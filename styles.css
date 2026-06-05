@@ -212,7 +212,8 @@ td small {
   background: #fff;
 }
 
-label span {
+label span,
+.form-field > span {
   display: block;
   margin-bottom: 7px;
   color: #344054;
@@ -387,6 +388,80 @@ textarea:focus {
 .cost-items {
   display: grid;
   gap: 10px;
+}
+
+.order-search-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.order-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.order-search-picker.is-selected #cost-order-search {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475467;
+}
+
+.order-search-results {
+  display: grid;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.order-search-results:empty {
+  display: none;
+}
+
+.order-search-option,
+.order-search-empty {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #edf0f5;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.order-search-option {
+  cursor: pointer;
+}
+
+.order-search-option:hover {
+  background: #eff6ff;
+}
+
+.order-search-option:last-child,
+.order-search-empty:last-child {
+  border-bottom: 0;
+}
+
+.order-search-option strong {
+  display: block;
+  font-size: 13px;
+}
+
+.order-search-option small,
+.order-search-helper,
+.order-search-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.order-search-helper {
+  margin: 0;
+}
+
+.order-search-empty {
+  cursor: default;
 }
 
 .cost-item-row {
@@ -599,7 +674,8 @@ th {
   .filters,
   .metric-grid,
   .form-grid,
-  .cost-item-row {
+  .cost-item-row,
+  .order-search-row {
     grid-template-columns: 1fr;
   }
 }

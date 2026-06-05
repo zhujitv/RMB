@@ -10,6 +10,10 @@ const state = {
   orders: [],
   payments: [],
   costs: [],
+  costOrderResults: [],
+  selectedCostOrder: null,
+  costOrderSearchTimer: null,
+  costOrderSearchRequestId: 0,
   overview: null,
   auditLogs: [],
 };
@@ -63,6 +67,10 @@ function amount(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
+}
+
+function currencyAmount(currency, value) {
+  return `${currency || "-"} ${amount(value)}`;
 }
 
 function percent(value) {
@@ -120,6 +128,108 @@ function fillOrderSelect(id, selected = "") {
   )).join("")}`;
 }
 
+function orderOutstandingOriginal(order) {
+  const value = order?.summary?.outstandingAmount;
+  if (Number.isFinite(Number(value))) return Number(value);
+  const rate = Number(order?.exchangeRate) || 1;
+  return Number(order?.summary?.outstandingCny || 0) / rate;
+}
+
+function costOrderLabel(order) {
+  return [
+    order?.orderNo || "-",
+    order?.billOfLadingNo || order?.blNo || "-",
+    order?.customerName || "-",
+    `未收 ${currencyAmount(order?.currency, orderOutstandingOriginal(order))}`,
+    order?.status || "-",
+  ].join(" | ");
+}
+
+function renderCostOrderResults(message = "") {
+  const box = $("#cost-order-results");
+  if (!box) return;
+  if (message) {
+    box.innerHTML = `<div class="order-search-empty">${escapeHtml(message)}</div>`;
+    return;
+  }
+  if (!state.costOrderResults.length) {
+    box.innerHTML = `<div class="order-search-empty">未找到匹配的应收订单，请先创建应收订单。</div>`;
+    return;
+  }
+  box.innerHTML = state.costOrderResults.map((order) => (
+    `<button class="order-search-option" type="button" role="option" data-cost-order-id="${escapeHtml(order.id)}"><strong>${escapeHtml(costOrderLabel(order))}</strong></button>`
+  )).join("");
+}
+
+function fillCostOrderDisplay(order = null) {
+  $("#cost-order").value = order?.id || "";
+  $("#cost-customer-id").value = order?.customerId || "";
+  $("#cost-order-no").value = order?.orderNo || "";
+  $("#cost-bl-no").value = order?.billOfLadingNo || order?.blNo || "";
+  $("#cost-customer").value = order?.customerName || "";
+  $("#cost-order-currency").value = order ? `${order.currency || "-"} / ${Number(order.exchangeRate || 0).toFixed(4)}` : "";
+}
+
+function setCostOrderLocked(locked) {
+  const search = $("#cost-order-search");
+  const picker = $("#cost-order-picker");
+  const reselect = $("#cost-order-reselect");
+  if (search) search.readOnly = locked;
+  if (picker) picker.classList.toggle("is-selected", locked);
+  if (reselect) reselect.hidden = !locked;
+}
+
+function selectCostOrder(order, { persist = true } = {}) {
+  if (!order) return;
+  state.selectedCostOrder = order;
+  fillCostOrderDisplay(order);
+  $("#cost-order-search").value = costOrderLabel(order);
+  $("#cost-order-results").innerHTML = "";
+  $("#cost-order-helper").textContent = "已选择应收订单，订单信息已锁定。";
+  setCostOrderLocked(true);
+  updateCostDerived();
+  if (persist) saveCostDraft();
+}
+
+function clearCostOrderSelection({ persist = true, reload = true } = {}) {
+  state.selectedCostOrder = null;
+  fillCostOrderDisplay(null);
+  $("#cost-order-search").value = "";
+  $("#cost-order-helper").textContent = "默认显示最近 20 条应收订单，输入 1 个字符后开始搜索。";
+  setCostOrderLocked(false);
+  if (persist) saveCostDraft();
+  if (reload) searchCostOrders("");
+}
+
+async function searchCostOrders(q = "") {
+  const requestId = ++state.costOrderSearchRequestId;
+  const keyword = String(q || "").trim();
+  $("#cost-order-helper").textContent = keyword ? "正在搜索应收订单..." : "正在加载最近 20 条应收订单...";
+  renderCostOrderResults("正在搜索...");
+  try {
+    const data = await api(`/api/receivables/search?q=${encodeURIComponent(keyword)}`);
+    if (requestId !== state.costOrderSearchRequestId) return;
+    state.costOrderResults = data.orders || [];
+    renderCostOrderResults();
+    $("#cost-order-helper").textContent = keyword
+      ? `搜索结果：${state.costOrderResults.length} 条`
+      : "默认显示最近 20 条应收订单，输入 1 个字符后开始搜索。";
+  } catch (error) {
+    if (requestId !== state.costOrderSearchRequestId) return;
+    state.costOrderResults = [];
+    renderCostOrderResults("无法加载应收订单，请稍后重试。");
+    $("#cost-order-helper").textContent = error.message;
+  }
+}
+
+function scheduleCostOrderSearch() {
+  if ($("#cost-order-search").readOnly) return;
+  clearTimeout(state.costOrderSearchTimer);
+  state.costOrderSearchTimer = setTimeout(() => {
+    searchCostOrders($("#cost-order-search").value);
+  }, 300);
+}
+
 function canReceivePayment(order) {
   return order
     && !["已关闭", "已取消"].includes(order.status)
@@ -175,7 +285,9 @@ function fillSalespersonSelect(id, selected = "", includeBlank = true) {
 }
 
 function orderById(id) {
-  return state.orders.find((order) => order.id === id);
+  return state.orders.find((order) => order.id === id)
+    || state.costOrderResults.find((order) => order.id === id)
+    || (state.selectedCostOrder?.id === id ? state.selectedCostOrder : null);
 }
 
 function customerById(id) {
@@ -325,7 +437,7 @@ function renderOrderSelects() {
     $("#order-salesperson").value = state.me?.name || "";
   }
   fillPaymentOrderSelect($("#payment-order")?.value || "", $("#payment-order")?.disabled || false);
-  fillOrderSelect("#cost-order", $("#cost-order")?.value || "");
+  if ($("#cost-order")?.value) fillCostOrderDisplay(orderById($("#cost-order").value));
 }
 
 function emptyRow(colspan) {
@@ -545,6 +657,21 @@ function costFormLabel(cost = {}) {
   return `${orderNo} / ${vendorName}`;
 }
 
+function costOrderFromCost(cost) {
+  return orderById(cost.orderId) || {
+    id: cost.orderId,
+    orderNo: cost.orderNo || "",
+    blNo: cost.blNo || cost.billOfLadingNo || "",
+    billOfLadingNo: cost.billOfLadingNo || cost.blNo || "",
+    customerId: cost.customerId || "",
+    customerName: cost.customerName || "",
+    currency: cost.orderCurrency || "",
+    exchangeRate: cost.orderExchangeRate || 0,
+    status: cost.orderStatus || "",
+    summary: {},
+  };
+}
+
 function setCostFormMode(cost = null) {
   const isEditing = Boolean(cost?.id);
   const mode = $("#cost-form-mode");
@@ -556,10 +683,10 @@ function setCostFormMode(cost = null) {
   if (submitButton) submitButton.textContent = isEditing ? "更新成本" : "保存成本";
 }
 
-function resetCostForm({ clearStoredDraft = true } = {}) {
+function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
   $("#cost-form").reset();
   $("#cost-id").value = "";
-  $("#cost-order").value = "";
+  clearCostOrderSelection({ persist: false, reload: reloadOrders });
   $("#cost-type").value = costDefaultType();
   $("#cost-payment-status").value = "待支付";
   $("#cost-payment-date").value = "";
@@ -601,6 +728,7 @@ function saveCostDraft() {
   }
   const data = readForm("cost", costFields);
   data.id = "";
+  if (state.selectedCostOrder?.id === data.orderId) data.selectedOrder = state.selectedCostOrder;
   data.items = readCostItems(false);
   localStorage.setItem(`${DRAFT_PREFIX}cost`, JSON.stringify(data));
 }
@@ -618,12 +746,16 @@ function loadCostDraft() {
       setCostFormMode(null);
       return;
     }
+    const selectedOrder = data.selectedOrder?.id === data.orderId ? data.selectedOrder : null;
+    if (!selectedOrder) data.orderId = "";
     costFields.forEach(([key, selector]) => {
       if (key === "id") return;
       const el = $(selector);
       if (el && Object.prototype.hasOwnProperty.call(data, key)) el.value = data[key] ?? "";
     });
     $("#cost-id").value = "";
+    if (selectedOrder) selectCostOrder(selectedOrder, { persist: false });
+    else clearCostOrderSelection({ persist: false, reload: false });
     if (Array.isArray(data.items) && data.items.length) resetCostItems(data.items);
     setCostFormMode(null);
     updateCostDerived();
@@ -675,8 +807,7 @@ function updatePaymentDerived() {
 
 function updateCostDerived() {
   const order = orderById($("#cost-order").value);
-  $("#cost-order-no").value = order?.orderNo || "";
-  $("#cost-customer").value = order?.customerName || "";
+  fillCostOrderDisplay(order);
   $$("#cost-items .cost-item-row").forEach(updateCostItemDerived);
 }
 
@@ -743,6 +874,9 @@ async function submitCost(event) {
   event.preventDefault();
   try {
     const data = readForm("cost", costFields);
+    if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
+      throw new Error("请从搜索结果中选择关联应收订单");
+    }
     const items = readCostItems(true);
     const id = data.id;
     delete data.id;
@@ -887,6 +1021,7 @@ function editCost(id) {
   setForm(costFields, cost);
   $("#cost-id").value = cost.id;
   $("#cost-attachment").value = "";
+  selectCostOrder(costOrderFromCost(cost), { persist: false });
   resetCostItems([cost]);
   setCostFormMode(cost);
   updateCostDerived();
@@ -997,10 +1132,14 @@ function bindEvents() {
     updatePaymentDerived();
     saveDraft("payment", paymentFields);
   }));
-  $("#cost-order").addEventListener("input", () => {
-    updateCostDerived();
-    saveCostDraft();
+  $("#cost-order-search").addEventListener("input", scheduleCostOrderSearch);
+  $("#cost-order-results").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-cost-order-id]");
+    if (!button) return;
+    const order = orderById(button.dataset.costOrderId);
+    if (order) selectCostOrder(order);
   });
+  $("#cost-order-reselect").addEventListener("click", () => clearCostOrderSelection());
   $("#add-cost-item").addEventListener("click", () => {
     addCostItem({});
     saveCostDraft();
@@ -1078,7 +1217,7 @@ async function init() {
   bindEvents();
   resetForm("order");
   resetForm("payment");
-  resetCostForm({ clearStoredDraft: false });
+  resetCostForm({ clearStoredDraft: false, reloadOrders: false });
   loadDraft("order", orderFields);
   loadDraft("payment", paymentFields);
   loadCostDraft();
@@ -1086,6 +1225,7 @@ async function init() {
   updatePaymentDerived();
   updateCostDerived();
   await loadData();
+  if (!state.selectedCostOrder) await searchCostOrders("");
 }
 
 init();
