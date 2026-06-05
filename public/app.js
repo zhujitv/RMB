@@ -534,6 +534,43 @@ function resetCostItems(items = [{}]) {
   (items.length ? items : [{}]).forEach((item) => addCostItem(item));
 }
 
+function costDefaultType() {
+  return constants.costTypes[0] || "其他费用";
+}
+
+function costFormLabel(cost = {}) {
+  const order = orderById(cost.orderId);
+  const orderNo = cost.orderNo || order?.orderNo || "-";
+  const vendorName = cost.vendorName || "-";
+  return `${orderNo} / ${vendorName}`;
+}
+
+function setCostFormMode(cost = null) {
+  const isEditing = Boolean(cost?.id);
+  const mode = $("#cost-form-mode");
+  const submitButton = $("#cost-submit-button");
+  if (mode) {
+    mode.textContent = isEditing ? `编辑成本：${costFormLabel(cost)}` : "新建成本";
+    mode.classList.toggle("is-editing", isEditing);
+  }
+  if (submitButton) submitButton.textContent = isEditing ? "更新成本" : "保存成本";
+}
+
+function resetCostForm({ clearStoredDraft = true } = {}) {
+  $("#cost-form").reset();
+  $("#cost-id").value = "";
+  $("#cost-order").value = "";
+  $("#cost-type").value = costDefaultType();
+  $("#cost-payment-status").value = "待支付";
+  $("#cost-payment-date").value = "";
+  $("#cost-invoice-status").value = "未收到";
+  $("#cost-attachment").value = "";
+  resetCostItems([{}]);
+  setCostFormMode(null);
+  updateCostDerived();
+  if (clearStoredDraft) clearDraft("cost");
+}
+
 function readCostItems(validate = false) {
   const rows = $$("#cost-items .cost-item-row");
   const items = rows.map((row) => ({
@@ -558,16 +595,38 @@ function readCostItems(validate = false) {
 }
 
 function saveCostDraft() {
+  if ($("#cost-id")?.value) {
+    clearDraft("cost");
+    return;
+  }
   const data = readForm("cost", costFields);
+  data.id = "";
   data.items = readCostItems(false);
   localStorage.setItem(`${DRAFT_PREFIX}cost`, JSON.stringify(data));
 }
 
 function loadCostDraft() {
   try {
-    const data = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}cost`) || "{}");
-    setForm(costFields, data);
+    const raw = localStorage.getItem(`${DRAFT_PREFIX}cost`);
+    if (!raw) {
+      setCostFormMode(null);
+      return;
+    }
+    const data = JSON.parse(raw);
+    if (data.id) {
+      clearDraft("cost");
+      setCostFormMode(null);
+      return;
+    }
+    costFields.forEach(([key, selector]) => {
+      if (key === "id") return;
+      const el = $(selector);
+      if (el && Object.prototype.hasOwnProperty.call(data, key)) el.value = data[key] ?? "";
+    });
+    $("#cost-id").value = "";
     if (Array.isArray(data.items) && data.items.length) resetCostItems(data.items);
+    setCostFormMode(null);
+    updateCostDerived();
   } catch {}
 }
 
@@ -694,9 +753,7 @@ async function submitCost(event) {
     });
     const savedCosts = result.costs || (result.cost ? [result.cost] : []);
     await Promise.all(savedCosts.map((cost) => saveAttachmentIfNeeded("order_costs", cost.id, "#cost-attachment", false)));
-    $("#cost-attachment").value = "";
-    clearDraft("cost");
-    resetForm("cost");
+    resetCostForm();
     await loadData();
     toast(`成本已保存${savedCosts.length > 1 ? ` ${savedCosts.length} 条` : ""}`);
   } catch (error) {
@@ -786,10 +843,7 @@ function resetForm(name) {
     updatePaymentDerived();
   }
   if (name === "cost") {
-    $("#cost-form").reset();
-    $("#cost-id").value = "";
-    resetCostItems([{}]);
-    updateCostDerived();
+    resetCostForm();
   }
   if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSalespersonSelect("#customer-salesperson");
   if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
@@ -829,9 +883,12 @@ function editPayment(id) {
 function editCost(id) {
   const cost = state.costs.find((item) => item.id === id);
   if (!cost) return;
+  clearDraft("cost");
   setForm(costFields, cost);
   $("#cost-id").value = cost.id;
+  $("#cost-attachment").value = "";
   resetCostItems([cost]);
+  setCostFormMode(cost);
   updateCostDerived();
   switchView("costs");
 }
@@ -1021,7 +1078,7 @@ async function init() {
   bindEvents();
   resetForm("order");
   resetForm("payment");
-  resetForm("cost");
+  resetCostForm({ clearStoredDraft: false });
   loadDraft("order", orderFields);
   loadDraft("payment", paymentFields);
   loadCostDraft();

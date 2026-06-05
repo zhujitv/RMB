@@ -138,7 +138,7 @@
         <section class="view-panel" id="costs-view">
           <form class="entry-form" id="cost-form" autocomplete="off">
             <input type="hidden" id="cost-id" />
-            <div class="form-header"><div><h3>成本录入</h3><p>协同人员基于应收订单录入采购、物流、海运、佣金等成本。</p></div><button class="secondary-button" type="button" data-reset="cost">新建</button></div>
+            <div class="form-header"><div><h3>成本录入</h3><p>协同人员基于应收订单录入采购、物流、海运、佣金等成本。</p><p class="form-mode" id="cost-form-mode">新建成本</p></div><button class="secondary-button" type="button" data-reset="cost">新建</button></div>
             <div class="form-grid">
               <label class="wide"><span>关联应收订单 *</span><select id="cost-order" required></select></label>
               <label><span>订单号</span><input id="cost-order-no" disabled /></label>
@@ -153,7 +153,7 @@
               </div>
               <label class="wide"><span>附件地址（可选）</span><input id="cost-attachment" placeholder="https://..." /></label>
             </div>
-            <div class="form-actions"><button class="primary-button" type="submit">保存成本</button></div>
+            <div class="form-actions"><button class="primary-button" id="cost-submit-button" type="submit">保存成本</button></div>
           </form>
           <section class="panel"><div class="panel-title"><h3>成本明细</h3><span id="costs-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>类型</th><th>供应商</th><th>金额</th><th>折人民币</th><th>付款</th><th>发票</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="costs-table"></tbody></table></div></section>
         </section>

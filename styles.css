@@ -330,6 +330,15 @@ textarea:focus {
   font-size: 13px;
 }
 
+.form-header p.form-mode {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.form-header p.form-mode.is-editing {
+  color: #b45309;
+}
+
 .entry-form {
   padding: 18px;
 }
