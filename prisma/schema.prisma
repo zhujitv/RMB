@@ -98,6 +98,9 @@ model ReceivableOrder {
   country             String?
   currency            String    @default("USD")
   exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate    DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource  String?   @map("exchange_rate_source")
+  exchangeRateType    String?   @map("exchange_rate_type")
   receivableAmount    Decimal   @map("receivable_amount") @db.Decimal(18, 2)
   receivableAmountCny Decimal   @map("receivable_amount_cny") @db.Decimal(18, 2)
   estimatedReceivableAmount    Decimal   @map("estimated_receivable_amount") @db.Decimal(18, 2)
@@ -143,6 +146,9 @@ model Payment {
   paymentDate   DateTime  @map("payment_date") @db.Date
   currency      String    @default("USD")
   exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource String?   @map("exchange_rate_source")
+  exchangeRateType   String?   @map("exchange_rate_type")
   amount        Decimal   @db.Decimal(18, 2)
   amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
   paymentType   String    @default("尾款") @map("payment_type")
@@ -175,6 +181,9 @@ model OrderCost {
   vendorName    String    @map("vendor_name")
   currency      String    @default("CNY")
   exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource String?   @map("exchange_rate_source")
+  exchangeRateType   String?   @map("exchange_rate_type")
   amount        Decimal   @db.Decimal(18, 2)
   amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
   paymentStatus String    @default("待支付") @map("payment_status")
@@ -198,6 +207,29 @@ model OrderCost {
   @@index([paymentStatus])
   @@index([deletedAt])
   @@map("order_costs")
+}
+
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  currency  String
+  rateToCny Decimal  @map("rate_to_cny") @db.Decimal(18, 6)
+  rateDate  DateTime @map("rate_date") @db.Date
+  source    String
+  rateType  String   @map("rate_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([currency, rateDate, source, rateType])
+  @@index([currency, rateDate])
+  @@map("exchange_rates")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
 }
 
 model Attachment {

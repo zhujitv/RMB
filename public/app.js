@@ -18,11 +18,19 @@ const state = {
   costOrderSearchRequestId: 0,
   overview: null,
   auditLogs: [],
+  exchangeRateSettings: {
+    source: "中国银行",
+    rateType: "现汇买入价",
+    autoUpdate: true,
+    allowManualEdit: true,
+  },
 };
 
 const constants = {
   currencies: ["USD", "EUR", "GBP", "CNY", "HKD"],
   defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
+  exchangeRateSources: ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"],
+  exchangeRateTypes: ["现汇买入价", "现汇卖出价", "中间价"],
   roles: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
   orderStatuses: ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"],
   paymentStatuses: ["待确认", "已到账", "部分到账", "已退回", "已取消"],
@@ -90,6 +98,224 @@ function today() {
 
 function calcCny(amountValue, rateValue) {
   return ((Number(amountValue) || 0) * (Number(rateValue) || 0)).toFixed(2);
+}
+
+function rateValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return number === 1 ? "1" : number.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function canManualRate() {
+  return Boolean(state.exchangeRateSettings.allowManualEdit && ["管理员", "财务"].includes(state.me?.role));
+}
+
+function canRefreshRate() {
+  return ["管理员", "财务"].includes(state.me?.role);
+}
+
+function rateDateFor(prefix) {
+  if (prefix === "payment") return $("#payment-date")?.value || today();
+  if (prefix === "cost") return $("#cost-payment-date")?.value || today();
+  return today();
+}
+
+function rateMetaText(data = {}) {
+  const source = data.exchangeRateSource || data.source || "自动汇率";
+  const date = data.exchangeRateDate || data.rateDate || today();
+  const type = data.exchangeRateType || data.rateType || state.exchangeRateSettings.rateType;
+  const label = source === "历史录入" ? "历史汇率" : (source === "手动" ? "手动汇率" : "自动汇率");
+  return `${label} | 来源：${source} | 日期：${date} | 类型：${type}`;
+}
+
+function applyRateEditability() {
+  const editable = canManualRate();
+  ["#order-rate", "#payment-rate"].forEach((selector) => {
+    const el = $(selector);
+    if (el) el.readOnly = !editable;
+  });
+  $$(".cost-item-rate").forEach((el) => {
+    el.readOnly = !editable;
+  });
+  const refreshDisabled = !canRefreshRate();
+  $$(".rate-refresh").forEach((button) => {
+    button.disabled = refreshDisabled;
+  });
+  const settingsDisabled = state.me?.role !== "管理员";
+  $$("#exchange-rate-settings-form select, #exchange-rate-settings-form button[type='submit']").forEach((el) => {
+    el.disabled = settingsDisabled;
+  });
+  const refreshButton = $("#refresh-exchange-rates");
+  if (refreshButton) refreshButton.disabled = refreshDisabled;
+}
+
+function setRateSnapshot(prefix, quote = {}) {
+  const rate = quote.rateToCny ?? quote.exchangeRate;
+  const rateInput = $(`#${prefix}-rate`);
+  if (rateInput && Number(rate) > 0) rateInput.value = rateValue(rate);
+  const dateInput = $(`#${prefix}-rate-date`);
+  const sourceInput = $(`#${prefix}-rate-source`);
+  const typeInput = $(`#${prefix}-rate-type`);
+  if (dateInput) dateInput.value = quote.rateDate || quote.exchangeRateDate || rateDateFor(prefix);
+  if (sourceInput) sourceInput.value = quote.source || quote.exchangeRateSource || "";
+  if (typeInput) typeInput.value = quote.rateType || quote.exchangeRateType || state.exchangeRateSettings.rateType;
+  const meta = $(`#${prefix}-rate-meta`);
+  if (meta) {
+    meta.textContent = rateMetaText({
+      exchangeRateSource: sourceInput?.value,
+      exchangeRateDate: dateInput?.value,
+      exchangeRateType: typeInput?.value,
+    });
+    meta.classList.toggle("warning", Boolean(quote.message || quote.isFallbackDate));
+  }
+}
+
+function markManualRate(prefix) {
+  const sourceInput = $(`#${prefix}-rate-source`);
+  const dateInput = $(`#${prefix}-rate-date`);
+  const typeInput = $(`#${prefix}-rate-type`);
+  if (sourceInput) sourceInput.value = "手动";
+  if (dateInput && !dateInput.value) dateInput.value = rateDateFor(prefix);
+  if (typeInput && !typeInput.value) typeInput.value = state.exchangeRateSettings.rateType;
+  const meta = $(`#${prefix}-rate-meta`);
+  if (meta) meta.textContent = rateMetaText({
+    exchangeRateSource: "手动",
+    exchangeRateDate: dateInput?.value,
+    exchangeRateType: typeInput?.value,
+  });
+}
+
+async function fetchExchangeRate(currency, date, force = false) {
+  const params = new URLSearchParams({
+    currency,
+    date: date || today(),
+    rateType: state.exchangeRateSettings.rateType,
+  });
+  if (force) params.set("force", "1");
+  const data = await api(`/api/exchange-rates?${params.toString()}`);
+  return data.rate;
+}
+
+async function applyRateFor(prefix, { force = false } = {}) {
+  const currency = $(`#${prefix}-currency`)?.value;
+  if (!currency) return;
+  try {
+    const quote = currency === "CNY"
+      ? {
+          currency,
+          rateToCny: 1,
+          rateDate: rateDateFor(prefix),
+          source: "系统",
+          rateType: state.exchangeRateSettings.rateType,
+        }
+      : await fetchExchangeRate(currency, rateDateFor(prefix), force);
+    setRateSnapshot(prefix, quote);
+    if (prefix === "order") updateOrderDerived();
+    if (prefix === "payment") updatePaymentDerived();
+    if (quote.message) toast(quote.message);
+  } catch (error) {
+    const meta = $(`#${prefix}-rate-meta`);
+    if (meta) {
+      meta.textContent = error.message;
+      meta.classList.add("warning");
+    }
+    toast(error.message);
+  }
+}
+
+function setCostRowRateSnapshot(row, quote = {}) {
+  const rate = quote.rateToCny ?? quote.exchangeRate;
+  const rateInput = row.querySelector(".cost-item-rate");
+  if (rateInput && Number(rate) > 0) rateInput.value = rateValue(rate);
+  row.querySelector(".cost-item-rate-date").value = quote.rateDate || quote.exchangeRateDate || rateDateFor("cost");
+  row.querySelector(".cost-item-rate-source").value = quote.source || quote.exchangeRateSource || "";
+  row.querySelector(".cost-item-rate-type").value = quote.rateType || quote.exchangeRateType || state.exchangeRateSettings.rateType;
+  const meta = row.querySelector(".cost-item-rate-meta");
+  if (meta) {
+    meta.textContent = rateMetaText({
+      exchangeRateSource: row.querySelector(".cost-item-rate-source").value,
+      exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
+      exchangeRateType: row.querySelector(".cost-item-rate-type").value,
+    });
+    meta.classList.toggle("warning", Boolean(quote.message || quote.isFallbackDate));
+  }
+}
+
+function markCostRowManualRate(row) {
+  row.querySelector(".cost-item-rate-source").value = "手动";
+  if (!row.querySelector(".cost-item-rate-date").value) row.querySelector(".cost-item-rate-date").value = rateDateFor("cost");
+  if (!row.querySelector(".cost-item-rate-type").value) row.querySelector(".cost-item-rate-type").value = state.exchangeRateSettings.rateType;
+  row.querySelector(".cost-item-rate-meta").textContent = rateMetaText({
+    exchangeRateSource: "手动",
+    exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
+    exchangeRateType: row.querySelector(".cost-item-rate-type").value,
+  });
+}
+
+async function applyCostItemRate(row, { force = false } = {}) {
+  const currency = row.querySelector(".cost-item-currency")?.value;
+  if (!currency) return;
+  try {
+    const quote = currency === "CNY"
+      ? {
+          currency,
+          rateToCny: 1,
+          rateDate: rateDateFor("cost"),
+          source: "系统",
+          rateType: state.exchangeRateSettings.rateType,
+        }
+      : await fetchExchangeRate(currency, rateDateFor("cost"), force);
+    setCostRowRateSnapshot(row, quote);
+    updateCostItemDerived(row);
+    if (quote.message) toast(quote.message);
+  } catch (error) {
+    const meta = row.querySelector(".cost-item-rate-meta");
+    if (meta) {
+      meta.textContent = error.message;
+      meta.classList.add("warning");
+    }
+    toast(error.message);
+  }
+}
+
+async function ensureRateSnapshot(prefix) {
+  const currency = $(`#${prefix}-currency`)?.value;
+  const source = $(`#${prefix}-rate-source`)?.value;
+  const rate = $(`#${prefix}-rate`)?.value;
+  if (!currency) return;
+  if (currency === "CNY" && (source !== "系统" || Number(rate) !== 1)) {
+    setRateSnapshot(prefix, {
+      currency,
+      rateToCny: 1,
+      rateDate: rateDateFor(prefix),
+      source: "系统",
+      rateType: state.exchangeRateSettings.rateType,
+    });
+    return;
+  }
+  if (!source || !(Number(rate) > 0)) await applyRateFor(prefix);
+}
+
+async function ensureCostRowRateSnapshot(row) {
+  const currency = row.querySelector(".cost-item-currency")?.value;
+  const source = row.querySelector(".cost-item-rate-source")?.value;
+  const rate = row.querySelector(".cost-item-rate")?.value;
+  if (!currency) return;
+  if (currency === "CNY" && (source !== "系统" || Number(rate) !== 1)) {
+    setCostRowRateSnapshot(row, {
+      currency,
+      rateToCny: 1,
+      rateDate: rateDateFor("cost"),
+      source: "系统",
+      rateType: state.exchangeRateSettings.rateType,
+    });
+    return;
+  }
+  if (!source || !(Number(rate) > 0)) await applyCostItemRate(row);
+}
+
+function needsAdminRateConfirmation(currency, exchangeRate) {
+  return state.me?.role === "管理员" && currency !== "CNY" && Math.abs(Number(exchangeRate) - 1) <= 0.000001;
 }
 
 function toast(message) {
@@ -331,9 +557,10 @@ async function loadMe() {
 async function loadData() {
   try {
     await loadMe();
-    const [data, availableData] = await Promise.all([
+    const [data, availableData, rateSettings] = await Promise.all([
       api(`/api/ledger?${filterParams().toString()}`),
       api("/api/customers/available"),
+      api("/api/exchange-rates/settings").catch(() => ({ settings: state.exchangeRateSettings })),
     ]);
     state.overview = data.overview;
     state.orders = data.orders || [];
@@ -343,6 +570,7 @@ async function loadData() {
     state.suppliers = data.suppliers || [];
     state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
     state.availableCustomers = availableData.customers || [];
+    state.exchangeRateSettings = rateSettings.settings || state.exchangeRateSettings;
     state.users = data.users || [];
     const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
     state.auditLogs = logs.logs || [];
@@ -361,6 +589,7 @@ function renderAll() {
   renderCosts();
   renderProfit();
   renderSettings();
+  applyRateEditability();
 }
 
 function updateCurrentView() {
@@ -542,6 +771,10 @@ function renderProfit() {
 }
 
 function renderSettings() {
+  $("#exchange-source").value = state.exchangeRateSettings.source || "中国银行";
+  $("#exchange-rate-type").value = state.exchangeRateSettings.rateType || "现汇买入价";
+  $("#exchange-auto-update").value = String(state.exchangeRateSettings.autoUpdate !== false);
+  $("#exchange-allow-manual").value = String(state.exchangeRateSettings.allowManualEdit !== false);
   fillSalespersonSelect("#customer-salesperson", $("#customer-salesperson")?.value || "");
   $("#customers-count").textContent = `${state.customers.length} 个客户`;
   $("#customers-table").innerHTML = state.customers.length ? state.customers.map((customer) => `
@@ -619,6 +852,7 @@ function clearDraft(name) {
 const orderFields = [
   ["id", "#order-id"], ["customerId", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"],
   ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
+  ["exchangeRateDate", "#order-rate-date"], ["exchangeRateSource", "#order-rate-source"], ["exchangeRateType", "#order-rate-type"],
   ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
   ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
   ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
@@ -626,6 +860,7 @@ const orderFields = [
 
 const paymentFields = [
   ["id", "#payment-id"], ["orderId", "#payment-order"], ["paymentDate", "#payment-date"], ["currency", "#payment-currency"], ["exchangeRate", "#payment-rate"],
+  ["exchangeRateDate", "#payment-rate-date"], ["exchangeRateSource", "#payment-rate-source"], ["exchangeRateType", "#payment-rate-type"],
   ["amount", "#payment-amount"], ["paymentType", "#payment-type"], ["status", "#payment-status"], ["bankReference", "#payment-bank-reference"], ["remark", "#payment-remark"],
 ];
 
@@ -692,7 +927,17 @@ function costItemRow(item = {}) {
       <label class="supplier-picker"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search" value="${escapeHtml(supplierDisplayName(item))}" placeholder="搜索供应商" autocomplete="off" /><div class="supplier-search-results"></div></label>
       <label><span>成本金额 *</span><input class="cost-item-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount ?? "")}" /></label>
       <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
-      <label><span>汇率 *</span><input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate ?? (constants.defaultRates[currency] || 1).toFixed(4))}" /></label>
+      <div class="form-field rate-field">
+        <span>汇率 *</span>
+        <div class="rate-input-row">
+          <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate ?? "")}" />
+          <button class="secondary-button rate-refresh cost-item-rate-refresh" type="button">刷新</button>
+        </div>
+        <input class="cost-item-rate-date" type="hidden" value="${escapeHtml(item.exchangeRateDate || "")}" />
+        <input class="cost-item-rate-source" type="hidden" value="${escapeHtml(item.exchangeRateSource || "")}" />
+        <input class="cost-item-rate-type" type="hidden" value="${escapeHtml(item.exchangeRateType || state.exchangeRateSettings.rateType)}" />
+        <small class="rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(item))}</small>
+      </div>
       <label><span>折人民币</span><input class="cost-item-amount-cny" disabled /></label>
       <label><span>备注</span><input class="cost-item-remark" value="${escapeHtml(item.remark || "")}" /></label>
       <button class="secondary-button delete-cost-item" type="button" title="删除">删</button>
@@ -710,6 +955,8 @@ function updateCostItemDerived(row) {
 function addCostItem(item = {}) {
   $("#cost-items").insertAdjacentHTML("beforeend", costItemRow(item));
   const row = $("#cost-items .cost-item-row:last-child");
+  applyRateEditability();
+  if (!item.exchangeRate) applyCostItemRate(row).catch(() => {});
   updateCostItemDerived(row);
   return row;
 }
@@ -779,6 +1026,9 @@ function readCostItems(validate = false) {
     amount: row.querySelector(".cost-item-amount").value,
     currency: row.querySelector(".cost-item-currency").value,
     exchangeRate: row.querySelector(".cost-item-rate").value,
+    exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
+    exchangeRateSource: row.querySelector(".cost-item-rate-source").value,
+    exchangeRateType: row.querySelector(".cost-item-rate-type").value,
     remark: row.querySelector(".cost-item-remark").value,
   })).filter((item) => item.supplierId || item.supplierName || item.amount || item.remark);
 
@@ -867,6 +1117,10 @@ function updateOrderCustomerDefaults(force = false) {
   if (!customer) return;
   if (force || !$("#order-country").value) $("#order-country").value = customer.country || "";
   if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || state.me?.name || "";
+  if (!$("#order-id").value && customer.defaultCurrency && !$("#order-currency").value) {
+    $("#order-currency").value = customer.defaultCurrency;
+    applyRateFor("order").catch(() => {});
+  }
   updateOrderDerived();
 }
 
@@ -879,7 +1133,6 @@ function updatePaymentDerived() {
   $("#payment-customer").value = order?.customerName || "";
   if (order && !$("#payment-id").value) {
     $("#payment-currency").value = order.currency;
-    $("#payment-rate").value = Number(order.exchangeRate).toFixed(4);
   }
   $("#payment-amount-cny").value = calcCny($("#payment-amount").value, $("#payment-rate").value);
 }
@@ -908,11 +1161,16 @@ async function saveAttachmentIfNeeded(relatedType, relatedId, inputId, clear = t
 async function submitOrder(event) {
   event.preventDefault();
   try {
+    await ensureRateSnapshot("order");
     const data = readForm("order", orderFields);
     if (!data.customerId) throw new Error("客户名称不能为空");
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
     if (!(Number(data.estimatedReceivableAmount) > 0)) throw new Error("预计应收金额必须大于 0");
     if (!data.currency) throw new Error("币种不能为空");
+    if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
+      if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
+      data.manualRateConfirmed = true;
+    }
     const id = data.id;
     delete data.id;
     const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
@@ -932,7 +1190,12 @@ async function submitOrder(event) {
 async function submitPayment(event) {
   event.preventDefault();
   try {
+    await ensureRateSnapshot("payment");
     const data = readForm("payment", paymentFields);
+    if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
+      if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
+      data.manualRateConfirmed = true;
+    }
     const id = data.id;
     delete data.id;
     const result = await api(id ? `/api/payments/${id}` : "/api/payments", {
@@ -956,7 +1219,12 @@ async function submitCost(event) {
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
       throw new Error("请从搜索结果中选择关联应收订单");
     }
+    await Promise.all($$("#cost-items .cost-item-row").map(ensureCostRowRateSnapshot));
     const items = readCostItems(true);
+    items.forEach((item) => {
+      if (needsAdminRateConfirmation(item.currency, item.exchangeRate)) item.manualRateConfirmed = true;
+    });
+    if (items.some((item) => item.manualRateConfirmed) && !confirm("存在非人民币汇率为 1 的成本明细，确认以管理员身份手动保存？")) return;
     const id = data.id;
     delete data.id;
     const payload = id ? { ...data, ...items[0] } : { ...data, items };
@@ -1017,6 +1285,47 @@ async function submitSupplier(event) {
   }
 }
 
+async function submitExchangeRateSettings(event) {
+  event.preventDefault();
+  try {
+    const data = {
+      source: $("#exchange-source").value,
+      rateType: $("#exchange-rate-type").value,
+      autoUpdate: $("#exchange-auto-update").value === "true",
+      allowManualEdit: $("#exchange-allow-manual").value === "true",
+    };
+    const result = await api("/api/exchange-rates/settings", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    state.exchangeRateSettings = result.settings || state.exchangeRateSettings;
+    renderSettings();
+    applyRateEditability();
+    toast("汇率设置已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function refreshExchangeRates() {
+  try {
+    const result = await api("/api/exchange-rates/refresh", {
+      method: "POST",
+      body: JSON.stringify({
+        date: today(),
+        source: state.exchangeRateSettings.source,
+        rateType: state.exchangeRateSettings.rateType,
+      }),
+    });
+    toast(result.ok ? "今日汇率已刷新" : (result.message || "今日汇率获取失败，已使用最近可用汇率。"));
+    await applyRateFor("order", { force: true });
+    await applyRateFor("payment", { force: true });
+    await Promise.all($$("#cost-items .cost-item-row").map((row) => applyCostItemRate(row, { force: true })));
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function submitUser(event) {
   event.preventDefault();
   try {
@@ -1056,6 +1365,10 @@ function resetForm(name) {
     $("#order-id").value = "";
     $("#order-currency").value = "";
     $("#order-rate").value = "";
+    $("#order-rate-date").value = "";
+    $("#order-rate-source").value = "";
+    $("#order-rate-type").value = "";
+    $("#order-rate-meta").textContent = "自动汇率";
     $("#order-reminder-days").value = "7";
     $("#order-salesperson").value = state.me?.name || "";
     fillAvailableCustomerSelect("");
@@ -1067,9 +1380,15 @@ function resetForm(name) {
     $("#payment-order").disabled = false;
     fillPaymentOrderSelect("");
     $("#payment-date").value = today();
-    $("#payment-rate").value = constants.defaultRates.USD.toFixed(4);
+    $("#payment-currency").value = "USD";
+    $("#payment-rate").value = "";
+    $("#payment-rate-date").value = "";
+    $("#payment-rate-source").value = "";
+    $("#payment-rate-type").value = "";
+    $("#payment-rate-meta").textContent = "自动汇率";
     $("#payment-type").value = "尾款";
     updatePaymentDerived();
+    applyRateFor("payment").catch(() => {});
   }
   if (name === "cost") {
     resetCostForm();
@@ -1085,6 +1404,12 @@ function editOrder(id) {
   setForm(orderFields, order);
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
+  setRateSnapshot("order", {
+    exchangeRate: order.exchangeRate,
+    exchangeRateDate: order.exchangeRateDate,
+    exchangeRateSource: order.exchangeRateSource || "手动",
+    exchangeRateType: order.exchangeRateType || state.exchangeRateSettings.rateType,
+  });
   updateOrderDerived();
   switchView("orders");
 }
@@ -1106,6 +1431,12 @@ function editPayment(id) {
   fillPaymentOrderSelect(payment.orderId, lockOrder, fallback);
   setForm(paymentFields, payment);
   $("#payment-id").value = payment.id;
+  setRateSnapshot("payment", {
+    exchangeRate: payment.exchangeRate,
+    exchangeRateDate: payment.exchangeRateDate || payment.paymentDate,
+    exchangeRateSource: payment.exchangeRateSource || "手动",
+    exchangeRateType: payment.exchangeRateType || state.exchangeRateSettings.rateType,
+  });
   updatePaymentDerived();
   switchView("payments");
 }
@@ -1205,6 +1536,8 @@ function bindEvents() {
   $("#cost-form").addEventListener("submit", submitCost);
   $("#customer-form").addEventListener("submit", submitCustomer);
   $("#supplier-form").addEventListener("submit", submitSupplier);
+  $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
+  $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
   $("#login-form").addEventListener("submit", submitLogin);
   $("#logout-button").addEventListener("click", async () => {
@@ -1218,6 +1551,7 @@ function bindEvents() {
   });
 
   ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date"].forEach((selector) => $(selector).addEventListener("input", () => {
+    if (selector === "#order-rate") markManualRate("order");
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
@@ -1235,9 +1569,19 @@ function bindEvents() {
     saveDraft("order", orderFields);
   });
   ["#payment-order", "#payment-amount", "#payment-rate"].forEach((selector) => $(selector).addEventListener("input", () => {
+    if (selector === "#payment-rate") markManualRate("payment");
     updatePaymentDerived();
     saveDraft("payment", paymentFields);
   }));
+  $("#payment-order").addEventListener("change", () => {
+    updatePaymentDerived();
+    applyRateFor("payment").catch(() => {});
+  });
+  $("#payment-date").addEventListener("change", () => applyRateFor("payment").catch(() => {}));
+  $("#cost-payment-date").addEventListener("change", () => {
+    $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));
+    saveCostDraft();
+  });
   $("#cost-order-search").addEventListener("input", scheduleCostOrderSearch);
   $("#cost-order-results").addEventListener("click", (event) => {
     const button = event.target.closest("[data-cost-order-id]");
@@ -1256,18 +1600,24 @@ function bindEvents() {
       row.querySelector(".cost-item-supplier-id").value = "";
       renderSupplierResults(row, event.target.value);
     }
+    if (row && event.target.classList.contains("cost-item-rate")) markCostRowManualRate(row);
     if (row) updateCostItemDerived(row);
     saveCostDraft();
   });
   $("#cost-items").addEventListener("change", (event) => {
     const row = event.target.closest(".cost-item-row");
     if (row && event.target.classList.contains("cost-item-currency")) {
-      row.querySelector(".cost-item-rate").value = (constants.defaultRates[event.target.value] || 1).toFixed(4);
-      updateCostItemDerived(row);
+      applyCostItemRate(row).catch(() => {});
     }
     saveCostDraft();
   });
   $("#cost-items").addEventListener("click", (event) => {
+    const rateButton = event.target.closest(".cost-item-rate-refresh");
+    if (rateButton) {
+      const row = rateButton.closest(".cost-item-row");
+      if (row) applyCostItemRate(row, { force: true }).catch(() => {});
+      return;
+    }
     const supplierButton = event.target.closest("[data-supplier-id]");
     if (supplierButton) {
       const supplier = supplierById(supplierButton.dataset.supplierId);
@@ -1282,11 +1632,11 @@ function bindEvents() {
     saveCostDraft();
   });
   $("#order-currency").addEventListener("change", () => {
-    $("#order-rate").value = $("#order-currency").value ? (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4) : "";
+    applyRateFor("order").catch(() => {});
     updateOrderDerived();
   });
   $("#payment-currency").addEventListener("change", () => {
-    $("#payment-rate").value = (constants.defaultRates[$("#payment-currency").value] || 1).toFixed(4);
+    applyRateFor("payment").catch(() => {});
     updatePaymentDerived();
   });
   $$("#order-form input, #order-form select, #order-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("order", orderFields)));
@@ -1296,6 +1646,8 @@ function bindEvents() {
   document.body.addEventListener("click", (event) => {
     const target = event.target.closest("button");
     if (!target) return;
+    if (target.dataset.rateRefresh === "order") applyRateFor("order", { force: true }).catch(() => {});
+    if (target.dataset.rateRefresh === "payment") applyRateFor("payment", { force: true }).catch(() => {});
     if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
     if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
     if (target.dataset.editCost) editCost(target.dataset.editCost);
@@ -1328,6 +1680,8 @@ function initSelects() {
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");
   fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
   fillSelect("#supplier-status", constants.supplierStatuses, "启用");
+  fillSelect("#exchange-source", constants.exchangeRateSources, "中国银行");
+  fillSelect("#exchange-rate-type", constants.exchangeRateTypes, "现汇买入价");
   fillSelect("#cost-type", constants.costTypes, "工厂货款");
   fillSelect("#cost-payment-status", constants.costPaymentStatuses, "待支付");
   fillSelect("#cost-invoice-status", constants.invoiceStatuses, "未收到");

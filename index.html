@@ -93,7 +93,17 @@
               <label><span>业务员</span><input id="order-salesperson" disabled /></label>
               <label><span>国家 / 地区</span><input id="order-country" /></label>
               <label><span>币种 *</span><select id="order-currency" required></select></label>
-              <label><span>汇率 *</span><input id="order-rate" type="number" min="0" step="0.0001" required /></label>
+              <div class="form-field rate-field">
+                <span>汇率 *</span>
+                <div class="rate-input-row">
+                  <input id="order-rate" type="number" min="0" step="0.0001" required />
+                  <button class="secondary-button rate-refresh" data-rate-refresh="order" type="button">刷新</button>
+                </div>
+                <input id="order-rate-date" type="hidden" />
+                <input id="order-rate-source" type="hidden" />
+                <input id="order-rate-type" type="hidden" />
+                <small class="rate-meta" id="order-rate-meta">自动汇率</small>
+              </div>
               <label><span>预计应收金额 *</span><input id="order-estimated-amount" type="number" min="0" step="0.01" required /></label>
               <label><span>预计折人民币</span><input id="order-estimated-amount-cny" disabled /></label>
               <label><span>实际发货金额</span><input id="order-actual-amount" type="number" min="0" step="0.01" /></label>
@@ -125,7 +135,17 @@
               <label><span>客户名称</span><input id="payment-customer" disabled /></label>
               <label><span>收款日期 *</span><input id="payment-date" type="date" required /></label>
               <label><span>币种</span><select id="payment-currency"></select></label>
-              <label><span>汇率 *</span><input id="payment-rate" type="number" min="0" step="0.0001" required /></label>
+              <div class="form-field rate-field">
+                <span>汇率 *</span>
+                <div class="rate-input-row">
+                  <input id="payment-rate" type="number" min="0" step="0.0001" required />
+                  <button class="secondary-button rate-refresh" data-rate-refresh="payment" type="button">刷新</button>
+                </div>
+                <input id="payment-rate-date" type="hidden" />
+                <input id="payment-rate-source" type="hidden" />
+                <input id="payment-rate-type" type="hidden" />
+                <small class="rate-meta" id="payment-rate-meta">自动汇率</small>
+              </div>
               <label><span>收款金额 *</span><input id="payment-amount" type="number" min="0" step="0.01" required /></label>
               <label><span>折人民币金额</span><input id="payment-amount-cny" disabled /></label>
               <label><span>收款类型</span><select id="payment-type"></select></label>
@@ -200,6 +220,16 @@
               <div class="form-header"><div><h3>用户登录</h3><p>默认管理员：admin@example.com / admin123456</p></div></div>
               <div class="form-grid"><label><span>邮箱</span><input id="login-email" value="admin@example.com" /></label><label><span>密码</span><input id="login-password" type="password" value="admin123456" /></label></div>
               <div class="form-actions"><button class="primary-button" type="submit">登录</button><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
+            </form>
+            <form class="entry-form" id="exchange-rate-settings-form" autocomplete="off">
+              <div class="form-header"><div><h3>汇率设置</h3></div><button class="secondary-button" id="refresh-exchange-rates" type="button">手动刷新今日汇率</button></div>
+              <div class="form-grid">
+                <label><span>汇率来源</span><select id="exchange-source"></select></label>
+                <label><span>汇率类型</span><select id="exchange-rate-type"></select></label>
+                <label><span>自动更新</span><select id="exchange-auto-update"><option value="true">开启</option><option value="false">关闭</option></select></label>
+                <label><span>允许手动修改</span><select id="exchange-allow-manual"><option value="true">是</option><option value="false">否</option></select></label>
+              </div>
+              <div class="form-actions"><button class="primary-button" type="submit">保存汇率设置</button></div>
             </form>
             <form class="entry-form" id="customer-form" autocomplete="off">
               <input type="hidden" id="customer-id" />
