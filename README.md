@@ -30,7 +30,24 @@ REMINDER_WEBHOOK_URL=""
 
 `REMINDER_WEBHOOK_URL` 为空时，定时任务只返回提醒清单，不主动发送消息；配置后会每天按 `vercel.json` 的 cron 调用发送 JSON payload。
 
-本地或 CI 初始化命令：
+Vercel Dashboard 部署步骤：
+
+1. 在 Vercel 选择 `Add New...` -> `Project`。
+2. 导入 GitHub 仓库 `zhujitv/RMB`。
+3. Framework Preset 选择 `Next.js`。
+4. Root Directory 保持仓库根目录。
+5. 在 Environment Variables 添加上面的变量，至少需要 `DATABASE_URL`。
+6. 点击 Deploy。
+
+构建时会自动执行：
+
+```bash
+prisma migrate deploy
+prisma generate
+next build
+```
+
+本地或 CI 手动初始化命令：
 
 ```bash
 npm install
