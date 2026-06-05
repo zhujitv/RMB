@@ -38,7 +38,7 @@ const constants = {
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
   invoiceStatuses: ["未收到", "已收到", "不需要发票"],
   tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
-  paymentTerms: ["预付款", "见提单付款", "见提单复印件付款", "OA账期", "到港后付款", "分批付款", "其他"],
+  paymentTerms: ["30%预付款", "50%预付款", "100%预付款", "自定义比例", "预付款", "见提单付款", "见提单复印件付款", "OA账期", "到港后付款", "分批付款", "其他"],
   costTypes: ["工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
@@ -98,6 +98,19 @@ function today() {
 
 function calcCny(amountValue, rateValue) {
   return ((Number(amountValue) || 0) * (Number(rateValue) || 0)).toFixed(2);
+}
+
+function depositRatioFromTerm(term) {
+  if (term === "30%预付款") return 30;
+  if (term === "50%预付款") return 50;
+  if (term === "100%预付款") return 100;
+  return null;
+}
+
+function currentOrderDepositSummary() {
+  const id = $("#order-id")?.value;
+  const order = id ? orderById(id) : null;
+  return order?.summary || {};
 }
 
 function rateValue(value) {
@@ -607,6 +620,9 @@ function renderDashboard() {
   $("#metric-grid").innerHTML = [
     metric("应收总额", money(totals.receivable), `${totals.orderCount || 0} 个订单`, "tone-blue"),
     metric("已确认收款", money(totals.confirmed), `${totals.paymentCount || 0} 笔收款`, "tone-green"),
+    metric("预付款要求", money(totals.requiredDepositAmount), "按付款条款自动计算", "tone-blue"),
+    metric("已收预付款", money(totals.receivedDeposit), "来自已到账预付款", "tone-green"),
+    metric("预付款差额", money(totals.depositGap), "需继续催收预付款", "tone-amber"),
     metric("待确认收款", money(totals.pending), "不计入正式已收", "tone-amber"),
     metric("未收余额", money(totals.outstanding), `逾期 ${totals.overdueOrders || 0} 个`, "tone-red"),
     metric("总成本", money(totals.cost), `${totals.costCount || 0} 笔成本`, "tone-slate"),
@@ -696,12 +712,15 @@ function renderOrders() {
       <td>${money(order.estimatedReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.estimatedReceivableAmount)}</small></td>
       <td>${order.actualShipmentAmount === "" ? "-" : `${money(order.actualShipmentAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.actualShipmentAmount)}</small>`}</td>
       <td>${money(order.finalReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}</small></td>
+      <td>${money(order.summary.requiredDepositAmount)}</td>
+      <td>${money(order.summary.receivedDepositCny)}</td>
+      <td>${money(order.summary.depositGapCny)}</td>
       <td>${money(order.summary.confirmedPaymentsCny)}</td>
       <td>${order.summary.overpaidCny > 0 ? `多收 ${money(order.summary.overpaidCny)}` : `未收 ${money(order.summary.outstandingCny)}`}</td>
       <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
       <td class="row-actions"><button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button></td>
     </tr>
-  `).join("") : emptyRow(10);
+  `).join("") : emptyRow(13);
 }
 
 function renderPayments() {
@@ -756,6 +775,9 @@ function renderProfit() {
         <td>${escapeHtml(order.customerName)}</td>
         <td>${escapeHtml(order.salespersonName || "-")}</td>
         <td>${money(order.summary.receivableCny)}</td>
+        <td>${money(order.summary.requiredDepositAmount)}</td>
+        <td>${money(order.summary.receivedDepositCny)}</td>
+        <td>${money(order.summary.depositGapCny)}</td>
         <td>${money(order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.outstandingCny)}</td>
         <td>${money(order.summary.totalCostCny)}</td>
@@ -767,7 +789,7 @@ function renderProfit() {
         <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
       </tr>
     `;
-  }).join("") : emptyRow(14);
+  }).join("") : emptyRow(17);
 }
 
 function renderSettings() {
@@ -854,7 +876,7 @@ const orderFields = [
   ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
   ["exchangeRateDate", "#order-rate-date"], ["exchangeRateSource", "#order-rate-source"], ["exchangeRateType", "#order-rate-type"],
   ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
-  ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
+  ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["depositRatio", "#order-deposit-ratio"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
   ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
 ];
 
@@ -1092,7 +1114,24 @@ function updateOrderDerived() {
   const rate = $("#order-rate").value;
   $("#order-final-amount").value = actual || estimated || $("#order-final-amount").value;
   $("#order-estimated-amount-cny").value = calcCny(estimated, rate);
-  $("#order-final-amount-cny").value = calcCny($("#order-final-amount").value || actual || estimated, rate);
+  const finalCny = Number(calcCny($("#order-final-amount").value || actual || estimated, rate));
+  $("#order-final-amount-cny").value = finalCny.toFixed(2);
+  const termRatio = depositRatioFromTerm($("#order-payment-term").value);
+  const ratioInput = $("#order-deposit-ratio");
+  if (termRatio != null) {
+    ratioInput.value = termRatio;
+    ratioInput.readOnly = true;
+  } else {
+    ratioInput.readOnly = $("#order-payment-term").value !== "自定义比例";
+    if ($("#order-payment-term").value !== "自定义比例") ratioInput.value = "";
+  }
+  const depositRatio = Number(ratioInput.value) || 0;
+  const requiredDeposit = Math.round(finalCny * (depositRatio / 100) * 100) / 100;
+  const summary = currentOrderDepositSummary();
+  const receivedDeposit = Number(summary.receivedDepositCny || 0);
+  $("#order-required-deposit").value = money(requiredDeposit);
+  $("#order-received-deposit").value = money(receivedDeposit);
+  $("#order-deposit-gap").value = money(Math.max(requiredDeposit - receivedDeposit, 0));
   const credit = Number($("#order-credit-days").value);
   if ($("#order-expected-date").value && Number.isFinite(credit) && credit > 0 && !$("#order-due-date").value) {
     const date = new Date(`${$("#order-expected-date").value}T00:00:00`);
@@ -1167,6 +1206,9 @@ async function submitOrder(event) {
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
     if (!(Number(data.estimatedReceivableAmount) > 0)) throw new Error("预计应收金额必须大于 0");
     if (!data.currency) throw new Error("币种不能为空");
+    if (data.paymentTerm === "自定义比例" && !(Number(data.depositRatio) > 0 && Number(data.depositRatio) <= 100)) {
+      throw new Error("自定义预付款比例必须大于 0 且不超过 100%");
+    }
     if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
       if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
       data.manualRateConfirmed = true;
@@ -1369,6 +1411,11 @@ function resetForm(name) {
     $("#order-rate-source").value = "";
     $("#order-rate-type").value = "";
     $("#order-rate-meta").textContent = "自动汇率";
+    $("#order-deposit-ratio").value = "";
+    $("#order-deposit-ratio").readOnly = true;
+    $("#order-required-deposit").value = money(0);
+    $("#order-received-deposit").value = money(0);
+    $("#order-deposit-gap").value = money(0);
     $("#order-reminder-days").value = "7";
     $("#order-salesperson").value = state.me?.name || "";
     fillAvailableCustomerSelect("");
@@ -1550,11 +1597,15 @@ function bindEvents() {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
   });
 
-  ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date"].forEach((selector) => $(selector).addEventListener("input", () => {
+  ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date", "#order-payment-term", "#order-deposit-ratio"].forEach((selector) => $(selector).addEventListener("input", () => {
     if (selector === "#order-rate") markManualRate("order");
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
+  $("#order-payment-term").addEventListener("change", () => {
+    updateOrderDerived();
+    saveDraft("order", orderFields);
+  });
   $("#order-link-due-date").addEventListener("click", () => {
     try {
       linkOrderDueDate();

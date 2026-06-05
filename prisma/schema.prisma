@@ -111,6 +111,7 @@ model ReceivableOrder {
   finalReceivableAmountCny     Decimal   @map("final_receivable_amount_cny") @db.Decimal(18, 2)
   tradeTerm           String    @default("FOB") @map("trade_term")
   paymentTerm         String    @default("OA账期") @map("payment_term")
+  depositRatio        Decimal?  @map("deposit_ratio") @db.Decimal(8, 4)
   expectedPaymentDate DateTime? @map("expected_payment_date") @db.Date
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
