@@ -42,14 +42,9 @@ Vercel Dashboard 部署步骤：
 Vercel 构建时会自动执行：
 
 ```bash
+prisma migrate deploy
 prisma generate
 next build
-```
-
-数据库表结构迁移需要在 `DATABASE_URL` 配好后单独执行：
-
-```bash
-npm run db:deploy
 ```
 
 本地或 CI 手动初始化命令：
