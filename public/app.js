@@ -7,6 +7,8 @@ const state = {
   users: [],
   customers: [],
   availableCustomers: [],
+  suppliers: [],
+  availableSuppliers: [],
   orders: [],
   payments: [],
   costs: [],
@@ -22,13 +24,16 @@ const constants = {
   currencies: ["USD", "EUR", "GBP", "CNY", "HKD"],
   defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
   roles: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
-  orderStatuses: ["草稿", "已提交", "部分收款", "已收齐", "已逾期", "已关闭", "已取消"],
+  orderStatuses: ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"],
   paymentStatuses: ["待确认", "已到账", "部分到账", "已退回", "已取消"],
+  paymentTypes: ["预付款", "尾款", "补差款", "其他"],
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
   invoiceStatuses: ["未收到", "已收到", "不需要发票"],
   tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
   paymentTerms: ["预付款", "见提单付款", "见提单复印件付款", "OA账期", "到港后付款", "分批付款", "其他"],
   costTypes: ["工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
+  supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
+  supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
 };
 
@@ -335,6 +340,8 @@ async function loadData() {
     state.payments = data.payments || [];
     state.costs = data.costs || [];
     state.customers = data.customers || [];
+    state.suppliers = data.suppliers || [];
+    state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
     state.availableCustomers = availableData.customers || [];
     state.users = data.users || [];
     const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
@@ -425,9 +432,9 @@ function renderStats(items) {
 }
 
 function statusClass(status) {
-  if (["已逾期", "已退回", "已取消"].includes(status)) return "danger";
-  if (["已收齐", "已结清", "已到账", "已支付"].includes(status)) return "success";
-  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付"].includes(status)) return "warning";
+  if (["已逾期", "已退回", "已取消", "停用"].includes(status)) return "danger";
+  if (["已收齐", "已结清", "已到账", "已支付", "启用"].includes(status)) return "success";
+  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付", "多收款"].includes(status)) return "warning";
   return "";
 }
 
@@ -455,18 +462,17 @@ function renderOrders() {
   $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
     <tr>
       <td><strong>${escapeHtml(order.orderNo)}</strong><small>ID: ${escapeHtml(order.id)}</small></td>
-      <td>${escapeHtml(order.blNo || "-")}</td>
+      <td>${escapeHtml(order.blNo || "待发货")}</td>
       <td>${escapeHtml(order.customerName)}</td>
-      <td>${escapeHtml(order.salespersonName || "-")}</td>
-      <td>${money(order.receivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.receivableAmount)}</small></td>
+      <td>${money(order.estimatedReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.estimatedReceivableAmount)}</small></td>
+      <td>${order.actualShipmentAmount === "" ? "-" : `${money(order.actualShipmentAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.actualShipmentAmount)}</small>`}</td>
+      <td>${money(order.finalReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}</small></td>
       <td>${money(order.summary.confirmedPaymentsCny)}</td>
-      <td>${money(order.summary.outstandingCny)}</td>
+      <td>${order.summary.overpaidCny > 0 ? `多收 ${money(order.summary.overpaidCny)}` : `未收 ${money(order.summary.outstandingCny)}`}</td>
       <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
-      <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span><small>${order.summary.overdueDays ? `${order.summary.overdueDays} 天` : ""}</small></td>
-      <td>${auditCell(order)}</td>
       <td class="row-actions"><button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button></td>
     </tr>
-  `).join("") : emptyRow(11);
+  `).join("") : emptyRow(10);
 }
 
 function renderPayments() {
@@ -476,6 +482,7 @@ function renderPayments() {
       <td>${escapeHtml(payment.orderNo)}</td>
       <td>${escapeHtml(payment.customerName)}</td>
       <td>${payment.paymentDate}</td>
+      <td>${escapeHtml(payment.paymentType || "尾款")}</td>
       <td>${escapeHtml(payment.currency)} ${amount(payment.amount)}</td>
       <td>${money(payment.amountCny)}</td>
       <td><span class="status ${statusClass(payment.status)}">${payment.status}</span></td>
@@ -483,7 +490,7 @@ function renderPayments() {
       <td>${auditCell(payment)}</td>
       <td class="row-actions"><button data-edit-payment="${payment.id}">编辑</button><button data-delete-payment="${payment.id}">删除</button></td>
     </tr>
-  `).join("") : emptyRow(9);
+  `).join("") : emptyRow(10);
 }
 
 function renderCosts() {
@@ -493,9 +500,9 @@ function renderCosts() {
       <td>${escapeHtml(cost.orderNo)}</td>
       <td>${escapeHtml(cost.customerName)}</td>
       <td>${escapeHtml(cost.costType)}</td>
-      <td>${escapeHtml(cost.vendorName)}</td>
+      <td>${escapeHtml(cost.supplierName || cost.vendorName)}</td>
+      <td>${escapeHtml(cost.supplierType || "-")}</td>
       <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
-      <td>${money(cost.amountCny)}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
       <td>${auditCell(cost)}</td>
@@ -549,6 +556,20 @@ function renderSettings() {
     </tr>
   `).join("") : emptyRow(7);
 
+  $("#suppliers-count").textContent = `${state.suppliers.length} 个供应商`;
+  $("#suppliers-table").innerHTML = state.suppliers.length ? state.suppliers.map((supplier) => `
+    <tr>
+      <td>${escapeHtml(supplier.supplierName)}</td>
+      <td>${escapeHtml(supplier.supplierType)}</td>
+      <td><span class="status ${statusClass(supplier.status)}">${supplier.status}</span></td>
+      <td>${escapeHtml(supplier.contactPerson || "-")}</td>
+      <td>${escapeHtml(supplier.phone || "-")}</td>
+      <td>${escapeHtml(supplier.invoiceTitle || "-")}</td>
+      <td>${escapeHtml(supplier.bankAccount || "-")}</td>
+      <td class="row-actions"><button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button></td>
+    </tr>
+  `).join("") : emptyRow(8);
+
   $("#users-count").textContent = `${state.users.length} 个用户`;
   $("#users-table").innerHTML = state.users.length ? state.users.map((user) => `
     <tr>
@@ -597,14 +618,22 @@ function clearDraft(name) {
 
 const orderFields = [
   ["id", "#order-id"], ["customerId", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"],
-  ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"], ["receivableAmount", "#order-amount"],
+  ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
+  ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
   ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
   ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
 ];
 
 const paymentFields = [
   ["id", "#payment-id"], ["orderId", "#payment-order"], ["paymentDate", "#payment-date"], ["currency", "#payment-currency"], ["exchangeRate", "#payment-rate"],
-  ["amount", "#payment-amount"], ["status", "#payment-status"], ["bankReference", "#payment-bank-reference"], ["remark", "#payment-remark"],
+  ["amount", "#payment-amount"], ["paymentType", "#payment-type"], ["status", "#payment-status"], ["bankReference", "#payment-bank-reference"], ["remark", "#payment-remark"],
+];
+
+const supplierFields = [
+  ["id", "#supplier-id"], ["supplierName", "#supplier-name"], ["supplierType", "#supplier-type"], ["country", "#supplier-country"],
+  ["contactPerson", "#supplier-contact-person"], ["phone", "#supplier-phone"], ["email", "#supplier-email"], ["address", "#supplier-address"],
+  ["invoiceTitle", "#supplier-invoice-title"], ["taxNumber", "#supplier-tax-number"], ["bankName", "#supplier-bank-name"],
+  ["bankAccount", "#supplier-bank-account"], ["status", "#supplier-status"], ["remark", "#supplier-remark"],
 ];
 
 const costFields = [
@@ -612,11 +641,55 @@ const costFields = [
   ["paymentStatus", "#cost-payment-status"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"],
 ];
 
+function supplierDisplayName(item = {}) {
+  return item.supplierName || item.supplierNameSnapshot || item.vendorName || "";
+}
+
+function supplierById(id) {
+  return state.suppliers.find((supplier) => supplier.id === id)
+    || state.availableSuppliers.find((supplier) => supplier.id === id);
+}
+
+function supplierLabel(supplier) {
+  return [
+    supplier.supplierName,
+    supplier.supplierType,
+    supplier.invoiceTitle ? `开票 ${supplier.invoiceTitle}` : "",
+    supplier.contactPerson ? `联系人 ${supplier.contactPerson}` : "",
+  ].filter(Boolean).join(" | ");
+}
+
+function supplierMatches(supplier, keyword) {
+  if (!keyword) return true;
+  const text = [supplier.supplierName, supplier.invoiceTitle, supplier.contactPerson, supplier.supplierType].join(" ").toLowerCase();
+  return text.includes(keyword.toLowerCase());
+}
+
+function renderSupplierResults(row, keyword = "") {
+  const box = row.querySelector(".supplier-search-results");
+  const suppliers = state.availableSuppliers.filter((supplier) => supplierMatches(supplier, keyword)).slice(0, 20);
+  if (!suppliers.length) {
+    box.innerHTML = `<div class="supplier-search-empty">未找到启用供应商，请先创建供应商资料。</div>`;
+    return;
+  }
+  box.innerHTML = suppliers.map((supplier) => (
+    `<button class="supplier-search-option" type="button" data-supplier-id="${escapeHtml(supplier.id)}"><strong>${escapeHtml(supplierLabel(supplier))}</strong></button>`
+  )).join("");
+}
+
+function selectSupplierForRow(row, supplier, { persist = true } = {}) {
+  if (!supplier) return;
+  row.querySelector(".cost-item-supplier-id").value = supplier.id;
+  row.querySelector(".cost-item-supplier-search").value = supplier.supplierName;
+  row.querySelector(".supplier-search-results").innerHTML = "";
+  if (persist) saveCostDraft();
+}
+
 function costItemRow(item = {}) {
   const currency = item.currency || "CNY";
   return `
     <div class="cost-item-row">
-      <label><span>供应商 / 收款方 *</span><input class="cost-item-vendor" value="${escapeHtml(item.vendorName || "")}" /></label>
+      <label class="supplier-picker"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search" value="${escapeHtml(supplierDisplayName(item))}" placeholder="搜索供应商" autocomplete="off" /><div class="supplier-search-results"></div></label>
       <label><span>成本金额 *</span><input class="cost-item-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount ?? "")}" /></label>
       <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
       <label><span>汇率 *</span><input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate ?? (constants.defaultRates[currency] || 1).toFixed(4))}" /></label>
@@ -653,8 +726,8 @@ function costDefaultType() {
 function costFormLabel(cost = {}) {
   const order = orderById(cost.orderId);
   const orderNo = cost.orderNo || order?.orderNo || "-";
-  const vendorName = cost.vendorName || "-";
-  return `${orderNo} / ${vendorName}`;
+  const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
+  return `${orderNo} / ${supplierName}`;
 }
 
 function costOrderFromCost(cost) {
@@ -701,18 +774,19 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
 function readCostItems(validate = false) {
   const rows = $$("#cost-items .cost-item-row");
   const items = rows.map((row) => ({
-    vendorName: row.querySelector(".cost-item-vendor").value.trim(),
+    supplierId: row.querySelector(".cost-item-supplier-id").value,
+    supplierName: row.querySelector(".cost-item-supplier-search").value.trim(),
     amount: row.querySelector(".cost-item-amount").value,
     currency: row.querySelector(".cost-item-currency").value,
     exchangeRate: row.querySelector(".cost-item-rate").value,
     remark: row.querySelector(".cost-item-remark").value,
-  })).filter((item) => item.vendorName || item.amount || item.remark);
+  })).filter((item) => item.supplierId || item.supplierName || item.amount || item.remark);
 
   if (validate && !items.length) throw new Error("请至少录入一条供应商成本");
   if (validate) {
     items.forEach((item, index) => {
       const label = `第 ${index + 1} 条成本`;
-      if (!item.vendorName) throw new Error(`${label}的供应商不能为空`);
+      if (!item.supplierId) throw new Error(`${label}必须从供应商资料中选择供应商`);
       if (!(Number(item.amount) > 0)) throw new Error(`${label}的成本金额必须大于 0`);
       if (!item.currency) throw new Error(`${label}的币种不能为空`);
       if (!(Number(item.exchangeRate) > 0)) throw new Error(`${label}的汇率必须大于 0`);
@@ -763,7 +837,12 @@ function loadCostDraft() {
 }
 
 function updateOrderDerived() {
-  $("#order-amount-cny").value = calcCny($("#order-amount").value, $("#order-rate").value);
+  const estimated = $("#order-estimated-amount").value;
+  const actual = $("#order-actual-amount").value;
+  const rate = $("#order-rate").value;
+  $("#order-final-amount").value = actual || estimated || $("#order-final-amount").value;
+  $("#order-estimated-amount-cny").value = calcCny(estimated, rate);
+  $("#order-final-amount-cny").value = calcCny($("#order-final-amount").value || actual || estimated, rate);
   const credit = Number($("#order-credit-days").value);
   if ($("#order-expected-date").value && Number.isFinite(credit) && credit > 0 && !$("#order-due-date").value) {
     const date = new Date(`${$("#order-expected-date").value}T00:00:00`);
@@ -832,7 +911,7 @@ async function submitOrder(event) {
     const data = readForm("order", orderFields);
     if (!data.customerId) throw new Error("客户名称不能为空");
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
-    if (!String(data.blNo || "").trim()) throw new Error("提单号不能为空");
+    if (!(Number(data.estimatedReceivableAmount) > 0)) throw new Error("预计应收金额必须大于 0");
     if (!data.currency) throw new Error("币种不能为空");
     const id = data.id;
     delete data.id;
@@ -923,6 +1002,21 @@ async function submitCustomer(event) {
   }
 }
 
+async function submitSupplier(event) {
+  event.preventDefault();
+  try {
+    const data = readForm("supplier", supplierFields);
+    const id = data.id;
+    delete data.id;
+    await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    resetForm("supplier");
+    await loadData();
+    toast("供应商已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function submitUser(event) {
   event.preventDefault();
   try {
@@ -974,12 +1068,14 @@ function resetForm(name) {
     fillPaymentOrderSelect("");
     $("#payment-date").value = today();
     $("#payment-rate").value = constants.defaultRates.USD.toFixed(4);
+    $("#payment-type").value = "尾款";
     updatePaymentDerived();
   }
   if (name === "cost") {
     resetCostForm();
   }
   if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSalespersonSelect("#customer-salesperson");
+  if (name === "supplier") $("#supplier-form").reset(), $("#supplier-id").value = "", $("#supplier-status").value = "启用", $("#supplier-type").value = "其他供应商";
   if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
 }
 
@@ -1044,6 +1140,14 @@ function editCustomer(id) {
   switchView("settings");
 }
 
+function editSupplier(id) {
+  const supplier = state.suppliers.find((item) => item.id === id);
+  if (!supplier) return;
+  setForm(supplierFields, supplier);
+  $("#supplier-id").value = supplier.id;
+  switchView("settings");
+}
+
 function editUser(id) {
   const user = state.users.find((item) => item.id === id);
   if (!user) return;
@@ -1056,13 +1160,14 @@ function editUser(id) {
 }
 
 async function deleteRecord(kind, id) {
-  const labels = { order: "应收订单", payment: "收款", cost: "成本", customer: "客户", user: "用户" };
+  const labels = { order: "应收订单", payment: "收款", cost: "成本", customer: "客户", supplier: "供应商", user: "用户" };
   if (!confirm(`确认删除/停用这条${labels[kind]}吗？该操作会写入操作日志。`)) return;
   const endpoints = {
     order: `/api/orders/${id}`,
     payment: `/api/payments/${id}`,
     cost: `/api/costs/${id}`,
     customer: `/api/customers/${id}`,
+    supplier: `/api/suppliers/${id}`,
     user: `/api/users/${id}`,
   };
   try {
@@ -1099,6 +1204,7 @@ function bindEvents() {
   $("#payment-form").addEventListener("submit", submitPayment);
   $("#cost-form").addEventListener("submit", submitCost);
   $("#customer-form").addEventListener("submit", submitCustomer);
+  $("#supplier-form").addEventListener("submit", submitSupplier);
   $("#user-form").addEventListener("submit", submitUser);
   $("#login-form").addEventListener("submit", submitLogin);
   $("#logout-button").addEventListener("click", async () => {
@@ -1107,11 +1213,11 @@ function bindEvents() {
     toast("已退出");
   });
 
-  ["order", "payment", "cost", "customer", "user"].forEach((name) => {
+  ["order", "payment", "cost", "customer", "supplier", "user"].forEach((name) => {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
   });
 
-  ["#order-amount", "#order-rate", "#order-credit-days", "#order-expected-date"].forEach((selector) => $(selector).addEventListener("input", () => {
+  ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date"].forEach((selector) => $(selector).addEventListener("input", () => {
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
@@ -1146,6 +1252,10 @@ function bindEvents() {
   });
   $("#cost-items").addEventListener("input", (event) => {
     const row = event.target.closest(".cost-item-row");
+    if (row && event.target.classList.contains("cost-item-supplier-search")) {
+      row.querySelector(".cost-item-supplier-id").value = "";
+      renderSupplierResults(row, event.target.value);
+    }
     if (row) updateCostItemDerived(row);
     saveCostDraft();
   });
@@ -1158,6 +1268,13 @@ function bindEvents() {
     saveCostDraft();
   });
   $("#cost-items").addEventListener("click", (event) => {
+    const supplierButton = event.target.closest("[data-supplier-id]");
+    if (supplierButton) {
+      const supplier = supplierById(supplierButton.dataset.supplierId);
+      const row = supplierButton.closest(".cost-item-row");
+      if (row && supplier) selectSupplierForRow(row, supplier);
+      return;
+    }
     const button = event.target.closest(".delete-cost-item");
     if (!button) return;
     if ($$("#cost-items .cost-item-row").length > 1) button.closest(".cost-item-row").remove();
@@ -1183,11 +1300,13 @@ function bindEvents() {
     if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
     if (target.dataset.editCost) editCost(target.dataset.editCost);
     if (target.dataset.editCustomer) editCustomer(target.dataset.editCustomer);
+    if (target.dataset.editSupplier) editSupplier(target.dataset.editSupplier);
     if (target.dataset.editUser) editUser(target.dataset.editUser);
     if (target.dataset.deleteOrder) deleteRecord("order", target.dataset.deleteOrder);
     if (target.dataset.deletePayment) deleteRecord("payment", target.dataset.deletePayment);
     if (target.dataset.deleteCost) deleteRecord("cost", target.dataset.deleteCost);
     if (target.dataset.deleteCustomer) deleteRecord("customer", target.dataset.deleteCustomer);
+    if (target.dataset.deleteSupplier) deleteRecord("supplier", target.dataset.deleteSupplier);
     if (target.dataset.deleteUser) deleteRecord("user", target.dataset.deleteUser);
     if (target.dataset.export) exportReport(target.dataset.export);
   });
@@ -1204,8 +1323,11 @@ function initSelects() {
   fillSelect("#customer-currency", constants.currencies, "CNY");
   fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
   fillSelect("#order-payment-term", constants.paymentTerms, "OA账期");
-  fillSelect("#order-status", constants.orderStatuses, "已提交");
+  fillSelect("#order-status", constants.orderStatuses, "已确认");
+  fillSelect("#payment-type", constants.paymentTypes, "尾款");
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");
+  fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
+  fillSelect("#supplier-status", constants.supplierStatuses, "启用");
   fillSelect("#cost-type", constants.costTypes, "工厂货款");
   fillSelect("#cost-payment-status", constants.costPaymentStatuses, "待支付");
   fillSelect("#cost-invoice-status", constants.invoiceStatuses, "未收到");

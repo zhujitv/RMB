@@ -25,6 +25,8 @@ model User {
   updatedPayments Payment[] @relation("PaymentsUpdated")
   createdCosts OrderCost[] @relation("CostsCreated")
   updatedCosts OrderCost[] @relation("CostsUpdated")
+  createdSuppliers Supplier[] @relation("SuppliersCreated")
+  updatedSuppliers Supplier[] @relation("SuppliersUpdated")
   attachments Attachment[]
   auditLogs   AuditLog[]
 
@@ -54,10 +56,42 @@ model Customer {
   @@map("customers")
 }
 
+model Supplier {
+  id            String    @id @default(cuid())
+  supplierName  String    @map("supplier_name")
+  supplierType  String    @default("其他供应商") @map("supplier_type")
+  country       String?
+  contactPerson String?   @map("contact_person")
+  phone         String?
+  email         String?
+  address       String?
+  invoiceTitle  String?   @map("invoice_title")
+  taxNumber     String?   @map("tax_number")
+  bankName      String?   @map("bank_name")
+  bankAccount   String?   @map("bank_account")
+  remark        String?
+  status        String    @default("启用")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  createdBy User?      @relation("SuppliersCreated", fields: [createdById], references: [id])
+  updatedBy User?      @relation("SuppliersUpdated", fields: [updatedById], references: [id])
+  costs     OrderCost[]
+
+  @@index([supplierName])
+  @@index([supplierType])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("suppliers")
+}
+
 model ReceivableOrder {
   id                  String    @id @default(cuid())
   orderNo             String    @map("order_no")
-  blNo                String    @map("bl_no")
+  blNo                String?   @map("bl_no")
   customerId          String    @map("customer_id")
   customerNameSnapshot String   @map("customer_name_snapshot")
   salespersonUserId   String?   @map("salesperson_user_id")
@@ -66,6 +100,12 @@ model ReceivableOrder {
   exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
   receivableAmount    Decimal   @map("receivable_amount") @db.Decimal(18, 2)
   receivableAmountCny Decimal   @map("receivable_amount_cny") @db.Decimal(18, 2)
+  estimatedReceivableAmount    Decimal   @map("estimated_receivable_amount") @db.Decimal(18, 2)
+  estimatedReceivableAmountCny Decimal   @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
+  actualShipmentAmount         Decimal?  @map("actual_shipment_amount") @db.Decimal(18, 2)
+  actualShipmentAmountCny      Decimal?  @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
+  finalReceivableAmount        Decimal   @map("final_receivable_amount") @db.Decimal(18, 2)
+  finalReceivableAmountCny     Decimal   @map("final_receivable_amount_cny") @db.Decimal(18, 2)
   tradeTerm           String    @default("FOB") @map("trade_term")
   paymentTerm         String    @default("OA账期") @map("payment_term")
   expectedPaymentDate DateTime? @map("expected_payment_date") @db.Date
@@ -105,6 +145,7 @@ model Payment {
   exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
   amount        Decimal   @db.Decimal(18, 2)
   amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  paymentType   String    @default("尾款") @map("payment_type")
   status        String    @default("待确认")
   bankReference String?   @map("bank_reference")
   remark        String?
@@ -128,6 +169,8 @@ model Payment {
 model OrderCost {
   id            String    @id @default(cuid())
   orderId       String    @map("order_id")
+  supplierId    String?   @map("supplier_id")
+  supplierNameSnapshot String @default("") @map("supplier_name_snapshot")
   costType      String    @map("cost_type")
   vendorName    String    @map("vendor_name")
   currency      String    @default("CNY")
@@ -145,10 +188,12 @@ model OrderCost {
   deletedAt     DateTime? @map("deleted_at")
 
   order     ReceivableOrder @relation(fields: [orderId], references: [id])
+  supplier  Supplier?       @relation(fields: [supplierId], references: [id])
   createdBy User?           @relation("CostsCreated", fields: [createdById], references: [id])
   updatedBy User?           @relation("CostsUpdated", fields: [updatedById], references: [id])
 
   @@index([orderId])
+  @@index([supplierId])
   @@index([costType])
   @@index([paymentStatus])
   @@index([deletedAt])
