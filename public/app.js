@@ -6,6 +6,7 @@ const state = {
   roles: [],
   users: [],
   customers: [],
+  availableCustomers: [],
   orders: [],
   payments: [],
   costs: [],
@@ -119,8 +120,34 @@ function fillOrderSelect(id, selected = "") {
   )).join("")}`;
 }
 
+function fillAvailableCustomerSelect(selected = "") {
+  const el = $("#order-customer");
+  if (!el) return;
+  const options = state.availableCustomers.map((customer) => {
+    const note = customer.country ? ` / ${customer.country}` : "";
+    return `<option value="${customer.id}" ${customer.id === selected ? "selected" : ""}>${escapeHtml(customer.name)}${escapeHtml(note)}</option>`;
+  }).join("");
+  el.innerHTML = `<option value="">请选择客户</option>${options}`;
+  if (selected) el.value = selected;
+}
+
+function fillSalespersonSelect(id, selected = "", includeBlank = true) {
+  const el = $(id);
+  if (!el) return;
+  const users = state.users.filter((user) => user.isActive && ["业务员", "管理员"].includes(user.role));
+  el.innerHTML = `${includeBlank ? '<option value="">未分配</option>' : ""}${users.map((user) => (
+    `<option value="${user.id}" ${user.id === selected ? "selected" : ""}>${escapeHtml(user.name)} / ${escapeHtml(user.role)}</option>`
+  )).join("")}`;
+  if (selected) el.value = selected;
+}
+
 function orderById(id) {
   return state.orders.find((order) => order.id === id);
+}
+
+function customerById(id) {
+  return state.availableCustomers.find((customer) => customer.id === id)
+    || state.customers.find((customer) => customer.id === id);
 }
 
 function filterParams() {
@@ -154,12 +181,16 @@ async function loadMe() {
 async function loadData() {
   try {
     await loadMe();
-    const data = await api(`/api/ledger?${filterParams().toString()}`);
+    const [data, availableData] = await Promise.all([
+      api(`/api/ledger?${filterParams().toString()}`),
+      api("/api/customers/available"),
+    ]);
     state.overview = data.overview;
     state.orders = data.orders || [];
     state.payments = data.payments || [];
     state.costs = data.costs || [];
     state.customers = data.customers || [];
+    state.availableCustomers = availableData.customers || [];
     state.users = data.users || [];
     const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
     state.auditLogs = logs.logs || [];
@@ -256,6 +287,10 @@ function statusClass(status) {
 }
 
 function renderOrderSelects() {
+  fillAvailableCustomerSelect($("#order-customer")?.value || "");
+  if (!$("#order-id")?.value && !$("#order-salesperson")?.value) {
+    $("#order-salesperson").value = state.me?.name || "";
+  }
   fillOrderSelect("#payment-order", $("#payment-order")?.value || "");
   fillOrderSelect("#cost-order", $("#cost-order")?.value || "");
 }
@@ -355,17 +390,19 @@ function renderProfit() {
 }
 
 function renderSettings() {
+  fillSalespersonSelect("#customer-salesperson", $("#customer-salesperson")?.value || "");
   $("#customers-count").textContent = `${state.customers.length} 个客户`;
   $("#customers-table").innerHTML = state.customers.length ? state.customers.map((customer) => `
     <tr>
       <td>${escapeHtml(customer.name)}</td>
       <td>${escapeHtml(customer.country || "-")}</td>
       <td>${escapeHtml(customer.defaultCurrency)}</td>
+      <td>${escapeHtml(customer.salespersonName || "-")}</td>
       <td>${escapeHtml(customer.contactPerson || "-")}</td>
       <td>${escapeHtml(customer.remark || "-")}</td>
       <td class="row-actions"><button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button></td>
     </tr>
-  `).join("") : emptyRow(6);
+  `).join("") : emptyRow(7);
 
   $("#users-count").textContent = `${state.users.length} 个用户`;
   $("#users-table").innerHTML = state.users.length ? state.users.map((user) => `
@@ -414,7 +451,7 @@ function clearDraft(name) {
 }
 
 const orderFields = [
-  ["id", "#order-id"], ["customerName", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"], ["salespersonName", "#order-salesperson"],
+  ["id", "#order-id"], ["customerId", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"],
   ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"], ["receivableAmount", "#order-amount"],
   ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
   ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
@@ -438,6 +475,18 @@ function updateOrderDerived() {
     date.setDate(date.getDate() + credit);
     $("#order-due-date").value = date.toISOString().slice(0, 10);
   }
+}
+
+function updateOrderCustomerDefaults(force = false) {
+  const customer = customerById($("#order-customer").value);
+  if (!customer) return;
+  if (force || !$("#order-country").value) $("#order-country").value = customer.country || "";
+  if (force || !$("#order-currency").value) {
+    $("#order-currency").value = customer.defaultCurrency || "USD";
+    $("#order-rate").value = (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4);
+  }
+  if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || state.me?.name || "";
+  updateOrderDerived();
 }
 
 function updatePaymentDerived() {
@@ -477,6 +526,9 @@ async function submitOrder(event) {
   event.preventDefault();
   try {
     const data = readForm("order", orderFields);
+    if (!data.customerId) throw new Error("客户名称不能为空");
+    if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
+    if (!String(data.blNo || "").trim()) throw new Error("提单号不能为空");
     const id = data.id;
     delete data.id;
     const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
@@ -543,6 +595,7 @@ async function submitCustomer(event) {
       contactPerson: $("#customer-contact-person").value,
       contactEmail: $("#customer-contact-email").value,
       contactPhone: $("#customer-contact-phone").value,
+      salespersonUserId: $("#customer-salesperson").value,
       remark: $("#customer-remark").value,
     };
     const id = $("#customer-id").value;
@@ -594,6 +647,8 @@ function resetForm(name) {
     $("#order-id").value = "";
     $("#order-rate").value = constants.defaultRates.USD.toFixed(4);
     $("#order-reminder-days").value = "7";
+    $("#order-salesperson").value = state.me?.name || "";
+    fillAvailableCustomerSelect("");
     updateOrderDerived();
   }
   if (name === "payment") {
@@ -609,7 +664,7 @@ function resetForm(name) {
     $("#cost-rate").value = "1.0000";
     updateCostDerived();
   }
-  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "";
+  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSalespersonSelect("#customer-salesperson");
   if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
 }
 
@@ -618,7 +673,6 @@ function editOrder(id) {
   if (!order) return;
   setForm(orderFields, order);
   $("#order-id").value = order.id;
-  $("#order-customer").value = order.customerName;
   $("#order-salesperson").value = order.salespersonName;
   updateOrderDerived();
   switchView("orders");
@@ -649,6 +703,8 @@ function editCustomer(id) {
   $("#customer-name").value = customer.name;
   $("#customer-country").value = customer.country;
   $("#customer-currency").value = customer.defaultCurrency;
+  fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
+  $("#customer-salesperson").value = customer.salespersonUserId || "";
   $("#customer-contact-person").value = customer.contactPerson;
   $("#customer-contact-email").value = customer.contactEmail;
   $("#customer-contact-phone").value = customer.contactPhone;
@@ -727,6 +783,10 @@ function bindEvents() {
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
+  $("#order-customer").addEventListener("change", () => {
+    updateOrderCustomerDefaults(true);
+    saveDraft("order", orderFields);
+  });
   ["#payment-order", "#payment-amount", "#payment-rate"].forEach((selector) => $(selector).addEventListener("input", () => {
     updatePaymentDerived();
     saveDraft("payment", paymentFields);

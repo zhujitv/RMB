@@ -11,7 +11,7 @@ export async function GET(request) {
       listOrders(query, actor),
       listPayments(query, actor),
       listCosts(query, actor),
-      listCustomers(query),
+      listCustomers(query, actor),
       listUsers(),
     ]);
     return ok({ overview, orders, payments, costs, customers, users });

@@ -4,7 +4,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
-    return ok({ customers: await listCustomers(new URL(request.url).searchParams) });
+    const actor = await getActor(request);
+    return ok({ customers: await listCustomers(new URL(request.url).searchParams, actor) });
   } catch (error) {
     return apiError(error, "读取客户失败");
   }

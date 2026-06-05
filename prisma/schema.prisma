@@ -18,6 +18,7 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   salesOrders   ReceivableOrder[] @relation("SalesOrders")
+  responsibleCustomers Customer[] @relation("CustomerSalesperson")
   createdOrders ReceivableOrder[] @relation("OrdersCreated")
   updatedOrders ReceivableOrder[] @relation("OrdersUpdated")
   createdPayments Payment[] @relation("PaymentsCreated")
@@ -35,6 +36,7 @@ model Customer {
   name            String
   country         String?
   defaultCurrency String    @default("USD") @map("default_currency")
+  salespersonUserId String?   @map("salesperson_user_id")
   contactPerson   String?   @map("contact_person")
   contactEmail    String?   @map("contact_email")
   contactPhone    String?   @map("contact_phone")
@@ -43,9 +45,11 @@ model Customer {
   updatedAt       DateTime  @updatedAt @map("updated_at")
   deletedAt       DateTime? @map("deleted_at")
 
+  salesperson User? @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
   orders ReceivableOrder[]
 
   @@index([name])
+  @@index([salespersonUserId])
   @@index([deletedAt])
   @@map("customers")
 }
@@ -53,9 +57,10 @@ model Customer {
 model ReceivableOrder {
   id                  String    @id @default(cuid())
   orderNo             String    @map("order_no")
-  blNo                String?   @map("bl_no")
+  blNo                String    @map("bl_no")
   customerId          String    @map("customer_id")
-  salespersonId       String?   @map("salesperson_id")
+  customerNameSnapshot String   @map("customer_name_snapshot")
+  salespersonUserId   String?   @map("salesperson_user_id")
   country             String?
   currency            String    @default("USD")
   exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
@@ -76,7 +81,7 @@ model ReceivableOrder {
   deletedAt           DateTime? @map("deleted_at")
 
   customer    Customer @relation(fields: [customerId], references: [id])
-  salesperson User?    @relation("SalesOrders", fields: [salespersonId], references: [id])
+  salesperson User?    @relation("SalesOrders", fields: [salespersonUserId], references: [id])
   createdBy   User?    @relation("OrdersCreated", fields: [createdById], references: [id])
   updatedBy   User?    @relation("OrdersUpdated", fields: [updatedById], references: [id])
   payments    Payment[]
@@ -85,7 +90,7 @@ model ReceivableOrder {
   @@index([orderNo])
   @@index([blNo])
   @@index([customerId])
-  @@index([salespersonId])
+  @@index([salespersonUserId])
   @@index([status])
   @@index([dueDate])
   @@index([deletedAt])

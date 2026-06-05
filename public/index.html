@@ -87,10 +87,10 @@
             <input type="hidden" id="order-id" />
             <div class="form-header"><div><h3>应收订单</h3><p>业务员创建应收订单，系统生成唯一 order_id，后续收款和成本都必须关联此 ID。</p></div><button class="secondary-button" type="button" data-reset="order">新建</button></div>
             <div class="form-grid">
-              <label><span>客户名称 *</span><input id="order-customer" required /></label>
+              <label><span>客户名称 *</span><select id="order-customer" required></select></label>
               <label><span>订单号 *</span><input id="order-no" required /></label>
-              <label><span>提单号</span><input id="order-bl-no" /></label>
-              <label><span>业务员</span><input id="order-salesperson" /></label>
+              <label><span>提单号 *</span><input id="order-bl-no" required /></label>
+              <label><span>业务员</span><input id="order-salesperson" disabled /></label>
               <label><span>国家 / 地区</span><input id="order-country" /></label>
               <label><span>币种</span><select id="order-currency"></select></label>
               <label><span>汇率 *</span><input id="order-rate" type="number" min="0" step="0.0001" required /></label>
@@ -187,7 +187,7 @@
             <form class="entry-form" id="customer-form" autocomplete="off">
               <input type="hidden" id="customer-id" />
               <div class="form-header"><div><h3>客户资料</h3></div><button class="secondary-button" type="button" data-reset="customer">新建</button></div>
-              <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
+              <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
               <div class="form-actions"><button class="primary-button" type="submit">保存客户</button></div>
             </form>
             <form class="entry-form" id="user-form" autocomplete="off">
@@ -197,7 +197,7 @@
               <div class="form-actions"><button class="primary-button" type="submit">保存用户</button></div>
             </form>
           </div>
-          <section class="panel"><div class="panel-title"><h3>客户列表</h3><span id="customers-count">0 个客户</span></div><div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>客户列表</h3><span id="customers-count">0 个客户</span></div><div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div></section>
           <section class="panel"><div class="panel-title"><h3>用户列表</h3><span id="users-count">0 个用户</span></div><div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div></section>
           <section class="panel"><div class="panel-title"><h3>操作日志</h3><span>最近 100 条</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>IP</th></tr></thead><tbody id="audit-table"></tbody></table></div></section>
         </section>
