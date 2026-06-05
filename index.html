@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>外贸收款与成本支出登记系统</title>
+    <title>外贸应收款协同管理平台</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -12,499 +12,198 @@
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">¥</div>
           <div>
-            <h1>外贸收支登记</h1>
-            <p>应收 · 回款 · 成本 · 利润</p>
+            <h1>外贸应收款协同管理平台</h1>
+            <p>应收订单 · 收款登记 · 成本录入 · 利润分析 · 逾期提醒</p>
           </div>
         </div>
 
         <nav class="nav-tabs" aria-label="主要视图">
-          <button class="nav-tab is-active" data-view="dashboard" type="button">
-            <span class="icon" aria-hidden="true">▦</span>
-            <span>总览</span>
-          </button>
-          <button class="nav-tab" data-view="invoices" type="button">
-            <span class="icon" aria-hidden="true">▤</span>
-            <span>应收发票</span>
-          </button>
-          <button class="nav-tab" data-view="receipts" type="button">
-            <span class="icon" aria-hidden="true">↙</span>
-            <span>收款登记</span>
-          </button>
-          <button class="nav-tab" data-view="costs" type="button">
-            <span class="icon" aria-hidden="true">↗</span>
-            <span>成本支出</span>
-          </button>
-          <button class="nav-tab" data-view="reports" type="button">
-            <span class="icon" aria-hidden="true">≋</span>
-            <span>报表导出</span>
-          </button>
+          <button class="nav-tab is-active" data-view="dashboard" type="button"><span>▦</span>总览</button>
+          <button class="nav-tab" data-view="orders" type="button"><span>▤</span>应收订单</button>
+          <button class="nav-tab" data-view="payments" type="button"><span>↙</span>收款登记</button>
+          <button class="nav-tab" data-view="costs" type="button"><span>↗</span>成本录入</button>
+          <button class="nav-tab" data-view="profit" type="button"><span>％</span>利润分析</button>
+          <button class="nav-tab" data-view="reports" type="button"><span>≋</span>报表导出</button>
+          <button class="nav-tab" data-view="settings" type="button"><span>⚙</span>系统设置</button>
         </nav>
 
-        <div class="storage-box">
-          <span class="label">本地数据</span>
-          <strong id="record-count">0 条记录</strong>
-          <small>数据只保存在当前浏览器，可用 JSON 备份。</small>
+        <div class="user-box">
+          <span class="label">当前用户</span>
+          <strong id="current-user">读取中...</strong>
+          <small id="current-role">PostgreSQL 协同数据</small>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">贸易订单现金流</p>
+            <p class="eyebrow">贸易订单应收协同</p>
             <h2 id="view-title">总览</h2>
           </div>
           <div class="top-actions">
-            <button class="ghost-button" id="load-sample" type="button" title="加载示例数据">
-              <span aria-hidden="true">＋</span>
-              <span>示例</span>
-            </button>
-            <button class="ghost-button" id="backup-json" type="button" title="下载 JSON 备份">
-              <span aria-hidden="true">⇩</span>
-              <span>备份</span>
-            </button>
-            <label class="ghost-button file-button" title="导入 JSON 备份">
-              <span aria-hidden="true">⇧</span>
-              <span>导入</span>
-              <input id="restore-json" type="file" accept="application/json" />
-            </label>
+            <button class="ghost-button" id="refresh-data" type="button">刷新</button>
+            <button class="ghost-button" id="show-login" type="button">登录</button>
           </div>
         </header>
 
         <section class="filters" aria-label="筛选条件">
-          <label>
-            <span>月份</span>
-            <input id="filter-month" type="month" />
-          </label>
-          <label>
-            <span>订单号 / 提单号</span>
-            <input id="filter-order" type="search" placeholder="如 PO-2026-001 或 BL-001" />
-          </label>
-          <label>
-            <span>客户 / 供应商 / 业务员</span>
-            <input id="filter-party" type="search" placeholder="名称关键词" />
-          </label>
+          <label><span>月份</span><input id="filter-month" type="month" /></label>
+          <label><span>订单号 / 提单号</span><input id="filter-order" type="search" placeholder="订单号或提单号" /></label>
+          <label><span>客户 / 供应商 / 业务员</span><input id="filter-party" type="search" placeholder="名称关键词" /></label>
+          <label><span>国家 / 地区</span><input id="filter-country" type="search" placeholder="国家或地区" /></label>
+          <label><span>币种</span><select id="filter-currency"><option value="">全部</option></select></label>
+          <label><span>订单状态</span><select id="filter-order-status"><option value="">全部</option></select></label>
+          <label><span>收款/付款状态</span><select id="filter-payment-status"><option value="">全部</option></select></label>
+          <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部</option></select></label>
+          <label><span>成本类型</span><select id="filter-cost-type"><option value="">全部</option></select></label>
           <button class="clear-button" id="clear-filters" type="button">清空筛选</button>
         </section>
 
-        <section class="view-panel is-active" id="dashboard-view">
-          <div class="metric-grid">
-            <article class="metric metric-receivable">
-              <span>折人民币应收</span>
-              <strong id="metric-invoices">¥0.00</strong>
-              <small id="metric-invoice-count">0 张应收发票</small>
-            </article>
-            <article class="metric metric-income">
-              <span>折人民币收款</span>
-              <strong id="metric-receipts">¥0.00</strong>
-              <small id="metric-receipt-count">0 笔收款</small>
-            </article>
-            <article class="metric metric-cost">
-              <span>折人民币成本</span>
-              <strong id="metric-costs">¥0.00</strong>
-              <small id="metric-cost-count">0 笔支出</small>
-            </article>
-            <article class="metric metric-profit">
-              <span>应收毛利</span>
-              <strong id="metric-profit">¥0.00</strong>
-              <small id="metric-margin">利润率 0.00%</small>
-            </article>
-            <article class="metric metric-open">
-              <span>未收余额</span>
-              <strong id="metric-outstanding">¥0.00</strong>
-              <small id="metric-pending">待确认收款 ¥0.00</small>
-            </article>
-          </div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+        <section class="view-panel is-active" id="dashboard-view">
+          <div class="metric-grid" id="metric-grid"></div>
           <div class="dashboard-grid">
             <section class="panel">
-              <div class="panel-title">
-                <h3>成本结构</h3>
-                <span id="cost-breakdown-total">¥0.00</span>
-              </div>
-              <div class="breakdown-list" id="cost-breakdown"></div>
+              <div class="panel-title"><h3>订单盈亏列表</h3><span id="order-profit-count">0 个订单</span></div>
+              <div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>应收</th><th>已收</th><th>未收</th><th>成本</th><th>预计毛利</th><th>逾期</th></tr></thead><tbody id="dashboard-order-rows"></tbody></table></div>
             </section>
             <section class="panel">
-              <div class="panel-title">
-                <h3>订单盈亏与回款</h3>
-                <span id="order-profit-count">0 个订单</span>
-              </div>
-              <div class="order-profit-list" id="order-profit-list"></div>
+              <div class="panel-title"><h3>成本结构统计</h3><span id="cost-structure-total">¥0.00</span></div>
+              <div class="stat-list" id="cost-structure-list"></div>
             </section>
-            <section class="panel reminder-panel">
-              <div class="panel-title">
-                <h3>催款提醒</h3>
-                <span id="payment-reminder-count">0 条提醒</span>
-              </div>
-              <div class="reminder-list" id="payment-reminder-list"></div>
+            <section class="panel alert-panel">
+              <div class="panel-title"><h3>催款提醒列表</h3><span id="reminder-count">0 条</span></div>
+              <div class="reminder-list" id="reminder-list"></div>
             </section>
+            <section class="panel"><div class="panel-title"><h3>按业务员统计</h3></div><div class="stat-list" id="salesperson-stats"></div></section>
+            <section class="panel"><div class="panel-title"><h3>按客户统计</h3></div><div class="stat-list" id="customer-stats"></div></section>
+            <section class="panel"><div class="panel-title"><h3>按月份统计</h3></div><div class="stat-list" id="month-stats"></div></section>
           </div>
         </section>
 
-        <section class="view-panel" id="invoices-view">
-          <form class="entry-form" id="invoice-form" autocomplete="off">
-            <input type="hidden" id="invoice-id" />
-            <div class="form-header">
-              <div>
-                <h3>应收发票登记</h3>
-                <p>出货时由业务员创建应收金额，后续按订单号自动匹配实际收款。</p>
-              </div>
-              <button class="secondary-button" id="reset-invoice-form" type="button">新建</button>
-            </div>
+        <section class="view-panel" id="orders-view">
+          <form class="entry-form" id="order-form" autocomplete="off">
+            <input type="hidden" id="order-id" />
+            <div class="form-header"><div><h3>应收订单</h3><p>业务员创建应收订单，系统生成唯一 order_id，后续收款和成本都必须关联此 ID。</p></div><button class="secondary-button" type="button" data-reset="order">新建</button></div>
             <div class="form-grid">
-              <label>
-                <span>出货 / 开票日期</span>
-                <input id="invoice-date" type="date" required />
-              </label>
-              <label>
-                <span>应收发票号</span>
-                <input id="invoice-no" type="text" placeholder="INV-2026-001" />
-              </label>
-              <label>
-                <span>订单号</span>
-                <input id="invoice-order" type="text" placeholder="PO-2026-001" required />
-              </label>
-              <label>
-                <span>提单号</span>
-                <input id="invoice-bl-no" type="text" placeholder="BL-2026-001" />
-              </label>
-              <label>
-                <span>业务员</span>
-                <input id="invoice-salesperson" type="text" placeholder="负责业务员" />
-              </label>
-              <label>
-                <span>客户</span>
-                <input id="invoice-customer" type="text" placeholder="客户公司名称" required />
-              </label>
-              <label>
-                <span>国家 / 地区</span>
-                <input id="invoice-country" type="text" placeholder="United States" />
-              </label>
-              <label>
-                <span>币种</span>
-                <select id="invoice-currency">
-                  <option value="USD">美元 (USD)</option>
-                  <option value="EUR">欧元 (EUR)</option>
-                  <option value="GBP">英镑 (GBP)</option>
-                  <option value="CNY">人民币 (CNY)</option>
-                  <option value="HKD">港币 (HKD)</option>
-                </select>
-              </label>
-              <label>
-                <span>应收金额</span>
-                <input id="invoice-amount" type="number" min="0" step="0.01" required />
-              </label>
-              <label>
-                <span>折人民币汇率</span>
-                <input id="invoice-rate" type="number" min="0" step="0.0001" value="7.2000" required />
-              </label>
-              <label>
-                <span>账期天数</span>
-                <input id="invoice-credit-days" type="number" min="0" step="1" placeholder="如 30" />
-              </label>
-              <label>
-                <span>账期到期日</span>
-                <input id="invoice-due-date" type="date" />
-              </label>
-              <label>
-                <span>提前提醒天数</span>
-                <input id="invoice-reminder-days" type="number" min="0" step="1" value="7" />
-              </label>
-              <label>
-                <span>提醒对象</span>
-                <select id="invoice-reminder-target">
-                  <option value="财务和业务员">财务和业务员</option>
-                  <option value="财务">财务</option>
-                  <option value="业务员">业务员</option>
-                </select>
-              </label>
-              <label class="wide">
-                <span>备注</span>
-                <input id="invoice-note" type="text" placeholder="付款条款、账期、发票说明" />
-              </label>
+              <label><span>客户名称 *</span><input id="order-customer" required /></label>
+              <label><span>订单号 *</span><input id="order-no" required /></label>
+              <label><span>提单号</span><input id="order-bl-no" /></label>
+              <label><span>业务员</span><input id="order-salesperson" /></label>
+              <label><span>国家 / 地区</span><input id="order-country" /></label>
+              <label><span>币种</span><select id="order-currency"></select></label>
+              <label><span>汇率 *</span><input id="order-rate" type="number" min="0" step="0.0001" required /></label>
+              <label><span>应收金额 *</span><input id="order-amount" type="number" min="0" step="0.01" required /></label>
+              <label><span>折人民币金额</span><input id="order-amount-cny" disabled /></label>
+              <label><span>交易条款</span><select id="order-trade-term"></select></label>
+              <label><span>付款条款</span><select id="order-payment-term"></select></label>
+              <label><span>客户预计付款日期</span><input id="order-expected-date" type="date" /></label>
+              <label><span>账期天数</span><input id="order-credit-days" type="number" min="0" step="1" /></label>
+              <label><span>到期日</span><input id="order-due-date" type="date" /></label>
+              <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
+              <label><span>订单状态</span><select id="order-status"></select></label>
+              <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
+              <label class="wide"><span>附件地址（可选）</span><input id="order-attachment" placeholder="https://..." /></label>
             </div>
-            <div class="form-total">
-              <span>应收折人民币</span>
-              <strong id="invoice-cny-preview">¥0.00</strong>
-              <button class="primary-button" type="submit">保存应收</button>
-            </div>
+            <div class="form-actions"><button class="primary-button" type="submit">保存应收订单</button></div>
           </form>
-
-          <section class="table-section">
-            <div class="section-heading">
-              <h3>应收发票明细</h3>
-              <button class="export-button" data-export="invoices" type="button">导出 CSV</button>
-            </div>
-            <div class="table-wrap">
-              <table class="invoice-table">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>发票号</th>
-                    <th>订单号</th>
-                    <th>提单号</th>
-                    <th>客户</th>
-                    <th>业务员</th>
-                    <th>币种</th>
-                    <th class="number">应收原币</th>
-                    <th class="number">应收人民币</th>
-                    <th class="number">订单已收</th>
-                    <th class="number">未收余额</th>
-                    <th>回款状态</th>
-                    <th>账期</th>
-                    <th>到期日</th>
-                    <th>提醒</th>
-                    <th>备注</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="invoice-table"></tbody>
-              </table>
-            </div>
-          </section>
+          <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>业务员</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th><th>逾期</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
         </section>
 
-        <section class="view-panel" id="receipts-view">
-          <form class="entry-form" id="receipt-form" autocomplete="off">
-            <input type="hidden" id="receipt-id" />
-            <div class="form-header">
-              <div>
-                <h3>收款登记</h3>
-                <p>登记客户实际回款，订单号与应收发票一致后自动计算未收余额。</p>
-              </div>
-              <button class="secondary-button" id="reset-receipt-form" type="button">新建</button>
-            </div>
+        <section class="view-panel" id="payments-view">
+          <form class="entry-form" id="payment-form" autocomplete="off">
+            <input type="hidden" id="payment-id" />
+            <div class="form-header"><div><h3>收款登记</h3><p>财务录入客户实际回款。收款必须先选择应收订单，待确认收款不会计入正式已收金额。</p></div><button class="secondary-button" type="button" data-reset="payment">新建</button></div>
             <div class="form-grid">
-              <label>
-                <span>收款日期</span>
-                <input id="receipt-date" type="date" required />
-              </label>
-              <label>
-                <span>订单号</span>
-                <input id="receipt-order" type="text" placeholder="PO-2026-001" required />
-              </label>
-              <label>
-                <span>客户</span>
-                <input id="receipt-customer" type="text" placeholder="客户公司名称" required />
-              </label>
-              <label>
-                <span>国家 / 地区</span>
-                <input id="receipt-country" type="text" placeholder="United States" />
-              </label>
-              <label>
-                <span>币种</span>
-                <select id="receipt-currency">
-                  <option value="USD">美元 (USD)</option>
-                  <option value="EUR">欧元 (EUR)</option>
-                  <option value="GBP">英镑 (GBP)</option>
-                  <option value="CNY">人民币 (CNY)</option>
-                  <option value="HKD">港币 (HKD)</option>
-                </select>
-              </label>
-              <label>
-                <span>收款金额</span>
-                <input id="receipt-amount" type="number" min="0" step="0.01" required />
-              </label>
-              <label>
-                <span>折人民币汇率</span>
-                <input id="receipt-rate" type="number" min="0" step="0.0001" value="7.2000" required />
-              </label>
-              <label>
-                <span>状态</span>
-                <select id="receipt-status">
-                  <option value="已到账">已到账</option>
-                  <option value="待确认">待确认</option>
-                  <option value="部分到账">部分到账</option>
-                </select>
-              </label>
-              <label class="wide">
-                <span>备注</span>
-                <input id="receipt-note" type="text" placeholder="银行流水、付款方式、异常说明" />
-              </label>
+              <label class="wide"><span>关联应收订单 *</span><select id="payment-order" required></select></label>
+              <label><span>订单号</span><input id="payment-order-no" disabled /></label>
+              <label><span>客户名称</span><input id="payment-customer" disabled /></label>
+              <label><span>收款日期 *</span><input id="payment-date" type="date" required /></label>
+              <label><span>币种</span><select id="payment-currency"></select></label>
+              <label><span>汇率 *</span><input id="payment-rate" type="number" min="0" step="0.0001" required /></label>
+              <label><span>收款金额 *</span><input id="payment-amount" type="number" min="0" step="0.01" required /></label>
+              <label><span>折人民币金额</span><input id="payment-amount-cny" disabled /></label>
+              <label><span>收款状态</span><select id="payment-status"></select></label>
+              <label><span>银行流水号</span><input id="payment-bank-reference" /></label>
+              <label class="wide"><span>备注</span><textarea id="payment-remark" rows="3"></textarea></label>
+              <label class="wide"><span>附件地址（可选）</span><input id="payment-attachment" placeholder="https://..." /></label>
             </div>
-            <div class="form-total">
-              <span>折人民币</span>
-              <strong id="receipt-cny-preview">¥0.00</strong>
-              <button class="primary-button" type="submit">保存收款</button>
-            </div>
+            <div class="form-actions"><button class="primary-button" type="submit">保存收款</button></div>
           </form>
-
-          <section class="table-section">
-            <div class="section-heading">
-              <h3>收款明细</h3>
-              <button class="export-button" data-export="receipts" type="button">导出 CSV</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>订单号</th>
-                    <th>客户</th>
-                    <th>国家</th>
-                    <th>币种</th>
-                    <th class="number">原币金额</th>
-                    <th class="number">折人民币</th>
-                    <th>状态</th>
-                    <th>备注</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="receipt-table"></tbody>
-              </table>
-            </div>
-          </section>
+          <section class="panel"><div class="panel-title"><h3>收款明细</h3><span id="payments-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>收款日期</th><th>金额</th><th>折人民币</th><th>状态</th><th>流水号</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="payments-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="costs-view">
           <form class="entry-form" id="cost-form" autocomplete="off">
             <input type="hidden" id="cost-id" />
-            <div class="form-header">
-              <div>
-                <h3>成本支出登记</h3>
-                <p>登记货款、物流、佣金等支出，关联订单后自动计算订单盈亏。</p>
-              </div>
-              <button class="secondary-button" id="reset-cost-form" type="button">新建</button>
-            </div>
+            <div class="form-header"><div><h3>成本录入</h3><p>协同人员基于应收订单录入采购、物流、海运、佣金等成本。</p></div><button class="secondary-button" type="button" data-reset="cost">新建</button></div>
             <div class="form-grid">
-              <label>
-                <span>支出日期</span>
-                <input id="cost-date" type="date" required />
-              </label>
-              <label>
-                <span>订单号</span>
-                <input id="cost-order" type="text" placeholder="PO-2026-001" required />
-              </label>
-              <label>
-                <span>成本类型</span>
-                <select id="cost-type">
-                  <option value="货款">货款</option>
-                  <option value="物流">物流</option>
-                  <option value="佣金">佣金</option>
-                  <option value="其他">其他</option>
-                </select>
-              </label>
-              <label>
-                <span>供应商 / 收款方</span>
-                <input id="cost-payee" type="text" placeholder="供应商、货代、业务员" required />
-              </label>
-              <label>
-                <span>币种</span>
-                <select id="cost-currency">
-                  <option value="CNY">人民币 (CNY)</option>
-                  <option value="USD">美元 (USD)</option>
-                  <option value="EUR">欧元 (EUR)</option>
-                  <option value="GBP">英镑 (GBP)</option>
-                  <option value="HKD">港币 (HKD)</option>
-                </select>
-              </label>
-              <label>
-                <span>支出金额</span>
-                <input id="cost-amount" type="number" min="0" step="0.01" required />
-              </label>
-              <label>
-                <span>折人民币汇率</span>
-                <input id="cost-rate" type="number" min="0" step="0.0001" value="1.0000" required />
-              </label>
-              <label>
-                <span>付款状态</span>
-                <select id="cost-status">
-                  <option value="已支付">已支付</option>
-                  <option value="待支付">待支付</option>
-                  <option value="部分支付">部分支付</option>
-                </select>
-              </label>
-              <label class="wide">
-                <span>备注</span>
-                <input id="cost-note" type="text" placeholder="发票、物流单号、佣金比例等" />
-              </label>
+              <label class="wide"><span>关联应收订单 *</span><select id="cost-order" required></select></label>
+              <label><span>订单号</span><input id="cost-order-no" disabled /></label>
+              <label><span>客户名称</span><input id="cost-customer" disabled /></label>
+              <label><span>成本类型</span><select id="cost-type"></select></label>
+              <label><span>供应商 / 收款方 *</span><input id="cost-vendor" required /></label>
+              <label><span>币种</span><select id="cost-currency"></select></label>
+              <label><span>汇率 *</span><input id="cost-rate" type="number" min="0" step="0.0001" required /></label>
+              <label><span>成本金额 *</span><input id="cost-amount" type="number" min="0" step="0.01" required /></label>
+              <label><span>折人民币金额</span><input id="cost-amount-cny" disabled /></label>
+              <label><span>付款状态</span><select id="cost-payment-status"></select></label>
+              <label><span>付款日期</span><input id="cost-payment-date" type="date" /></label>
+              <label><span>发票状态</span><select id="cost-invoice-status"></select></label>
+              <label class="wide"><span>备注</span><textarea id="cost-remark" rows="3"></textarea></label>
+              <label class="wide"><span>附件地址（可选）</span><input id="cost-attachment" placeholder="https://..." /></label>
             </div>
-            <div class="form-total">
-              <span>折人民币</span>
-              <strong id="cost-cny-preview">¥0.00</strong>
-              <button class="primary-button" type="submit">保存支出</button>
-            </div>
+            <div class="form-actions"><button class="primary-button" type="submit">保存成本</button></div>
           </form>
+          <section class="panel"><div class="panel-title"><h3>成本明细</h3><span id="costs-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>类型</th><th>供应商</th><th>金额</th><th>折人民币</th><th>付款</th><th>发票</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="costs-table"></tbody></table></div></section>
+        </section>
 
-          <section class="table-section">
-            <div class="section-heading">
-              <h3>成本明细</h3>
-              <button class="export-button" data-export="costs" type="button">导出 CSV</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>订单号</th>
-                    <th>类型</th>
-                    <th>收款方</th>
-                    <th>币种</th>
-                    <th class="number">原币金额</th>
-                    <th class="number">折人民币</th>
-                    <th>状态</th>
-                    <th>备注</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="cost-table"></tbody>
-              </table>
+        <section class="view-panel" id="profit-view">
+          <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>业务员</th><th>应收</th><th>已收款</th><th>未收款</th><th>总成本</th><th>预计毛利</th><th>实际毛利</th><th>毛利率</th><th>成本结构</th><th>收款状态</th><th>逾期状态</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
+        </section>
+
+        <section class="view-panel" id="reports-view">
+          <section class="panel">
+            <div class="panel-title"><h3>报表导出</h3><span>使用当前筛选条件</span></div>
+            <div class="export-grid">
+              <button class="export-card" data-export="orders" type="button">应收订单明细 CSV</button>
+              <button class="export-card" data-export="payments" type="button">收款明细 CSV</button>
+              <button class="export-card" data-export="costs" type="button">成本明细 CSV</button>
+              <button class="export-card" data-export="profit" type="button">订单利润分析 CSV</button>
+              <button class="export-card" data-export="reminders" type="button">逾期催款报表 CSV</button>
+              <button class="export-card" data-export="backup-json" type="button">完整数据备份 JSON</button>
             </div>
           </section>
         </section>
 
-        <section class="view-panel" id="reports-view">
-          <div class="reports-grid">
-            <section class="panel report-panel">
-              <h3>当前筛选汇总</h3>
-              <dl class="summary-list">
-                <div>
-                  <dt>应收合计</dt>
-                  <dd id="report-invoices">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>收款合计</dt>
-                  <dd id="report-receipts">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>未收余额</dt>
-                  <dd id="report-outstanding">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>货款</dt>
-                  <dd id="report-goods">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>物流</dt>
-                  <dd id="report-logistics">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>佣金</dt>
-                  <dd id="report-commission">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>其他</dt>
-                  <dd id="report-other">¥0.00</dd>
-                </div>
-                <div>
-                  <dt>应收毛利</dt>
-                  <dd id="report-profit">¥0.00</dd>
-                </div>
-              </dl>
-            </section>
-            <section class="panel report-panel">
-              <h3>导出与维护</h3>
-              <div class="report-actions">
-                <button class="primary-button" data-export="all" type="button">导出完整 CSV</button>
-                <button class="secondary-button" id="download-json-2" type="button">下载 JSON 备份</button>
-                <button class="danger-button" id="clear-data" type="button">清空全部数据</button>
-              </div>
-            </section>
+        <section class="view-panel" id="settings-view">
+          <div class="settings-grid">
+            <form class="entry-form" id="login-form" autocomplete="off">
+              <div class="form-header"><div><h3>用户登录</h3><p>默认管理员：admin@example.com / admin123456</p></div></div>
+              <div class="form-grid"><label><span>邮箱</span><input id="login-email" value="admin@example.com" /></label><label><span>密码</span><input id="login-password" type="password" value="admin123456" /></label></div>
+              <div class="form-actions"><button class="primary-button" type="submit">登录</button><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
+            </form>
+            <form class="entry-form" id="customer-form" autocomplete="off">
+              <input type="hidden" id="customer-id" />
+              <div class="form-header"><div><h3>客户资料</h3></div><button class="secondary-button" type="button" data-reset="customer">新建</button></div>
+              <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
+              <div class="form-actions"><button class="primary-button" type="submit">保存客户</button></div>
+            </form>
+            <form class="entry-form" id="user-form" autocomplete="off">
+              <input type="hidden" id="user-id" />
+              <div class="form-header"><div><h3>用户和权限</h3></div><button class="secondary-button" type="button" data-reset="user">新建</button></div>
+              <div class="form-grid"><label><span>姓名 *</span><input id="user-name" required /></label><label><span>邮箱 *</span><input id="user-email" required /></label><label><span>角色</span><select id="user-role"></select></label><label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新用户默认 123456" /></label></div>
+              <div class="form-actions"><button class="primary-button" type="submit">保存用户</button></div>
+            </form>
           </div>
+          <section class="panel"><div class="panel-title"><h3>客户列表</h3><span id="customers-count">0 个客户</span></div><div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>用户列表</h3><span id="users-count">0 个用户</span></div><div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>操作日志</h3><span>最近 100 条</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>IP</th></tr></thead><tbody id="audit-table"></tbody></table></div></section>
         </section>
       </main>
     </div>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./app.js"></script>
   </body>
 </html>

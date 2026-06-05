@@ -1,130 +1,44 @@
-const STORAGE_KEY = "tradeLedger.v1";
+const DRAFT_PREFIX = "fta-platform-draft:";
 
 const state = {
-  invoices: [],
-  receipts: [],
-  costs: [],
   view: "dashboard",
-  filters: {
-    month: "",
-    order: "",
-    party: "",
-  },
+  me: null,
+  roles: [],
+  users: [],
+  customers: [],
+  orders: [],
+  payments: [],
+  costs: [],
+  overview: null,
+  auditLogs: [],
 };
 
-const DEFAULT_REMINDER_DAYS = 7;
-let remoteStorageEnabled = false;
+const constants = {
+  currencies: ["USD", "EUR", "GBP", "CNY", "HKD"],
+  defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
+  roles: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
+  orderStatuses: ["草稿", "已提交", "部分收款", "已收齐", "已逾期", "已关闭", "已取消"],
+  paymentStatuses: ["待确认", "已到账", "部分到账", "已退回", "已取消"],
+  costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
+  invoiceStatuses: ["未收到", "已收到", "不需要发票"],
+  tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
+  paymentTerms: ["预付款", "见提单付款", "见提单复印件付款", "OA账期", "分批付款", "其他"],
+  costTypes: ["采购成本", "原材料成本", "工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
+  reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
+};
 
 const viewTitles = {
   dashboard: "总览",
-  invoices: "应收发票",
-  receipts: "收款登记",
-  costs: "成本支出",
+  orders: "应收订单",
+  payments: "收款登记",
+  costs: "成本录入",
+  profit: "利润分析",
   reports: "报表导出",
-};
-
-const costTypeClass = {
-  货款: "type-goods",
-  物流: "type-logistics",
-  佣金: "type-commission",
-  其他: "",
-};
-
-const defaultRates = {
-  USD: 7.2,
-  EUR: 7.8,
-  GBP: 9.15,
-  CNY: 1,
-  HKD: 0.92,
-};
-
-const currencyNames = {
-  USD: "美元 (USD)",
-  EUR: "欧元 (EUR)",
-  GBP: "英镑 (GBP)",
-  CNY: "人民币 (CNY)",
-  HKD: "港币 (HKD)",
+  settings: "系统设置",
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-
-function uid() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function today() {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
-}
-
-function parseDateOnly(value) {
-  const parts = String(value || "")
-    .split("-")
-    .map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
-  const [year, month, day] = parts;
-  return new Date(year, month - 1, day);
-}
-
-function formatDateOnly(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(dateString, days) {
-  const date = parseDateOnly(dateString);
-  const dayCount = Number(days);
-  if (!date || !Number.isFinite(dayCount)) return "";
-  date.setDate(date.getDate() + Math.round(dayCount));
-  return formatDateOnly(date);
-}
-
-function diffDays(dateString, baseString = today()) {
-  const date = parseDateOnly(dateString);
-  const base = parseDateOnly(baseString);
-  if (!date || !base) return Number.POSITIVE_INFINITY;
-  return Math.round((date.getTime() - base.getTime()) / 86400000);
-}
-
-function toNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function cny(amount, rate) {
-  return toNumber(amount) * toNumber(rate);
-}
-
-function itemCny(item) {
-  return cny(item.amount, item.rate);
-}
-
-function money(value) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    minimumFractionDigits: 2,
-  }).format(toNumber(value));
-}
-
-function plainAmount(value) {
-  return new Intl.NumberFormat("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
-}
-
-function currencyText(value) {
-  return currencyNames[value] || value || "";
-}
-
-function emptyRow(colspan) {
-  return `<tr><td class="empty-row" colspan="${colspan}">暂无记录</td></tr>`;
-}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -135,1222 +49,755 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function save() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      invoices: state.invoices,
-      receipts: state.receipts,
-      costs: state.costs,
-    }),
-  );
+function money(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 2,
+  }).format(Number(value) || 0);
 }
 
-function readLocalStorageLedger() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
-      receipts: Array.isArray(parsed.receipts) ? parsed.receipts : [],
-      costs: Array.isArray(parsed.costs) ? parsed.costs : [],
-    };
-  } catch {
-    return null;
-  }
+function amount(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
 }
 
-function recordTotal(data) {
-  return data.invoices.length + data.receipts.length + data.costs.length;
+function percent(value) {
+  return `${(((Number(value) || 0) * 100)).toFixed(2)}%`;
 }
 
-async function importRemoteLedger() {
-  try {
-    const response = await fetch("/api/import", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        invoices: state.invoices,
-        receipts: state.receipts,
-        costs: state.costs,
-      }),
-    });
-    if (!response.ok) {
-      throw new Error("remote sync failed");
-    }
-    return true;
-  } catch {
-    showToast("数据库同步失败，当前数据已保存在本机浏览器。");
-    return false;
-  }
+function today() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
 }
 
-async function persistRemoteRecord(collectionName, record) {
-  if (!remoteStorageEnabled) return;
-
-  try {
-    const response = await fetch(`/api/${collectionName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(record),
-    });
-    if (!response.ok) {
-      throw new Error("record sync failed");
-    }
-  } catch {
-    showToast("数据库保存失败，当前记录已保存在本机浏览器。");
-  }
+function calcCny(amountValue, rateValue) {
+  return ((Number(amountValue) || 0) * (Number(rateValue) || 0)).toFixed(2);
 }
 
-async function deleteRemoteRecord(collectionName, id) {
-  if (!remoteStorageEnabled) return;
-
-  try {
-    const response = await fetch(`/api/${collectionName}/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) {
-      throw new Error("record delete failed");
-    }
-  } catch {
-    showToast("数据库删除失败，本机浏览器已删除该记录。");
-  }
+function toast(message) {
+  const box = $("#toast");
+  box.textContent = message;
+  box.classList.add("is-visible");
+  setTimeout(() => box.classList.remove("is-visible"), 2800);
 }
 
-async function load() {
-  try {
-    const response = await fetch("/api/ledger", {
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    if (response.ok) {
-      const parsed = await response.json();
-      const remoteLedger = {
-        invoices: Array.isArray(parsed.invoices) ? parsed.invoices : [],
-        receipts: Array.isArray(parsed.receipts) ? parsed.receipts : [],
-        costs: Array.isArray(parsed.costs) ? parsed.costs : [],
-      };
-      const localLedger = readLocalStorageLedger();
-      remoteStorageEnabled = true;
-
-      if (recordTotal(remoteLedger) === 0 && localLedger && recordTotal(localLedger) > 0) {
-        state.invoices = localLedger.invoices;
-        state.receipts = localLedger.receipts;
-        state.costs = localLedger.costs;
-        await importRemoteLedger();
-        return;
-      }
-
-      state.invoices = remoteLedger.invoices;
-      state.receipts = remoteLedger.receipts;
-      state.costs = remoteLedger.costs;
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          invoices: state.invoices,
-          receipts: state.receipts,
-          costs: state.costs,
-        }),
-      );
-      return;
-    }
-  } catch {
-    remoteStorageEnabled = false;
-  }
-
-  const localLedger = readLocalStorageLedger();
-  if (!localLedger) {
-    if (localStorage.getItem(STORAGE_KEY)) {
-      showToast("本地数据读取失败，可导入备份恢复。");
-    }
-    return;
-  }
-  state.invoices = localLedger.invoices;
-  state.receipts = localLedger.receipts;
-  state.costs = localLedger.costs;
-}
-
-function showToast(message) {
-  const toast = $("#toast");
-  toast.textContent = message;
-  toast.classList.add("is-visible");
-  window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => {
-    toast.classList.remove("is-visible");
-  }, 2200);
-}
-
-function matchesMonth(date, month) {
-  return !month || String(date).startsWith(month);
-}
-
-function normalized(value) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-function getCreditDays(item) {
-  if (item.creditDays === undefined || item.creditDays === null || item.creditDays === "") return "";
-  const days = Number(item.creditDays);
-  return Number.isFinite(days) && days >= 0 ? Math.round(days) : "";
-}
-
-function getReminderDays(item) {
-  const days = Number(item.reminderDays);
-  return Number.isFinite(days) && days >= 0 ? Math.round(days) : DEFAULT_REMINDER_DAYS;
-}
-
-function getReminderTarget(item) {
-  return item.reminderTarget || "财务和业务员";
-}
-
-function getDueDate(item) {
-  const creditDays = getCreditDays(item);
-  return item.dueDate || (creditDays === "" ? "" : addDays(item.date, creditDays));
-}
-
-function orderOrBillMatch(item, query) {
-  return (
-    !query ||
-    normalized(item.orderNo).includes(query) ||
-    normalized(item.blNo).includes(query)
-  );
-}
-
-function linkedOrderOrBillMatch(orderNo, query) {
-  if (!query) return true;
-  if (normalized(orderNo).includes(query)) return true;
-  const linkedOrder = normalized(orderNo);
-  return state.invoices.some(
-    (invoice) =>
-      normalized(invoice.orderNo) === linkedOrder &&
-      normalized(invoice.blNo).includes(query),
-  );
-}
-
-function getFilteredInvoices() {
-  const order = normalized(state.filters.order);
-  const party = normalized(state.filters.party);
-
-  return state.invoices.filter((item) => {
-    const orderMatch = orderOrBillMatch(item, order);
-    const partyMatch =
-      !party ||
-      normalized(item.customer).includes(party) ||
-      normalized(item.country).includes(party) ||
-      normalized(item.salesperson).includes(party) ||
-      normalized(item.invoiceNo).includes(party);
-    return matchesMonth(item.date, state.filters.month) && orderMatch && partyMatch;
-  });
-}
-
-function getFilteredReceipts() {
-  const order = normalized(state.filters.order);
-  const party = normalized(state.filters.party);
-
-  return state.receipts.filter((item) => {
-    const orderMatch = linkedOrderOrBillMatch(item.orderNo, order);
-    const partyMatch =
-      !party ||
-      normalized(item.customer).includes(party) ||
-      normalized(item.country).includes(party);
-    return matchesMonth(item.date, state.filters.month) && orderMatch && partyMatch;
-  });
-}
-
-function getFilteredCosts() {
-  const order = normalized(state.filters.order);
-  const party = normalized(state.filters.party);
-
-  return state.costs.filter((item) => {
-    const orderMatch = linkedOrderOrBillMatch(item.orderNo, order);
-    const partyMatch =
-      !party ||
-      normalized(item.payee).includes(party) ||
-      normalized(item.type).includes(party);
-    return matchesMonth(item.date, state.filters.month) && orderMatch && partyMatch;
-  });
-}
-
-function confirmedReceipts(receipts) {
-  return receipts.filter((item) => item.status !== "待确认");
-}
-
-function sumItems(items) {
-  return items.reduce((sum, item) => sum + itemCny(item), 0);
-}
-
-function sumByOrder(items) {
-  return items.reduce((map, item) => {
-    const key = item.orderNo || "未填写订单";
-    map.set(key, (map.get(key) || 0) + itemCny(item));
-    return map;
-  }, new Map());
-}
-
-function totals() {
-  const invoices = getFilteredInvoices();
-  const receipts = getFilteredReceipts();
-  const costs = getFilteredCosts();
-  const confirmedReceiptItems = confirmedReceipts(receipts);
-  const invoiceTotal = sumItems(invoices);
-  const receiptTotal = sumItems(receipts);
-  const confirmedReceiptTotal = sumItems(confirmedReceiptItems);
-  const costTotal = sumItems(costs);
-  const pendingTotal = receipts
-    .filter((item) => item.status === "待确认")
-    .reduce((sum, item) => sum + itemCny(item), 0);
-  const byCostType = costs.reduce(
-    (acc, item) => {
-      acc[item.type] = (acc[item.type] || 0) + itemCny(item);
-      return acc;
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     },
-    { 货款: 0, 物流: 0, 佣金: 0, 其他: 0 },
-  );
+  });
+  const type = response.headers.get("content-type") || "";
+  const data = type.includes("application/json") ? await response.json() : await response.text();
+  if (!response.ok) {
+    throw new Error(data?.error || "API 请求失败");
+  }
+  return data;
+}
 
-  return {
-    invoices,
-    receipts,
-    costs,
-    invoiceTotal,
-    receiptTotal,
-    confirmedReceiptTotal,
-    costTotal,
-    pendingTotal,
-    outstandingTotal: invoiceTotal - confirmedReceiptTotal,
-    profit: invoiceTotal - costTotal,
-    margin: invoiceTotal ? ((invoiceTotal - costTotal) / invoiceTotal) * 100 : 0,
-    byCostType,
+function optionHtml(values, selected = "") {
+  return values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+}
+
+function fillSelect(id, values, selected = "", includeBlank = false) {
+  const el = $(id);
+  if (!el) return;
+  el.innerHTML = `${includeBlank ? '<option value="">全部</option>' : ""}${optionHtml(values, selected)}`;
+}
+
+function fillOrderSelect(id, selected = "") {
+  const el = $(id);
+  if (!el) return;
+  el.innerHTML = `<option value="">请选择应收订单</option>${state.orders.map((order) => (
+    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(order.customerName)} - 未收 ${money(order.summary.outstandingCny)}</option>`
+  )).join("")}`;
+}
+
+function orderById(id) {
+  return state.orders.find((order) => order.id === id);
+}
+
+function filterParams() {
+  const params = new URLSearchParams();
+  const map = {
+    month: "#filter-month",
+    order: "#filter-order",
+    party: "#filter-party",
+    country: "#filter-country",
+    currency: "#filter-currency",
+    orderStatus: "#filter-order-status",
+    paymentStatus: "#filter-payment-status",
+    reminderStatus: "#filter-reminder-status",
+    costType: "#filter-cost-type",
   };
+  Object.entries(map).forEach(([key, selector]) => {
+    const value = $(selector)?.value || "";
+    if (value) params.set(key, value);
+  });
+  return params;
 }
 
-function orderProfitRows() {
-  const invoiceMap = sumByOrder(getFilteredInvoices());
-  const receiptMap = sumByOrder(confirmedReceipts(getFilteredReceipts()));
-  const costMap = sumByOrder(getFilteredCosts());
-
-  const orders = [...new Set([...invoiceMap.keys(), ...receiptMap.keys(), ...costMap.keys()])];
-  return orders
-    .map((orderNo) => {
-      const invoices = invoiceMap.get(orderNo) || 0;
-      const receipts = receiptMap.get(orderNo) || 0;
-      const costs = costMap.get(orderNo) || 0;
-      return {
-        orderNo,
-        invoices,
-        receipts,
-        costs,
-        outstanding: invoices - receipts,
-        profit: invoices - costs,
-        margin: invoices ? ((invoices - costs) / invoices) * 100 : 0,
-      };
-    })
-    .sort((a, b) => b.profit - a.profit);
+async function loadMe() {
+  const data = await api("/api/auth/me");
+  state.me = data.user;
+  state.roles = data.roles || constants.roles;
+  $("#current-user").textContent = state.me?.name || "未登录";
+  $("#current-role").textContent = state.me?.role || "查看者";
 }
 
-function invoiceStatus(invoice, received) {
-  const amount = itemCny(invoice);
-  const balance = amount - received;
-  const dueDate = getDueDate(invoice);
-  if (amount > 0 && received - amount > 0.005) return "超收";
-  if (amount > 0 && Math.abs(balance) <= 0.005) return "已结清";
-  if (received > 0) return "部分回款";
-  if (dueDate && dueDate < today()) return "逾期未收";
-  return "未收款";
+async function loadData() {
+  try {
+    await loadMe();
+    const data = await api(`/api/ledger?${filterParams().toString()}`);
+    state.overview = data.overview;
+    state.orders = data.orders || [];
+    state.payments = data.payments || [];
+    state.costs = data.costs || [];
+    state.customers = data.customers || [];
+    state.users = data.users || [];
+    const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
+    state.auditLogs = logs.logs || [];
+    renderAll();
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
-function statusClass(status = "") {
-  if (status.includes("逾期")) return "status-alert";
-  if (status.includes("已") || status.includes("超收")) return "status-good";
-  return "status-waiting";
+function renderAll() {
+  updateCurrentView();
+  renderDashboard();
+  renderOrderSelects();
+  renderOrders();
+  renderPayments();
+  renderCosts();
+  renderProfit();
+  renderSettings();
 }
 
-function reminderText(daysLeft) {
-  if (daysLeft < 0) return `逾期 ${Math.abs(daysLeft)} 天`;
-  if (daysLeft === 0) return "今天到期";
-  return `${daysLeft} 天后到期`;
+function updateCurrentView() {
+  $("#view-title").textContent = viewTitles[state.view];
+  $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
+  $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
 }
 
-function paymentReminderRows() {
-  const receivedByOrder = sumByOrder(confirmedReceipts(getFilteredReceipts()));
-  return getFilteredInvoices()
-    .map((invoice) => {
-      const received = receivedByOrder.get(invoice.orderNo || "未填写订单") || 0;
-      const outstanding = itemCny(invoice) - received;
-      const dueDate = getDueDate(invoice);
-      const daysLeft = diffDays(dueDate);
-      const reminderDays = getReminderDays(invoice);
-      return {
-        invoice,
-        dueDate,
-        daysLeft,
-        reminderDays,
-        outstanding,
-      };
-    })
-    .filter(
-      (item) =>
-        item.outstanding > 0.005 &&
-        item.dueDate &&
-        item.daysLeft <= item.reminderDays,
-    )
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+function metric(label, value, note, tone = "") {
+  return `<article class="metric ${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
 }
 
 function renderDashboard() {
-  const summary = totals();
-  $("#metric-invoices").textContent = money(summary.invoiceTotal);
-  $("#metric-receipts").textContent = money(summary.receiptTotal);
-  $("#metric-costs").textContent = money(summary.costTotal);
-  $("#metric-profit").textContent = money(summary.profit);
-  $("#metric-profit").className = summary.profit >= 0 ? "profit-positive" : "profit-negative";
-  $("#metric-outstanding").textContent = money(summary.outstandingTotal);
-  $("#metric-outstanding").className =
-    summary.outstandingTotal > 0 ? "profit-negative" : "profit-positive";
-  $("#metric-invoice-count").textContent = `${summary.invoices.length} 张应收发票`;
-  $("#metric-receipt-count").textContent = `${summary.receipts.length} 笔收款`;
-  $("#metric-cost-count").textContent = `${summary.costs.length} 笔支出`;
-  $("#metric-margin").textContent = `利润率 ${summary.margin.toFixed(2)}%`;
-  $("#metric-pending").textContent = `待确认收款 ${money(summary.pendingTotal)}`;
+  const totals = state.overview?.totals || {};
+  $("#metric-grid").innerHTML = [
+    metric("应收总额", money(totals.receivable), `${totals.orderCount || 0} 个订单`, "tone-blue"),
+    metric("已确认收款", money(totals.confirmed), `${totals.paymentCount || 0} 笔收款`, "tone-green"),
+    metric("待确认收款", money(totals.pending), "不计入正式已收", "tone-amber"),
+    metric("未收余额", money(totals.outstanding), `逾期 ${totals.overdueOrders || 0} 个`, "tone-red"),
+    metric("总成本", money(totals.cost), `${totals.costCount || 0} 笔成本`, "tone-slate"),
+    metric("预计毛利", money(totals.expectedProfit), `毛利率 ${percent(totals.grossMargin)}`, "tone-indigo"),
+    metric("实际毛利", money(totals.actualProfit), "按已确认收款计算", "tone-purple"),
+    metric("即将到期订单", totals.dueSoonOrders || 0, "需要提前催收", "tone-orange"),
+  ].join("");
 
-  const breakdownTotal = Object.values(summary.byCostType).reduce((sum, value) => sum + value, 0);
-  $("#cost-breakdown-total").textContent = money(breakdownTotal);
-  $("#cost-breakdown").innerHTML = Object.entries(summary.byCostType)
-    .map(([type, value]) => {
-      const percent = breakdownTotal ? (value / breakdownTotal) * 100 : 0;
-      return `
-        <div class="breakdown-row">
-          <strong>${type}</strong>
-          <div class="bar-track" aria-label="${type} ${percent.toFixed(1)}%">
-            <div class="bar-fill" style="width: ${Math.max(percent, value ? 3 : 0)}%"></div>
-          </div>
-          <span class="number">${money(value)}</span>
-        </div>
-      `;
-    })
-    .join("");
+  const rows = state.orders.slice(0, 12);
+  $("#order-profit-count").textContent = `${state.orders.length} 个订单`;
+  $("#dashboard-order-rows").innerHTML = rows.length ? rows.map((order) => `
+    <tr>
+      <td>${escapeHtml(order.orderNo)}</td>
+      <td>${escapeHtml(order.customerName)}</td>
+      <td>${money(order.summary.receivableCny)}</td>
+      <td>${money(order.summary.confirmedPaymentsCny)}</td>
+      <td>${money(order.summary.outstandingCny)}</td>
+      <td>${money(order.summary.totalCostCny)}</td>
+      <td>${money(order.summary.expectedGrossProfit)}</td>
+      <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
+    </tr>
+  `).join("") : emptyRow(8);
 
-  const orders = orderProfitRows();
-  $("#order-profit-count").textContent = `${orders.length} 个订单`;
-  $("#order-profit-list").innerHTML =
-    orders
-      .slice(0, 8)
-      .map(
-        (item) => `
-          <article class="order-card">
-            <strong title="${escapeHtml(item.orderNo)}">${escapeHtml(item.orderNo)}</strong>
-            <strong class="${item.profit >= 0 ? "profit-positive" : "profit-negative"}">${money(item.profit)}</strong>
-            <span>应收 ${money(item.invoices)} · 已收 ${money(item.receipts)} · 成本 ${money(item.costs)}</span>
-            <small class="${item.outstanding > 0 ? "profit-negative" : "profit-positive"}">未收 ${money(item.outstanding)} · 利润率 ${item.margin.toFixed(2)}%</small>
-          </article>
-        `,
-      )
-      .join("") || `<div class="empty-row">暂无订单盈亏数据</div>`;
+  const costStructure = state.overview?.costStructure || [];
+  const totalCost = costStructure.reduce((sum, item) => sum + item.amount, 0);
+  $("#cost-structure-total").textContent = money(totalCost);
+  $("#cost-structure-list").innerHTML = renderStats(costStructure);
+  $("#salesperson-stats").innerHTML = renderStats(state.overview?.bySalesperson || []);
+  $("#customer-stats").innerHTML = renderStats(state.overview?.byCustomer || []);
+  $("#month-stats").innerHTML = renderStats(state.overview?.byMonth || []);
 
-  const reminders = paymentReminderRows();
-  $("#payment-reminder-count").textContent = `${reminders.length} 条提醒`;
-  $("#payment-reminder-list").innerHTML =
-    reminders
-      .slice(0, 8)
-      .map(({ invoice, dueDate, daysLeft, outstanding }) => {
-        const alertClass = daysLeft < 0 ? "status-alert" : "status-waiting";
-        return `
-          <article class="reminder-card">
-            <div>
-              <strong>${escapeHtml(invoice.orderNo)}</strong>
-              <span>${escapeHtml(invoice.blNo || "未填提单号")} · ${escapeHtml(invoice.customer)}</span>
-            </div>
-            <div class="reminder-meta">
-              <span class="status-pill ${alertClass}">${reminderText(daysLeft)}</span>
-              <strong>${money(outstanding)}</strong>
-            </div>
-            <small>到期日 ${escapeHtml(dueDate)} · 提醒 ${escapeHtml(getReminderTarget(invoice))} · 业务员 ${escapeHtml(invoice.salesperson || "未填")}</small>
-          </article>
-        `;
-      })
-      .join("") || `<div class="empty-row">暂无催款提醒</div>`;
+  const reminders = state.overview?.reminders || [];
+  $("#reminder-count").textContent = `${reminders.length} 条`;
+  $("#reminder-list").innerHTML = reminders.length ? reminders.map((order) => `
+    <div class="reminder-item ${order.summary.reminderStatus === "已逾期" ? "danger" : ""}">
+      <strong>${escapeHtml(order.orderNo)} · ${escapeHtml(order.customerName)}</strong>
+      <span>${order.summary.reminderStatus} / 到期日 ${order.dueDate || "-"} / 未收 ${money(order.summary.outstandingCny)} / 逾期 ${order.summary.overdueDays} 天</span>
+    </div>
+  `).join("") : `<div class="empty-note">暂无催款提醒</div>`;
 }
 
-function renderTables() {
-  const receivedByOrder = sumByOrder(confirmedReceipts(getFilteredReceipts()));
-  const invoiceRows = getFilteredInvoices()
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map((item) => {
-      const invoiceAmount = itemCny(item);
-      const received = receivedByOrder.get(item.orderNo || "未填写订单") || 0;
-      const outstanding = invoiceAmount - received;
-      const status = invoiceStatus(item, received);
-      const creditDays = getCreditDays(item);
-      const dueDate = getDueDate(item);
-      const reminder = `${getReminderTarget(item)} / 提前 ${getReminderDays(item)} 天`;
-      return `
-        <tr>
-          <td>${escapeHtml(item.date)}</td>
-          <td>${escapeHtml(item.invoiceNo)}</td>
-          <td>${escapeHtml(item.orderNo)}</td>
-          <td>${escapeHtml(item.blNo)}</td>
-          <td>${escapeHtml(item.customer)}</td>
-          <td>${escapeHtml(item.salesperson)}</td>
-          <td>${escapeHtml(currencyText(item.currency))}</td>
-          <td class="number">${plainAmount(item.amount)}</td>
-          <td class="number">${money(invoiceAmount)}</td>
-          <td class="number">${money(received)}</td>
-          <td class="number ${outstanding > 0 ? "profit-negative" : "profit-positive"}">${money(outstanding)}</td>
-          <td><span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span></td>
-          <td>${escapeHtml(creditDays === "" ? "" : `${creditDays} 天`)}</td>
-          <td>${escapeHtml(dueDate)}</td>
-          <td>${escapeHtml(reminder)}</td>
-          <td>${escapeHtml(item.note)}</td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-button" data-edit-invoice="${item.id}" type="button" title="编辑">✎</button>
-              <button class="icon-button" data-delete-invoice="${item.id}" type="button" title="删除">×</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  const receiptRows = getFilteredReceipts()
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map(
-      (item) => `
-        <tr>
-          <td>${escapeHtml(item.date)}</td>
-          <td>${escapeHtml(item.orderNo)}</td>
-          <td>${escapeHtml(item.customer)}</td>
-          <td>${escapeHtml(item.country)}</td>
-          <td>${escapeHtml(currencyText(item.currency))}</td>
-          <td class="number">${plainAmount(item.amount)}</td>
-          <td class="number">${money(itemCny(item))}</td>
-          <td><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
-          <td>${escapeHtml(item.note)}</td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-button" data-edit-receipt="${item.id}" type="button" title="编辑">✎</button>
-              <button class="icon-button" data-delete-receipt="${item.id}" type="button" title="删除">×</button>
-            </div>
-          </td>
-        </tr>
-      `,
-    )
-    .join("");
-
-  const costRows = getFilteredCosts()
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map(
-      (item) => `
-        <tr>
-          <td>${escapeHtml(item.date)}</td>
-          <td>${escapeHtml(item.orderNo)}</td>
-          <td><span class="type-pill ${costTypeClass[item.type] || ""}">${escapeHtml(item.type)}</span></td>
-          <td>${escapeHtml(item.payee)}</td>
-          <td>${escapeHtml(currencyText(item.currency))}</td>
-          <td class="number">${plainAmount(item.amount)}</td>
-          <td class="number">${money(itemCny(item))}</td>
-          <td><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
-          <td>${escapeHtml(item.note)}</td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-button" data-edit-cost="${item.id}" type="button" title="编辑">✎</button>
-              <button class="icon-button" data-delete-cost="${item.id}" type="button" title="删除">×</button>
-            </div>
-          </td>
-        </tr>
-      `,
-    )
-    .join("");
-
-  $("#invoice-table").innerHTML = invoiceRows || emptyRow(17);
-  $("#receipt-table").innerHTML = receiptRows || emptyRow(10);
-  $("#cost-table").innerHTML = costRows || emptyRow(10);
+function renderStats(items) {
+  if (!items.length) return `<div class="empty-note">暂无数据</div>`;
+  const max = Math.max(...items.map((item) => item.amount), 1);
+  return items.slice(0, 8).map((item) => `
+    <div class="stat-row">
+      <div><strong>${escapeHtml(item.label)}</strong><small>${item.count} 条</small></div>
+      <span>${money(item.amount)}</span>
+      <i style="width:${Math.max(4, (item.amount / max) * 100)}%"></i>
+    </div>
+  `).join("");
 }
 
-function renderReports() {
-  const summary = totals();
-  $("#report-invoices").textContent = money(summary.invoiceTotal);
-  $("#report-receipts").textContent = money(summary.receiptTotal);
-  $("#report-outstanding").textContent = money(summary.outstandingTotal);
-  $("#report-goods").textContent = money(summary.byCostType.货款);
-  $("#report-logistics").textContent = money(summary.byCostType.物流);
-  $("#report-commission").textContent = money(summary.byCostType.佣金);
-  $("#report-other").textContent = money(summary.byCostType.其他);
-  $("#report-profit").textContent = money(summary.profit);
+function statusClass(status) {
+  if (["已逾期", "已退回", "已取消"].includes(status)) return "danger";
+  if (["已收齐", "已结清", "已到账", "已支付"].includes(status)) return "success";
+  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付"].includes(status)) return "warning";
+  return "";
 }
 
-function render() {
-  $("#view-title").textContent = viewTitles[state.view];
-  $("#record-count").textContent = `${state.invoices.length + state.receipts.length + state.costs.length} 条记录`;
+function renderOrderSelects() {
+  fillOrderSelect("#payment-order", $("#payment-order")?.value || "");
+  fillOrderSelect("#cost-order", $("#cost-order")?.value || "");
+}
 
-  $$(".nav-tab").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.view === state.view);
+function emptyRow(colspan) {
+  return `<tr><td class="empty-row" colspan="${colspan}">暂无数据</td></tr>`;
+}
+
+function auditCell(row) {
+  const created = row.createdBy?.name || "-";
+  const updated = row.updatedBy?.name || "-";
+  return `<small>建：${escapeHtml(created)}<br>改：${escapeHtml(updated)}</small>`;
+}
+
+function renderOrders() {
+  $("#orders-count").textContent = `${state.orders.length} 条`;
+  $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
+    <tr>
+      <td><strong>${escapeHtml(order.orderNo)}</strong><small>ID: ${escapeHtml(order.id)}</small></td>
+      <td>${escapeHtml(order.blNo || "-")}</td>
+      <td>${escapeHtml(order.customerName)}</td>
+      <td>${escapeHtml(order.salespersonName || "-")}</td>
+      <td>${money(order.receivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.receivableAmount)}</small></td>
+      <td>${money(order.summary.confirmedPaymentsCny)}</td>
+      <td>${money(order.summary.outstandingCny)}</td>
+      <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
+      <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span><small>${order.summary.overdueDays ? `${order.summary.overdueDays} 天` : ""}</small></td>
+      <td>${auditCell(order)}</td>
+      <td class="row-actions"><button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button></td>
+    </tr>
+  `).join("") : emptyRow(11);
+}
+
+function renderPayments() {
+  $("#payments-count").textContent = `${state.payments.length} 条`;
+  $("#payments-table").innerHTML = state.payments.length ? state.payments.map((payment) => `
+    <tr>
+      <td>${escapeHtml(payment.orderNo)}</td>
+      <td>${escapeHtml(payment.customerName)}</td>
+      <td>${payment.paymentDate}</td>
+      <td>${escapeHtml(payment.currency)} ${amount(payment.amount)}</td>
+      <td>${money(payment.amountCny)}</td>
+      <td><span class="status ${statusClass(payment.status)}">${payment.status}</span></td>
+      <td>${escapeHtml(payment.bankReference || "-")}</td>
+      <td>${auditCell(payment)}</td>
+      <td class="row-actions"><button data-edit-payment="${payment.id}">编辑</button><button data-delete-payment="${payment.id}">删除</button></td>
+    </tr>
+  `).join("") : emptyRow(9);
+}
+
+function renderCosts() {
+  $("#costs-count").textContent = `${state.costs.length} 条`;
+  $("#costs-table").innerHTML = state.costs.length ? state.costs.map((cost) => `
+    <tr>
+      <td>${escapeHtml(cost.orderNo)}</td>
+      <td>${escapeHtml(cost.customerName)}</td>
+      <td>${escapeHtml(cost.costType)}</td>
+      <td>${escapeHtml(cost.vendorName)}</td>
+      <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
+      <td>${money(cost.amountCny)}</td>
+      <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
+      <td>${escapeHtml(cost.invoiceStatus)}</td>
+      <td>${auditCell(cost)}</td>
+      <td class="row-actions"><button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button></td>
+    </tr>
+  `).join("") : emptyRow(10);
+}
+
+function renderProfit() {
+  $("#profit-count").textContent = `${state.orders.length} 个订单`;
+  $("#profit-table").innerHTML = state.orders.length ? state.orders.map((order) => {
+    const costGroups = state.costs
+      .filter((cost) => cost.orderId === order.id)
+      .reduce((acc, cost) => {
+        acc[cost.costType] = (acc[cost.costType] || 0) + cost.amountCny;
+        return acc;
+      }, {});
+    return `
+      <tr>
+        <td>${escapeHtml(order.orderNo)}</td>
+        <td>${escapeHtml(order.blNo || "-")}</td>
+        <td>${escapeHtml(order.customerName)}</td>
+        <td>${escapeHtml(order.salespersonName || "-")}</td>
+        <td>${money(order.summary.receivableCny)}</td>
+        <td>${money(order.summary.confirmedPaymentsCny)}</td>
+        <td>${money(order.summary.outstandingCny)}</td>
+        <td>${money(order.summary.totalCostCny)}</td>
+        <td>${money(order.summary.expectedGrossProfit)}</td>
+        <td>${money(order.summary.actualGrossProfit)}</td>
+        <td>${percent(order.summary.grossMargin)}</td>
+        <td>${Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"}</td>
+        <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
+        <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
+      </tr>
+    `;
+  }).join("") : emptyRow(14);
+}
+
+function renderSettings() {
+  $("#customers-count").textContent = `${state.customers.length} 个客户`;
+  $("#customers-table").innerHTML = state.customers.length ? state.customers.map((customer) => `
+    <tr>
+      <td>${escapeHtml(customer.name)}</td>
+      <td>${escapeHtml(customer.country || "-")}</td>
+      <td>${escapeHtml(customer.defaultCurrency)}</td>
+      <td>${escapeHtml(customer.contactPerson || "-")}</td>
+      <td>${escapeHtml(customer.remark || "-")}</td>
+      <td class="row-actions"><button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button></td>
+    </tr>
+  `).join("") : emptyRow(6);
+
+  $("#users-count").textContent = `${state.users.length} 个用户`;
+  $("#users-table").innerHTML = state.users.length ? state.users.map((user) => `
+    <tr>
+      <td>${escapeHtml(user.name)}</td>
+      <td>${escapeHtml(user.email)}</td>
+      <td>${escapeHtml(user.role)}</td>
+      <td>${user.isActive ? "启用" : "停用"}</td>
+      <td class="row-actions"><button data-edit-user="${user.id}">编辑</button><button data-delete-user="${user.id}">停用</button></td>
+    </tr>
+  `).join("") : emptyRow(5);
+
+  $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
+    <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.entityType)} / ${escapeHtml(log.entityId || "-")}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
+  `).join("") : emptyRow(5);
+}
+
+function readForm(prefix, fields) {
+  return fields.reduce((data, [key, selector]) => {
+    data[key] = $(selector).value;
+    return data;
+  }, {});
+}
+
+function setForm(fields, data) {
+  fields.forEach(([key, selector]) => {
+    const el = $(selector);
+    if (el) el.value = data?.[key] ?? "";
   });
-
-  $$(".view-panel").forEach((panel) => {
-    panel.classList.toggle("is-active", panel.id === `${state.view}-view`);
-  });
-
-  renderDashboard();
-  renderTables();
-  renderReports();
 }
 
-function resetInvoiceForm() {
-  $("#invoice-id").value = "";
-  $("#invoice-date").value = today();
-  $("#invoice-no").value = "";
-  $("#invoice-order").value = "";
-  $("#invoice-bl-no").value = "";
-  $("#invoice-salesperson").value = "";
-  $("#invoice-customer").value = "";
-  $("#invoice-country").value = "";
-  $("#invoice-currency").value = "USD";
-  $("#invoice-amount").value = "";
-  $("#invoice-rate").value = defaultRates.USD.toFixed(4);
-  $("#invoice-credit-days").value = "";
-  $("#invoice-due-date").value = "";
-  $("#invoice-reminder-days").value = String(DEFAULT_REMINDER_DAYS);
-  $("#invoice-reminder-target").value = "财务和业务员";
-  $("#invoice-note").value = "";
-  updatePreviews();
+function saveDraft(name, fields) {
+  const data = readForm(name, fields);
+  localStorage.setItem(`${DRAFT_PREFIX}${name}`, JSON.stringify(data));
 }
 
-function resetReceiptForm() {
-  $("#receipt-id").value = "";
-  $("#receipt-date").value = today();
-  $("#receipt-order").value = "";
-  $("#receipt-customer").value = "";
-  $("#receipt-country").value = "";
-  $("#receipt-currency").value = "USD";
-  $("#receipt-amount").value = "";
-  $("#receipt-rate").value = defaultRates.USD.toFixed(4);
-  $("#receipt-status").value = "已到账";
-  $("#receipt-note").value = "";
-  updatePreviews();
+function loadDraft(name, fields) {
+  try {
+    const data = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}${name}`) || "{}");
+    setForm(fields, data);
+  } catch {}
 }
 
-function resetCostForm() {
-  $("#cost-id").value = "";
-  $("#cost-date").value = today();
-  $("#cost-order").value = "";
-  $("#cost-type").value = "货款";
-  $("#cost-payee").value = "";
-  $("#cost-currency").value = "CNY";
-  $("#cost-amount").value = "";
-  $("#cost-rate").value = defaultRates.CNY.toFixed(4);
-  $("#cost-status").value = "已支付";
-  $("#cost-note").value = "";
-  updatePreviews();
+function clearDraft(name) {
+  localStorage.removeItem(`${DRAFT_PREFIX}${name}`);
 }
 
-function updatePreviews() {
-  $("#invoice-cny-preview").textContent = money(cny($("#invoice-amount").value, $("#invoice-rate").value));
-  $("#receipt-cny-preview").textContent = money(cny($("#receipt-amount").value, $("#receipt-rate").value));
-  $("#cost-cny-preview").textContent = money(cny($("#cost-amount").value, $("#cost-rate").value));
-}
+const orderFields = [
+  ["id", "#order-id"], ["customerName", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"], ["salespersonName", "#order-salesperson"],
+  ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"], ["receivableAmount", "#order-amount"],
+  ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
+  ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
+];
 
-function updateDueDateFromCreditDays() {
-  const creditDays = $("#invoice-credit-days").value;
-  const invoiceDate = $("#invoice-date").value;
-  if (!invoiceDate || creditDays === "") return;
-  $("#invoice-due-date").value = addDays(invoiceDate, creditDays);
-}
+const paymentFields = [
+  ["id", "#payment-id"], ["orderId", "#payment-order"], ["paymentDate", "#payment-date"], ["currency", "#payment-currency"], ["exchangeRate", "#payment-rate"],
+  ["amount", "#payment-amount"], ["status", "#payment-status"], ["bankReference", "#payment-bank-reference"], ["remark", "#payment-remark"],
+];
 
-function collectInvoice() {
-  const creditDays = $("#invoice-credit-days").value;
-  const dueDate = $("#invoice-due-date").value || (creditDays === "" ? "" : addDays($("#invoice-date").value, creditDays));
-  return {
-    id: $("#invoice-id").value || uid(),
-    date: $("#invoice-date").value,
-    invoiceNo: $("#invoice-no").value.trim(),
-    orderNo: $("#invoice-order").value.trim(),
-    blNo: $("#invoice-bl-no").value.trim(),
-    salesperson: $("#invoice-salesperson").value.trim(),
-    customer: $("#invoice-customer").value.trim(),
-    country: $("#invoice-country").value.trim(),
-    currency: $("#invoice-currency").value,
-    amount: toNumber($("#invoice-amount").value),
-    rate: toNumber($("#invoice-rate").value),
-    creditDays: creditDays === "" ? "" : toNumber(creditDays),
-    dueDate,
-    reminderDays: toNumber($("#invoice-reminder-days").value || DEFAULT_REMINDER_DAYS),
-    reminderTarget: $("#invoice-reminder-target").value,
-    note: $("#invoice-note").value.trim(),
-  };
-}
+const costFields = [
+  ["id", "#cost-id"], ["orderId", "#cost-order"], ["costType", "#cost-type"], ["vendorName", "#cost-vendor"], ["currency", "#cost-currency"], ["exchangeRate", "#cost-rate"],
+  ["amount", "#cost-amount"], ["paymentStatus", "#cost-payment-status"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"], ["remark", "#cost-remark"],
+];
 
-function collectReceipt() {
-  return {
-    id: $("#receipt-id").value || uid(),
-    date: $("#receipt-date").value,
-    orderNo: $("#receipt-order").value.trim(),
-    customer: $("#receipt-customer").value.trim(),
-    country: $("#receipt-country").value.trim(),
-    currency: $("#receipt-currency").value,
-    amount: toNumber($("#receipt-amount").value),
-    rate: toNumber($("#receipt-rate").value),
-    status: $("#receipt-status").value,
-    note: $("#receipt-note").value.trim(),
-  };
-}
-
-function collectCost() {
-  return {
-    id: $("#cost-id").value || uid(),
-    date: $("#cost-date").value,
-    orderNo: $("#cost-order").value.trim(),
-    type: $("#cost-type").value,
-    payee: $("#cost-payee").value.trim(),
-    currency: $("#cost-currency").value,
-    amount: toNumber($("#cost-amount").value),
-    rate: toNumber($("#cost-rate").value),
-    status: $("#cost-status").value,
-    note: $("#cost-note").value.trim(),
-  };
-}
-
-function upsert(collection, record) {
-  const index = collection.findIndex((item) => item.id === record.id);
-  if (index >= 0) {
-    collection[index] = record;
-  } else {
-    collection.push(record);
+function updateOrderDerived() {
+  $("#order-amount-cny").value = calcCny($("#order-amount").value, $("#order-rate").value);
+  const credit = Number($("#order-credit-days").value);
+  if ($("#order-expected-date").value && Number.isFinite(credit) && credit > 0 && !$("#order-due-date").value) {
+    const date = new Date(`${$("#order-expected-date").value}T00:00:00`);
+    date.setDate(date.getDate() + credit);
+    $("#order-due-date").value = date.toISOString().slice(0, 10);
   }
 }
 
-function editInvoice(id) {
-  const item = state.invoices.find((record) => record.id === id);
-  if (!item) return;
-  state.view = "invoices";
-  $("#invoice-id").value = item.id;
-  $("#invoice-date").value = item.date;
-  $("#invoice-no").value = item.invoiceNo || "";
-  $("#invoice-order").value = item.orderNo;
-  $("#invoice-bl-no").value = item.blNo || "";
-  $("#invoice-salesperson").value = item.salesperson || "";
-  $("#invoice-customer").value = item.customer;
-  $("#invoice-country").value = item.country || "";
-  $("#invoice-currency").value = item.currency;
-  $("#invoice-amount").value = item.amount;
-  $("#invoice-rate").value = item.rate;
-  $("#invoice-credit-days").value = getCreditDays(item);
-  $("#invoice-due-date").value = getDueDate(item);
-  $("#invoice-reminder-days").value = getReminderDays(item);
-  $("#invoice-reminder-target").value = getReminderTarget(item);
-  $("#invoice-note").value = item.note || "";
-  updatePreviews();
-  render();
-  $("#invoice-date").focus();
+function updatePaymentDerived() {
+  const order = orderById($("#payment-order").value);
+  $("#payment-order-no").value = order?.orderNo || "";
+  $("#payment-customer").value = order?.customerName || "";
+  if (order && !$("#payment-id").value) {
+    $("#payment-currency").value = order.currency;
+    $("#payment-rate").value = Number(order.exchangeRate).toFixed(4);
+  }
+  $("#payment-amount-cny").value = calcCny($("#payment-amount").value, $("#payment-rate").value);
 }
 
-function editReceipt(id) {
-  const item = state.receipts.find((record) => record.id === id);
-  if (!item) return;
-  state.view = "receipts";
-  $("#receipt-id").value = item.id;
-  $("#receipt-date").value = item.date;
-  $("#receipt-order").value = item.orderNo;
-  $("#receipt-customer").value = item.customer;
-  $("#receipt-country").value = item.country;
-  $("#receipt-currency").value = item.currency;
-  $("#receipt-amount").value = item.amount;
-  $("#receipt-rate").value = item.rate;
-  $("#receipt-status").value = item.status;
-  $("#receipt-note").value = item.note || "";
-  updatePreviews();
-  render();
-  $("#receipt-date").focus();
+function updateCostDerived() {
+  const order = orderById($("#cost-order").value);
+  $("#cost-order-no").value = order?.orderNo || "";
+  $("#cost-customer").value = order?.customerName || "";
+  $("#cost-amount-cny").value = calcCny($("#cost-amount").value, $("#cost-rate").value);
+}
+
+async function saveAttachmentIfNeeded(relatedType, relatedId, inputId) {
+  const value = $(inputId)?.value.trim();
+  if (!value) return;
+  await api("/api/attachments", {
+    method: "POST",
+    body: JSON.stringify({
+      relatedType,
+      relatedId,
+      fileName: value.split("/").pop() || "附件",
+      fileUrl: value,
+    }),
+  }).catch((error) => toast(`附件保存失败：${error.message}`));
+  $(inputId).value = "";
+}
+
+async function submitOrder(event) {
+  event.preventDefault();
+  try {
+    const data = readForm("order", orderFields);
+    const id = data.id;
+    delete data.id;
+    const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(data),
+    });
+    await saveAttachmentIfNeeded("receivable_orders", result.order.id, "#order-attachment");
+    clearDraft("order");
+    resetForm("order");
+    await loadData();
+    toast("应收订单已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitPayment(event) {
+  event.preventDefault();
+  try {
+    const data = readForm("payment", paymentFields);
+    const id = data.id;
+    delete data.id;
+    const result = await api(id ? `/api/payments/${id}` : "/api/payments", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(data),
+    });
+    await saveAttachmentIfNeeded("payments", result.payment.id, "#payment-attachment");
+    clearDraft("payment");
+    resetForm("payment");
+    await loadData();
+    toast("收款已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitCost(event) {
+  event.preventDefault();
+  try {
+    const data = readForm("cost", costFields);
+    const id = data.id;
+    delete data.id;
+    const result = await api(id ? `/api/costs/${id}` : "/api/costs", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(data),
+    });
+    await saveAttachmentIfNeeded("order_costs", result.cost.id, "#cost-attachment");
+    clearDraft("cost");
+    resetForm("cost");
+    await loadData();
+    toast("成本已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitCustomer(event) {
+  event.preventDefault();
+  try {
+    const data = {
+      name: $("#customer-name").value,
+      country: $("#customer-country").value,
+      defaultCurrency: $("#customer-currency").value,
+      contactPerson: $("#customer-contact-person").value,
+      contactEmail: $("#customer-contact-email").value,
+      contactPhone: $("#customer-contact-phone").value,
+      remark: $("#customer-remark").value,
+    };
+    const id = $("#customer-id").value;
+    await api(id ? `/api/customers/${id}` : "/api/customers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    resetForm("customer");
+    await loadData();
+    toast("客户已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitUser(event) {
+  event.preventDefault();
+  try {
+    const data = {
+      name: $("#user-name").value,
+      email: $("#user-email").value,
+      role: $("#user-role").value,
+      password: $("#user-password").value,
+    };
+    const id = $("#user-id").value;
+    await api(id ? `/api/users/${id}` : "/api/users", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    resetForm("user");
+    await loadData();
+    toast("用户已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  try {
+    await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: $("#login-email").value, password: $("#login-password").value }),
+    });
+    await loadData();
+    toast("登录成功");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function resetForm(name) {
+  if (name === "order") {
+    $("#order-form").reset();
+    $("#order-id").value = "";
+    $("#order-rate").value = constants.defaultRates.USD.toFixed(4);
+    $("#order-reminder-days").value = "7";
+    updateOrderDerived();
+  }
+  if (name === "payment") {
+    $("#payment-form").reset();
+    $("#payment-id").value = "";
+    $("#payment-date").value = today();
+    $("#payment-rate").value = constants.defaultRates.USD.toFixed(4);
+    updatePaymentDerived();
+  }
+  if (name === "cost") {
+    $("#cost-form").reset();
+    $("#cost-id").value = "";
+    $("#cost-rate").value = "1.0000";
+    updateCostDerived();
+  }
+  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "";
+  if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
+}
+
+function editOrder(id) {
+  const order = state.orders.find((item) => item.id === id);
+  if (!order) return;
+  setForm(orderFields, order);
+  $("#order-id").value = order.id;
+  $("#order-customer").value = order.customerName;
+  $("#order-salesperson").value = order.salespersonName;
+  updateOrderDerived();
+  switchView("orders");
+}
+
+function editPayment(id) {
+  const payment = state.payments.find((item) => item.id === id);
+  if (!payment) return;
+  setForm(paymentFields, payment);
+  $("#payment-id").value = payment.id;
+  updatePaymentDerived();
+  switchView("payments");
 }
 
 function editCost(id) {
-  const item = state.costs.find((record) => record.id === id);
-  if (!item) return;
-  state.view = "costs";
-  $("#cost-id").value = item.id;
-  $("#cost-date").value = item.date;
-  $("#cost-order").value = item.orderNo;
-  $("#cost-type").value = item.type;
-  $("#cost-payee").value = item.payee;
-  $("#cost-currency").value = item.currency;
-  $("#cost-amount").value = item.amount;
-  $("#cost-rate").value = item.rate;
-  $("#cost-status").value = item.status;
-  $("#cost-note").value = item.note || "";
-  updatePreviews();
-  render();
-  $("#cost-date").focus();
+  const cost = state.costs.find((item) => item.id === id);
+  if (!cost) return;
+  setForm(costFields, cost);
+  $("#cost-id").value = cost.id;
+  updateCostDerived();
+  switchView("costs");
 }
 
-function deleteRecord(collectionName, id) {
-  const collection = state[collectionName];
-  const index = collection.findIndex((item) => item.id === id);
-  if (index < 0) return;
-  const ok = window.confirm("确定删除这条记录吗？");
-  if (!ok) return;
-  collection.splice(index, 1);
-  save();
-  deleteRemoteRecord(collectionName, id);
-  render();
-  showToast("记录已删除。");
+function editCustomer(id) {
+  const customer = state.customers.find((item) => item.id === id);
+  if (!customer) return;
+  $("#customer-id").value = customer.id;
+  $("#customer-name").value = customer.name;
+  $("#customer-country").value = customer.country;
+  $("#customer-currency").value = customer.defaultCurrency;
+  $("#customer-contact-person").value = customer.contactPerson;
+  $("#customer-contact-email").value = customer.contactEmail;
+  $("#customer-contact-phone").value = customer.contactPhone;
+  $("#customer-remark").value = customer.remark;
+  switchView("settings");
 }
 
-function csvCell(value) {
-  const text = String(value ?? "");
-  return `"${text.replaceAll('"', '""')}"`;
+function editUser(id) {
+  const user = state.users.find((item) => item.id === id);
+  if (!user) return;
+  $("#user-id").value = user.id;
+  $("#user-name").value = user.name;
+  $("#user-email").value = user.email;
+  $("#user-role").value = user.role;
+  $("#user-password").value = "";
+  switchView("settings");
 }
 
-function download(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function csvText(rows) {
-  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
-}
-
-function invoiceExportRows() {
-  const receivedByOrder = sumByOrder(confirmedReceipts(getFilteredReceipts()));
-  return [
-    [
-      "出货/开票日期",
-      "应收发票号",
-      "订单号",
-      "提单号",
-      "客户",
-      "国家/地区",
-      "业务员",
-      "币种",
-      "应收原币",
-      "汇率",
-      "应收人民币",
-      "订单已收人民币",
-      "未收余额",
-      "回款状态",
-      "账期天数",
-      "账期到期日",
-      "提前提醒天数",
-      "提醒对象",
-      "备注",
-    ],
-    ...getFilteredInvoices().map((item) => {
-      const received = receivedByOrder.get(item.orderNo || "未填写订单") || 0;
-      const invoiceAmount = itemCny(item);
-      return [
-        item.date,
-        item.invoiceNo,
-        item.orderNo,
-        item.blNo,
-        item.customer,
-        item.country,
-        item.salesperson,
-        currencyText(item.currency),
-        item.amount,
-        item.rate,
-        invoiceAmount.toFixed(2),
-        received.toFixed(2),
-        (invoiceAmount - received).toFixed(2),
-        invoiceStatus(item, received),
-        getCreditDays(item),
-        getDueDate(item),
-        getReminderDays(item),
-        getReminderTarget(item),
-        item.note,
-      ];
-    }),
-  ];
-}
-
-function receiptExportRows() {
-  return [
-    ["日期", "订单号", "客户", "国家/地区", "币种", "原币金额", "汇率", "折人民币", "状态", "备注"],
-    ...getFilteredReceipts().map((item) => [
-      item.date,
-      item.orderNo,
-      item.customer,
-      item.country,
-      currencyText(item.currency),
-      item.amount,
-      item.rate,
-      itemCny(item).toFixed(2),
-      item.status,
-      item.note,
-    ]),
-  ];
-}
-
-function costExportRows() {
-  return [
-    ["日期", "订单号", "成本类型", "供应商/收款方", "币种", "原币金额", "汇率", "折人民币", "状态", "备注"],
-    ...getFilteredCosts().map((item) => [
-      item.date,
-      item.orderNo,
-      item.type,
-      item.payee,
-      currencyText(item.currency),
-      item.amount,
-      item.rate,
-      itemCny(item).toFixed(2),
-      item.status,
-      item.note,
-    ]),
-  ];
-}
-
-function exportInvoices() {
-  download(`应收发票-${today()}.csv`, csvText(invoiceExportRows()), "text/csv;charset=utf-8");
-}
-
-function exportReceipts() {
-  download(`收款登记-${today()}.csv`, csvText(receiptExportRows()), "text/csv;charset=utf-8");
-}
-
-function exportCosts() {
-  download(`成本支出-${today()}.csv`, csvText(costExportRows()), "text/csv;charset=utf-8");
-}
-
-function exportAll() {
-  const summary = totals();
-  const sections = [
-    ["应收发票"],
-    ...invoiceExportRows(),
-    [],
-    ["收款登记"],
-    ...receiptExportRows(),
-    [],
-    ["成本支出"],
-    ...costExportRows(),
-    [],
-    ["汇总"],
-    ["应收合计", summary.invoiceTotal.toFixed(2)],
-    ["收款合计", summary.receiptTotal.toFixed(2)],
-    ["已确认收款", summary.confirmedReceiptTotal.toFixed(2)],
-    ["待确认收款", summary.pendingTotal.toFixed(2)],
-    ["未收余额", summary.outstandingTotal.toFixed(2)],
-    ["成本合计", summary.costTotal.toFixed(2)],
-    ["应收毛利", summary.profit.toFixed(2)],
-    ["利润率", `${summary.margin.toFixed(2)}%`],
-  ];
-  download(`外贸收支汇总-${today()}.csv`, csvText(sections), "text/csv;charset=utf-8");
-}
-
-function backupJson() {
-  download(
-    `外贸收支备份-${today()}.json`,
-    JSON.stringify({ invoices: state.invoices, receipts: state.receipts, costs: state.costs }, null, 2),
-    "application/json;charset=utf-8",
-  );
-}
-
-function restoreJson(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(String(reader.result));
-      if (!Array.isArray(parsed.receipts) || !Array.isArray(parsed.costs)) {
-        throw new Error("invalid data");
-      }
-      state.invoices = Array.isArray(parsed.invoices) ? parsed.invoices : [];
-      state.receipts = parsed.receipts;
-      state.costs = parsed.costs;
-      save();
-      if (remoteStorageEnabled) {
-        importRemoteLedger();
-      }
-      render();
-      showToast("备份已导入。");
-    } catch {
-      showToast("导入失败，请选择本系统导出的 JSON 文件。");
-    } finally {
-      $("#restore-json").value = "";
-    }
+async function deleteRecord(kind, id) {
+  const labels = { order: "应收订单", payment: "收款", cost: "成本", customer: "客户", user: "用户" };
+  if (!confirm(`确认删除/停用这条${labels[kind]}吗？该操作会写入操作日志。`)) return;
+  const endpoints = {
+    order: `/api/orders/${id}`,
+    payment: `/api/payments/${id}`,
+    cost: `/api/costs/${id}`,
+    customer: `/api/customers/${id}`,
+    user: `/api/users/${id}`,
   };
-  reader.readAsText(file);
+  try {
+    await api(endpoints[kind], { method: "DELETE" });
+    await loadData();
+    toast("操作已完成");
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
-function loadSample() {
-  if (state.invoices.length || state.receipts.length || state.costs.length) {
-    const ok = window.confirm("当前已有数据，仍要追加示例记录吗？");
-    if (!ok) return;
-  }
-
-  state.invoices.push(
-    {
-      id: uid(),
-      date: "2026-06-01",
-      invoiceNo: "INV-2026-001",
-      orderNo: "PO-2026-001",
-      blNo: "BL-2026-001",
-      salesperson: "Linda",
-      customer: "Northstar Retail LLC",
-      country: "United States",
-      currency: "USD",
-      amount: 12800,
-      rate: 7.21,
-      creditDays: 19,
-      dueDate: "2026-06-20",
-      reminderDays: 7,
-      reminderTarget: "财务和业务员",
-      note: "出货后开票，T/T 尾款",
-    },
-    {
-      id: uid(),
-      date: "2026-06-03",
-      invoiceNo: "INV-2026-002",
-      orderNo: "PO-2026-002",
-      blNo: "BL-2026-002",
-      salesperson: "Kevin",
-      customer: "Blue Harbor GmbH",
-      country: "Germany",
-      currency: "EUR",
-      amount: 8600,
-      rate: 7.82,
-      creditDays: 5,
-      dueDate: "2026-06-08",
-      reminderDays: 7,
-      reminderTarget: "财务",
-      note: "5 天账期",
-    },
-  );
-
-  state.receipts.push(
-    {
-      id: uid(),
-      date: "2026-06-01",
-      orderNo: "PO-2026-001",
-      customer: "Northstar Retail LLC",
-      country: "United States",
-      currency: "USD",
-      amount: 12800,
-      rate: 7.21,
-      status: "已到账",
-      note: "T/T 尾款",
-    },
-    {
-      id: uid(),
-      date: "2026-06-03",
-      orderNo: "PO-2026-002",
-      customer: "Blue Harbor GmbH",
-      country: "Germany",
-      currency: "EUR",
-      amount: 4000,
-      rate: 7.82,
-      status: "部分到账",
-      note: "首笔回款",
-    },
-    {
-      id: uid(),
-      date: "2026-06-04",
-      orderNo: "PO-2026-002",
-      customer: "Blue Harbor GmbH",
-      country: "Germany",
-      currency: "EUR",
-      amount: 4600,
-      rate: 7.82,
-      status: "待确认",
-      note: "银行入账待核",
-    },
-  );
-
-  state.costs.push(
-    {
-      id: uid(),
-      date: "2026-06-01",
-      orderNo: "PO-2026-001",
-      type: "货款",
-      payee: "宁波华辰工厂",
-      currency: "CNY",
-      amount: 51600,
-      rate: 1,
-      status: "已支付",
-      note: "首批货款",
-    },
-    {
-      id: uid(),
-      date: "2026-06-02",
-      orderNo: "PO-2026-001",
-      type: "物流",
-      payee: "上海远航货代",
-      currency: "CNY",
-      amount: 9800,
-      rate: 1,
-      status: "已支付",
-      note: "海运拼箱",
-    },
-    {
-      id: uid(),
-      date: "2026-06-03",
-      orderNo: "PO-2026-002",
-      type: "佣金",
-      payee: "Agent Mason",
-      currency: "USD",
-      amount: 360,
-      rate: 7.21,
-      status: "待支付",
-      note: "4% 佣金",
-    },
-  );
-
-  save();
-  if (remoteStorageEnabled) {
-    importRemoteLedger();
-  }
-  render();
-  showToast("示例数据已加载。");
+function switchView(view) {
+  state.view = view;
+  updateCurrentView();
 }
 
-function applyCurrencyRate(selectId, rateId) {
-  const currency = $(selectId).value;
-  $(rateId).value = (defaultRates[currency] || 1).toFixed(4);
-  updatePreviews();
+function exportReport(type) {
+  const params = filterParams();
+  params.set("type", type);
+  window.location.href = `/api/reports?${params.toString()}`;
 }
 
 function bindEvents() {
-  $$(".nav-tab").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.view = button.dataset.view;
-      render();
-    });
-  });
-
-  $("#filter-month").addEventListener("input", (event) => {
-    state.filters.month = event.target.value;
-    render();
-  });
-  $("#filter-order").addEventListener("input", (event) => {
-    state.filters.order = event.target.value;
-    render();
-  });
-  $("#filter-party").addEventListener("input", (event) => {
-    state.filters.party = event.target.value;
-    render();
-  });
+  $$(".nav-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+  $("#refresh-data").addEventListener("click", loadData);
+  $("#show-login").addEventListener("click", () => switchView("settings"));
   $("#clear-filters").addEventListener("click", () => {
-    state.filters = { month: "", order: "", party: "" };
-    $("#filter-month").value = "";
-    $("#filter-order").value = "";
-    $("#filter-party").value = "";
-    render();
+    $$(".filters input, .filters select").forEach((el) => (el.value = ""));
+    loadData();
+  });
+  $$(".filters input, .filters select").forEach((el) => el.addEventListener("change", loadData));
+
+  $("#order-form").addEventListener("submit", submitOrder);
+  $("#payment-form").addEventListener("submit", submitPayment);
+  $("#cost-form").addEventListener("submit", submitCost);
+  $("#customer-form").addEventListener("submit", submitCustomer);
+  $("#user-form").addEventListener("submit", submitUser);
+  $("#login-form").addEventListener("submit", submitLogin);
+  $("#logout-button").addEventListener("click", async () => {
+    await api("/api/auth/logout", { method: "POST" });
+    await loadData();
+    toast("已退出");
   });
 
-  [
-    "#invoice-amount",
-    "#invoice-rate",
-    "#receipt-amount",
-    "#receipt-rate",
-    "#cost-amount",
-    "#cost-rate",
-  ].forEach((selector) => {
-    $(selector).addEventListener("input", updatePreviews);
+  ["order", "payment", "cost", "customer", "user"].forEach((name) => {
+    $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
   });
 
-  $("#invoice-currency").addEventListener("change", () => applyCurrencyRate("#invoice-currency", "#invoice-rate"));
-  $("#receipt-currency").addEventListener("change", () => applyCurrencyRate("#receipt-currency", "#receipt-rate"));
-  $("#cost-currency").addEventListener("change", () => applyCurrencyRate("#cost-currency", "#cost-rate"));
-  $("#invoice-date").addEventListener("change", updateDueDateFromCreditDays);
-  $("#invoice-credit-days").addEventListener("input", updateDueDateFromCreditDays);
-
-  $("#invoice-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const record = collectInvoice();
-    upsert(state.invoices, record);
-    save();
-    persistRemoteRecord("invoices", record);
-    resetInvoiceForm();
-    render();
-    showToast("应收发票已保存。");
+  ["#order-amount", "#order-rate", "#order-credit-days", "#order-expected-date"].forEach((selector) => $(selector).addEventListener("input", () => {
+    updateOrderDerived();
+    saveDraft("order", orderFields);
+  }));
+  ["#payment-order", "#payment-amount", "#payment-rate"].forEach((selector) => $(selector).addEventListener("input", () => {
+    updatePaymentDerived();
+    saveDraft("payment", paymentFields);
+  }));
+  ["#cost-order", "#cost-amount", "#cost-rate"].forEach((selector) => $(selector).addEventListener("input", () => {
+    updateCostDerived();
+    saveDraft("cost", costFields);
+  }));
+  $("#order-currency").addEventListener("change", () => {
+    $("#order-rate").value = (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4);
+    updateOrderDerived();
   });
-
-  $("#receipt-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const record = collectReceipt();
-    upsert(state.receipts, record);
-    save();
-    persistRemoteRecord("receipts", record);
-    resetReceiptForm();
-    render();
-    showToast("收款记录已保存。");
+  $("#payment-currency").addEventListener("change", () => {
+    $("#payment-rate").value = (constants.defaultRates[$("#payment-currency").value] || 1).toFixed(4);
+    updatePaymentDerived();
   });
-
-  $("#cost-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const record = collectCost();
-    upsert(state.costs, record);
-    save();
-    persistRemoteRecord("costs", record);
-    resetCostForm();
-    render();
-    showToast("支出记录已保存。");
+  $("#cost-currency").addEventListener("change", () => {
+    $("#cost-rate").value = (constants.defaultRates[$("#cost-currency").value] || 1).toFixed(4);
+    updateCostDerived();
   });
+  $$("#order-form input, #order-form select, #order-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("order", orderFields)));
+  $$("#payment-form input, #payment-form select, #payment-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("payment", paymentFields)));
+  $$("#cost-form input, #cost-form select, #cost-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("cost", costFields)));
 
-  $("#reset-invoice-form").addEventListener("click", resetInvoiceForm);
-  $("#reset-receipt-form").addEventListener("click", resetReceiptForm);
-  $("#reset-cost-form").addEventListener("click", resetCostForm);
-  $("#load-sample").addEventListener("click", loadSample);
-  $("#backup-json").addEventListener("click", backupJson);
-  $("#download-json-2").addEventListener("click", backupJson);
-  $("#restore-json").addEventListener("change", (event) => restoreJson(event.target.files[0]));
-
-  document.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-
-    const invoiceEditId = target.dataset.editInvoice;
-    const invoiceDeleteId = target.dataset.deleteInvoice;
-    const receiptEditId = target.dataset.editReceipt;
-    const receiptDeleteId = target.dataset.deleteReceipt;
-    const costEditId = target.dataset.editCost;
-    const costDeleteId = target.dataset.deleteCost;
-    const exportType = target.dataset.export;
-
-    if (invoiceEditId) editInvoice(invoiceEditId);
-    if (invoiceDeleteId) deleteRecord("invoices", invoiceDeleteId);
-    if (receiptEditId) editReceipt(receiptEditId);
-    if (receiptDeleteId) deleteRecord("receipts", receiptDeleteId);
-    if (costEditId) editCost(costEditId);
-    if (costDeleteId) deleteRecord("costs", costDeleteId);
-    if (exportType === "invoices") exportInvoices();
-    if (exportType === "receipts") exportReceipts();
-    if (exportType === "costs") exportCosts();
-    if (exportType === "all") exportAll();
-  });
-
-  $("#clear-data").addEventListener("click", () => {
-    const ok = window.confirm("确定清空全部应收、收款和成本记录吗？建议先下载 JSON 备份。");
-    if (!ok) return;
-    state.invoices = [];
-    state.receipts = [];
-    state.costs = [];
-    save();
-    if (remoteStorageEnabled) {
-      importRemoteLedger();
-    }
-    render();
-    showToast("全部数据已清空。");
+  document.body.addEventListener("click", (event) => {
+    const target = event.target.closest("button");
+    if (!target) return;
+    if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
+    if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
+    if (target.dataset.editCost) editCost(target.dataset.editCost);
+    if (target.dataset.editCustomer) editCustomer(target.dataset.editCustomer);
+    if (target.dataset.editUser) editUser(target.dataset.editUser);
+    if (target.dataset.deleteOrder) deleteRecord("order", target.dataset.deleteOrder);
+    if (target.dataset.deletePayment) deleteRecord("payment", target.dataset.deletePayment);
+    if (target.dataset.deleteCost) deleteRecord("cost", target.dataset.deleteCost);
+    if (target.dataset.deleteCustomer) deleteRecord("customer", target.dataset.deleteCustomer);
+    if (target.dataset.deleteUser) deleteRecord("user", target.dataset.deleteUser);
+    if (target.dataset.export) exportReport(target.dataset.export);
   });
 }
 
+function initSelects() {
+  fillSelect("#filter-currency", constants.currencies, "", true);
+  fillSelect("#filter-order-status", constants.orderStatuses, "", true);
+  fillSelect("#filter-payment-status", [...constants.paymentStatuses, ...constants.costPaymentStatuses], "", true);
+  fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true);
+  fillSelect("#filter-cost-type", constants.costTypes, "", true);
+  ["#order-currency", "#payment-currency", "#cost-currency", "#customer-currency"].forEach((id) => fillSelect(id, constants.currencies, id === "#cost-currency" || id === "#customer-currency" ? "CNY" : "USD"));
+  fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
+  fillSelect("#order-payment-term", constants.paymentTerms, "OA账期");
+  fillSelect("#order-status", constants.orderStatuses, "已提交");
+  fillSelect("#payment-status", constants.paymentStatuses, "待确认");
+  fillSelect("#cost-type", constants.costTypes, "采购成本");
+  fillSelect("#cost-payment-status", constants.costPaymentStatuses, "待支付");
+  fillSelect("#cost-invoice-status", constants.invoiceStatuses, "未收到");
+  fillSelect("#user-role", constants.roles, "查看者");
+}
+
 async function init() {
-  await load();
+  initSelects();
   bindEvents();
-  resetInvoiceForm();
-  resetReceiptForm();
-  resetCostForm();
-  render();
+  resetForm("order");
+  resetForm("payment");
+  resetForm("cost");
+  loadDraft("order", orderFields);
+  loadDraft("payment", paymentFields);
+  loadDraft("cost", costFields);
+  updateOrderDerived();
+  updatePaymentDerived();
+  updateCostDerived();
+  await loadData();
 }
 
 init();

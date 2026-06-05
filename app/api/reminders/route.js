@@ -1,18 +1,12 @@
-import { NextResponse } from "next/server";
-import { readPaymentReminders } from "../../../lib/reminders";
+import { apiError, getActor, getReminders, ok } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
   try {
-    return NextResponse.json({
-      reminders: await readPaymentReminders(),
-    });
+    const actor = await getActor(request);
+    return ok({ reminders: await getReminders(new URL(request.url).searchParams, actor) });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "REMINDER_READ_FAILED" },
-      { status: 500 },
-    );
+    return apiError(error, "读取催款提醒失败");
   }
 }

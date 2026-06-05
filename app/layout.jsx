@@ -1,8 +1,8 @@
 import "../styles.css";
 
 export const metadata = {
-  title: "外贸收款与成本支出登记系统",
-  description: "外贸应收、收款和成本登记系统",
+  title: "外贸应收款协同管理平台",
+  description: "应收订单、收款登记、成本录入、利润分析和逾期提醒",
 };
 
 export default function RootLayout({ children }) {

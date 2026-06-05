@@ -1,0 +1,21 @@
+import { apiError, getActor, listUsers, ok, saveUser } from "../../../lib/platform-db";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    return ok({ users: await listUsers() });
+  } catch (error) {
+    return apiError(error, "读取用户失败");
+  }
+}
+
+export async function POST(request) {
+  try {
+    const actor = await getActor(request);
+    const body = await request.json();
+    return ok({ user: await saveUser(request, actor, body) });
+  } catch (error) {
+    return apiError(error, "保存用户失败");
+  }
+}

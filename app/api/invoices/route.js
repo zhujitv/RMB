@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-import { upsertInvoice } from "../../../lib/ledger-db";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request) {
-  try {
-    const body = await request.json();
-    return NextResponse.json(await upsertInvoice(body));
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "INVOICE_SAVE_FAILED" },
-      { status: 500 },
-    );
-  }
+export async function GET() {
+  return NextResponse.json(
+    { error: "模块已重命名为应收订单，请使用 /api/orders。" },
+    { status: 410 },
+  );
 }

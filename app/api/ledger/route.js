@@ -1,16 +1,21 @@
-import { NextResponse } from "next/server";
-import { readLedger } from "../../../lib/ledger-db";
+import { apiError, getActor, getOverview, listCosts, listCustomers, listOrders, listPayments, listUsers, ok } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
   try {
-    return NextResponse.json(await readLedger());
+    const actor = await getActor(request);
+    const query = new URL(request.url).searchParams;
+    const [overview, orders, payments, costs, customers, users] = await Promise.all([
+      getOverview(query, actor),
+      listOrders(query, actor),
+      listPayments(query, actor),
+      listCosts(query, actor),
+      listCustomers(query),
+      listUsers(),
+    ]);
+    return ok({ overview, orders, payments, costs, customers, users });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "LEDGER_READ_FAILED" },
-      { status: 500 },
-    );
+    return apiError(error, "读取平台数据失败");
   }
 }
