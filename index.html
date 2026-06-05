@@ -92,15 +92,16 @@
               <label><span>提单号 *</span><input id="order-bl-no" required /></label>
               <label><span>业务员</span><input id="order-salesperson" disabled /></label>
               <label><span>国家 / 地区</span><input id="order-country" /></label>
-              <label><span>币种</span><select id="order-currency"></select></label>
+              <label><span>币种 *</span><select id="order-currency" required></select></label>
               <label><span>汇率 *</span><input id="order-rate" type="number" min="0" step="0.0001" required /></label>
               <label><span>应收金额 *</span><input id="order-amount" type="number" min="0" step="0.01" required /></label>
               <label><span>折人民币金额</span><input id="order-amount-cny" disabled /></label>
               <label><span>交易条款</span><select id="order-trade-term"></select></label>
               <label><span>付款条款</span><select id="order-payment-term"></select></label>
-              <label><span>客户预计付款日期</span><input id="order-expected-date" type="date" /></label>
-              <label><span>账期天数</span><input id="order-credit-days" type="number" min="0" step="1" /></label>
+              <label><span>到港 / 预计日期</span><input id="order-expected-date" type="date" /></label>
+              <label><span>到港后 / 账期天数</span><input id="order-credit-days" type="number" min="0" step="1" /></label>
               <label><span>到期日</span><input id="order-due-date" type="date" /></label>
+              <label class="action-label"><span>到期关联</span><button class="secondary-button" id="order-link-due-date" type="button">关联到期日</button></label>
               <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
               <label><span>订单状态</span><select id="order-status"></select></label>
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
@@ -143,15 +144,13 @@
               <label><span>订单号</span><input id="cost-order-no" disabled /></label>
               <label><span>客户名称</span><input id="cost-customer" disabled /></label>
               <label><span>成本类型</span><select id="cost-type"></select></label>
-              <label><span>供应商 / 收款方 *</span><input id="cost-vendor" required /></label>
-              <label><span>币种</span><select id="cost-currency"></select></label>
-              <label><span>汇率 *</span><input id="cost-rate" type="number" min="0" step="0.0001" required /></label>
-              <label><span>成本金额 *</span><input id="cost-amount" type="number" min="0" step="0.01" required /></label>
-              <label><span>折人民币金额</span><input id="cost-amount-cny" disabled /></label>
               <label><span>付款状态</span><select id="cost-payment-status"></select></label>
               <label><span>付款日期</span><input id="cost-payment-date" type="date" /></label>
               <label><span>发票状态</span><select id="cost-invoice-status"></select></label>
-              <label class="wide"><span>备注</span><textarea id="cost-remark" rows="3"></textarea></label>
+              <div class="wide cost-items-block">
+                <div class="cost-items-title"><strong>供应商成本明细</strong><button class="secondary-button" id="add-cost-item" type="button">添加供应商</button></div>
+                <div class="cost-items" id="cost-items"></div>
+              </div>
               <label class="wide"><span>附件地址（可选）</span><input id="cost-attachment" placeholder="https://..." /></label>
             </div>
             <div class="form-actions"><button class="primary-button" type="submit">保存成本</button></div>

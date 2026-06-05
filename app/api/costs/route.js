@@ -1,4 +1,4 @@
-import { apiError, getActor, listCosts, ok, saveCost } from "../../../lib/platform-db";
+import { apiError, getActor, listCosts, ok, saveCost, saveCosts } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,9 @@ export async function POST(request) {
   try {
     const actor = await getActor(request);
     const body = await request.json();
+    if (Array.isArray(body.items)) {
+      return ok({ costs: await saveCosts(request, actor, body) });
+    }
     return ok({ cost: await saveCost(request, actor, body) });
   } catch (error) {
     return apiError(error, "保存成本失败");

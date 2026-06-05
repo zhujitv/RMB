@@ -23,8 +23,8 @@ const constants = {
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
   invoiceStatuses: ["未收到", "已收到", "不需要发票"],
   tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
-  paymentTerms: ["预付款", "见提单付款", "见提单复印件付款", "OA账期", "分批付款", "其他"],
-  costTypes: ["采购成本", "原材料成本", "工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
+  paymentTerms: ["预付款", "见提单付款", "见提单复印件付款", "OA账期", "到港后付款", "分批付款", "其他"],
+  costTypes: ["工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
 };
 
@@ -106,10 +106,10 @@ function optionHtml(values, selected = "") {
   return values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
 }
 
-function fillSelect(id, values, selected = "", includeBlank = false) {
+function fillSelect(id, values, selected = "", includeBlank = false, blankLabel = "全部") {
   const el = $(id);
   if (!el) return;
-  el.innerHTML = `${includeBlank ? '<option value="">全部</option>' : ""}${optionHtml(values, selected)}`;
+  el.innerHTML = `${includeBlank ? `<option value="">${escapeHtml(blankLabel)}</option>` : ""}${optionHtml(values, selected)}`;
 }
 
 function fillOrderSelect(id, selected = "") {
@@ -463,9 +463,80 @@ const paymentFields = [
 ];
 
 const costFields = [
-  ["id", "#cost-id"], ["orderId", "#cost-order"], ["costType", "#cost-type"], ["vendorName", "#cost-vendor"], ["currency", "#cost-currency"], ["exchangeRate", "#cost-rate"],
-  ["amount", "#cost-amount"], ["paymentStatus", "#cost-payment-status"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"], ["remark", "#cost-remark"],
+  ["id", "#cost-id"], ["orderId", "#cost-order"], ["costType", "#cost-type"],
+  ["paymentStatus", "#cost-payment-status"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"],
 ];
+
+function costItemRow(item = {}) {
+  const currency = item.currency || "CNY";
+  return `
+    <div class="cost-item-row">
+      <label><span>供应商 / 收款方 *</span><input class="cost-item-vendor" value="${escapeHtml(item.vendorName || "")}" /></label>
+      <label><span>成本金额 *</span><input class="cost-item-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount ?? "")}" /></label>
+      <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
+      <label><span>汇率 *</span><input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate ?? (constants.defaultRates[currency] || 1).toFixed(4))}" /></label>
+      <label><span>折人民币</span><input class="cost-item-amount-cny" disabled /></label>
+      <label><span>备注</span><input class="cost-item-remark" value="${escapeHtml(item.remark || "")}" /></label>
+      <button class="secondary-button delete-cost-item" type="button" title="删除">删</button>
+    </div>
+  `;
+}
+
+function updateCostItemDerived(row) {
+  row.querySelector(".cost-item-amount-cny").value = calcCny(
+    row.querySelector(".cost-item-amount").value,
+    row.querySelector(".cost-item-rate").value,
+  );
+}
+
+function addCostItem(item = {}) {
+  $("#cost-items").insertAdjacentHTML("beforeend", costItemRow(item));
+  const row = $("#cost-items .cost-item-row:last-child");
+  updateCostItemDerived(row);
+  return row;
+}
+
+function resetCostItems(items = [{}]) {
+  $("#cost-items").innerHTML = "";
+  (items.length ? items : [{}]).forEach((item) => addCostItem(item));
+}
+
+function readCostItems(validate = false) {
+  const rows = $$("#cost-items .cost-item-row");
+  const items = rows.map((row) => ({
+    vendorName: row.querySelector(".cost-item-vendor").value.trim(),
+    amount: row.querySelector(".cost-item-amount").value,
+    currency: row.querySelector(".cost-item-currency").value,
+    exchangeRate: row.querySelector(".cost-item-rate").value,
+    remark: row.querySelector(".cost-item-remark").value,
+  })).filter((item) => item.vendorName || item.amount || item.remark);
+
+  if (validate && !items.length) throw new Error("请至少录入一条供应商成本");
+  if (validate) {
+    items.forEach((item, index) => {
+      const label = `第 ${index + 1} 条成本`;
+      if (!item.vendorName) throw new Error(`${label}的供应商不能为空`);
+      if (!(Number(item.amount) > 0)) throw new Error(`${label}的成本金额必须大于 0`);
+      if (!item.currency) throw new Error(`${label}的币种不能为空`);
+      if (!(Number(item.exchangeRate) > 0)) throw new Error(`${label}的汇率必须大于 0`);
+    });
+  }
+  return items;
+}
+
+function saveCostDraft() {
+  const data = readForm("cost", costFields);
+  data.items = readCostItems(false);
+  localStorage.setItem(`${DRAFT_PREFIX}cost`, JSON.stringify(data));
+}
+
+function loadCostDraft() {
+  try {
+    const data = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}cost`) || "{}");
+    setForm(costFields, data);
+    if (Array.isArray(data.items) && data.items.length) resetCostItems(data.items);
+  } catch {}
+}
 
 function updateOrderDerived() {
   $("#order-amount-cny").value = calcCny($("#order-amount").value, $("#order-rate").value);
@@ -477,14 +548,21 @@ function updateOrderDerived() {
   }
 }
 
+function linkOrderDueDate() {
+  const baseDate = $("#order-expected-date").value;
+  const days = Number($("#order-credit-days").value);
+  if (!baseDate) throw new Error("请先填写到港 / 预计日期");
+  if (!Number.isFinite(days) || days < 0) throw new Error("请填写有效的到港后 / 账期天数");
+  const date = new Date(`${baseDate}T00:00:00`);
+  date.setDate(date.getDate() + Math.round(days));
+  $("#order-due-date").value = date.toISOString().slice(0, 10);
+  updateOrderDerived();
+}
+
 function updateOrderCustomerDefaults(force = false) {
   const customer = customerById($("#order-customer").value);
   if (!customer) return;
   if (force || !$("#order-country").value) $("#order-country").value = customer.country || "";
-  if (force || !$("#order-currency").value) {
-    $("#order-currency").value = customer.defaultCurrency || "USD";
-    $("#order-rate").value = (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4);
-  }
   if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || state.me?.name || "";
   updateOrderDerived();
 }
@@ -504,10 +582,10 @@ function updateCostDerived() {
   const order = orderById($("#cost-order").value);
   $("#cost-order-no").value = order?.orderNo || "";
   $("#cost-customer").value = order?.customerName || "";
-  $("#cost-amount-cny").value = calcCny($("#cost-amount").value, $("#cost-rate").value);
+  $$("#cost-items .cost-item-row").forEach(updateCostItemDerived);
 }
 
-async function saveAttachmentIfNeeded(relatedType, relatedId, inputId) {
+async function saveAttachmentIfNeeded(relatedType, relatedId, inputId, clear = true) {
   const value = $(inputId)?.value.trim();
   if (!value) return;
   await api("/api/attachments", {
@@ -519,7 +597,7 @@ async function saveAttachmentIfNeeded(relatedType, relatedId, inputId) {
       fileUrl: value,
     }),
   }).catch((error) => toast(`附件保存失败：${error.message}`));
-  $(inputId).value = "";
+  if (clear) $(inputId).value = "";
 }
 
 async function submitOrder(event) {
@@ -529,6 +607,7 @@ async function submitOrder(event) {
     if (!data.customerId) throw new Error("客户名称不能为空");
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
     if (!String(data.blNo || "").trim()) throw new Error("提单号不能为空");
+    if (!data.currency) throw new Error("币种不能为空");
     const id = data.id;
     delete data.id;
     const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
@@ -569,17 +648,21 @@ async function submitCost(event) {
   event.preventDefault();
   try {
     const data = readForm("cost", costFields);
+    const items = readCostItems(true);
     const id = data.id;
     delete data.id;
+    const payload = id ? { ...data, ...items[0] } : { ...data, items };
     const result = await api(id ? `/api/costs/${id}` : "/api/costs", {
       method: id ? "PATCH" : "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
-    await saveAttachmentIfNeeded("order_costs", result.cost.id, "#cost-attachment");
+    const savedCosts = result.costs || (result.cost ? [result.cost] : []);
+    await Promise.all(savedCosts.map((cost) => saveAttachmentIfNeeded("order_costs", cost.id, "#cost-attachment", false)));
+    $("#cost-attachment").value = "";
     clearDraft("cost");
     resetForm("cost");
     await loadData();
-    toast("成本已保存");
+    toast(`成本已保存${savedCosts.length > 1 ? ` ${savedCosts.length} 条` : ""}`);
   } catch (error) {
     toast(error.message);
   }
@@ -588,8 +671,14 @@ async function submitCost(event) {
 async function submitCustomer(event) {
   event.preventDefault();
   try {
+    const id = $("#customer-id").value;
+    const name = $("#customer-name").value.trim();
+    const duplicate = state.customers.find((customer) => (
+      customer.id !== id && customer.name.trim().toLowerCase() === name.toLowerCase()
+    ));
+    if (duplicate) throw new Error("客户名称已存在，不能重复创建");
     const data = {
-      name: $("#customer-name").value,
+      name,
       country: $("#customer-country").value,
       defaultCurrency: $("#customer-currency").value,
       contactPerson: $("#customer-contact-person").value,
@@ -598,7 +687,6 @@ async function submitCustomer(event) {
       salespersonUserId: $("#customer-salesperson").value,
       remark: $("#customer-remark").value,
     };
-    const id = $("#customer-id").value;
     await api(id ? `/api/customers/${id}` : "/api/customers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
     resetForm("customer");
     await loadData();
@@ -645,7 +733,8 @@ function resetForm(name) {
   if (name === "order") {
     $("#order-form").reset();
     $("#order-id").value = "";
-    $("#order-rate").value = constants.defaultRates.USD.toFixed(4);
+    $("#order-currency").value = "";
+    $("#order-rate").value = "";
     $("#order-reminder-days").value = "7";
     $("#order-salesperson").value = state.me?.name || "";
     fillAvailableCustomerSelect("");
@@ -661,7 +750,7 @@ function resetForm(name) {
   if (name === "cost") {
     $("#cost-form").reset();
     $("#cost-id").value = "";
-    $("#cost-rate").value = "1.0000";
+    resetCostItems([{}]);
     updateCostDerived();
   }
   if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSalespersonSelect("#customer-salesperson");
@@ -692,6 +781,7 @@ function editCost(id) {
   if (!cost) return;
   setForm(costFields, cost);
   $("#cost-id").value = cost.id;
+  resetCostItems([cost]);
   updateCostDerived();
   switchView("costs");
 }
@@ -783,6 +873,15 @@ function bindEvents() {
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
+  $("#order-link-due-date").addEventListener("click", () => {
+    try {
+      linkOrderDueDate();
+      saveDraft("order", orderFields);
+      toast("到期日已关联");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
   $("#order-customer").addEventListener("change", () => {
     updateOrderCustomerDefaults(true);
     saveDraft("order", orderFields);
@@ -791,25 +890,45 @@ function bindEvents() {
     updatePaymentDerived();
     saveDraft("payment", paymentFields);
   }));
-  ["#cost-order", "#cost-amount", "#cost-rate"].forEach((selector) => $(selector).addEventListener("input", () => {
+  $("#cost-order").addEventListener("input", () => {
     updateCostDerived();
-    saveDraft("cost", costFields);
-  }));
+    saveCostDraft();
+  });
+  $("#add-cost-item").addEventListener("click", () => {
+    addCostItem({});
+    saveCostDraft();
+  });
+  $("#cost-items").addEventListener("input", (event) => {
+    const row = event.target.closest(".cost-item-row");
+    if (row) updateCostItemDerived(row);
+    saveCostDraft();
+  });
+  $("#cost-items").addEventListener("change", (event) => {
+    const row = event.target.closest(".cost-item-row");
+    if (row && event.target.classList.contains("cost-item-currency")) {
+      row.querySelector(".cost-item-rate").value = (constants.defaultRates[event.target.value] || 1).toFixed(4);
+      updateCostItemDerived(row);
+    }
+    saveCostDraft();
+  });
+  $("#cost-items").addEventListener("click", (event) => {
+    const button = event.target.closest(".delete-cost-item");
+    if (!button) return;
+    if ($$("#cost-items .cost-item-row").length > 1) button.closest(".cost-item-row").remove();
+    else resetCostItems([{}]);
+    saveCostDraft();
+  });
   $("#order-currency").addEventListener("change", () => {
-    $("#order-rate").value = (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4);
+    $("#order-rate").value = $("#order-currency").value ? (constants.defaultRates[$("#order-currency").value] || 1).toFixed(4) : "";
     updateOrderDerived();
   });
   $("#payment-currency").addEventListener("change", () => {
     $("#payment-rate").value = (constants.defaultRates[$("#payment-currency").value] || 1).toFixed(4);
     updatePaymentDerived();
   });
-  $("#cost-currency").addEventListener("change", () => {
-    $("#cost-rate").value = (constants.defaultRates[$("#cost-currency").value] || 1).toFixed(4);
-    updateCostDerived();
-  });
   $$("#order-form input, #order-form select, #order-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("order", orderFields)));
   $$("#payment-form input, #payment-form select, #payment-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("payment", paymentFields)));
-  $$("#cost-form input, #cost-form select, #cost-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("cost", costFields)));
+  $$("#cost-form input, #cost-form select, #cost-form textarea").forEach((el) => el.addEventListener("input", saveCostDraft));
 
   document.body.addEventListener("click", (event) => {
     const target = event.target.closest("button");
@@ -834,12 +953,14 @@ function initSelects() {
   fillSelect("#filter-payment-status", [...constants.paymentStatuses, ...constants.costPaymentStatuses], "", true);
   fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true);
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
-  ["#order-currency", "#payment-currency", "#cost-currency", "#customer-currency"].forEach((id) => fillSelect(id, constants.currencies, id === "#cost-currency" || id === "#customer-currency" ? "CNY" : "USD"));
+  fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
+  fillSelect("#payment-currency", constants.currencies, "USD");
+  fillSelect("#customer-currency", constants.currencies, "CNY");
   fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
   fillSelect("#order-payment-term", constants.paymentTerms, "OA账期");
   fillSelect("#order-status", constants.orderStatuses, "已提交");
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");
-  fillSelect("#cost-type", constants.costTypes, "采购成本");
+  fillSelect("#cost-type", constants.costTypes, "工厂货款");
   fillSelect("#cost-payment-status", constants.costPaymentStatuses, "待支付");
   fillSelect("#cost-invoice-status", constants.invoiceStatuses, "未收到");
   fillSelect("#user-role", constants.roles, "查看者");
@@ -853,7 +974,7 @@ async function init() {
   resetForm("cost");
   loadDraft("order", orderFields);
   loadDraft("payment", paymentFields);
-  loadDraft("cost", costFields);
+  loadCostDraft();
   updateOrderDerived();
   updatePaymentDerived();
   updateCostDerived();
