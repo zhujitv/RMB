@@ -39,12 +39,17 @@ Vercel Dashboard 部署步骤：
 5. 在 Environment Variables 添加上面的变量，至少需要 `DATABASE_URL`。
 6. 点击 Deploy。
 
-构建时会自动执行：
+Vercel 构建时会自动执行：
 
 ```bash
-prisma migrate deploy
 prisma generate
 next build
+```
+
+数据库表结构迁移需要在 `DATABASE_URL` 配好后单独执行：
+
+```bash
+npm run db:deploy
 ```
 
 本地或 CI 手动初始化命令：
