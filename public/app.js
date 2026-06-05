@@ -120,6 +120,39 @@ function fillOrderSelect(id, selected = "") {
   )).join("")}`;
 }
 
+function canReceivePayment(order) {
+  return order
+    && !["已关闭", "已取消"].includes(order.status)
+    && Number(order.summary?.outstandingCny || 0) > 0;
+}
+
+function paymentOrderLabel(order) {
+  const outstanding = order.summary?.outstandingCny;
+  const outstandingText = Number.isFinite(Number(outstanding)) ? money(outstanding) : "-";
+  return `${order.orderNo} | ${order.customerName} | 未收 ${outstandingText}`;
+}
+
+function paymentOrderSort(a, b) {
+  const dueCompare = String(a.dueDate || "9999-12-31").localeCompare(String(b.dueDate || "9999-12-31"));
+  if (dueCompare) return dueCompare;
+  return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+}
+
+function fillPaymentOrderSelect(selected = "", locked = false, fallback = null) {
+  const el = $("#payment-order");
+  if (!el) return;
+  const availableOrders = state.orders.filter(canReceivePayment).sort(paymentOrderSort);
+  const selectedOrder = orderById(selected) || fallback;
+  const rows = selectedOrder && !availableOrders.some((order) => order.id === selectedOrder.id)
+    ? [selectedOrder, ...availableOrders]
+    : availableOrders;
+  el.innerHTML = `<option value="">请选择应收订单</option>${rows.map((order) => (
+    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(paymentOrderLabel(order))}</option>`
+  )).join("")}`;
+  el.value = selected || "";
+  el.disabled = locked;
+}
+
 function fillAvailableCustomerSelect(selected = "") {
   const el = $("#order-customer");
   if (!el) return;
@@ -291,7 +324,7 @@ function renderOrderSelects() {
   if (!$("#order-id")?.value && !$("#order-salesperson")?.value) {
     $("#order-salesperson").value = state.me?.name || "";
   }
-  fillOrderSelect("#payment-order", $("#payment-order")?.value || "");
+  fillPaymentOrderSelect($("#payment-order")?.value || "", $("#payment-order")?.disabled || false);
   fillOrderSelect("#cost-order", $("#cost-order")?.value || "");
 }
 
@@ -568,7 +601,10 @@ function updateOrderCustomerDefaults(force = false) {
 }
 
 function updatePaymentDerived() {
-  const order = orderById($("#payment-order").value);
+  const selectedOrderId = $("#payment-order").value;
+  const currentPayment = state.payments.find((payment) => payment.id === $("#payment-id").value);
+  const order = orderById(selectedOrderId)
+    || (currentPayment?.orderId === selectedOrderId ? currentPayment : null);
   $("#payment-order-no").value = order?.orderNo || "";
   $("#payment-customer").value = order?.customerName || "";
   if (order && !$("#payment-id").value) {
@@ -743,6 +779,8 @@ function resetForm(name) {
   if (name === "payment") {
     $("#payment-form").reset();
     $("#payment-id").value = "";
+    $("#payment-order").disabled = false;
+    fillPaymentOrderSelect("");
     $("#payment-date").value = today();
     $("#payment-rate").value = constants.defaultRates.USD.toFixed(4);
     updatePaymentDerived();
@@ -770,6 +808,18 @@ function editOrder(id) {
 function editPayment(id) {
   const payment = state.payments.find((item) => item.id === id);
   if (!payment) return;
+  const order = orderById(payment.orderId);
+  const fallback = order || {
+    id: payment.orderId,
+    orderNo: payment.orderNo || "",
+    customerName: payment.customerName || "",
+    summary: { outstandingCny: null },
+    dueDate: "",
+    createdAt: payment.createdAt,
+    status: "",
+  };
+  const lockOrder = !canReceivePayment(order);
+  fillPaymentOrderSelect(payment.orderId, lockOrder, fallback);
   setForm(paymentFields, payment);
   $("#payment-id").value = payment.id;
   updatePaymentDerived();
