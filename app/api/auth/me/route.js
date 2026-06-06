@@ -3,7 +3,7 @@ import { getActor, ok, publicUser, ROLES, rolePermissions, roleScopeText } from 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const user = await getActor(request, { required: false });
+  const user = await getActor(request, { required: false, allowPasswordChangeRequired: true });
   return ok({
     user: publicUser(user),
     roles: ROLES,

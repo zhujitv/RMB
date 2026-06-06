@@ -45,12 +45,17 @@ button {
   cursor: pointer;
 }
 
-.login-screen {
+.login-screen,
+.password-change-screen {
   display: grid;
   min-height: 100vh;
   place-items: center;
   padding: 24px;
   background: #eef2f7;
+}
+
+.password-change-screen[hidden] {
+  display: none;
 }
 
 .login-card {
@@ -88,7 +93,8 @@ button {
   gap: 14px;
 }
 
-.login-screen-form .primary-button {
+.login-screen-form .primary-button,
+.login-screen-form .secondary-button {
   width: 100%;
   min-height: 42px;
 }

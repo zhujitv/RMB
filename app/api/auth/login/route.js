@@ -4,7 +4,9 @@ import {
   assertLoginNotRateLimited,
   createUserSession,
   ensureDefaultUsers,
+  isInitialAdminPasswordLogin,
   normalizeEmail,
+  passwordHashNeedsUpgrade,
   publicUser,
   recordLoginAttempt,
   setSessionCookie,
@@ -21,17 +23,23 @@ export async function POST(request) {
     const body = await request.json();
     const email = normalizeEmail(body.email);
     await assertLoginNotRateLimited(request, email);
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" }, isActive: true },
     });
     if (!user || !verifyPassword(body.password || "", user.passwordHash)) {
       await recordLoginAttempt(request, email, false, user?.id || null);
       return NextResponse.json({ error: "邮箱或密码错误" }, { status: 401 });
     }
-    if (/^[a-f0-9]{64}$/i.test(String(user.passwordHash || ""))) {
-      await prisma.user.update({
+    if (passwordHashNeedsUpgrade(user.passwordHash)) {
+      user = await prisma.user.update({
         where: { id: user.id },
         data: { passwordHash: upgradePasswordHash(body.password || "") },
+      });
+    }
+    if (!user.mustChangePassword && isInitialAdminPasswordLogin(user, body.password || "")) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { mustChangePassword: true },
       });
     }
     await recordLoginAttempt(request, email, true, user.id);

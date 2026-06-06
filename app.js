@@ -5,6 +5,7 @@ const MAX_CONCURRENT_UPLOADS = 3;
 const state = {
   view: "dashboard",
   me: null,
+  passwordChangeRequired: false,
   roles: [],
   permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
   users: [],
@@ -106,7 +107,6 @@ const constants = {
     { value: "taxRefund", label: "退税状态" },
     { value: "commissions", label: "提成结算" },
     { value: "suppliers", label: "供应商维护" },
-    { value: "attachments", label: "附件维护" },
     { value: "settings", label: "系统设置" },
     { value: "exchangeRates", label: "汇率刷新" },
   ],
@@ -166,10 +166,10 @@ const roleScopeTexts = {
 };
 
 const roleWrites = {
-  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "documents", "taxRefund", "commissions", "suppliers", "attachments", "settings", "exchangeRates"],
-  业务员: ["orders", "logistics", "documents", "attachments"],
-  财务: ["payments", "taxRefund", "commissions", "attachments", "exchangeRates"],
-  成本录入员: ["costs", "documents", "attachments"],
+  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
+  业务员: ["orders", "logistics", "documents"],
+  财务: ["payments", "taxRefund", "commissions", "exchangeRates"],
+  成本录入员: ["costs", "documents"],
   查看者: [],
 };
 
@@ -690,17 +690,20 @@ function clearLocalCaches() {
   if ($("#installment-items")) $("#installment-items").innerHTML = "";
 }
 
-function setAuthenticatedShell(loggedIn) {
+function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   const loginScreen = $("#login-screen");
+  const passwordChangeScreen = $("#password-change-screen");
   const appShell = $("#app-shell");
-  if (loginScreen) loginScreen.hidden = loggedIn;
-  if (appShell) appShell.hidden = !loggedIn;
-  document.body.classList.toggle("is-authenticated", loggedIn);
+  if (loginScreen) loginScreen.hidden = loggedIn || passwordChangeRequired;
+  if (passwordChangeScreen) passwordChangeScreen.hidden = !passwordChangeRequired;
+  if (appShell) appShell.hidden = !loggedIn || passwordChangeRequired;
+  document.body.classList.toggle("is-authenticated", loggedIn && !passwordChangeRequired);
   if (!loggedIn) closeLoginModal();
 }
 
 function handleAuthExpired(message = "登录已过期，请重新登录") {
   state.me = null;
+  state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "dashboard";
   clearLocalCaches();
@@ -720,6 +723,10 @@ async function api(path, options = {}) {
   const data = type.includes("application/json") ? await response.json() : await response.text();
   if (!response.ok) {
     if (response.status === 401) handleAuthExpired(data?.error || "登录已过期，请重新登录");
+    if (data?.code === "PASSWORD_CHANGE_REQUIRED") {
+      state.passwordChangeRequired = true;
+      setAuthenticatedShell(true, true);
+    }
     throw new Error(data?.error || "API 请求失败");
   }
   return data;
@@ -979,17 +986,20 @@ async function loadMe() {
     $("#settings-session-text").textContent = state.me ? `${state.me.name} · ${state.me.role} · ${scopeText()}` : "请登录后访问业务数据。";
   }
   const loggedIn = Boolean(state.me);
-  setAuthenticatedShell(loggedIn);
-  return loggedIn;
+  state.passwordChangeRequired = Boolean(state.me?.mustChangePassword);
+  setAuthenticatedShell(loggedIn, state.passwordChangeRequired);
+  return loggedIn && !state.passwordChangeRequired;
 }
 
 async function loadData() {
   try {
     const loggedIn = await loadMe();
     if (!loggedIn) {
-      state.view = "dashboard";
-      clearLocalCaches();
-      setAuthenticatedShell(false);
+      if (!state.me) {
+        state.view = "dashboard";
+        clearLocalCaches();
+        setAuthenticatedShell(false);
+      }
       return;
     }
     const [data, availableData, rateSettings] = await Promise.all([
@@ -2549,15 +2559,7 @@ function updateCostDerived() {
 async function saveAttachmentIfNeeded(relatedType, relatedId, inputId, clear = true) {
   const value = $(inputId)?.value.trim();
   if (!value) return;
-  await api("/api/attachments", {
-    method: "POST",
-    body: JSON.stringify({
-      relatedType,
-      relatedId,
-      fileName: value.split("/").pop() || "附件",
-      fileUrl: value,
-    }),
-  }).catch((error) => toast(`附件保存失败：${error.message}`));
+  toast("附件地址保存已停用，请使用订单单证 PDF 上传。");
   if (clear) $(inputId).value = "";
 }
 
@@ -3214,7 +3216,25 @@ async function submitLogin(event) {
     });
     await loadData();
     closeLoginModal();
-    toast("登录成功");
+    toast(state.passwordChangeRequired ? "请先修改初始密码" : "登录成功");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitPasswordChange(event) {
+  event.preventDefault();
+  const currentPassword = $("#change-current-password")?.value || "";
+  const newPassword = $("#change-new-password")?.value || "";
+  const confirmPassword = $("#change-confirm-password")?.value || "";
+  if (newPassword !== confirmPassword) return toast("两次输入的新密码不一致");
+  try {
+    await api("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+    $("#password-change-form")?.reset();
+    handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
     toast(error.message);
   }
@@ -3661,6 +3681,7 @@ function loginPayloadFromForm(form) {
 async function logoutCurrentUser() {
   await api("/api/auth/logout", { method: "POST" });
   state.me = null;
+  state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   clearLocalCaches();
   closeLoginModal();
@@ -3679,6 +3700,8 @@ function bindEvents() {
   $("#refresh-data").addEventListener("click", loadData);
   $("#show-login").addEventListener("click", openLoginModal);
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  $("#password-change-form")?.addEventListener("submit", submitPasswordChange);
+  $("#password-change-logout")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeMobileNav();

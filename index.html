@@ -20,6 +20,21 @@
       </div>
     </section>
 
+    <section class="password-change-screen" id="password-change-screen" hidden>
+      <div class="login-card">
+        <p class="login-company">浙江莱诺建材有限公司</p>
+        <h1>首次登录修改密码</h1>
+        <p class="login-copy">为保护业务数据，请先修改初始密码后重新登录。</p>
+        <form class="login-screen-form" id="password-change-form" autocomplete="off">
+          <label><span>当前密码</span><input id="change-current-password" type="password" autocomplete="current-password" required /></label>
+          <label><span>新密码</span><input id="change-new-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <label><span>确认新密码</span><input id="change-confirm-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="primary-button" type="submit">修改密码</button>
+          <button class="secondary-button" id="password-change-logout" type="button">退出登录</button>
+        </form>
+      </div>
+    </section>
+
     <div class="app-shell" id="app-shell" hidden>
       <div class="nav-backdrop" id="nav-backdrop" hidden></div>
       <aside class="sidebar" id="sidebar" aria-label="系统导航">
@@ -249,7 +264,7 @@
               <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
               <label><span>订单状态</span><select id="order-status"></select></label>
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
-              <label class="wide"><span>附件地址（可选）</span><input id="order-attachment" placeholder="https://..." /></label>
+              <label class="wide"><span>附件地址</span><input id="order-attachment" placeholder="旧附件地址已停用，请使用单证 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" id="order-submit-button" type="submit">保存应收订单</button></div>
           </form>
@@ -324,7 +339,7 @@
               <label><span>收款状态</span><select id="payment-status"></select></label>
               <label><span>银行流水号</span><input id="payment-bank-reference" /></label>
               <label class="wide"><span>备注</span><textarea id="payment-remark" rows="3"></textarea></label>
-              <label class="wide"><span>附件地址（可选）</span><input id="payment-attachment" placeholder="https://..." /></label>
+              <label class="wide"><span>附件地址</span><input id="payment-attachment" placeholder="旧附件地址已停用，请使用单证 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" type="submit">保存收款</button></div>
           </form>
@@ -362,7 +377,7 @@
                 <div class="cost-items-title"><strong>供应商成本明细</strong><button class="secondary-button" id="add-cost-item" type="button">添加供应商</button></div>
                 <div class="cost-items" id="cost-items"></div>
               </div>
-              <label class="wide"><span>附件地址（可选）</span><input id="cost-attachment" placeholder="https://..." /></label>
+              <label class="wide"><span>附件地址</span><input id="cost-attachment" placeholder="旧附件地址已停用，请使用供应商 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" id="cost-submit-button" type="submit">保存成本</button></div>
           </form>
@@ -544,7 +559,7 @@
                 <label><span>邮箱 *</span><input id="user-email" required /></label>
                 <label><span>角色分类</span><select id="user-role"></select></label>
                 <label><span>权限模式</span><select id="user-permission-mode"></select></label>
-                <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新用户默认 123456" /></label>
+                <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="至少 8 位，保存后用户需首次改密" /></label>
                 <div class="wide permission-editor" id="user-permission-editor" hidden>
                   <div class="permission-editor-title"><strong>自定义权限组合</strong><small>菜单决定可进入页面，查看/操作权限由后端再次校验。</small></div>
                   <label class="permission-scope-field"><span>数据范围</span><select id="user-data-scope"></select></label>
