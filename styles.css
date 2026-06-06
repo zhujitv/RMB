@@ -1560,9 +1560,110 @@ textarea:focus {
   padding: 12px;
 }
 
+.tax-detail-document.is-customs-entry {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.customs-important-note {
+  margin: 8px 0 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .tax-detail-supplier {
   display: grid;
   gap: 10px;
+}
+
+.pdf-preview-modal[hidden] {
+  display: none;
+}
+
+.pdf-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.pdf-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.pdf-preview-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1040px, 100%);
+  height: min(86vh, 920px);
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+}
+
+.pdf-preview-header {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.4fr) auto;
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 14px 16px;
+}
+
+.pdf-preview-header strong {
+  display: block;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.pdf-preview-header span,
+.pdf-preview-meta {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.pdf-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.pdf-preview-meta b {
+  color: #334155;
+  font-weight: 700;
+}
+
+.pdf-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pdf-preview-actions .modal-close {
+  position: static;
+}
+
+#pdf-preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #f1f5f9;
 }
 
 .tax-missing-docs {
@@ -2590,6 +2691,25 @@ body.modal-open {
   .tax-detail-summary,
   .tax-detail-doc-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pdf-preview-modal {
+    padding: 0;
+  }
+
+  .pdf-preview-panel {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .pdf-preview-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .pdf-preview-meta {
+    grid-column: 1 / -1;
   }
 
   .dashboard-section-title {

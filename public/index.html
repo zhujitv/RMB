@@ -621,6 +621,28 @@
           <div id="tax-detail-body" class="tax-detail-body"></div>
         </section>
       </aside>
+
+      <aside class="pdf-preview-modal" id="pdf-preview-modal" hidden>
+        <div class="pdf-preview-backdrop" data-close-pdf-preview></div>
+        <section class="pdf-preview-panel" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title">
+          <header class="pdf-preview-header">
+            <div>
+              <strong id="pdf-preview-title">PDF 预览</strong>
+              <span id="pdf-preview-type">-</span>
+            </div>
+            <div class="pdf-preview-meta">
+              <span>文件：<b id="pdf-preview-name">-</b></span>
+              <span>订单：<b id="pdf-preview-order">-</b></span>
+              <span>供应商：<b id="pdf-preview-supplier">-</b></span>
+            </div>
+            <div class="pdf-preview-actions">
+              <a class="secondary-button small-link" id="pdf-preview-download" href="#" target="_blank" rel="noreferrer">下载原文件</a>
+              <button class="modal-close" data-close-pdf-preview type="button" aria-label="关闭 PDF 预览">×</button>
+            </div>
+          </header>
+          <iframe id="pdf-preview-frame" title="PDF 预览" src="about:blank"></iframe>
+        </section>
+      </aside>
     </div>
 
     <script src="./app.js"></script>

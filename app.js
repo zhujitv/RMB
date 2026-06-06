@@ -21,6 +21,7 @@ const state = {
   taxRefundKeyword: "",
   taxRefundDetailOrder: null,
   taxRefundDetailLoading: false,
+  pdfPreviewDocument: null,
   costOrderResults: [],
   selectedCostOrder: null,
   documentUploads: {},
@@ -722,6 +723,7 @@ function clearLocalCaches() {
   state.taxRefundKeyword = "";
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
+  state.pdfPreviewDocument = null;
   state.customers = [];
   state.suppliers = [];
   state.availableCustomers = [];
@@ -1686,13 +1688,16 @@ function documentActionsHtml(document) {
       </div>
     `;
   }
+  const preview = document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents") && canReadArea("taxRefund")
+    ? `<button class="secondary-button small-link" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
+    : "";
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
     ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
   const remove = canWriteArea("documents") && isPersistedDocument(document)
     ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
     : "";
-  return download || remove ? `<div class="row-actions file-actions">${download}${remove}</div>` : "";
+  return preview || download || remove ? `<div class="row-actions file-actions">${preview}${download}${remove}</div>` : "";
 }
 
 function uploadProgressHtml(document = {}) {
@@ -2164,9 +2169,13 @@ function taxDetailDocumentRows(order, type, scope = {}) {
 function renderTaxDocumentItem(order, type, scope = {}) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+  const customsNotice = type.value === "CUSTOMS_ENTRY_FORM"
+    ? `<div class="customs-important-note">用于核对供应商开票品名、数量、单位、金额</div>`
+    : "";
   return `
-    <article class="tax-detail-document">
+    <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
       <div class="document-card-head"><strong>${escapeHtml(type.label)}</strong></div>
+      ${customsNotice}
       <div class="document-file-list">${docsHtml}</div>
     </article>
   `;
@@ -2269,6 +2278,46 @@ function closeTaxRefundDetail() {
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
   document.body.classList.remove("modal-open");
+}
+
+function findDocumentById(id) {
+  if (!id) return null;
+  const pools = [
+    ...(state.taxRefundDetailOrder?.documents || []),
+    ...state.orders.flatMap((order) => order.documents || []),
+    ...state.costs.flatMap((cost) => cost.documents || []),
+    ...Object.values(state.documentUploads),
+  ];
+  return pools.find((document) => document.id === id) || null;
+}
+
+function closePdfPreview() {
+  const modal = $("#pdf-preview-modal");
+  const frame = $("#pdf-preview-frame");
+  if (frame) frame.src = "about:blank";
+  if (modal) modal.hidden = true;
+  state.pdfPreviewDocument = null;
+  if (!state.taxRefundDetailOrder && $("#tax-detail-drawer")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function openPdfPreview(documentId) {
+  if (!canReadArea("documents") || !canReadArea("taxRefund")) return toast("没有权限预览退税资料");
+  const doc = findDocumentById(documentId);
+  if (!doc || doc.uploadStatus !== "SUCCESS") return toast("未找到可预览的 PDF 文件");
+  state.pdfPreviewDocument = doc;
+  const modal = $("#pdf-preview-modal");
+  const frame = $("#pdf-preview-frame");
+  if (!modal || !frame) return;
+  $("#pdf-preview-type").textContent = doc.documentTypeLabel || documentTypeLabel(doc.documentType);
+  $("#pdf-preview-name").textContent = doc.fileName || "-";
+  $("#pdf-preview-order").textContent = doc.orderNo || state.taxRefundDetailOrder?.orderNo || "-";
+  $("#pdf-preview-supplier").textContent = doc.supplierName || "无供应商";
+  $("#pdf-preview-download").href = `/api/order-documents/${encodeURIComponent(doc.id)}/download`;
+  frame.src = `/api/order-documents/${encodeURIComponent(doc.id)}/preview`;
+  modal.hidden = false;
+  document.body?.classList?.add?.("modal-open");
 }
 
 function renderSettings() {
@@ -4050,6 +4099,7 @@ function bindEvents() {
   $("#nav-backdrop")?.addEventListener("click", closeMobileNav);
   $("#refresh-data").addEventListener("click", loadData);
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeMobileNav();
   });
@@ -4159,6 +4209,8 @@ function bindEvents() {
     if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
     const cancel = event.target.closest("[data-cancel-upload]");
     if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
+    const preview = event.target.closest("[data-preview-document]");
+    if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });
@@ -4181,6 +4233,8 @@ function bindEvents() {
     if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
     const cancel = event.target.closest("[data-cancel-upload]");
     if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
+    const preview = event.target.closest("[data-preview-document]");
+    if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });
@@ -4211,8 +4265,13 @@ function bindEvents() {
       closeTaxRefundDetail();
       focusMissingDocumentTarget(missing.dataset);
     }
+    const preview = event.target.closest("[data-preview-document]");
+    if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
+  });
+  $("#pdf-preview-modal").addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-pdf-preview]")) closePdfPreview();
   });
   $("#cost-payment-date").addEventListener("change", () => {
     $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));
