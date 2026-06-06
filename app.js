@@ -896,9 +896,7 @@ function filterParams() {
   const params = new URLSearchParams();
   const map = {
     month: "#filter-month",
-    order: "#filter-order",
-    party: "#filter-party",
-    country: "#filter-country",
+    keyword: "#filter-keyword",
     currency: "#filter-currency",
     orderStatus: "#filter-order-status",
     paymentStatus: "#filter-payment-status",
@@ -910,6 +908,25 @@ function filterParams() {
     if (value) params.set(key, value);
   });
   return params;
+}
+
+function filterSelectText(selector) {
+  const el = $(selector);
+  if (!el?.value) return "";
+  return el.options[el.selectedIndex]?.textContent || el.value;
+}
+
+function renderFilterSummary() {
+  const parts = [
+    $("#filter-month")?.value || "",
+    $("#filter-keyword")?.value.trim() || "",
+    filterSelectText("#filter-currency"),
+    filterSelectText("#filter-order-status"),
+    filterSelectText("#filter-payment-status"),
+    filterSelectText("#filter-reminder-status"),
+  ].filter(Boolean);
+  const summary = $("#active-filter-summary");
+  if (summary) summary.textContent = `当前筛选：${parts.length ? parts.join(" / ") : "全部数据"}`;
 }
 
 async function loadMe() {
@@ -967,6 +984,7 @@ async function loadData() {
 function renderAll() {
   applyAccessControl();
   updateCurrentView();
+  renderFilterSummary();
   renderDashboard();
   renderOrderSelects();
   renderOrders();
@@ -3039,13 +3057,7 @@ function focusMissingDocumentTarget(dataset = {}) {
 async function openDashboardDetail(kind, value) {
   const text = String(value || "").trim();
   if (!text) return;
-  if (kind === "order") {
-    $("#filter-order").value = text;
-    $("#filter-party").value = "";
-  } else {
-    $("#filter-party").value = text;
-    $("#filter-order").value = "";
-  }
+  $("#filter-keyword").value = text;
   if (!switchView("orders")) return;
   await loadData();
 }
@@ -3104,9 +3116,24 @@ function bindEvents() {
   });
   $("#clear-filters").addEventListener("click", () => {
     $$(".filters input, .filters select").forEach((el) => (el.value = ""));
+    $("#advanced-filters").hidden = true;
+    $("#toggle-advanced-filters").setAttribute("aria-expanded", "false");
+    $("#toggle-advanced-filters").textContent = "高级筛选";
+    renderFilterSummary();
     loadData();
   });
-  $$(".filters input, .filters select").forEach((el) => el.addEventListener("change", loadData));
+  $("#overview-filter-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    renderFilterSummary();
+    loadData();
+  });
+  $("#toggle-advanced-filters").addEventListener("click", () => {
+    const panel = $("#advanced-filters");
+    const expanded = panel.hidden;
+    panel.hidden = !expanded;
+    $("#toggle-advanced-filters").setAttribute("aria-expanded", String(expanded));
+    $("#toggle-advanced-filters").textContent = expanded ? "收起筛选" : "高级筛选";
+  });
 
   $("#order-form").addEventListener("submit", submitOrder);
   $("#payment-form").addEventListener("submit", submitPayment);
@@ -3320,10 +3347,10 @@ function bindEvents() {
 }
 
 function initSelects() {
-  fillSelect("#filter-currency", constants.currencies, "", true);
-  fillSelect("#filter-order-status", constants.orderStatuses, "", true);
-  fillSelect("#filter-payment-status", constants.paymentStatuses, "", true);
-  fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true);
+  fillSelect("#filter-currency", constants.currencies, "", true, "全部币种");
+  fillSelect("#filter-order-status", constants.orderStatuses, "", true, "全部订单状态");
+  fillSelect("#filter-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
+  fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true, "全部逾期状态");
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
   fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#payment-currency", constants.currencies, "USD");

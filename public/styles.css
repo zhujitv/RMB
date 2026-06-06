@@ -286,14 +286,47 @@ td small {
 }
 
 .filters {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr)) auto;
-  gap: 12px;
+  display: block;
   margin-bottom: 18px;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.filter-main-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 170px) minmax(260px, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-advanced {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eef1f6;
+}
+
+.filter-advanced[hidden] {
+  display: none;
+}
+
+.filter-summary {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.filter-main-row button {
+  min-width: 76px;
+}
+
+.filter-toggle {
+  white-space: nowrap;
 }
 
 label span,
@@ -1462,10 +1495,13 @@ body.modal-open {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .filters,
   .form-grid,
   .cost-item-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-main-row {
+    grid-template-columns: minmax(130px, 160px) minmax(240px, 1fr) repeat(3, auto);
   }
 
   .dashboard-grid,
@@ -1514,7 +1550,6 @@ body.modal-open {
     flex-wrap: wrap;
   }
 
-  .filters,
   .metric-grid,
   .form-grid,
   .permission-groups,
@@ -1525,6 +1560,16 @@ body.modal-open {
   .installment-row,
   .order-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .filter-main-row,
+  .filter-advanced {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-main-row button,
+  .filter-advanced button {
+    width: 100%;
   }
 
   .chart-row,

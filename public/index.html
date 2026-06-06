@@ -97,17 +97,22 @@
           </div>
         </section>
 
-        <section class="filters" aria-label="筛选条件">
-          <label><span>月份</span><input id="filter-month" type="month" /></label>
-          <label><span>订单号 / 提单号</span><input id="filter-order" type="search" placeholder="订单号或提单号" /></label>
-          <label><span>客户 / 供应商 / 业务员</span><input id="filter-party" type="search" placeholder="名称关键词" /></label>
-          <label><span>国家 / 地区</span><input id="filter-country" type="search" placeholder="国家或地区" /></label>
-          <label><span>币种</span><select id="filter-currency"><option value="">全部</option></select></label>
-          <label><span>订单状态</span><select id="filter-order-status"><option value="">全部</option></select></label>
-          <label><span>收款状态</span><select id="filter-payment-status"><option value="">全部</option></select></label>
-          <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部</option></select></label>
-          <button class="clear-button" id="clear-filters" type="button">清空筛选</button>
-        </section>
+        <form class="filters dashboard-only" id="overview-filter-form" aria-label="总览筛选条件">
+          <div class="filter-main-row">
+            <label class="filter-month"><span>月份</span><input id="filter-month" type="month" /></label>
+            <label class="filter-search"><span>综合搜索</span><input id="filter-keyword" type="search" placeholder="订单号、提单号、客户、供应商、业务员、国家/地区" /></label>
+            <button class="primary-button" id="query-filters" type="submit">查询</button>
+            <button class="clear-button" id="clear-filters" type="button">重置</button>
+            <button class="secondary-button filter-toggle" id="toggle-advanced-filters" type="button" aria-expanded="false">高级筛选</button>
+          </div>
+          <div class="filter-advanced" id="advanced-filters" hidden>
+            <label><span>币种</span><select id="filter-currency"><option value="">全部币种</option></select></label>
+            <label><span>订单状态</span><select id="filter-order-status"><option value="">全部订单状态</option></select></label>
+            <label><span>收款状态</span><select id="filter-payment-status"><option value="">全部收款状态</option></select></label>
+            <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部逾期状态</option></select></label>
+          </div>
+          <p class="filter-summary" id="active-filter-summary">当前筛选：全部数据</p>
+        </form>
 
         <section class="dashboard-only" id="dashboard-lists">
           <div class="dashboard-list-grid">
