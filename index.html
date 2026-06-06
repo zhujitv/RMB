@@ -42,7 +42,7 @@
           </div>
           <div class="top-actions">
             <button class="ghost-button" id="refresh-data" type="button">刷新</button>
-            <button class="ghost-button" id="show-login" type="button">登录</button>
+            <button class="account-button" id="show-login" type="button"><span id="top-user-name">登录</span><small id="top-user-role">账户</small></button>
           </div>
         </header>
 
@@ -60,6 +60,31 @@
         </section>
 
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+        <div class="login-modal" id="login-modal" hidden>
+          <div class="login-backdrop" data-close-login></div>
+          <section class="login-dialog" role="dialog" aria-modal="true" aria-labelledby="login-dialog-title">
+            <button class="modal-close" data-close-login type="button" aria-label="关闭登录窗口">×</button>
+            <div class="login-dialog-header">
+              <span class="login-badge">账户</span>
+              <h3 id="login-dialog-title">用户登录</h3>
+              <p>登录后按角色加载客户、订单、收款和成本权限。</p>
+            </div>
+            <div class="login-current">
+              <span>当前用户</span>
+              <strong id="modal-current-user">读取中...</strong>
+              <small id="modal-current-role">-</small>
+            </div>
+            <form class="login-form" id="login-modal-form" autocomplete="off">
+              <label><span>邮箱</span><input id="modal-login-email" data-login-email value="admin@example.com" /></label>
+              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" value="admin123456" /></label>
+              <div class="login-actions">
+                <button class="primary-button" type="submit">登录</button>
+                <button class="secondary-button" id="modal-logout-button" type="button">退出登录</button>
+              </div>
+            </form>
+          </section>
+        </div>
 
         <section class="view-panel is-active" id="dashboard-view">
           <div class="metric-grid" id="metric-grid"></div>
@@ -224,7 +249,7 @@
           <div class="settings-grid">
             <form class="entry-form" id="login-form" autocomplete="off">
               <div class="form-header"><div><h3>用户登录</h3><p>默认管理员：admin@example.com / admin123456</p></div></div>
-              <div class="form-grid"><label><span>邮箱</span><input id="login-email" value="admin@example.com" /></label><label><span>密码</span><input id="login-password" type="password" value="admin123456" /></label></div>
+              <div class="form-grid"><label><span>邮箱</span><input id="login-email" data-login-email value="admin@example.com" /></label><label><span>密码</span><input id="login-password" data-login-password type="password" value="admin123456" /></label></div>
               <div class="form-actions"><button class="primary-button" type="submit">登录</button><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
             </form>
             <form class="entry-form" id="exchange-rate-settings-form" autocomplete="off">

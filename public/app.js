@@ -601,6 +601,10 @@ async function loadMe() {
   state.roles = data.roles || constants.roles;
   $("#current-user").textContent = state.me?.name || "未登录";
   $("#current-role").textContent = state.me?.role || "查看者";
+  $("#top-user-name").textContent = state.me?.name || "登录";
+  $("#top-user-role").textContent = state.me?.role || "账户";
+  $("#modal-current-user").textContent = state.me?.name || "未登录";
+  $("#modal-current-role").textContent = state.me?.role || "-";
 }
 
 async function loadData() {
@@ -1427,11 +1431,13 @@ async function submitUser(event) {
 async function submitLogin(event) {
   event.preventDefault();
   try {
+    const payload = loginPayloadFromForm(event.currentTarget);
     await api("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: $("#login-email").value, password: $("#login-password").value }),
+      body: JSON.stringify(payload),
     });
     await loadData();
+    closeLoginModal();
     toast("登录成功");
   } catch (error) {
     toast(error.message);
@@ -1617,10 +1623,44 @@ function exportReport(type) {
   window.location.href = `/api/reports?${params.toString()}`;
 }
 
+function openLoginModal() {
+  const modal = $("#login-modal");
+  if (!modal) return;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  const email = $("#modal-login-email");
+  if (email) email.focus();
+}
+
+function closeLoginModal() {
+  const modal = $("#login-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+function loginPayloadFromForm(form) {
+  return {
+    email: form.querySelector("[data-login-email]")?.value || $("#login-email")?.value || "",
+    password: form.querySelector("[data-login-password]")?.value || $("#login-password")?.value || "",
+  };
+}
+
+async function logoutCurrentUser() {
+  await api("/api/auth/logout", { method: "POST" });
+  await loadData();
+  closeLoginModal();
+  toast("已退出");
+}
+
 function bindEvents() {
   $$(".nav-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $("#refresh-data").addEventListener("click", loadData);
-  $("#show-login").addEventListener("click", () => switchView("settings"));
+  $("#show-login").addEventListener("click", openLoginModal);
+  $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
+  });
   $("#clear-filters").addEventListener("click", () => {
     $$(".filters input, .filters select").forEach((el) => (el.value = ""));
     loadData();
@@ -1636,11 +1676,9 @@ function bindEvents() {
   $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
   $("#login-form").addEventListener("submit", submitLogin);
-  $("#logout-button").addEventListener("click", async () => {
-    await api("/api/auth/logout", { method: "POST" });
-    await loadData();
-    toast("已退出");
-  });
+  $("#login-modal-form").addEventListener("submit", submitLogin);
+  $("#logout-button").addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
+  $("#modal-logout-button").addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
 
   ["order", "payment", "cost", "customer", "supplier", "user"].forEach((name) => {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
