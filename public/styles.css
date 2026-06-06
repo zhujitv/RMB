@@ -978,11 +978,11 @@ textarea:focus {
 
 .document-card {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   background: #fff;
 }
 
@@ -991,6 +991,13 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.document-card-head strong {
+  color: #0f172a;
+  font-size: 14px;
 }
 
 .document-card-head a,
@@ -1001,10 +1008,36 @@ textarea:focus {
 }
 
 .document-upload-control {
-  display: grid;
-  gap: 6px;
-  color: #475467;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #2563eb;
   font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.document-upload-control:hover,
+.supplier-doc-upload:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.document-upload-control input,
+.supplier-doc-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .document-file-list {
@@ -1012,28 +1045,195 @@ textarea:focus {
   gap: 8px;
 }
 
-.document-file-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 80px 38px auto;
-  gap: 8px;
+.document-file-list-title {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-empty-state {
+  display: flex;
   align-items: center;
-  padding: 8px;
-  border: 1px solid #edf0f5;
-  border-radius: 8px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.upload-empty-state span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.upload-empty-state strong {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.uploaded-file-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   background: #f8fafc;
 }
 
-.document-file-row strong {
+.uploaded-file-card.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.uploaded-file-card.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.uploaded-file-card.is-uploading {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.file-state-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.uploaded-file-card.is-success .file-state-icon {
+  background: #bbf7d0;
+  color: #047857;
+}
+
+.uploaded-file-card.is-error .file-state-icon {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.uploaded-file-card.is-uploading .file-state-icon {
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  background: transparent;
+  animation: upload-spin 0.85s linear infinite;
+}
+
+@keyframes upload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.file-card-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.file-card-main strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #0f172a;
   font-size: 13px;
+  font-weight: 800;
 }
 
-.document-file-row progress {
-  width: 80px;
+.file-card-main > small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.file-type-label {
+  width: max-content;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.file-status.success {
+  color: #047857;
+  font-weight: 800;
+}
+
+.file-actions {
+  align-self: center;
+}
+
+.file-actions a,
+.file-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.upload-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.upload-progress div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.upload-progress i {
+  display: block;
   height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
+.upload-progress b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+
+.upload-error {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.upload-error strong {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.upload-error small {
+  color: #991b1b;
+  font-size: 12px;
 }
 
 .supplier-doc-list {
@@ -1045,57 +1245,35 @@ textarea:focus {
 
 .supplier-doc-item {
   display: grid;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid #edf0f5;
-  border-radius: 8px;
-  background: #fbfcfe;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
 }
 
-.supplier-doc-head,
-.supplier-doc-file {
+.supplier-doc-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
 }
 
-.supplier-doc-file {
-  grid-template-columns: minmax(0, 1fr) 88px auto;
-  padding-top: 6px;
-  border-top: 1px dashed #d9dee8;
-}
-
-.supplier-doc-file span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.supplier-doc-file small {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.supplier-doc-file progress {
-  width: 88px;
-  height: 8px;
-}
-
 .supplier-doc-upload {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   width: max-content;
-  color: var(--blue);
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #2563eb;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
-}
-
-.supplier-doc-upload input {
-  max-width: 150px;
-  font-size: 12px;
 }
 
 .supplier-doc-list.is-optional {
@@ -2036,8 +2214,7 @@ body.modal-open {
   .permission-groups,
   .cost-item-row,
   .document-grid,
-  .document-file-row,
-  .supplier-doc-file,
+  .uploaded-file-card,
   .installment-row,
   .order-search-row {
     grid-template-columns: 1fr;

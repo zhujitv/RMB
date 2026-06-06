@@ -1500,15 +1500,6 @@ function taxStatusLabel(status) {
   return constants.taxRefundStatuses.find((item) => item.value === status)?.label || status || "-";
 }
 
-function uploadStatusLabel(status) {
-  return {
-    PENDING: "等待上传",
-    UPLOADING: "上传中",
-    SUCCESS: "上传成功",
-    FAILED: "上传失败",
-  }[status] || status || "-";
-}
-
 function humanFileSize(size) {
   const bytes = Number(size || 0);
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -1516,11 +1507,71 @@ function humanFileSize(size) {
   return `${bytes} B`;
 }
 
-function documentFailureHtml(document) {
-  const message = document.uploadStatus === "FAILED"
-    ? (document.failureMessage || document.error || "上传失败，请重试。")
+function formatUploadTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function uploadFailureReason(document = {}) {
+  const code = document.failureCode || document.code || "";
+  const message = document.failureMessage || document.error || "";
+  if (code === "FILE_TOO_LARGE" || /过大|大小限制|20MB/i.test(message)) return "文件过大";
+  if (code === "FILE_TYPE_NOT_ALLOWED" || /格式|类型|PDF/i.test(message)) return "文件格式错误";
+  if (/网络|超时|连接/i.test(message)) return "网络异常";
+  if (/存储|R2|S3|Bucket|Access Key|对象存储/i.test(message)) return "存储服务异常";
+  return message || "上传失败，请重试";
+}
+
+function documentActionsHtml(document) {
+  const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
+    ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
-  return message ? `<small class="danger-text">${escapeHtml(message)}</small>` : "";
+  const remove = canWriteArea("documents") && isPersistedDocument(document)
+    ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
+    : "";
+  return download || remove ? `<div class="row-actions file-actions">${download}${remove}</div>` : "";
+}
+
+function uploadProgressHtml(document = {}) {
+  const progress = Math.max(0, Math.min(99, Number(document.uploadProgress || 0)));
+  return `
+    <div class="upload-progress">
+      <div><strong>上传中...</strong><span>${progress}%</span></div>
+      <i><b style="width:${progress}%"></b></i>
+    </div>
+  `;
+}
+
+function uploadedFileCard(document, options = {}) {
+  const status = document.uploadStatus || "PENDING";
+  const statusClassName = status === "SUCCESS" ? "is-success" : (status === "FAILED" ? "is-error" : "is-uploading");
+  const filePrefix = options.typeLabel ? `<span class="file-type-label">${escapeHtml(options.typeLabel)}</span>` : "";
+  const uploader = document.uploadedByName || document.uploadedBy?.name || state.me?.name || "-";
+  const timeText = formatUploadTime(document.uploadedAt || document.createdAt || (status === "UPLOADING" ? new Date().toISOString() : ""));
+  const bodyHtml = status === "UPLOADING" || status === "PENDING"
+    ? uploadProgressHtml(document)
+    : (status === "FAILED"
+      ? `<div class="upload-error"><strong>上传失败</strong><small>${escapeHtml(uploadFailureReason(document))}</small></div>`
+      : `<div class="file-meta"><span class="file-status success">✓ 已上传</span><span>${escapeHtml(uploader)}</span><span>${escapeHtml(timeText)}</span></div>`);
+  return `
+    <article class="uploaded-file-card ${statusClassName}">
+      <div class="file-state-icon" aria-hidden="true">${status === "SUCCESS" ? "✓" : (status === "FAILED" ? "!" : "")}</div>
+      <div class="file-card-main">
+        ${filePrefix}
+        <strong title="${escapeHtml(document.fileName || "-")}">${escapeHtml(document.fileName || "-")}</strong>
+        <small>${humanFileSize(document.fileSize)}</small>
+        ${bodyHtml}
+      </div>
+      ${documentActionsHtml(document)}
+    </article>
+  `;
+}
+
+function emptyUploadState() {
+  return `<div class="upload-empty-state"><span>📄</span><strong>暂未上传</strong></div>`;
 }
 
 function isPersistedDocument(document) {
@@ -1612,22 +1663,7 @@ function renderDocumentGrid(order) {
   $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${completeness.text || "-"}`;
   $("#document-grid").innerHTML = constants.documentTypes.map((type) => {
     const docs = documentRowsForType(order, type.value);
-    const docsHtml = docs.length ? docs.map((document) => `
-      <div class="document-file-row">
-        <div>
-          <strong>${escapeHtml(document.fileName)}</strong>
-          <small>${humanFileSize(document.fileSize)} · ${escapeHtml(document.uploadedByName || document.uploadedBy?.name || "当前用户")} · ${document.uploadedAt ? new Date(document.uploadedAt).toLocaleString("zh-CN") : "-"}</small>
-        </div>
-        <span class="status ${statusClass(document.uploadStatus)}">${escapeHtml(uploadStatusLabel(document.uploadStatus))}</span>
-        <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
-        <small>${Number(document.uploadProgress || 0)}%</small>
-        ${documentFailureHtml(document)}
-        <div class="row-actions">
-          ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
-          ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${document.id}" type="button">删除</button>` : ""}
-        </div>
-      </div>
-    `).join("") : `<div class="order-search-empty">未上传${escapeHtml(type.label)}</div>`;
+    const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
     return `
       <article class="document-card" data-document-upload-card="true" data-order-id="${escapeHtml(order.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
@@ -1635,9 +1671,10 @@ function renderDocumentGrid(order) {
           ${canReadArea("taxRefund") ? `<a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>` : ""}
         </div>
         <label class="document-upload-control">
-          <span>上传 PDF</span>
+          <span>选择PDF文件</span>
           <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" />
         </label>
+        <div class="document-file-list-title">已上传文件列表</div>
         <div class="document-file-list">${docsHtml}</div>
       </article>
     `;
@@ -1681,18 +1718,7 @@ function supplierDocumentCell(cost) {
     costDocumentRowsForType(cost, type.value).map((document) => ({ ...document, typeLabel: type.label }))
   ));
   if (!isRequired) {
-    const archivedHtml = archivedDocs.length ? archivedDocs.map((document) => `
-      <div class="supplier-doc-file">
-        <span>${escapeHtml(document.typeLabel)}：${escapeHtml(document.fileName)}</span>
-        <small>${humanFileSize(document.fileSize)} · ${escapeHtml(uploadStatusLabel(document.uploadStatus))} · ${Number(document.uploadProgress || 0)}%</small>
-        <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
-        ${documentFailureHtml(document)}
-        <div class="row-actions">
-          ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
-          ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>` : ""}
-        </div>
-      </div>
-    `).join("") : "";
+    const archivedHtml = archivedDocs.length ? archivedDocs.map((document) => uploadedFileCard(document, { typeLabel: document.typeLabel })).join("") : "";
     return `
       <div class="supplier-doc-list is-optional">
         <span class="supplier-doc-note">非工厂供应商，不参与退税检查</span>
@@ -1706,18 +1732,7 @@ function supplierDocumentCell(cost) {
       ${constants.supplierDocumentTypes.map((type) => {
         const docs = costDocumentRowsForType(cost, type.value);
         const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-        const docsHtml = docs.length ? docs.map((document) => `
-          <div class="supplier-doc-file">
-            <span>${escapeHtml(document.fileName)}</span>
-            <small>${humanFileSize(document.fileSize)} · ${escapeHtml(uploadStatusLabel(document.uploadStatus))} · ${Number(document.uploadProgress || 0)}%</small>
-            <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
-            ${documentFailureHtml(document)}
-            <div class="row-actions">
-              ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
-              ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>` : ""}
-            </div>
-          </div>
-        `).join("") : `<small class="missing-docs">未上传</small>`;
+        const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
         return `
           <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
             <div class="supplier-doc-head">
@@ -1727,7 +1742,7 @@ function supplierDocumentCell(cost) {
             ${docsHtml}
             ${canWriteArea("documents") ? `
               <label class="supplier-doc-upload">
-                <span>上传 PDF</span>
+                <span>选择PDF文件</span>
                 <input type="file" accept="application/pdf,.pdf"
                   data-cost-document-type="${escapeHtml(type.value)}"
                   data-order-id="${escapeHtml(order.id || cost.orderId)}"
@@ -2608,6 +2623,44 @@ function documentUploadKey(orderId, documentType, fileName, scope = {}) {
   return `${orderId}:${scope.costId || "order"}:${scope.supplierId || "none"}:${documentType}:${fileName}`;
 }
 
+function uploadScopeMatches(item = {}, orderId, documentType, scope = {}) {
+  return item.orderId === orderId
+    && item.documentType === documentType
+    && (item.costId || "") === (scope.costId || "")
+    && (item.supplierId || "") === (scope.supplierId || "");
+}
+
+function clearFailedTransientUploads(orderId, documentType, scope = {}) {
+  Object.entries(state.documentUploads).forEach(([key, item]) => {
+    if (item.uploadStatus === "FAILED" && uploadScopeMatches(item, orderId, documentType, scope)) {
+      delete state.documentUploads[key];
+    }
+  });
+}
+
+function showLocalUploadFailure(order, documentType, file, scope = {}, message = "上传失败，请重试。", code = "") {
+  clearFailedTransientUploads(order.id, documentType, scope);
+  const key = documentUploadKey(order.id, documentType, file?.name || "upload-error.pdf", scope);
+  state.documentUploads[key] = {
+    id: key,
+    orderId: order.id,
+    costId: scope.costId || "",
+    supplierId: scope.supplierId || "",
+    relatedModule: scope.relatedModule || documentRelatedModule(documentType),
+    documentType,
+    fileName: file?.name || "-",
+    fileSize: file?.size || 0,
+    uploadStatus: "FAILED",
+    uploadProgress: 0,
+    failureCode: code,
+    failureMessage: message,
+    uploadedByName: state.me?.name || "",
+    uploadedAt: new Date().toISOString(),
+  };
+  refreshDocumentViews();
+  toast(`${uploadFailureReason(state.documentUploads[key])}：${message}`);
+}
+
 function refreshDocumentViews() {
   renderOrderDetails();
   renderCosts();
@@ -2619,13 +2672,14 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
   if (!canWriteArea("documents")) return toast("没有权限上传单证");
   if (!file) return;
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
-    toast("文件类型不允许，只能上传 PDF 文件");
+    showLocalUploadFailure(order, documentType, file, scope, "只能上传 PDF 文件", "FILE_TYPE_NOT_ALLOWED");
     return;
   }
   if (Number(file.size || 0) > MAX_PDF_UPLOAD_BYTES) {
-    toast("文件超过大小限制，最大支持 20MB PDF。");
+    showLocalUploadFailure(order, documentType, file, scope, "文件超过大小限制，最大支持 20MB PDF。", "FILE_TOO_LARGE");
     return;
   }
+  clearFailedTransientUploads(order.id, documentType, scope);
   const key = documentUploadKey(order.id, documentType, file.name, scope);
   state.documentUploads[key] = {
     id: key,
@@ -2639,16 +2693,18 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
     uploadStatus: "UPLOADING",
     uploadProgress: 0,
     uploadedByName: state.me?.name || "",
+    uploadedAt: new Date().toISOString(),
   };
-  const markUploadFailed = (message) => {
+  const markUploadFailed = (message, code = "") => {
     state.documentUploads[key] = {
       ...state.documentUploads[key],
       uploadStatus: "FAILED",
       uploadProgress: 0,
+      failureCode: code,
       failureMessage: message || "上传失败，请重试。",
     };
     refreshDocumentViews();
-    toast(message || "上传失败，请重试。");
+    toast(`${uploadFailureReason(state.documentUploads[key])}：${message || "上传失败，请重试。"}`);
   };
   refreshDocumentViews();
   const formData = new FormData();
@@ -2672,9 +2728,8 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
         state.documentUploads[key] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
         refreshDocumentViews();
         await loadData();
-        toast("上传成功");
       } else {
-        markUploadFailed(data.error || "上传失败，请检查文件存储配置。");
+        markUploadFailed(data.error || "上传失败，请检查文件存储配置。", data.code || "");
       }
     } catch {
       markUploadFailed("上传失败，服务器返回内容无法解析。");
