@@ -1712,9 +1712,9 @@ function documentActionsHtml(document) {
     ? `<button class="secondary-button small-link" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
     : "";
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
-    ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>`
+    ? `<a class="secondary-button small-link" href="/api/order-documents/${encodeURIComponent(document.id)}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
-  const remove = canWriteArea("documents") && isPersistedDocument(document)
+  const remove = document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
     ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
     : "";
   return preview || download || remove ? `<div class="row-actions file-actions">${preview}${download}${remove}</div>` : "";
@@ -1768,6 +1768,10 @@ function uploadedFileCard(document, options = {}) {
 
 function emptyUploadState() {
   return `<div class="upload-empty-state"><span>📄</span><strong>暂未上传</strong></div>`;
+}
+
+function documentStatusBadge(successCount = 0) {
+  return `<span class="status ${successCount ? "success" : "danger"}">${successCount ? `已上传 ${successCount}` : "缺失"}</span>`;
 }
 
 function isPersistedDocument(document) {
@@ -1859,21 +1863,24 @@ function renderDocumentGrid(order) {
   $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${completeness.text || "-"}`;
   $("#document-grid").innerHTML = constants.documentTypes.map((type) => {
     const docs = documentRowsForType(order, type.value);
-    const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+    const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+    const docsHtml = docs.length ? `
+      <div class="document-file-list-title">已上传文件列表</div>
+      <div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>
+    ` : "";
     const busyStatus = uploadScopeStatus(order.id, type.value);
     const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
     return `
       <article class="document-card" data-document-upload-card="true" data-order-id="${escapeHtml(order.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
           <strong>${escapeHtml(type.label)}</strong>
-          ${canReadArea("taxRefund") ? `<a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>` : ""}
+          ${documentStatusBadge(successCount)}
         </div>
         <label class="document-upload-control ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
           <span>${escapeHtml(uploadText)}</span>
           <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" />
         </label>
-        <div class="document-file-list-title">已上传文件列表</div>
-        <div class="document-file-list">${docsHtml}</div>
+        ${docsHtml}
       </article>
     `;
   }).join("");
@@ -1930,7 +1937,7 @@ function supplierDocumentCell(cost) {
       ${constants.supplierDocumentTypes.map((type) => {
         const docs = costDocumentRowsForType(cost, type.value);
         const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-        const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+        const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
         const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
         const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
         const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
@@ -1938,7 +1945,7 @@ function supplierDocumentCell(cost) {
           <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
             <div class="supplier-doc-head">
               <strong>${escapeHtml(type.label)}</strong>
-              <span class="status ${successCount ? "success" : "danger"}">${successCount ? "已上传" : "缺失"}</span>
+              ${documentStatusBadge(successCount)}
             </div>
             ${docsHtml}
             ${canWriteArea("documents") ? `
@@ -2362,7 +2369,10 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     : "";
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
-      <div class="document-card-head"><strong>${escapeHtml(type.label)}</strong></div>
+      <div class="document-card-head">
+        <strong>${escapeHtml(type.label)}</strong>
+        ${documentStatusBadge(docs.length)}
+      </div>
       ${customsNotice}
       <div class="document-file-list">${docsHtml}</div>
     </article>
