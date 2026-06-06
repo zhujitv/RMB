@@ -236,6 +236,21 @@ function currencyAmount(currency, value) {
   return `${currency || "-"} ${amount(value)}`;
 }
 
+function moneyCell({ currency = "CNY", amount: originalAmount, amountCny, exchangeRate = 1, prefix = "", empty = "-" } = {}) {
+  const normalizedCurrency = String(currency || "CNY").toUpperCase();
+  const hasGivenOriginal = originalAmount !== "" && originalAmount != null && Number.isFinite(Number(originalAmount));
+  const hasCny = amountCny !== "" && amountCny != null && Number.isFinite(Number(amountCny));
+  const inferredOriginal = !hasGivenOriginal && hasCny && normalizedCurrency !== "CNY" && Number(exchangeRate) > 0
+    ? Number(amountCny) / Number(exchangeRate)
+    : originalAmount;
+  const hasOriginal = inferredOriginal !== "" && inferredOriginal != null && Number.isFinite(Number(inferredOriginal));
+  if (!hasOriginal && !hasCny) return empty;
+  const cnyValue = hasCny ? amountCny : originalAmount;
+  if (normalizedCurrency === "CNY") return `${prefix}${money(cnyValue)}`;
+  const originalText = hasOriginal ? `${escapeHtml(normalizedCurrency)} ${amount(inferredOriginal)}` : escapeHtml(normalizedCurrency);
+  return `${prefix}${originalText}<small>折人民币 ${money(cnyValue)}</small>`;
+}
+
 function percent(value) {
   return `${(((Number(value) || 0) * 100)).toFixed(2)}%`;
 }
@@ -1677,14 +1692,16 @@ function renderOrders() {
       <td>${escapeHtml(order.customerName)}</td>
       <td>${paymentTermCell(order)}</td>
       <td>${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary.reminderStatus)}</small></td>
-      <td>${money(order.estimatedReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.estimatedReceivableAmount)}</small></td>
-      <td>${order.actualShipmentAmount === "" ? "-" : `${money(order.actualShipmentAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.actualShipmentAmount)}</small>`}</td>
-      <td>${money(order.finalReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}</small></td>
-      <td>${money(order.summary.requiredDepositAmount)}</td>
-      <td>${money(order.summary.receivedDepositCny)}</td>
-      <td>${money(order.summary.depositGapCny)}</td>
-      <td>${money(order.summary.confirmedPaymentsCny)}</td>
-      <td>${order.summary.overpaidCny > 0 ? `多收 ${money(order.summary.overpaidCny)}` : `未收 ${money(order.summary.outstandingCny)}`}</td>
+      <td>${moneyCell({ currency: order.currency, amount: order.estimatedReceivableAmount, amountCny: order.estimatedReceivableAmountCny })}</td>
+      <td>${moneyCell({ currency: order.currency, amount: order.actualShipmentAmount, amountCny: order.actualShipmentAmountCny })}</td>
+      <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
+      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.requiredDepositAmount, exchangeRate: order.exchangeRate })}</td>
+      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.receivedDepositCny, exchangeRate: order.exchangeRate })}</td>
+      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.depositGapCny, exchangeRate: order.exchangeRate })}</td>
+      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.confirmedPaymentsCny, exchangeRate: order.exchangeRate })}</td>
+      <td>${order.summary.overpaidCny > 0
+        ? moneyCell({ currency: order.currency, amount: order.summary.overpaidAmount, amountCny: order.summary.overpaidCny, exchangeRate: order.exchangeRate, prefix: "多收 " })
+        : moneyCell({ currency: order.currency, amount: order.summary.outstandingAmount, amountCny: order.summary.outstandingCny, exchangeRate: order.exchangeRate, prefix: "未收 " })}</td>
       <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
       ${rowActions(canWriteArea("orders") ? `<button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button>` : "")}
     </tr>
@@ -1848,8 +1865,8 @@ function renderLogisticsTable(order) {
     <tr>
       <td>${escapeHtml(cost.costType)}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
-      <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
-      <td>${money(cost.amountCny)}</td>
+      <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
+      <td>${moneyCell({ currency: "CNY", amountCny: cost.amountCny })}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus)}</span></td>
       <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
@@ -1943,8 +1960,8 @@ function renderPayments() {
       <td>${escapeHtml(payment.customerName)}</td>
       <td>${payment.paymentDate}</td>
       <td>${escapeHtml(payment.paymentType || "尾款")}</td>
-      <td>${escapeHtml(payment.currency)} ${amount(payment.amount)}</td>
-      <td>${money(payment.amountCny)}</td>
+      <td>${moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny })}</td>
+      <td>${moneyCell({ currency: "CNY", amountCny: payment.amountCny })}</td>
       <td><span class="status ${statusClass(payment.status)}">${payment.status}</span></td>
       <td>${escapeHtml(payment.bankReference || "-")}</td>
       <td>${auditCell(payment)}</td>
@@ -2011,7 +2028,7 @@ function renderCosts() {
       <td>${escapeHtml(cost.costType)}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName)}</td>
       <td>${escapeHtml(cost.supplierType || "-")}</td>
-      <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
+      <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
       <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
@@ -2210,8 +2227,8 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(order.customerName)}</td>
         <td>${escapeHtml(order.currency)}</td>
-        <td>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}<small>${money(order.finalReceivableAmountCny)}</small></td>
-        <td>${money(order.receivedAmountCny ?? 0)}</td>
+        <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
+        <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
