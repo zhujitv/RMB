@@ -2204,7 +2204,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : emptyRow(11);
+  }).join("") : `<tr><td colspan="11" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
