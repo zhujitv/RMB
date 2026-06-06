@@ -46,19 +46,6 @@
           </div>
         </header>
 
-        <section class="filters" aria-label="筛选条件">
-          <label><span>月份</span><input id="filter-month" type="month" /></label>
-          <label><span>订单号 / 提单号</span><input id="filter-order" type="search" placeholder="订单号或提单号" /></label>
-          <label><span>客户 / 供应商 / 业务员</span><input id="filter-party" type="search" placeholder="名称关键词" /></label>
-          <label><span>国家 / 地区</span><input id="filter-country" type="search" placeholder="国家或地区" /></label>
-          <label><span>币种</span><select id="filter-currency"><option value="">全部</option></select></label>
-          <label><span>订单状态</span><select id="filter-order-status"><option value="">全部</option></select></label>
-          <label><span>收款/付款状态</span><select id="filter-payment-status"><option value="">全部</option></select></label>
-          <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部</option></select></label>
-          <label><span>成本类型</span><select id="filter-cost-type"><option value="">全部</option></select></label>
-          <button class="clear-button" id="clear-filters" type="button">清空筛选</button>
-        </section>
-
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
         <div class="login-modal" id="login-modal" hidden>
@@ -88,22 +75,32 @@
 
         <section class="view-panel is-active" id="dashboard-view">
           <div class="metric-grid" id="metric-grid"></div>
-          <div class="dashboard-grid">
-            <section class="panel">
-              <div class="panel-title"><h3>订单盈亏列表</h3><span id="order-profit-count">0 个订单</span></div>
-              <div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>应收</th><th>已收</th><th>未收</th><th>成本</th><th>预计毛利</th><th>逾期</th></tr></thead><tbody id="dashboard-order-rows"></tbody></table></div>
-            </section>
-            <section class="panel">
-              <div class="panel-title"><h3>成本结构统计</h3><span id="cost-structure-total">¥0.00</span></div>
-              <div class="stat-list" id="cost-structure-list"></div>
-            </section>
-            <section class="panel alert-panel">
-              <div class="panel-title"><h3>催款提醒列表</h3><span id="reminder-count">0 条</span></div>
-              <div class="reminder-list" id="reminder-list"></div>
-            </section>
-            <section class="panel"><div class="panel-title"><h3>按业务员统计</h3></div><div class="stat-list" id="salesperson-stats"></div></section>
-            <section class="panel"><div class="panel-title"><h3>按客户统计</h3></div><div class="stat-list" id="customer-stats"></div></section>
-            <section class="panel"><div class="panel-title"><h3>按月份统计</h3></div><div class="stat-list" id="month-stats"></div></section>
+          <div class="dashboard-chart-grid">
+            <section class="panel"><div class="panel-title"><h3>月度应收 / 已收 / 未收趋势</h3></div><div class="chart-stack" id="monthly-trend-chart"></div></section>
+            <section class="panel"><div class="panel-title"><h3>客户未收款排行 Top 10</h3></div><div class="chart-stack" id="customer-unpaid-chart"></div></section>
+            <section class="panel"><div class="panel-title"><h3>业务员应收回款排行</h3></div><div class="chart-stack" id="salesperson-collection-chart"></div></section>
+            <section class="panel"><div class="panel-title"><h3>成本结构</h3><span id="cost-structure-total">¥0.00</span></div><div class="chart-stack" id="cost-structure-chart"></div></section>
+          </div>
+        </section>
+
+        <section class="filters" aria-label="筛选条件">
+          <label><span>月份</span><input id="filter-month" type="month" /></label>
+          <label><span>订单号 / 提单号</span><input id="filter-order" type="search" placeholder="订单号或提单号" /></label>
+          <label><span>客户 / 供应商 / 业务员</span><input id="filter-party" type="search" placeholder="名称关键词" /></label>
+          <label><span>国家 / 地区</span><input id="filter-country" type="search" placeholder="国家或地区" /></label>
+          <label><span>币种</span><select id="filter-currency"><option value="">全部</option></select></label>
+          <label><span>订单状态</span><select id="filter-order-status"><option value="">全部</option></select></label>
+          <label><span>收款状态</span><select id="filter-payment-status"><option value="">全部</option></select></label>
+          <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部</option></select></label>
+          <button class="clear-button" id="clear-filters" type="button">清空筛选</button>
+        </section>
+
+        <section class="dashboard-only" id="dashboard-lists">
+          <div class="dashboard-list-grid">
+            <section class="panel"><div class="panel-title"><h3>逾期应收 Top 10</h3><span id="overdue-top-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>提单号</th><th>未收金额</th><th>到期日</th><th>逾期天数</th><th>负责业务员</th></tr></thead><tbody id="overdue-top-table"></tbody></table></div></section>
+            <section class="panel"><div class="panel-title"><h3>即将到期 Top 10</h3><span id="due-soon-top-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>提单号</th><th>未收金额</th><th>到期日</th><th>剩余天数</th><th>负责业务员</th></tr></thead><tbody id="due-soon-top-table"></tbody></table></div></section>
+            <section class="panel"><div class="panel-title"><h3>大额未收款 Top 10</h3><span id="large-unpaid-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>未收金额</th><th>已收金额</th><th>最终应收金额</th><th>收款进度</th></tr></thead><tbody id="large-unpaid-table"></tbody></table></div></section>
+            <section class="panel"><div class="panel-title"><h3>低毛利 / 亏损订单 Top 10</h3><span id="low-margin-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户名称</th><th>应收金额</th><th>总成本</th><th>毛利</th><th>毛利率</th><th>负责业务员</th></tr></thead><tbody id="low-margin-table"></tbody></table></div></section>
           </div>
         </section>
 

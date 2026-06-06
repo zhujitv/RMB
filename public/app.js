@@ -736,59 +736,183 @@ function updateCurrentView() {
   $("#view-title").textContent = viewTitles[state.view];
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
+  $$(".dashboard-only").forEach((panel) => panel.classList.toggle("is-hidden", state.view !== "dashboard"));
 }
 
 function metric(label, value, note, tone = "") {
   return `<article class="metric ${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
 }
 
+function dayNumber(value) {
+  if (!value) return null;
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function dashboardLink(label, kind, value) {
+  return `<button class="link-button" type="button" data-dashboard-kind="${escapeHtml(kind)}" data-dashboard-value="${escapeHtml(value || "")}">${escapeHtml(label || "-")}</button>`;
+}
+
+function orderDashboardRows() {
+  const todayNo = dayNumber(today());
+  return state.orders.map((order) => {
+    const receivable = Number(order.summary?.receivableCny || 0);
+    const paid = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
+    const unpaid = Math.max(receivable - paid, 0);
+    const cost = Number(order.summary?.totalCostCny || 0);
+    const dueNo = dayNumber(order.dueDate);
+    const remainingDays = dueNo == null || todayNo == null ? null : dueNo - todayNo;
+    const grossProfit = receivable - cost;
+    const grossMargin = receivable > 0 ? grossProfit / receivable : 0;
+    return { order, receivable, paid, unpaid, cost, remainingDays, grossProfit, grossMargin };
+  });
+}
+
+function groupDashboardRows(rows, keyFn, valueFn) {
+  return Object.values(rows.reduce((acc, row) => {
+    const key = keyFn(row) || "未填写";
+    acc[key] ||= { label: key, amount: 0, count: 0, rows: [] };
+    acc[key].amount += valueFn(row);
+    acc[key].count += 1;
+    acc[key].rows.push(row);
+    return acc;
+  }, {}));
+}
+
+function chartEmpty() {
+  return `<div class="empty-note">暂无数据</div>`;
+}
+
+function renderBarChart(id, rows, valueFn, detailFn, tone = "blue") {
+  const box = $(`#${id}`);
+  if (!box) return;
+  const values = rows.map(valueFn);
+  const max = Math.max(...values, 1);
+  box.innerHTML = rows.length ? rows.map((row) => {
+    const value = valueFn(row);
+    return `
+      <div class="chart-row">
+        <div class="chart-label">${detailFn(row)}</div>
+        <div class="chart-track"><i class="${tone}" style="width:${Math.max(3, (value / max) * 100)}%"></i></div>
+        <strong>${money(value)}</strong>
+      </div>
+    `;
+  }).join("") : chartEmpty();
+}
+
+function renderTrendChart(rows) {
+  const groups = groupDashboardRows(rows, (row) => String(row.order.createdAt || "").slice(0, 7), () => 0)
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-8)
+    .map((group) => ({
+      label: group.label,
+      receivable: group.rows.reduce((sum, row) => sum + row.receivable, 0),
+      paid: group.rows.reduce((sum, row) => sum + row.paid, 0),
+      unpaid: group.rows.reduce((sum, row) => sum + row.unpaid, 0),
+    }));
+  const max = Math.max(...groups.flatMap((item) => [item.receivable, item.paid, item.unpaid]), 1);
+  $("#monthly-trend-chart").innerHTML = groups.length ? groups.map((item) => `
+    <div class="trend-row">
+      <div class="chart-label"><strong>${escapeHtml(item.label || "未填写")}</strong></div>
+      <div class="trend-bars">
+        <span><i class="blue" style="width:${Math.max(3, (item.receivable / max) * 100)}%"></i><em>应收 ${money(item.receivable)}</em></span>
+        <span><i class="green" style="width:${Math.max(3, (item.paid / max) * 100)}%"></i><em>已收 ${money(item.paid)}</em></span>
+        <span><i class="red" style="width:${Math.max(3, (item.unpaid / max) * 100)}%"></i><em>未收 ${money(item.unpaid)}</em></span>
+      </div>
+    </div>
+  `).join("") : chartEmpty();
+}
+
+function renderSalespersonChart(rows) {
+  const groups = groupDashboardRows(rows, (row) => row.order.salespersonName || "未分配", () => 0)
+    .map((group) => {
+      const receivable = group.rows.reduce((sum, row) => sum + row.receivable, 0);
+      const paid = group.rows.reduce((sum, row) => sum + row.paid, 0);
+      const unpaid = group.rows.reduce((sum, row) => sum + row.unpaid, 0);
+      return { ...group, receivable, paid, unpaid, rate: receivable > 0 ? paid / receivable : 0 };
+    })
+    .sort((a, b) => b.receivable - a.receivable)
+    .slice(0, 10);
+  const max = Math.max(...groups.flatMap((item) => [item.receivable, item.paid, item.unpaid]), 1);
+  $("#salesperson-collection-chart").innerHTML = groups.length ? groups.map((item) => `
+    <div class="trend-row">
+      <div class="chart-label">${dashboardLink(item.label, "party", item.label)}<small>回款率 ${percent(item.rate)}</small></div>
+      <div class="trend-bars compact">
+        <span><i class="blue" style="width:${Math.max(3, (item.receivable / max) * 100)}%"></i><em>应收 ${money(item.receivable)}</em></span>
+        <span><i class="green" style="width:${Math.max(3, (item.paid / max) * 100)}%"></i><em>已收 ${money(item.paid)}</em></span>
+        <span><i class="red" style="width:${Math.max(3, (item.unpaid / max) * 100)}%"></i><em>未收 ${money(item.unpaid)}</em></span>
+      </div>
+    </div>
+  `).join("") : chartEmpty();
+}
+
 function renderDashboard() {
-  const totals = state.overview?.totals || {};
+  const rows = orderDashboardRows();
+  const receivableTotal = rows.reduce((sum, row) => sum + row.receivable, 0);
+  const paidTotal = rows.reduce((sum, row) => sum + row.paid, 0);
+  const unpaidTotal = rows.reduce((sum, row) => sum + row.unpaid, 0);
+  const overdueAmount = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0).reduce((sum, row) => sum + row.unpaid, 0);
+  const dueSoonAmount = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7).reduce((sum, row) => sum + row.unpaid, 0);
+  const costTotal = rows.reduce((sum, row) => sum + row.cost, 0);
+  const actualProfit = paidTotal - costTotal;
+
   $("#metric-grid").innerHTML = [
-    metric("应收总额", money(totals.receivable), `${totals.orderCount || 0} 个订单`, "tone-blue"),
-    metric("已确认收款", money(totals.confirmed), `${totals.paymentCount || 0} 笔收款`, "tone-green"),
-    metric("预付款要求", money(totals.requiredDepositAmount), "按付款条款自动计算", "tone-blue"),
-    metric("已收预付款", money(totals.receivedDeposit), "来自已到账预付款", "tone-green"),
-    metric("预付款差额", money(totals.depositGap), "需继续催收预付款", "tone-amber"),
-    metric("待确认收款", money(totals.pending), "不计入正式已收", "tone-amber"),
-    metric("未收余额", money(totals.outstanding), `逾期 ${totals.overdueOrders || 0} 个`, "tone-red"),
-    metric("总成本", money(totals.cost), `${totals.costCount || 0} 笔成本`, "tone-slate"),
-    metric("预计毛利", money(totals.expectedProfit), `毛利率 ${percent(totals.grossMargin)}`, "tone-indigo"),
-    metric("实际毛利", money(totals.actualProfit), "按已确认收款计算", "tone-purple"),
-    metric("即将到期订单", totals.dueSoonOrders || 0, "需要提前催收", "tone-orange"),
+    metric("应收总额", money(receivableTotal), `${rows.length} 个订单`, "tone-blue"),
+    metric("已收金额", money(paidTotal), "只统计已到账收款", "tone-green"),
+    metric("未收余额", money(unpaidTotal), "最终应收 - 已到账", "tone-red"),
+    metric("逾期金额", money(overdueAmount), "已过到期日且未收齐", "tone-red strong-alert"),
+    metric("即将到期金额", money(dueSoonAmount), "未来 7 天内到期", "tone-orange"),
+    metric("实际毛利", money(actualProfit), "已到账金额 - 已确认成本", actualProfit >= 0 ? "tone-green" : "tone-red"),
   ].join("");
 
-  const rows = state.orders.slice(0, 12);
-  $("#order-profit-count").textContent = `${state.orders.length} 个订单`;
-  $("#dashboard-order-rows").innerHTML = rows.length ? rows.map((order) => `
-    <tr>
-      <td>${escapeHtml(order.orderNo)}</td>
-      <td>${escapeHtml(order.customerName)}</td>
-      <td>${money(order.summary.receivableCny)}</td>
-      <td>${money(order.summary.confirmedPaymentsCny)}</td>
-      <td>${money(order.summary.outstandingCny)}</td>
-      <td>${money(order.summary.totalCostCny)}</td>
-      <td>${money(order.summary.expectedGrossProfit)}</td>
-      <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
-    </tr>
-  `).join("") : emptyRow(8);
+  renderTrendChart(rows);
+  const customerUnpaid = groupDashboardRows(rows.filter((row) => row.unpaid > 0), (row) => row.order.customerName, (row) => row.unpaid)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 10);
+  renderBarChart("customer-unpaid-chart", customerUnpaid, (item) => item.amount, (item) => dashboardLink(item.label, "party", item.label), "red");
+  renderSalespersonChart(rows);
+  const costRows = Object.values(state.costs.filter((cost) => cost.paymentStatus !== "已取消").reduce((acc, cost) => {
+    const key = cost.costType || "其他费用";
+    acc[key] ||= { label: key, amount: 0, count: 0 };
+    acc[key].amount += Number(cost.amountCny || 0);
+    acc[key].count += 1;
+    return acc;
+  }, {})).sort((a, b) => b.amount - a.amount);
+  $("#cost-structure-total").textContent = money(costRows.reduce((sum, row) => sum + row.amount, 0));
+  renderBarChart("cost-structure-chart", costRows, (item) => item.amount, (item) => `<strong>${escapeHtml(item.label)}</strong><small>${item.count} 笔</small>`, "amber");
 
-  const costStructure = state.overview?.costStructure || [];
-  const totalCost = costStructure.reduce((sum, item) => sum + item.amount, 0);
-  $("#cost-structure-total").textContent = money(totalCost);
-  $("#cost-structure-list").innerHTML = renderStats(costStructure);
-  $("#salesperson-stats").innerHTML = renderStats(state.overview?.bySalesperson || []);
-  $("#customer-stats").innerHTML = renderStats(state.overview?.byCustomer || []);
-  $("#month-stats").innerHTML = renderStats(state.overview?.byMonth || []);
+  const overdue = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0)
+    .sort((a, b) => Math.abs(b.remainingDays) - Math.abs(a.remainingDays) || b.unpaid - a.unpaid)
+    .slice(0, 10);
+  const dueSoon = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7)
+    .sort((a, b) => a.remainingDays - b.remainingDays || b.unpaid - a.unpaid)
+    .slice(0, 10);
+  const largeUnpaid = rows.filter((row) => row.unpaid > 0).sort((a, b) => b.unpaid - a.unpaid).slice(0, 10);
+  const lowMargin = rows
+    .filter((row) => row.receivable > 0 || row.cost > 0)
+    .sort((a, b) => a.grossMargin - b.grossMargin || a.grossProfit - b.grossProfit)
+    .slice(0, 10);
 
-  const reminders = state.overview?.reminders || [];
-  $("#reminder-count").textContent = `${reminders.length} 条`;
-  $("#reminder-list").innerHTML = reminders.length ? reminders.map((order) => `
-    <div class="reminder-item ${order.summary.reminderStatus === "已逾期" ? "danger" : ""}">
-      <strong>${escapeHtml(order.orderNo)} · ${escapeHtml(order.customerName)}</strong>
-      <span>${escapeHtml(order.paymentTermDisplay || order.paymentTerm || "-")} / ${order.summary.reminderStatus} / 到期日 ${order.dueDate || "-"} / 未收 ${money(order.summary.outstandingCny)} / 逾期 ${order.summary.overdueDays} 天</span>
-    </div>
-  `).join("") : `<div class="empty-note">暂无催款提醒</div>`;
+  $("#overdue-top-count").textContent = `${overdue.length} 条`;
+  $("#overdue-top-table").innerHTML = overdue.length ? overdue.map(({ order, unpaid, remainingDays }) => `
+    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${escapeHtml(order.blNo || "-")}</td><td>${money(unpaid)}</td><td>${escapeHtml(order.dueDate || "-")}</td><td>${Math.abs(remainingDays)} 天</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
+  `).join("") : emptyRow(7);
+
+  $("#due-soon-top-count").textContent = `${dueSoon.length} 条`;
+  $("#due-soon-top-table").innerHTML = dueSoon.length ? dueSoon.map(({ order, unpaid, remainingDays }) => `
+    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${escapeHtml(order.blNo || "-")}</td><td>${money(unpaid)}</td><td>${escapeHtml(order.dueDate || "-")}</td><td>${remainingDays} 天</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
+  `).join("") : emptyRow(7);
+
+  $("#large-unpaid-count").textContent = `${largeUnpaid.length} 条`;
+  $("#large-unpaid-table").innerHTML = largeUnpaid.length ? largeUnpaid.map(({ order, receivable, paid, unpaid }) => `
+    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${money(unpaid)}</td><td>${money(paid)}</td><td>${money(receivable)}</td><td>${percent(receivable > 0 ? paid / receivable : 0)}</td></tr>
+  `).join("") : emptyRow(6);
+
+  $("#low-margin-count").textContent = `${lowMargin.length} 条`;
+  $("#low-margin-table").innerHTML = lowMargin.length ? lowMargin.map(({ order, receivable, cost, grossProfit, grossMargin }) => `
+    <tr><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${money(receivable)}</td><td>${money(cost)}</td><td class="${grossProfit < 0 ? "danger-text" : ""}">${money(grossProfit)}</td><td class="${grossMargin < 0.08 ? "danger-text" : ""}">${percent(grossMargin)}</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
+  `).join("") : emptyRow(7);
 }
 
 function renderStats(items) {
@@ -1801,6 +1925,20 @@ function switchView(view) {
   updateCurrentView();
 }
 
+async function openDashboardDetail(kind, value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  if (kind === "order") {
+    $("#filter-order").value = text;
+    $("#filter-party").value = "";
+  } else {
+    $("#filter-party").value = text;
+    $("#filter-order").value = "";
+  }
+  switchView("orders");
+  await loadData();
+}
+
 function exportReport(type) {
   const params = filterParams();
   params.set("type", type);
@@ -1982,6 +2120,7 @@ function bindEvents() {
     if (!target) return;
     if (target.dataset.rateRefresh === "order") applyRateFor("order", { force: true }).catch(() => {});
     if (target.dataset.rateRefresh === "payment") applyRateFor("payment", { force: true }).catch(() => {});
+    if (target.dataset.dashboardKind) openDashboardDetail(target.dataset.dashboardKind, target.dataset.dashboardValue).catch((error) => toast(error.message));
     if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
     if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
     if (target.dataset.editCost) editCost(target.dataset.editCost);
@@ -2001,7 +2140,7 @@ function bindEvents() {
 function initSelects() {
   fillSelect("#filter-currency", constants.currencies, "", true);
   fillSelect("#filter-order-status", constants.orderStatuses, "", true);
-  fillSelect("#filter-payment-status", [...constants.paymentStatuses, ...constants.costPaymentStatuses], "", true);
+  fillSelect("#filter-payment-status", constants.paymentStatuses, "", true);
   fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true);
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
   fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
