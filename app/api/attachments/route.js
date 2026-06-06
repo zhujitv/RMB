@@ -25,12 +25,19 @@ export async function POST(request) {
     const actor = await getActor(request);
     assertWrite(actor, "attachments");
     const body = await request.json();
+    const fileUrl = requireText(body.fileUrl, "文件地址");
+    if (fileUrl.startsWith("/uploads") || fileUrl.includes("/uploads/")) {
+      const error = new Error("禁止使用 /uploads 本地存储，请使用 Cloudflare R2 / S3 上传接口。");
+      error.status = 400;
+      error.code = "LOCAL_UPLOADS_NOT_ALLOWED";
+      throw error;
+    }
     const row = await prisma.attachment.create({
       data: {
         relatedType: requireText(body.relatedType, "关联类型"),
         relatedId: requireText(body.relatedId, "关联 ID"),
         fileName: requireText(body.fileName, "文件名"),
-        fileUrl: requireText(body.fileUrl, "文件地址"),
+        fileUrl,
         fileSize: body.fileSize ? Number(body.fileSize) : null,
         mimeType: optional(body.mimeType),
         uploadedById: actor.id,

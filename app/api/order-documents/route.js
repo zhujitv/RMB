@@ -1,4 +1,4 @@
-import { apiError, getActor, listOrderDocuments, ok, requireText, uploadOrderDocument } from "../../../lib/platform-db";
+import { apiError, getActor, listOrderDocuments, MAX_PDF_UPLOAD_BYTES, ok, requireText, uploadOrderDocument } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,8 +25,15 @@ export async function POST(request) {
     }
     const fileName = String(file.name || "");
     if (!fileName.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
-      const error = new Error("只能上传 PDF 文件");
+      const error = new Error("文件类型不允许，只能上传 PDF 文件");
       error.status = 400;
+      error.code = "FILE_TYPE_NOT_ALLOWED";
+      throw error;
+    }
+    if (Number(file.size || 0) > MAX_PDF_UPLOAD_BYTES) {
+      const error = new Error("文件超过大小限制，最大支持 20MB PDF。");
+      error.status = 413;
+      error.code = "FILE_TOO_LARGE";
       throw error;
     }
     const document = await uploadOrderDocument(request, actor, {
