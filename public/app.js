@@ -1155,6 +1155,7 @@ function applyAccessControl() {
   setHidden("[data-reset='customer'], #customer-form button[type='submit']", !canWriteArea("customers"));
   setHidden("[data-reset='supplier'], #supplier-form button[type='submit']", !canWriteArea("suppliers"));
   setHidden("[data-reset='user'], #user-form button[type='submit']", !canWriteArea("users"));
+  setHidden("[data-order-commission-field]", !canWriteArea("commissions"));
   setHidden("#exchange-rate-settings-form", !canWriteArea("settings"));
   setHidden("#customer-form", !canWriteArea("customers"));
   setHidden("#supplier-form", !canWriteArea("suppliers"));
@@ -2682,6 +2683,7 @@ async function submitOrder(event) {
     const id = data.id;
     delete data.id;
     delete data.country;
+    if (!canWriteArea("commissions")) delete data.salespersonCommissionRate;
     const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),

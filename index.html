@@ -241,7 +241,7 @@
               <label><span>订单号 *</span><input id="order-no" required /></label>
               <label><span>提单号</span><input id="order-bl-no" /></label>
               <label><span>业务员</span><input id="order-salesperson" disabled /></label>
-              <label><span>提成比例</span><input id="order-commission-rate" disabled /></label>
+              <label data-order-commission-field><span>提成比例</span><input id="order-commission-rate" disabled /></label>
               <label><span>客户国家 / 地区</span><input id="order-country" disabled /></label>
               <label><span>币种 *</span><select id="order-currency" required></select></label>
               <div class="form-field rate-field">
@@ -459,7 +459,7 @@
             <article class="manual-card">
               <h4>3. 应收订单</h4>
               <ol>
-                <li>先选择客户，系统会带出业务员、客户国家、默认币种和提成比例。</li>
+                <li>先选择客户，系统会带出业务员、客户国家和默认币种；提成比例由系统后台锁定。</li>
                 <li>录入订单号、金额、付款条款、交易条款、预计日期、提醒天数和订单状态。</li>
                 <li>付款条款选择见提单复印件、OA账期、到港后付款或分批付款时，按页面要求补齐对应日期或节点。</li>
                 <li>保存订单后，在订单详情资料中维护物流费用、出口单证和销售合同。</li>
