@@ -6,6 +6,7 @@ const APP_VERSION = "v1.0.1";
 const state = {
   view: "dashboard",
   me: null,
+  session: null,
   passwordChangeRequired: false,
   roles: [],
   permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
@@ -785,12 +786,12 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
-    closePasswordModal();
   }
 }
 
 function handleAuthExpired(message = "登录已过期，请重新登录") {
   state.me = null;
+  state.session = null;
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "dashboard";
@@ -1088,6 +1089,7 @@ async function loadMe() {
   const response = await fetch("/api/auth/me");
   if (response.status === 401) {
     state.me = null;
+    state.session = null;
     state.roles = constants.roles;
     state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
     setAuthenticatedShell(false);
@@ -1096,6 +1098,7 @@ async function loadMe() {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "校验登录状态失败");
   state.me = data.user;
+  state.session = data.session || null;
   state.roles = data.roles || constants.roles;
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
   $("#current-user").textContent = state.me?.name || "未登录";
@@ -3934,7 +3937,7 @@ async function submitProfilePassword(event) {
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     });
     $("#profile-password-form")?.reset();
-    closePasswordModal();
+    closeLoginModal();
     handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
     reportFrontendError(error, "修改密码失败", form);
@@ -4374,6 +4377,17 @@ function renderProfileModal() {
   $("#profile-name").value = state.me.name || "";
   $("#profile-phone").value = state.me.phone || "";
   $("#profile-language").value = state.me.defaultLanguage || "zh-CN";
+  $("#profile-login-time").textContent = state.session?.loginAt
+    ? new Date(state.session.loginAt).toLocaleString("zh-CN")
+    : "-";
+  $("#profile-login-ip").textContent = state.session?.ipAddress || "-";
+}
+
+function setProfilePanel(panel = "account") {
+  const activePanel = panel === "security" ? "security" : "account";
+  $$("[data-profile-panel]").forEach((section) => {
+    section.hidden = section.dataset.profilePanel !== activePanel;
+  });
 }
 
 function closeAccountMenu() {
@@ -4397,7 +4411,7 @@ function toggleAccountMenu() {
   button.setAttribute("aria-expanded", String(open));
 }
 
-function openProfileDrawer() {
+function openProfileDrawer(panel = "account") {
   if (!state.me) {
     setAuthenticatedShell(false);
     $("#screen-login-email")?.focus();
@@ -4407,38 +4421,17 @@ function openProfileDrawer() {
   const modal = $("#login-modal");
   if (!modal) return;
   renderProfileModal();
+  setProfilePanel(panel);
   modal.hidden = false;
   document.body.classList.add("modal-open");
-  $("#profile-name")?.focus();
-}
-
-function openPasswordModal() {
-  if (!state.me) {
-    setAuthenticatedShell(false);
-    $("#screen-login-email")?.focus();
-    return;
-  }
-  closeAccountMenu();
-  $("#profile-password-form")?.reset();
-  const modal = $("#password-modal");
-  if (!modal) return;
-  modal.hidden = false;
-  document.body.classList.add("modal-open");
-  $("#profile-current-password")?.focus();
+  (panel === "security" ? $("#profile-current-password") : $("#profile-name"))?.focus();
 }
 
 function closeLoginModal() {
   const modal = $("#login-modal");
   if (!modal) return;
   modal.hidden = true;
-  if ($("#password-modal")?.hidden !== false) document.body.classList.remove("modal-open");
-}
-
-function closePasswordModal() {
-  const modal = $("#password-modal");
-  if (!modal) return;
-  modal.hidden = true;
-  if ($("#login-modal")?.hidden !== false) document.body.classList.remove("modal-open");
+  document.body.classList.remove("modal-open");
 }
 
 function setMobileNav(open) {
@@ -4464,12 +4457,12 @@ function loginPayloadFromForm(form) {
 async function logoutCurrentUser() {
   await api("/api/auth/logout", { method: "POST" });
   state.me = null;
+  state.session = null;
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   clearLocalCaches();
   closeAccountMenu();
   closeLoginModal();
-  closePasswordModal();
   closeMobileNav();
   setAuthenticatedShell(false);
   toast("已退出");
@@ -4487,12 +4480,10 @@ function bindAuthEvents() {
   $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $$("[data-profile-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.profileOpen === "password") openPasswordModal();
-      else openProfileDrawer();
+      openProfileDrawer(button.dataset.profileOpen || "account");
     });
   });
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
-  $$("[data-close-password]").forEach((el) => el.addEventListener("click", closePasswordModal));
   document.addEventListener("click", (event) => {
     if (!event.target.closest?.(".account-menu-wrap")) closeAccountMenu();
   });
@@ -4510,7 +4501,6 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
-    if (event.key === "Escape" && !$("#password-modal")?.hidden) closePasswordModal();
     if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
   });

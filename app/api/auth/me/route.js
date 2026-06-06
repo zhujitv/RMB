@@ -1,4 +1,4 @@
-import { apiError, getActor, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
+import { apiError, currentSessionInfo, getActor, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ export async function GET(request) {
       roles: ROLES,
       permissions: rolePermissions(user),
       scopeText: roleScopeText(user?.role),
+      session: await currentSessionInfo(request),
     });
   } catch (error) {
     return apiError(error, "请先登录");
