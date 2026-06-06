@@ -54,13 +54,20 @@ const constants = {
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
-  documentTypes: [
-    { value: "CUSTOMS_ENTRY_FORM", label: "报关录入单" },
+  exportDocumentTypes: [
+    { value: "CUSTOMS_ENTRY_FORM", label: "报关单录入单" },
     { value: "RELEASE_NOTICE", label: "放行通知书" },
     { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
     { value: "BILL_OF_LADING", label: "提单" },
-    { value: "COMMERCIAL_INVOICE", label: "发票" },
+    { value: "COMMERCIAL_INVOICE", label: "商业发票" },
     { value: "PACKING_LIST", label: "箱单" },
+  ],
+  salesDocumentTypes: [
+    { value: "SALES_CONTRACT", label: "销售合同" },
+  ],
+  supplierDocumentTypes: [
+    { value: "SUPPLIER_PURCHASE_CONTRACT", label: "采购合同" },
+    { value: "SUPPLIER_INVOICE", label: "供应商发票" },
   ],
   taxRefundStatuses: [
     { value: "NOT_READY", label: "资料不完整" },
@@ -82,6 +89,9 @@ const viewTitles = {
   settings: "系统设置",
 };
 
+constants.documentTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
+constants.allDocumentTypes = [...constants.documentTypes, ...constants.supplierDocumentTypes];
+
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "taxRefund", "reports", "settings"],
   业务员: ["dashboard", "orders", "profit", "reports"],
@@ -102,7 +112,7 @@ const roleWrites = {
   管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "documents", "taxRefund", "suppliers", "attachments", "settings", "exchangeRates"],
   业务员: ["orders", "logistics", "documents", "attachments"],
   财务: ["payments", "taxRefund", "attachments", "exchangeRates"],
-  成本录入员: ["costs", "attachments"],
+  成本录入员: ["costs", "documents", "attachments"],
   查看者: [],
 };
 
@@ -110,7 +120,7 @@ const roleReads = {
   管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "documents", "taxRefund", "reports", "settings", "auditLogs"],
   业务员: ["customers", "orders", "payments", "costs", "documents", "reports"],
   财务: ["orders", "payments", "costs", "documents", "taxRefund", "reports"],
-  成本录入员: ["suppliers", "orders", "costs"],
+  成本录入员: ["suppliers", "orders", "costs", "documents"],
   查看者: ["orders", "payments", "costs", "documents", "reports"],
 };
 
@@ -1194,7 +1204,7 @@ function renderOrders() {
 }
 
 function documentTypeLabel(type) {
-  return constants.documentTypes.find((item) => item.value === type)?.label || type || "-";
+  return constants.allDocumentTypes.find((item) => item.value === type)?.label || type || "-";
 }
 
 function taxStatusLabel(status) {
@@ -1215,6 +1225,10 @@ function humanFileSize(size) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+function isPersistedDocument(document) {
+  return Boolean(document?.id && !String(document.id).includes(":"));
 }
 
 function currentDetailOrder() {
@@ -1259,10 +1273,35 @@ function renderLogisticsTable(order) {
   `).join("") : emptyRow(8);
 }
 
-function documentRowsForType(order, type) {
-  const persisted = (order.documents || []).filter((document) => document.documentType === type);
+function documentRelatedModule(type) {
+  if (constants.supplierDocumentTypes.some((item) => item.value === type)) return "SUPPLIER";
+  if (constants.salesDocumentTypes.some((item) => item.value === type)) return "SALES";
+  return "EXPORT";
+}
+
+function documentMatchesScope(document, scope = {}) {
+  if (scope.costId && document.costId !== scope.costId) return false;
+  if (scope.supplierId && document.supplierId !== scope.supplierId) return false;
+  if (scope.relatedModule && (document.relatedModule || "EXPORT") !== scope.relatedModule) return false;
+  return true;
+}
+
+function documentRowsForType(order, type, scope = {}) {
+  const persisted = (order.documents || []).filter((document) => document.documentType === type && documentMatchesScope(document, scope));
   const transient = Object.values(state.documentUploads)
-    .filter((item) => item.orderId === order.id && item.documentType === type && !persisted.some((document) => document.id === item.id));
+    .filter((item) => item.orderId === order.id && item.documentType === type && documentMatchesScope(item, scope) && !persisted.some((document) => document.id === item.id));
+  return [...transient, ...persisted];
+}
+
+function costDocumentRowsForType(cost, type) {
+  const persisted = (cost.documents || []).filter((document) => document.documentType === type);
+  const transient = Object.values(state.documentUploads)
+    .filter((item) => (
+      item.orderId === cost.orderId
+      && item.costId === cost.id
+      && item.documentType === type
+      && !persisted.some((document) => document.id === item.id)
+    ));
   return [...transient, ...persisted];
 }
 
@@ -1281,8 +1320,8 @@ function renderDocumentGrid(order) {
         <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
         <small>${Number(document.uploadProgress || 0)}%</small>
         <div class="row-actions">
-          ${document.uploadStatus === "SUCCESS" ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
-          ${canWriteArea("documents") && document.id ? `<button data-delete-document="${document.id}" type="button">删除</button>` : ""}
+          ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
+          ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${document.id}" type="button">删除</button>` : ""}
         </div>
       </div>
     `).join("") : `<div class="order-search-empty">未上传${escapeHtml(type.label)}</div>`;
@@ -1290,7 +1329,7 @@ function renderDocumentGrid(order) {
       <article class="document-card">
         <div class="document-card-head">
           <strong>${escapeHtml(type.label)}</strong>
-          <a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>
+          ${canReadArea("taxRefund") ? `<a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>` : ""}
         </div>
         <label class="document-upload-control">
           <span>上传 PDF</span>
@@ -1332,6 +1371,49 @@ function renderPayments() {
   `).join("") : emptyRow(10);
 }
 
+function supplierDocumentCell(cost) {
+  if (!cost.supplierId) return `<span class="muted-cell">未关联供应商资料</span>`;
+  const order = orderById(cost.orderId) || costOrderFromCost(cost);
+  return `
+    <div class="supplier-doc-list">
+      ${constants.supplierDocumentTypes.map((type) => {
+        const docs = costDocumentRowsForType(cost, type.value);
+        const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+        const docsHtml = docs.length ? docs.map((document) => `
+          <div class="supplier-doc-file">
+            <span>${escapeHtml(document.fileName)}</span>
+            <small>${humanFileSize(document.fileSize)} · ${escapeHtml(uploadStatusLabel(document.uploadStatus))} · ${Number(document.uploadProgress || 0)}%</small>
+            <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
+            <div class="row-actions">
+              ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
+              ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>` : ""}
+            </div>
+          </div>
+        `).join("") : `<small class="missing-docs">未上传</small>`;
+        return `
+          <div class="supplier-doc-item">
+            <div class="supplier-doc-head">
+              <strong>${escapeHtml(type.label)}</strong>
+              <span class="status ${successCount ? "success" : "danger"}">${successCount ? "已上传" : "缺失"}</span>
+            </div>
+            ${docsHtml}
+            ${canWriteArea("documents") ? `
+              <label class="supplier-doc-upload">
+                <span>上传 PDF</span>
+                <input type="file" accept="application/pdf,.pdf"
+                  data-cost-document-type="${escapeHtml(type.value)}"
+                  data-order-id="${escapeHtml(order.id || cost.orderId)}"
+                  data-cost-id="${escapeHtml(cost.id)}"
+                  data-supplier-id="${escapeHtml(cost.supplierId)}" />
+              </label>
+            ` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderCosts() {
   $("#costs-count").textContent = `${state.costs.length} 条`;
   $("#costs-table").innerHTML = state.costs.length ? state.costs.map((cost) => `
@@ -1345,9 +1427,10 @@ function renderCosts() {
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
       <td>${auditCell(cost)}</td>
+      <td>${supplierDocumentCell(cost)}</td>
       ${rowActions(canWriteArea("costs") ? `<button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button>` : "")}
     </tr>
-  `).join("") : emptyRow(10);
+  `).join("") : emptyRow(11);
 }
 
 function renderProfit() {
@@ -1385,6 +1468,24 @@ function renderProfit() {
   }).join("") : emptyRow(19);
 }
 
+function completenessText(part = {}) {
+  const completed = Number(part.completed || 0);
+  const total = Number(part.total || 0);
+  return `${completed}/${total}`;
+}
+
+function completenessBadge(part = {}, completeOverride = null) {
+  const complete = completeOverride == null ? Number(part.completed || 0) >= Number(part.total || 0) : completeOverride;
+  return `<span class="tax-completeness ${complete ? "is-complete" : "is-missing"}">${escapeHtml(completenessText(part))}</span>`;
+}
+
+function taxMissingHtml(completeness = {}) {
+  const labels = completeness.missingLabels || [];
+  if (!labels.length) return `<small class="positive-note">资料完整</small>`;
+  const reminderCount = completeness.supplier?.reminders?.length || 0;
+  return `<small class="missing-docs">缺失：${escapeHtml(labels.join("、"))}${reminderCount ? `；${reminderCount} 项已超过 3 天` : ""}</small>`;
+}
+
 function renderTaxRefund() {
   const box = $("#tax-refund-table");
   if (!box) return;
@@ -1405,12 +1506,15 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.currency)}</td>
         <td>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}<small>${money(order.finalReceivableAmountCny)}</small></td>
         <td>${money(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0)}</td>
-        <td><span class="status ${completeness.complete ? "success" : "danger"}">${escapeHtml(completeness.text || "-")}</span></td>
+        <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
+        <td>${completenessBadge(completeness.sales, (completeness.sales?.missingTypes || []).length === 0)}</td>
+        <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0)}</td>
+        <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions"><a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a></td>
       </tr>
     `;
-  }).join("") : emptyRow(10);
+  }).join("") : emptyRow(13);
 }
 
 function renderSettings() {
@@ -2036,21 +2140,31 @@ async function deleteLogistics(id) {
   }
 }
 
-function documentUploadKey(orderId, documentType, fileName) {
-  return `${orderId}:${documentType}:${fileName}`;
+function documentUploadKey(orderId, documentType, fileName, scope = {}) {
+  return `${orderId}:${scope.costId || "order"}:${scope.supplierId || "none"}:${documentType}:${fileName}`;
 }
 
-function uploadDocumentFile(order, documentType, file) {
+function refreshDocumentViews() {
+  renderOrderDetails();
+  renderCosts();
+  renderTaxRefund();
+  applyAccessControl();
+}
+
+function uploadDocumentFile(order, documentType, file, scope = {}) {
   if (!canWriteArea("documents")) return toast("没有权限上传单证");
   if (!file) return;
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
     toast("只能上传 PDF 文件");
     return;
   }
-  const key = documentUploadKey(order.id, documentType, file.name);
+  const key = documentUploadKey(order.id, documentType, file.name, scope);
   state.documentUploads[key] = {
     id: key,
     orderId: order.id,
+    costId: scope.costId || "",
+    supplierId: scope.supplierId || "",
+    relatedModule: scope.relatedModule || documentRelatedModule(documentType),
     documentType,
     fileName: file.name,
     fileSize: file.size,
@@ -2058,42 +2172,44 @@ function uploadDocumentFile(order, documentType, file) {
     uploadProgress: 0,
     uploadedByName: state.me?.name || "",
   };
-  renderOrderDetails();
+  refreshDocumentViews();
   const formData = new FormData();
   formData.append("orderId", order.id);
   formData.append("documentType", documentType);
+  if (scope.costId) formData.append("costId", scope.costId);
+  if (scope.supplierId) formData.append("supplierId", scope.supplierId);
   formData.append("file", file);
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/api/order-documents");
   xhr.upload.onprogress = (event) => {
     if (!event.lengthComputable) return;
     state.documentUploads[key].uploadProgress = Math.min(99, Math.round((event.loaded / event.total) * 100));
-    renderOrderDetails();
+    refreshDocumentViews();
   };
   xhr.onload = async () => {
     try {
       const data = JSON.parse(xhr.responseText || "{}");
       if (xhr.status >= 200 && xhr.status < 300) {
         state.documentUploads[key] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
-        renderOrderDetails();
+        refreshDocumentViews();
         await loadData();
         toast("上传成功");
       } else {
         state.documentUploads[key].uploadStatus = "FAILED";
         state.documentUploads[key].uploadProgress = 0;
-        renderOrderDetails();
+        refreshDocumentViews();
         toast(data.error || "上传失败");
       }
     } catch {
       state.documentUploads[key].uploadStatus = "FAILED";
-      renderOrderDetails();
+      refreshDocumentViews();
       toast("上传失败");
     }
   };
   xhr.onerror = () => {
     state.documentUploads[key].uploadStatus = "FAILED";
     state.documentUploads[key].uploadProgress = 0;
-    renderOrderDetails();
+    refreshDocumentViews();
     toast("上传失败");
   };
   xhr.send(formData);
@@ -2159,13 +2275,19 @@ async function submitCost(event) {
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
       throw new Error("请从搜索结果中选择关联应收订单");
     }
+    const id = data.id;
+    const hasUnfinishedCostUpload = id && Object.values(state.documentUploads).some((document) => (
+      document.costId === id && document.uploadStatus !== "SUCCESS"
+    ));
+    if (hasUnfinishedCostUpload) {
+      throw new Error("存在未完成上传文件，请处理后再提交");
+    }
     await Promise.all($$("#cost-items .cost-item-row").map(ensureCostRowRateSnapshot));
     const items = readCostItems(true);
     items.forEach((item) => {
       if (needsAdminRateConfirmation(item.currency, item.exchangeRate)) item.manualRateConfirmed = true;
     });
     if (items.some((item) => item.manualRateConfirmed) && !confirm("存在非人民币汇率为 1 的成本明细，确认以管理员身份手动保存？")) return;
-    const id = data.id;
     delete data.id;
     const payload = id ? { ...data, ...items[0] } : { ...data, items };
     const result = await api(id ? `/api/costs/${id}` : "/api/costs", {
@@ -2728,6 +2850,24 @@ function bindEvents() {
     uploadDocumentFile(order, input.dataset.documentType, file);
   });
   $("#document-grid").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-document]");
+    if (button) deleteDocument(button.dataset.deleteDocument);
+  });
+  $("#costs-table").addEventListener("change", (event) => {
+    const input = event.target.closest("[data-cost-document-type]");
+    if (!input) return;
+    const cost = state.costs.find((item) => item.id === input.dataset.costId);
+    const order = cost ? (orderById(cost.orderId) || costOrderFromCost(cost)) : null;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!cost || !order) return toast("请先选择有效成本记录");
+    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+      costId: cost.id,
+      supplierId: cost.supplierId,
+      relatedModule: "SUPPLIER",
+    });
+  });
+  $("#costs-table").addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });

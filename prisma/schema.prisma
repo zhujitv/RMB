@@ -21,6 +21,9 @@ enum OrderDocumentType {
   BILL_OF_LADING
   COMMERCIAL_INVOICE
   PACKING_LIST
+  SALES_CONTRACT
+  SUPPLIER_PURCHASE_CONTRACT
+  SUPPLIER_INVOICE
 }
 
 enum UploadStatus {
@@ -104,6 +107,7 @@ model Supplier {
   createdBy User?      @relation("SuppliersCreated", fields: [createdById], references: [id])
   updatedBy User?      @relation("SuppliersUpdated", fields: [updatedById], references: [id])
   costs     OrderCost[]
+  documents OrderDocument[]
 
   @@index([supplierName])
   @@index([supplierType])
@@ -177,6 +181,9 @@ model ReceivableOrder {
 model OrderDocument {
   id             String            @id @default(cuid())
   orderId        String            @map("order_id")
+  costId         String?           @map("cost_id")
+  supplierId     String?           @map("supplier_id")
+  relatedModule  String            @default("EXPORT") @map("related_module")
   documentType   OrderDocumentType @map("document_type")
   fileName       String            @map("file_name")
   fileSize       Int               @map("file_size")
@@ -193,9 +200,14 @@ model OrderDocument {
   deletedAt      DateTime?         @map("deleted_at")
 
   order      ReceivableOrder @relation(fields: [orderId], references: [id])
+  cost       OrderCost?      @relation(fields: [costId], references: [id])
+  supplier   Supplier?       @relation(fields: [supplierId], references: [id])
   uploadedBy User?           @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
 
   @@index([orderId])
+  @@index([costId])
+  @@index([supplierId])
+  @@index([relatedModule])
   @@index([documentType])
   @@index([uploadStatus])
   @@index([uploadedById])
@@ -263,6 +275,7 @@ model OrderCost {
   supplier  Supplier?       @relation(fields: [supplierId], references: [id])
   createdBy User?           @relation("CostsCreated", fields: [createdById], references: [id])
   updatedBy User?           @relation("CostsUpdated", fields: [updatedById], references: [id])
+  documents OrderDocument[]
 
   @@index([orderId])
   @@index([supplierId])

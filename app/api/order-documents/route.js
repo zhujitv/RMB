@@ -32,6 +32,8 @@ export async function POST(request) {
     const document = await uploadOrderDocument(request, actor, {
       orderId: requireText(formData.get("orderId"), "订单"),
       documentType: requireText(formData.get("documentType"), "单证类型"),
+      costId: String(formData.get("costId") || ""),
+      supplierId: String(formData.get("supplierId") || ""),
       file,
     });
     return ok({ document });
