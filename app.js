@@ -101,14 +101,14 @@ const constants = {
     { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
     { value: "BILL_OF_LADING", label: "提单" },
     { value: "COMMERCIAL_INVOICE", label: "商业发票" },
-    { value: "PACKING_LIST", label: "箱单" },
+    { value: "PACKING_LIST", label: "装箱单" },
   ],
   salesDocumentTypes: [
     { value: "SALES_CONTRACT", label: "销售合同" },
   ],
   supplierDocumentTypes: [
     { value: "SUPPLIER_PURCHASE_CONTRACT", label: "采购合同" },
-    { value: "SUPPLIER_INVOICE", label: "供应商发票" },
+    { value: "SUPPLIER_INVOICE", label: "进项发票" },
   ],
   taxRefundStatuses: [
     { value: "NOT_READY", label: "资料不完整" },
@@ -1374,6 +1374,10 @@ function costDocumentRowsForType(cost, type) {
   return [...transient, ...persisted];
 }
 
+function taxRefundSupplierRequired(cost) {
+  return cost.supplierType === "工厂供应商";
+}
+
 function renderDocumentGrid(order) {
   const completeness = order.documentCompleteness || { text: "暂无单证", completed: 0, total: constants.documentTypes.length };
   $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${completeness.text || "-"}`;
@@ -1442,6 +1446,29 @@ function renderPayments() {
 
 function supplierDocumentCell(cost) {
   if (!cost.supplierId) return `<span class="muted-cell">未关联供应商资料</span>`;
+  const isRequired = taxRefundSupplierRequired(cost);
+  const archivedDocs = constants.supplierDocumentTypes.flatMap((type) => (
+    costDocumentRowsForType(cost, type.value).map((document) => ({ ...document, typeLabel: type.label }))
+  ));
+  if (!isRequired) {
+    const archivedHtml = archivedDocs.length ? archivedDocs.map((document) => `
+      <div class="supplier-doc-file">
+        <span>${escapeHtml(document.typeLabel)}：${escapeHtml(document.fileName)}</span>
+        <small>${humanFileSize(document.fileSize)} · ${escapeHtml(uploadStatusLabel(document.uploadStatus))} · ${Number(document.uploadProgress || 0)}%</small>
+        <progress value="${Number(document.uploadProgress || 0)}" max="100"></progress>
+        <div class="row-actions">
+          ${document.uploadStatus === "SUCCESS" && isPersistedDocument(document) ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>` : ""}
+          ${canWriteArea("documents") && isPersistedDocument(document) ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>` : ""}
+        </div>
+      </div>
+    `).join("") : "";
+    return `
+      <div class="supplier-doc-list is-optional">
+        <span class="supplier-doc-note">非工厂供应商，不参与退税检查</span>
+        ${archivedHtml}
+      </div>
+    `;
+  }
   const order = orderById(cost.orderId) || costOrderFromCost(cost);
   return `
     <div class="supplier-doc-list">

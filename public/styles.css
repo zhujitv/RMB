@@ -883,6 +883,16 @@ textarea:focus {
   font-size: 12px;
 }
 
+.supplier-doc-list.is-optional {
+  min-width: 220px;
+}
+
+.supplier-doc-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .muted-cell,
 .missing-docs {
   color: var(--red);
