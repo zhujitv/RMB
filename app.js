@@ -725,6 +725,7 @@ function statusClass(status) {
 
 function renderOrderSelects() {
   fillAvailableCustomerSelect($("#order-customer")?.value || "");
+  updateOrderCustomerCountry();
   if (!$("#order-id")?.value && !$("#order-salesperson")?.value) {
     $("#order-salesperson").value = state.me?.name || "";
   }
@@ -913,7 +914,7 @@ function clearDraft(name) {
 
 const orderFields = [
   ["id", "#order-id"], ["customerId", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"],
-  ["country", "#order-country"], ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
+  ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
   ["exchangeRateDate", "#order-rate-date"], ["exchangeRateSource", "#order-rate-source"], ["exchangeRateType", "#order-rate-type"],
   ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
   ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["depositRatio", "#order-deposit-ratio"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
@@ -1192,10 +1193,15 @@ function linkOrderDueDate() {
   updateOrderDerived();
 }
 
+function updateOrderCustomerCountry() {
+  const customer = customerById($("#order-customer").value);
+  $("#order-country").value = customer?.country || "";
+}
+
 function updateOrderCustomerDefaults(force = false) {
   const customer = customerById($("#order-customer").value);
+  updateOrderCustomerCountry();
   if (!customer) return;
-  if (force || !$("#order-country").value) $("#order-country").value = customer.country || "";
   if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || state.me?.name || "";
   if (!$("#order-id").value && customer.defaultCurrency && !$("#order-currency").value) {
     $("#order-currency").value = customer.defaultCurrency;
@@ -1256,6 +1262,7 @@ async function submitOrder(event) {
     }
     const id = data.id;
     delete data.id;
+    delete data.country;
     const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),
@@ -1506,6 +1513,7 @@ function editOrder(id) {
   setForm(orderFields, order);
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
+  updateOrderCustomerCountry();
   setRateSnapshot("order", {
     exchangeRate: order.exchangeRate,
     exchangeRateDate: order.exchangeRateDate,
