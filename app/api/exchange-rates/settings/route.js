@@ -2,8 +2,9 @@ import { apiError, getActor, getExchangeRateSettings, ok, saveExchangeRateSettin
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
   try {
+    await getActor(request);
     return ok({ settings: await getExchangeRateSettings() });
   } catch (error) {
     return apiError(error, "读取汇率设置失败");

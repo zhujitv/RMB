@@ -4,6 +4,7 @@ const state = {
   view: "dashboard",
   me: null,
   roles: [],
+  permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
   users: [],
   customers: [],
   availableCustomers: [],
@@ -61,6 +62,38 @@ const viewTitles = {
   profit: "利润分析",
   reports: "报表导出",
   settings: "系统设置",
+};
+
+const roleMenus = {
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "reports", "settings"],
+  业务员: ["dashboard", "orders", "profit", "reports"],
+  财务: ["dashboard", "payments", "profit", "reports"],
+  成本录入员: ["costs", "profit"],
+  查看者: ["dashboard", "profit", "reports"],
+};
+
+const roleScopeTexts = {
+  管理员: "可查看和管理全部数据",
+  业务员: "仅可查看本人客户和订单",
+  财务: "可查看全部应收和收款数据",
+  成本录入员: "仅可录入成本并查看成本相关数据",
+  查看者: "只读权限",
+};
+
+const roleWrites = {
+  管理员: ["users", "customers", "orders", "payments", "costs", "suppliers", "attachments", "settings", "exchangeRates"],
+  业务员: ["orders", "attachments"],
+  财务: ["payments", "attachments", "exchangeRates"],
+  成本录入员: ["costs", "attachments"],
+  查看者: [],
+};
+
+const roleReads = {
+  管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "reports", "settings", "auditLogs"],
+  业务员: ["customers", "orders", "payments", "costs", "reports"],
+  财务: ["orders", "payments", "costs", "reports"],
+  成本录入员: ["suppliers", "orders", "costs"],
+  查看者: ["orders", "payments", "costs", "reports"],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -198,11 +231,11 @@ function rateValue(value) {
 }
 
 function canManualRate() {
-  return Boolean(state.exchangeRateSettings.allowManualEdit && ["管理员", "财务"].includes(state.me?.role));
+  return Boolean(state.exchangeRateSettings.allowManualEdit && canWriteArea("exchangeRates"));
 }
 
 function canRefreshRate() {
-  return ["管理员", "财务"].includes(state.me?.role);
+  return canWriteArea("exchangeRates");
 }
 
 function rateDateFor(prefix) {
@@ -239,14 +272,15 @@ function applyRateEditability() {
   });
   const refreshDisabled = !canRefreshRate();
   $$(".rate-refresh").forEach((button) => {
-    button.disabled = refreshDisabled;
+    button.hidden = refreshDisabled;
   });
-  const settingsDisabled = state.me?.role !== "管理员";
+  const settingsDisabled = !canWriteArea("settings");
   $$("#exchange-rate-settings-form select, #exchange-rate-settings-form button[type='submit']").forEach((el) => {
-    el.disabled = settingsDisabled;
+    el.hidden = settingsDisabled && el.matches("button[type='submit']");
+    if (!el.matches("button[type='submit']")) el.disabled = settingsDisabled;
   });
   const refreshButton = $("#refresh-exchange-rates");
-  if (refreshButton) refreshButton.disabled = refreshDisabled;
+  if (refreshButton) refreshButton.hidden = refreshDisabled;
 }
 
 function setRateSnapshot(prefix, quote = {}) {
@@ -452,6 +486,64 @@ function toast(message) {
   setTimeout(() => box.classList.remove("is-visible"), 2800);
 }
 
+function canView(view) {
+  const menus = state.permissions?.menus?.length ? state.permissions.menus : (roleMenus[state.me?.role] || []);
+  return menus.includes(view);
+}
+
+function canWriteArea(area) {
+  if (state.permissions?.writes && Object.prototype.hasOwnProperty.call(state.permissions.writes, area)) {
+    return Boolean(state.permissions.writes[area]);
+  }
+  return (roleWrites[state.me?.role] || []).includes(area);
+}
+
+function canReadArea(area) {
+  if (state.permissions?.reads && Object.prototype.hasOwnProperty.call(state.permissions.reads, area)) {
+    return Boolean(state.permissions.reads[area]);
+  }
+  return (roleReads[state.me?.role] || []).includes(area);
+}
+
+function scopeText() {
+  return state.permissions?.scopeText || roleScopeTexts[state.me?.role] || "未登录";
+}
+
+function clearLocalCaches() {
+  ["order", "payment", "cost", "customer", "supplier", "user"].forEach(clearDraft);
+  state.orders = [];
+  state.payments = [];
+  state.costs = [];
+  state.customers = [];
+  state.suppliers = [];
+  state.availableCustomers = [];
+  state.availableSuppliers = [];
+  state.users = [];
+  state.auditLogs = [];
+  state.costOrderResults = [];
+  state.selectedCostOrder = null;
+  ["#order-id", "#payment-id", "#cost-id", "#customer-id", "#supplier-id", "#user-id"].forEach((selector) => {
+    const el = $(selector);
+    if (el) el.value = "";
+  });
+  ["#order-form", "#payment-form", "#cost-form", "#customer-form", "#supplier-form", "#user-form"].forEach((selector) => {
+    const form = $(selector);
+    if (form) form.reset();
+  });
+  if ($("#cost-items")) $("#cost-items").innerHTML = "";
+  if ($("#installment-items")) $("#installment-items").innerHTML = "";
+}
+
+function handleAuthExpired(message = "登录已过期，请重新登录") {
+  state.me = null;
+  state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+  state.view = "dashboard";
+  clearLocalCaches();
+  renderAll();
+  openLoginModal();
+  toast(message);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -463,6 +555,7 @@ async function api(path, options = {}) {
   const type = response.headers.get("content-type") || "";
   const data = type.includes("application/json") ? await response.json() : await response.text();
   if (!response.ok) {
+    if (response.status === 401) handleAuthExpired(data?.error || "登录已过期，请重新登录");
     throw new Error(data?.error || "API 请求失败");
   }
   return data;
@@ -693,20 +786,29 @@ async function loadMe() {
   const data = await api("/api/auth/me");
   state.me = data.user;
   state.roles = data.roles || constants.roles;
+  state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
   $("#current-user").textContent = state.me?.name || "未登录";
-  $("#current-role").textContent = state.me?.role || "查看者";
+  $("#current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "请登录后访问业务数据";
   $("#top-user-name").textContent = state.me?.name || "登录";
-  $("#top-user-role").textContent = state.me?.role || "账户";
+  $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
-  $("#modal-current-role").textContent = state.me?.role || "-";
+  $("#modal-current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "-";
+  return Boolean(state.me);
 }
 
 async function loadData() {
   try {
-    await loadMe();
+    const loggedIn = await loadMe();
+    if (!loggedIn) {
+      state.view = "dashboard";
+      clearLocalCaches();
+      renderAll();
+      openLoginModal();
+      return;
+    }
     const [data, availableData, rateSettings] = await Promise.all([
       api(`/api/ledger?${filterParams().toString()}`),
-      api("/api/customers/available"),
+      canWriteArea("orders") ? api("/api/customers/available") : Promise.resolve({ customers: [] }),
       api("/api/exchange-rates/settings").catch(() => ({ settings: state.exchangeRateSettings })),
     ]);
     state.overview = data.overview;
@@ -722,12 +824,14 @@ async function loadData() {
     const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
     state.auditLogs = logs.logs || [];
     renderAll();
+    if (canWriteArea("costs") && !state.selectedCostOrder) await searchCostOrders("");
   } catch (error) {
     toast(error.message);
   }
 }
 
 function renderAll() {
+  applyAccessControl();
   updateCurrentView();
   renderDashboard();
   renderOrderSelects();
@@ -737,13 +841,50 @@ function renderAll() {
   renderProfit();
   renderSettings();
   applyRateEditability();
+  applyAccessControl();
 }
 
 function updateCurrentView() {
+  const menus = state.permissions?.menus || [];
+  if (state.me && !canView(state.view)) {
+    state.view = menus[0] || "dashboard";
+  }
   $("#view-title").textContent = viewTitles[state.view];
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
   $$(".dashboard-only").forEach((panel) => panel.classList.toggle("is-hidden", state.view !== "dashboard"));
+}
+
+function setHidden(selector, hidden) {
+  $$(selector).forEach((el) => {
+    el.hidden = hidden;
+  });
+}
+
+function applyAccessControl() {
+  const loggedIn = Boolean(state.me);
+  $$(".nav-tab").forEach((button) => {
+    button.hidden = !loggedIn || !canView(button.dataset.view);
+  });
+  setHidden("#order-form", !canWriteArea("orders"));
+  setHidden("#payment-form", !canWriteArea("payments"));
+  setHidden("#cost-form", !canWriteArea("costs"));
+  setHidden("#settings-view", !canView("settings"));
+  setHidden("[data-reset='order'], #order-submit-button", !canWriteArea("orders"));
+  setHidden("[data-reset='payment'], #payment-form button[type='submit']", !canWriteArea("payments"));
+  setHidden("[data-reset='cost'], #cost-submit-button, #add-cost-item, .delete-cost-item", !canWriteArea("costs"));
+  setHidden("[data-reset='customer'], #customer-form button[type='submit']", !canWriteArea("customers"));
+  setHidden("[data-reset='supplier'], #supplier-form button[type='submit']", !canWriteArea("suppliers"));
+  setHidden("[data-reset='user'], #user-form button[type='submit']", !canWriteArea("users"));
+  setHidden("#exchange-rate-settings-form", !canWriteArea("settings"));
+  setHidden("#customer-form, #supplier-form, #user-form", !canWriteArea("settings"));
+  setHidden("#logout-button, #modal-logout-button", !loggedIn);
+  const canUseReports = canView("reports");
+  setHidden("[data-export='backup-json']", !canUseReports || state.me?.role !== "管理员");
+  setHidden("[data-export='payments']", !canUseReports || !canReadArea("payments"));
+  setHidden("[data-export='costs']", !canUseReports || !canReadArea("costs"));
+  setHidden("[data-export='orders'], [data-export='profit'], [data-export='reminders']", !canUseReports || !canReadArea("orders"));
+  applyRateEditability();
 }
 
 function metric(label, value, note, tone = "") {
@@ -964,6 +1105,10 @@ function paymentTermCell(order) {
   return `${escapeHtml(order.paymentTermDisplay || order.paymentTerm || "-")}${schedule ? `<small>${escapeHtml(schedule)}</small>` : ""}`;
 }
 
+function rowActions(html) {
+  return html ? `<td class="row-actions">${html}</td>` : `<td class="row-actions"></td>`;
+}
+
 function renderOrders() {
   $("#orders-count").textContent = `${state.orders.length} 条`;
   $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
@@ -982,7 +1127,7 @@ function renderOrders() {
       <td>${money(order.summary.confirmedPaymentsCny)}</td>
       <td>${order.summary.overpaidCny > 0 ? `多收 ${money(order.summary.overpaidCny)}` : `未收 ${money(order.summary.outstandingCny)}`}</td>
       <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
-      <td class="row-actions"><button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button></td>
+      ${rowActions(canWriteArea("orders") ? `<button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button>` : "")}
     </tr>
   `).join("") : emptyRow(15);
 }
@@ -1000,7 +1145,7 @@ function renderPayments() {
       <td><span class="status ${statusClass(payment.status)}">${payment.status}</span></td>
       <td>${escapeHtml(payment.bankReference || "-")}</td>
       <td>${auditCell(payment)}</td>
-      <td class="row-actions"><button data-edit-payment="${payment.id}">编辑</button><button data-delete-payment="${payment.id}">删除</button></td>
+      ${rowActions(canWriteArea("payments") ? `<button data-edit-payment="${payment.id}">编辑</button><button data-delete-payment="${payment.id}">删除</button>` : "")}
     </tr>
   `).join("") : emptyRow(10);
 }
@@ -1018,7 +1163,7 @@ function renderCosts() {
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
       <td>${auditCell(cost)}</td>
-      <td class="row-actions"><button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button></td>
+      ${rowActions(canWriteArea("costs") ? `<button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button>` : "")}
     </tr>
   `).join("") : emptyRow(10);
 }
@@ -1073,7 +1218,7 @@ function renderSettings() {
       <td>${escapeHtml(customer.salespersonName || "-")}</td>
       <td>${escapeHtml(customer.contactPerson || "-")}</td>
       <td>${escapeHtml(customer.remark || "-")}</td>
-      <td class="row-actions"><button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button></td>
+      ${rowActions(canWriteArea("customers") ? `<button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button>` : "")}
     </tr>
   `).join("") : emptyRow(7);
 
@@ -1087,7 +1232,7 @@ function renderSettings() {
       <td>${escapeHtml(supplier.phone || "-")}</td>
       <td>${escapeHtml(supplier.invoiceTitle || "-")}</td>
       <td>${escapeHtml(supplier.bankAccount || "-")}</td>
-      <td class="row-actions"><button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button></td>
+      ${rowActions(canWriteArea("suppliers") ? `<button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button>` : "")}
     </tr>
   `).join("") : emptyRow(8);
 
@@ -1098,7 +1243,7 @@ function renderSettings() {
       <td>${escapeHtml(user.email)}</td>
       <td>${escapeHtml(user.role)}</td>
       <td>${user.isActive ? "启用" : "停用"}</td>
-      <td class="row-actions"><button data-edit-user="${user.id}">编辑</button><button data-delete-user="${user.id}">停用</button></td>
+      ${rowActions(canWriteArea("users") ? `<button data-edit-user="${user.id}">编辑</button><button data-delete-user="${user.id}">停用</button>` : "")}
     </tr>
   `).join("") : emptyRow(5);
 
@@ -1256,7 +1401,7 @@ function addCostItem(item = {}) {
   $("#cost-items").insertAdjacentHTML("beforeend", costItemRow(item));
   const row = $("#cost-items .cost-item-row:last-child");
   applyRateEditability();
-  if (!item.exchangeRate) applyCostItemRate(row).catch(() => {});
+  if (!item.exchangeRate && state.me) applyCostItemRate(row).catch(() => {});
   updateCostItemDerived(row);
   return row;
 }
@@ -1555,6 +1700,7 @@ async function saveAttachmentIfNeeded(relatedType, relatedId, inputId, clear = t
 
 async function submitOrder(event) {
   event.preventDefault();
+  if (!canWriteArea("orders")) return toast("没有权限保存应收订单");
   try {
     await ensureRateSnapshot("order");
     const data = readForm("order", orderFields);
@@ -1586,6 +1732,7 @@ async function submitOrder(event) {
 
 async function submitPayment(event) {
   event.preventDefault();
+  if (!canWriteArea("payments")) return toast("没有权限保存收款");
   try {
     await ensureRateSnapshot("payment");
     const data = readForm("payment", paymentFields);
@@ -1611,6 +1758,7 @@ async function submitPayment(event) {
 
 async function submitCost(event) {
   event.preventDefault();
+  if (!canWriteArea("costs")) return toast("没有权限保存成本");
   try {
     const data = readForm("cost", costFields);
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
@@ -1641,6 +1789,7 @@ async function submitCost(event) {
 
 async function submitCustomer(event) {
   event.preventDefault();
+  if (!canWriteArea("customers")) return toast("没有权限保存客户资料");
   try {
     const id = $("#customer-id").value;
     const name = $("#customer-name").value.trim();
@@ -1669,6 +1818,7 @@ async function submitCustomer(event) {
 
 async function submitSupplier(event) {
   event.preventDefault();
+  if (!canWriteArea("suppliers")) return toast("没有权限保存供应商资料");
   try {
     const data = readForm("supplier", supplierFields);
     const id = data.id;
@@ -1684,6 +1834,7 @@ async function submitSupplier(event) {
 
 async function submitExchangeRateSettings(event) {
   event.preventDefault();
+  if (!canWriteArea("settings")) return toast("没有权限修改系统设置");
   try {
     const data = {
       source: $("#exchange-source").value,
@@ -1705,6 +1856,7 @@ async function submitExchangeRateSettings(event) {
 }
 
 async function refreshExchangeRates() {
+  if (!canWriteArea("exchangeRates")) return toast("没有权限手动刷新汇率");
   try {
     const result = await api("/api/exchange-rates/refresh", {
       method: "POST",
@@ -1725,6 +1877,7 @@ async function refreshExchangeRates() {
 
 async function submitUser(event) {
   event.preventDefault();
+  if (!canWriteArea("users")) return toast("没有权限保存用户");
   try {
     const data = {
       name: $("#user-name").value,
@@ -1746,6 +1899,7 @@ async function submitLogin(event) {
   event.preventDefault();
   try {
     const payload = loginPayloadFromForm(event.currentTarget);
+    clearLocalCaches();
     await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1872,7 +2026,7 @@ function resetForm(name) {
     $("#payment-rate-details")?.closest("details")?.removeAttribute("open");
     $("#payment-type").value = "尾款";
     updatePaymentDerived();
-    applyRateFor("payment").catch(() => {});
+    if (state.me) applyRateFor("payment").catch(() => {});
   }
   if (name === "cost") {
     resetCostForm();
@@ -1883,6 +2037,7 @@ function resetForm(name) {
 }
 
 function editOrder(id) {
+  if (!canWriteArea("orders")) return toast("没有权限编辑应收订单");
   const order = state.orders.find((item) => item.id === id);
   if (!order) return;
   if ($("#order-id").value && state.orderFormDirty && !confirmAbandonOrderEdit()) return;
@@ -1908,6 +2063,7 @@ function editOrder(id) {
 }
 
 function editPayment(id) {
+  if (!canWriteArea("payments")) return toast("没有权限编辑收款");
   const payment = state.payments.find((item) => item.id === id);
   if (!payment) return;
   const order = orderById(payment.orderId);
@@ -1935,6 +2091,7 @@ function editPayment(id) {
 }
 
 function editCost(id) {
+  if (!canWriteArea("costs")) return toast("没有权限编辑成本");
   const cost = state.costs.find((item) => item.id === id);
   if (!cost) return;
   clearDraft("cost");
@@ -1949,6 +2106,7 @@ function editCost(id) {
 }
 
 function editCustomer(id) {
+  if (!canWriteArea("customers")) return toast("没有权限编辑客户资料");
   const customer = state.customers.find((item) => item.id === id);
   if (!customer) return;
   $("#customer-id").value = customer.id;
@@ -1965,6 +2123,7 @@ function editCustomer(id) {
 }
 
 function editSupplier(id) {
+  if (!canWriteArea("suppliers")) return toast("没有权限编辑供应商资料");
   const supplier = state.suppliers.find((item) => item.id === id);
   if (!supplier) return;
   setForm(supplierFields, supplier);
@@ -1973,6 +2132,7 @@ function editSupplier(id) {
 }
 
 function editUser(id) {
+  if (!canWriteArea("users")) return toast("没有权限编辑用户");
   const user = state.users.find((item) => item.id === id);
   if (!user) return;
   $("#user-id").value = user.id;
@@ -1985,6 +2145,8 @@ function editUser(id) {
 
 async function deleteRecord(kind, id) {
   const labels = { order: "应收订单", payment: "收款", cost: "成本", customer: "客户", supplier: "供应商", user: "用户" };
+  const areas = { order: "orders", payment: "payments", cost: "costs", customer: "customers", supplier: "suppliers", user: "users" };
+  if (!canWriteArea(areas[kind])) return toast(`没有权限删除/停用${labels[kind]}`);
   if (!confirm(`确认删除/停用这条${labels[kind]}吗？该操作会写入操作日志。`)) return;
   const endpoints = {
     order: `/api/orders/${id}`,
@@ -2004,6 +2166,14 @@ async function deleteRecord(kind, id) {
 }
 
 function switchView(view, options = {}) {
+  if (!state.me) {
+    openLoginModal();
+    return false;
+  }
+  if (!canView(view)) {
+    toast("没有权限进入该模块");
+    return false;
+  }
   if (state.view === "orders" && view !== "orders" && !options.skipOrderConfirm) {
     if (!confirmAbandonOrderEdit()) return false;
     resetOrderForm();
@@ -2024,7 +2194,7 @@ async function openDashboardDetail(kind, value) {
     $("#filter-party").value = text;
     $("#filter-order").value = "";
   }
-  switchView("orders");
+  if (!switchView("orders")) return;
   await loadData();
 }
 
@@ -2059,8 +2229,12 @@ function loginPayloadFromForm(form) {
 
 async function logoutCurrentUser() {
   await api("/api/auth/logout", { method: "POST" });
-  await loadData();
+  state.me = null;
+  state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+  clearLocalCaches();
+  renderAll();
   closeLoginModal();
+  openLoginModal();
   toast("已退出");
 }
 
@@ -2272,7 +2446,6 @@ async function init() {
   updatePaymentDerived();
   updateCostDerived();
   await loadData();
-  if (!state.selectedCostOrder) await searchCostOrders("");
 }
 
 init();

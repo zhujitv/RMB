@@ -1,4 +1,4 @@
-import { apiError, getActor, getOverview, getReminders, listCosts, listOrders, listPayments } from "../../../lib/platform-db";
+import { apiError, assertRead, getActor, getOverview, getReminders, listCosts, listOrders, listPayments } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +23,14 @@ function csvResponse(filename, columns, rows) {
 export async function GET(request) {
   try {
     const actor = await getActor(request);
+    assertRead(actor, "reports");
     const query = new URL(request.url).searchParams;
     const type = query.get("type") || "orders";
 
     if (type === "backup-json") {
+      if (actor.role !== "管理员") {
+        return Response.json({ error: "只有管理员可以导出完整数据备份" }, { status: 403 });
+      }
       const [overview, orders, payments, costs] = await Promise.all([
         getOverview(query, actor),
         listOrders(query, actor),

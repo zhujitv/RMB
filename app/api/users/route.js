@@ -2,9 +2,10 @@ import { apiError, getActor, listUsers, ok, saveUser } from "../../../lib/platfo
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
   try {
-    return ok({ users: await listUsers() });
+    const actor = await getActor(request);
+    return ok({ users: await listUsers(actor) });
   } catch (error) {
     return apiError(error, "读取用户失败");
   }

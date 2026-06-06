@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
+    await getActor(request);
     const query = new URL(request.url).searchParams;
     const relatedType = query.get("relatedType") || undefined;
     const relatedId = query.get("relatedId") || undefined;
