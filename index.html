@@ -128,24 +128,47 @@
 
         <div class="login-modal" id="login-modal" hidden>
           <div class="login-backdrop" data-close-login></div>
-          <section class="login-dialog" role="dialog" aria-modal="true" aria-labelledby="login-dialog-title">
-            <button class="modal-close" data-close-login type="button" aria-label="关闭登录窗口">×</button>
+          <section class="login-dialog profile-dialog" role="dialog" aria-modal="true" aria-labelledby="login-dialog-title">
+            <button class="modal-close" data-close-login type="button" aria-label="关闭个人中心">×</button>
             <div class="login-dialog-header">
-              <span class="login-badge">账户</span>
-              <h3 id="login-dialog-title">用户登录</h3>
-              <p>登录后按角色加载客户、订单、收款和成本权限。</p>
+              <span class="login-badge">个人中心</span>
+              <h3 id="login-dialog-title">个人中心</h3>
+              <p>查看账号状态，修改个人资料或密码。</p>
             </div>
-            <div class="login-current">
-              <span>当前用户</span>
-              <strong id="modal-current-user">读取中...</strong>
-              <small id="modal-current-role">-</small>
+            <div class="profile-summary">
+              <div class="profile-avatar" id="profile-avatar">--</div>
+              <div>
+                <span>当前用户</span>
+                <strong id="modal-current-user">读取中...</strong>
+                <small id="modal-current-role">-</small>
+              </div>
             </div>
-            <form class="login-form" id="login-modal-form" autocomplete="off" novalidate data-error-target="login-modal-error">
-              <label><span>邮箱</span><input id="modal-login-email" data-login-email type="text" inputmode="email" autocomplete="email" required /></label>
-              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" autocomplete="current-password" required /></label>
-              <div class="form-error" id="login-modal-error" hidden></div>
+            <dl class="profile-meta">
+              <div><dt>邮箱</dt><dd id="profile-email">-</dd></div>
+              <div><dt>账号状态</dt><dd id="profile-status">-</dd></div>
+              <div><dt>权限范围</dt><dd id="profile-scope">-</dd></div>
+              <div><dt>当前版本</dt><dd id="profile-version">当前版本：v1.0.1</dd></div>
+            </dl>
+            <form class="login-form profile-form" id="profile-form" autocomplete="off" novalidate data-error-target="profile-error">
+              <h4>修改个人信息</h4>
+              <label><span>姓名</span><input id="profile-name" type="text" autocomplete="name" required /></label>
+              <label><span>联系电话</span><input id="profile-phone" type="tel" autocomplete="tel" placeholder="可选" /></label>
+              <label><span>头像缩写</span><input id="profile-avatar-initials" type="text" maxlength="8" placeholder="例如 JD" /></label>
+              <label><span>默认语言</span><select id="profile-language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
+              <p class="profile-note">邮箱、角色、权限、账号状态和数据范围只能由管理员在系统设置中修改。</p>
+              <div class="form-error" id="profile-error" hidden></div>
               <div class="login-actions">
-                <button class="primary-button" type="submit">登录</button>
+                <button class="primary-button" type="submit">保存个人信息</button>
+              </div>
+            </form>
+            <form class="login-form profile-form" id="profile-password-form" autocomplete="off" novalidate data-error-target="profile-password-error">
+              <h4>修改密码</h4>
+              <label><span>当前密码</span><input id="profile-current-password" type="password" autocomplete="current-password" required /></label>
+              <label><span>新密码</span><input id="profile-new-password" type="password" autocomplete="new-password" required /></label>
+              <label><span>确认新密码</span><input id="profile-confirm-password" type="password" autocomplete="new-password" required /></label>
+              <div class="form-error" id="profile-password-error" hidden></div>
+              <div class="login-actions">
+                <button class="primary-button" type="submit">保存新密码</button>
                 <button class="secondary-button" id="modal-logout-button" type="button">退出登录</button>
               </div>
             </form>

@@ -1101,6 +1101,7 @@ async function loadMe() {
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
   $("#modal-current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "-";
+  renderProfileModal();
   $$("#app-version, [data-app-version]").forEach((el) => {
     el.textContent = `当前版本：${APP_VERSION}`;
   });
@@ -3901,6 +3902,53 @@ async function submitPasswordChange(event) {
   }
 }
 
+async function submitProfile(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setFormError(form, "");
+  const name = $("#profile-name")?.value.trim() || "";
+  const phone = $("#profile-phone")?.value.trim() || "";
+  const avatarInitials = $("#profile-avatar-initials")?.value.trim() || "";
+  const defaultLanguage = $("#profile-language")?.value || "zh-CN";
+  if (!name) return reportFrontendError(new Error("请输入姓名"), "个人信息校验失败", form);
+  try {
+    const result = await api("/api/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ name, phone, avatarInitials, defaultLanguage }),
+    });
+    state.me = result.user || state.me;
+    renderProfileModal();
+    $("#current-user").textContent = state.me?.name || "未登录";
+    $("#top-user-name").textContent = state.me?.name || "登录";
+    toast("个人信息已保存");
+  } catch (error) {
+    reportFrontendError(error, "修改个人信息失败", form);
+  }
+}
+
+async function submitProfilePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  setFormError(form, "");
+  const currentPassword = $("#profile-current-password")?.value || "";
+  const newPassword = $("#profile-new-password")?.value || "";
+  const confirmPassword = $("#profile-confirm-password")?.value || "";
+  if (!currentPassword) return reportFrontendError(new Error("请输入当前密码"), "修改密码校验失败", form);
+  if (!newPassword) return reportFrontendError(new Error("请输入新密码"), "修改密码校验失败", form);
+  if (newPassword.length < 8) return reportFrontendError(new Error("新密码长度不能少于 8 位"), "修改密码校验失败", form);
+  if (newPassword !== confirmPassword) return reportFrontendError(new Error("两次输入的新密码不一致"), "修改密码校验失败", form);
+  try {
+    await api("/api/auth/change-password", {
+      method: "PATCH",
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+    $("#profile-password-form")?.reset();
+    handleAuthExpired("密码已修改，请重新登录");
+  } catch (error) {
+    reportFrontendError(error, "修改密码失败", form);
+  }
+}
+
 function currentEditingOrderNo() {
   const id = $("#order-id")?.value || "";
   const order = state.orders.find((item) => item.id === id);
@@ -4302,6 +4350,42 @@ function exportReport(type) {
   window.location.href = `/api/reports?${params.toString()}`;
 }
 
+function profileInitials(user = state.me) {
+  const manual = String(user?.avatarInitials || "").trim();
+  if (manual) return manual.slice(0, 8).toUpperCase();
+  const name = String(user?.name || "").trim();
+  if (!name) return "--";
+  const asciiParts = name.match(/[A-Za-z0-9]+/g);
+  if (asciiParts?.length) return asciiParts.map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return name.slice(-2);
+}
+
+function approvalStatusText(user = state.me) {
+  const status = user?.approvalStatus || (user?.isActive ? "APPROVED" : "DISABLED");
+  const labels = {
+    APPROVED: "已启用",
+    PENDING: "待审核",
+    REJECTED: "审核未通过",
+    DISABLED: "已停用",
+  };
+  return labels[status] || status || "-";
+}
+
+function renderProfileModal() {
+  if (!state.me) return;
+  $("#modal-current-user").textContent = state.me.name || "-";
+  $("#modal-current-role").textContent = `${state.me.role || "-"} · ${scopeText()}`;
+  $("#profile-avatar").textContent = profileInitials();
+  $("#profile-email").textContent = state.me.email || "-";
+  $("#profile-status").textContent = approvalStatusText();
+  $("#profile-scope").textContent = scopeText();
+  $("#profile-version").textContent = `当前版本：${APP_VERSION}`;
+  $("#profile-name").value = state.me.name || "";
+  $("#profile-phone").value = state.me.phone || "";
+  $("#profile-avatar-initials").value = state.me.avatarInitials || "";
+  $("#profile-language").value = state.me.defaultLanguage || "zh-CN";
+}
+
 function openLoginModal() {
   if (!state.me) {
     setAuthenticatedShell(false);
@@ -4310,10 +4394,10 @@ function openLoginModal() {
   }
   const modal = $("#login-modal");
   if (!modal) return;
+  renderProfileModal();
   modal.hidden = false;
   document.body.classList.add("modal-open");
-  const email = $("#modal-login-email");
-  if (email) email.focus();
+  $("#profile-name")?.focus();
 }
 
 function closeLoginModal() {
@@ -4357,7 +4441,8 @@ async function logoutCurrentUser() {
 
 function bindAuthEvents() {
   bindOptional("#login-screen-form", "submit", submitLogin);
-  bindOptional("#login-modal-form", "submit", submitLogin);
+  bindOptional("#profile-form", "submit", submitProfile);
+  bindOptional("#profile-password-form", "submit", submitProfilePassword);
   bindOptional("#register-form", "submit", submitRegister);
   bindOptional("#password-change-form", "submit", submitPasswordChange);
   bindOptional("#password-change-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));

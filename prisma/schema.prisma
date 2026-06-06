@@ -39,6 +39,9 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   role         String   @default("查看者")
+  phone        String?
+  avatarInitials String? @map("avatar_initials")
+  defaultLanguage String? @map("default_language")
   customPermissions Json? @map("custom_permissions")
   mustChangePassword Boolean @default(false) @map("must_change_password")
   approvalStatus String @default("APPROVED") @map("approval_status")

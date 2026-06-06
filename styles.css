@@ -2565,6 +2565,10 @@ body.modal-open {
   padding: 22px;
 }
 
+.profile-dialog {
+  width: min(560px, 100%);
+}
+
 .modal-close {
   position: absolute;
   top: 12px;
@@ -2637,6 +2641,89 @@ body.modal-open {
 .login-form {
   display: grid;
   gap: 14px;
+}
+
+.profile-summary {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0 14px;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.profile-summary span,
+.profile-summary small {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.profile-summary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 2px 0;
+  font-size: 16px;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.profile-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.profile-meta div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.profile-meta dt {
+  color: #667085;
+  font-size: 12px;
+}
+
+.profile-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: #101828;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.profile-form {
+  border-top: 1px solid #edf0f5;
+  padding-top: 16px;
+}
+
+.profile-form h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.profile-note {
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 9px 10px;
+  color: #667085;
 }
 
 .login-actions {

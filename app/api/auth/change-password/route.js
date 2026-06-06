@@ -15,3 +15,7 @@ export async function POST(request) {
     return apiError(error, "修改密码失败");
   }
 }
+
+export async function PATCH(request) {
+  return POST(request);
+}
