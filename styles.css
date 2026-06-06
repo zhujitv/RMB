@@ -466,6 +466,67 @@ textarea:focus {
   grid-column: 1 / -1;
 }
 
+.permission-editor {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.permission-editor-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permission-editor-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.permission-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.permission-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.permission-group h4 {
+  margin: 0;
+  color: #344054;
+  font-size: 13px;
+}
+
+.permission-checks {
+  display: grid;
+  gap: 6px;
+}
+
+.permission-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.permission-check input {
+  width: auto;
+  min-height: auto;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
@@ -1392,6 +1453,7 @@ body.modal-open {
   .filters,
   .metric-grid,
   .form-grid,
+  .permission-groups,
   .cost-item-row,
   .document-grid,
   .document-file-row,

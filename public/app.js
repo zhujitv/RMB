@@ -54,6 +54,47 @@ const constants = {
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
+  permissionModes: [
+    { value: "ROLE", label: "固定角色权限" },
+    { value: "CUSTOM", label: "自定义组合权限" },
+  ],
+  menuPermissionOptions: [
+    { value: "dashboard", label: "总览" },
+    { value: "orders", label: "应收订单" },
+    { value: "payments", label: "收款登记" },
+    { value: "costs", label: "成本录入" },
+    { value: "profit", label: "利润分析" },
+    { value: "taxRefund", label: "退税资料管理" },
+    { value: "reports", label: "报表导出" },
+    { value: "settings", label: "系统设置" },
+  ],
+  readPermissionOptions: [
+    { value: "users", label: "用户查看" },
+    { value: "customers", label: "客户查看" },
+    { value: "suppliers", label: "供应商查看" },
+    { value: "orders", label: "应收订单查看" },
+    { value: "payments", label: "收款查看" },
+    { value: "costs", label: "成本查看" },
+    { value: "documents", label: "单证查看" },
+    { value: "taxRefund", label: "退税查看" },
+    { value: "reports", label: "报表查看" },
+    { value: "settings", label: "系统设置查看" },
+    { value: "auditLogs", label: "操作日志查看" },
+  ],
+  writePermissionOptions: [
+    { value: "users", label: "用户管理" },
+    { value: "customers", label: "客户维护" },
+    { value: "orders", label: "应收订单保存" },
+    { value: "payments", label: "收款登记" },
+    { value: "costs", label: "成本录入" },
+    { value: "logistics", label: "物流费用" },
+    { value: "documents", label: "单证上传/删除" },
+    { value: "taxRefund", label: "退税状态" },
+    { value: "suppliers", label: "供应商维护" },
+    { value: "attachments", label: "附件维护" },
+    { value: "settings", label: "系统设置" },
+    { value: "exchangeRates", label: "汇率刷新" },
+  ],
   exportDocumentTypes: [
     { value: "CUSTOMS_ENTRY_FORM", label: "报关单录入单" },
     { value: "RELEASE_NOTICE", label: "放行通知书" },
@@ -541,7 +582,7 @@ function toast(message) {
 }
 
 function canView(view) {
-  const menus = state.permissions?.menus?.length ? state.permissions.menus : (roleMenus[state.me?.role] || []);
+  const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
 
@@ -561,6 +602,32 @@ function canReadArea(area) {
 
 function scopeText() {
   return state.permissions?.scopeText || roleScopeTexts[state.me?.role] || "未登录";
+}
+
+function roleTemplatePermissions(role) {
+  return {
+    mode: "ROLE",
+    menus: roleMenus[role] || [],
+    reads: roleReads[role] || [],
+    writes: roleWrites[role] || [],
+  };
+}
+
+function permissionListFromMap(map = {}) {
+  return Object.entries(map)
+    .filter(([, enabled]) => Boolean(enabled))
+    .map(([key]) => key);
+}
+
+function userPermissionConfig(user = null) {
+  if (user?.customPermissions?.mode === "CUSTOM") return user.customPermissions;
+  return roleTemplatePermissions(user?.role || $("#user-role")?.value || "查看者");
+}
+
+function checkboxValues(selector) {
+  return $$(selector)
+    .filter((input) => input.checked)
+    .map((input) => input.value);
 }
 
 function clearLocalCaches() {
@@ -948,7 +1015,9 @@ function applyAccessControl() {
   setHidden("[data-reset='supplier'], #supplier-form button[type='submit']", !canWriteArea("suppliers"));
   setHidden("[data-reset='user'], #user-form button[type='submit']", !canWriteArea("users"));
   setHidden("#exchange-rate-settings-form", !canWriteArea("settings"));
-  setHidden("#customer-form, #supplier-form, #user-form", !canWriteArea("settings"));
+  setHidden("#customer-form", !canWriteArea("customers"));
+  setHidden("#supplier-form", !canWriteArea("suppliers"));
+  setHidden("#user-form", !canWriteArea("users"));
   setHidden("#logout-button, #modal-logout-button", !loggedIn);
   const canUseReports = canView("reports");
   setHidden("[data-export='backup-json']", !canUseReports || state.me?.role !== "管理员");
@@ -1486,6 +1555,50 @@ function taxMissingHtml(completeness = {}) {
   return `<small class="missing-docs">缺失：${escapeHtml(labels.join("、"))}${reminderCount ? `；${reminderCount} 项已超过 3 天` : ""}</small>`;
 }
 
+function permissionModeLabel(mode) {
+  return constants.permissionModes.find((item) => item.value === mode)?.label || "固定角色权限";
+}
+
+function permissionCheckHtml(option, selected, name) {
+  return `
+    <label class="permission-check">
+      <input type="checkbox" name="${escapeHtml(name)}" value="${escapeHtml(option.value)}" ${selected.includes(option.value) ? "checked" : ""} />
+      <span>${escapeHtml(option.label)}</span>
+    </label>
+  `;
+}
+
+function renderPermissionGroup(selector, options, selected, name) {
+  const box = $(selector);
+  if (!box) return;
+  box.innerHTML = options.map((option) => permissionCheckHtml(option, selected, name)).join("");
+}
+
+function renderUserPermissionEditor(user = null) {
+  const role = $("#user-role")?.value || user?.role || "查看者";
+  const mode = $("#user-permission-mode")?.value || user?.permissionMode || "ROLE";
+  const roleTemplate = roleTemplatePermissions(role);
+  const config = mode === "CUSTOM" ? userPermissionConfig(user) : roleTemplate;
+  const menus = config.menus || roleTemplate.menus;
+  const reads = config.reads || config.readKeys || roleTemplate.reads;
+  const writes = config.writes || config.writeKeys || roleTemplate.writes;
+  $("#user-permission-editor").hidden = mode !== "CUSTOM";
+  renderPermissionGroup("#user-menu-permissions", constants.menuPermissionOptions, menus, "userMenus");
+  renderPermissionGroup("#user-read-permissions", constants.readPermissionOptions, reads, "userReads");
+  renderPermissionGroup("#user-write-permissions", constants.writePermissionOptions, writes, "userWrites");
+}
+
+function readUserPermissionForm() {
+  const mode = $("#user-permission-mode")?.value || "ROLE";
+  if (mode !== "CUSTOM") return { mode: "ROLE" };
+  return {
+    mode: "CUSTOM",
+    menus: checkboxValues("#user-menu-permissions input[type='checkbox']"),
+    reads: checkboxValues("#user-read-permissions input[type='checkbox']"),
+    writes: checkboxValues("#user-write-permissions input[type='checkbox']"),
+  };
+}
+
 function renderTaxRefund() {
   const box = $("#tax-refund-table");
   if (!box) return;
@@ -1556,10 +1669,11 @@ function renderSettings() {
       <td>${escapeHtml(user.name)}</td>
       <td>${escapeHtml(user.email)}</td>
       <td>${escapeHtml(user.role)}</td>
+      <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
       <td>${user.isActive ? "启用" : "停用"}</td>
       ${rowActions(canWriteArea("users") ? `<button data-edit-user="${user.id}">编辑</button><button data-delete-user="${user.id}">停用</button>` : "")}
     </tr>
-  `).join("") : emptyRow(5);
+  `).join("") : emptyRow(6);
 
   $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
     <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.entityType)} / ${escapeHtml(log.entityId || "-")}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
@@ -2401,6 +2515,7 @@ async function submitUser(event) {
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
       password: $("#user-password").value,
+      customPermissions: readUserPermissionForm(),
     };
     const id = $("#user-id").value;
     await api(id ? `/api/users/${id}` : "/api/users", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
@@ -2541,7 +2656,13 @@ function resetForm(name) {
   }
   if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种"), fillSalespersonSelect("#customer-salesperson");
   if (name === "supplier") $("#supplier-form").reset(), $("#supplier-id").value = "", $("#supplier-status").value = "启用", $("#supplier-type").value = "其他供应商";
-  if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
+  if (name === "user") {
+    $("#user-form").reset();
+    $("#user-id").value = "";
+    $("#user-role").value = "查看者";
+    $("#user-permission-mode").value = "ROLE";
+    renderUserPermissionEditor();
+  }
 }
 
 function editOrder(id) {
@@ -2649,7 +2770,9 @@ function editUser(id) {
   $("#user-name").value = user.name;
   $("#user-email").value = user.email;
   $("#user-role").value = user.role;
+  $("#user-permission-mode").value = user.permissionMode || user.customPermissions?.mode || "ROLE";
   $("#user-password").value = "";
+  renderUserPermissionEditor(user);
   switchView("settings");
 }
 
@@ -2776,6 +2899,8 @@ function bindEvents() {
   $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
   $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
+  $("#user-role").addEventListener("change", () => renderUserPermissionEditor());
+  $("#user-permission-mode").addEventListener("change", () => renderUserPermissionEditor());
   $("#login-screen-form")?.addEventListener("submit", submitLogin);
   $("#login-modal-form").addEventListener("submit", submitLogin);
   $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
@@ -2996,6 +3121,8 @@ function initSelects() {
   fillSelect("#logistics-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#logistics-invoice-status", constants.invoiceStatuses, "未收到");
   fillSelect("#user-role", constants.roles, "查看者");
+  fillSelect("#user-permission-mode", constants.permissionModes.map((item) => ({ value: item.value, label: item.label })), "ROLE");
+  renderUserPermissionEditor();
 }
 
 async function init() {
