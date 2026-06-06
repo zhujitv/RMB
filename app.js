@@ -1051,7 +1051,13 @@ function applyAccessControl() {
 }
 
 function metric(label, value, note, tone = "") {
-  return `<article class="metric ${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
+  return `
+    <article class="metric ${tone}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </article>
+  `;
 }
 
 function dayNumber(value) {
@@ -1091,51 +1097,93 @@ function groupDashboardRows(rows, keyFn, valueFn) {
   }, {}));
 }
 
-function chartEmpty() {
-  return `<div class="empty-note">暂无数据</div>`;
+function chartEmpty(title = "当前筛选范围内还没有可展示的数据", note = "调整月份、搜索条件或清空筛选后会自动刷新。") {
+  return `
+    <div class="empty-note dashboard-empty">
+      <i></i>
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </div>
+  `;
 }
 
-function renderBarChart(id, rows, valueFn, detailFn, tone = "blue") {
-  const box = $(`#${id}`);
-  if (!box) return;
-  const values = rows.map(valueFn);
-  const max = Math.max(...values, 1);
-  box.innerHTML = rows.length ? rows.map((row) => {
-    const value = valueFn(row);
-    return `
-      <div class="chart-row">
-        <div class="chart-label">${detailFn(row)}</div>
-        <div class="chart-track"><i class="${tone}" style="width:${Math.max(3, (value / max) * 100)}%"></i></div>
-        <strong>${money(value)}</strong>
-      </div>
-    `;
-  }).join("") : chartEmpty();
+function monthKeys(count = 12) {
+  const [year, month] = today().slice(0, 7).split("-").map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - count + index, 1));
+    return date.toISOString().slice(0, 7);
+  });
+}
+
+function monthLabel(monthKey) {
+  const month = Number(String(monthKey).slice(5, 7));
+  return month ? `${month}月` : monthKey;
 }
 
 function renderTrendChart(rows) {
-  const groups = groupDashboardRows(rows, (row) => String(row.order.createdAt || "").slice(0, 7), () => 0)
-    .sort((a, b) => a.label.localeCompare(b.label))
-    .slice(-8)
-    .map((group) => ({
-      label: group.label,
-      receivable: group.rows.reduce((sum, row) => sum + row.receivable, 0),
-      paid: group.rows.reduce((sum, row) => sum + row.paid, 0),
-      unpaid: group.rows.reduce((sum, row) => sum + row.unpaid, 0),
-    }));
-  const max = Math.max(...groups.flatMap((item) => [item.receivable, item.paid, item.unpaid]), 1);
-  $("#monthly-trend-chart").innerHTML = groups.length ? groups.map((item) => `
-    <div class="trend-row">
-      <div class="chart-label"><strong>${escapeHtml(item.label || "未填写")}</strong></div>
-      <div class="trend-bars">
-        <span><i class="blue" style="width:${Math.max(3, (item.receivable / max) * 100)}%"></i><em>应收 ${money(item.receivable)}</em></span>
-        <span><i class="green" style="width:${Math.max(3, (item.paid / max) * 100)}%"></i><em>已收 ${money(item.paid)}</em></span>
-        <span><i class="red" style="width:${Math.max(3, (item.unpaid / max) * 100)}%"></i><em>未收 ${money(item.unpaid)}</em></span>
-      </div>
+  const box = $("#monthly-trend-chart");
+  if (!box) return;
+  const keys = monthKeys(12);
+  const groups = Object.fromEntries(keys.map((key) => [key, { label: key, receivable: 0, paid: 0, unpaid: 0 }]));
+  rows.forEach((row) => {
+    const key = String(row.order.createdAt || row.order.dueDate || "").slice(0, 7);
+    if (!groups[key]) return;
+    groups[key].receivable += row.receivable;
+    groups[key].paid += row.paid;
+    groups[key].unpaid += row.unpaid;
+  });
+  const data = keys.map((key) => groups[key]);
+  const max = Math.max(...data.flatMap((item) => [item.receivable, item.paid, item.unpaid]), 0);
+  if (!max) {
+    box.innerHTML = chartEmpty("最近 12 个月还没有趋势数据", "录入应收订单、收款或成本后，这里会显示经营曲线。");
+    return;
+  }
+
+  const width = 760;
+  const height = 310;
+  const padding = { top: 22, right: 26, bottom: 46, left: 58 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const yMax = max * 1.08;
+  const x = (index) => padding.left + (chartWidth * index) / Math.max(data.length - 1, 1);
+  const y = (value) => padding.top + chartHeight - (chartHeight * value) / yMax;
+  const series = [
+    { key: "receivable", label: "应收", color: "#2563EB" },
+    { key: "paid", label: "回款", color: "#10B981" },
+    { key: "unpaid", label: "未收", color: "#F97316" },
+  ];
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+    const lineY = padding.top + chartHeight - chartHeight * ratio;
+    return `<g><line x1="${padding.left}" y1="${lineY}" x2="${width - padding.right}" y2="${lineY}" /><text x="12" y="${lineY + 4}">${money(yMax * ratio).replace(".00", "")}</text></g>`;
+  }).join("");
+  const lines = series.map((item) => {
+    const points = data.map((row, index) => `${x(index)},${y(row[item.key])}`).join(" ");
+    const circles = data.map((row, index) => `
+      <circle cx="${x(index)}" cy="${y(row[item.key])}" r="4">
+        <title>${escapeHtml(row.label)} ${item.label} ${money(row[item.key])}</title>
+      </circle>
+    `).join("");
+    return `<g class="trend-line trend-${item.key}" style="--line-color:${item.color}"><polyline points="${points}" />${circles}</g>`;
+  }).join("");
+  const xLabels = data.map((row, index) => `
+    <text x="${x(index)}" y="${height - 18}" text-anchor="middle">${escapeHtml(monthLabel(row.label))}</text>
+  `).join("");
+
+  box.innerHTML = `
+    <div class="chart-legend">
+      ${series.map((item) => `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)}</span>`).join("")}
     </div>
-  `).join("") : chartEmpty();
+    <svg class="trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="最近12个月应收、回款、未收趋势图">
+      <g class="trend-grid">${gridLines}</g>
+      <g class="trend-axis">${xLabels}</g>
+      ${lines}
+    </svg>
+  `;
 }
 
 function renderSalespersonChart(rows) {
+  const box = $("#salesperson-collection-chart");
+  if (!box) return;
   const groups = groupDashboardRows(rows, (row) => row.order.salespersonName || "未分配", () => 0)
     .map((group) => {
       const receivable = group.rows.reduce((sum, row) => sum + row.receivable, 0);
@@ -1143,26 +1191,27 @@ function renderSalespersonChart(rows) {
       const unpaid = group.rows.reduce((sum, row) => sum + row.unpaid, 0);
       return { ...group, receivable, paid, unpaid, rate: receivable > 0 ? paid / receivable : 0 };
     })
-    .sort((a, b) => b.receivable - a.receivable)
+    .sort((a, b) => b.paid - a.paid || b.receivable - a.receivable)
     .slice(0, 10);
-  const max = Math.max(...groups.flatMap((item) => [item.receivable, item.paid, item.unpaid]), 1);
-  $("#salesperson-collection-chart").innerHTML = groups.length ? groups.map((item) => `
-    <div class="trend-row">
-      <div class="chart-label">${dashboardLink(item.label, "party", item.label)}<small>回款率 ${percent(item.rate)}</small></div>
-      <div class="trend-bars compact">
-        <span><i class="blue" style="width:${Math.max(3, (item.receivable / max) * 100)}%"></i><em>应收 ${money(item.receivable)}</em></span>
-        <span><i class="green" style="width:${Math.max(3, (item.paid / max) * 100)}%"></i><em>已收 ${money(item.paid)}</em></span>
-        <span><i class="red" style="width:${Math.max(3, (item.unpaid / max) * 100)}%"></i><em>未收 ${money(item.unpaid)}</em></span>
+  const max = Math.max(...groups.map((item) => item.paid), 1);
+  box.innerHTML = groups.length ? groups.map((item, index) => `
+    <article class="rank-item">
+      <span class="rank-index">${index + 1}</span>
+      <div class="rank-main">
+        <strong>${dashboardLink(item.label, "party", item.label)}</strong>
+        <small>回款率 ${percent(item.rate)} · 未收 ${money(item.unpaid)}</small>
+        <i class="mini-progress"><b style="width:${Math.max(4, (item.paid / max) * 100)}%"></b></i>
       </div>
-    </div>
-  `).join("") : chartEmpty();
+      <div class="rank-value positive"><strong>${money(item.paid)}</strong><small>已收回款</small></div>
+    </article>
+  `).join("") : chartEmpty("还没有业务员回款数据", "收款确认到账后，这里会自动形成排行。");
 }
 
 function renderCommissionRank(rows) {
-  const box = $("#commission-rank-table");
+  const box = $("#commission-rank-list");
   if (!box) return;
   if (!canReadArea("commissions")) {
-    box.innerHTML = emptyRow(5);
+    box.innerHTML = chartEmpty("当前账号没有提成数据权限", "管理员可在系统设置中分配提成查看权限。");
     return;
   }
   const month = $("#filter-month")?.value || today().slice(0, 7);
@@ -1187,15 +1236,119 @@ function renderCommissionRank(rows) {
     .filter((group) => group.month || group.year || group.pending || group.settled)
     .sort((a, b) => b.month - a.month || b.pending - a.pending || b.year - a.year)
     .slice(0, 10);
-  box.innerHTML = groups.length ? groups.map((item) => `
-    <tr>
-      <td>${dashboardLink(item.label, "party", item.label)}</td>
-      <td>${money(item.month)}</td>
-      <td>${money(item.year)}</td>
-      <td>${money(item.pending)}</td>
-      <td>${money(item.settled)}</td>
-    </tr>
-  `).join("") : emptyRow(5);
+  const max = Math.max(...groups.map((item) => item.month || item.pending || item.year), 1);
+  box.innerHTML = groups.length ? groups.map((item, index) => `
+    <article class="rank-item">
+      <span class="rank-index">${index + 1}</span>
+      <div class="rank-main">
+        <strong>${dashboardLink(item.label, "party", item.label)}</strong>
+        <small>本年 ${money(item.year)} · 未结算 ${money(item.pending)}</small>
+        <i class="mini-progress"><b style="width:${Math.max(4, ((item.month || item.pending || item.year) / max) * 100)}%"></b></i>
+      </div>
+      <div class="rank-value"><strong>${money(item.month)}</strong><small>本月提成</small></div>
+    </article>
+  `).join("") : chartEmpty("还没有提成排行数据", "订单回款和物流成本形成后，这里会显示提成表现。");
+}
+
+function renderSalespersonProfitRank(rows) {
+  const box = $("#salesperson-profit-chart");
+  if (!box) return;
+  const groups = groupDashboardRows(rows, (row) => row.order.salespersonName || "未分配", () => 0)
+    .map((group) => {
+      const receivable = group.rows.reduce((sum, row) => sum + row.receivable, 0);
+      const profit = group.rows.reduce((sum, row) => sum + row.grossProfit, 0);
+      const margin = receivable > 0 ? profit / receivable : 0;
+      return { ...group, receivable, profit, margin };
+    })
+    .filter((group) => group.receivable || group.profit)
+    .sort((a, b) => b.profit - a.profit || b.receivable - a.receivable)
+    .slice(0, 10);
+  const max = Math.max(...groups.map((item) => Math.abs(item.profit)), 1);
+  box.innerHTML = groups.length ? groups.map((item, index) => `
+    <article class="rank-item">
+      <span class="rank-index">${index + 1}</span>
+      <div class="rank-main">
+        <strong>${dashboardLink(item.label, "party", item.label)}</strong>
+        <small>毛利率 ${percent(item.margin)} · 应收 ${money(item.receivable)}</small>
+        <i class="mini-progress"><b class="${item.profit < 0 ? "negative" : ""}" style="width:${Math.max(4, (Math.abs(item.profit) / max) * 100)}%"></b></i>
+      </div>
+      <div class="rank-value ${item.profit < 0 ? "negative" : "positive"}"><strong>${money(item.profit)}</strong><small>毛利贡献</small></div>
+    </article>
+  `).join("") : chartEmpty("还没有毛利贡献数据", "录入订单和成本后，这里会显示业务员毛利贡献。");
+}
+
+function renderRiskList(id, rows, mode) {
+  const box = $(`#${id}`);
+  if (!box) return;
+  const isOverdue = mode === "overdue";
+  box.innerHTML = rows.length ? rows.map(({ order, unpaid, remainingDays }, index) => `
+    <article class="rank-item risk-item ${isOverdue ? "is-danger" : "is-warning"}">
+      <span class="rank-index">${index + 1}</span>
+      <div class="rank-main">
+        <strong>${dashboardLink(order.customerName, "party", order.customerName)} · ${dashboardLink(order.orderNo, "order", order.orderNo)}</strong>
+        <small>提单号 ${escapeHtml(order.blNo || "待发货")} · 到期日 ${escapeHtml(order.dueDate || "-")} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
+      </div>
+      <div class="rank-value ${isOverdue ? "negative" : ""}">
+        <strong>${money(unpaid)}</strong>
+        <small>${isOverdue ? `逾期 ${Math.abs(remainingDays)} 天` : `剩余 ${remainingDays} 天`}</small>
+      </div>
+    </article>
+  `).join("") : chartEmpty(isOverdue ? "当前没有逾期应收风险" : "未来 7 天内没有临期应收", "保持这个状态很好，筛选变化后会自动更新。");
+}
+
+function renderLowMarginList(rows) {
+  const box = $("#low-margin-list");
+  if (!box) return;
+  const max = Math.max(...rows.map((row) => Math.abs(row.grossProfit)), 1);
+  box.innerHTML = rows.length ? rows.map(({ order, receivable, cost, grossProfit, grossMargin }, index) => `
+    <article class="rank-item ${grossProfit < 0 || grossMargin < 0.08 ? "risk-item is-danger" : ""}">
+      <span class="rank-index">${index + 1}</span>
+      <div class="rank-main">
+        <strong>${dashboardLink(order.orderNo, "order", order.orderNo)} · ${dashboardLink(order.customerName, "party", order.customerName)}</strong>
+        <small>应收 ${money(receivable)} · 成本 ${money(cost)} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
+        <i class="mini-progress"><b class="${grossProfit < 0 ? "negative" : ""}" style="width:${Math.max(4, (Math.abs(grossProfit) / max) * 100)}%"></b></i>
+      </div>
+      <div class="rank-value ${grossProfit < 0 ? "negative" : ""}">
+        <strong>${money(grossProfit)}</strong>
+        <small>毛利率 ${percent(grossMargin)}</small>
+      </div>
+    </article>
+  `).join("") : chartEmpty("还没有发现低毛利订单", "有订单和成本数据后，低毛利风险会在这里聚合。");
+}
+
+function renderCostStructure(costRows) {
+  const total = costRows.reduce((sum, row) => sum + row.amount, 0);
+  const totalEl = $("#cost-structure-total");
+  if (totalEl) totalEl.textContent = money(total);
+  const donut = $("#cost-structure-donut");
+  const list = $("#cost-structure-chart");
+  if (!donut || !list) return;
+  if (!total) {
+    donut.innerHTML = chartEmpty("还没有成本结构数据", "录入成本后会自动生成环形分析。");
+    list.innerHTML = "";
+    return;
+  }
+  const palette = ["#2563EB", "#10B981", "#F97316", "#7C3AED", "#14B8A6", "#E11D48", "#F59E0B", "#64748B", "#0EA5E9", "#84CC16"];
+  let cursor = 0;
+  const segments = costRows.map((row, index) => {
+    const start = cursor;
+    const end = cursor + (row.amount / total) * 100;
+    cursor = end;
+    return { ...row, color: palette[index % palette.length], start, end };
+  });
+  const gradient = segments.map((row) => `${row.color} ${row.start}% ${row.end}%`).join(", ");
+  donut.innerHTML = `
+    <div class="donut-ring" style="background: conic-gradient(${gradient})">
+      <span>总成本<strong>${money(total)}</strong></span>
+    </div>
+  `;
+  list.innerHTML = segments.slice(0, 10).map((item) => `
+    <article class="rank-item cost-legend-item">
+      <span class="legend-dot" style="background:${item.color}"></span>
+      <div class="rank-main"><strong>${escapeHtml(item.label)}</strong><small>${item.count} 笔 · ${percent(item.amount / total)}</small></div>
+      <div class="rank-value"><strong>${money(item.amount)}</strong></div>
+    </article>
+  `).join("");
 }
 
 function renderDashboard() {
@@ -1207,23 +1360,24 @@ function renderDashboard() {
   const dueSoonAmount = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7).reduce((sum, row) => sum + row.unpaid, 0);
   const costTotal = rows.reduce((sum, row) => sum + row.cost, 0);
   const actualProfit = paidTotal - costTotal;
+  const averageMargin = receivableTotal > 0 ? (receivableTotal - costTotal) / receivableTotal : 0;
+  const commissionTotal = rows.reduce((sum, row) => sum + Number(row.order.summary?.estimatedCommissionCny || row.order.summary?.settleableCommissionCny || row.order.summary?.commissionAmountCny || 0), 0);
 
   $("#metric-grid").innerHTML = [
     metric("应收总额", money(receivableTotal), `${rows.length} 个订单`, "tone-blue"),
-    metric("已收金额", money(paidTotal), "只统计已到账收款", "tone-green"),
+    metric("已收回款", money(paidTotal), "只统计已到账收款", "tone-green"),
     metric("未收余额", money(unpaidTotal), "最终应收 - 已到账", "tone-red"),
     metric("逾期金额", money(overdueAmount), "已过到期日且未收齐", "tone-red strong-alert"),
-    metric("即将到期金额", money(dueSoonAmount), "未来 7 天内到期", "tone-orange"),
     metric("实际毛利", money(actualProfit), "已到账金额 - 已确认成本", actualProfit >= 0 ? "tone-green" : "tone-red"),
+    metric("平均毛利率", percent(averageMargin), "按当前订单加权计算", averageMargin >= 0.08 ? "tone-indigo" : "tone-orange"),
+    metric("业务员提成", canReadArea("commissions") ? money(commissionTotal) : "无权限", "预计提成合计", "tone-purple"),
+    metric("订单数量", `${rows.length}`, `即将到期 ${money(dueSoonAmount)}`, "tone-blue"),
   ].join("");
 
   renderTrendChart(rows);
-  const customerUnpaid = groupDashboardRows(rows.filter((row) => row.unpaid > 0), (row) => row.order.customerName, (row) => row.unpaid)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 10);
-  renderBarChart("customer-unpaid-chart", customerUnpaid, (item) => item.amount, (item) => dashboardLink(item.label, "party", item.label), "red");
   renderSalespersonChart(rows);
   renderCommissionRank(rows);
+  renderSalespersonProfitRank(rows);
   const costRows = Object.values(state.costs.filter((cost) => cost.paymentStatus !== "已取消").reduce((acc, cost) => {
     const key = cost.costType || "其他费用";
     acc[key] ||= { label: key, amount: 0, count: 0 };
@@ -1231,8 +1385,7 @@ function renderDashboard() {
     acc[key].count += 1;
     return acc;
   }, {})).sort((a, b) => b.amount - a.amount);
-  $("#cost-structure-total").textContent = money(costRows.reduce((sum, row) => sum + row.amount, 0));
-  renderBarChart("cost-structure-chart", costRows, (item) => item.amount, (item) => `<strong>${escapeHtml(item.label)}</strong><small>${item.count} 笔</small>`, "amber");
+  renderCostStructure(costRows);
 
   const overdue = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0)
     .sort((a, b) => Math.abs(b.remainingDays) - Math.abs(a.remainingDays) || b.unpaid - a.unpaid)
@@ -1240,35 +1393,23 @@ function renderDashboard() {
   const dueSoon = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7)
     .sort((a, b) => a.remainingDays - b.remainingDays || b.unpaid - a.unpaid)
     .slice(0, 10);
-  const largeUnpaid = rows.filter((row) => row.unpaid > 0).sort((a, b) => b.unpaid - a.unpaid).slice(0, 10);
   const lowMargin = rows
     .filter((row) => row.receivable > 0 || row.cost > 0)
     .sort((a, b) => a.grossMargin - b.grossMargin || a.grossProfit - b.grossProfit)
     .slice(0, 10);
 
   $("#overdue-top-count").textContent = `${overdue.length} 条`;
-  $("#overdue-top-table").innerHTML = overdue.length ? overdue.map(({ order, unpaid, remainingDays }) => `
-    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${escapeHtml(order.blNo || "-")}</td><td>${money(unpaid)}</td><td>${escapeHtml(order.dueDate || "-")}</td><td>${Math.abs(remainingDays)} 天</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
-  `).join("") : emptyRow(7);
+  renderRiskList("overdue-top-list", overdue, "overdue");
 
   $("#due-soon-top-count").textContent = `${dueSoon.length} 条`;
-  $("#due-soon-top-table").innerHTML = dueSoon.length ? dueSoon.map(({ order, unpaid, remainingDays }) => `
-    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${escapeHtml(order.blNo || "-")}</td><td>${money(unpaid)}</td><td>${escapeHtml(order.dueDate || "-")}</td><td>${remainingDays} 天</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
-  `).join("") : emptyRow(7);
-
-  $("#large-unpaid-count").textContent = `${largeUnpaid.length} 条`;
-  $("#large-unpaid-table").innerHTML = largeUnpaid.length ? largeUnpaid.map(({ order, receivable, paid, unpaid }) => `
-    <tr><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${money(unpaid)}</td><td>${money(paid)}</td><td>${money(receivable)}</td><td>${percent(receivable > 0 ? paid / receivable : 0)}</td></tr>
-  `).join("") : emptyRow(6);
+  renderRiskList("due-soon-top-list", dueSoon, "dueSoon");
 
   $("#low-margin-count").textContent = `${lowMargin.length} 条`;
-  $("#low-margin-table").innerHTML = lowMargin.length ? lowMargin.map(({ order, receivable, cost, grossProfit, grossMargin }) => `
-    <tr><td>${dashboardLink(order.orderNo, "order", order.orderNo)}</td><td>${dashboardLink(order.customerName, "party", order.customerName)}</td><td>${money(receivable)}</td><td>${money(cost)}</td><td class="${grossProfit < 0 ? "danger-text" : ""}">${money(grossProfit)}</td><td class="${grossMargin < 0.08 ? "danger-text" : ""}">${percent(grossMargin)}</td><td>${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</td></tr>
-  `).join("") : emptyRow(7);
+  renderLowMarginList(lowMargin);
 }
 
 function renderStats(items) {
-  if (!items.length) return `<div class="empty-note">暂无数据</div>`;
+  if (!items.length) return `<div class="empty-note">当前筛选范围内还没有匹配记录</div>`;
   const max = Math.max(...items.map((item) => item.amount), 1);
   return items.slice(0, 8).map((item) => `
     <div class="stat-row">
@@ -1299,7 +1440,7 @@ function renderOrderSelects() {
 }
 
 function emptyRow(colspan) {
-  return `<tr><td class="empty-row" colspan="${colspan}">暂无数据</td></tr>`;
+  return `<tr><td class="empty-row" colspan="${colspan}">当前没有匹配记录</td></tr>`;
 }
 
 function auditCell(row) {

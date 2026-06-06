@@ -117,40 +117,83 @@
         </div>
 
         <section class="view-panel is-active" id="dashboard-view">
-          <div class="metric-grid" id="metric-grid"></div>
-          <div class="dashboard-chart-grid">
-            <section class="panel"><div class="panel-title"><h3>月度应收 / 已收 / 未收趋势</h3></div><div class="chart-stack" id="monthly-trend-chart"></div></section>
-            <section class="panel"><div class="panel-title"><h3>客户未收款排行 Top 10</h3></div><div class="chart-stack" id="customer-unpaid-chart"></div></section>
-            <section class="panel"><div class="panel-title"><h3>业务员应收回款排行</h3></div><div class="chart-stack" id="salesperson-collection-chart"></div></section>
-            <section class="panel"><div class="panel-title"><h3>成本结构</h3><span id="cost-structure-total">¥0.00</span></div><div class="chart-stack" id="cost-structure-chart"></div></section>
-            <section class="panel"><div class="panel-title"><h3>业务员提成排行</h3></div><div class="table-wrap compact-table"><table><thead><tr><th>业务员</th><th>本月提成</th><th>本年提成</th><th>未结算</th><th>已结算</th></tr></thead><tbody id="commission-rank-table"></tbody></table></div></section>
-          </div>
-        </section>
+          <form class="filters dashboard-filter-bar dashboard-only" id="overview-filter-form" aria-label="总览筛选条件">
+            <div class="filter-main-row">
+              <label class="filter-month"><span>月份</span><input id="filter-month" type="month" /></label>
+              <label class="filter-search"><span>综合搜索</span><input id="filter-keyword" type="search" placeholder="订单号、提单号、客户、供应商、业务员、国家/地区" /></label>
+              <button class="primary-button" id="query-filters" type="submit">查询</button>
+              <button class="clear-button" id="clear-filters" type="button">重置</button>
+              <button class="secondary-button filter-toggle" id="toggle-advanced-filters" type="button" aria-expanded="false">高级筛选</button>
+            </div>
+            <div class="filter-advanced" id="advanced-filters" hidden>
+              <label><span>币种</span><select id="filter-currency"><option value="">全部币种</option></select></label>
+              <label><span>订单状态</span><select id="filter-order-status"><option value="">全部订单状态</option></select></label>
+              <label><span>收款状态</span><select id="filter-payment-status"><option value="">全部收款状态</option></select></label>
+              <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部逾期状态</option></select></label>
+            </div>
+            <p class="filter-summary" id="active-filter-summary">当前筛选：全部数据</p>
+          </form>
 
-        <form class="filters dashboard-only" id="overview-filter-form" aria-label="总览筛选条件">
-          <div class="filter-main-row">
-            <label class="filter-month"><span>月份</span><input id="filter-month" type="month" /></label>
-            <label class="filter-search"><span>综合搜索</span><input id="filter-keyword" type="search" placeholder="订单号、提单号、客户、供应商、业务员、国家/地区" /></label>
-            <button class="primary-button" id="query-filters" type="submit">查询</button>
-            <button class="clear-button" id="clear-filters" type="button">重置</button>
-            <button class="secondary-button filter-toggle" id="toggle-advanced-filters" type="button" aria-expanded="false">高级筛选</button>
-          </div>
-          <div class="filter-advanced" id="advanced-filters" hidden>
-            <label><span>币种</span><select id="filter-currency"><option value="">全部币种</option></select></label>
-            <label><span>订单状态</span><select id="filter-order-status"><option value="">全部订单状态</option></select></label>
-            <label><span>收款状态</span><select id="filter-payment-status"><option value="">全部收款状态</option></select></label>
-            <label><span>逾期状态</span><select id="filter-reminder-status"><option value="">全部逾期状态</option></select></label>
-          </div>
-          <p class="filter-summary" id="active-filter-summary">当前筛选：全部数据</p>
-        </form>
+          <section class="dashboard-layer">
+            <div class="metric-grid" id="metric-grid"></div>
+          </section>
 
-        <section class="dashboard-only" id="dashboard-lists">
-          <div class="dashboard-list-grid">
-            <section class="panel"><div class="panel-title"><h3>逾期应收 Top 10</h3><span id="overdue-top-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>提单号</th><th>未收金额</th><th>到期日</th><th>逾期天数</th><th>负责业务员</th></tr></thead><tbody id="overdue-top-table"></tbody></table></div></section>
-            <section class="panel"><div class="panel-title"><h3>即将到期 Top 10</h3><span id="due-soon-top-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>提单号</th><th>未收金额</th><th>到期日</th><th>剩余天数</th><th>负责业务员</th></tr></thead><tbody id="due-soon-top-table"></tbody></table></div></section>
-            <section class="panel"><div class="panel-title"><h3>大额未收款 Top 10</h3><span id="large-unpaid-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>客户名称</th><th>订单号</th><th>未收金额</th><th>已收金额</th><th>最终应收金额</th><th>收款进度</th></tr></thead><tbody id="large-unpaid-table"></tbody></table></div></section>
-            <section class="panel"><div class="panel-title"><h3>低毛利 / 亏损订单 Top 10</h3><span id="low-margin-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户名称</th><th>应收金额</th><th>总成本</th><th>毛利</th><th>毛利率</th><th>负责业务员</th></tr></thead><tbody id="low-margin-table"></tbody></table></div></section>
-          </div>
+          <section class="dashboard-layer">
+            <div class="dashboard-section-title"><span>趋势分析</span><h3>最近 12 个月经营趋势</h3></div>
+            <section class="panel dashboard-card dashboard-wide-card">
+              <div class="panel-title"><h3>应收 / 回款 / 未收趋势</h3><span>按订单创建月份统计</span></div>
+              <div class="line-chart" id="monthly-trend-chart"></div>
+            </section>
+          </section>
+
+          <section class="dashboard-layer">
+            <div class="dashboard-section-title"><span>风险预警</span><h3>重点催款与临期订单</h3></div>
+            <div class="dashboard-two-col">
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>逾期应收 Top 10</h3><span id="overdue-top-count">0 条</span></div>
+                <div class="rank-list" id="overdue-top-list"></div>
+              </section>
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>即将到期 Top 10</h3><span id="due-soon-top-count">0 条</span></div>
+                <div class="rank-list" id="due-soon-top-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="dashboard-layer">
+            <div class="dashboard-section-title"><span>利润分析</span><h3>利润异常与成本结构</h3></div>
+            <div class="dashboard-two-col">
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>低毛利订单 Top 10</h3><span id="low-margin-count">0 条</span></div>
+                <div class="rank-list" id="low-margin-list"></div>
+              </section>
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>成本结构分析</h3><span id="cost-structure-total">¥0.00</span></div>
+                <div class="donut-layout">
+                  <div class="donut-chart" id="cost-structure-donut"></div>
+                  <div class="rank-list compact-rank" id="cost-structure-chart"></div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="dashboard-layer">
+            <div class="dashboard-section-title"><span>业务员绩效</span><h3>回款、提成与毛利贡献</h3></div>
+            <div class="dashboard-three-col">
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>回款排行</h3></div>
+                <div class="rank-list compact-rank" id="salesperson-collection-chart"></div>
+              </section>
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>提成排行</h3></div>
+                <div class="rank-list compact-rank" id="commission-rank-list"></div>
+              </section>
+              <section class="panel dashboard-card">
+                <div class="panel-title"><h3>毛利贡献排行</h3></div>
+                <div class="rank-list compact-rank" id="salesperson-profit-chart"></div>
+              </section>
+            </div>
+          </section>
         </section>
 
         <section class="view-panel" id="orders-view">
