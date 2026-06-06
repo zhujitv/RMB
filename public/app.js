@@ -1570,9 +1570,15 @@ function completenessText(part = {}) {
   return `${completed}/${total}`;
 }
 
-function completenessBadge(part = {}, completeOverride = null) {
-  const complete = completeOverride == null ? Number(part.completed || 0) >= Number(part.total || 0) : completeOverride;
-  return `<span class="tax-completeness ${complete ? "is-complete" : "is-missing"}">${escapeHtml(completenessText(part))}</span>`;
+function completenessBadge(part = {}, completeOverride = null, emptyText = "") {
+  const completed = Number(part.completed || 0);
+  const total = Number(part.total || 0);
+  if (total <= 0) {
+    return `<span class="tax-completeness is-empty">${escapeHtml(emptyText || completenessText(part))}</span>`;
+  }
+  const complete = completeOverride == null ? completed >= total : completeOverride;
+  const stateClass = complete ? "is-complete" : (completed > 0 ? "is-partial" : "is-missing");
+  return `<span class="tax-completeness ${stateClass}">${escapeHtml(completenessText(part))}</span>`;
 }
 
 function taxMissingHtml(completeness = {}) {
@@ -1647,7 +1653,7 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}<small>${money(order.finalReceivableAmountCny)}</small></td>
         <td>${money(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0)}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
-        <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0)}</td>
+        <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions"><a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a></td>
@@ -1781,6 +1787,34 @@ function supplierDisplayName(item = {}) {
 function supplierById(id) {
   return state.suppliers.find((supplier) => supplier.id === id)
     || state.availableSuppliers.find((supplier) => supplier.id === id);
+}
+
+function factoryCostSupplierMismatches(costType, items = []) {
+  if (costType !== "工厂货款") return [];
+  return items.map((item) => ({
+    item,
+    supplier: supplierById(item.supplierId),
+  })).filter(({ supplier }) => supplier && supplier.supplierType !== "工厂供应商");
+}
+
+function confirmFactoryCostSupplierTypes(costType, items = []) {
+  const mismatches = factoryCostSupplierMismatches(costType, items);
+  if (!mismatches.length) return { proceed: true, confirmed: false };
+  const supplierList = mismatches.map(({ supplier }) => `${supplier.supplierName}（${supplier.supplierType || "未设置类型"}）`).join("、");
+  const shouldEdit = confirm(`当前成本类型为工厂货款，
+但供应商类型不是工厂供应商，
+是否修改供应商资料？
+
+涉及供应商：${supplierList}`);
+  if (!shouldEdit) return { proceed: true, confirmed: true };
+  const supplier = mismatches[0].supplier;
+  if (canWriteArea("suppliers")) {
+    editSupplier(supplier.id);
+    toast("请将供应商类型修改为工厂供应商后再保存成本");
+  } else {
+    toast("请联系管理员将供应商类型修改为工厂供应商");
+  }
+  return { proceed: false, confirmed: false };
 }
 
 function supplierLabel(supplier) {
@@ -2424,6 +2458,14 @@ async function submitCost(event) {
     }
     await Promise.all($$("#cost-items .cost-item-row").map(ensureCostRowRateSnapshot));
     const items = readCostItems(true);
+    const supplierCheck = confirmFactoryCostSupplierTypes(data.costType, items);
+    if (!supplierCheck.proceed) return;
+    if (supplierCheck.confirmed) {
+      data.factorySupplierMismatchConfirmed = true;
+      items.forEach((item) => {
+        item.factorySupplierMismatchConfirmed = true;
+      });
+    }
     items.forEach((item) => {
       if (needsAdminRateConfirmation(item.currency, item.exchangeRate)) item.manualRateConfirmed = true;
     });

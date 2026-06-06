@@ -925,9 +925,19 @@ textarea:focus {
   color: #067647;
 }
 
+.tax-completeness.is-empty {
+  background: #f2f4f7;
+  color: #667085;
+}
+
 .tax-completeness.is-missing {
-  background: #fff1ed;
-  color: #c2410c;
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.tax-completeness.is-partial {
+  background: #fffaeb;
+  color: #b54708;
 }
 
 .order-search-option small,
