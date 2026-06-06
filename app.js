@@ -16,6 +16,11 @@ const state = {
   orders: [],
   payments: [],
   costs: [],
+  taxRefundOrders: [],
+  taxRefundPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  taxRefundKeyword: "",
+  taxRefundDetailOrder: null,
+  taxRefundDetailLoading: false,
   costOrderResults: [],
   selectedCostOrder: null,
   documentUploads: {},
@@ -712,6 +717,11 @@ function clearLocalCaches() {
   state.orders = [];
   state.payments = [];
   state.costs = [];
+  state.taxRefundOrders = [];
+  state.taxRefundPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.taxRefundKeyword = "";
+  state.taxRefundDetailOrder = null;
+  state.taxRefundDetailLoading = false;
   state.customers = [];
   state.suppliers = [];
   state.availableCustomers = [];
@@ -1098,9 +1108,30 @@ async function loadData() {
     const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
     state.auditLogs = logs.logs || [];
     renderAll();
+    if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
     if (canWriteArea("costs") && !state.selectedCostOrder) await searchCostOrders("");
   } catch (error) {
     toast(error.message);
+  }
+}
+
+async function loadTaxRefundList(options = {}) {
+  if (!canReadArea("taxRefund")) return;
+  const page = Math.max(1, Number(options.page || state.taxRefundPagination.page || 1));
+  const pageSize = Number(state.taxRefundPagination.pageSize || 20);
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const keyword = String(state.taxRefundKeyword || "").trim();
+  if (keyword) params.set("q", keyword);
+  try {
+    const data = await api(`/api/tax-refunds?${params.toString()}`);
+    state.taxRefundOrders = data.orders || [];
+    state.taxRefundPagination = data.pagination || { page, pageSize, total: state.taxRefundOrders.length, totalPages: 1 };
+    renderTaxRefund();
+  } catch (error) {
+    if (!options.silent) toast(error.message);
   }
 }
 
@@ -2085,8 +2116,13 @@ function readUserPermissionForm() {
 function renderTaxRefund() {
   const box = $("#tax-refund-table");
   if (!box) return;
-  const rows = canReadArea("taxRefund") ? state.orders : [];
-  $("#tax-refund-count").textContent = `${rows.length} 个订单`;
+  const rows = canReadArea("taxRefund") ? state.taxRefundOrders : [];
+  const pagination = state.taxRefundPagination || { page: 1, pageSize: 20, total: rows.length, totalPages: 1 };
+  $("#tax-refund-count").textContent = `${pagination.total || 0} 个订单`;
+  if ($("#tax-refund-search")) $("#tax-refund-search").value = state.taxRefundKeyword || "";
+  if ($("#tax-refund-page-info")) $("#tax-refund-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
+  if ($("#tax-refund-prev")) $("#tax-refund-prev").disabled = (pagination.page || 1) <= 1;
+  if ($("#tax-refund-next")) $("#tax-refund-next").disabled = (pagination.page || 1) >= (pagination.totalPages || 1);
   box.innerHTML = rows.length ? rows.map((order) => {
     const completeness = order.documentCompleteness || {};
     const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
@@ -2098,18 +2134,141 @@ function renderTaxRefund() {
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(order.customerName)}</td>
-        <td>${escapeHtml(order.blDate || "-")}</td>
         <td>${escapeHtml(order.currency)}</td>
         <td>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}<small>${money(order.finalReceivableAmountCny)}</small></td>
-        <td>${money(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0)}</td>
+        <td>${money(order.receivedAmountCny ?? 0)}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</td>
-        <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(order)}</td>
+        <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
-        <td class="row-actions"><a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a></td>
+        <td class="row-actions">
+          <button class="secondary-button small-link" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
+          <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
+        </td>
       </tr>
     `;
-  }).join("") : emptyRow(12);
+  }).join("") : emptyRow(11);
+}
+
+function taxDetailDocumentRows(order, type, scope = {}) {
+  const documents = (order.documents || []).filter((document) => {
+    if (document.documentType !== type || document.uploadStatus !== "SUCCESS") return false;
+    if (scope.relatedModule && document.relatedModule !== scope.relatedModule) return false;
+    if (scope.supplierId && document.supplierId !== scope.supplierId) return false;
+    if (scope.costId && document.costId !== scope.costId) return false;
+    return true;
+  });
+  return documents;
+}
+
+function renderTaxDocumentItem(order, type, scope = {}) {
+  const docs = taxDetailDocumentRows(order, type.value, scope);
+  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+  return `
+    <article class="tax-detail-document">
+      <div class="document-card-head"><strong>${escapeHtml(type.label)}</strong></div>
+      <div class="document-file-list">${docsHtml}</div>
+    </article>
+  `;
+}
+
+function factorySupplierCosts(order = {}) {
+  const bySupplier = {};
+  (order.costs || [])
+    .filter((cost) => cost.supplierId && cost.supplierType === "工厂供应商")
+    .forEach((cost) => {
+      const key = cost.supplierId;
+      bySupplier[key] ||= {
+        supplierId: cost.supplierId,
+        supplierName: cost.supplierNameSnapshot || cost.supplierName || cost.vendorName || "工厂供应商",
+        costs: [],
+      };
+      bySupplier[key].costs.push(cost);
+    });
+  return Object.values(bySupplier);
+}
+
+function renderTaxRefundDetail() {
+  const drawer = $("#tax-detail-drawer");
+  const body = $("#tax-detail-body");
+  if (!drawer || !body) return;
+  drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  const order = state.taxRefundDetailOrder;
+  if (state.taxRefundDetailLoading) {
+    $("#tax-detail-title").textContent = "退税资料详情";
+    $("#tax-detail-subtitle").textContent = "正在读取订单资料...";
+    body.innerHTML = `<div class="empty-state">正在加载资料，请稍候。</div>`;
+    return;
+  }
+  if (!order) {
+    body.innerHTML = `<div class="empty-state">请选择一个订单查看资料。</div>`;
+    return;
+  }
+  const completeness = order.documentCompleteness || {};
+  $("#tax-detail-title").textContent = `${order.orderNo} · ${order.customerName}`;
+  $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
+  const exportTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
+  const supplierGroups = factorySupplierCosts(order);
+  body.innerHTML = `
+    <div class="tax-detail-summary">
+      <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
+      <div><span>供应商资料</span>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</div>
+      <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
+    </div>
+    ${taxMissingHtml(order)}
+    <section class="tax-detail-section">
+      <h4>出口资料</h4>
+      <div class="tax-detail-doc-grid">${exportTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: type.value === "SALES_CONTRACT" ? "SALES" : "EXPORT" })).join("")}</div>
+    </section>
+    <section class="tax-detail-section">
+      <h4>工厂供应商资料</h4>
+      ${supplierGroups.length ? supplierGroups.map((supplier) => `
+        <div class="tax-detail-supplier">
+          <strong>${escapeHtml(supplier.supplierName)}</strong>
+          <div class="tax-detail-doc-grid">
+            ${constants.supplierDocumentTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "SUPPLIER", supplierId: supplier.supplierId })).join("")}
+          </div>
+        </div>
+      `).join("") : `<div class="empty-state subtle">无工厂供应商资料要求。</div>`}
+    </section>
+  `;
+  applyAccessControl();
+}
+
+async function openTaxRefundDetail(orderId) {
+  state.taxRefundDetailLoading = true;
+  state.taxRefundDetailOrder = null;
+  renderTaxRefundDetail();
+  try {
+    const data = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`);
+    state.taxRefundDetailOrder = data.order;
+    state.taxRefundOrders = state.taxRefundOrders.map((order) => (
+      order.id === data.order.id
+        ? {
+          ...order,
+          documentCompleteness: data.order.documentCompleteness,
+          taxRefundStatus: data.order.taxRefundStatus,
+          taxRefundStatusLabel: data.order.taxRefundStatusLabel,
+          receivedAmountCny: data.order.summary?.arrivedPaymentsCny ?? order.receivedAmountCny,
+        }
+        : order
+    ));
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    state.taxRefundDetailLoading = false;
+    renderTaxRefund();
+    renderTaxRefundDetail();
+  }
+}
+
+function closeTaxRefundDetail() {
+  const drawer = $("#tax-detail-drawer");
+  if (drawer) drawer.hidden = true;
+  state.taxRefundDetailOrder = null;
+  state.taxRefundDetailLoading = false;
+  document.body.classList.remove("modal-open");
 }
 
 function renderSettings() {
@@ -2983,7 +3142,7 @@ function startQueuedUpload(task) {
         state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
         refreshDocumentViews();
         processUploadQueue();
-        await loadData();
+        await refreshAfterTaxRefundMutation(task.orderId);
         delete state.documentUploads[task.id];
         refreshDocumentViews();
       } else {
@@ -3075,12 +3234,23 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
   enqueueUploadTask(order, documentType, file, scope);
 }
 
+async function refreshAfterTaxRefundMutation(orderId = "") {
+  await loadData();
+  if (canReadArea("taxRefund")) await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
+  if (orderId && state.taxRefundDetailOrder?.id === orderId) {
+    await openTaxRefundDetail(orderId);
+  }
+}
+
 async function deleteDocument(id) {
   if (!canWriteArea("documents")) return toast("没有权限删除单证");
   if (!confirm("确认删除这份单证记录吗？R2 文件会保留归档。")) return;
   try {
+    const document = Object.values(state.documentUploads).find((item) => item.id === id)
+      || state.orders.flatMap((order) => order.documents || []).find((item) => item.id === id)
+      || state.taxRefundDetailOrder?.documents?.find((item) => item.id === id);
     await api(`/api/order-documents/${id}`, { method: "DELETE" });
-    await loadData();
+    await refreshAfterTaxRefundMutation(document?.orderId || state.taxRefundDetailOrder?.id || "");
     toast("单证已删除");
   } catch (error) {
     toast(error.message);
@@ -3094,7 +3264,8 @@ async function updateTaxStatus(orderId, status) {
       method: "PATCH",
       body: JSON.stringify({ status }),
     });
-    await loadData();
+    await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
+    if (state.taxRefundDetailOrder?.id === orderId) await openTaxRefundDetail(orderId);
     toast("退税状态已更新");
   } catch (error) {
     toast(error.message);
@@ -3687,6 +3858,7 @@ function switchView(view, options = {}) {
   state.view = view;
   updateCurrentView();
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
+  if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
   return true;
 }
 
@@ -4017,9 +4189,30 @@ function bindEvents() {
     if (select) updateTaxStatus(select.dataset.taxStatusOrder, select.value);
   });
   $("#tax-refund-table").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-missing-document]");
-    if (!button) return;
-    focusMissingDocumentTarget(button.dataset);
+    const detailButton = event.target.closest("[data-view-tax-detail]");
+    if (detailButton) openTaxRefundDetail(detailButton.dataset.viewTaxDetail);
+  });
+  $("#tax-refund-filter-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.taxRefundKeyword = $("#tax-refund-search")?.value || "";
+    loadTaxRefundList({ page: 1 });
+  });
+  $("#tax-refund-reset").addEventListener("click", () => {
+    state.taxRefundKeyword = "";
+    if ($("#tax-refund-search")) $("#tax-refund-search").value = "";
+    loadTaxRefundList({ page: 1 });
+  });
+  $("#tax-refund-prev").addEventListener("click", () => loadTaxRefundList({ page: Math.max(1, (state.taxRefundPagination.page || 1) - 1) }));
+  $("#tax-refund-next").addEventListener("click", () => loadTaxRefundList({ page: Math.min(state.taxRefundPagination.totalPages || 1, (state.taxRefundPagination.page || 1) + 1) }));
+  $("#tax-detail-drawer").addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-tax-detail]")) return closeTaxRefundDetail();
+    const missing = event.target.closest("[data-missing-document]");
+    if (missing) {
+      closeTaxRefundDetail();
+      focusMissingDocumentTarget(missing.dataset);
+    }
+    const deleteButton = event.target.closest("[data-delete-document]");
+    if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
   });
   $("#cost-payment-date").addEventListener("change", () => {
     $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));

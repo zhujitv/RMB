@@ -6,7 +6,7 @@ export async function GET(request) {
   try {
     const actor = await getActor(request);
     const query = new URL(request.url).searchParams;
-    return ok({ orders: await listTaxRefundOrders(query, actor) });
+    return ok(await listTaxRefundOrders(query, actor));
   } catch (error) {
     return apiError(error, "读取退税资料失败");
   }

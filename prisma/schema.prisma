@@ -198,6 +198,8 @@ model ReceivableOrder {
   blDate              DateTime? @map("bl_date") @db.Date
   paymentInstallments Json?     @map("payment_installments")
   taxRefundStatus      String    @default("NOT_READY") @map("tax_refund_status")
+  taxRefundCompleteness Json?    @map("tax_refund_completeness")
+  taxRefundCompletenessUpdatedAt DateTime? @map("tax_refund_completeness_updated_at")
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
   reminderDays        Int       @default(7) @map("reminder_days")
@@ -227,6 +229,7 @@ model ReceivableOrder {
   @@index([status])
   @@index([paymentTermType])
   @@index([taxRefundStatus])
+  @@index([taxRefundCompletenessUpdatedAt])
   @@index([dueDate])
   @@index([deletedAt])
   @@map("receivable_orders")
