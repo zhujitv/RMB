@@ -75,7 +75,7 @@ const constants = {
     { value: "INSTALLMENT", label: "分批付款" },
   ],
   logisticsCostTypes: ["国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
-  costTypes: ["工厂货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "佣金", "样品费", "银行手续费", "其他物流费用", "其他费用"],
+  costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "佣金", "样品费", "银行手续费", "其他物流费用", "其他费用"],
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
@@ -1909,7 +1909,7 @@ function costDocumentRowsForType(cost, type) {
 }
 
 function taxRefundSupplierRequired(cost) {
-  return cost.supplierType === "工厂供应商";
+  return ["工厂货款", "原材料货款", "采购货款", "产品货款"].includes(cost.costType) && cost.supplierType === "工厂供应商";
 }
 
 function renderDocumentGrid(order) {
@@ -2106,6 +2106,17 @@ function completenessBadge(part = {}, completeOverride = null, emptyText = "") {
   return `<span class="tax-completeness ${stateClass}">${escapeHtml(completenessText(part))}</span>`;
 }
 
+function supplierCompletenessBadge(part = {}) {
+  const normalized = {
+    ...part,
+    total: Math.max(2, Number(part.total || 0)),
+    completed: Math.min(Number(part.completed || 0), Math.max(2, Number(part.total || 0))),
+  };
+  const complete = normalized.completed >= normalized.total && !part.missingFactoryCost;
+  const note = part.missingFactoryCost || Number(part.total || 0) <= 0 ? `<small>未录入工厂供应商</small>` : "";
+  return `${completenessBadge(normalized, complete)}${note}`;
+}
+
 function missingDocumentTargets(order = {}) {
   const completeness = order.documentCompleteness || {};
   const exportTargets = (completeness.export?.missingTypes || []).map((type) => ({
@@ -2116,6 +2127,7 @@ function missingDocumentTargets(order = {}) {
   const supplierTargets = [];
   const seenSupplierTypes = new Set();
   (completeness.supplier?.missing || []).forEach((item) => {
+    if (item.missingFactoryCost) return;
     if (!item.documentType || seenSupplierTypes.has(item.documentType)) return;
     seenSupplierTypes.add(item.documentType);
     supplierTargets.push({
@@ -2146,10 +2158,18 @@ function taxMissingHtml(order = {}) {
   const labels = completeness.missingLabels || [];
   if (!labels.length) return `<small class="positive-note">资料完整</small>`;
   const targets = missingDocumentTargets(order);
+  const factoryCostMissingLabels = [...new Set((completeness.supplier?.missing || [])
+    .filter((item) => item.missingFactoryCost)
+    .map(() => "缺少工厂供应商成本记录"))];
   const reminderCount = completeness.supplier?.reminders?.length || 0;
-  const targetHtml = targets.length
-    ? targets.map((target) => missingDocumentButton(order, target)).join("")
-    : labels.map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`).join("");
+  const targetHtml = [
+    ...(targets.length
+      ? targets.map((target) => missingDocumentButton(order, target))
+      : labels
+        .filter((label) => !factoryCostMissingLabels.includes(label))
+        .map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`)),
+    ...factoryCostMissingLabels.map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`),
+  ].join("");
   return `<div class="missing-docs tax-missing-docs">缺失：<span class="missing-doc-actions">${targetHtml}</span>${reminderCount ? `<small>${reminderCount} 项已超过 3 天</small>` : ""}</div>`;
 }
 
@@ -2230,7 +2250,7 @@ function renderTaxRefund() {
         <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
         <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
-        <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</td>
+        <td>${supplierCompletenessBadge(completeness.supplier)}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -2474,7 +2494,7 @@ function renderTaxRefundDetail() {
   body.innerHTML = `
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
-      <div><span>供应商资料</span>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</div>
+      <div><span>供应商资料</span>${supplierCompletenessBadge(completeness.supplier)}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
@@ -2491,7 +2511,7 @@ function renderTaxRefundDetail() {
             ${constants.supplierDocumentTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "SUPPLIER", supplierId: supplier.supplierId })).join("")}
           </div>
         </div>
-      `).join("") : `<div class="empty-state subtle">无工厂供应商资料要求。</div>`}
+      `).join("") : `<div class="empty-state subtle">请先在成本管理中录入工厂货款，并选择工厂供应商；系统将按供应商生成采购合同和增值税发票上传要求。</div>`}
     </section>
   `;
   applyAccessControl();
@@ -2762,7 +2782,7 @@ function supplierById(id) {
 }
 
 function factoryCostSupplierMismatches(costType, items = []) {
-  if (costType !== "工厂货款") return [];
+  if (!["工厂货款", "原材料货款", "采购货款", "产品货款"].includes(costType)) return [];
   return items.map((item) => ({
     item,
     supplier: supplierById(item.supplierId),
