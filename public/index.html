@@ -282,12 +282,11 @@
               <label><span>币种 *</span><select id="order-currency" required></select></label>
               <div class="form-field rate-field">
                 <span>汇率 *</span>
-                <div class="rate-input-row">
+                <div class="rate-input-row exchange-rate-field">
                   <input id="order-rate" type="number" min="0" step="0.0001" required />
                   <button class="secondary-button rate-refresh" data-rate-refresh="order" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
-                  <small class="rate-meta" id="order-rate-meta">待获取</small>
-                  <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover" id="order-rate-details">来源：待获取<br>类型：现汇买入价<br>更新时间：-</div></details>
                 </div>
+                <small class="rate-meta exchange-rate-meta" id="order-rate-meta">汇率来源：待获取</small>
                 <input id="order-rate-date" type="hidden" />
                 <input id="order-rate-source" type="hidden" />
                 <input id="order-rate-type" type="hidden" />
@@ -332,12 +331,11 @@
                     <label><span>金额 *</span><input id="logistics-amount" type="number" min="0" step="0.01" /></label>
                     <div class="form-field rate-field">
                       <span>汇率 *</span>
-                      <div class="rate-input-row">
+                      <div class="rate-input-row exchange-rate-field">
                         <input id="logistics-rate" type="number" min="0" step="0.0001" />
                         <button class="secondary-button rate-refresh" data-rate-refresh="logistics" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
-                        <small class="rate-meta" id="logistics-rate-meta">待获取</small>
-                        <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover" id="logistics-rate-details">来源：待获取<br>类型：现汇买入价<br>更新时间：-</div></details>
                       </div>
+                      <small class="rate-meta exchange-rate-meta" id="logistics-rate-meta">汇率来源：待获取</small>
                       <input id="logistics-rate-date" type="hidden" />
                       <input id="logistics-rate-source" type="hidden" />
                       <input id="logistics-rate-type" type="hidden" />
@@ -373,12 +371,11 @@
               <label><span>币种</span><select id="payment-currency"></select></label>
               <div class="form-field rate-field">
                 <span>汇率 *</span>
-                <div class="rate-input-row">
+                <div class="rate-input-row exchange-rate-field">
                   <input id="payment-rate" type="number" min="0" step="0.0001" required />
                   <button class="secondary-button rate-refresh" data-rate-refresh="payment" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
-                  <small class="rate-meta" id="payment-rate-meta">待获取</small>
-                  <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover" id="payment-rate-details">来源：待获取<br>类型：现汇买入价<br>更新时间：-</div></details>
                 </div>
+                <small class="rate-meta exchange-rate-meta" id="payment-rate-meta">汇率来源：待获取</small>
                 <input id="payment-rate-date" type="hidden" />
                 <input id="payment-rate-source" type="hidden" />
                 <input id="payment-rate-type" type="hidden" />

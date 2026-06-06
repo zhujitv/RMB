@@ -355,19 +355,10 @@ function rateDateFor(prefix) {
 
 function rateMetaText(data = {}) {
   const source = data.exchangeRateSource || data.source || "待获取";
-  const date = data.exchangeRateDate || data.rateDate || today();
-  return `${source} · ${date}`;
-}
-
-function rateDetailHtml(data = {}) {
-  const source = data.exchangeRateSource || data.source || "待获取";
+  if (!source || source === "待获取") return "汇率来源：待获取";
   const date = data.exchangeRateDate || data.rateDate || today();
   const type = data.exchangeRateType || data.rateType || state.exchangeRateSettings.rateType;
-  return [
-    `来源：${escapeHtml(source)}`,
-    `类型：${escapeHtml(type)}`,
-    `更新时间：${escapeHtml(date)}`,
-  ].join("<br>");
+  return `来源：${source} ｜ 类型：${type} ｜ 更新时间：${date}`;
 }
 
 function applyRateEditability() {
@@ -405,7 +396,6 @@ function setRateSnapshot(prefix, quote = {}) {
   if (sourceInput) sourceInput.value = quote.source || quote.exchangeRateSource || "";
   if (typeInput) typeInput.value = quote.rateType || quote.exchangeRateType || state.exchangeRateSettings.rateType;
   const meta = $(`#${prefix}-rate-meta`);
-  const details = $(`#${prefix}-rate-details`);
   if (meta) {
     meta.textContent = rateMetaText({
       exchangeRateSource: sourceInput?.value,
@@ -413,13 +403,6 @@ function setRateSnapshot(prefix, quote = {}) {
       exchangeRateType: typeInput?.value,
     });
     meta.classList.toggle("warning", Boolean(quote.message || quote.isFallbackDate));
-  }
-  if (details) {
-    details.innerHTML = rateDetailHtml({
-      exchangeRateSource: sourceInput?.value,
-      exchangeRateDate: dateInput?.value,
-      exchangeRateType: typeInput?.value,
-    });
   }
 }
 
@@ -429,22 +412,13 @@ function clearRateSnapshot(prefix) {
   const sourceInput = $(`#${prefix}-rate-source`);
   const typeInput = $(`#${prefix}-rate-type`);
   const meta = $(`#${prefix}-rate-meta`);
-  const details = $(`#${prefix}-rate-details`);
   if (rateInput) rateInput.value = "";
   if (dateInput) dateInput.value = "";
   if (sourceInput) sourceInput.value = "";
   if (typeInput) typeInput.value = "";
   if (meta) {
-    meta.textContent = "待获取";
+    meta.textContent = "汇率来源：待获取";
     meta.classList.remove("warning");
-  }
-  if (details) {
-    details.innerHTML = rateDetailHtml({
-      exchangeRateSource: "待获取",
-      exchangeRateDate: "-",
-      exchangeRateType: state.exchangeRateSettings.rateType,
-    });
-    details.closest("details")?.removeAttribute("open");
   }
 }
 
@@ -457,12 +431,6 @@ function markManualRate(prefix) {
   if (typeInput && !typeInput.value) typeInput.value = state.exchangeRateSettings.rateType;
   const meta = $(`#${prefix}-rate-meta`);
   if (meta) meta.textContent = rateMetaText({
-    exchangeRateSource: "手动",
-    exchangeRateDate: dateInput?.value,
-    exchangeRateType: typeInput?.value,
-  });
-  const details = $(`#${prefix}-rate-details`);
-  if (details) details.innerHTML = rateDetailHtml({
     exchangeRateSource: "手动",
     exchangeRateDate: dateInput?.value,
     exchangeRateType: typeInput?.value,
@@ -516,7 +484,6 @@ function setCostRowRateSnapshot(row, quote = {}) {
   row.querySelector(".cost-item-rate-source").value = quote.source || quote.exchangeRateSource || "";
   row.querySelector(".cost-item-rate-type").value = quote.rateType || quote.exchangeRateType || state.exchangeRateSettings.rateType;
   const meta = row.querySelector(".cost-item-rate-meta");
-  const details = row.querySelector(".cost-item-rate-details");
   if (meta) {
     meta.textContent = rateMetaText({
       exchangeRateSource: row.querySelector(".cost-item-rate-source").value,
@@ -524,13 +491,6 @@ function setCostRowRateSnapshot(row, quote = {}) {
       exchangeRateType: row.querySelector(".cost-item-rate-type").value,
     });
     meta.classList.toggle("warning", Boolean(quote.message || quote.isFallbackDate));
-  }
-  if (details) {
-    details.innerHTML = rateDetailHtml({
-      exchangeRateSource: row.querySelector(".cost-item-rate-source").value,
-      exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
-      exchangeRateType: row.querySelector(".cost-item-rate-type").value,
-    });
   }
 }
 
@@ -557,11 +517,6 @@ function markCostRowManualRate(row) {
   if (!row.querySelector(".cost-item-rate-date").value) row.querySelector(".cost-item-rate-date").value = rateDateFor("cost");
   if (!row.querySelector(".cost-item-rate-type").value) row.querySelector(".cost-item-rate-type").value = state.exchangeRateSettings.rateType;
   row.querySelector(".cost-item-rate-meta").textContent = rateMetaText({
-    exchangeRateSource: "手动",
-    exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
-    exchangeRateType: row.querySelector(".cost-item-rate-type").value,
-  });
-  row.querySelector(".cost-item-rate-details").innerHTML = rateDetailHtml({
     exchangeRateSource: "手动",
     exchangeRateDate: row.querySelector(".cost-item-rate-date").value,
     exchangeRateType: row.querySelector(".cost-item-rate-type").value,
@@ -2867,12 +2822,11 @@ function costItemRow(item = {}) {
       <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
       <div class="form-field rate-field">
         <span>汇率 *</span>
-        <div class="rate-input-row">
+        <div class="rate-input-row exchange-rate-field">
           <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(normalizedItem.exchangeRate ?? "")}" ${currency === "CNY" ? "readonly" : ""} />
           <button class="secondary-button rate-refresh cost-item-rate-refresh" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
-          <small class="rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(normalizedItem))}</small>
-          <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover cost-item-rate-details">${rateDetailHtml(normalizedItem)}</div></details>
         </div>
+        <small class="rate-meta exchange-rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(normalizedItem))}</small>
         <input class="cost-item-rate-date" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateDate || "")}" />
         <input class="cost-item-rate-source" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateSource || "")}" />
         <input class="cost-item-rate-type" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateType || state.exchangeRateSettings.rateType)}" />
@@ -4110,13 +4064,7 @@ function resetForm(name) {
     $("#payment-rate-date").value = "";
     $("#payment-rate-source").value = "";
     $("#payment-rate-type").value = "";
-    $("#payment-rate-meta").textContent = "待获取";
-    $("#payment-rate-details").innerHTML = rateDetailHtml({
-      exchangeRateSource: "待获取",
-      exchangeRateDate: "-",
-      exchangeRateType: state.exchangeRateSettings.rateType,
-    });
-    $("#payment-rate-details")?.closest("details")?.removeAttribute("open");
+    $("#payment-rate-meta").textContent = "汇率来源：待获取";
     $("#payment-type").value = "尾款";
     updatePaymentDerived();
     if (state.me) applyRateFor("payment").catch(() => {});

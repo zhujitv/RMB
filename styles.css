@@ -953,14 +953,41 @@ textarea:focus {
 }
 
 .rate-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
 .rate-input-row {
-  display: grid;
-  grid-template-columns: minmax(78px, 1fr) 40px minmax(86px, 0.8fr) auto;
-  gap: 6px;
+  display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  grid-column: 1 / -1;
+  min-height: 40px;
+}
+
+.exchange-rate-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rate-input-row input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.exchange-rate-meta {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rate-input-row {
   min-height: 40px;
 }
 
@@ -978,54 +1005,22 @@ textarea:focus {
 .rate-meta {
   display: block;
   min-width: 0;
-  margin: 0;
+  margin: 4px 0 0;
   color: #999;
   font-size: 12px;
   line-height: 16px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.rate-meta::-webkit-scrollbar {
+  display: none;
 }
 
 .rate-meta.warning {
   color: #b45309;
-}
-
-.rate-details {
-  position: relative;
-  color: #667085;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.rate-details summary {
-  cursor: pointer;
-  list-style: none;
-  outline: none;
-}
-
-.rate-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.rate-details summary:hover {
-  color: #0f766e;
-}
-
-.rate-detail-popover {
-  position: absolute;
-  z-index: 20;
-  top: 26px;
-  right: 0;
-  min-width: 168px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  background: #f8fafc;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  color: #475467;
-  padding: 6px 8px;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .cost-items-block {
