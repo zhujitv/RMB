@@ -7,7 +7,20 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="login-screen" id="login-screen">
+      <div class="login-card">
+        <p class="login-company">浙江莱诺建材有限公司</p>
+        <h1>外贸应收款协同管理平台</h1>
+        <p class="login-copy">请登录后访问业务数据</p>
+        <form class="login-screen-form" id="login-screen-form" autocomplete="off">
+          <label><span>邮箱</span><input id="screen-login-email" data-login-email type="text" inputmode="email" autocomplete="email" required /></label>
+          <label><span>密码</span><input id="screen-login-password" data-login-password type="password" autocomplete="current-password" required /></label>
+          <button class="primary-button" type="submit">登录</button>
+        </form>
+      </div>
+    </section>
+
+    <div class="app-shell" id="app-shell" hidden>
       <aside class="sidebar" aria-label="系统导航">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">¥</div>
@@ -63,8 +76,8 @@
               <small id="modal-current-role">-</small>
             </div>
             <form class="login-form" id="login-modal-form" autocomplete="off">
-              <label><span>邮箱</span><input id="modal-login-email" data-login-email value="admin@example.com" /></label>
-              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" value="admin123456" /></label>
+              <label><span>邮箱</span><input id="modal-login-email" data-login-email type="text" inputmode="email" autocomplete="email" /></label>
+              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" autocomplete="current-password" /></label>
               <div class="login-actions">
                 <button class="primary-button" type="submit">登录</button>
                 <button class="secondary-button" id="modal-logout-button" type="button">退出登录</button>
@@ -251,11 +264,10 @@
 
         <section class="view-panel" id="settings-view">
           <div class="settings-grid">
-            <form class="entry-form" id="login-form" autocomplete="off">
-              <div class="form-header"><div><h3>用户登录</h3><p>默认管理员：admin@example.com / admin123456</p></div></div>
-              <div class="form-grid"><label><span>邮箱</span><input id="login-email" data-login-email value="admin@example.com" /></label><label><span>密码</span><input id="login-password" data-login-password type="password" value="admin123456" /></label></div>
-              <div class="form-actions"><button class="primary-button" type="submit">登录</button><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
-            </form>
+            <section class="entry-form account-session-panel" id="account-session-panel">
+              <div class="form-header"><div><h3>当前会话</h3><p id="settings-session-text">登录后按角色加载菜单和数据权限。</p></div></div>
+              <div class="form-actions"><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
+            </section>
             <form class="entry-form" id="exchange-rate-settings-form" autocomplete="off">
               <div class="form-header"><div><h3>汇率设置</h3></div><button class="secondary-button" id="refresh-exchange-rates" type="button">手动刷新今日汇率</button></div>
               <div class="form-grid">

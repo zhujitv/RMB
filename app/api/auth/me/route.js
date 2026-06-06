@@ -9,9 +9,5 @@ export async function GET(request) {
     roles: ROLES,
     permissions: rolePermissions(user),
     scopeText: roleScopeText(user?.role),
-    defaultLogin: {
-      email: "admin@example.com",
-      passwordHint: "admin123456",
-    },
   });
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiError, ensureDefaultUsers, hashPassword, publicUser } from "../../../../lib/platform-db";
+import { apiError, ensureDefaultUsers, hashPassword, normalizeEmail, publicUser } from "../../../../lib/platform-db";
 import { prisma } from "../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +8,10 @@ export async function POST(request) {
   try {
     await ensureDefaultUsers();
     const body = await request.json();
-    const email = String(body.email || "").trim();
+    const email = normalizeEmail(body.email);
     const passwordHash = hashPassword(body.password || "");
     const user = await prisma.user.findFirst({
-      where: { email, passwordHash, isActive: true },
+      where: { email: { equals: email, mode: "insensitive" }, passwordHash, isActive: true },
     });
     if (!user) {
       return NextResponse.json({ error: "邮箱或密码错误" }, { status: 401 });

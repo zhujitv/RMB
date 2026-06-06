@@ -534,13 +534,21 @@ function clearLocalCaches() {
   if ($("#installment-items")) $("#installment-items").innerHTML = "";
 }
 
+function setAuthenticatedShell(loggedIn) {
+  const loginScreen = $("#login-screen");
+  const appShell = $("#app-shell");
+  if (loginScreen) loginScreen.hidden = loggedIn;
+  if (appShell) appShell.hidden = !loggedIn;
+  document.body.classList.toggle("is-authenticated", loggedIn);
+  if (!loggedIn) closeLoginModal();
+}
+
 function handleAuthExpired(message = "登录已过期，请重新登录") {
   state.me = null;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "dashboard";
   clearLocalCaches();
-  renderAll();
-  openLoginModal();
+  setAuthenticatedShell(false);
   toast(message);
 }
 
@@ -793,7 +801,12 @@ async function loadMe() {
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
   $("#modal-current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "-";
-  return Boolean(state.me);
+  if ($("#settings-session-text")) {
+    $("#settings-session-text").textContent = state.me ? `${state.me.name} · ${state.me.role} · ${scopeText()}` : "请登录后访问业务数据。";
+  }
+  const loggedIn = Boolean(state.me);
+  setAuthenticatedShell(loggedIn);
+  return loggedIn;
 }
 
 async function loadData() {
@@ -802,8 +815,7 @@ async function loadData() {
     if (!loggedIn) {
       state.view = "dashboard";
       clearLocalCaches();
-      renderAll();
-      openLoginModal();
+      setAuthenticatedShell(false);
       return;
     }
     const [data, availableData, rateSettings] = await Promise.all([
@@ -1881,7 +1893,7 @@ async function submitUser(event) {
   try {
     const data = {
       name: $("#user-name").value,
-      email: $("#user-email").value,
+      email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
       password: $("#user-password").value,
     };
@@ -2167,7 +2179,8 @@ async function deleteRecord(kind, id) {
 
 function switchView(view, options = {}) {
   if (!state.me) {
-    openLoginModal();
+    setAuthenticatedShell(false);
+    $("#screen-login-email")?.focus();
     return false;
   }
   if (!canView(view)) {
@@ -2205,6 +2218,11 @@ function exportReport(type) {
 }
 
 function openLoginModal() {
+  if (!state.me) {
+    setAuthenticatedShell(false);
+    $("#screen-login-email")?.focus();
+    return;
+  }
   const modal = $("#login-modal");
   if (!modal) return;
   modal.hidden = false;
@@ -2222,8 +2240,8 @@ function closeLoginModal() {
 
 function loginPayloadFromForm(form) {
   return {
-    email: form.querySelector("[data-login-email]")?.value || $("#login-email")?.value || "",
-    password: form.querySelector("[data-login-password]")?.value || $("#login-password")?.value || "",
+    email: String(form.querySelector("[data-login-email]")?.value || "").trim().toLowerCase(),
+    password: form.querySelector("[data-login-password]")?.value || "",
   };
 }
 
@@ -2232,9 +2250,8 @@ async function logoutCurrentUser() {
   state.me = null;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   clearLocalCaches();
-  renderAll();
   closeLoginModal();
-  openLoginModal();
+  setAuthenticatedShell(false);
   toast("已退出");
 }
 
@@ -2260,9 +2277,9 @@ function bindEvents() {
   $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
   $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
-  $("#login-form").addEventListener("submit", submitLogin);
+  $("#login-screen-form")?.addEventListener("submit", submitLogin);
   $("#login-modal-form").addEventListener("submit", submitLogin);
-  $("#logout-button").addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
+  $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
   $("#modal-logout-button").addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
 
   ["order", "payment", "cost", "customer", "supplier", "user"].forEach((name) => {
@@ -2436,6 +2453,7 @@ function initSelects() {
 async function init() {
   initSelects();
   bindEvents();
+  setAuthenticatedShell(false);
   resetForm("order");
   resetForm("payment");
   resetCostForm({ clearStoredDraft: false, reloadOrders: false });
