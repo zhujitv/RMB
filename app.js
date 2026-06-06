@@ -1276,6 +1276,17 @@ function documentTypeLabel(type) {
   return constants.allDocumentTypes.find((item) => item.value === type)?.label || type || "-";
 }
 
+function missingSupplierDocumentLabel(type) {
+  return type === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票";
+}
+
+function costsForOrder(orderId) {
+  const rows = new Map();
+  state.costs.filter((cost) => cost.orderId === orderId).forEach((cost) => rows.set(cost.id, cost));
+  (orderById(orderId)?.costs || []).forEach((cost) => rows.set(cost.id, { ...cost, orderId }));
+  return [...rows.values()];
+}
+
 function taxStatusLabel(status) {
   return constants.taxRefundStatuses.find((item) => item.value === status)?.label || status || "-";
 }
@@ -1399,7 +1410,7 @@ function renderDocumentGrid(order) {
       </div>
     `).join("") : `<div class="order-search-empty">未上传${escapeHtml(type.label)}</div>`;
     return `
-      <article class="document-card">
+      <article class="document-card" data-document-upload-card="true" data-order-id="${escapeHtml(order.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
           <strong>${escapeHtml(type.label)}</strong>
           ${canReadArea("taxRefund") ? `<a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>` : ""}
@@ -1487,7 +1498,7 @@ function supplierDocumentCell(cost) {
           </div>
         `).join("") : `<small class="missing-docs">未上传</small>`;
         return `
-          <div class="supplier-doc-item">
+          <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
             <div class="supplier-doc-head">
               <strong>${escapeHtml(type.label)}</strong>
               <span class="status ${successCount ? "success" : "danger"}">${successCount ? "已上传" : "缺失"}</span>
@@ -1581,11 +1592,51 @@ function completenessBadge(part = {}, completeOverride = null, emptyText = "") {
   return `<span class="tax-completeness ${stateClass}">${escapeHtml(completenessText(part))}</span>`;
 }
 
-function taxMissingHtml(completeness = {}) {
+function missingDocumentTargets(order = {}) {
+  const completeness = order.documentCompleteness || {};
+  const exportTargets = (completeness.export?.missingTypes || []).map((type) => ({
+    module: "order",
+    documentType: type,
+    label: documentTypeLabel(type),
+  }));
+  const supplierTargets = [];
+  const seenSupplierTypes = new Set();
+  (completeness.supplier?.missing || []).forEach((item) => {
+    if (!item.documentType || seenSupplierTypes.has(item.documentType)) return;
+    seenSupplierTypes.add(item.documentType);
+    supplierTargets.push({
+      module: "supplier",
+      documentType: item.documentType,
+      supplierId: item.supplierId || "",
+      label: missingSupplierDocumentLabel(item.documentType),
+      title: item.supplierName ? `${item.supplierName}${missingSupplierDocumentLabel(item.documentType)}` : missingSupplierDocumentLabel(item.documentType),
+    });
+  });
+  return [...exportTargets, ...supplierTargets];
+}
+
+function missingDocumentButton(order, target) {
+  return `
+    <button class="missing-doc-button" type="button"
+      data-missing-document="true"
+      data-missing-module="${escapeHtml(target.module)}"
+      data-missing-order-id="${escapeHtml(order.id)}"
+      data-missing-document-type="${escapeHtml(target.documentType)}"
+      data-missing-supplier-id="${escapeHtml(target.supplierId || "")}"
+      title="${escapeHtml(target.title || target.label)}">${escapeHtml(target.label)}</button>
+  `;
+}
+
+function taxMissingHtml(order = {}) {
+  const completeness = order.documentCompleteness || {};
   const labels = completeness.missingLabels || [];
   if (!labels.length) return `<small class="positive-note">资料完整</small>`;
+  const targets = missingDocumentTargets(order);
   const reminderCount = completeness.supplier?.reminders?.length || 0;
-  return `<small class="missing-docs">缺失：${escapeHtml(labels.join("、"))}${reminderCount ? `；${reminderCount} 项已超过 3 天` : ""}</small>`;
+  const targetHtml = targets.length
+    ? targets.map((target) => missingDocumentButton(order, target)).join("")
+    : labels.map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`).join("");
+  return `<div class="missing-docs tax-missing-docs">缺失：<span class="missing-doc-actions">${targetHtml}</span>${reminderCount ? `<small>${reminderCount} 项已超过 3 天</small>` : ""}</div>`;
 }
 
 function permissionModeLabel(mode) {
@@ -1654,7 +1705,7 @@ function renderTaxRefund() {
         <td>${money(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0)}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0, "无工厂供应商资料要求")}</td>
-        <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(completeness)}</td>
+        <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(order)}</td>
         <td>${statusControl}</td>
         <td class="row-actions"><a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a></td>
       </tr>
@@ -2886,6 +2937,105 @@ function switchView(view, options = {}) {
   return true;
 }
 
+function openAncestorDetails(element) {
+  let details = element?.closest("details");
+  while (details) {
+    details.open = true;
+    details = details.parentElement?.closest("details");
+  }
+}
+
+function highlightUploadArea(element) {
+  if (!element) {
+    toast("未找到对应上传区域");
+    return;
+  }
+  openAncestorDetails(element);
+  element.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  element.classList.add("upload-target-highlight");
+  setTimeout(() => element.classList.remove("upload-target-highlight"), 2000);
+}
+
+function deferHighlightUploadArea(findElement) {
+  requestAnimationFrame(() => {
+    setTimeout(() => highlightUploadArea(findElement()), 80);
+  });
+}
+
+function findOrderDocumentUploadCard(orderId, documentType) {
+  return $$("[data-document-upload-card]").find((element) => (
+    element.dataset.orderId === orderId && element.dataset.documentType === documentType
+  ));
+}
+
+function showOrderDocumentArea(orderId) {
+  const order = orderById(orderId);
+  if (!order) {
+    toast("未找到对应应收订单");
+    return false;
+  }
+  if (!canView("orders")) {
+    toast("没有权限进入应收订单模块");
+    return false;
+  }
+  if (canWriteArea("orders")) {
+    editOrder(orderId);
+    return true;
+  }
+  if (!switchView("orders", { preserveOrderForm: true, skipOrderConfirm: true })) return false;
+  $("#order-id").value = order.id;
+  renderOrderDetails();
+  return true;
+}
+
+function focusOrderMissingDocument(orderId, documentType) {
+  if (!showOrderDocumentArea(orderId)) return;
+  deferHighlightUploadArea(() => findOrderDocumentUploadCard(orderId, documentType));
+}
+
+function successfulCostDocument(cost, documentType) {
+  return costDocumentRowsForType(cost, documentType).some((document) => document.uploadStatus === "SUCCESS");
+}
+
+function findMissingSupplierCost(orderId, supplierId, documentType) {
+  const candidates = costsForOrder(orderId).filter((cost) => (
+    cost.supplierId === supplierId && taxRefundSupplierRequired(cost)
+  ));
+  return candidates.find((cost) => !successfulCostDocument(cost, documentType)) || candidates[0] || null;
+}
+
+function findSupplierDocumentUploadItem(costId, documentType) {
+  return $$("[data-supplier-doc-item]").find((element) => (
+    element.dataset.costId === costId && element.dataset.documentType === documentType
+  ));
+}
+
+function focusSupplierMissingDocument(orderId, supplierId, documentType) {
+  const cost = findMissingSupplierCost(orderId, supplierId, documentType);
+  if (!cost) {
+    toast("未找到对应工厂供应商成本记录");
+    return;
+  }
+  if (!canView("costs")) {
+    toast("没有权限进入成本录入模块");
+    return;
+  }
+  if (!switchView("costs", { skipOrderConfirm: true })) return;
+  renderCosts();
+  deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType));
+}
+
+function focusMissingDocumentTarget(dataset = {}) {
+  const orderId = dataset.missingOrderId || "";
+  const documentType = dataset.missingDocumentType || "";
+  if (!orderId || !documentType) return;
+  if (dataset.missingModule === "supplier") {
+    focusSupplierMissingDocument(orderId, dataset.missingSupplierId || "", documentType);
+    return;
+  }
+  focusOrderMissingDocument(orderId, documentType);
+}
+
 async function openDashboardDetail(kind, value) {
   const text = String(value || "").trim();
   if (!text) return;
@@ -3067,6 +3217,11 @@ function bindEvents() {
   $("#tax-refund-table").addEventListener("change", (event) => {
     const select = event.target.closest("[data-tax-status-order]");
     if (select) updateTaxStatus(select.dataset.taxStatusOrder, select.value);
+  });
+  $("#tax-refund-table").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-missing-document]");
+    if (!button) return;
+    focusMissingDocumentTarget(button.dataset);
   });
   $("#cost-payment-date").addEventListener("change", () => {
     $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));

@@ -940,6 +940,50 @@ textarea:focus {
   color: #b54708;
 }
 
+.tax-missing-docs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.missing-doc-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.missing-doc-button,
+.missing-doc-chip {
+  border: 1px solid #fecdca;
+  background: #fff7f5;
+  color: #b42318;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.missing-doc-button {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.missing-doc-button:hover {
+  border-color: #f97066;
+  background: #fee4e2;
+}
+
+.upload-target-highlight {
+  position: relative;
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.14);
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+  scroll-margin-top: 96px;
+}
+
 .order-search-option small,
 .order-search-helper,
 .order-search-empty {
