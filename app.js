@@ -1983,10 +1983,16 @@ function commissionActionCell(order) {
   if (order.commissionStatus === "已结算") {
     return `<small>结算人：${escapeHtml(order.commissionSettledByName || "-")}<br>时间：${order.commissionSettledAt ? new Date(order.commissionSettledAt).toLocaleString("zh-CN") : "-"}</small>`;
   }
-  if (order.summary?.commissionCanSettle) {
+  if (order.summary?.commissionCanSettle && Number(order.summary.commissionAmountCny || 0) > 0) {
     return `<button data-settle-commission="${escapeHtml(order.id)}" type="button">结算提成</button>`;
   }
   return "";
+}
+
+function commissionAmountHint(order) {
+  if (order.commissionStatus === "已结算") return "已结算";
+  if (order.summary?.commissionCanSettle) return "可结算";
+  return order.commissionStatus || "预计";
 }
 
 function renderProfit() {
@@ -2008,7 +2014,7 @@ function renderProfit() {
         <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.logisticsCostCny || 0)}</td>
         <td>${money(order.summary.commissionBaseCny || 0)}</td>
-        <td>${money(order.summary.commissionAmountCny || order.summary.estimatedCommissionCny || 0)}<small>${order.summary.commissionCanSettle ? "可结算" : "预计"}</small></td>
+        <td>${money(order.summary.commissionAmountCny || order.summary.estimatedCommissionCny || 0)}<small>${escapeHtml(commissionAmountHint(order))}</small></td>
         <td><span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span></td>
         <td>${money(order.summary.receivableCny)}</td>
         <td>${money(order.summary.outstandingCny)}</td>
@@ -3556,7 +3562,23 @@ async function settleCommission(orderId) {
   if (!canWriteArea("commissions")) return toast("没有权限结算业务员提成");
   const order = state.orders.find((item) => item.id === orderId);
   if (!order) return toast("未找到对应订单");
-  const remark = prompt(`确认结算订单 ${order.orderNo} 的业务员提成？\n可填写结算备注（可留空）：`, "") ?? "";
+  const summary = order.summary || {};
+  const paidAmount = Number(summary.arrivedPaymentsCny || 0);
+  const logisticsCost = Number(summary.confirmedLogisticsCostCny || summary.logisticsCostCny || 0);
+  const commissionBase = Number(summary.settleableCommissionBaseCny ?? Math.max(paidAmount - logisticsCost, 0));
+  const commissionRate = Number(summary.commissionRate ?? order.salespersonCommissionRate ?? 0);
+  const commissionAmount = Number(summary.commissionAmountCny || summary.settleableCommissionCny || 0);
+  const confirmed = confirm([
+    "确认结算业务员提成？",
+    `订单号：${order.orderNo}`,
+    `已到账：${money(paidAmount)}`,
+    `已确认物流成本：${money(logisticsCost)}`,
+    `提成基数：${money(commissionBase)}`,
+    `提成比例：${commissionRate.toFixed(2)}%`,
+    `应结算提成：${money(commissionAmount)}`,
+  ].join("\n"));
+  if (!confirmed) return;
+  const remark = "";
   try {
     await api(`/api/commissions/${orderId}/settle`, {
       method: "POST",
