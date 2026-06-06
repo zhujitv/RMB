@@ -36,6 +36,7 @@
           <button class="nav-tab" data-view="payments" type="button"><span>↙</span>收款登记</button>
           <button class="nav-tab" data-view="costs" type="button"><span>↗</span>成本录入</button>
           <button class="nav-tab" data-view="profit" type="button"><span>％</span>利润分析</button>
+          <button class="nav-tab" data-view="taxRefund" type="button"><span>☰</span>退税资料管理</button>
           <button class="nav-tab" data-view="reports" type="button"><span>≋</span>报表导出</button>
           <button class="nav-tab" data-view="settings" type="button"><span>⚙</span>系统设置</button>
         </nav>
@@ -169,6 +170,45 @@
             </div>
             <div class="form-actions"><button class="primary-button" id="order-submit-button" type="submit">保存应收订单</button></div>
           </form>
+          <section class="panel order-detail-panel" id="order-detail-panel" hidden>
+            <div class="panel-title"><h3>订单详情资料</h3><span id="order-detail-title">请先编辑或保存订单</span></div>
+            <div class="detail-grid">
+              <section class="detail-block">
+                <div class="cost-items-title"><strong>物流费用</strong><span id="logistics-count">0 条</span></div>
+                <form class="compact-form" id="logistics-form" autocomplete="off">
+                  <input type="hidden" id="logistics-id" />
+                  <div class="form-grid">
+                    <label><span>费用类型</span><select id="logistics-type"></select></label>
+                    <label><span>供应商名称 *</span><input id="logistics-supplier" required /></label>
+                    <label><span>币种 *</span><select id="logistics-currency"></select></label>
+                    <label><span>金额 *</span><input id="logistics-amount" type="number" min="0" step="0.01" /></label>
+                    <div class="form-field rate-field">
+                      <span>汇率 *</span>
+                      <div class="rate-input-row">
+                        <input id="logistics-rate" type="number" min="0" step="0.0001" />
+                        <button class="secondary-button rate-refresh" data-rate-refresh="logistics" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
+                        <small class="rate-meta" id="logistics-rate-meta">待获取</small>
+                        <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover" id="logistics-rate-details">来源：待获取<br>类型：现汇买入价<br>更新时间：-</div></details>
+                      </div>
+                      <input id="logistics-rate-date" type="hidden" />
+                      <input id="logistics-rate-source" type="hidden" />
+                      <input id="logistics-rate-type" type="hidden" />
+                    </div>
+                    <label><span>折人民币金额</span><input id="logistics-amount-cny" disabled /></label>
+                    <label><span>是否已付款</span><select id="logistics-paid"><option value="false">未付款</option><option value="true">已付款</option></select></label>
+                    <label><span>发票状态</span><select id="logistics-invoice-status"></select></label>
+                    <label class="wide"><span>备注</span><textarea id="logistics-remark" rows="2"></textarea></label>
+                  </div>
+                  <div class="form-actions"><button class="primary-button" id="logistics-submit-button" type="submit">保存物流费用</button></div>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>类型</th><th>供应商</th><th>金额</th><th>折人民币</th><th>付款</th><th>发票</th><th>备注</th><th>操作</th></tr></thead><tbody id="logistics-table"></tbody></table></div>
+              </section>
+              <section class="detail-block">
+                <div class="cost-items-title"><strong>出口单证管理</strong><span id="document-completeness">-</span></div>
+                <div class="document-grid" id="document-grid"></div>
+              </section>
+            </div>
+          </section>
           <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>付款条款</th><th>到期日</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
         </section>
 
@@ -246,6 +286,13 @@
 
         <section class="view-panel" id="profit-view">
           <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>业务员</th><th>付款条款</th><th>到期日</th><th>应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收款</th><th>未收款</th><th>总成本</th><th>预计毛利</th><th>实际毛利</th><th>毛利率</th><th>成本结构</th><th>收款状态</th><th>逾期状态</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
+        </section>
+
+        <section class="view-panel" id="taxRefund-view">
+          <section class="panel">
+            <div class="panel-title"><h3>退税资料管理</h3><span id="tax-refund-count">0 个订单</span></div>
+            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户名称</th><th>提单日期</th><th>币种</th><th>最终应收金额</th><th>已收金额</th><th>单证完整度</th><th>退税状态</th><th>操作</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
+          </section>
         </section>
 
         <section class="view-panel" id="reports-view">
