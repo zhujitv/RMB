@@ -87,6 +87,13 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.login-platform-code {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .login-copy {
   margin: 10px 0 24px;
   color: var(--muted);
