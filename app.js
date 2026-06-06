@@ -1044,7 +1044,7 @@ function applyAccessControl() {
   setHidden("[data-export='payments']", !canUseReports || !canReadArea("payments"));
   setHidden("[data-export='costs']", !canUseReports || !canReadArea("costs"));
   setHidden("[data-export='orders'], [data-export='profit'], [data-export='reminders']", !canUseReports || !canReadArea("orders"));
-  setHidden("[data-export='commissions']", !canUseReports || !canReadArea("commissions"));
+  setHidden("[data-export='commissions'], [data-export='commissions-xlsx']", !canUseReports || !canReadArea("commissions"));
   applyRateEditability();
 }
 

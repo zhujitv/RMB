@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import { apiError, assertRead, getActor, getOverview, getReminders, listCosts, listOrders, listPayments } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
@@ -7,14 +8,80 @@ function csvCell(value) {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+function columnValue(column, row) {
+  return typeof column.value === "function" ? column.value(row) : row[column.value];
+}
+
 function csvResponse(filename, columns, rows) {
   const header = columns.map((column) => csvCell(column.label)).join(",");
   const body = rows
-    .map((row) => columns.map((column) => csvCell(typeof column.value === "function" ? column.value(row) : row[column.value])).join(","))
+    .map((row) => columns.map((column) => csvCell(columnValue(column, row))).join(","))
     .join("\n");
   return new Response(`\ufeff${header}\n${body}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
+}
+
+function xmlCell(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function excelColumnName(index) {
+  let value = index + 1;
+  let name = "";
+  while (value > 0) {
+    const mod = (value - 1) % 26;
+    name = String.fromCharCode(65 + mod) + name;
+    value = Math.floor((value - mod) / 26);
+  }
+  return name;
+}
+
+async function xlsxResponse(filename, columns, rows) {
+  const values = [
+    columns.map((column) => column.label),
+    ...rows.map((row) => columns.map((column) => columnValue(column, row))),
+  ];
+  const sheetData = values.map((row, rowIndex) => `
+    <row r="${rowIndex + 1}">
+      ${row.map((cell, colIndex) => `<c r="${excelColumnName(colIndex)}${rowIndex + 1}" t="inlineStr"><is><t>${xmlCell(cell)}</t></is></c>`).join("")}
+    </row>
+  `).join("");
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`);
+  zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`);
+  zip.folder("xl").file("workbook.xml", `<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="业务员提成报表" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`);
+  zip.folder("xl").folder("_rels").file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`);
+  zip.folder("xl").folder("worksheets").file("sheet1.xml", `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>${sheetData}</sheetData>
+</worksheet>`);
+  const body = await zip.generateAsync({ type: "uint8array" });
+  return new Response(body, {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
@@ -99,9 +166,9 @@ export async function GET(request) {
     }
 
     const rows = await listOrders(query, actor);
-    if (type === "commissions") {
+    if (type === "commissions" || type === "commissions-xlsx") {
       assertRead(actor, "commissions");
-      return csvResponse("salesperson-commissions.csv", [
+      const columns = [
         { label: "订单号", value: "orderNo" },
         { label: "客户名称", value: "customerName" },
         { label: "业务员", value: "salespersonName" },
@@ -114,7 +181,9 @@ export async function GET(request) {
         { label: "结算人", value: "commissionSettledByName" },
         { label: "结算时间", value: "commissionSettledAt" },
         { label: "结算备注", value: "commissionSettlementRemark" },
-      ], rows);
+      ];
+      if (type === "commissions-xlsx") return xlsxResponse("salesperson-commissions.xlsx", columns, rows);
+      return csvResponse("salesperson-commissions.csv", columns, rows);
     }
     const columns = [
       { label: "订单号", value: "orderNo" },
