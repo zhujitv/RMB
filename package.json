@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
@@ -13,14 +13,14 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.726.0",
-    "@aws-sdk/s3-request-presigner": "^3.726.0",
+    "@aws-sdk/client-s3": "3.726.0",
+    "@aws-sdk/s3-request-presigner": "3.726.0",
     "@prisma/client": "6.19.3",
-    "bcryptjs": "^3.0.3",
-    "jszip": "^3.10.1",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "bcryptjs": "3.0.3",
+    "jszip": "3.10.1",
+    "next": "16.2.7",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "prisma": "6.19.3"

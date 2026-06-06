@@ -184,7 +184,7 @@ const roleReads = {
   业务员: ["customers", "orders", "payments", "costs", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
-  查看者: ["orders", "payments", "costs", "documents", "reports"],
+  查看者: ["orders", "payments", "costs", "reports"],
 };
 
 const $ = (selector) => document.querySelector(selector);

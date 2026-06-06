@@ -1,17 +1,27 @@
-import { apiError, ok, refreshExchangeRatesForDate } from "../../../../lib/platform-db";
+import { apiError, assertCronSecret, getCronActor, ok, refreshExchangeRatesForDate, writeAudit } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
-    const secret = process.env.CRON_SECRET;
-    if (process.env.NODE_ENV === "production" && !secret) {
-      return Response.json({ error: "CRON_SECRET 未配置" }, { status: 403 });
+    assertCronSecret(request);
+    const actor = await getCronActor();
+    if (!actor) {
+      const error = new Error("没有可用于执行定时任务的管理员账号");
+      error.status = 500;
+      throw error;
     }
-    if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return ok(await refreshExchangeRatesForDate());
+    const result = await refreshExchangeRatesForDate();
+    await writeAudit(
+      request,
+      actor,
+      result.ok ? "自动更新汇率" : "自动更新汇率失败",
+      "exchange_rates",
+      result.rateDate,
+      null,
+      result,
+    );
+    return ok(result);
   } catch (error) {
     return apiError(error, "自动更新汇率失败");
   }

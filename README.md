@@ -273,15 +273,9 @@ ZIP 文件名：
 
 ### 初始密码
 
-默认管理员和管理员新建用户时使用 8 位数字初始密码：
+生产环境不提供固定默认管理员和固定默认密码。
 
-```text
-12345678
-```
-
-管理员新建用户时，如果“初始/新密码”留空，系统会自动使用该默认初始密码。默认初始密码可通过 `DEFAULT_INITIAL_PASSWORD` 环境变量修改，但必须是 8 位数字。
-
-所有初始密码账号登录后应立即修改密码。系统会对管理员重置密码后的用户强制首次改密。
+管理员新建用户时必须填写“初始/新密码”，禁止留空使用统一默认密码。管理员重置密码后，系统会强制该用户首次登录修改密码。
 
 ## 数据库
 
@@ -306,13 +300,14 @@ Vercel 需要配置：
 
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
-CRON_SECRET="change-me"
+CRON_SECRET="use-a-long-random-secret"
 BCRYPT_COST="12"
 REMINDER_WEBHOOK_URL=""
-INITIAL_ADMIN_NAME="系统管理员"
-INITIAL_ADMIN_EMAIL="admin@example.com"
-INITIAL_ADMIN_PASSWORD="12345678"
-DEFAULT_INITIAL_PASSWORD="12345678"
+
+# 可选：仅用于空数据库引导管理员。生产环境禁止使用 admin@example.com、12345678、admin123456、password。
+INITIAL_ADMIN_NAME=""
+INITIAL_ADMIN_EMAIL=""
+INITIAL_ADMIN_PASSWORD=""
 
 R2_ACCOUNT_ID="your-cloudflare-account-id"
 R2_ACCESS_KEY_ID="your-r2-access-key-id"
@@ -365,26 +360,13 @@ R2_ENDPOINT=https://your-s3-endpoint
 /api/cron/exchange-rates
 ```
 
-汇率任务每天自动拉取汇率并缓存到 `exchange_rates`。
+汇率任务每天自动拉取汇率并缓存到 `exchange_rates`。`/api/reminders/run` 和 `/api/cron/exchange-rates` 都必须携带 `Authorization: Bearer CRON_SECRET`，禁止使用 `change-me` 作为生产密钥。
 
 ## 默认账号
 
-首次部署后系统会创建默认管理员：
+系统不再提供 `admin@example.com / 12345678` 默认管理员。历史默认账号会在新迁移中被停用，生产环境请使用公司管理员邮箱创建或引导管理员账号。
 
-```text
-邮箱：admin@example.com
-密码：12345678
-```
-
-上线后请立即修改默认管理员密码，或创建新的管理员并停用默认账号。
-
-管理员新建用户时，如果“初始/新密码”留空，系统会使用默认 8 位初始密码：
-
-```text
-12345678
-```
-
-默认初始密码可通过环境变量 `DEFAULT_INITIAL_PASSWORD` 修改，必须设置为 8 位数字。所有默认初始密码登录后都应立即修改。
+如果需要空数据库引导管理员，请配置 `INITIAL_ADMIN_EMAIL` 和 `INITIAL_ADMIN_PASSWORD`，并确保不是公开默认值。引导账号首次登录必须修改密码。
 
 ## 本地开发
 
@@ -445,9 +427,14 @@ npm run db:deploy
 Vercel 构建时会自动执行：
 
 ```bash
-prisma migrate deploy
 prisma generate
 next build
+```
+
+数据库迁移必须在上线前单独执行：
+
+```bash
+npm run db:deploy
 ```
 
 ## 常用命令
