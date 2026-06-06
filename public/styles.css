@@ -45,6 +45,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .login-screen,
 .password-change-screen {
   display: grid;
@@ -91,6 +96,16 @@ button {
 .login-screen-form {
   display: grid;
   gap: 14px;
+}
+
+.form-error {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 9px 11px;
 }
 
 .login-screen-form .primary-button,

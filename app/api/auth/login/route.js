@@ -57,7 +57,11 @@ export async function POST(request) {
     }
     await recordLoginAttempt(request, email, true, user.id);
     const session = await createUserSession(request, user);
-    const response = NextResponse.json({ user: publicUser(user) });
+    const safeUser = publicUser(user);
+    const response = NextResponse.json({
+      user: safeUser,
+      mustChangePassword: Boolean(safeUser.mustChangePassword),
+    });
     setSessionCookie(response, session.token);
     return response;
   } catch (error) {

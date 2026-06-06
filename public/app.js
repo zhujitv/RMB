@@ -598,9 +598,55 @@ function needsAdminRateConfirmation(currency, exchangeRate) {
 
 function toast(message) {
   const box = $("#toast");
+  if (!box) {
+    console.error("Toast container is missing:", message);
+    return;
+  }
   box.textContent = message;
   box.classList.add("is-visible");
   setTimeout(() => box.classList.remove("is-visible"), 2800);
+}
+
+function formErrorElement(form) {
+  if (!form) return null;
+  const target = form.dataset?.errorTarget;
+  if (target) return $(`#${target}`);
+  return form.querySelector(".form-error");
+}
+
+function setFormError(form, message = "") {
+  const errorBox = formErrorElement(form);
+  if (!errorBox) return;
+  errorBox.textContent = message;
+  errorBox.hidden = !message;
+}
+
+function reportFrontendError(error, context = "操作失败", form = null) {
+  const message = error?.message || context;
+  console.error(context, error);
+  setFormError(form, message);
+  toast(message);
+}
+
+function bindOptional(selector, eventName, handler) {
+  const el = $(selector);
+  if (!el) {
+    console.error(`缺少页面元素，事件未绑定：${selector}`);
+    return null;
+  }
+  el.addEventListener(eventName, handler);
+  return el;
+}
+
+function installFrontendErrorBoundary() {
+  window.addEventListener("error", (event) => {
+    console.error("前端运行错误", event.error || event.message);
+    toast("页面脚本发生错误，请刷新后重试。");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("前端异步错误", event.reason);
+    toast("请求处理失败，请稍后重试。");
+  });
 }
 
 function canView(view) {
@@ -718,24 +764,50 @@ function handleAuthExpired(message = "登录已过期，请重新登录") {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch (error) {
+    console.error("API 网络请求失败", { path, error });
+    throw new Error("网络异常，请检查连接后重试。");
+  }
   const type = response.headers.get("content-type") || "";
-  const data = type.includes("application/json") ? await response.json() : await response.text();
+  let data;
+  try {
+    data = type.includes("application/json") ? await response.json() : await response.text();
+  } catch (error) {
+    console.error("API 响应解析失败", { path, status: response.status, error });
+    throw new Error("服务器响应异常，请稍后重试。");
+  }
   if (!response.ok) {
     if (response.status === 401) handleAuthExpired(data?.error || "登录已过期，请重新登录");
     if (data?.code === "PASSWORD_CHANGE_REQUIRED") {
       state.passwordChangeRequired = true;
       setAuthenticatedShell(true, true);
     }
-    throw new Error(data?.error || "API 请求失败");
+    console.error("API 请求失败", { path, status: response.status, error: data?.error || data });
+    throw new Error(apiErrorMessage(path, response, data));
   }
   return data;
+}
+
+function apiErrorMessage(path, response, data) {
+  if (data && typeof data === "object" && data.error) return data.error;
+  if (path.startsWith("/api/auth/login") && [404, 405, 501].includes(response.status)) {
+    return `登录接口不可用（${response.status}），当前页面可能由静态文件服务打开，请使用 Next.js 或 Vercel 地址访问系统。`;
+  }
+  if (response.status >= 500) return `服务器内部错误（${response.status}），请联系管理员查看部署日志。`;
+  if (typeof data === "string" && data.trim()) {
+    const plainText = data.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return plainText ? `请求失败（${response.status}）：${plainText.slice(0, 120)}` : `请求失败（${response.status}）`;
+  }
+  return `请求失败（${response.status}）`;
 }
 
 function optionHtml(values, selected = "") {
@@ -3251,32 +3323,50 @@ async function updateUserApproval(id, approvalStatus) {
 
 async function submitLogin(event) {
   event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector("button[type='submit']");
+  setFormError(form, "");
   try {
-    const payload = loginPayloadFromForm(event.currentTarget);
+    const payload = loginPayloadFromForm(form);
+    if (submitButton) submitButton.disabled = true;
+    console.debug("发送登录请求", { email: payload.email });
     clearLocalCaches();
-    await api("/api/auth/login", {
+    const loginResult = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    if (!loginResult?.user) throw new Error("登录接口未返回用户信息，请联系管理员。");
+    state.me = loginResult.user;
+    state.passwordChangeRequired = Boolean(loginResult.mustChangePassword ?? loginResult.user.mustChangePassword);
     await loadData();
     closeLoginModal();
     toast(state.passwordChangeRequired ? "请先修改初始密码" : "登录成功");
   } catch (error) {
-    toast(error.message);
+    reportFrontendError(error, "登录失败", form);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
 async function submitRegister(event) {
   event.preventDefault();
+  const form = event.currentTarget;
+  setFormError(form, "");
+  const name = $("#register-name")?.value.trim() || "";
+  const email = String($("#register-email")?.value || "").trim().toLowerCase();
   const password = $("#register-password")?.value || "";
   const confirmPassword = $("#register-confirm-password")?.value || "";
-  if (password !== confirmPassword) return toast("两次输入的密码不一致");
+  if (!name) return reportFrontendError(new Error("请输入姓名"), "注册校验失败", form);
+  if (!email) return reportFrontendError(new Error("请输入邮箱"), "注册校验失败", form);
+  if (!password) return reportFrontendError(new Error("请输入密码"), "注册校验失败", form);
+  if (password.length < 8) return reportFrontendError(new Error("密码长度不能少于 8 位"), "注册校验失败", form);
+  if (password !== confirmPassword) return reportFrontendError(new Error("两次输入的密码不一致"), "注册校验失败", form);
   try {
     await api("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({
-        name: $("#register-name")?.value || "",
-        email: String($("#register-email")?.value || "").trim().toLowerCase(),
+        name,
+        email,
         password,
         confirmPassword,
       }),
@@ -3284,16 +3374,21 @@ async function submitRegister(event) {
     $("#register-form")?.reset();
     toast("注册申请已提交，请等待管理员审核");
   } catch (error) {
-    toast(error.message);
+    reportFrontendError(error, "注册申请失败", form);
   }
 }
 
 async function submitPasswordChange(event) {
   event.preventDefault();
+  const form = event.currentTarget;
+  setFormError(form, "");
   const currentPassword = $("#change-current-password")?.value || "";
   const newPassword = $("#change-new-password")?.value || "";
   const confirmPassword = $("#change-confirm-password")?.value || "";
-  if (newPassword !== confirmPassword) return toast("两次输入的新密码不一致");
+  if (!currentPassword) return reportFrontendError(new Error("请输入当前密码"), "修改密码校验失败", form);
+  if (!newPassword) return reportFrontendError(new Error("请输入新密码"), "修改密码校验失败", form);
+  if (newPassword.length < 8) return reportFrontendError(new Error("新密码长度不能少于 8 位"), "修改密码校验失败", form);
+  if (newPassword !== confirmPassword) return reportFrontendError(new Error("两次输入的新密码不一致"), "修改密码校验失败", form);
   try {
     await api("/api/auth/change-password", {
       method: "POST",
@@ -3302,7 +3397,7 @@ async function submitPasswordChange(event) {
     $("#password-change-form")?.reset();
     handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
-    toast(error.message);
+    reportFrontendError(error, "修改密码失败", form);
   }
 }
 
@@ -3740,10 +3835,11 @@ function closeMobileNav() {
 }
 
 function loginPayloadFromForm(form) {
-  return {
-    email: String(form.querySelector("[data-login-email]")?.value || "").trim().toLowerCase(),
-    password: form.querySelector("[data-login-password]")?.value || "",
-  };
+  const email = String(form.querySelector("[data-login-email]")?.value || "").trim().toLowerCase();
+  const password = form.querySelector("[data-login-password]")?.value || "";
+  if (!email) throw new Error("请输入邮箱");
+  if (!password) throw new Error("请输入密码");
+  return { email, password };
 }
 
 async function logoutCurrentUser() {
@@ -3758,7 +3854,20 @@ async function logoutCurrentUser() {
   toast("已退出");
 }
 
+function bindAuthEvents() {
+  bindOptional("#login-screen-form", "submit", submitLogin);
+  bindOptional("#login-modal-form", "submit", submitLogin);
+  bindOptional("#register-form", "submit", submitRegister);
+  bindOptional("#password-change-form", "submit", submitPasswordChange);
+  bindOptional("#password-change-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
+  bindOptional("#show-login", "click", openLoginModal);
+  bindOptional("#modal-logout-button", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
+  $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
+  $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+}
+
 function bindEvents() {
+  bindAuthEvents();
   $$(".nav-tab").forEach((button) => button.addEventListener("click", () => {
     switchView(button.dataset.view);
     closeMobileNav();
@@ -3766,11 +3875,6 @@ function bindEvents() {
   $("#mobile-nav-toggle")?.addEventListener("click", () => setMobileNav(!document.body.classList.contains("nav-open")));
   $("#nav-backdrop")?.addEventListener("click", closeMobileNav);
   $("#refresh-data").addEventListener("click", loadData);
-  $("#show-login").addEventListener("click", openLoginModal);
-  $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
-  $("#register-form")?.addEventListener("submit", submitRegister);
-  $("#password-change-form")?.addEventListener("submit", submitPasswordChange);
-  $("#password-change-logout")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeMobileNav();
@@ -3807,10 +3911,6 @@ function bindEvents() {
   $("#user-form").addEventListener("submit", submitUser);
   $("#user-role").addEventListener("change", () => renderUserPermissionEditor());
   $("#user-permission-mode").addEventListener("change", () => renderUserPermissionEditor());
-  $("#login-screen-form")?.addEventListener("submit", submitLogin);
-  $("#login-modal-form").addEventListener("submit", submitLogin);
-  $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
-  $("#modal-logout-button").addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
 
   ["order", "payment", "cost", "customer", "supplier", "user"].forEach((name) => {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
@@ -4064,4 +4164,9 @@ async function init() {
   await loadData();
 }
 
-init();
+installFrontendErrorBoundary();
+init().catch((error) => {
+  console.error("系统初始化失败", error);
+  setAuthenticatedShell(false);
+  toast("系统初始化失败，请刷新页面或联系管理员。");
+});

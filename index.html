@@ -7,23 +7,27 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <section class="login-screen" id="login-screen">
       <div class="login-card">
         <p class="login-company">浙江莱诺建材有限公司</p>
         <h1>外贸应收款协同管理平台</h1>
         <p class="login-copy">请登录后访问业务数据</p>
-        <form class="login-screen-form" id="login-screen-form" autocomplete="off">
+        <form class="login-screen-form" id="login-screen-form" autocomplete="off" novalidate data-error-target="login-screen-error">
           <label><span>邮箱</span><input id="screen-login-email" data-login-email type="text" inputmode="email" autocomplete="email" required /></label>
           <label><span>密码</span><input id="screen-login-password" data-login-password type="password" autocomplete="current-password" required /></label>
+          <div class="form-error" id="login-screen-error" hidden></div>
           <button class="primary-button" type="submit">登录</button>
         </form>
         <details class="register-box">
           <summary>申请普通用户账号</summary>
-          <form class="login-screen-form" id="register-form" autocomplete="off">
+          <form class="login-screen-form" id="register-form" autocomplete="off" novalidate data-error-target="register-error">
             <label><span>姓名</span><input id="register-name" required /></label>
             <label><span>邮箱</span><input id="register-email" type="text" inputmode="email" autocomplete="email" required /></label>
             <label><span>密码</span><input id="register-password" type="password" autocomplete="new-password" minlength="8" required /></label>
             <label><span>确认密码</span><input id="register-confirm-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <div class="form-error" id="register-error" hidden></div>
             <button class="secondary-button" type="submit">提交审核</button>
             <small>提交后需管理员审核通过，才能登录系统。</small>
           </form>
@@ -36,10 +40,11 @@
         <p class="login-company">浙江莱诺建材有限公司</p>
         <h1>首次登录修改密码</h1>
         <p class="login-copy">为保护业务数据，请先修改初始密码后重新登录。</p>
-        <form class="login-screen-form" id="password-change-form" autocomplete="off">
+        <form class="login-screen-form" id="password-change-form" autocomplete="off" novalidate data-error-target="password-change-error">
           <label><span>当前密码</span><input id="change-current-password" type="password" autocomplete="current-password" required /></label>
           <label><span>新密码</span><input id="change-new-password" type="password" autocomplete="new-password" minlength="8" required /></label>
           <label><span>确认新密码</span><input id="change-confirm-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <div class="form-error" id="password-change-error" hidden></div>
           <button class="primary-button" type="submit">修改密码</button>
           <button class="secondary-button" id="password-change-logout" type="button">退出登录</button>
         </form>
@@ -119,8 +124,6 @@
           </div>
         </header>
 
-        <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
         <div class="login-modal" id="login-modal" hidden>
           <div class="login-backdrop" data-close-login></div>
           <section class="login-dialog" role="dialog" aria-modal="true" aria-labelledby="login-dialog-title">
@@ -135,9 +138,10 @@
               <strong id="modal-current-user">读取中...</strong>
               <small id="modal-current-role">-</small>
             </div>
-            <form class="login-form" id="login-modal-form" autocomplete="off">
-              <label><span>邮箱</span><input id="modal-login-email" data-login-email type="text" inputmode="email" autocomplete="email" /></label>
-              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" autocomplete="current-password" /></label>
+            <form class="login-form" id="login-modal-form" autocomplete="off" novalidate data-error-target="login-modal-error">
+              <label><span>邮箱</span><input id="modal-login-email" data-login-email type="text" inputmode="email" autocomplete="email" required /></label>
+              <label><span>密码</span><input id="modal-login-password" data-login-password type="password" autocomplete="current-password" required /></label>
+              <div class="form-error" id="login-modal-error" hidden></div>
               <div class="login-actions">
                 <button class="primary-button" type="submit">登录</button>
                 <button class="secondary-button" id="modal-logout-button" type="button">退出登录</button>
