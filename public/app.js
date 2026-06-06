@@ -77,6 +77,7 @@ const constants = {
     { value: "costs", label: "成本查看" },
     { value: "documents", label: "单证查看" },
     { value: "taxRefund", label: "退税查看" },
+    { value: "commissions", label: "提成查看" },
     { value: "reports", label: "报表查看" },
     { value: "settings", label: "系统设置查看" },
     { value: "auditLogs", label: "操作日志查看" },
@@ -90,6 +91,7 @@ const constants = {
     { value: "logistics", label: "物流费用" },
     { value: "documents", label: "单证上传/删除" },
     { value: "taxRefund", label: "退税状态" },
+    { value: "commissions", label: "提成结算" },
     { value: "suppliers", label: "供应商维护" },
     { value: "attachments", label: "附件维护" },
     { value: "settings", label: "系统设置" },
@@ -150,17 +152,17 @@ const roleScopeTexts = {
 };
 
 const roleWrites = {
-  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "documents", "taxRefund", "suppliers", "attachments", "settings", "exchangeRates"],
+  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "documents", "taxRefund", "commissions", "suppliers", "attachments", "settings", "exchangeRates"],
   业务员: ["orders", "logistics", "documents", "attachments"],
-  财务: ["payments", "taxRefund", "attachments", "exchangeRates"],
+  财务: ["payments", "taxRefund", "commissions", "attachments", "exchangeRates"],
   成本录入员: ["costs", "documents", "attachments"],
   查看者: [],
 };
 
 const roleReads = {
-  管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "documents", "taxRefund", "reports", "settings", "auditLogs"],
-  业务员: ["customers", "orders", "payments", "costs", "documents", "reports"],
-  财务: ["orders", "payments", "costs", "documents", "taxRefund", "reports"],
+  管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
+  业务员: ["customers", "orders", "payments", "costs", "documents", "commissions", "reports"],
+  财务: ["orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
   查看者: ["orders", "payments", "costs", "documents", "reports"],
 };
@@ -1042,6 +1044,7 @@ function applyAccessControl() {
   setHidden("[data-export='payments']", !canUseReports || !canReadArea("payments"));
   setHidden("[data-export='costs']", !canUseReports || !canReadArea("costs"));
   setHidden("[data-export='orders'], [data-export='profit'], [data-export='reminders']", !canUseReports || !canReadArea("orders"));
+  setHidden("[data-export='commissions']", !canUseReports || !canReadArea("commissions"));
   applyRateEditability();
 }
 
@@ -1153,6 +1156,46 @@ function renderSalespersonChart(rows) {
   `).join("") : chartEmpty();
 }
 
+function renderCommissionRank(rows) {
+  const box = $("#commission-rank-table");
+  if (!box) return;
+  if (!canReadArea("commissions")) {
+    box.innerHTML = emptyRow(5);
+    return;
+  }
+  const month = $("#filter-month")?.value || today().slice(0, 7);
+  const year = month.slice(0, 4) || today().slice(0, 4);
+  const groups = groupDashboardRows(rows, (row) => row.order.salespersonName || "未分配", () => 0)
+    .map((group) => {
+      const metrics = group.rows.reduce((acc, row) => {
+        const createdMonth = String(row.order.createdAt || "").slice(0, 7);
+        const createdYear = createdMonth.slice(0, 4);
+        const estimated = Number(row.order.summary?.estimatedCommissionCny || 0);
+        const settleable = Number(row.order.summary?.settleableCommissionCny || row.order.summary?.commissionAmountCny || 0);
+        const settled = row.order.commissionStatus === "已结算" ? settleable : 0;
+        const pending = row.order.commissionStatus === "已结算" ? 0 : estimated;
+        if (createdMonth === month) acc.month += row.order.commissionStatus === "已结算" ? settled : estimated;
+        if (createdYear === year) acc.year += row.order.commissionStatus === "已结算" ? settled : estimated;
+        acc.pending += pending;
+        acc.settled += settled;
+        return acc;
+      }, { month: 0, year: 0, pending: 0, settled: 0 });
+      return { ...group, ...metrics };
+    })
+    .filter((group) => group.month || group.year || group.pending || group.settled)
+    .sort((a, b) => b.month - a.month || b.pending - a.pending || b.year - a.year)
+    .slice(0, 10);
+  box.innerHTML = groups.length ? groups.map((item) => `
+    <tr>
+      <td>${dashboardLink(item.label, "party", item.label)}</td>
+      <td>${money(item.month)}</td>
+      <td>${money(item.year)}</td>
+      <td>${money(item.pending)}</td>
+      <td>${money(item.settled)}</td>
+    </tr>
+  `).join("") : emptyRow(5);
+}
+
 function renderDashboard() {
   const rows = orderDashboardRows();
   const receivableTotal = rows.reduce((sum, row) => sum + row.receivable, 0);
@@ -1178,6 +1221,7 @@ function renderDashboard() {
     .slice(0, 10);
   renderBarChart("customer-unpaid-chart", customerUnpaid, (item) => item.amount, (item) => dashboardLink(item.label, "party", item.label), "red");
   renderSalespersonChart(rows);
+  renderCommissionRank(rows);
   const costRows = Object.values(state.costs.filter((cost) => cost.paymentStatus !== "已取消").reduce((acc, cost) => {
     const key = cost.costType || "其他费用";
     acc[key] ||= { label: key, amount: 0, count: 0 };
@@ -1235,15 +1279,19 @@ function renderStats(items) {
 
 function statusClass(status) {
   if (["已逾期", "已退回", "已取消", "停用", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
-  if (["已收齐", "已结清", "已到账", "已支付", "启用", "SUCCESS", "READY", "COMPLETED"].includes(status)) return "success";
-  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED"].includes(status)) return "warning";
+  if (String(status || "").startsWith("不可结算")) return "danger";
+  if (["已收齐", "已结清", "已到账", "已支付", "启用", "SUCCESS", "READY", "COMPLETED", "可结算", "已结算"].includes(status)) return "success";
+  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
   return "";
 }
 
 function renderOrderSelects() {
   fillAvailableCustomerSelect($("#order-customer")?.value || "");
   updateOrderCustomerCountry();
-  if (!$("#order-id")?.value && !$("#order-customer")?.value) $("#order-salesperson").value = "";
+  if (!$("#order-id")?.value && !$("#order-customer")?.value) {
+    $("#order-salesperson").value = "";
+    $("#order-commission-rate").value = "";
+  }
   fillPaymentOrderSelect($("#payment-order")?.value || "", $("#payment-order")?.disabled || false);
   if ($("#cost-order")?.value) fillCostOrderDisplay(orderById($("#cost-order").value));
 }
@@ -1349,6 +1397,7 @@ function resetLogisticsForm() {
   if ($("#logistics-id")) $("#logistics-id").value = "";
   if ($("#logistics-type")) $("#logistics-type").value = constants.logisticsCostTypes[0] || "其他物流费用";
   if ($("#logistics-currency")) $("#logistics-currency").value = currentDetailOrder()?.currency || "";
+  if ($("#logistics-confirmed")) $("#logistics-confirmed").value = "false";
   clearRateSnapshot("logistics");
   updateLogisticsDerived();
   if ($("#logistics-currency")?.value) applyRateFor("logistics").catch(() => {});
@@ -1364,11 +1413,12 @@ function renderLogisticsTable(order) {
       <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
       <td>${money(cost.amountCny)}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus)}</span></td>
+      <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
       <td>${escapeHtml(cost.remark || "-")}</td>
       ${rowActions(canWriteArea("logistics") ? `<button data-edit-logistics="${cost.id}">编辑</button><button data-delete-logistics="${cost.id}">删除</button>` : "")}
     </tr>
-  `).join("") : emptyRow(8);
+  `).join("") : emptyRow(9);
 }
 
 function documentRelatedModule(type) {
@@ -1550,12 +1600,24 @@ function renderCosts() {
       <td>${escapeHtml(cost.supplierType || "-")}</td>
       <td>${escapeHtml(cost.currency)} ${amount(cost.amount)}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
+      <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
       <td>${escapeHtml(cost.invoiceStatus)}</td>
       <td>${auditCell(cost)}</td>
       <td>${supplierDocumentCell(cost)}</td>
       ${rowActions(canWriteArea("costs") ? `<button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button>` : "")}
     </tr>
-  `).join("") : emptyRow(11);
+  `).join("") : emptyRow(12);
+}
+
+function commissionActionCell(order) {
+  if (!canWriteArea("commissions")) return "";
+  if (order.commissionStatus === "已结算") {
+    return `<small>结算人：${escapeHtml(order.commissionSettledByName || "-")}<br>时间：${order.commissionSettledAt ? new Date(order.commissionSettledAt).toLocaleString("zh-CN") : "-"}</small>`;
+  }
+  if (order.summary?.commissionCanSettle) {
+    return `<button data-settle-commission="${escapeHtml(order.id)}" type="button">结算提成</button>`;
+  }
+  return "";
 }
 
 function renderProfit() {
@@ -1573,24 +1635,22 @@ function renderProfit() {
         <td>${escapeHtml(order.blNo || "-")}</td>
         <td>${escapeHtml(order.customerName)}</td>
         <td>${escapeHtml(order.salespersonName || "-")}</td>
-        <td>${paymentTermCell(order)}</td>
-        <td>${escapeHtml(order.dueDate || "-")}</td>
+        <td>${Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2)}%</td>
+        <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
+        <td>${money(order.summary.logisticsCostCny || 0)}</td>
+        <td>${money(order.summary.commissionBaseCny || 0)}</td>
+        <td>${money(order.summary.commissionAmountCny || order.summary.estimatedCommissionCny || 0)}<small>${order.summary.commissionCanSettle ? "可结算" : "预计"}</small></td>
+        <td><span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span></td>
         <td>${money(order.summary.receivableCny)}</td>
-        <td>${money(order.summary.requiredDepositAmount)}</td>
-        <td>${money(order.summary.receivedDepositCny)}</td>
-        <td>${money(order.summary.depositGapCny)}</td>
-        <td>${money(order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.outstandingCny)}</td>
         <td>${money(order.summary.totalCostCny)}</td>
-        <td>${money(order.summary.expectedGrossProfit)}</td>
         <td>${money(order.summary.actualGrossProfit)}</td>
         <td>${percent(order.summary.grossMargin)}</td>
         <td>${Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"}</td>
-        <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
-        <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
+        ${rowActions(commissionActionCell(order))}
       </tr>
     `;
-  }).join("") : emptyRow(19);
+  }).join("") : emptyRow(17);
 }
 
 function completenessText(part = {}) {
@@ -1744,11 +1804,13 @@ function renderSettings() {
       <td>${escapeHtml(customer.country || "-")}</td>
       <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
       <td>${escapeHtml(customer.salespersonName || "-")}</td>
+      <td>${Number(customer.commissionRate || 0).toFixed(2)}%</td>
+      <td><span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span></td>
       <td>${escapeHtml(customer.contactPerson || "-")}</td>
       <td>${escapeHtml(customer.remark || "-")}</td>
       ${rowActions(canWriteArea("customers") ? `<button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button>` : "")}
     </tr>
-  `).join("") : emptyRow(7);
+  `).join("") : emptyRow(9);
 
   $("#suppliers-count").textContent = `${state.suppliers.length} 个供应商`;
   $("#suppliers-table").innerHTML = state.suppliers.length ? state.suppliers.map((supplier) => `
@@ -1824,6 +1886,7 @@ function clearDraft(name) {
 
 const orderFields = [
   ["id", "#order-id"], ["customerId", "#order-customer"], ["orderNo", "#order-no"], ["blNo", "#order-bl-no"],
+  ["salespersonCommissionRate", "#order-commission-rate"],
   ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
   ["exchangeRateDate", "#order-rate-date"], ["exchangeRateSource", "#order-rate-source"], ["exchangeRateType", "#order-rate-type"],
   ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
@@ -1846,7 +1909,7 @@ const supplierFields = [
 
 const costFields = [
   ["id", "#cost-id"], ["orderId", "#cost-order"], ["costType", "#cost-type"],
-  ["paymentStatus", "#cost-payment-status"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"],
+  ["paymentStatus", "#cost-payment-status"], ["costConfirmed", "#cost-confirmed"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"],
 ];
 
 function supplierDisplayName(item = {}) {
@@ -2011,6 +2074,7 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
   clearCostOrderSelection({ persist: false, reload: reloadOrders });
   $("#cost-type").value = costDefaultType();
   $("#cost-payment-status").value = "待支付";
+  $("#cost-confirmed").value = "false";
   $("#cost-payment-date").value = "";
   $("#cost-invoice-status").value = "未收到";
   $("#cost-attachment").value = "";
@@ -2216,6 +2280,7 @@ function updateOrderCustomerDefaults(force = false) {
   if (!customer) {
     if (shouldApplyCustomerDefaults) {
       $("#order-salesperson").value = "";
+      $("#order-commission-rate").value = "";
       $("#order-currency").value = "";
       clearRateSnapshot("order");
     }
@@ -2224,6 +2289,7 @@ function updateOrderCustomerDefaults(force = false) {
   }
   if (shouldApplyCustomerDefaults) {
     $("#order-salesperson").value = customer.salespersonName || "";
+    $("#order-commission-rate").value = customer.commissionStatus === "停用" ? "0.00" : Number(customer.commissionRate || 0).toFixed(2);
     const nextCurrency = customer.defaultCurrency || "";
     if ($("#order-currency").value !== nextCurrency) {
       $("#order-currency").value = nextCurrency;
@@ -2326,6 +2392,7 @@ async function submitLogistics(event) {
       exchangeRateSource: $("#logistics-rate-source").value,
       exchangeRateType: $("#logistics-rate-type").value,
       isPaid: $("#logistics-paid").value === "true",
+      costConfirmed: $("#logistics-confirmed").value === "true",
       invoiceStatus: $("#logistics-invoice-status").value,
       remark: $("#logistics-remark").value,
     };
@@ -2366,6 +2433,7 @@ function editLogistics(id) {
     exchangeRateType: cost.exchangeRateType || state.exchangeRateSettings.rateType,
   });
   $("#logistics-paid").value = cost.paymentStatus === "已支付" ? "true" : "false";
+  $("#logistics-confirmed").value = String(Boolean(cost.costConfirmed));
   $("#logistics-invoice-status").value = cost.invoiceStatus || "未收到";
   $("#logistics-remark").value = cost.remark || "";
   updateLogisticsDerived();
@@ -2484,6 +2552,23 @@ async function updateTaxStatus(orderId, status) {
   }
 }
 
+async function settleCommission(orderId) {
+  if (!canWriteArea("commissions")) return toast("没有权限结算业务员提成");
+  const order = state.orders.find((item) => item.id === orderId);
+  if (!order) return toast("未找到对应订单");
+  const remark = prompt(`确认结算订单 ${order.orderNo} 的业务员提成？\n可填写结算备注（可留空）：`, "") ?? "";
+  try {
+    await api(`/api/commissions/${orderId}/settle`, {
+      method: "POST",
+      body: JSON.stringify({ remark }),
+    });
+    await loadData();
+    toast("业务员提成已结算");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function submitPayment(event) {
   event.preventDefault();
   if (!canWriteArea("payments")) return toast("没有权限保存收款");
@@ -2573,6 +2658,8 @@ async function submitCustomer(event) {
       contactEmail: $("#customer-contact-email").value,
       contactPhone: $("#customer-contact-phone").value,
       salespersonUserId: $("#customer-salesperson").value,
+      commissionRate: $("#customer-commission-rate").value,
+      commissionStatus: $("#customer-commission-status").value,
       remark: $("#customer-remark").value,
     };
     await api(id ? `/api/customers/${id}` : "/api/customers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
@@ -2729,6 +2816,7 @@ function resetOrderForm({ clearStoredDraft = true } = {}) {
   $("#order-no").value = "";
   $("#order-bl-no").value = "";
   $("#order-salesperson").value = "";
+  $("#order-commission-rate").value = "";
   $("#order-country").value = "";
   $("#order-currency").value = "";
   clearRateSnapshot("order");
@@ -2791,7 +2879,14 @@ function resetForm(name) {
   if (name === "cost") {
     resetCostForm();
   }
-  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种"), fillSalespersonSelect("#customer-salesperson");
+  if (name === "customer") {
+    $("#customer-form").reset();
+    $("#customer-id").value = "";
+    fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种");
+    fillSalespersonSelect("#customer-salesperson");
+    $("#customer-commission-rate").value = "";
+    $("#customer-commission-status").value = "启用";
+  }
   if (name === "supplier") $("#supplier-form").reset(), $("#supplier-id").value = "", $("#supplier-status").value = "启用", $("#supplier-type").value = "其他供应商";
   if (name === "user") {
     $("#user-form").reset();
@@ -2813,6 +2908,7 @@ function editOrder(id) {
   setForm(orderFields, order);
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
+  $("#order-commission-rate").value = Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2);
   $("#order-attachment").value = "";
   updateOrderCustomerCountry();
   setOrderPaymentTerm(order);
@@ -2883,6 +2979,8 @@ function editCustomer(id) {
   $("#customer-currency").value = customer.defaultCurrency || "";
   fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
   $("#customer-salesperson").value = customer.salespersonUserId || "";
+  $("#customer-commission-rate").value = Number(customer.commissionRate || 0).toFixed(2);
+  $("#customer-commission-status").value = customer.commissionStatus || "启用";
   $("#customer-contact-person").value = customer.contactPerson;
   $("#customer-contact-email").value = customer.contactEmail;
   $("#customer-contact-phone").value = customer.contactPhone;
@@ -3342,6 +3440,7 @@ function bindEvents() {
     if (target.dataset.deleteCustomer) deleteRecord("customer", target.dataset.deleteCustomer);
     if (target.dataset.deleteSupplier) deleteRecord("supplier", target.dataset.deleteSupplier);
     if (target.dataset.deleteUser) deleteRecord("user", target.dataset.deleteUser);
+    if (target.dataset.settleCommission) settleCommission(target.dataset.settleCommission);
     if (target.dataset.export) exportReport(target.dataset.export);
   });
 }

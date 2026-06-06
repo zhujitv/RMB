@@ -55,6 +55,7 @@ model User {
   createdSuppliers Supplier[] @relation("SuppliersCreated")
   updatedSuppliers Supplier[] @relation("SuppliersUpdated")
   uploadedDocuments OrderDocument[] @relation("DocumentsUploaded")
+  commissionSettlements ReceivableOrder[] @relation("CommissionSettlements")
   attachments Attachment[]
   auditLogs   AuditLog[]
 
@@ -67,6 +68,8 @@ model Customer {
   country         String?
   defaultCurrency String?   @map("default_currency")
   salespersonUserId String?   @map("salesperson_user_id")
+  commissionRate Decimal   @default(0) @map("commission_rate") @db.Decimal(8, 2)
+  commissionStatus String  @default("启用") @map("commission_status")
   contactPerson   String?   @map("contact_person")
   contactEmail    String?   @map("contact_email")
   contactPhone    String?   @map("contact_phone")
@@ -80,6 +83,7 @@ model Customer {
 
   @@index([name])
   @@index([salespersonUserId])
+  @@index([commissionStatus])
   @@index([deletedAt])
   @@map("customers")
 }
@@ -124,6 +128,11 @@ model ReceivableOrder {
   customerId          String    @map("customer_id")
   customerNameSnapshot String   @map("customer_name_snapshot")
   salespersonUserId   String?   @map("salesperson_user_id")
+  salespersonCommissionRate Decimal @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
+  commissionStatus     String    @default("未结算") @map("commission_status")
+  commissionSettledById String?  @map("commission_settled_by")
+  commissionSettledAt  DateTime? @map("commission_settled_at")
+  commissionSettlementRemark String? @map("commission_settlement_remark")
   country             String?
   currency            String
   exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
@@ -161,6 +170,7 @@ model ReceivableOrder {
 
   customer    Customer @relation(fields: [customerId], references: [id])
   salesperson User?    @relation("SalesOrders", fields: [salespersonUserId], references: [id])
+  commissionSettledBy User? @relation("CommissionSettlements", fields: [commissionSettledById], references: [id])
   createdBy   User?    @relation("OrdersCreated", fields: [createdById], references: [id])
   updatedBy   User?    @relation("OrdersUpdated", fields: [updatedById], references: [id])
   payments    Payment[]
@@ -171,6 +181,8 @@ model ReceivableOrder {
   @@index([blNo])
   @@index([customerId])
   @@index([salespersonUserId])
+  @@index([commissionStatus])
+  @@index([commissionSettledById])
   @@index([status])
   @@index([paymentTermType])
   @@index([taxRefundStatus])
@@ -263,6 +275,8 @@ model OrderCost {
   amount        Decimal   @db.Decimal(18, 2)
   amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
   paymentStatus String    @default("待支付") @map("payment_status")
+  costConfirmed Boolean   @default(false) @map("cost_confirmed")
+  costConfirmedAt DateTime? @map("cost_confirmed_at")
   paymentDate   DateTime? @map("payment_date") @db.Date
   invoiceStatus String    @default("未收到") @map("invoice_status")
   remark        String?
@@ -282,6 +296,7 @@ model OrderCost {
   @@index([supplierId])
   @@index([costType])
   @@index([paymentStatus])
+  @@index([costConfirmed])
   @@index([deletedAt])
   @@map("order_costs")
 }

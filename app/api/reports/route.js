@@ -99,6 +99,23 @@ export async function GET(request) {
     }
 
     const rows = await listOrders(query, actor);
+    if (type === "commissions") {
+      assertRead(actor, "commissions");
+      return csvResponse("salesperson-commissions.csv", [
+        { label: "订单号", value: "orderNo" },
+        { label: "客户名称", value: "customerName" },
+        { label: "业务员", value: "salespersonName" },
+        { label: "提成比例", value: (row) => `${Number(row.salespersonCommissionRate || row.commissionRate || 0).toFixed(2)}%` },
+        { label: "已到账收款", value: (row) => row.summary.arrivedPaymentsCny ?? row.summary.confirmedPaymentsCny },
+        { label: "物流成本", value: (row) => row.summary.logisticsCostCny },
+        { label: "提成基数", value: (row) => row.summary.commissionBaseCny },
+        { label: "提成金额", value: (row) => row.summary.commissionAmountCny ?? row.summary.estimatedCommissionCny },
+        { label: "提成状态", value: "commissionStatus" },
+        { label: "结算人", value: "commissionSettledByName" },
+        { label: "结算时间", value: "commissionSettledAt" },
+        { label: "结算备注", value: "commissionSettlementRemark" },
+      ], rows);
+    }
     const columns = [
       { label: "订单号", value: "orderNo" },
       { label: "提单号", value: "blNo" },
@@ -130,6 +147,13 @@ export async function GET(request) {
       { label: "预计毛利", value: (row) => row.summary.expectedGrossProfit },
       { label: "实际毛利", value: (row) => row.summary.actualGrossProfit },
       { label: "毛利率", value: (row) => `${(row.summary.grossMargin * 100).toFixed(2)}%` },
+      { label: "提成比例", value: (row) => `${Number(row.salespersonCommissionRate || row.commissionRate || 0).toFixed(2)}%` },
+      { label: "已到账收款人民币", value: (row) => row.summary.arrivedPaymentsCny ?? row.summary.confirmedPaymentsCny },
+      { label: "物流成本人民币", value: (row) => row.summary.logisticsCostCny },
+      { label: "提成基数人民币", value: (row) => row.summary.commissionBaseCny },
+      { label: "业务员提成人民币", value: (row) => row.summary.commissionAmountCny ?? row.summary.estimatedCommissionCny },
+      { label: "提成状态", value: "commissionStatus" },
+      { label: "结算时间", value: "commissionSettledAt" },
       { label: "订单状态", value: "status" },
       { label: "逾期状态", value: (row) => row.summary.reminderStatus },
       { label: "逾期天数", value: (row) => row.summary.overdueDays },
