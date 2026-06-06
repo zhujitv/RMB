@@ -64,6 +64,12 @@ const constants = {
     { value: "ROLE", label: "固定角色权限" },
     { value: "CUSTOM", label: "自定义组合权限" },
   ],
+  dataScopeOptions: [
+    { value: "ALL", label: "全部数据" },
+    { value: "OWN", label: "本人客户和订单" },
+    { value: "OWN_COST", label: "本人成本相关" },
+    { value: "NONE", label: "无数据范围" },
+  ],
   menuPermissionOptions: [
     { value: "dashboard", label: "经营总览" },
     { value: "orders", label: "应收订单" },
@@ -616,11 +622,19 @@ function scopeText() {
 }
 
 function roleTemplatePermissions(role) {
+  const dataScopeMap = {
+    管理员: "ALL",
+    财务: "ALL",
+    查看者: "ALL",
+    业务员: "OWN",
+    成本录入员: "OWN_COST",
+  };
   return {
     mode: "ROLE",
     menus: roleMenus[role] || [],
     reads: roleReads[role] || [],
     writes: roleWrites[role] || [],
+    dataScope: dataScopeMap[role] || "NONE",
   };
 }
 
@@ -1954,7 +1968,9 @@ function renderUserPermissionEditor(user = null) {
   const menus = config.menus || roleTemplate.menus;
   const reads = config.reads || config.readKeys || roleTemplate.reads;
   const writes = config.writes || config.writeKeys || roleTemplate.writes;
+  const dataScope = config.dataScope || roleTemplate.dataScope || "NONE";
   $("#user-permission-editor").hidden = mode !== "CUSTOM";
+  fillSelect("#user-data-scope", constants.dataScopeOptions, dataScope);
   renderPermissionGroup("#user-menu-permissions", constants.menuPermissionOptions, menus, "userMenus");
   renderPermissionGroup("#user-read-permissions", constants.readPermissionOptions, reads, "userReads");
   renderPermissionGroup("#user-write-permissions", constants.writePermissionOptions, writes, "userWrites");
@@ -1968,6 +1984,7 @@ function readUserPermissionForm() {
     menus: checkboxValues("#user-menu-permissions input[type='checkbox']"),
     reads: checkboxValues("#user-read-permissions input[type='checkbox']"),
     writes: checkboxValues("#user-write-permissions input[type='checkbox']"),
+    dataScope: $("#user-data-scope")?.value || "NONE",
   };
 }
 

@@ -702,6 +702,10 @@ textarea:focus {
   font-size: 12px;
 }
 
+.permission-scope-field {
+  max-width: 320px;
+}
+
 .permission-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

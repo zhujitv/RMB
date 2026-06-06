@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { apiError, assertRead, getActor, getOverview, getReminders, listCosts, listOrders, listPayments } from "../../../lib/platform-db";
+import { apiError, assertRead, canRead, getActor, getOverview, getReminders, listCosts, listOrders, listPayments } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -185,7 +185,8 @@ export async function GET(request) {
       if (type === "commissions-xlsx") return xlsxResponse("salesperson-commissions.xlsx", columns, rows);
       return csvResponse("salesperson-commissions.csv", columns, rows);
     }
-    const columns = [
+    const canExportCommissions = canRead(actor, "commissions");
+    const baseColumns = [
       { label: "订单号", value: "orderNo" },
       { label: "提单号", value: "blNo" },
       { label: "客户", value: "customerName" },
@@ -216,6 +217,8 @@ export async function GET(request) {
       { label: "预计毛利", value: (row) => row.summary.expectedGrossProfit },
       { label: "实际毛利", value: (row) => row.summary.actualGrossProfit },
       { label: "毛利率", value: (row) => `${(row.summary.grossMargin * 100).toFixed(2)}%` },
+    ];
+    const commissionColumns = [
       { label: "提成比例", value: (row) => `${Number(row.salespersonCommissionRate || row.commissionRate || 0).toFixed(2)}%` },
       { label: "已到账收款人民币", value: (row) => row.summary.arrivedPaymentsCny ?? row.summary.confirmedPaymentsCny },
       { label: "物流成本人民币", value: (row) => row.summary.logisticsCostCny },
@@ -223,10 +226,15 @@ export async function GET(request) {
       { label: "业务员提成人民币", value: (row) => row.summary.commissionAmountCny ?? row.summary.estimatedCommissionCny },
       { label: "提成状态", value: "commissionStatus" },
       { label: "结算时间", value: "commissionSettledAt" },
+    ];
+    const statusColumns = [
       { label: "订单状态", value: "status" },
       { label: "逾期状态", value: (row) => row.summary.reminderStatus },
       { label: "逾期天数", value: (row) => row.summary.overdueDays },
     ];
+    const columns = canExportCommissions
+      ? [...baseColumns, ...commissionColumns, ...statusColumns]
+      : [...baseColumns, ...statusColumns];
     return csvResponse(type === "profit" ? "order-profit-analysis.csv" : "receivable-orders.csv", columns, rows);
   } catch (error) {
     return apiError(error, "导出报表失败");
