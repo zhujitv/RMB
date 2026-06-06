@@ -109,7 +109,7 @@
             <input type="hidden" id="order-id" />
             <input type="hidden" id="order-created-at" />
             <input type="hidden" id="order-deposit-ratio" />
-            <div class="form-header"><div><h3>应收订单</h3><p>业务员创建应收订单，系统生成唯一 order_id，后续收款和成本都必须关联此 ID。</p></div><button class="secondary-button" type="button" data-reset="order">新建</button></div>
+            <div class="form-header"><div><h3 id="order-form-title">新建应收订单</h3><p>业务员创建应收订单，系统生成唯一 order_id，后续收款和成本都必须关联此 ID。</p><p class="form-mode" id="order-form-mode">新建应收订单</p></div><button class="secondary-button" type="button" data-reset="order">新建</button></div>
             <div class="form-grid">
               <label><span>客户名称 *</span><select id="order-customer" required></select></label>
               <label><span>订单号 *</span><input id="order-no" required /></label>
@@ -154,7 +154,7 @@
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
               <label class="wide"><span>附件地址（可选）</span><input id="order-attachment" placeholder="https://..." /></label>
             </div>
-            <div class="form-actions"><button class="primary-button" type="submit">保存应收订单</button></div>
+            <div class="form-actions"><button class="primary-button" id="order-submit-button" type="submit">保存应收订单</button></div>
           </form>
           <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>付款条款</th><th>到期日</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
         </section>

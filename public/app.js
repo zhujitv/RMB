@@ -14,6 +14,9 @@ const state = {
   costs: [],
   costOrderResults: [],
   selectedCostOrder: null,
+  orderFormDirty: false,
+  orderFormResetting: false,
+  orderFormPopulating: false,
   costOrderSearchTimer: null,
   costOrderSearchRequestId: 0,
   overview: null,
@@ -158,6 +161,10 @@ function addInstallment(item = {}) {
 function resetInstallments(items = [{}]) {
   $("#installment-items").innerHTML = "";
   (items.length ? items : [{}]).forEach((item) => addInstallment(item));
+}
+
+function clearInstallments() {
+  $("#installment-items").innerHTML = "";
 }
 
 function readInstallments(validate = false) {
@@ -937,9 +944,7 @@ function statusClass(status) {
 function renderOrderSelects() {
   fillAvailableCustomerSelect($("#order-customer")?.value || "");
   updateOrderCustomerCountry();
-  if (!$("#order-id")?.value && !$("#order-salesperson")?.value) {
-    $("#order-salesperson").value = state.me?.name || "";
-  }
+  if (!$("#order-id")?.value && !$("#order-customer")?.value) $("#order-salesperson").value = "";
   fillPaymentOrderSelect($("#payment-order")?.value || "", $("#payment-order")?.disabled || false);
   if ($("#cost-order")?.value) fillCostOrderDisplay(orderById($("#cost-order").value));
 }
@@ -1117,12 +1122,14 @@ function setForm(fields, data) {
 }
 
 function saveDraft(name, fields) {
+  if (name === "order") return;
   const data = readForm(name, fields);
   if (name === "order") data.paymentInstallments = readInstallments(false);
   localStorage.setItem(`${DRAFT_PREFIX}${name}`, JSON.stringify(data));
 }
 
 function loadDraft(name, fields) {
+  if (name === "order") return;
   try {
     const data = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}${name}`) || "{}");
     setForm(fields, data);
@@ -1481,21 +1488,22 @@ function updateOrderCustomerCountry() {
 }
 
 function setOrderPaymentTerm(order = null) {
-  const type = order?.paymentTermType || "";
+  const type = order ? (order.paymentTermType || "") : "COPY_BL";
   fillPaymentTermSelect(type || "", type ? "" : order?.paymentTerm);
   $("#order-created-at").value = order?.createdAt ? String(order.createdAt).slice(0, 10) : today();
   $("#order-credit-days").value = order?.creditDays || "30";
   syncCreditDaysPreset();
   $("#order-bl-date").value = order?.blDate || "";
   if (type === "AFTER_ARRIVAL") {
-    $("#order-expected-date").value = order.expectedArrivalDate || order.expectedPaymentDate || "";
+    $("#order-expected-date").value = order?.expectedArrivalDate || order?.expectedPaymentDate || "";
   } else if (type === "COPY_BL") {
-    $("#order-expected-date").value = order.expectedShipmentDate || order.expectedPaymentDate || "";
+    $("#order-expected-date").value = order?.expectedShipmentDate || order?.expectedPaymentDate || "";
   } else {
     $("#order-expected-date").value = order?.expectedPaymentDate || "";
   }
   $("#order-due-date").value = order?.dueDate || "";
-  resetInstallments(order?.paymentInstallments || [{}]);
+  if (order) resetInstallments(order.paymentInstallments || [{}]);
+  else clearInstallments();
   updatePaymentTermVisibility();
 }
 
@@ -1503,7 +1511,7 @@ function updateOrderCustomerDefaults(force = false) {
   const customer = customerById($("#order-customer").value);
   updateOrderCustomerCountry();
   if (!customer) return;
-  if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || state.me?.name || "";
+  if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || "";
   if (!$("#order-id").value && customer.defaultCurrency && !$("#order-currency").value) {
     $("#order-currency").value = customer.defaultCurrency;
     applyRateFor("order").catch(() => {});
@@ -1750,31 +1758,99 @@ async function submitLogin(event) {
   }
 }
 
+function currentEditingOrderNo() {
+  const id = $("#order-id")?.value || "";
+  const order = state.orders.find((item) => item.id === id);
+  return $("#order-no")?.value || order?.orderNo || "-";
+}
+
+function setOrderFormMode(order = null) {
+  const isEditing = Boolean(order?.id || $("#order-id")?.value);
+  const orderNo = order?.orderNo || currentEditingOrderNo();
+  const title = $("#order-form-title");
+  const mode = $("#order-form-mode");
+  const submitButton = $("#order-submit-button");
+  if (title) title.textContent = isEditing ? "编辑应收订单" : "新建应收订单";
+  if (mode) {
+    mode.textContent = isEditing ? `当前正在编辑订单：订单号 ${orderNo}` : "新建应收订单";
+    mode.classList.toggle("is-editing", isEditing);
+  }
+  if (submitButton) submitButton.textContent = isEditing ? "更新应收订单" : "保存应收订单";
+}
+
+function markOrderFormDirty() {
+  if (state.orderFormResetting || state.orderFormPopulating) return;
+  if ($("#order-id")?.value) {
+    state.orderFormDirty = true;
+    setOrderFormMode();
+  }
+}
+
+function hasDirtyOrderEdit() {
+  return Boolean($("#order-id")?.value && state.orderFormDirty);
+}
+
+function confirmAbandonOrderEdit() {
+  if (!hasDirtyOrderEdit()) return true;
+  return confirm(`当前正在编辑订单：订单号 ${currentEditingOrderNo()}，是否放弃未保存修改？`);
+}
+
+function resetOrderForm({ clearStoredDraft = true } = {}) {
+  state.orderFormResetting = true;
+  $("#order-form").reset();
+  $("#order-id").value = "";
+  $("#order-created-at").value = today();
+  $("#order-deposit-ratio").value = "";
+  fillAvailableCustomerSelect("");
+  $("#order-customer").value = "";
+  $("#order-no").value = "";
+  $("#order-bl-no").value = "";
+  $("#order-salesperson").value = "";
+  $("#order-country").value = "";
+  $("#order-currency").value = "";
+  $("#order-rate").value = "";
+  $("#order-rate-date").value = "";
+  $("#order-rate-source").value = "";
+  $("#order-rate-type").value = "";
+  $("#order-rate-meta").textContent = "待获取";
+  $("#order-rate-details").innerHTML = rateDetailHtml({
+    exchangeRateSource: "待获取",
+    exchangeRateDate: "-",
+    exchangeRateType: state.exchangeRateSettings.rateType,
+  });
+  $("#order-rate-details")?.closest("details")?.removeAttribute("open");
+  $("#order-estimated-amount").value = "";
+  $("#order-estimated-amount-cny").value = "";
+  $("#order-actual-amount").value = "";
+  $("#order-final-amount").value = "";
+  $("#order-final-amount-cny").value = "";
+  $("#order-trade-term").value = "FOB";
+  setOrderPaymentTerm(null);
+  $("#order-required-deposit").value = money(0);
+  $("#order-received-deposit").value = money(0);
+  $("#order-deposit-gap").value = money(0);
+  $("#order-expected-date").value = "";
+  $("#order-bl-date").value = "";
+  $("#order-due-date").value = "";
+  $("#order-reminder-days").value = "7";
+  $("#order-status").value = "草稿";
+  $("#order-remark").value = "";
+  $("#order-attachment").value = "";
+  clearInstallments();
+  updateOrderCustomerCountry();
+  updatePaymentTermVisibility();
+  updateOrderDerived();
+  $("#order-estimated-amount-cny").value = "";
+  $("#order-final-amount-cny").value = "";
+  state.orderFormDirty = false;
+  setOrderFormMode(null);
+  if (clearStoredDraft) clearDraft("order");
+  state.orderFormResetting = false;
+}
+
 function resetForm(name) {
   if (name === "order") {
-    $("#order-form").reset();
-    $("#order-id").value = "";
-    setOrderPaymentTerm(null);
-    $("#order-currency").value = "";
-    $("#order-rate").value = "";
-    $("#order-rate-date").value = "";
-    $("#order-rate-source").value = "";
-    $("#order-rate-type").value = "";
-    $("#order-rate-meta").textContent = "待获取";
-    $("#order-rate-details").innerHTML = rateDetailHtml({
-      exchangeRateSource: "待获取",
-      exchangeRateDate: "-",
-      exchangeRateType: state.exchangeRateSettings.rateType,
-    });
-    $("#order-rate-details")?.closest("details")?.removeAttribute("open");
-    $("#order-required-deposit").value = money(0);
-    $("#order-received-deposit").value = money(0);
-    $("#order-deposit-gap").value = money(0);
-    $("#order-reminder-days").value = "7";
-    $("#order-salesperson").value = state.me?.name || "";
-    fillAvailableCustomerSelect("");
-    updateOrderCustomerCountry();
-    updateOrderDerived();
+    resetOrderForm();
   }
   if (name === "payment") {
     $("#payment-form").reset();
@@ -1809,9 +1885,14 @@ function resetForm(name) {
 function editOrder(id) {
   const order = state.orders.find((item) => item.id === id);
   if (!order) return;
+  if ($("#order-id").value && state.orderFormDirty && !confirmAbandonOrderEdit()) return;
+  state.orderFormPopulating = true;
+  clearDraft("order");
+  switchView("orders", { preserveOrderForm: true, skipOrderConfirm: true });
   setForm(orderFields, order);
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
+  $("#order-attachment").value = "";
   updateOrderCustomerCountry();
   setOrderPaymentTerm(order);
   setRateSnapshot("order", {
@@ -1821,7 +1902,9 @@ function editOrder(id) {
     exchangeRateType: order.exchangeRateType || state.exchangeRateSettings.rateType,
   });
   updateOrderDerived();
-  switchView("orders");
+  state.orderFormDirty = false;
+  setOrderFormMode(order);
+  state.orderFormPopulating = false;
 }
 
 function editPayment(id) {
@@ -1920,9 +2003,15 @@ async function deleteRecord(kind, id) {
   }
 }
 
-function switchView(view) {
+function switchView(view, options = {}) {
+  if (state.view === "orders" && view !== "orders" && !options.skipOrderConfirm) {
+    if (!confirmAbandonOrderEdit()) return false;
+    resetOrderForm();
+  }
   state.view = view;
   updateCurrentView();
+  if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
+  return true;
 }
 
 async function openDashboardDetail(kind, value) {
@@ -2022,10 +2111,12 @@ function bindEvents() {
   });
   $("#add-installment").addEventListener("click", () => {
     addInstallment({});
+    markOrderFormDirty();
     saveDraft("order", orderFields);
   });
   $("#installment-items").addEventListener("input", () => {
     updateInstallmentAmounts();
+    markOrderFormDirty();
     saveDraft("order", orderFields);
   });
   $("#installment-items").addEventListener("click", (event) => {
@@ -2034,6 +2125,7 @@ function bindEvents() {
     if ($$("#installment-items .installment-row").length > 1) button.closest(".installment-row").remove();
     else resetInstallments([{}]);
     updateInstallmentAmounts();
+    markOrderFormDirty();
     saveDraft("order", orderFields);
   });
   $("#order-customer").addEventListener("change", () => {
@@ -2111,14 +2203,20 @@ function bindEvents() {
     applyRateFor("payment").catch(() => {});
     updatePaymentDerived();
   });
-  $$("#order-form input, #order-form select, #order-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("order", orderFields)));
+  $$("#order-form input, #order-form select, #order-form textarea").forEach((el) => {
+    el.addEventListener("input", markOrderFormDirty);
+    el.addEventListener("change", markOrderFormDirty);
+  });
   $$("#payment-form input, #payment-form select, #payment-form textarea").forEach((el) => el.addEventListener("input", () => saveDraft("payment", paymentFields)));
   $$("#cost-form input, #cost-form select, #cost-form textarea").forEach((el) => el.addEventListener("input", saveCostDraft));
 
   document.body.addEventListener("click", (event) => {
     const target = event.target.closest("button");
     if (!target) return;
-    if (target.dataset.rateRefresh === "order") applyRateFor("order", { force: true }).catch(() => {});
+    if (target.dataset.rateRefresh === "order") {
+      markOrderFormDirty();
+      applyRateFor("order", { force: true }).catch(() => {});
+    }
     if (target.dataset.rateRefresh === "payment") applyRateFor("payment", { force: true }).catch(() => {});
     if (target.dataset.dashboardKind) openDashboardDetail(target.dataset.dashboardKind, target.dataset.dashboardValue).catch((error) => toast(error.message));
     if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
@@ -2147,8 +2245,8 @@ function initSelects() {
   fillSelect("#payment-currency", constants.currencies, "USD");
   fillSelect("#customer-currency", constants.currencies, "CNY");
   fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
-  fillPaymentTermSelect("OA");
-  fillSelect("#order-status", constants.orderStatuses, "已确认");
+  fillPaymentTermSelect("COPY_BL");
+  fillSelect("#order-status", constants.orderStatuses, "草稿");
   fillSelect("#payment-type", constants.paymentTypes, "尾款");
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");
   fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
@@ -2167,7 +2265,7 @@ async function init() {
   resetForm("order");
   resetForm("payment");
   resetCostForm({ clearStoredDraft: false, reloadOrders: false });
-  loadDraft("order", orderFields);
+  clearDraft("order");
   loadDraft("payment", paymentFields);
   loadCostDraft();
   updateOrderDerived();
