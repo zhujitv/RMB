@@ -60,6 +60,10 @@
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M12 9v8"/></svg>
             <span>报表中心</span>
           </button>
+          <button class="nav-tab" data-view="manual" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z"/><path d="M8 7h8"/><path d="M8 11h6"/></svg>
+            <span>操作说明书</span>
+          </button>
           <button class="nav-tab" data-view="settings" type="button">
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.1V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.1-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .35-1.1V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15.4 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.32.36.7.6 1.1.6H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>
             <span>系统设置</span>
@@ -389,6 +393,104 @@
               <button class="export-card" data-export="reminders" type="button">逾期催款报表 CSV</button>
               <button class="export-card" data-export="backup-json" type="button">完整数据备份 JSON</button>
             </div>
+          </section>
+        </section>
+
+        <section class="view-panel" id="manual-view">
+          <section class="manual-hero">
+            <div>
+              <span>操作说明书</span>
+              <h3>外贸应收款协同管理平台</h3>
+              <p>适用于业务、财务、成本录入、退税资料跟进和管理员日常维护。</p>
+            </div>
+            <div class="manual-version">
+              <strong>2026-06-06</strong>
+              <small>系统内置版</small>
+            </div>
+          </section>
+
+          <section class="manual-grid">
+            <article class="manual-card">
+              <h4>1. 登录与权限</h4>
+              <ol>
+                <li>使用公司分配的邮箱和密码登录系统。</li>
+                <li>登录后左侧菜单会按账号权限显示，可进入的模块代表当前账号具备相应查看权限。</li>
+                <li>管理员可在系统设置中维护用户、角色、自定义菜单权限和基础资料。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>2. 经营总览</h4>
+              <ol>
+                <li>通过月份、关键词、币种、订单状态、收款状态和逾期状态筛选数据。</li>
+                <li>查看应收、回款、未收、逾期、低毛利、成本结构和业务员绩效。</li>
+                <li>点击重点列表中的订单或客户信息，可快速定位到相关业务数据。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>3. 应收订单</h4>
+              <ol>
+                <li>先选择客户，系统会带出业务员、客户国家、默认币种和提成比例。</li>
+                <li>录入订单号、金额、付款条款、交易条款、预计日期、提醒天数和订单状态。</li>
+                <li>付款条款选择见提单复印件、OA账期、到港后付款或分批付款时，按页面要求补齐对应日期或节点。</li>
+                <li>保存订单后，在订单详情资料中维护物流费用、出口单证和销售合同。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>4. 收款管理</h4>
+              <ol>
+                <li>搜索并选择应收订单，确认客户、订单号和币种无误。</li>
+                <li>录入收款日期、收款类型、金额、汇率、流水号、到账状态和备注。</li>
+                <li>保存后系统会更新订单已收、未收、多收、预付款差额和收款状态。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>5. 成本管理</h4>
+              <ol>
+                <li>选择对应应收订单，再录入成本类型、供应商、金额、币种、汇率和付款状态。</li>
+                <li>物流类费用可在应收订单详情中维护，也会进入成本和利润统计。</li>
+                <li>成本确认、发票状态和供应商资料会影响利润核算、退税资料完整度和提成结算。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>6. 利润分析</h4>
+              <ol>
+                <li>查看每个订单的到账收款、物流成本、总成本、实际毛利、毛利率和成本结构。</li>
+                <li>当订单已收齐且物流成本确认完成后，财务或管理员可进行业务员提成结算。</li>
+                <li>低毛利、成本异常或未确认费用应先回到订单或成本模块核对来源数据。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>7. 退税资料</h4>
+              <ol>
+                <li>按订单查看出口资料、销售合同、供应商采购合同和工厂发票完整度。</li>
+                <li>资料完整后可将状态更新为待提交、已提交或退税完成。</li>
+                <li>如系统提示资料异常，需回到订单详情或成本供应商资料中补齐 PDF 文件。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>8. 报表中心</h4>
+              <ol>
+                <li>先在经营总览设置筛选条件，再进入报表中心导出对应范围数据。</li>
+                <li>可导出应收订单、收款、成本、利润、提成、逾期催款等 CSV 或 Excel 报表。</li>
+                <li>完整数据备份仅管理员可导出，用于归档和迁移前留存。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>9. 系统设置</h4>
+              <ol>
+                <li>管理员可维护客户、供应商、用户、权限和汇率设置。</li>
+                <li>新增用户默认可设置角色权限，也可切换为自定义组合权限。</li>
+                <li>汇率设置会影响外币订单、收款和成本折人民币金额，修改前应确认公司口径。</li>
+              </ol>
+            </article>
+            <article class="manual-card">
+              <h4>10. 日常注意事项</h4>
+              <ol>
+                <li>订单号、客户、币种、金额和付款条款是后续收款、成本和利润核算的关键字段，保存前请重点核对。</li>
+                <li>附件和单证仅支持系统允许的文件类型和大小，上传失败时可重新选择文件。</li>
+                <li>删除、停用、状态变更和关键资料修改会写入操作日志，便于后续追溯。</li>
+              </ol>
+            </article>
           </section>
         </section>
 

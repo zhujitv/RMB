@@ -72,6 +72,7 @@ const constants = {
     { value: "profit", label: "利润分析" },
     { value: "taxRefund", label: "退税资料" },
     { value: "reports", label: "报表中心" },
+    { value: "manual", label: "操作说明书" },
     { value: "settings", label: "系统设置" },
   ],
   readPermissionOptions: [
@@ -135,6 +136,7 @@ const viewTitles = {
   profit: "利润分析",
   taxRefund: "退税资料",
   reports: "报表中心",
+  manual: "操作说明书",
   settings: "系统设置",
 };
 
@@ -142,11 +144,11 @@ constants.documentTypes = [...constants.exportDocumentTypes, ...constants.salesD
 constants.allDocumentTypes = [...constants.documentTypes, ...constants.supplierDocumentTypes];
 
 const roleMenus = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "taxRefund", "reports", "settings"],
-  业务员: ["dashboard", "orders", "profit", "reports"],
-  财务: ["dashboard", "payments", "profit", "taxRefund", "reports"],
-  成本录入员: ["costs", "profit"],
-  查看者: ["dashboard", "profit", "reports"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["dashboard", "orders", "profit", "reports", "manual"],
+  财务: ["dashboard", "payments", "profit", "taxRefund", "reports", "manual"],
+  成本录入员: ["costs", "profit", "manual"],
+  查看者: ["dashboard", "profit", "reports", "manual"],
 };
 
 const roleScopeTexts = {
@@ -590,6 +592,7 @@ function toast(message) {
 }
 
 function canView(view) {
+  if (view === "manual") return Boolean(state.me);
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }

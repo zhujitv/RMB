@@ -2031,6 +2031,96 @@ th {
   font-weight: 800;
 }
 
+.manual-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.manual-hero span {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-hero h3 {
+  margin: 6px 0;
+  color: #0f172a;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.manual-hero p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.manual-version {
+  flex: 0 0 auto;
+  min-width: 150px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  text-align: right;
+}
+
+.manual-version strong,
+.manual-version small {
+  display: block;
+}
+
+.manual-version strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.manual-version small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.manual-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.manual-card h4 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.manual-card ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: #475467;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 .toast {
   position: fixed;
   right: 24px;
@@ -2195,6 +2285,7 @@ body.modal-open {
   .donut-layout,
   .settings-grid,
   .detail-grid,
+  .manual-grid,
   .export-grid {
     grid-template-columns: 1fr;
   }
@@ -2268,6 +2359,16 @@ body.modal-open {
 
   .login-actions {
     flex-wrap: wrap;
+  }
+
+  .manual-hero {
+    display: block;
+    padding: 18px;
+  }
+
+  .manual-version {
+    margin-top: 14px;
+    text-align: left;
   }
 
   .metric-grid,
