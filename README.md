@@ -255,6 +255,34 @@ ZIP 文件名：
 - 自己创建或负责的订单
 - 权限范围内的收款、成本和利润数据
 
+## 登录、注册与账号审核
+
+未登录时系统只显示登录页面，不加载业务菜单和业务数据。登录成功后，系统会根据当前用户角色和自定义权限加载菜单、按钮和数据范围。
+
+### 自助注册
+
+普通用户可以在登录页点击“申请普通用户账号”提交注册申请。注册后账号状态为“待审核”，默认角色为“查看者”，在管理员审核通过前不能登录系统。
+
+管理员审核路径：
+
+```text
+系统设置 → 用户和权限 → 待审核用户 → 通过 / 拒绝
+```
+
+审核通过后账号状态变为“已通过”，用户才能登录。拒绝或停用账号后，后端会撤销该用户现有会话。
+
+### 初始密码
+
+默认管理员和管理员新建用户时使用 8 位数字初始密码：
+
+```text
+12345678
+```
+
+管理员新建用户时，如果“初始/新密码”留空，系统会自动使用该默认初始密码。默认初始密码可通过 `DEFAULT_INITIAL_PASSWORD` 环境变量修改，但必须是 8 位数字。
+
+所有初始密码账号登录后应立即修改密码。系统会对管理员重置密码后的用户强制首次改密。
+
 ## 数据库
 
 主要数据表：
@@ -279,7 +307,12 @@ Vercel 需要配置：
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
 CRON_SECRET="change-me"
+BCRYPT_COST="12"
 REMINDER_WEBHOOK_URL=""
+INITIAL_ADMIN_NAME="系统管理员"
+INITIAL_ADMIN_EMAIL="admin@example.com"
+INITIAL_ADMIN_PASSWORD="12345678"
+DEFAULT_INITIAL_PASSWORD="12345678"
 
 R2_ACCOUNT_ID="your-cloudflare-account-id"
 R2_ACCESS_KEY_ID="your-r2-access-key-id"
@@ -355,6 +388,12 @@ R2_ENDPOINT=https://your-s3-endpoint
 
 ## 本地开发
 
+本系统必须通过 Next.js 服务运行，不能只用静态文件服务打开 `index.html`。如果使用 Python `http.server`、VS Code Live Server 或普通静态服务器，页面可以显示，但 `/api/auth/login` 等接口不可用，登录会提示：
+
+```text
+登录接口不可用（501），当前页面可能由静态文件服务打开，请使用 Next.js 或 Vercel 地址访问系统。
+```
+
 安装依赖：
 
 ```bash
@@ -378,6 +417,16 @@ npm run dev
 ```text
 http://localhost:3000
 ```
+
+如果端口被占用，Next.js 会提示新的可访问端口，请以终端输出为准。
+
+### 本地登录检查
+
+1. 确认 `DATABASE_URL` 指向可用 PostgreSQL 数据库。
+2. 确认已运行 `npm run dev`，不是静态文件服务。
+3. 打开 Next.js 地址，例如 `http://localhost:3000`。
+4. 使用默认管理员或已审核通过账号登录。
+5. 如果登录失败，页面会显示明确错误，同时浏览器控制台会输出 `console.error` 便于定位。
 
 ## 数据库迁移
 
