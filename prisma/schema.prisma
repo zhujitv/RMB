@@ -44,7 +44,7 @@ model Customer {
   id              String    @id @default(cuid())
   name            String
   country         String?
-  defaultCurrency String    @default("USD") @map("default_currency")
+  defaultCurrency String?   @map("default_currency")
   salespersonUserId String?   @map("salesperson_user_id")
   contactPerson   String?   @map("contact_person")
   contactEmail    String?   @map("contact_email")
@@ -103,7 +103,7 @@ model ReceivableOrder {
   customerNameSnapshot String   @map("customer_name_snapshot")
   salespersonUserId   String?   @map("salesperson_user_id")
   country             String?
-  currency            String    @default("USD")
+  currency            String
   exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
   exchangeRateDate    DateTime? @map("exchange_rate_date") @db.Date
   exchangeRateSource  String?   @map("exchange_rate_source")

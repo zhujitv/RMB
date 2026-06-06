@@ -312,6 +312,31 @@ function setRateSnapshot(prefix, quote = {}) {
   }
 }
 
+function clearRateSnapshot(prefix) {
+  const rateInput = $(`#${prefix}-rate`);
+  const dateInput = $(`#${prefix}-rate-date`);
+  const sourceInput = $(`#${prefix}-rate-source`);
+  const typeInput = $(`#${prefix}-rate-type`);
+  const meta = $(`#${prefix}-rate-meta`);
+  const details = $(`#${prefix}-rate-details`);
+  if (rateInput) rateInput.value = "";
+  if (dateInput) dateInput.value = "";
+  if (sourceInput) sourceInput.value = "";
+  if (typeInput) typeInput.value = "";
+  if (meta) {
+    meta.textContent = "待获取";
+    meta.classList.remove("warning");
+  }
+  if (details) {
+    details.innerHTML = rateDetailHtml({
+      exchangeRateSource: "待获取",
+      exchangeRateDate: "-",
+      exchangeRateType: state.exchangeRateSettings.rateType,
+    });
+    details.closest("details")?.removeAttribute("open");
+  }
+}
+
 function markManualRate(prefix) {
   const sourceInput = $(`#${prefix}-rate-source`);
   const dateInput = $(`#${prefix}-rate-date`);
@@ -1226,7 +1251,7 @@ function renderSettings() {
     <tr>
       <td>${escapeHtml(customer.name)}</td>
       <td>${escapeHtml(customer.country || "-")}</td>
-      <td>${escapeHtml(customer.defaultCurrency)}</td>
+      <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
       <td>${escapeHtml(customer.salespersonName || "-")}</td>
       <td>${escapeHtml(customer.contactPerson || "-")}</td>
       <td>${escapeHtml(customer.remark || "-")}</td>
@@ -1667,11 +1692,24 @@ function setOrderPaymentTerm(order = null) {
 function updateOrderCustomerDefaults(force = false) {
   const customer = customerById($("#order-customer").value);
   updateOrderCustomerCountry();
-  if (!customer) return;
-  if (!$("#order-id").value) $("#order-salesperson").value = customer.salespersonName || "";
-  if (!$("#order-id").value && customer.defaultCurrency && !$("#order-currency").value) {
-    $("#order-currency").value = customer.defaultCurrency;
-    applyRateFor("order").catch(() => {});
+  const shouldApplyCustomerDefaults = force || !$("#order-id").value;
+  if (!customer) {
+    if (shouldApplyCustomerDefaults) {
+      $("#order-salesperson").value = "";
+      $("#order-currency").value = "";
+      clearRateSnapshot("order");
+    }
+    updateOrderDerived();
+    return;
+  }
+  if (shouldApplyCustomerDefaults) {
+    $("#order-salesperson").value = customer.salespersonName || "";
+    const nextCurrency = customer.defaultCurrency || "";
+    if ($("#order-currency").value !== nextCurrency) {
+      $("#order-currency").value = nextCurrency;
+      clearRateSnapshot("order");
+      if (nextCurrency) applyRateFor("order").catch(() => {});
+    }
   }
   updateOrderDerived();
 }
@@ -1719,7 +1757,7 @@ async function submitOrder(event) {
     if (!data.customerId) throw new Error("客户名称不能为空");
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
     if (!(Number(data.estimatedReceivableAmount) > 0)) throw new Error("预计应收金额必须大于 0");
-    if (!data.currency) throw new Error("币种不能为空");
+    if (!data.currency) throw new Error("请选择币种");
     buildOrderPaymentTermPayload(data, true);
     if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
       if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
@@ -1974,17 +2012,7 @@ function resetOrderForm({ clearStoredDraft = true } = {}) {
   $("#order-salesperson").value = "";
   $("#order-country").value = "";
   $("#order-currency").value = "";
-  $("#order-rate").value = "";
-  $("#order-rate-date").value = "";
-  $("#order-rate-source").value = "";
-  $("#order-rate-type").value = "";
-  $("#order-rate-meta").textContent = "待获取";
-  $("#order-rate-details").innerHTML = rateDetailHtml({
-    exchangeRateSource: "待获取",
-    exchangeRateDate: "-",
-    exchangeRateType: state.exchangeRateSettings.rateType,
-  });
-  $("#order-rate-details")?.closest("details")?.removeAttribute("open");
+  clearRateSnapshot("order");
   $("#order-estimated-amount").value = "";
   $("#order-estimated-amount-cny").value = "";
   $("#order-actual-amount").value = "";
@@ -2043,7 +2071,7 @@ function resetForm(name) {
   if (name === "cost") {
     resetCostForm();
   }
-  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSalespersonSelect("#customer-salesperson");
+  if (name === "customer") $("#customer-form").reset(), $("#customer-id").value = "", fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种"), fillSalespersonSelect("#customer-salesperson");
   if (name === "supplier") $("#supplier-form").reset(), $("#supplier-id").value = "", $("#supplier-status").value = "启用", $("#supplier-type").value = "其他供应商";
   if (name === "user") $("#user-form").reset(), $("#user-id").value = "";
 }
@@ -2124,7 +2152,7 @@ function editCustomer(id) {
   $("#customer-id").value = customer.id;
   $("#customer-name").value = customer.name;
   $("#customer-country").value = customer.country;
-  $("#customer-currency").value = customer.defaultCurrency;
+  $("#customer-currency").value = customer.defaultCurrency || "";
   fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
   $("#customer-salesperson").value = customer.salespersonUserId || "";
   $("#customer-contact-person").value = customer.contactPerson;
@@ -2434,7 +2462,7 @@ function initSelects() {
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
   fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#payment-currency", constants.currencies, "USD");
-  fillSelect("#customer-currency", constants.currencies, "CNY");
+  fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种");
   fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
   fillPaymentTermSelect("COPY_BL");
   fillSelect("#order-status", constants.orderStatuses, "草稿");
