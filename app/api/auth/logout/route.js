@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
+import { clearSessionCookies, revokeCurrentSession } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request) {
+  await revokeCurrentSession(request).catch(() => {});
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("fta_user_id", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: true,
-    path: "/",
-    maxAge: 0,
-  });
+  clearSessionCookies(response);
   return response;
 }

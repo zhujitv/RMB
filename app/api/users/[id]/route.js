@@ -1,4 +1,4 @@
-import { apiError, assertWrite, getActor, ok, saveUser, writeAudit } from "../../../../lib/platform-db";
+import { apiError, assertWrite, getActor, ok, revokeUserSessions, saveUser, writeAudit } from "../../../../lib/platform-db";
 import { prisma } from "../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ export async function DELETE(request, { params }) {
     assertWrite(actor, "users");
     const before = await prisma.user.findUnique({ where: { id } });
     const user = await prisma.user.update({ where: { id }, data: { isActive: false } });
+    await revokeUserSessions(id);
     await writeAudit(request, actor, "停用用户", "users", id, before, user);
     return ok({ ok: true });
   } catch (error) {
