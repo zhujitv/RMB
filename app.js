@@ -107,8 +107,8 @@ const constants = {
     { value: "SALES_CONTRACT", label: "销售合同" },
   ],
   supplierDocumentTypes: [
-    { value: "SUPPLIER_PURCHASE_CONTRACT", label: "采购合同" },
-    { value: "SUPPLIER_INVOICE", label: "进项发票" },
+    { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同" },
+    { value: "SUPPLIER_INVOICE", label: "工厂增值税发票" },
   ],
   taxRefundStatuses: [
     { value: "NOT_READY", label: "资料不完整" },
@@ -1647,14 +1647,13 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}<small>${money(order.finalReceivableAmountCny)}</small></td>
         <td>${money(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0)}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
-        <td>${completenessBadge(completeness.sales, (completeness.sales?.missingTypes || []).length === 0)}</td>
         <td>${completenessBadge(completeness.supplier, (completeness.supplier?.missing || []).length === 0)}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}${taxMissingHtml(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions"><a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a></td>
       </tr>
     `;
-  }).join("") : emptyRow(13);
+  }).join("") : emptyRow(12);
 }
 
 function renderSettings() {
