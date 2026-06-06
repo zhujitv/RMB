@@ -20,7 +20,7 @@ export async function DELETE(request, { params }) {
     const actor = await getActor(request);
     assertWrite(actor, "users");
     const before = await prisma.user.findUnique({ where: { id } });
-    const user = await prisma.user.update({ where: { id }, data: { isActive: false } });
+    const user = await prisma.user.update({ where: { id }, data: { isActive: false, approvalStatus: "DISABLED" } });
     await revokeUserSessions(id);
     await writeAudit(request, actor, "停用用户", "users", id, before, user);
     return ok({ ok: true });

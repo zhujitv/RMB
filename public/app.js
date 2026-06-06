@@ -71,6 +71,12 @@ const constants = {
     { value: "OWN_COST", label: "本人成本相关" },
     { value: "NONE", label: "无数据范围" },
   ],
+  userApprovalStatuses: [
+    { value: "PENDING", label: "待审核" },
+    { value: "APPROVED", label: "已通过" },
+    { value: "REJECTED", label: "已拒绝" },
+    { value: "DISABLED", label: "已停用" },
+  ],
   menuPermissionOptions: [
     { value: "dashboard", label: "经营总览" },
     { value: "orders", label: "应收订单" },
@@ -1462,10 +1468,10 @@ function renderStats(items) {
 }
 
 function statusClass(status) {
-  if (["已逾期", "已退回", "已取消", "停用", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
+  if (["已逾期", "已退回", "已取消", "停用", "已停用", "已拒绝", "REJECTED", "DISABLED", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
   if (String(status || "").startsWith("不可结算")) return "danger";
-  if (["已收齐", "已结清", "已到账", "已支付", "启用", "SUCCESS", "READY", "COMPLETED", "可结算", "已结算"].includes(status)) return "success";
-  if (["即将到期", "待确认", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
+  if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "COMPLETED", "可结算", "已结算"].includes(status)) return "success";
+  if (["即将到期", "待确认", "待审核", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
   return "";
 }
 
@@ -1955,6 +1961,11 @@ function permissionModeLabel(mode) {
   return constants.permissionModes.find((item) => item.value === mode)?.label || "固定角色权限";
 }
 
+function approvalStatusLabel(status, isActive = false) {
+  const normalized = status || (isActive ? "APPROVED" : "DISABLED");
+  return constants.userApprovalStatuses.find((item) => item.value === normalized)?.label || normalized;
+}
+
 function permissionCheckHtml(option, selected, name) {
   return `
     <label class="permission-check">
@@ -2064,16 +2075,26 @@ function renderSettings() {
   `).join("") : emptyRow(8);
 
   $("#users-count").textContent = `${state.users.length} 个用户`;
-  $("#users-table").innerHTML = state.users.length ? state.users.map((user) => `
-    <tr>
-      <td>${escapeHtml(user.name)}</td>
-      <td>${escapeHtml(user.email)}</td>
-      <td>${escapeHtml(user.role)}</td>
-      <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
-      <td>${user.isActive ? "启用" : "停用"}</td>
-      ${rowActions(canWriteArea("users") ? `<button data-edit-user="${user.id}">编辑</button><button data-delete-user="${user.id}">停用</button>` : "")}
-    </tr>
-  `).join("") : emptyRow(6);
+  $("#users-table").innerHTML = state.users.length ? state.users.map((user) => {
+    const approvalLabel = approvalStatusLabel(user.approvalStatus, user.isActive);
+    const actions = canWriteArea("users")
+      ? [
+          user.approvalStatus === "PENDING" ? `<button data-approve-user="${user.id}">通过</button><button data-reject-user="${user.id}">拒绝</button>` : "",
+          `<button data-edit-user="${user.id}">编辑</button>`,
+          user.approvalStatus !== "DISABLED" ? `<button data-delete-user="${user.id}">停用</button>` : "",
+        ].filter(Boolean).join("")
+      : "";
+    return `
+      <tr>
+        <td>${escapeHtml(user.name)}</td>
+        <td>${escapeHtml(user.email)}</td>
+        <td>${escapeHtml(user.role)}</td>
+        <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
+        <td><span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span></td>
+        ${rowActions(actions)}
+      </tr>
+    `;
+  }).join("") : emptyRow(6);
 
   $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
     <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.entityType)} / ${escapeHtml(log.entityId || "-")}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
@@ -3192,6 +3213,7 @@ async function submitUser(event) {
       name: $("#user-name").value,
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
+      approvalStatus: $("#user-approval-status").value,
       password: $("#user-password").value,
       customPermissions: readUserPermissionForm(),
     };
@@ -3200,6 +3222,28 @@ async function submitUser(event) {
     resetForm("user");
     await loadData();
     toast("用户已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function updateUserApproval(id, approvalStatus) {
+  if (!canWriteArea("users")) return toast("没有权限审核用户");
+  const user = state.users.find((item) => item.id === id);
+  if (!user) return;
+  try {
+    await api(`/api/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: user.name,
+        email: user.email,
+        role: user.role || "查看者",
+        approvalStatus,
+        customPermissions: user.customPermissions || { mode: "ROLE" },
+      }),
+    });
+    await loadData();
+    toast(approvalStatus === "APPROVED" ? "用户审核已通过" : "用户审核已拒绝");
   } catch (error) {
     toast(error.message);
   }
@@ -3217,6 +3261,28 @@ async function submitLogin(event) {
     await loadData();
     closeLoginModal();
     toast(state.passwordChangeRequired ? "请先修改初始密码" : "登录成功");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function submitRegister(event) {
+  event.preventDefault();
+  const password = $("#register-password")?.value || "";
+  const confirmPassword = $("#register-confirm-password")?.value || "";
+  if (password !== confirmPassword) return toast("两次输入的密码不一致");
+  try {
+    await api("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        name: $("#register-name")?.value || "",
+        email: String($("#register-email")?.value || "").trim().toLowerCase(),
+        password,
+        confirmPassword,
+      }),
+    });
+    $("#register-form")?.reset();
+    toast("注册申请已提交，请等待管理员审核");
   } catch (error) {
     toast(error.message);
   }
@@ -3364,6 +3430,7 @@ function resetForm(name) {
     $("#user-form").reset();
     $("#user-id").value = "";
     $("#user-role").value = "查看者";
+    $("#user-approval-status").value = "APPROVED";
     $("#user-permission-mode").value = "ROLE";
     renderUserPermissionEditor();
   }
@@ -3477,6 +3544,7 @@ function editUser(id) {
   $("#user-name").value = user.name;
   $("#user-email").value = user.email;
   $("#user-role").value = user.role;
+  $("#user-approval-status").value = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
   $("#user-permission-mode").value = user.permissionMode || user.customPermissions?.mode || "ROLE";
   $("#user-password").value = "";
   renderUserPermissionEditor(user);
@@ -3700,6 +3768,7 @@ function bindEvents() {
   $("#refresh-data").addEventListener("click", loadData);
   $("#show-login").addEventListener("click", openLoginModal);
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  $("#register-form")?.addEventListener("submit", submitRegister);
   $("#password-change-form")?.addEventListener("submit", submitPasswordChange);
   $("#password-change-logout")?.addEventListener("click", () => logoutCurrentUser().catch((error) => toast(error.message)));
   document.addEventListener("keydown", (event) => {
@@ -3935,6 +4004,8 @@ function bindEvents() {
     if (target.dataset.editCustomer) editCustomer(target.dataset.editCustomer);
     if (target.dataset.editSupplier) editSupplier(target.dataset.editSupplier);
     if (target.dataset.editUser) editUser(target.dataset.editUser);
+    if (target.dataset.approveUser) updateUserApproval(target.dataset.approveUser, "APPROVED");
+    if (target.dataset.rejectUser) updateUserApproval(target.dataset.rejectUser, "REJECTED");
     if (target.dataset.deleteOrder) deleteRecord("order", target.dataset.deleteOrder);
     if (target.dataset.deletePayment) deleteRecord("payment", target.dataset.deletePayment);
     if (target.dataset.deleteCost) deleteRecord("cost", target.dataset.deleteCost);
@@ -3972,6 +4043,7 @@ function initSelects() {
   fillSelect("#logistics-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#logistics-invoice-status", constants.invoiceStatuses, "未收到");
   fillSelect("#user-role", constants.roles, "查看者");
+  fillSelect("#user-approval-status", constants.userApprovalStatuses, "APPROVED");
   fillSelect("#user-permission-mode", constants.permissionModes.map((item) => ({ value: item.value, label: item.label })), "ROLE");
   renderUserPermissionEditor();
 }

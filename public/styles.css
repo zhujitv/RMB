@@ -99,6 +99,29 @@ button {
   min-height: 42px;
 }
 
+.register-box {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.register-box summary {
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.register-box .login-screen-form {
+  margin-top: 14px;
+}
+
+.register-box small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .app-shell {
   display: block;
   min-height: 100vh;

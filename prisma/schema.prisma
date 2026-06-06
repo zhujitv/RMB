@@ -41,6 +41,7 @@ model User {
   role         String   @default("查看者")
   customPermissions Json? @map("custom_permissions")
   mustChangePassword Boolean @default(false) @map("must_change_password")
+  approvalStatus String @default("APPROVED") @map("approval_status")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -62,6 +63,7 @@ model User {
   loginAttempts LoginAttempt[]
   auditLogs   AuditLog[]
 
+  @@index([approvalStatus])
   @@map("users")
 }
 

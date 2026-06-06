@@ -17,6 +17,17 @@
           <label><span>密码</span><input id="screen-login-password" data-login-password type="password" autocomplete="current-password" required /></label>
           <button class="primary-button" type="submit">登录</button>
         </form>
+        <details class="register-box">
+          <summary>申请普通用户账号</summary>
+          <form class="login-screen-form" id="register-form" autocomplete="off">
+            <label><span>姓名</span><input id="register-name" required /></label>
+            <label><span>邮箱</span><input id="register-email" type="text" inputmode="email" autocomplete="email" required /></label>
+            <label><span>密码</span><input id="register-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <label><span>确认密码</span><input id="register-confirm-password" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <button class="secondary-button" type="submit">提交审核</button>
+            <small>提交后需管理员审核通过，才能登录系统。</small>
+          </form>
+        </details>
       </div>
     </section>
 
@@ -558,6 +569,7 @@
                 <label><span>姓名 *</span><input id="user-name" required /></label>
                 <label><span>邮箱 *</span><input id="user-email" required /></label>
                 <label><span>角色分类</span><select id="user-role"></select></label>
+                <label><span>账号状态</span><select id="user-approval-status"></select></label>
                 <label><span>权限模式</span><select id="user-permission-mode"></select></label>
                 <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="至少 8 位，保存后用户需首次改密" /></label>
                 <div class="wide permission-editor" id="user-permission-editor" hidden>
