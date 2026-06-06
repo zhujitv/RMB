@@ -60,13 +60,13 @@ const constants = {
     { value: "CUSTOM", label: "自定义组合权限" },
   ],
   menuPermissionOptions: [
-    { value: "dashboard", label: "总览" },
+    { value: "dashboard", label: "经营总览" },
     { value: "orders", label: "应收订单" },
-    { value: "payments", label: "收款登记" },
-    { value: "costs", label: "成本录入" },
+    { value: "payments", label: "收款管理" },
+    { value: "costs", label: "成本管理" },
     { value: "profit", label: "利润分析" },
-    { value: "taxRefund", label: "退税资料管理" },
-    { value: "reports", label: "报表导出" },
+    { value: "taxRefund", label: "退税资料" },
+    { value: "reports", label: "报表中心" },
     { value: "settings", label: "系统设置" },
   ],
   readPermissionOptions: [
@@ -123,13 +123,13 @@ const constants = {
 };
 
 const viewTitles = {
-  dashboard: "总览",
+  dashboard: "经营总览",
   orders: "应收订单",
-  payments: "收款登记",
-  costs: "成本录入",
+  payments: "收款管理",
+  costs: "成本管理",
   profit: "利润分析",
-  taxRefund: "退税资料管理",
-  reports: "报表导出",
+  taxRefund: "退税资料",
+  reports: "报表中心",
   settings: "系统设置",
 };
 
@@ -938,7 +938,8 @@ async function loadMe() {
   state.roles = data.roles || constants.roles;
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
   $("#current-user").textContent = state.me?.name || "未登录";
-  $("#current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "请登录后访问业务数据";
+  $("#current-role").textContent = state.me?.role || "未登录";
+  $("#current-scope").textContent = state.me ? scopeText() : "请登录后访问业务数据";
   $("#top-user-name").textContent = state.me?.name || "登录";
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
@@ -3208,6 +3209,18 @@ function closeLoginModal() {
   document.body.classList.remove("modal-open");
 }
 
+function setMobileNav(open) {
+  document.body.classList.toggle("nav-open", open);
+  const toggle = $("#mobile-nav-toggle");
+  const backdrop = $("#nav-backdrop");
+  if (toggle) toggle.setAttribute("aria-expanded", String(open));
+  if (backdrop) backdrop.hidden = !open;
+}
+
+function closeMobileNav() {
+  setMobileNav(false);
+}
+
 function loginPayloadFromForm(form) {
   return {
     email: String(form.querySelector("[data-login-email]")?.value || "").trim().toLowerCase(),
@@ -3221,17 +3234,24 @@ async function logoutCurrentUser() {
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   clearLocalCaches();
   closeLoginModal();
+  closeMobileNav();
   setAuthenticatedShell(false);
   toast("已退出");
 }
 
 function bindEvents() {
-  $$(".nav-tab").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+  $$(".nav-tab").forEach((button) => button.addEventListener("click", () => {
+    switchView(button.dataset.view);
+    closeMobileNav();
+  }));
+  $("#mobile-nav-toggle")?.addEventListener("click", () => setMobileNav(!document.body.classList.contains("nav-open")));
+  $("#nav-backdrop")?.addEventListener("click", closeMobileNav);
   $("#refresh-data").addEventListener("click", loadData);
   $("#show-login").addEventListener("click", openLoginModal);
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
+    if (event.key === "Escape") closeMobileNav();
   });
   $("#clear-filters").addEventListener("click", () => {
     $$(".filters input, .filters select").forEach((el) => (el.value = ""));

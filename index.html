@@ -21,38 +21,67 @@
     </section>
 
     <div class="app-shell" id="app-shell" hidden>
-      <aside class="sidebar" aria-label="系统导航">
+      <div class="nav-backdrop" id="nav-backdrop" hidden></div>
+      <aside class="sidebar" id="sidebar" aria-label="系统导航">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">¥</div>
           <div>
-            <h1>外贸应收款协同管理平台</h1>
-            <p>应收订单 · 收款登记 · 成本录入 · 利润分析 · 逾期提醒</p>
+            <h1>NEXTWOOD Finance</h1>
+            <p class="brand-platform">外贸应收款协同平台</p>
+            <p class="brand-company">浙江莱诺建材有限公司</p>
           </div>
         </div>
 
         <nav class="nav-tabs" aria-label="主要视图">
-          <button class="nav-tab is-active" data-view="dashboard" type="button"><span>▦</span>总览</button>
-          <button class="nav-tab" data-view="orders" type="button"><span>▤</span>应收订单</button>
-          <button class="nav-tab" data-view="payments" type="button"><span>↙</span>收款登记</button>
-          <button class="nav-tab" data-view="costs" type="button"><span>↗</span>成本录入</button>
-          <button class="nav-tab" data-view="profit" type="button"><span>％</span>利润分析</button>
-          <button class="nav-tab" data-view="taxRefund" type="button"><span>☰</span>退税资料管理</button>
-          <button class="nav-tab" data-view="reports" type="button"><span>≋</span>报表导出</button>
-          <button class="nav-tab" data-view="settings" type="button"><span>⚙</span>系统设置</button>
+          <button class="nav-tab is-active" data-view="dashboard" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+            <span>经营总览</span>
+          </button>
+          <button class="nav-tab" data-view="orders" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+            <span>应收订单</span>
+          </button>
+          <button class="nav-tab" data-view="payments" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M21 8V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"/><path d="M17 14h.01"/></svg>
+            <span>收款管理</span>
+          </button>
+          <button class="nav-tab" data-view="costs" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+            <span>成本管理</span>
+          </button>
+          <button class="nav-tab" data-view="profit" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>
+            <span>利润分析</span>
+          </button>
+          <button class="nav-tab" data-view="taxRefund" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/><path d="m9 13 2 2 4-4"/></svg>
+            <span>退税资料</span>
+          </button>
+          <button class="nav-tab" data-view="reports" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M12 9v8"/></svg>
+            <span>报表中心</span>
+          </button>
+          <button class="nav-tab" data-view="settings" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.1V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.1-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .35-1.1V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15.4 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.32.36.7.6 1.1.6H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>
+            <span>系统设置</span>
+          </button>
         </nav>
 
         <div class="user-box">
           <span class="label">当前用户</span>
-          <strong id="current-user">读取中...</strong>
-          <small id="current-role">PostgreSQL 协同数据</small>
+          <strong id="current-user">蒋丁樑</strong>
+          <small id="current-role">管理员</small>
+          <small id="current-scope">可查看和管理全部数据</small>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
+          <button class="mobile-nav-button" id="mobile-nav-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="展开导航">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+          </button>
           <div>
             <p class="eyebrow">贸易订单应收协同</p>
-            <h2 id="view-title">总览</h2>
+            <h2 id="view-title">经营总览</h2>
           </div>
           <div class="top-actions">
             <button class="ghost-button" id="refresh-data" type="button">刷新</button>
