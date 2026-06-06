@@ -785,6 +785,7 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
+    closePasswordModal();
   }
 }
 
@@ -1099,7 +1100,6 @@ async function loadMe() {
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
   $("#current-user").textContent = state.me?.name || "未登录";
   $("#current-role").textContent = state.me?.role || "未登录";
-  $("#current-scope").textContent = state.me ? scopeText() : "请登录后访问业务数据";
   $("#top-user-name").textContent = state.me?.name || "登录";
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
@@ -3934,6 +3934,7 @@ async function submitProfilePassword(event) {
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     });
     $("#profile-password-form")?.reset();
+    closePasswordModal();
     handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
     reportFrontendError(error, "修改密码失败", form);
@@ -4341,6 +4342,8 @@ function exportReport(type) {
 function profileInitials(user = state.me) {
   const manual = String(user?.avatarInitials || "").trim();
   if (manual) return manual.slice(0, 8).toUpperCase();
+  const emailLocal = String(user?.email || "").split("@")[0].replace(/[^A-Za-z0-9]/g, "");
+  if (emailLocal.length >= 2) return `${emailLocal[0]}${emailLocal[emailLocal.length - 1]}`.toUpperCase();
   const name = String(user?.name || "").trim();
   if (!name) return "--";
   const asciiParts = name.match(/[A-Za-z0-9]+/g);
@@ -4359,28 +4362,15 @@ function approvalStatusText(user = state.me) {
   return labels[status] || status || "-";
 }
 
-function setProfileTab(tab = "profile") {
-  const activeTab = tab === "password" ? "password" : "profile";
-  $$("[data-profile-tab]").forEach((button) => {
-    const active = button.dataset.profileTab === activeTab;
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-selected", String(active));
-  });
-  $$("[data-profile-panel]").forEach((panel) => {
-    const active = panel.dataset.profilePanel === activeTab;
-    panel.hidden = !active;
-    panel.classList.toggle("is-active", active);
-  });
-}
-
 function renderProfileModal() {
   if (!state.me) return;
   $("#modal-current-user").textContent = state.me.name || "-";
   $("#modal-current-role").textContent = state.me.role || "-";
   $("#profile-avatar").textContent = profileInitials();
+  $("#account-menu-avatar").textContent = profileInitials();
+  $("#account-menu-name").textContent = state.me.name || "-";
+  $("#account-menu-role").textContent = state.me.role || "-";
   $("#profile-email").textContent = state.me.email || "-";
-  $("#profile-status").textContent = approvalStatusText();
-  $("#profile-version").textContent = `当前版本：${APP_VERSION}`;
   $("#profile-name").value = state.me.name || "";
   $("#profile-phone").value = state.me.phone || "";
   $("#profile-language").value = state.me.defaultLanguage || "zh-CN";
@@ -4407,7 +4397,7 @@ function toggleAccountMenu() {
   button.setAttribute("aria-expanded", String(open));
 }
 
-function openLoginModal(tab = "profile") {
+function openProfileDrawer() {
   if (!state.me) {
     setAuthenticatedShell(false);
     $("#screen-login-email")?.focus();
@@ -4417,17 +4407,38 @@ function openLoginModal(tab = "profile") {
   const modal = $("#login-modal");
   if (!modal) return;
   renderProfileModal();
-  setProfileTab(tab);
   modal.hidden = false;
   document.body.classList.add("modal-open");
-  (tab === "password" ? $("#profile-current-password") : $("#profile-name"))?.focus();
+  $("#profile-name")?.focus();
+}
+
+function openPasswordModal() {
+  if (!state.me) {
+    setAuthenticatedShell(false);
+    $("#screen-login-email")?.focus();
+    return;
+  }
+  closeAccountMenu();
+  $("#profile-password-form")?.reset();
+  const modal = $("#password-modal");
+  if (!modal) return;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#profile-current-password")?.focus();
 }
 
 function closeLoginModal() {
   const modal = $("#login-modal");
   if (!modal) return;
   modal.hidden = true;
-  document.body.classList.remove("modal-open");
+  if ($("#password-modal")?.hidden !== false) document.body.classList.remove("modal-open");
+}
+
+function closePasswordModal() {
+  const modal = $("#password-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  if ($("#login-modal")?.hidden !== false) document.body.classList.remove("modal-open");
 }
 
 function setMobileNav(open) {
@@ -4458,6 +4469,7 @@ async function logoutCurrentUser() {
   clearLocalCaches();
   closeAccountMenu();
   closeLoginModal();
+  closePasswordModal();
   closeMobileNav();
   setAuthenticatedShell(false);
   toast("已退出");
@@ -4474,12 +4486,13 @@ function bindAuthEvents() {
   bindOptional("#account-menu-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $$("[data-profile-open]").forEach((button) => {
-    button.addEventListener("click", () => openLoginModal(button.dataset.profileOpen || "profile"));
-  });
-  $$("[data-profile-tab]").forEach((button) => {
-    button.addEventListener("click", () => setProfileTab(button.dataset.profileTab));
+    button.addEventListener("click", () => {
+      if (button.dataset.profileOpen === "password") openPasswordModal();
+      else openProfileDrawer();
+    });
   });
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  $$("[data-close-password]").forEach((el) => el.addEventListener("click", closePasswordModal));
   document.addEventListener("click", (event) => {
     if (!event.target.closest?.(".account-menu-wrap")) closeAccountMenu();
   });
@@ -4497,6 +4510,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
+    if (event.key === "Escape" && !$("#password-modal")?.hidden) closePasswordModal();
     if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
   });
