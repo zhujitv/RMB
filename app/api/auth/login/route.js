@@ -5,6 +5,7 @@ import {
   createUserSession,
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
+  isUnsafeDefaultAdminEmail,
   normalizeEmail,
   passwordHashNeedsUpgrade,
   publicUser,
@@ -23,6 +24,10 @@ export async function POST(request) {
     const body = await request.json();
     const email = normalizeEmail(body.email);
     await assertLoginNotRateLimited(request, email);
+    if (isUnsafeDefaultAdminEmail(email)) {
+      await recordLoginAttempt(request, email, false, null);
+      return NextResponse.json({ error: "默认管理员账号已禁用，请使用公司管理员账号登录。" }, { status: 403 });
+    }
     let user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
     });
