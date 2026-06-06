@@ -2879,7 +2879,7 @@ function resetCostItems(items = [{}]) {
 }
 
 function costDefaultType() {
-  return constants.costTypes[0] || "其他费用";
+  return constants.costTypes.includes("工厂货款") ? "工厂货款" : (constants.costTypes[0] || "其他费用");
 }
 
 function costFormLabel(cost = {}) {
@@ -2928,6 +2928,19 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
   setCostFormMode(null);
   updateCostDerived();
   if (clearStoredDraft) clearDraft("cost");
+}
+
+function resetCostFormAfterSave() {
+  clearDraft("cost");
+  resetCostForm({ clearStoredDraft: true, reloadOrders: true });
+  $("#cost-id").value = "";
+  $("#cost-type").value = costDefaultType();
+  $("#cost-payment-status").value = "待支付";
+  $("#cost-confirmed").value = "false";
+  $("#cost-invoice-status").value = "未收到";
+  resetCostItems([{}]);
+  setCostFormMode(null);
+  updateCostDerived();
 }
 
 function readCostItems(validate = false) {
@@ -3714,6 +3727,12 @@ async function submitPayment(event) {
 async function submitCost(event) {
   event.preventDefault();
   if (!canWriteArea("costs")) return toast("没有权限保存成本");
+  const submitButton = $("#cost-submit-button");
+  if (submitButton?.disabled) return;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "保存中...";
+  }
   try {
     const data = readForm("cost", costFields);
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
@@ -3746,12 +3765,16 @@ async function submitCost(event) {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
-    const savedCosts = result.costs || (result.cost ? [result.cost] : []);
-    resetCostForm();
     await loadData();
-    toast(`成本已保存${savedCosts.length > 1 ? ` ${savedCosts.length} 条` : ""}`);
+    resetCostFormAfterSave();
+    toast("成本保存成功");
   } catch (error) {
     toast(error.message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = $("#cost-id")?.value ? "更新成本" : "保存成本";
+    }
   }
 }
 
