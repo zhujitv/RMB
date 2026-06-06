@@ -377,7 +377,9 @@ function applyRateEditability() {
     if (el) el.readOnly = !editable;
   });
   $$(".cost-item-rate").forEach((el) => {
-    el.readOnly = !editable;
+    const row = el.closest(".cost-item-row");
+    const currency = row?.querySelector(".cost-item-currency")?.value;
+    el.readOnly = currency === "CNY" || !editable;
   });
   const refreshDisabled = !canRefreshRate();
   $$(".rate-refresh").forEach((button) => {
@@ -532,7 +534,25 @@ function setCostRowRateSnapshot(row, quote = {}) {
   }
 }
 
+function normalizeCostRowCnyRate(row) {
+  if (!row || row.querySelector(".cost-item-currency")?.value !== "CNY") return;
+  setCostRowRateSnapshot(row, {
+    currency: "CNY",
+    rateToCny: 1,
+    rateDate: rateDateFor("cost"),
+    source: "系统",
+    rateType: state.exchangeRateSettings.rateType,
+  });
+  const rateInput = row.querySelector(".cost-item-rate");
+  if (rateInput) rateInput.readOnly = true;
+  updateCostItemDerived(row);
+}
+
 function markCostRowManualRate(row) {
+  if (row.querySelector(".cost-item-currency")?.value === "CNY") {
+    normalizeCostRowCnyRate(row);
+    return;
+  }
   row.querySelector(".cost-item-rate-source").value = "手动";
   if (!row.querySelector(".cost-item-rate-date").value) row.querySelector(".cost-item-rate-date").value = rateDateFor("cost");
   if (!row.querySelector(".cost-item-rate-type").value) row.querySelector(".cost-item-rate-type").value = state.exchangeRateSettings.rateType;
@@ -2833,6 +2853,13 @@ function selectSupplierForRow(row, supplier, { persist = true } = {}) {
 
 function costItemRow(item = {}) {
   const currency = item.currency || "CNY";
+  const normalizedItem = currency === "CNY" ? {
+    ...item,
+    exchangeRate: item.exchangeRate || 1,
+    exchangeRateDate: item.exchangeRateDate || rateDateFor("cost"),
+    exchangeRateSource: item.exchangeRateSource || "系统",
+    exchangeRateType: item.exchangeRateType || state.exchangeRateSettings.rateType,
+  } : item;
   return `
     <div class="cost-item-row">
       <label class="supplier-picker"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search" value="${escapeHtml(supplierDisplayName(item))}" placeholder="搜索供应商" autocomplete="off" /><div class="supplier-search-results"></div></label>
@@ -2841,14 +2868,14 @@ function costItemRow(item = {}) {
       <div class="form-field rate-field">
         <span>汇率 *</span>
         <div class="rate-input-row">
-          <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate ?? "")}" />
+          <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(normalizedItem.exchangeRate ?? "")}" ${currency === "CNY" ? "readonly" : ""} />
           <button class="secondary-button rate-refresh cost-item-rate-refresh" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
-          <small class="rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(item))}</small>
-          <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover cost-item-rate-details">${rateDetailHtml(item)}</div></details>
+          <small class="rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(normalizedItem))}</small>
+          <details class="rate-details"><summary>详情</summary><div class="rate-detail-popover cost-item-rate-details">${rateDetailHtml(normalizedItem)}</div></details>
         </div>
-        <input class="cost-item-rate-date" type="hidden" value="${escapeHtml(item.exchangeRateDate || "")}" />
-        <input class="cost-item-rate-source" type="hidden" value="${escapeHtml(item.exchangeRateSource || "")}" />
-        <input class="cost-item-rate-type" type="hidden" value="${escapeHtml(item.exchangeRateType || state.exchangeRateSettings.rateType)}" />
+        <input class="cost-item-rate-date" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateDate || "")}" />
+        <input class="cost-item-rate-source" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateSource || "")}" />
+        <input class="cost-item-rate-type" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateType || state.exchangeRateSettings.rateType)}" />
       </div>
       <label><span>折人民币</span><input class="cost-item-amount-cny" disabled /></label>
       <label><span>备注</span><input class="cost-item-remark" value="${escapeHtml(item.remark || "")}" /></label>
@@ -2868,7 +2895,8 @@ function addCostItem(item = {}) {
   $("#cost-items").insertAdjacentHTML("beforeend", costItemRow(item));
   const row = $("#cost-items .cost-item-row:last-child");
   applyRateEditability();
-  if (!item.exchangeRate && state.me) applyCostItemRate(row).catch(() => {});
+  if (row.querySelector(".cost-item-currency")?.value === "CNY") normalizeCostRowCnyRate(row);
+  else if (!item.exchangeRate && state.me) applyCostItemRate(row).catch(() => {});
   updateCostItemDerived(row);
   return row;
 }
@@ -2932,6 +2960,7 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
 
 function readCostItems(validate = false) {
   const rows = $$("#cost-items .cost-item-row");
+  rows.forEach(normalizeCostRowCnyRate);
   const items = rows.map((row) => ({
     supplierId: row.querySelector(".cost-item-supplier-id").value,
     supplierName: row.querySelector(".cost-item-supplier-search").value.trim(),
@@ -2949,9 +2978,11 @@ function readCostItems(validate = false) {
     items.forEach((item, index) => {
       const label = `第 ${index + 1} 条成本`;
       if (!item.supplierId) throw new Error(`${label}必须从供应商资料中选择供应商`);
-      if (!(Number(item.amount) > 0)) throw new Error(`${label}的成本金额必须大于 0`);
-      if (!item.currency) throw new Error(`${label}的币种不能为空`);
-      if (!(Number(item.exchangeRate) > 0)) throw new Error(`${label}的汇率必须大于 0`);
+      if (!String(item.amount || "").trim()) throw new Error("请填写供应商成本金额");
+      if (!(Number(item.amount) > 0)) throw new Error("供应商成本金额必须大于 0");
+      if (!item.currency) throw new Error("请选择成本币种");
+      if (!String(item.exchangeRate || "").trim()) throw new Error("请填写汇率；CNY 成本汇率应自动为 1");
+      if (!(Number(item.exchangeRate) > 0)) throw new Error("成本汇率必须大于 0");
     });
   }
   return items;
@@ -4795,7 +4826,8 @@ function bindEvents() {
   $("#cost-items").addEventListener("change", (event) => {
     const row = event.target.closest(".cost-item-row");
     if (row && event.target.classList.contains("cost-item-currency")) {
-      applyCostItemRate(row).catch(() => {});
+      if (event.target.value === "CNY") normalizeCostRowCnyRate(row);
+      else applyCostItemRate(row).catch(() => {});
     }
     saveCostDraft();
   });
