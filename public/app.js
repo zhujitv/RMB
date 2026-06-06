@@ -1644,6 +1644,45 @@ function auditCell(row) {
   return `<small>建：${escapeHtml(created)}<br>改：${escapeHtml(updated)}</small>`;
 }
 
+function auditEntityLabel(log = {}) {
+  if (log.entityLabel) return log.entityLabel;
+  const data = log.afterData || log.beforeData || {};
+  const nestedOrder = data.order || {};
+  const nestedCustomer = data.customer || {};
+  const nestedSupplier = data.supplier || {};
+  const typeLabels = {
+    receivable_orders: "订单",
+    payments: "收款",
+    order_costs: "成本",
+    customers: "客户",
+    suppliers: "供应商",
+    users: "用户",
+    order_documents: "文件",
+    attachments: "附件",
+    exchange_rates: "汇率",
+    exchange_rate_settings: "汇率设置",
+  };
+  const type = typeLabels[log.entityType] || log.entityType || "业务对象";
+  const candidates = [
+    data.orderNo,
+    data.order?.orderNo,
+    data.fileName,
+    data.supplierName,
+    data.supplierNameSnapshot,
+    data.vendorName,
+    data.customerName,
+    data.customerNameSnapshot,
+    data.name,
+    data.email,
+    nestedOrder.orderNo,
+    nestedSupplier.supplierName,
+    nestedSupplier.name,
+    nestedCustomer.name,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const value = candidates[0] || "业务记录";
+  return `${type}：${value}`;
+}
+
 function paymentTermCell(order) {
   const schedule = order.paymentInstallmentText || "";
   return `${escapeHtml(order.paymentTermDisplay || order.paymentTerm || "-")}${schedule ? `<small>${escapeHtml(schedule)}</small>` : ""}`;
@@ -1657,7 +1696,7 @@ function renderOrders() {
   $("#orders-count").textContent = `${state.orders.length} 条`;
   $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
     <tr>
-      <td><strong>${escapeHtml(order.orderNo)}</strong><small>ID: ${escapeHtml(order.id)}</small></td>
+      <td><strong>${escapeHtml(order.orderNo)}</strong></td>
       <td>${escapeHtml(order.blNo || "待发货")}</td>
       <td>${escapeHtml(order.customerName)}</td>
       <td>${paymentTermCell(order)}</td>
@@ -2647,7 +2686,7 @@ function renderSettings() {
   }).join("") : emptyRow(6);
 
   $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
-    <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(log.entityType)} / ${escapeHtml(log.entityId || "-")}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
+    <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(auditEntityLabel(log))}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
   `).join("") : emptyRow(5);
 }
 
