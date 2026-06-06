@@ -31,7 +31,7 @@ export async function POST(request) {
     let user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
     });
-    if (!user || !verifyPassword(body.password || "", user.passwordHash)) {
+    if (!user || !(await verifyPassword(body.password || "", user.passwordHash))) {
       await recordLoginAttempt(request, email, false, user?.id || null);
       return NextResponse.json({ error: "邮箱或密码错误" }, { status: 401 });
     }

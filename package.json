@@ -1,10 +1,11 @@
 {
   "name": "foreign-trade-ledger",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "lint": "node --check app.js && node --check public/app.js && node --check lib/platform-db.js",
     "start": "next start",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",

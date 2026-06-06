@@ -1,6 +1,7 @@
 const DRAFT_PREFIX = "fta-platform-draft:";
 const MAX_PDF_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_CONCURRENT_UPLOADS = 3;
+const APP_VERSION = "v1.0.1";
 
 const state = {
   view: "dashboard",
@@ -1080,7 +1081,16 @@ function renderFilterSummary() {
 }
 
 async function loadMe() {
-  const data = await api("/api/auth/me");
+  const response = await fetch("/api/auth/me");
+  if (response.status === 401) {
+    state.me = null;
+    state.roles = constants.roles;
+    state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+    setAuthenticatedShell(false);
+    return false;
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "校验登录状态失败");
   state.me = data.user;
   state.roles = data.roles || constants.roles;
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
@@ -1091,8 +1101,13 @@ async function loadMe() {
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
   $("#modal-current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "-";
+  $$("#app-version, [data-app-version]").forEach((el) => {
+    el.textContent = `当前版本：${APP_VERSION}`;
+  });
   if ($("#settings-session-text")) {
-    $("#settings-session-text").textContent = state.me ? `${state.me.name} · ${state.me.role} · ${scopeText()}` : "请登录后访问业务数据。";
+    $("#settings-session-text").textContent = state.me
+      ? `${state.me.name} · ${state.me.role} · ${scopeText()} · 当前版本：${APP_VERSION}`
+      : `请登录后访问业务数据。当前版本：${APP_VERSION}`;
   }
   const loggedIn = Boolean(state.me);
   state.passwordChangeRequired = Boolean(state.me?.mustChangePassword);
