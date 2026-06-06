@@ -1030,6 +1030,13 @@ textarea:focus {
   color: #1d4ed8;
 }
 
+.document-upload-control.is-busy,
+.supplier-doc-upload.is-busy {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
 .document-upload-control input,
 .supplier-doc-upload input {
   position: absolute;
@@ -1095,6 +1102,11 @@ textarea:focus {
   background: #fef2f2;
 }
 
+.uploaded-file-card.is-waiting {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
 .uploaded-file-card.is-uploading {
   border-color: #bfdbfe;
   background: #eff6ff;
@@ -1120,6 +1132,11 @@ textarea:focus {
 .uploaded-file-card.is-error .file-state-icon {
   background: #fecaca;
   color: #b91c1c;
+}
+
+.uploaded-file-card.is-waiting .file-state-icon {
+  background: #fde68a;
+  color: #a16207;
 }
 
 .uploaded-file-card.is-uploading .file-state-icon {
@@ -1195,6 +1212,22 @@ textarea:focus {
   margin-top: 6px;
 }
 
+.upload-waiting {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.upload-waiting strong {
+  color: #a16207;
+  font-size: 12px;
+}
+
+.upload-waiting small {
+  color: #854d0e;
+  font-size: 12px;
+}
+
 .upload-progress div {
   display: flex;
   align-items: center;
@@ -1234,6 +1267,34 @@ textarea:focus {
 .upload-error small {
   color: #991b1b;
   font-size: 12px;
+}
+
+.upload-queue-notice {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 80;
+  display: grid;
+  gap: 3px;
+  min-width: 210px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: rgba(239, 246, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #1e40af;
+  backdrop-filter: blur(8px);
+}
+
+.upload-queue-notice strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.upload-queue-notice small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .supplier-doc-list {
@@ -2259,6 +2320,14 @@ body.modal-open {
   .donut-ring {
     width: 170px;
     height: 170px;
+  }
+
+  .upload-queue-notice {
+    top: auto;
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+    min-width: 0;
   }
 
   .chart-row,

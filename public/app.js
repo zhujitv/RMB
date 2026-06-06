@@ -1,5 +1,6 @@
 const DRAFT_PREFIX = "fta-platform-draft:";
 const MAX_PDF_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_CONCURRENT_UPLOADS = 3;
 
 const state = {
   view: "dashboard",
@@ -17,6 +18,10 @@ const state = {
   costOrderResults: [],
   selectedCostOrder: null,
   documentUploads: {},
+  uploadQueue: [],
+  uploadBatchTotal: 0,
+  uploadBatchCompleted: 0,
+  uploadNoticeTimer: null,
   orderFormDirty: false,
   orderFormResetting: false,
   orderFormPopulating: false,
@@ -646,7 +651,16 @@ function clearLocalCaches() {
   state.auditLogs = [];
   state.costOrderResults = [];
   state.selectedCostOrder = null;
+  state.uploadQueue.forEach((task) => {
+    task.uploadStatus = "CANCELED";
+    if (task.xhr) task.xhr.abort();
+  });
+  state.uploadQueue = [];
+  state.uploadBatchTotal = 0;
+  state.uploadBatchCompleted = 0;
+  clearTimeout(state.uploadNoticeTimer);
   state.documentUploads = {};
+  if ($("#upload-queue-notice")) $("#upload-queue-notice").hidden = true;
   ["#order-id", "#payment-id", "#cost-id", "#customer-id", "#supplier-id", "#user-id"].forEach((selector) => {
     const el = $(selector);
     if (el) el.value = "";
@@ -1526,6 +1540,15 @@ function uploadFailureReason(document = {}) {
 }
 
 function documentActionsHtml(document) {
+  const transient = !isPersistedDocument(document);
+  if (transient && ["WAITING", "UPLOADING", "FAILED"].includes(document.uploadStatus)) {
+    return `
+      <div class="row-actions file-actions">
+        ${document.uploadStatus === "FAILED" ? `<button data-retry-upload="${escapeHtml(document.id)}" type="button">重新上传</button>` : ""}
+        <button data-cancel-upload="${escapeHtml(document.id)}" type="button">${document.uploadStatus === "FAILED" ? "移除" : "取消"}</button>
+      </div>
+    `;
+  }
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
     ? `<a class="secondary-button small-link" href="/api/order-documents/${document.id}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
@@ -1545,20 +1568,31 @@ function uploadProgressHtml(document = {}) {
   `;
 }
 
+function uploadWaitingHtml() {
+  return `
+    <div class="upload-waiting">
+      <strong>等待上传</strong>
+      <small>已进入队列，系统会自动开始上传</small>
+    </div>
+  `;
+}
+
 function uploadedFileCard(document, options = {}) {
   const status = document.uploadStatus || "PENDING";
-  const statusClassName = status === "SUCCESS" ? "is-success" : (status === "FAILED" ? "is-error" : "is-uploading");
+  const statusClassName = status === "SUCCESS" ? "is-success" : (status === "FAILED" ? "is-error" : (status === "WAITING" ? "is-waiting" : "is-uploading"));
   const filePrefix = options.typeLabel ? `<span class="file-type-label">${escapeHtml(options.typeLabel)}</span>` : "";
   const uploader = document.uploadedByName || document.uploadedBy?.name || state.me?.name || "-";
   const timeText = formatUploadTime(document.uploadedAt || document.createdAt || (status === "UPLOADING" ? new Date().toISOString() : ""));
-  const bodyHtml = status === "UPLOADING" || status === "PENDING"
+  const bodyHtml = status === "WAITING"
+    ? uploadWaitingHtml()
+    : (status === "UPLOADING" || status === "PENDING"
     ? uploadProgressHtml(document)
     : (status === "FAILED"
       ? `<div class="upload-error"><strong>上传失败</strong><small>${escapeHtml(uploadFailureReason(document))}</small></div>`
-      : `<div class="file-meta"><span class="file-status success">✓ 已上传</span><span>${escapeHtml(uploader)}</span><span>${escapeHtml(timeText)}</span></div>`);
+      : `<div class="file-meta"><span class="file-status success">✓ 已上传</span><span>${escapeHtml(uploader)}</span><span>${escapeHtml(timeText)}</span></div>`));
   return `
     <article class="uploaded-file-card ${statusClassName}">
-      <div class="file-state-icon" aria-hidden="true">${status === "SUCCESS" ? "✓" : (status === "FAILED" ? "!" : "")}</div>
+      <div class="file-state-icon" aria-hidden="true">${status === "SUCCESS" ? "✓" : (status === "FAILED" ? "!" : (status === "WAITING" ? "…" : ""))}</div>
       <div class="file-card-main">
         ${filePrefix}
         <strong title="${escapeHtml(document.fileName || "-")}">${escapeHtml(document.fileName || "-")}</strong>
@@ -1664,14 +1698,16 @@ function renderDocumentGrid(order) {
   $("#document-grid").innerHTML = constants.documentTypes.map((type) => {
     const docs = documentRowsForType(order, type.value);
     const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+    const busyStatus = uploadScopeStatus(order.id, type.value);
+    const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
     return `
       <article class="document-card" data-document-upload-card="true" data-order-id="${escapeHtml(order.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
           <strong>${escapeHtml(type.label)}</strong>
           ${canReadArea("taxRefund") ? `<a href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}&documentType=${encodeURIComponent(type.value)}" target="_blank" rel="noreferrer">下载此类</a>` : ""}
         </div>
-        <label class="document-upload-control">
-          <span>选择PDF文件</span>
+        <label class="document-upload-control ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+          <span>${escapeHtml(uploadText)}</span>
           <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" />
         </label>
         <div class="document-file-list-title">已上传文件列表</div>
@@ -1733,6 +1769,9 @@ function supplierDocumentCell(cost) {
         const docs = costDocumentRowsForType(cost, type.value);
         const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
         const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+        const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
+        const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
+        const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
         return `
           <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
             <div class="supplier-doc-head">
@@ -1741,8 +1780,8 @@ function supplierDocumentCell(cost) {
             </div>
             ${docsHtml}
             ${canWriteArea("documents") ? `
-              <label class="supplier-doc-upload">
-                <span>选择PDF文件</span>
+              <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+                <span>${escapeHtml(uploadText)}</span>
                 <input type="file" accept="application/pdf,.pdf"
                   data-cost-document-type="${escapeHtml(type.value)}"
                   data-order-id="${escapeHtml(order.id || cost.orderId)}"
@@ -2630,12 +2669,22 @@ function uploadScopeMatches(item = {}, orderId, documentType, scope = {}) {
     && (item.supplierId || "") === (scope.supplierId || "");
 }
 
+function uploadScopeStatus(orderId, documentType, scope = {}) {
+  const task = state.uploadQueue.find((item) => uploadScopeMatches(item, orderId, documentType, scope) && ["WAITING", "UPLOADING"].includes(item.uploadStatus));
+  return task?.uploadStatus || "";
+}
+
+function uploadScopeBusy(orderId, documentType, scope = {}) {
+  return Boolean(uploadScopeStatus(orderId, documentType, scope));
+}
+
 function clearFailedTransientUploads(orderId, documentType, scope = {}) {
   Object.entries(state.documentUploads).forEach(([key, item]) => {
     if (item.uploadStatus === "FAILED" && uploadScopeMatches(item, orderId, documentType, scope)) {
       delete state.documentUploads[key];
     }
   });
+  state.uploadQueue = state.uploadQueue.filter((item) => !(item.uploadStatus === "FAILED" && uploadScopeMatches(item, orderId, documentType, scope)));
 }
 
 function showLocalUploadFailure(order, documentType, file, scope = {}, message = "上传失败，请重试。", code = "") {
@@ -2656,9 +2705,45 @@ function showLocalUploadFailure(order, documentType, file, scope = {}, message =
     failureMessage: message,
     uploadedByName: state.me?.name || "",
     uploadedAt: new Date().toISOString(),
+    file,
   };
   refreshDocumentViews();
   toast(`${uploadFailureReason(state.documentUploads[key])}：${message}`);
+}
+
+function pendingUploadCount() {
+  return state.uploadQueue.filter((task) => ["WAITING", "UPLOADING"].includes(task.uploadStatus)).length;
+}
+
+function updateUploadQueueNotice() {
+  let notice = $("#upload-queue-notice");
+  const pending = pendingUploadCount();
+  const uploading = state.uploadQueue.filter((task) => task.uploadStatus === "UPLOADING").length;
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "upload-queue-notice";
+    notice.className = "upload-queue-notice";
+    document.body.appendChild(notice);
+  }
+  clearTimeout(state.uploadNoticeTimer);
+  if (!pending) {
+    if (state.uploadBatchTotal > 0) {
+      notice.innerHTML = `<strong>上传队列已完成</strong><small>已完成 ${state.uploadBatchCompleted}/${state.uploadBatchTotal}</small>`;
+      notice.hidden = false;
+      state.uploadNoticeTimer = setTimeout(() => {
+        if (!pendingUploadCount()) {
+          notice.hidden = true;
+          state.uploadBatchTotal = 0;
+          state.uploadBatchCompleted = 0;
+        }
+      }, 1600);
+    } else {
+      notice.hidden = true;
+    }
+    return;
+  }
+  notice.hidden = false;
+  notice.innerHTML = `<strong>正在上传 ${pending} 个文件</strong><small>已完成 ${state.uploadBatchCompleted}/${state.uploadBatchTotal} · 并发 ${uploading}/${MAX_CONCURRENT_UPLOADS}</small>`;
 }
 
 function refreshDocumentViews() {
@@ -2666,11 +2751,37 @@ function refreshDocumentViews() {
   renderCosts();
   renderTaxRefund();
   applyAccessControl();
+  updateUploadQueueNotice();
 }
 
-function uploadDocumentFile(order, documentType, file, scope = {}) {
+function syncUploadTaskToDocument(task) {
+  state.documentUploads[task.id] = {
+    ...(state.documentUploads[task.id] || {}),
+    id: task.id,
+    orderId: task.orderId,
+    costId: task.costId || "",
+    supplierId: task.supplierId || "",
+    relatedModule: task.relatedModule || documentRelatedModule(task.documentType),
+    documentType: task.documentType,
+    fileName: task.fileName,
+    fileSize: task.fileSize,
+    uploadStatus: task.uploadStatus,
+    uploadProgress: task.uploadProgress || 0,
+    failureCode: task.failureCode || "",
+    failureMessage: task.failureMessage || "",
+    uploadedByName: task.uploadedByName || state.me?.name || "",
+    uploadedAt: task.uploadedAt || new Date().toISOString(),
+    file: task.file,
+  };
+}
+
+function enqueueUploadTask(order, documentType, file, scope = {}) {
   if (!canWriteArea("documents")) return toast("没有权限上传单证");
   if (!file) return;
+  if (uploadScopeBusy(order.id, documentType, scope)) {
+    toast("当前资料正在上传，请等待完成或取消后重新上传。");
+    return;
+  }
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
     showLocalUploadFailure(order, documentType, file, scope, "只能上传 PDF 文件", "FILE_TYPE_NOT_ALLOWED");
     return;
@@ -2679,9 +2790,13 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
     showLocalUploadFailure(order, documentType, file, scope, "文件超过大小限制，最大支持 20MB PDF。", "FILE_TOO_LARGE");
     return;
   }
+  if (!pendingUploadCount()) {
+    state.uploadBatchTotal = 0;
+    state.uploadBatchCompleted = 0;
+  }
   clearFailedTransientUploads(order.id, documentType, scope);
   const key = documentUploadKey(order.id, documentType, file.name, scope);
-  state.documentUploads[key] = {
+  const task = {
     id: key,
     orderId: order.id,
     costId: scope.costId || "",
@@ -2690,58 +2805,157 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
     documentType,
     fileName: file.name,
     fileSize: file.size,
-    uploadStatus: "UPLOADING",
+    file,
+    uploadStatus: "WAITING",
     uploadProgress: 0,
     uploadedByName: state.me?.name || "",
     uploadedAt: new Date().toISOString(),
   };
-  const markUploadFailed = (message, code = "") => {
-    state.documentUploads[key] = {
-      ...state.documentUploads[key],
-      uploadStatus: "FAILED",
-      uploadProgress: 0,
-      failureCode: code,
-      failureMessage: message || "上传失败，请重试。",
-    };
-    refreshDocumentViews();
-    toast(`${uploadFailureReason(state.documentUploads[key])}：${message || "上传失败，请重试。"}`);
-  };
+  state.uploadQueue.push(task);
+  state.uploadBatchTotal += 1;
+  syncUploadTaskToDocument(task);
+  refreshDocumentViews();
+  processUploadQueue();
+}
+
+function markQueuedUploadFailed(task, message, code = "") {
+  task.uploadStatus = "FAILED";
+  task.uploadProgress = 0;
+  task.failureCode = code;
+  task.failureMessage = message || "上传失败，请重试。";
+  task.xhr = null;
+  state.uploadBatchCompleted += 1;
+  syncUploadTaskToDocument(task);
+  refreshDocumentViews();
+  toast(`${uploadFailureReason(task)}：${task.failureMessage}`);
+  processUploadQueue();
+}
+
+function startQueuedUpload(task) {
+  task.uploadStatus = "UPLOADING";
+  task.uploadProgress = 0;
+  task.failureCode = "";
+  task.failureMessage = "";
+  syncUploadTaskToDocument(task);
   refreshDocumentViews();
   const formData = new FormData();
-  formData.append("orderId", order.id);
-  formData.append("documentType", documentType);
-  if (scope.costId) formData.append("costId", scope.costId);
-  if (scope.supplierId) formData.append("supplierId", scope.supplierId);
-  formData.append("file", file);
+  formData.append("orderId", task.orderId);
+  formData.append("documentType", task.documentType);
+  if (task.costId) formData.append("costId", task.costId);
+  if (task.supplierId) formData.append("supplierId", task.supplierId);
+  formData.append("file", task.file);
   const xhr = new XMLHttpRequest();
+  task.xhr = xhr;
   xhr.open("POST", "/api/order-documents");
   xhr.timeout = 60000;
   xhr.upload.onprogress = (event) => {
     if (!event.lengthComputable) return;
-    state.documentUploads[key].uploadProgress = Math.min(99, Math.round((event.loaded / event.total) * 100));
+    task.uploadProgress = Math.min(99, Math.round((event.loaded / event.total) * 100));
+    syncUploadTaskToDocument(task);
     refreshDocumentViews();
   };
   xhr.onload = async () => {
     try {
       const data = JSON.parse(xhr.responseText || "{}");
       if (xhr.status >= 200 && xhr.status < 300) {
-        state.documentUploads[key] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
+        task.uploadStatus = "SUCCESS";
+        task.uploadProgress = 100;
+        task.xhr = null;
+        state.documentUploads[task.id] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
+        state.uploadBatchCompleted += 1;
+        state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
         refreshDocumentViews();
+        processUploadQueue();
         await loadData();
+        delete state.documentUploads[task.id];
+        refreshDocumentViews();
       } else {
-        markUploadFailed(data.error || "上传失败，请检查文件存储配置。", data.code || "");
+        markQueuedUploadFailed(task, data.error || "上传失败，请检查文件存储配置。", data.code || "");
       }
     } catch {
-      markUploadFailed("上传失败，服务器返回内容无法解析。");
+      markQueuedUploadFailed(task, "上传失败，服务器返回内容无法解析。");
     }
   };
   xhr.onerror = () => {
-    markUploadFailed("网络超时或连接失败，请检查对象存储服务和网络。");
+    if (task.uploadStatus !== "CANCELED") markQueuedUploadFailed(task, "网络超时或连接失败，请检查对象存储服务和网络。");
   };
   xhr.ontimeout = () => {
-    markUploadFailed("网络超时，请稍后重试或检查对象存储网络连接。");
+    if (task.uploadStatus !== "CANCELED") markQueuedUploadFailed(task, "网络超时，请稍后重试或检查对象存储网络连接。");
+  };
+  xhr.onabort = () => {
+    if (task.uploadStatus !== "CANCELED") markQueuedUploadFailed(task, "上传已中断，请重新上传。");
   };
   xhr.send(formData);
+}
+
+function processUploadQueue() {
+  const active = state.uploadQueue.filter((task) => task.uploadStatus === "UPLOADING").length;
+  let slots = Math.max(0, MAX_CONCURRENT_UPLOADS - active);
+  while (slots > 0) {
+    const next = state.uploadQueue.find((task) => task.uploadStatus === "WAITING");
+    if (!next) break;
+    startQueuedUpload(next);
+    slots -= 1;
+  }
+  updateUploadQueueNotice();
+}
+
+function cancelQueuedUpload(id) {
+  const task = state.uploadQueue.find((item) => item.id === id);
+  if (!task) {
+    delete state.documentUploads[id];
+    refreshDocumentViews();
+    return;
+  }
+  const shouldCount = ["WAITING", "UPLOADING"].includes(task.uploadStatus);
+  task.uploadStatus = "CANCELED";
+  if (task.xhr) task.xhr.abort();
+  state.uploadQueue = state.uploadQueue.filter((item) => item.id !== id);
+  delete state.documentUploads[id];
+  if (shouldCount) state.uploadBatchCompleted += 1;
+  refreshDocumentViews();
+  processUploadQueue();
+}
+
+function retryQueuedUpload(id) {
+  const existing = state.uploadQueue.find((item) => item.id === id);
+  const source = existing || state.documentUploads[id];
+  if (!source?.file) return toast("无法重新上传，请重新选择 PDF 文件。");
+  const scope = { costId: source.costId || "", supplierId: source.supplierId || "", relatedModule: source.relatedModule || documentRelatedModule(source.documentType) };
+  if (uploadScopeBusy(source.orderId, source.documentType, scope)) {
+    toast("当前资料正在上传，请等待完成或取消后重新上传。");
+    return;
+  }
+  if (!pendingUploadCount()) {
+    state.uploadBatchTotal = 0;
+    state.uploadBatchCompleted = 0;
+  }
+  const task = existing || {
+    id,
+    orderId: source.orderId,
+    costId: source.costId || "",
+    supplierId: source.supplierId || "",
+    relatedModule: source.relatedModule || documentRelatedModule(source.documentType),
+    documentType: source.documentType,
+    fileName: source.fileName,
+    fileSize: source.fileSize,
+    file: source.file,
+    uploadedByName: state.me?.name || source.uploadedByName || "",
+  };
+  task.uploadStatus = "WAITING";
+  task.uploadProgress = 0;
+  task.failureCode = "";
+  task.failureMessage = "";
+  task.uploadedAt = new Date().toISOString();
+  if (!existing) state.uploadQueue.push(task);
+  state.uploadBatchTotal += 1;
+  syncUploadTaskToDocument(task);
+  refreshDocumentViews();
+  processUploadQueue();
+}
+
+function uploadDocumentFile(order, documentType, file, scope = {}) {
+  enqueueUploadTask(order, documentType, file, scope);
 }
 
 async function deleteDocument(id) {
@@ -3555,6 +3769,10 @@ function bindEvents() {
     uploadDocumentFile(order, input.dataset.documentType, file);
   });
   $("#document-grid").addEventListener("click", (event) => {
+    const retry = event.target.closest("[data-retry-upload]");
+    if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
+    const cancel = event.target.closest("[data-cancel-upload]");
+    if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });
@@ -3573,6 +3791,10 @@ function bindEvents() {
     });
   });
   $("#costs-table").addEventListener("click", (event) => {
+    const retry = event.target.closest("[data-retry-upload]");
+    if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
+    const cancel = event.target.closest("[data-cancel-upload]");
+    if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });
