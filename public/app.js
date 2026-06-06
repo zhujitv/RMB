@@ -24,6 +24,14 @@ const state = {
   pdfPreviewDocument: null,
   pdfPreviewObjectUrl: "",
   pdfPreviewError: "",
+  reportType: "receivables",
+  reportRows: [],
+  reportColumns: [],
+  reportPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  reportSortBy: "",
+  reportSortDir: "asc",
+  reportSelectedIds: new Set(),
+  reportQueried: false,
   costOrderResults: [],
   selectedCostOrder: null,
   documentUploads: {},
@@ -728,6 +736,13 @@ function clearLocalCaches() {
   state.pdfPreviewDocument = null;
   state.pdfPreviewObjectUrl = "";
   state.pdfPreviewError = "";
+  state.reportRows = [];
+  state.reportColumns = [];
+  state.reportPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.reportSortBy = "";
+  state.reportSortDir = "asc";
+  state.reportSelectedIds = new Set();
+  state.reportQueried = false;
   state.customers = [];
   state.suppliers = [];
   state.availableCustomers = [];
@@ -1153,6 +1168,7 @@ function renderAll() {
   renderCosts();
   renderProfit();
   renderTaxRefund();
+  renderReports();
   renderSettings();
   applyRateEditability();
   applyAccessControl();
@@ -2157,6 +2173,168 @@ function renderTaxRefund() {
       </tr>
     `;
   }).join("") : emptyRow(11);
+}
+
+function reportEndpoint(type = state.reportType) {
+  return `/api/reports/${encodeURIComponent(type)}`;
+}
+
+function reportArea(type) {
+  return {
+    receivables: "orders",
+    payments: "payments",
+    costs: "costs",
+    profits: "orders",
+    commissions: "commissions",
+    overdue: "orders",
+    "tax-refunds": "taxRefund",
+  }[type] || "orders";
+}
+
+function reportFilters() {
+  return {
+    dateFrom: $("#report-date-from")?.value || "",
+    dateTo: $("#report-date-to")?.value || "",
+    customerName: $("#report-customer")?.value.trim() || "",
+    orderNo: $("#report-order-no")?.value.trim() || "",
+    blNo: $("#report-bl-no")?.value.trim() || "",
+    currency: $("#report-currency")?.value || "",
+    salespersonName: $("#report-salesperson")?.value.trim() || "",
+    orderStatus: $("#report-order-status")?.value || "",
+    paymentStatus: $("#report-payment-status")?.value || "",
+    costType: $("#report-cost-type")?.value || "",
+    taxRefundStatus: $("#report-tax-status")?.value || "",
+    keyword: $("#report-keyword")?.value.trim() || "",
+  };
+}
+
+function reportQueryParams(page = 1) {
+  const params = new URLSearchParams();
+  Object.entries(reportFilters()).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  params.set("page", String(page));
+  params.set("pageSize", String(state.reportPagination.pageSize || 20));
+  if (state.reportSortBy) params.set("sortBy", state.reportSortBy);
+  if (state.reportSortDir) params.set("sortDir", state.reportSortDir);
+  return params;
+}
+
+async function queryReport(page = 1) {
+  if (!canReadArea("reports")) return toast("没有权限查看报表");
+  try {
+    const data = await api(`${reportEndpoint()}?${reportQueryParams(page).toString()}`);
+    state.reportRows = data.rows || [];
+    state.reportColumns = data.columns || [];
+    state.reportPagination = data.pagination || { page, pageSize: 20, total: state.reportRows.length, totalPages: 1 };
+    state.reportQueried = true;
+    renderReports();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function renderReports() {
+  const head = $("#report-table-head");
+  const body = $("#report-table-body");
+  if (!head || !body) return;
+  $$("#report-tabs [data-report-type]").forEach((button) => {
+    button.hidden = !canReadArea(reportArea(button.dataset.reportType));
+    button.classList.toggle("is-active", button.dataset.reportType === state.reportType);
+  });
+  const pagination = state.reportPagination || { page: 1, total: 0, totalPages: 1 };
+  const downloadBar = $("#report-download-bar");
+  if (downloadBar) downloadBar.hidden = !state.reportQueried;
+  if ($("#report-result-summary")) $("#report-result-summary").textContent = `已查询 ${pagination.total || 0} 条，已勾选 ${state.reportSelectedIds.size} 条`;
+  if ($("#report-page-info")) $("#report-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
+  if ($("#report-prev")) $("#report-prev").disabled = (pagination.page || 1) <= 1;
+  if ($("#report-next")) $("#report-next").disabled = (pagination.page || 1) >= (pagination.totalPages || 1);
+  const columns = state.reportColumns || [];
+  const allChecked = state.reportRows.length > 0 && state.reportRows.every((row) => state.reportSelectedIds.has(row.id));
+  head.innerHTML = `
+    <tr>
+      <th><input id="report-select-page" type="checkbox" ${allChecked ? "checked" : ""} /></th>
+      ${columns.map((column) => `
+        <th><button class="table-sort-button" data-report-sort="${escapeHtml(column.key)}" type="button">${escapeHtml(column.label)}${state.reportSortBy === column.key ? (state.reportSortDir === "desc" ? " ↓" : " ↑") : ""}</button></th>
+      `).join("")}
+      <th>操作</th>
+    </tr>
+  `;
+  body.innerHTML = state.reportQueried
+    ? (state.reportRows.length ? state.reportRows.map((row) => `
+      <tr>
+        <td><input data-report-row-select="${escapeHtml(row.id)}" type="checkbox" ${state.reportSelectedIds.has(row.id) ? "checked" : ""} /></td>
+        ${columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
+        <td class="row-actions"><button class="secondary-button small-link" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button></td>
+      </tr>
+    `).join("") : emptyRow(columns.length + 2))
+    : `<tr><td colspan="${columns.length + 2 || 8}"><div class="empty-state">请选择报表类型并点击查询。</div></td></tr>`;
+}
+
+function resetReportForm() {
+  $$("#report-query-form input, #report-query-form select").forEach((el) => (el.value = ""));
+  state.reportRows = [];
+  state.reportColumns = [];
+  state.reportPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.reportSortBy = "";
+  state.reportSortDir = "asc";
+  state.reportSelectedIds = new Set();
+  state.reportQueried = false;
+  renderReports();
+}
+
+function openReportDetail(rowId) {
+  const row = state.reportRows.find((item) => item.id === rowId);
+  if (!row) return;
+  if (state.reportType === "payments" && row.id) return editPayment(row.id);
+  if (state.reportType === "costs" && row.id) return editCost(row.id);
+  if (state.reportType === "tax-refunds") {
+    if (switchView("taxRefund", { skipOrderConfirm: true })) openTaxRefundDetail(row.orderId || row.id);
+    return;
+  }
+  if (row.orderId || row.id) {
+    if (canView("orders")) editOrder(row.orderId || row.id);
+    else toast("没有权限查看订单详情");
+  }
+}
+
+async function downloadReport(scope, format) {
+  if (!state.reportQueried) return toast("请先查询报表");
+  if (scope === "selected" && !state.reportSelectedIds.size) return toast("请先勾选要下载的数据");
+  try {
+    const response = await fetch("/api/reports/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reportType: state.reportType,
+        filters: reportFilters(),
+        selectedIds: [...state.reportSelectedIds],
+        exportScope: scope,
+        format,
+        page: state.reportPagination.page,
+        pageSize: state.reportPagination.pageSize,
+        sortBy: state.reportSortBy,
+        sortDir: state.reportSortDir,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "下载报表失败");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const disposition = response.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+    a.href = url;
+    a.download = match?.[1] || `report.${format === "xlsx" ? "xlsx" : "csv"}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
 function taxDetailDocumentRows(order, type, scope = {}) {
@@ -4176,7 +4354,60 @@ function bindEvents() {
     $("#toggle-advanced-filters").setAttribute("aria-expanded", String(expanded));
     $("#toggle-advanced-filters").textContent = expanded ? "收起筛选" : "高级筛选";
   });
-
+  $("#report-query-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.reportSelectedIds = new Set();
+    queryReport(1);
+  });
+  $("#report-reset").addEventListener("click", resetReportForm);
+  $("#report-tabs").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-report-type]");
+    if (!tab) return;
+    state.reportType = tab.dataset.reportType;
+    state.reportRows = [];
+    state.reportColumns = [];
+    state.reportSelectedIds = new Set();
+    state.reportSortBy = "";
+    state.reportSortDir = "asc";
+    state.reportQueried = false;
+    renderReports();
+  });
+  $("#report-table-head").addEventListener("click", (event) => {
+    const sort = event.target.closest("[data-report-sort]");
+    if (!sort) return;
+    const key = sort.dataset.reportSort;
+    if (state.reportSortBy === key) state.reportSortDir = state.reportSortDir === "asc" ? "desc" : "asc";
+    else {
+      state.reportSortBy = key;
+      state.reportSortDir = "asc";
+    }
+    queryReport(state.reportPagination.page || 1);
+  });
+  $("#report-table-head").addEventListener("change", (event) => {
+    if (!event.target.matches("#report-select-page")) return;
+    state.reportRows.forEach((row) => {
+      if (event.target.checked) state.reportSelectedIds.add(row.id);
+      else state.reportSelectedIds.delete(row.id);
+    });
+    renderReports();
+  });
+  $("#report-table-body").addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-report-row-select]");
+    if (!checkbox) return;
+    if (checkbox.checked) state.reportSelectedIds.add(checkbox.dataset.reportRowSelect);
+    else state.reportSelectedIds.delete(checkbox.dataset.reportRowSelect);
+    renderReports();
+  });
+  $("#report-table-body").addEventListener("click", (event) => {
+    const detail = event.target.closest("[data-report-detail]");
+    if (detail) openReportDetail(detail.dataset.reportDetail);
+  });
+  $("#report-prev").addEventListener("click", () => queryReport(Math.max(1, (state.reportPagination.page || 1) - 1)));
+  $("#report-next").addEventListener("click", () => queryReport(Math.min(state.reportPagination.totalPages || 1, (state.reportPagination.page || 1) + 1)));
+  $("#report-download-bar").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-report-export-scope]");
+    if (button) downloadReport(button.dataset.reportExportScope, button.dataset.reportFormat);
+  });
   $("#order-form").addEventListener("submit", submitOrder);
   $("#payment-form").addEventListener("submit", submitPayment);
   $("#cost-form").addEventListener("submit", submitCost);
@@ -4431,6 +4662,11 @@ function initSelects() {
   fillSelect("#filter-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
   fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true, "全部逾期状态");
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
+  fillSelect("#report-currency", constants.currencies, "", true, "全部币种");
+  fillSelect("#report-order-status", constants.orderStatuses, "", true, "全部订单状态");
+  fillSelect("#report-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
+  fillSelect("#report-cost-type", constants.costTypes, "", true, "全部成本类型");
+  fillSelect("#report-tax-status", constants.taxRefundStatuses, "", true, "全部退税状态");
   fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#payment-currency", constants.currencies, "USD");
   fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种");

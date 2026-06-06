@@ -423,16 +423,46 @@
 
         <section class="view-panel" id="reports-view">
           <section class="panel">
-            <div class="panel-title"><h3>报表导出</h3><span>使用当前筛选条件</span></div>
-            <div class="export-grid">
-              <button class="export-card" data-export="orders" type="button">应收订单明细 CSV</button>
-              <button class="export-card" data-export="payments" type="button">收款明细 CSV</button>
-              <button class="export-card" data-export="costs" type="button">成本明细 CSV</button>
-              <button class="export-card" data-export="profit" type="button">订单利润分析 CSV</button>
-              <button class="export-card" data-export="commissions" type="button">业务员提成报表 CSV</button>
-              <button class="export-card" data-export="commissions-xlsx" type="button">业务员提成报表 Excel</button>
-              <button class="export-card" data-export="reminders" type="button">逾期催款报表 CSV</button>
-              <button class="export-card" data-export="backup-json" type="button">完整数据备份 JSON</button>
+            <div class="panel-title"><h3>报表中心</h3><span>在线查询 · 按需下载</span></div>
+            <div class="report-tabs" id="report-tabs">
+              <button data-report-type="receivables" type="button">应收订单明细</button>
+              <button data-report-type="payments" type="button">收款明细</button>
+              <button data-report-type="costs" type="button">成本明细</button>
+              <button data-report-type="profits" type="button">利润分析</button>
+              <button data-report-type="commissions" type="button">业务员提成</button>
+              <button data-report-type="overdue" type="button">逾期催款</button>
+              <button data-report-type="tax-refunds" type="button">退税资料</button>
+            </div>
+            <form class="report-query-form" id="report-query-form">
+              <label><span>开始日期</span><input id="report-date-from" type="date" /></label>
+              <label><span>结束日期</span><input id="report-date-to" type="date" /></label>
+              <label><span>客户名称</span><input id="report-customer" type="search" placeholder="客户名称" /></label>
+              <label><span>订单号</span><input id="report-order-no" type="search" placeholder="订单号" /></label>
+              <label><span>提单号</span><input id="report-bl-no" type="search" placeholder="提单号" /></label>
+              <label><span>币种</span><select id="report-currency"><option value="">全部币种</option></select></label>
+              <label><span>业务员</span><input id="report-salesperson" type="search" placeholder="业务员" /></label>
+              <label><span>订单状态</span><select id="report-order-status"><option value="">全部订单状态</option></select></label>
+              <label><span>收款状态</span><select id="report-payment-status"><option value="">全部收款状态</option></select></label>
+              <label><span>成本类型</span><select id="report-cost-type"><option value="">全部成本类型</option></select></label>
+              <label><span>退税状态</span><select id="report-tax-status"><option value="">全部退税状态</option></select></label>
+              <label><span>关键词</span><input id="report-keyword" type="search" placeholder="订单、客户、供应商、国家/地区" /></label>
+              <div class="report-query-actions">
+                <button class="primary-button" type="submit">查询</button>
+                <button class="secondary-button" id="report-reset" type="button">重置</button>
+              </div>
+            </form>
+            <div class="report-download-bar" id="report-download-bar" hidden>
+              <span id="report-result-summary">已查询 0 条</span>
+              <button class="secondary-button small-link" data-report-export-scope="allFiltered" data-report-format="xlsx" type="button">下载当前查询结果 Excel</button>
+              <button class="secondary-button small-link" data-report-export-scope="allFiltered" data-report-format="csv" type="button">下载当前查询结果 CSV</button>
+              <button class="secondary-button small-link" data-report-export-scope="selected" data-report-format="xlsx" type="button">下载已勾选数据</button>
+              <button class="secondary-button small-link" data-report-export-scope="currentPage" data-report-format="xlsx" type="button">下载当前页</button>
+            </div>
+            <div class="table-wrap report-table-wrap"><table><thead id="report-table-head"></thead><tbody id="report-table-body"></tbody></table></div>
+            <div class="pagination-bar">
+              <button class="secondary-button" id="report-prev" type="button">上一页</button>
+              <span id="report-page-info">第 1 / 1 页</span>
+              <button class="secondary-button" id="report-next" type="button">下一页</button>
             </div>
           </section>
         </section>

@@ -2338,6 +2338,86 @@ th {
   font-weight: 800;
 }
 
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.report-tabs button {
+  min-height: 36px;
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-tabs button:hover {
+  border-color: #93c5fd;
+  color: #2563eb;
+}
+
+.report-tabs button.is-active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.report-query-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.report-query-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.report-download-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
+.report-download-bar span {
+  margin-right: auto;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.report-table-wrap {
+  margin-top: 8px;
+}
+
+.table-sort-button {
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .manual-hero {
   display: flex;
   align-items: center;
@@ -2690,7 +2770,8 @@ body.modal-open {
   }
 
   .filter-main-row,
-  .filter-advanced {
+  .filter-advanced,
+  .report-query-form {
     grid-template-columns: 1fr;
   }
 
@@ -2699,8 +2780,15 @@ body.modal-open {
   }
 
   .filter-main-row button,
-  .filter-advanced button {
+  .filter-advanced button,
+  .report-query-actions button {
     width: 100%;
+  }
+
+  .report-query-actions,
+  .report-download-bar {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .tax-refund-toolbar {
