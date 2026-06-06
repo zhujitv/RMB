@@ -811,6 +811,7 @@ async function api(path, options = {}) {
 
 function apiErrorMessage(path, response, data) {
   if (data && typeof data === "object" && data.error) return data.error;
+  if (data && typeof data === "object" && data.message) return data.message;
   if (path.startsWith("/api/auth/login") && [404, 405, 501].includes(response.status)) {
     return `登录接口不可用（${response.status}），当前页面可能由静态文件服务打开，请使用 Next.js 或 Vercel 地址访问系统。`;
   }
@@ -3150,9 +3151,31 @@ function updateCostDerived() {
   $$("#cost-items .cost-item-row").forEach(updateCostItemDerived);
 }
 
+async function saveOrderRequest(id, data) {
+  const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
+    method: id ? "PATCH" : "POST",
+    body: JSON.stringify(data),
+  });
+  if (result?.success !== true) {
+    throw new Error(result?.message || result?.error || "订单保存失败");
+  }
+  return result;
+}
+
+async function reloadOrderList() {
+  await loadData();
+}
+
 async function submitOrder(event) {
   event.preventDefault();
   if (!canWriteArea("orders")) return toast("没有权限保存应收订单");
+  const submitButton = $("#order-submit-button");
+  const originalButtonText = submitButton?.textContent || "保存应收订单";
+  if (submitButton?.disabled) return;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "保存中...";
+  }
   try {
     await ensureRateSnapshot("order");
     const data = readForm("order", orderFields);
@@ -3177,16 +3200,24 @@ async function submitOrder(event) {
     delete data.id;
     delete data.country;
     if (!canWriteArea("commissions")) delete data.salespersonCommissionRate;
-    await api(id ? `/api/orders/${id}` : "/api/orders", {
-      method: id ? "PATCH" : "POST",
-      body: JSON.stringify(data),
-    });
+    const result = await saveOrderRequest(id, data);
     clearDraft("order");
     resetForm("order");
-    await loadData();
-    toast("应收订单已保存");
+    toast(result.message || "订单保存成功");
+    try {
+      await reloadOrderList();
+    } catch (refreshError) {
+      console.error("订单已保存，但列表刷新失败", refreshError);
+      toast("订单已保存，但列表刷新失败，请手动刷新");
+    }
   } catch (error) {
     toast(error.message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+      setOrderFormMode($("#order-id")?.value ? orderById($("#order-id").value) : null);
+    }
   }
 }
 
