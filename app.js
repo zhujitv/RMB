@@ -99,7 +99,7 @@ const constants = {
     { value: "exchangeRates", label: "汇率刷新" },
   ],
   exportDocumentTypes: [
-    { value: "CUSTOMS_ENTRY_FORM", label: "报关单录入单" },
+    { value: "CUSTOMS_ENTRY_FORM", label: "货物报关单" },
     { value: "RELEASE_NOTICE", label: "放行通知书" },
     { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
     { value: "BILL_OF_LADING", label: "提单" },
