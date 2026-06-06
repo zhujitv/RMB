@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PaymentTermType {
+  COPY_BL
+  OA
+  AFTER_ARRIVAL
+  INSTALLMENT
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -111,8 +118,13 @@ model ReceivableOrder {
   finalReceivableAmountCny     Decimal   @map("final_receivable_amount_cny") @db.Decimal(18, 2)
   tradeTerm           String    @default("FOB") @map("trade_term")
   paymentTerm         String    @default("OA账期") @map("payment_term")
+  paymentTermType     PaymentTermType? @map("payment_term_type")
   depositRatio        Decimal?  @map("deposit_ratio") @db.Decimal(8, 4)
   expectedPaymentDate DateTime? @map("expected_payment_date") @db.Date
+  expectedArrivalDate DateTime? @map("expected_arrival_date") @db.Date
+  expectedShipmentDate DateTime? @map("expected_shipment_date") @db.Date
+  blDate              DateTime? @map("bl_date") @db.Date
+  paymentInstallments Json?     @map("payment_installments")
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
   reminderDays        Int       @default(7) @map("reminder_days")
@@ -136,6 +148,7 @@ model ReceivableOrder {
   @@index([customerId])
   @@index([salespersonUserId])
   @@index([status])
+  @@index([paymentTermType])
   @@index([dueDate])
   @@index([deletedAt])
   @@map("receivable_orders")

@@ -110,6 +110,8 @@
         <section class="view-panel" id="orders-view">
           <form class="entry-form" id="order-form" autocomplete="off">
             <input type="hidden" id="order-id" />
+            <input type="hidden" id="order-created-at" />
+            <input type="hidden" id="order-deposit-ratio" />
             <div class="form-header"><div><h3>应收订单</h3><p>业务员创建应收订单，系统生成唯一 order_id，后续收款和成本都必须关联此 ID。</p></div><button class="secondary-button" type="button" data-reset="order">新建</button></div>
             <div class="form-grid">
               <label><span>客户名称 *</span><select id="order-customer" required></select></label>
@@ -136,15 +138,20 @@
               <label><span>最终应收金额</span><input id="order-final-amount" type="number" min="0" step="0.01" /></label>
               <label><span>最终折人民币</span><input id="order-final-amount-cny" disabled /></label>
               <label><span>交易条款</span><select id="order-trade-term"></select></label>
-              <label><span>付款条款</span><select id="order-payment-term"></select></label>
-              <label><span>预付款比例 %</span><input id="order-deposit-ratio" type="number" min="0" max="100" step="0.01" /></label>
+              <label><span>付款条款 *</span><select id="order-payment-term" required></select><small class="field-note" id="order-payment-term-note"></small></label>
               <label><span>预付款要求金额</span><input id="order-required-deposit" disabled /></label>
               <label><span>已收到预付款</span><input id="order-received-deposit" disabled /></label>
               <label><span>预付款差额</span><input id="order-deposit-gap" disabled /></label>
-              <label><span>到港 / 预计日期</span><input id="order-expected-date" type="date" /></label>
-              <label><span>到港后 / 账期天数</span><input id="order-credit-days" type="number" min="0" step="1" /></label>
-              <label><span>到期日</span><input id="order-due-date" type="date" /></label>
-              <label class="action-label"><span>到期关联</span><button class="secondary-button" id="order-link-due-date" type="button">关联到期日</button></label>
+              <label class="term-field" data-terms="COPY_BL AFTER_ARRIVAL"><span id="order-expected-date-label">预计到港日期</span><input id="order-expected-date" type="date" /></label>
+              <label class="term-field" data-terms="COPY_BL"><span>提单日期</span><input id="order-bl-date" type="date" /></label>
+              <label class="term-field" data-terms="OA AFTER_ARRIVAL"><span>账期天数</span><select id="order-credit-days-preset"><option value="30">30 天</option><option value="60">60 天</option><option value="90">90 天</option><option value="120">120 天</option><option value="custom">自定义</option></select></label>
+              <label class="term-field" id="order-credit-days-custom-field" data-terms="OA AFTER_ARRIVAL"><span>自定义账期天数</span><input id="order-credit-days" type="number" min="0" step="1" /></label>
+              <label class="term-field" data-terms="COPY_BL OA AFTER_ARRIVAL"><span>到期日（自动计算）</span><input id="order-due-date" type="date" disabled /></label>
+              <div class="wide term-field installment-block" data-terms="INSTALLMENT">
+                <div class="cost-items-title"><strong>分批付款节点</strong><button class="secondary-button" id="add-installment" type="button">添加节点</button></div>
+                <div class="installment-items" id="installment-items"></div>
+                <p class="order-search-helper">付款金额根据最终应收金额自动计算，比例合计必须等于 100%。</p>
+              </div>
               <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
               <label><span>订单状态</span><select id="order-status"></select></label>
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
@@ -152,7 +159,7 @@
             </div>
             <div class="form-actions"><button class="primary-button" type="submit">保存应收订单</button></div>
           </form>
-          <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>付款条款</th><th>到期日</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="payments-view">
@@ -228,7 +235,7 @@
         </section>
 
         <section class="view-panel" id="profit-view">
-          <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>业务员</th><th>应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收款</th><th>未收款</th><th>总成本</th><th>预计毛利</th><th>实际毛利</th><th>毛利率</th><th>成本结构</th><th>收款状态</th><th>逾期状态</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>业务员</th><th>付款条款</th><th>到期日</th><th>应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收款</th><th>未收款</th><th>总成本</th><th>预计毛利</th><th>实际毛利</th><th>毛利率</th><th>成本结构</th><th>收款状态</th><th>逾期状态</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="reports-view">

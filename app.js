@@ -38,7 +38,12 @@ const constants = {
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
   invoiceStatuses: ["未收到", "已收到", "不需要发票"],
   tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
-  paymentTerms: ["30%预付款", "50%预付款", "100%预付款", "自定义比例", "预付款", "见提单付款", "见提单复印件付款", "OA账期", "到港后付款", "分批付款", "其他"],
+  paymentTerms: [
+    { value: "COPY_BL", label: "见提单复印件付款" },
+    { value: "OA", label: "OA账期" },
+    { value: "AFTER_ARRIVAL", label: "到港后付款" },
+    { value: "INSTALLMENT", label: "分批付款" },
+  ],
   costTypes: ["工厂货款", "国内物流费", "报关费", "港杂费", "海运费", "保险费", "佣金", "样品费", "银行手续费", "其他费用"],
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
@@ -100,17 +105,83 @@ function calcCny(amountValue, rateValue) {
   return ((Number(amountValue) || 0) * (Number(rateValue) || 0)).toFixed(2);
 }
 
-function depositRatioFromTerm(term) {
-  if (term === "30%预付款") return 30;
-  if (term === "50%预付款") return 50;
-  if (term === "100%预付款") return 100;
-  return null;
+const paymentTermLabels = Object.fromEntries(constants.paymentTerms.map((item) => [item.value, item.label]));
+const legacyPaymentTermValue = "__LEGACY__";
+
+function paymentTermLabel(type, fallback = "") {
+  return paymentTermLabels[type] || fallback || "";
+}
+
+function currentPaymentTermType() {
+  const value = $("#order-payment-term")?.value || "";
+  return value === legacyPaymentTermValue ? "" : value;
+}
+
+function addDaysText(dateText, days) {
+  if (!dateText || !Number.isFinite(Number(days))) return "";
+  const [year, month, day] = String(dateText).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + Math.round(Number(days)));
+  return date.toISOString().slice(0, 10);
 }
 
 function currentOrderDepositSummary() {
   const id = $("#order-id")?.value;
   const order = id ? orderById(id) : null;
   return order?.summary || {};
+}
+
+function installmentAmount(ratio) {
+  const finalAmount = Number($("#order-final-amount").value || $("#order-actual-amount").value || $("#order-estimated-amount").value || 0);
+  return Math.round(finalAmount * (Number(ratio) || 0)) / 100;
+}
+
+function installmentRow(item = {}) {
+  const ratio = item.ratio ?? "";
+  const condition = item.condition || "";
+  const amountValue = item.amount ?? installmentAmount(ratio);
+  return `
+    <div class="installment-row">
+      <label><span>付款比例 %</span><input class="installment-ratio" type="number" min="0" max="100" step="0.01" value="${escapeHtml(ratio)}" /></label>
+      <label><span>付款条件</span><input class="installment-condition" value="${escapeHtml(condition)}" placeholder="如：下单后、见提单复印件后" /></label>
+      <label><span>付款金额</span><input class="installment-amount" disabled value="${amount(Number(amountValue) || 0)}" /></label>
+      <button class="secondary-button delete-installment" type="button" title="删除">删</button>
+    </div>
+  `;
+}
+
+function addInstallment(item = {}) {
+  $("#installment-items").insertAdjacentHTML("beforeend", installmentRow(item));
+  updateInstallmentAmounts();
+}
+
+function resetInstallments(items = [{}]) {
+  $("#installment-items").innerHTML = "";
+  (items.length ? items : [{}]).forEach((item) => addInstallment(item));
+}
+
+function readInstallments(validate = false) {
+  const items = $$("#installment-items .installment-row").map((row) => ({
+    ratio: row.querySelector(".installment-ratio").value,
+    condition: row.querySelector(".installment-condition").value.trim(),
+  })).filter((item) => item.ratio || item.condition);
+  if (!validate) return items;
+  if (!items.length) throw new Error("分批付款请至少录入一个付款节点");
+  const total = items.reduce((sum, item, index) => {
+    const ratio = Number(item.ratio);
+    if (!(ratio > 0)) throw new Error(`第 ${index + 1} 个付款节点比例必须大于 0`);
+    if (!item.condition) throw new Error(`第 ${index + 1} 个付款节点条件不能为空`);
+    return sum + ratio;
+  }, 0);
+  if (Math.abs(total - 100) > 0.01) throw new Error("分批付款比例合计必须等于 100%");
+  return items;
+}
+
+function updateInstallmentAmounts() {
+  $$("#installment-items .installment-row").forEach((row) => {
+    const ratio = row.querySelector(".installment-ratio").value;
+    row.querySelector(".installment-amount").value = amount(installmentAmount(ratio));
+  });
 }
 
 function rateValue(value) {
@@ -391,7 +462,11 @@ async function api(path, options = {}) {
 }
 
 function optionHtml(values, selected = "") {
-  return values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+  return values.map((item) => {
+    const value = typeof item === "object" ? item.value : item;
+    const label = typeof item === "object" ? item.label : item;
+    return `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
 }
 
 function fillSelect(id, values, selected = "", includeBlank = false, blankLabel = "全部") {
@@ -554,6 +629,18 @@ function fillAvailableCustomerSelect(selected = "") {
   if (selected) el.value = selected;
 }
 
+function fillPaymentTermSelect(selected = "OA", legacyLabel = "") {
+  const el = $("#order-payment-term");
+  if (!el) return;
+  el.innerHTML = optionHtml(constants.paymentTerms, selected);
+  if (legacyLabel && !paymentTermLabel(selected)) {
+    el.insertAdjacentHTML("afterbegin", `<option value="${legacyPaymentTermValue}" selected>历史：${escapeHtml(legacyLabel)}</option>`);
+    el.value = legacyPaymentTermValue;
+  } else {
+    el.value = selected || "OA";
+  }
+}
+
 function fillSalespersonSelect(id, selected = "", includeBlank = true) {
   const el = $(id);
   if (!el) return;
@@ -699,7 +786,7 @@ function renderDashboard() {
   $("#reminder-list").innerHTML = reminders.length ? reminders.map((order) => `
     <div class="reminder-item ${order.summary.reminderStatus === "已逾期" ? "danger" : ""}">
       <strong>${escapeHtml(order.orderNo)} · ${escapeHtml(order.customerName)}</strong>
-      <span>${order.summary.reminderStatus} / 到期日 ${order.dueDate || "-"} / 未收 ${money(order.summary.outstandingCny)} / 逾期 ${order.summary.overdueDays} 天</span>
+      <span>${escapeHtml(order.paymentTermDisplay || order.paymentTerm || "-")} / ${order.summary.reminderStatus} / 到期日 ${order.dueDate || "-"} / 未收 ${money(order.summary.outstandingCny)} / 逾期 ${order.summary.overdueDays} 天</span>
     </div>
   `).join("") : `<div class="empty-note">暂无催款提醒</div>`;
 }
@@ -743,6 +830,11 @@ function auditCell(row) {
   return `<small>建：${escapeHtml(created)}<br>改：${escapeHtml(updated)}</small>`;
 }
 
+function paymentTermCell(order) {
+  const schedule = order.paymentInstallmentText || "";
+  return `${escapeHtml(order.paymentTermDisplay || order.paymentTerm || "-")}${schedule ? `<small>${escapeHtml(schedule)}</small>` : ""}`;
+}
+
 function renderOrders() {
   $("#orders-count").textContent = `${state.orders.length} 条`;
   $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
@@ -750,6 +842,8 @@ function renderOrders() {
       <td><strong>${escapeHtml(order.orderNo)}</strong><small>ID: ${escapeHtml(order.id)}</small></td>
       <td>${escapeHtml(order.blNo || "待发货")}</td>
       <td>${escapeHtml(order.customerName)}</td>
+      <td>${paymentTermCell(order)}</td>
+      <td>${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary.reminderStatus)}</small></td>
       <td>${money(order.estimatedReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.estimatedReceivableAmount)}</small></td>
       <td>${order.actualShipmentAmount === "" ? "-" : `${money(order.actualShipmentAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.actualShipmentAmount)}</small>`}</td>
       <td>${money(order.finalReceivableAmountCny)}<small>${escapeHtml(order.currency)} ${amount(order.finalReceivableAmount)}</small></td>
@@ -761,7 +855,7 @@ function renderOrders() {
       <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
       <td class="row-actions"><button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button></td>
     </tr>
-  `).join("") : emptyRow(13);
+  `).join("") : emptyRow(15);
 }
 
 function renderPayments() {
@@ -815,6 +909,8 @@ function renderProfit() {
         <td>${escapeHtml(order.blNo || "-")}</td>
         <td>${escapeHtml(order.customerName)}</td>
         <td>${escapeHtml(order.salespersonName || "-")}</td>
+        <td>${paymentTermCell(order)}</td>
+        <td>${escapeHtml(order.dueDate || "-")}</td>
         <td>${money(order.summary.receivableCny)}</td>
         <td>${money(order.summary.requiredDepositAmount)}</td>
         <td>${money(order.summary.receivedDepositCny)}</td>
@@ -830,7 +926,7 @@ function renderProfit() {
         <td><span class="status ${statusClass(order.summary.reminderStatus)}">${order.summary.reminderStatus}</span></td>
       </tr>
     `;
-  }).join("") : emptyRow(17);
+  }).join("") : emptyRow(19);
 }
 
 function renderSettings() {
@@ -898,6 +994,7 @@ function setForm(fields, data) {
 
 function saveDraft(name, fields) {
   const data = readForm(name, fields);
+  if (name === "order") data.paymentInstallments = readInstallments(false);
   localStorage.setItem(`${DRAFT_PREFIX}${name}`, JSON.stringify(data));
 }
 
@@ -905,6 +1002,14 @@ function loadDraft(name, fields) {
   try {
     const data = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}${name}`) || "{}");
     setForm(fields, data);
+    if (name === "order") {
+      if (!data.paymentTermType) $("#order-payment-term").value = "OA";
+      if (!data.creditDays) $("#order-credit-days").value = "30";
+      if (Array.isArray(data.paymentInstallments)) resetInstallments(data.paymentInstallments);
+      syncCreditDaysPreset();
+      updatePaymentTermVisibility();
+      updateOrderDerived();
+    }
   } catch {}
 }
 
@@ -917,7 +1022,7 @@ const orderFields = [
   ["currency", "#order-currency"], ["exchangeRate", "#order-rate"],
   ["exchangeRateDate", "#order-rate-date"], ["exchangeRateSource", "#order-rate-source"], ["exchangeRateType", "#order-rate-type"],
   ["estimatedReceivableAmount", "#order-estimated-amount"], ["actualShipmentAmount", "#order-actual-amount"], ["finalReceivableAmount", "#order-final-amount"],
-  ["tradeTerm", "#order-trade-term"], ["paymentTerm", "#order-payment-term"], ["depositRatio", "#order-deposit-ratio"], ["expectedPaymentDate", "#order-expected-date"], ["creditDays", "#order-credit-days"],
+  ["tradeTerm", "#order-trade-term"], ["paymentTermType", "#order-payment-term"], ["expectedPaymentDate", "#order-expected-date"], ["blDate", "#order-bl-date"], ["creditDays", "#order-credit-days"],
   ["dueDate", "#order-due-date"], ["reminderDays", "#order-reminder-days"], ["status", "#order-status"], ["remark", "#order-remark"],
 ];
 
@@ -1150,6 +1255,52 @@ function loadCostDraft() {
   } catch {}
 }
 
+function syncCreditDaysPreset() {
+  const preset = $("#order-credit-days-preset");
+  const input = $("#order-credit-days");
+  if (!preset || !input) return;
+  if (["30", "60", "90", "120"].includes(input.value)) preset.value = input.value;
+  else if (input.value) preset.value = "custom";
+  else {
+    preset.value = "30";
+    input.value = "30";
+  }
+}
+
+function applyCreditDaysPreset() {
+  const preset = $("#order-credit-days-preset").value;
+  if (preset !== "custom") $("#order-credit-days").value = preset;
+  updatePaymentTermVisibility();
+  updateOrderDerived();
+}
+
+function updatePaymentTermVisibility() {
+  const type = currentPaymentTermType();
+  $$(".term-field").forEach((el) => {
+    const terms = (el.dataset.terms || "").split(/\s+/).filter(Boolean);
+    el.classList.toggle("is-hidden", Boolean(terms.length && !terms.includes(type)));
+  });
+  $("#order-expected-date-label").textContent = type === "COPY_BL" ? "预计发货日期" : "预计到港日期";
+  $("#order-credit-days-custom-field").classList.toggle("is-hidden", !["OA", "AFTER_ARRIVAL"].includes(type) || $("#order-credit-days-preset").value !== "custom");
+  const note = $("#order-payment-term-note");
+  if (note) note.textContent = type ? "" : "历史付款条款，保存时将保留原值；如需变更，请选择新的付款条款。";
+}
+
+function updateOrderDueDate() {
+  const type = currentPaymentTermType();
+  let dueDate = "";
+  if (type === "OA") {
+    dueDate = addDaysText($("#order-created-at").value || today(), Number($("#order-credit-days").value));
+  }
+  if (type === "AFTER_ARRIVAL") {
+    dueDate = addDaysText($("#order-expected-date").value, Number($("#order-credit-days").value));
+  }
+  if (type === "COPY_BL") {
+    dueDate = $("#order-bl-date").value || $("#order-expected-date").value;
+  }
+  if (type) $("#order-due-date").value = dueDate;
+}
+
 function updateOrderDerived() {
   const estimated = $("#order-estimated-amount").value;
   const actual = $("#order-actual-amount").value;
@@ -1158,44 +1309,70 @@ function updateOrderDerived() {
   $("#order-estimated-amount-cny").value = calcCny(estimated, rate);
   const finalCny = Number(calcCny($("#order-final-amount").value || actual || estimated, rate));
   $("#order-final-amount-cny").value = finalCny.toFixed(2);
-  const termRatio = depositRatioFromTerm($("#order-payment-term").value);
-  const ratioInput = $("#order-deposit-ratio");
-  if (termRatio != null) {
-    ratioInput.value = termRatio;
-    ratioInput.readOnly = true;
-  } else {
-    ratioInput.readOnly = $("#order-payment-term").value !== "自定义比例";
-    if ($("#order-payment-term").value !== "自定义比例") ratioInput.value = "";
-  }
-  const depositRatio = Number(ratioInput.value) || 0;
-  const requiredDeposit = Math.round(finalCny * (depositRatio / 100) * 100) / 100;
   const summary = currentOrderDepositSummary();
+  const requiredDeposit = Number(summary.requiredDepositAmount || 0);
   const receivedDeposit = Number(summary.receivedDepositCny || 0);
   $("#order-required-deposit").value = money(requiredDeposit);
   $("#order-received-deposit").value = money(receivedDeposit);
   $("#order-deposit-gap").value = money(Math.max(requiredDeposit - receivedDeposit, 0));
-  const credit = Number($("#order-credit-days").value);
-  if ($("#order-expected-date").value && Number.isFinite(credit) && credit > 0 && !$("#order-due-date").value) {
-    const date = new Date(`${$("#order-expected-date").value}T00:00:00`);
-    date.setDate(date.getDate() + credit);
-    $("#order-due-date").value = date.toISOString().slice(0, 10);
-  }
+  updateOrderDueDate();
+  updateInstallmentAmounts();
 }
 
-function linkOrderDueDate() {
-  const baseDate = $("#order-expected-date").value;
-  const days = Number($("#order-credit-days").value);
-  if (!baseDate) throw new Error("请先填写到港 / 预计日期");
-  if (!Number.isFinite(days) || days < 0) throw new Error("请填写有效的到港后 / 账期天数");
-  const date = new Date(`${baseDate}T00:00:00`);
-  date.setDate(date.getDate() + Math.round(days));
-  $("#order-due-date").value = date.toISOString().slice(0, 10);
-  updateOrderDerived();
+function buildOrderPaymentTermPayload(data, validate = false) {
+  const type = currentPaymentTermType();
+  if (!type && !data.id) throw new Error("请选择付款条款");
+  data.paymentTermType = type || data.paymentTermType;
+  data.expectedArrivalDate = "";
+  data.expectedShipmentDate = "";
+  data.blDate = "";
+  data.paymentInstallments = [];
+  if (type === "OA" || type === "AFTER_ARRIVAL") {
+    if (!$("#order-credit-days").value) throw new Error("请填写账期天数");
+    data.creditDays = $("#order-credit-days").value;
+  } else {
+    data.creditDays = "";
+  }
+  if (type === "AFTER_ARRIVAL") {
+    if (!$("#order-expected-date").value) throw new Error("请填写预计到港日期");
+    data.expectedArrivalDate = $("#order-expected-date").value;
+    data.expectedPaymentDate = $("#order-expected-date").value;
+  }
+  if (type === "COPY_BL") {
+    data.expectedShipmentDate = $("#order-expected-date").value;
+    data.expectedPaymentDate = $("#order-expected-date").value;
+    data.blDate = $("#order-bl-date").value;
+  }
+  if (type === "INSTALLMENT") {
+    data.paymentInstallments = readInstallments(validate);
+    data.expectedPaymentDate = "";
+    data.dueDate = "";
+  }
+  return data;
 }
 
 function updateOrderCustomerCountry() {
   const customer = customerById($("#order-customer").value);
   $("#order-country").value = customer?.country || "";
+}
+
+function setOrderPaymentTerm(order = null) {
+  const type = order?.paymentTermType || "";
+  fillPaymentTermSelect(type || "", type ? "" : order?.paymentTerm);
+  $("#order-created-at").value = order?.createdAt ? String(order.createdAt).slice(0, 10) : today();
+  $("#order-credit-days").value = order?.creditDays || "30";
+  syncCreditDaysPreset();
+  $("#order-bl-date").value = order?.blDate || "";
+  if (type === "AFTER_ARRIVAL") {
+    $("#order-expected-date").value = order.expectedArrivalDate || order.expectedPaymentDate || "";
+  } else if (type === "COPY_BL") {
+    $("#order-expected-date").value = order.expectedShipmentDate || order.expectedPaymentDate || "";
+  } else {
+    $("#order-expected-date").value = order?.expectedPaymentDate || "";
+  }
+  $("#order-due-date").value = order?.dueDate || "";
+  resetInstallments(order?.paymentInstallments || [{}]);
+  updatePaymentTermVisibility();
 }
 
 function updateOrderCustomerDefaults(force = false) {
@@ -1253,9 +1430,7 @@ async function submitOrder(event) {
     if (!String(data.orderNo || "").trim()) throw new Error("订单号不能为空");
     if (!(Number(data.estimatedReceivableAmount) > 0)) throw new Error("预计应收金额必须大于 0");
     if (!data.currency) throw new Error("币种不能为空");
-    if (data.paymentTerm === "自定义比例" && !(Number(data.depositRatio) > 0 && Number(data.depositRatio) <= 100)) {
-      throw new Error("自定义预付款比例必须大于 0 且不超过 100%");
-    }
+    buildOrderPaymentTermPayload(data, true);
     if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
       if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
       data.manualRateConfirmed = true;
@@ -1455,6 +1630,7 @@ function resetForm(name) {
   if (name === "order") {
     $("#order-form").reset();
     $("#order-id").value = "";
+    setOrderPaymentTerm(null);
     $("#order-currency").value = "";
     $("#order-rate").value = "";
     $("#order-rate-date").value = "";
@@ -1467,14 +1643,13 @@ function resetForm(name) {
       exchangeRateType: state.exchangeRateSettings.rateType,
     });
     $("#order-rate-details")?.closest("details")?.removeAttribute("open");
-    $("#order-deposit-ratio").value = "";
-    $("#order-deposit-ratio").readOnly = true;
     $("#order-required-deposit").value = money(0);
     $("#order-received-deposit").value = money(0);
     $("#order-deposit-gap").value = money(0);
     $("#order-reminder-days").value = "7";
     $("#order-salesperson").value = state.me?.name || "";
     fillAvailableCustomerSelect("");
+    updateOrderCustomerCountry();
     updateOrderDerived();
   }
   if (name === "payment") {
@@ -1514,6 +1689,7 @@ function editOrder(id) {
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
   updateOrderCustomerCountry();
+  setOrderPaymentTerm(order);
   setRateSnapshot("order", {
     exchangeRate: order.exchangeRate,
     exchangeRateDate: order.exchangeRateDate,
@@ -1692,23 +1868,35 @@ function bindEvents() {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
   });
 
-  ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date", "#order-payment-term", "#order-deposit-ratio"].forEach((selector) => $(selector).addEventListener("input", () => {
+  ["#order-estimated-amount", "#order-actual-amount", "#order-final-amount", "#order-rate", "#order-credit-days", "#order-expected-date", "#order-bl-date"].forEach((selector) => $(selector).addEventListener("input", () => {
     if (selector === "#order-rate") markManualRate("order");
     updateOrderDerived();
     saveDraft("order", orderFields);
   }));
   $("#order-payment-term").addEventListener("change", () => {
+    updatePaymentTermVisibility();
     updateOrderDerived();
     saveDraft("order", orderFields);
   });
-  $("#order-link-due-date").addEventListener("click", () => {
-    try {
-      linkOrderDueDate();
-      saveDraft("order", orderFields);
-      toast("到期日已关联");
-    } catch (error) {
-      toast(error.message);
-    }
+  $("#order-credit-days-preset").addEventListener("change", () => {
+    applyCreditDaysPreset();
+    saveDraft("order", orderFields);
+  });
+  $("#add-installment").addEventListener("click", () => {
+    addInstallment({});
+    saveDraft("order", orderFields);
+  });
+  $("#installment-items").addEventListener("input", () => {
+    updateInstallmentAmounts();
+    saveDraft("order", orderFields);
+  });
+  $("#installment-items").addEventListener("click", (event) => {
+    const button = event.target.closest(".delete-installment");
+    if (!button) return;
+    if ($$("#installment-items .installment-row").length > 1) button.closest(".installment-row").remove();
+    else resetInstallments([{}]);
+    updateInstallmentAmounts();
+    saveDraft("order", orderFields);
   });
   $("#order-customer").addEventListener("change", () => {
     updateOrderCustomerDefaults(true);
@@ -1820,7 +2008,7 @@ function initSelects() {
   fillSelect("#payment-currency", constants.currencies, "USD");
   fillSelect("#customer-currency", constants.currencies, "CNY");
   fillSelect("#order-trade-term", constants.tradeTerms, "FOB");
-  fillSelect("#order-payment-term", constants.paymentTerms, "OA账期");
+  fillPaymentTermSelect("OA");
   fillSelect("#order-status", constants.orderStatuses, "已确认");
   fillSelect("#payment-type", constants.paymentTypes, "尾款");
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");

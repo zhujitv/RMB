@@ -253,6 +253,15 @@ label span,
   font-weight: 700;
 }
 
+.field-note {
+  display: block;
+  min-height: 16px;
+  margin-top: 4px;
+  color: #999;
+  font-size: 12px;
+  line-height: 16px;
+}
+
 input,
 select,
 textarea {
@@ -395,6 +404,39 @@ textarea:focus {
 .action-label button {
   width: 100%;
   min-height: 40px;
+}
+
+.term-field.is-hidden {
+  display: none;
+}
+
+.installment-block {
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 12px;
+}
+
+.installment-items {
+  display: grid;
+  gap: 10px;
+}
+
+.installment-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.5fr) minmax(180px, 1.2fr) minmax(120px, 0.7fr) 42px;
+  gap: 10px;
+  align-items: end;
+}
+
+.installment-row label span {
+  font-size: 12px;
+}
+
+.installment-row .delete-installment {
+  width: 42px;
+  min-height: 40px;
+  padding: 0;
 }
 
 .rate-field {
@@ -963,6 +1005,7 @@ body.modal-open {
   .metric-grid,
   .form-grid,
   .cost-item-row,
+  .installment-row,
   .order-search-row {
     grid-template-columns: 1fr;
   }
