@@ -782,7 +782,10 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   if (passwordChangeScreen) passwordChangeScreen.hidden = !passwordChangeRequired;
   if (appShell) appShell.hidden = !loggedIn || passwordChangeRequired;
   document.body.classList.toggle("is-authenticated", loggedIn && !passwordChangeRequired);
-  if (!loggedIn) closeLoginModal();
+  if (!loggedIn) {
+    closeAccountMenu();
+    closeLoginModal();
+  }
 }
 
 function handleAuthExpired(message = "登录已过期，请重新登录") {
@@ -1100,7 +1103,7 @@ async function loadMe() {
   $("#top-user-name").textContent = state.me?.name || "登录";
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
-  $("#modal-current-role").textContent = state.me ? `${state.me.role} · ${scopeText()}` : "-";
+  $("#modal-current-role").textContent = state.me ? state.me.role : "-";
   renderProfileModal();
   $$("#app-version, [data-app-version]").forEach((el) => {
     el.textContent = `当前版本：${APP_VERSION}`;
@@ -1229,7 +1232,7 @@ function applyAccessControl() {
   setHidden("#customer-form", !canWriteArea("customers"));
   setHidden("#supplier-form", !canWriteArea("suppliers"));
   setHidden("#user-form", !canWriteArea("users"));
-  setHidden("#logout-button, #modal-logout-button", !loggedIn);
+  setHidden("#logout-button, #account-menu-logout", !loggedIn);
   const canUseReports = canView("reports");
   setHidden("[data-export='backup-json']", !canUseReports || state.me?.role !== "管理员");
   setHidden("[data-export='payments']", !canUseReports || !canReadArea("payments"));
@@ -2879,7 +2882,6 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
   $("#cost-confirmed").value = "false";
   $("#cost-payment-date").value = "";
   $("#cost-invoice-status").value = "未收到";
-  $("#cost-attachment").value = "";
   resetCostItems([{}]);
   setCostFormMode(null);
   updateCostDerived();
@@ -3121,13 +3123,6 @@ function updateCostDerived() {
   $$("#cost-items .cost-item-row").forEach(updateCostItemDerived);
 }
 
-async function saveAttachmentIfNeeded(relatedType, relatedId, inputId, clear = true) {
-  const value = $(inputId)?.value.trim();
-  if (!value) return;
-  toast("附件地址保存已停用，请使用订单单证 PDF 上传。");
-  if (clear) $(inputId).value = "";
-}
-
 async function submitOrder(event) {
   event.preventDefault();
   if (!canWriteArea("orders")) return toast("没有权限保存应收订单");
@@ -3155,11 +3150,10 @@ async function submitOrder(event) {
     delete data.id;
     delete data.country;
     if (!canWriteArea("commissions")) delete data.salespersonCommissionRate;
-    const result = await api(id ? `/api/orders/${id}` : "/api/orders", {
+    await api(id ? `/api/orders/${id}` : "/api/orders", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),
     });
-    await saveAttachmentIfNeeded("receivable_orders", result.order.id, "#order-attachment");
     clearDraft("order");
     resetForm("order");
     await loadData();
@@ -3629,11 +3623,10 @@ async function submitPayment(event) {
     }
     const id = data.id;
     delete data.id;
-    const result = await api(id ? `/api/payments/${id}` : "/api/payments", {
+    await api(id ? `/api/payments/${id}` : "/api/payments", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),
     });
-    await saveAttachmentIfNeeded("payments", result.payment.id, "#payment-attachment");
     clearDraft("payment");
     resetForm("payment");
     await loadData();
@@ -3679,7 +3672,6 @@ async function submitCost(event) {
       body: JSON.stringify(payload),
     });
     const savedCosts = result.costs || (result.cost ? [result.cost] : []);
-    await Promise.all(savedCosts.map((cost) => saveAttachmentIfNeeded("order_costs", cost.id, "#cost-attachment", false)));
     resetCostForm();
     await loadData();
     toast(`成本已保存${savedCosts.length > 1 ? ` ${savedCosts.length} 条` : ""}`);
@@ -3908,13 +3900,12 @@ async function submitProfile(event) {
   setFormError(form, "");
   const name = $("#profile-name")?.value.trim() || "";
   const phone = $("#profile-phone")?.value.trim() || "";
-  const avatarInitials = $("#profile-avatar-initials")?.value.trim() || "";
   const defaultLanguage = $("#profile-language")?.value || "zh-CN";
   if (!name) return reportFrontendError(new Error("请输入姓名"), "个人信息校验失败", form);
   try {
     const result = await api("/api/auth/profile", {
       method: "PATCH",
-      body: JSON.stringify({ name, phone, avatarInitials, defaultLanguage }),
+      body: JSON.stringify({ name, phone, defaultLanguage }),
     });
     state.me = result.user || state.me;
     renderProfileModal();
@@ -4017,7 +4008,6 @@ function resetOrderForm({ clearStoredDraft = true } = {}) {
   $("#order-reminder-days").value = "7";
   $("#order-status").value = "草稿";
   $("#order-remark").value = "";
-  $("#order-attachment").value = "";
   clearInstallments();
   updateOrderCustomerCountry();
   updatePaymentTermVisibility();
@@ -4091,7 +4081,6 @@ function editOrder(id) {
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
   $("#order-commission-rate").value = Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2);
-  $("#order-attachment").value = "";
   updateOrderCustomerCountry();
   setOrderPaymentTerm(order);
   setRateSnapshot("order", {
@@ -4143,7 +4132,6 @@ function editCost(id) {
   clearDraft("cost");
   setForm(costFields, cost);
   $("#cost-id").value = cost.id;
-  $("#cost-attachment").value = "";
   selectCostOrder(costOrderFromCost(cost), { persist: false });
   resetCostItems([cost]);
   setCostFormMode(cost);
@@ -4371,33 +4359,68 @@ function approvalStatusText(user = state.me) {
   return labels[status] || status || "-";
 }
 
+function setProfileTab(tab = "profile") {
+  const activeTab = tab === "password" ? "password" : "profile";
+  $$("[data-profile-tab]").forEach((button) => {
+    const active = button.dataset.profileTab === activeTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $$("[data-profile-panel]").forEach((panel) => {
+    const active = panel.dataset.profilePanel === activeTab;
+    panel.hidden = !active;
+    panel.classList.toggle("is-active", active);
+  });
+}
+
 function renderProfileModal() {
   if (!state.me) return;
   $("#modal-current-user").textContent = state.me.name || "-";
-  $("#modal-current-role").textContent = `${state.me.role || "-"} · ${scopeText()}`;
+  $("#modal-current-role").textContent = state.me.role || "-";
   $("#profile-avatar").textContent = profileInitials();
   $("#profile-email").textContent = state.me.email || "-";
   $("#profile-status").textContent = approvalStatusText();
-  $("#profile-scope").textContent = scopeText();
   $("#profile-version").textContent = `当前版本：${APP_VERSION}`;
   $("#profile-name").value = state.me.name || "";
   $("#profile-phone").value = state.me.phone || "";
-  $("#profile-avatar-initials").value = state.me.avatarInitials || "";
   $("#profile-language").value = state.me.defaultLanguage || "zh-CN";
 }
 
-function openLoginModal() {
+function closeAccountMenu() {
+  const menu = $("#account-menu");
+  const button = $("#show-login");
+  if (menu) menu.hidden = true;
+  if (button) button.setAttribute("aria-expanded", "false");
+}
+
+function toggleAccountMenu() {
   if (!state.me) {
     setAuthenticatedShell(false);
     $("#screen-login-email")?.focus();
     return;
   }
+  const menu = $("#account-menu");
+  const button = $("#show-login");
+  if (!menu || !button) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
+}
+
+function openLoginModal(tab = "profile") {
+  if (!state.me) {
+    setAuthenticatedShell(false);
+    $("#screen-login-email")?.focus();
+    return;
+  }
+  closeAccountMenu();
   const modal = $("#login-modal");
   if (!modal) return;
   renderProfileModal();
+  setProfileTab(tab);
   modal.hidden = false;
   document.body.classList.add("modal-open");
-  $("#profile-name")?.focus();
+  (tab === "password" ? $("#profile-current-password") : $("#profile-name"))?.focus();
 }
 
 function closeLoginModal() {
@@ -4433,6 +4456,7 @@ async function logoutCurrentUser() {
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   clearLocalCaches();
+  closeAccountMenu();
   closeLoginModal();
   closeMobileNav();
   setAuthenticatedShell(false);
@@ -4446,10 +4470,19 @@ function bindAuthEvents() {
   bindOptional("#register-form", "submit", submitRegister);
   bindOptional("#password-change-form", "submit", submitPasswordChange);
   bindOptional("#password-change-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
-  bindOptional("#show-login", "click", openLoginModal);
-  bindOptional("#modal-logout-button", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
+  bindOptional("#show-login", "click", toggleAccountMenu);
+  bindOptional("#account-menu-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
+  $$("[data-profile-open]").forEach((button) => {
+    button.addEventListener("click", () => openLoginModal(button.dataset.profileOpen || "profile"));
+  });
+  $$("[data-profile-tab]").forEach((button) => {
+    button.addEventListener("click", () => setProfileTab(button.dataset.profileTab));
+  });
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest?.(".account-menu-wrap")) closeAccountMenu();
+  });
 }
 
 function bindEvents() {
@@ -4464,6 +4497,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
+    if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
   });
   $("#clear-filters").addEventListener("click", () => {

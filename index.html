@@ -122,7 +122,16 @@
           </div>
           <div class="top-actions">
             <button class="ghost-button" id="refresh-data" type="button">刷新</button>
-            <button class="account-button" id="show-login" type="button"><span id="top-user-name">登录</span><small id="top-user-role">账户</small></button>
+            <div class="account-menu-wrap">
+              <button class="account-button" id="show-login" type="button" aria-haspopup="menu" aria-expanded="false">
+                <span id="top-user-name">登录</span><small id="top-user-role">账户</small>
+              </button>
+              <div class="account-menu" id="account-menu" hidden>
+                <button type="button" data-profile-open="profile">个人资料</button>
+                <button type="button" data-profile-open="password">修改密码</button>
+                <button type="button" id="account-menu-logout">退出登录</button>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -130,48 +139,44 @@
           <div class="login-backdrop" data-close-login></div>
           <section class="login-dialog profile-dialog" role="dialog" aria-modal="true" aria-labelledby="login-dialog-title">
             <button class="modal-close" data-close-login type="button" aria-label="关闭个人中心">×</button>
-            <div class="login-dialog-header">
-              <span class="login-badge">个人中心</span>
-              <h3 id="login-dialog-title">个人中心</h3>
-              <p>查看账号状态，修改个人资料或密码。</p>
-            </div>
-            <div class="profile-summary">
+            <div class="profile-header">
               <div class="profile-avatar" id="profile-avatar">--</div>
               <div>
-                <span>当前用户</span>
+                <h3 id="login-dialog-title">个人中心</h3>
                 <strong id="modal-current-user">读取中...</strong>
                 <small id="modal-current-role">-</small>
+                <span id="profile-email">-</span>
               </div>
             </div>
-            <dl class="profile-meta">
-              <div><dt>邮箱</dt><dd id="profile-email">-</dd></div>
-              <div><dt>账号状态</dt><dd id="profile-status">-</dd></div>
-              <div><dt>权限范围</dt><dd id="profile-scope">-</dd></div>
-              <div><dt>当前版本</dt><dd id="profile-version">当前版本：v1.0.1</dd></div>
-            </dl>
-            <form class="login-form profile-form" id="profile-form" autocomplete="off" novalidate data-error-target="profile-error">
-              <h4>修改个人信息</h4>
-              <label><span>姓名</span><input id="profile-name" type="text" autocomplete="name" required /></label>
-              <label><span>联系电话</span><input id="profile-phone" type="tel" autocomplete="tel" placeholder="可选" /></label>
-              <label><span>头像缩写</span><input id="profile-avatar-initials" type="text" maxlength="8" placeholder="例如 JD" /></label>
-              <label><span>默认语言</span><select id="profile-language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
-              <p class="profile-note">邮箱、角色、权限、账号状态和数据范围只能由管理员在系统设置中修改。</p>
-              <div class="form-error" id="profile-error" hidden></div>
-              <div class="login-actions">
-                <button class="primary-button" type="submit">保存个人信息</button>
-              </div>
-            </form>
-            <form class="login-form profile-form" id="profile-password-form" autocomplete="off" novalidate data-error-target="profile-password-error">
-              <h4>修改密码</h4>
-              <label><span>当前密码</span><input id="profile-current-password" type="password" autocomplete="current-password" required /></label>
-              <label><span>新密码</span><input id="profile-new-password" type="password" autocomplete="new-password" required /></label>
-              <label><span>确认新密码</span><input id="profile-confirm-password" type="password" autocomplete="new-password" required /></label>
-              <div class="form-error" id="profile-password-error" hidden></div>
-              <div class="login-actions">
-                <button class="primary-button" type="submit">保存新密码</button>
-                <button class="secondary-button" id="modal-logout-button" type="button">退出登录</button>
-              </div>
-            </form>
+            <div class="profile-tabs" role="tablist" aria-label="个人中心">
+              <button class="is-active" id="profile-tab-profile" type="button" data-profile-tab="profile" role="tab" aria-selected="true">个人资料</button>
+              <button id="profile-tab-password" type="button" data-profile-tab="password" role="tab" aria-selected="false">修改密码</button>
+            </div>
+            <div class="profile-body">
+              <form class="login-form profile-form is-active" id="profile-form" autocomplete="off" novalidate data-error-target="profile-error" data-profile-panel="profile" role="tabpanel">
+                <label><span>姓名</span><input id="profile-name" type="text" autocomplete="name" required /></label>
+                <label><span>联系电话</span><input id="profile-phone" type="tel" autocomplete="tel" placeholder="可选" /></label>
+                <label><span>默认语言</span><select id="profile-language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
+                <p class="profile-note">邮箱、角色、权限和账号状态由管理员维护。</p>
+                <div class="form-error" id="profile-error" hidden></div>
+                <div class="login-actions">
+                  <button class="primary-button" type="submit">保存个人信息</button>
+                </div>
+              </form>
+              <form class="login-form profile-form" id="profile-password-form" autocomplete="off" novalidate data-error-target="profile-password-error" data-profile-panel="password" role="tabpanel" hidden>
+                <label><span>当前密码</span><input id="profile-current-password" type="password" autocomplete="current-password" required /></label>
+                <label><span>新密码</span><input id="profile-new-password" type="password" autocomplete="new-password" required /></label>
+                <label><span>确认密码</span><input id="profile-confirm-password" type="password" autocomplete="new-password" required /></label>
+                <div class="form-error" id="profile-password-error" hidden></div>
+                <div class="login-actions">
+                  <button class="primary-button" type="submit">保存密码</button>
+                </div>
+              </form>
+            </div>
+            <div class="profile-footer">
+              <span>账号状态：<strong id="profile-status">-</strong></span>
+              <span id="profile-version">当前版本：v1.0.1</span>
+            </div>
           </section>
         </div>
 
@@ -304,7 +309,6 @@
               <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
               <label><span>订单状态</span><select id="order-status"></select></label>
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
-              <label class="wide"><span>附件地址</span><input id="order-attachment" placeholder="旧附件地址已停用，请使用单证 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" id="order-submit-button" type="submit">保存应收订单</button></div>
           </form>
@@ -379,7 +383,6 @@
               <label><span>收款状态</span><select id="payment-status"></select></label>
               <label><span>银行流水号</span><input id="payment-bank-reference" /></label>
               <label class="wide"><span>备注</span><textarea id="payment-remark" rows="3"></textarea></label>
-              <label class="wide"><span>附件地址</span><input id="payment-attachment" placeholder="旧附件地址已停用，请使用单证 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" type="submit">保存收款</button></div>
           </form>
@@ -417,7 +420,6 @@
                 <div class="cost-items-title"><strong>供应商成本明细</strong><button class="secondary-button" id="add-cost-item" type="button">添加供应商</button></div>
                 <div class="cost-items" id="cost-items"></div>
               </div>
-              <label class="wide"><span>附件地址</span><input id="cost-attachment" placeholder="旧附件地址已停用，请使用供应商 PDF 上传" disabled /></label>
             </div>
             <div class="form-actions"><button class="primary-button" id="cost-submit-button" type="submit">保存成本</button></div>
           </form>
