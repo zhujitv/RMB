@@ -285,6 +285,7 @@ R2_ACCOUNT_ID="your-cloudflare-account-id"
 R2_ACCESS_KEY_ID="your-r2-access-key-id"
 R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
 R2_BUCKET="your-r2-bucket"
+R2_ENDPOINT=""
 ```
 
 也兼容以下 R2 变量名：
@@ -296,6 +297,31 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY
 CLOUDFLARE_R2_BUCKET
 R2_ENDPOINT
 ```
+
+### 文件服务器配置
+
+PDF 单证和供应商资料必须保存到 Cloudflare R2 / S3 对象存储，不能保存到 Vercel 本地目录。Vercel 环境变量建议配置：
+
+```text
+R2_ACCOUNT_ID=Cloudflare 账户 ID
+R2_ACCESS_KEY_ID=R2 API Token 的 Access Key ID
+R2_SECRET_ACCESS_KEY=R2 API Token 的 Secret Access Key
+R2_BUCKET=R2 存储桶名称
+```
+
+如果使用其他 S3 兼容存储，同时配置：
+
+```text
+R2_ENDPOINT=https://your-s3-endpoint
+```
+
+配置完成后，以管理员登录系统，访问：
+
+```text
+/api/storage/health
+```
+
+返回 `ok: true` 表示文件服务器可用。若配置错误，接口会返回明确错误，例如“文件存储服务未配置”“Access Key 错误”“Bucket 不存在”或“网络超时”。
 
 ## 定时任务
 
@@ -390,7 +416,7 @@ npm run db:studio
 1. 在 Railway 创建 PostgreSQL 数据库。
 2. 将 Railway 提供的 PostgreSQL 外网连接填入 Vercel `DATABASE_URL`。
 3. 在 Cloudflare R2 创建 Bucket 和访问密钥。
-4. 将 R2 环境变量填入 Vercel。
+4. 将 R2 环境变量填入 Vercel，并用 `/api/storage/health` 检查文件服务器。
 5. 在 Vercel 连接 GitHub 仓库。
 6. 部署项目。
 7. 首次部署后登录默认管理员账号。
