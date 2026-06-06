@@ -1,10 +1,27 @@
-import { apiError, getActor, getOrderDocumentPreview } from "../../../../../lib/platform-db";
+import { getActor, getOrderDocumentPreview } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function asciiFileName(name = "document.pdf") {
-  return String(name || "document.pdf").replace(/[\r\n"]/g, "_");
+  const cleaned = String(name || "document.pdf")
+    .replace(/[\r\n"]/g, "_")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/[\\/:*?<>|]+/g, "_");
+  return cleaned || "document.pdf";
+}
+
+function previewErrorResponse(error) {
+  const status = error?.status || 500;
+  const code = error?.code || (status === 403 ? "PERMISSION_DENIED" : "R2_STREAM_FAILED");
+  const message = error?.message || "PDF 预览失败，请下载原文件查看";
+  return Response.json({ error: message, code }, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Preview-Error-Code": code,
+    },
+  });
 }
 
 export async function GET(request, { params }) {
@@ -23,6 +40,6 @@ export async function GET(request, { params }) {
       },
     });
   } catch (error) {
-    return apiError(error, "预览订单单证失败");
+    return previewErrorResponse(error);
   }
 }

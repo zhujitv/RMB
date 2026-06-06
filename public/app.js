@@ -22,6 +22,8 @@ const state = {
   taxRefundDetailOrder: null,
   taxRefundDetailLoading: false,
   pdfPreviewDocument: null,
+  pdfPreviewObjectUrl: "",
+  pdfPreviewError: "",
   costOrderResults: [],
   selectedCostOrder: null,
   documentUploads: {},
@@ -724,6 +726,8 @@ function clearLocalCaches() {
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
   state.pdfPreviewDocument = null;
+  state.pdfPreviewObjectUrl = "";
+  state.pdfPreviewError = "";
   state.customers = [];
   state.suppliers = [];
   state.availableCustomers = [];
@@ -2294,30 +2298,79 @@ function findDocumentById(id) {
 function closePdfPreview() {
   const modal = $("#pdf-preview-modal");
   const frame = $("#pdf-preview-frame");
+  const errorBox = $("#pdf-preview-error");
   if (frame) frame.src = "about:blank";
+  if (state.pdfPreviewObjectUrl) URL.revokeObjectURL(state.pdfPreviewObjectUrl);
   if (modal) modal.hidden = true;
   state.pdfPreviewDocument = null;
+  state.pdfPreviewObjectUrl = "";
+  state.pdfPreviewError = "";
+  if (errorBox) errorBox.hidden = true;
   if (!state.taxRefundDetailOrder && $("#tax-detail-drawer")?.hidden) {
     document.body.classList.remove("modal-open");
   }
 }
 
-function openPdfPreview(documentId) {
+async function openPdfPreview(documentId) {
   if (!canReadArea("documents") || !canReadArea("taxRefund")) return toast("没有权限预览退税资料");
   const doc = findDocumentById(documentId);
   if (!doc || doc.uploadStatus !== "SUCCESS") return toast("未找到可预览的 PDF 文件");
   state.pdfPreviewDocument = doc;
   const modal = $("#pdf-preview-modal");
   const frame = $("#pdf-preview-frame");
+  const errorBox = $("#pdf-preview-error");
   if (!modal || !frame) return;
   $("#pdf-preview-type").textContent = doc.documentTypeLabel || documentTypeLabel(doc.documentType);
   $("#pdf-preview-name").textContent = doc.fileName || "-";
   $("#pdf-preview-order").textContent = doc.orderNo || state.taxRefundDetailOrder?.orderNo || "-";
   $("#pdf-preview-supplier").textContent = doc.supplierName || "无供应商";
   $("#pdf-preview-download").href = `/api/order-documents/${encodeURIComponent(doc.id)}/download`;
-  frame.src = `/api/order-documents/${encodeURIComponent(doc.id)}/preview`;
+  frame.src = "about:blank";
+  if (state.pdfPreviewObjectUrl) URL.revokeObjectURL(state.pdfPreviewObjectUrl);
+  state.pdfPreviewObjectUrl = "";
+  state.pdfPreviewError = "";
+  if (errorBox) {
+    errorBox.hidden = false;
+    errorBox.innerHTML = `<strong>正在加载 PDF 预览...</strong><small>请稍候</small>`;
+  }
   modal.hidden = false;
   document.body?.classList?.add?.("modal-open");
+  try {
+    const response = await fetch(`/api/order-documents/${encodeURIComponent(doc.id)}/preview`, {
+      headers: { Accept: "application/pdf" },
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/pdf")) {
+      let message = "PDF 预览失败，请下载原文件查看";
+      let code = response.headers.get("x-preview-error-code") || "";
+      try {
+        const data = await response.json();
+        code = data.code || code;
+        message = data.error || message;
+      } catch {
+        const text = await response.text().catch(() => "");
+        if (text) message = text.slice(0, 160);
+      }
+      throw new Error(code ? `${message}（${code}）` : message);
+    }
+    const blob = await response.blob();
+    if (blob.type && blob.type !== "application/pdf") throw new Error("INVALID_FILE_TYPE");
+    const url = URL.createObjectURL(blob);
+    state.pdfPreviewObjectUrl = url;
+    frame.src = url;
+    if (errorBox) errorBox.hidden = true;
+  } catch (error) {
+    console.error("PDF 预览失败", error);
+    state.pdfPreviewError = error.message || "PDF 预览失败，请下载原文件查看";
+    if (frame) frame.src = "about:blank";
+    if (errorBox) {
+      errorBox.hidden = false;
+      errorBox.innerHTML = `
+        <strong>PDF 预览失败，请下载原文件查看</strong>
+        <small>${escapeHtml(state.pdfPreviewError)}</small>
+      `;
+    }
+  }
 }
 
 function renderSettings() {

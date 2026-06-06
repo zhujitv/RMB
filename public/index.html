@@ -640,7 +640,10 @@
               <button class="modal-close" data-close-pdf-preview type="button" aria-label="关闭 PDF 预览">×</button>
             </div>
           </header>
-          <iframe id="pdf-preview-frame" title="PDF 预览" src="about:blank"></iframe>
+          <div class="pdf-preview-stage">
+            <iframe id="pdf-preview-frame" title="PDF 预览" src="about:blank"></iframe>
+            <div class="pdf-preview-error" id="pdf-preview-error" hidden></div>
+          </div>
         </section>
       </aside>
     </div>
