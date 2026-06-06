@@ -371,27 +371,74 @@ textarea:focus {
 
 .rate-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: minmax(78px, 1fr) 40px minmax(86px, 0.8fr) auto;
+  gap: 6px;
   align-items: center;
+  min-height: 40px;
 }
 
 .rate-refresh {
-  padding: 0 10px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  color: #475467;
+  font-size: 18px;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .rate-meta {
   display: block;
-  min-height: 18px;
-  margin-top: 6px;
-  color: var(--muted);
+  min-width: 0;
+  margin: 0;
+  color: #999;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rate-meta.warning {
   color: #b45309;
+}
+
+.rate-details {
+  position: relative;
+  color: #667085;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rate-details summary {
+  cursor: pointer;
+  list-style: none;
+  outline: none;
+}
+
+.rate-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.rate-details summary:hover {
+  color: #0f766e;
+}
+
+.rate-detail-popover {
+  position: absolute;
+  z-index: 20;
+  top: 26px;
+  right: 0;
+  min-width: 168px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  color: #475467;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .cost-items-block {
