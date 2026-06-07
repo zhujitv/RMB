@@ -973,6 +973,70 @@ textarea:focus {
   align-items: start;
 }
 
+.settings-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
+.settings-tab-button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: #475467;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-tab-button.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.settings-tab-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-filter select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.settings-filter input,
+.settings-filter select {
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.settings-record-panel {
+  max-width: min(760px, calc(100vw - 32px));
+}
+
+.settings-record-panel .entry-form {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.settings-record-panel .form-header {
+  padding-right: 36px;
+}
+
 .panel.dashboard-card {
   min-height: 100%;
   border-color: #e2e8f0;
@@ -2242,6 +2306,11 @@ textarea:focus {
 
 .inline-filter input {
   min-width: 320px;
+}
+
+.inline-filter.settings-filter input,
+.inline-filter.settings-filter select {
+  min-width: 160px;
 }
 
 .cost-item-row {

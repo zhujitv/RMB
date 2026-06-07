@@ -668,62 +668,127 @@
         </section>
 
         <section class="view-panel" id="settings-view">
-          <div class="settings-grid">
-            <section class="entry-form account-session-panel" id="account-session-panel">
-              <div class="form-header"><div><h3>当前会话</h3><p id="settings-session-text">登录后按角色加载菜单和数据权限。</p></div></div>
-              <div class="form-actions"><button class="secondary-button" id="logout-button" type="button">退出登录</button></div>
+          <div class="settings-shell">
+            <nav class="settings-tabs" id="settings-tabs" aria-label="系统设置分类">
+              <button class="settings-tab-button is-active" data-settings-tab="exchangeRates" type="button">汇率设置</button>
+              <button class="settings-tab-button" data-settings-tab="customers" type="button">客户资料</button>
+              <button class="settings-tab-button" data-settings-tab="suppliers" type="button">供应商资料</button>
+              <button class="settings-tab-button" data-settings-tab="users" type="button">用户与权限</button>
+              <button class="settings-tab-button" data-settings-tab="auditLogs" type="button">操作日志</button>
+            </nav>
+
+            <section class="settings-tab-panel" data-settings-panel="exchangeRates">
+              <form class="entry-form" id="exchange-rate-settings-form" autocomplete="off">
+                <div class="form-header"><div><h3>汇率设置</h3><p id="exchange-settings-status">仅加载当前设置。</p></div><button class="secondary-button" id="refresh-exchange-rates" type="button">手动刷新今日汇率</button></div>
+                <div class="form-grid">
+                  <label><span>汇率来源</span><select id="exchange-source"></select></label>
+                  <label><span>汇率类型</span><select id="exchange-rate-type"></select></label>
+                  <label><span>自动更新</span><select id="exchange-auto-update"><option value="true">开启</option><option value="false">关闭</option></select></label>
+                  <label><span>允许手动修改</span><select id="exchange-allow-manual"><option value="true">是</option><option value="false">否</option></select></label>
+                </div>
+                <div class="form-actions"><button class="secondary-button" data-settings-refresh="exchangeRates" type="button">刷新</button><button class="primary-button" type="submit">保存汇率设置</button></div>
+              </form>
             </section>
-            <form class="entry-form" id="exchange-rate-settings-form" autocomplete="off">
-              <div class="form-header"><div><h3>汇率设置</h3></div><button class="secondary-button" id="refresh-exchange-rates" type="button">手动刷新今日汇率</button></div>
-              <div class="form-grid">
-                <label><span>汇率来源</span><select id="exchange-source"></select></label>
-                <label><span>汇率类型</span><select id="exchange-rate-type"></select></label>
-                <label><span>自动更新</span><select id="exchange-auto-update"><option value="true">开启</option><option value="false">关闭</option></select></label>
-                <label><span>允许手动修改</span><select id="exchange-allow-manual"><option value="true">是</option><option value="false">否</option></select></label>
-              </div>
-              <div class="form-actions"><button class="primary-button" type="submit">保存汇率设置</button></div>
-            </form>
-            <form class="entry-form" id="customer-form" autocomplete="off">
-              <input type="hidden" id="customer-id" />
-              <div class="form-header"><div><h3>客户资料</h3></div><button class="secondary-button" type="button" data-reset="customer">新建</button></div>
-              <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
-              <div class="form-actions"><button class="primary-button" type="submit">保存客户</button></div>
-            </form>
-            <form class="entry-form" id="supplier-form" autocomplete="off">
-              <input type="hidden" id="supplier-id" />
-              <div class="form-header"><div><h3>供应商资料</h3></div><button class="secondary-button" type="button" data-reset="supplier">新建</button></div>
-              <div class="form-grid">
-                <label><span>供应商名称 *</span><input id="supplier-name" required /></label>
-                <label><span>供应商类型</span><select id="supplier-type"></select></label>
-                <label><span>状态</span><select id="supplier-status"></select></label>
-                <label><span>国家 / 地区</span><input id="supplier-country" /></label>
-                <label><span>联系人</span><input id="supplier-contact-person" /></label>
-                <label><span>联系电话</span><input id="supplier-phone" /></label>
-                <label><span>邮箱</span><input id="supplier-email" type="email" /></label>
-                <label><span>开票名称</span><input id="supplier-invoice-title" /></label>
-                <label><span>税号</span><input id="supplier-tax-number" /></label>
-                <label><span>银行名称</span><input id="supplier-bank-name" /></label>
-                <label><span>银行账号</span><input id="supplier-bank-account" /></label>
-                <label class="wide"><span>地址</span><input id="supplier-address" /></label>
-                <label class="wide"><span>备注</span><textarea id="supplier-remark" rows="2"></textarea></label>
-              </div>
-              <div class="form-actions"><button class="primary-button" type="submit">保存供应商</button></div>
-            </form>
+
+            <section class="settings-tab-panel" data-settings-panel="customers" hidden>
+              <section class="panel">
+                <div class="panel-title"><h3>客户资料</h3><div class="panel-title-actions"><span id="customers-count">0 个客户</span><button class="secondary-button" data-settings-refresh="customers" type="button">刷新</button><button class="primary-button" id="open-customer-drawer" type="button">新建客户</button></div></div>
+                <form class="inline-filter" id="customer-search-form" autocomplete="off">
+                  <input id="customer-search-keyword" placeholder="搜索客户名称 / 国家地区" />
+                  <button class="primary-button" type="submit">查询</button>
+                  <button class="secondary-button" id="customer-search-reset" type="button">重置</button>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>提成比例</th><th>提成状态</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div>
+                <div class="pagination-bar"><button class="secondary-button" id="customers-prev-page" type="button">上一页</button><span id="customers-page-info">第 1 / 1 页</span><button class="secondary-button" id="customers-next-page" type="button">下一页</button></div>
+              </section>
+            </section>
+
+            <section class="settings-tab-panel" data-settings-panel="suppliers" hidden>
+              <section class="panel">
+                <div class="panel-title"><h3>供应商资料</h3><div class="panel-title-actions"><span id="suppliers-count">0 个供应商</span><button class="secondary-button" data-settings-refresh="suppliers" type="button">刷新</button><button class="primary-button" id="open-supplier-drawer" type="button">新建供应商</button></div></div>
+                <form class="inline-filter settings-filter" id="supplier-search-form" autocomplete="off">
+                  <input id="supplier-search-keyword" placeholder="搜索供应商名称 / 联系人 / 开票名称 / 税号" />
+                  <select id="supplier-filter-type"></select>
+                  <select id="supplier-filter-status"></select>
+                  <button class="primary-button" type="submit">查询</button>
+                  <button class="secondary-button" id="supplier-search-reset" type="button">重置</button>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>供应商</th><th>类型</th><th>状态</th><th>联系人</th><th>电话</th><th>开票名称</th><th>银行账号</th><th>操作</th></tr></thead><tbody id="suppliers-table"></tbody></table></div>
+                <div class="pagination-bar"><button class="secondary-button" id="suppliers-prev-page" type="button">上一页</button><span id="suppliers-page-info">第 1 / 1 页</span><button class="secondary-button" id="suppliers-next-page" type="button">下一页</button></div>
+              </section>
+            </section>
+
+            <section class="settings-tab-panel" data-settings-panel="users" hidden>
+              <section class="panel">
+                <div class="panel-title"><h3>用户与权限</h3><div class="panel-title-actions"><span id="users-count">0 个用户</span><button class="secondary-button" data-settings-refresh="users" type="button">刷新</button><button class="primary-button" id="open-user-drawer" type="button">新建用户</button></div></div>
+                <form class="inline-filter settings-filter" id="user-search-form" autocomplete="off">
+                  <input id="user-search-keyword" placeholder="搜索姓名 / 邮箱" />
+                  <select id="user-filter-status"></select>
+                  <select id="user-filter-role"></select>
+                  <button class="primary-button" type="submit">查询</button>
+                  <button class="secondary-button" id="user-search-reset" type="button">重置</button>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>权限模式</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div>
+                <div class="pagination-bar"><button class="secondary-button" id="users-prev-page" type="button">上一页</button><span id="users-page-info">第 1 / 1 页</span><button class="secondary-button" id="users-next-page" type="button">下一页</button></div>
+              </section>
+            </section>
+
+            <section class="settings-tab-panel" data-settings-panel="auditLogs" hidden>
+              <section class="panel">
+                <div class="panel-title"><h3>操作日志</h3><div class="panel-title-actions"><span id="audit-count">0 条日志</span><button class="secondary-button" data-settings-refresh="auditLogs" type="button">刷新</button></div></div>
+                <form class="inline-filter settings-filter" id="audit-search-form" autocomplete="off">
+                  <input id="audit-search-keyword" placeholder="搜索用户 / 对象 / IP / 关键词" />
+                  <input id="audit-search-action" placeholder="动作" />
+                  <button class="primary-button" type="submit">查询</button>
+                  <button class="secondary-button" id="audit-search-reset" type="button">重置</button>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>IP</th></tr></thead><tbody id="audit-table"></tbody></table></div>
+                <div class="pagination-bar"><button class="secondary-button" id="audit-prev-page" type="button">上一页</button><span id="audit-page-info">第 1 / 1 页</span><button class="secondary-button" id="audit-next-page" type="button">下一页</button></div>
+              </section>
+            </section>
           </div>
-          <section class="panel"><div class="panel-title"><h3>客户列表</h3><span id="customers-count">0 个客户</span></div><div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>提成比例</th><th>提成状态</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div></section>
-          <section class="panel">
-            <div class="panel-title"><h3>供应商列表</h3><span id="suppliers-count">0 个供应商</span></div>
-            <form class="inline-filter" id="supplier-search-form" autocomplete="off">
-              <input id="supplier-search-keyword" placeholder="搜索供应商名称 / 类型 / 联系人 / 开票名称 / 税号" />
-              <button class="primary-button" type="submit">查询</button>
-              <button class="secondary-button" id="supplier-search-reset" type="button">重置</button>
-            </form>
-            <div class="table-wrap"><table><thead><tr><th>供应商</th><th>类型</th><th>状态</th><th>联系人</th><th>电话</th><th>开票名称</th><th>银行账号</th><th>操作</th></tr></thead><tbody id="suppliers-table"></tbody></table></div>
-          </section>
-          <section class="panel"><div class="panel-title"><h3>用户列表</h3><div class="panel-title-actions"><span id="users-count">0 个用户</span><button class="primary-button" id="open-user-drawer" type="button">新建用户</button></div></div><div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>权限模式</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div></section>
-          <section class="panel"><div class="panel-title"><h3>操作日志</h3><span>最近 100 条</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>IP</th></tr></thead><tbody id="audit-table"></tbody></table></div></section>
         </section>
       </main>
+
+      <aside class="tax-detail-drawer settings-record-drawer" id="customer-drawer" hidden>
+        <div class="tax-detail-backdrop" data-close-customer-drawer></div>
+        <section class="tax-detail-panel settings-record-panel" role="dialog" aria-modal="true" aria-labelledby="customer-drawer-title">
+          <button class="modal-close" data-close-customer-drawer type="button" aria-label="关闭客户编辑">×</button>
+          <form class="entry-form" id="customer-form" autocomplete="off">
+            <input type="hidden" id="customer-id" />
+            <div class="form-header"><div><h3 id="customer-drawer-title">客户资料</h3><p id="customer-form-subtitle">新建客户</p></div></div>
+            <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
+            <div class="form-actions"><button class="secondary-button" data-close-customer-drawer type="button">取消</button><button class="primary-button" type="submit">保存客户</button></div>
+          </form>
+        </section>
+      </aside>
+
+      <aside class="tax-detail-drawer settings-record-drawer" id="supplier-drawer" hidden>
+        <div class="tax-detail-backdrop" data-close-supplier-drawer></div>
+        <section class="tax-detail-panel settings-record-panel" role="dialog" aria-modal="true" aria-labelledby="supplier-drawer-title">
+          <button class="modal-close" data-close-supplier-drawer type="button" aria-label="关闭供应商编辑">×</button>
+          <form class="entry-form" id="supplier-form" autocomplete="off">
+            <input type="hidden" id="supplier-id" />
+            <div class="form-header"><div><h3 id="supplier-drawer-title">供应商资料</h3><p id="supplier-form-subtitle">新建供应商</p></div></div>
+            <div class="form-grid">
+              <label><span>供应商名称 *</span><input id="supplier-name" required /></label>
+              <label><span>供应商类型</span><select id="supplier-type"></select></label>
+              <label><span>状态</span><select id="supplier-status"></select></label>
+              <label><span>国家 / 地区</span><input id="supplier-country" /></label>
+              <label><span>联系人</span><input id="supplier-contact-person" /></label>
+              <label><span>联系电话</span><input id="supplier-phone" /></label>
+              <label><span>邮箱</span><input id="supplier-email" type="email" /></label>
+              <label><span>开票名称</span><input id="supplier-invoice-title" /></label>
+              <label><span>税号</span><input id="supplier-tax-number" /></label>
+              <label><span>银行名称</span><input id="supplier-bank-name" /></label>
+              <label><span>银行账号</span><input id="supplier-bank-account" /></label>
+              <label class="wide"><span>地址</span><input id="supplier-address" /></label>
+              <label class="wide"><span>备注</span><textarea id="supplier-remark" rows="2"></textarea></label>
+            </div>
+            <div class="form-actions"><button class="secondary-button" data-close-supplier-drawer type="button">取消</button><button class="primary-button" type="submit">保存供应商</button></div>
+          </form>
+        </section>
+      </aside>
 
       <aside class="tax-detail-drawer user-drawer" id="user-drawer" hidden>
         <div class="tax-detail-backdrop" data-close-user-drawer></div>

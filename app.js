@@ -12,10 +12,42 @@ const state = {
   permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
   users: [],
   customers: [],
+  customerSalespeople: [],
   availableCustomers: [],
   suppliers: [],
   availableSuppliers: [],
   supplierSettingsKeyword: "",
+  settingsActiveTab: "exchangeRates",
+  settingsLoaded: {
+    exchangeRates: false,
+    customers: false,
+    suppliers: false,
+    users: false,
+    auditLogs: false,
+  },
+  settingsLoading: {
+    exchangeRates: false,
+    customers: false,
+    suppliers: false,
+    users: false,
+    auditLogs: false,
+  },
+  settingsErrors: {},
+  customersPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  suppliersPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  usersPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  auditLogsPagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 },
+  customerSettingsKeyword: "",
+  supplierSettingsType: "",
+  supplierSettingsStatus: "",
+  userSettingsKeyword: "",
+  userSettingsStatus: "",
+  userSettingsRole: "",
+  auditLogSettingsKeyword: "",
+  auditLogSettingsAction: "",
+  permissionConfigLoaded: false,
+  permissionConfigLoading: false,
+  permissionConfigError: "",
   orders: [],
   payments: [],
   costs: [],
@@ -189,6 +221,16 @@ const viewTitles = {
   settings: "系统设置",
 };
 
+const settingsTabs = [
+  { key: "exchangeRates", label: "汇率设置", readArea: "settings" },
+  { key: "customers", label: "客户资料", readArea: "customers" },
+  { key: "suppliers", label: "供应商资料", readArea: "suppliers" },
+  { key: "users", label: "用户与权限", readArea: "users" },
+  { key: "auditLogs", label: "操作日志", readArea: "auditLogs" },
+];
+
+const settingsTabKeys = settingsTabs.map((tab) => tab.key);
+
 constants.documentTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
 constants.allDocumentTypes = [...constants.documentTypes, ...constants.supplierDocumentTypes];
 
@@ -227,9 +269,30 @@ const roleReads = {
 const rolePermissionTemplateCache = new Map();
 const permissionOptionHtmlCache = new Map();
 const userStatusInFlight = new Set();
+let permissionConfigPromise = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+function anyModalOpen() {
+  return [
+    "#tax-detail-drawer",
+    "#pdf-preview-modal",
+    "#login-modal",
+    "#user-drawer",
+    "#customer-drawer",
+    "#supplier-drawer",
+    "#cost-drawer",
+    "#cost-document-drawer",
+  ].some((selector) => {
+    const el = $(selector);
+    return el && !el.hidden;
+  });
+}
+
+function syncBodyModalOpen() {
+  document.body.classList.toggle("modal-open", anyModalOpen());
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -804,12 +867,44 @@ function clearLocalCaches() {
   state.reportSelectedIds = new Set();
   state.reportQueried = false;
   state.customers = [];
+  state.customerSalespeople = [];
   state.suppliers = [];
   state.availableCustomers = [];
   state.availableSuppliers = [];
   state.supplierSettingsKeyword = "";
   state.users = [];
   state.auditLogs = [];
+  state.settingsActiveTab = "exchangeRates";
+  state.settingsLoaded = {
+    exchangeRates: false,
+    customers: false,
+    suppliers: false,
+    users: false,
+    auditLogs: false,
+  };
+  state.settingsLoading = {
+    exchangeRates: false,
+    customers: false,
+    suppliers: false,
+    users: false,
+    auditLogs: false,
+  };
+  state.settingsErrors = {};
+  state.customersPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.suppliersPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.usersPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.auditLogsPagination = { page: 1, pageSize: 50, total: 0, totalPages: 1 };
+  state.customerSettingsKeyword = "";
+  state.supplierSettingsType = "";
+  state.supplierSettingsStatus = "";
+  state.userSettingsKeyword = "";
+  state.userSettingsStatus = "";
+  state.userSettingsRole = "";
+  state.auditLogSettingsKeyword = "";
+  state.auditLogSettingsAction = "";
+  state.permissionConfigLoaded = false;
+  state.permissionConfigLoading = false;
+  state.permissionConfigError = "";
   state.costOrderResults = [];
   state.selectedCostOrder = null;
   state.supplierSearchTimers = {};
@@ -1148,7 +1243,8 @@ function fillPaymentTermSelect(selected = "OA", legacyLabel = "") {
 function fillSalespersonSelect(id, selected = "", includeBlank = true) {
   const el = $(id);
   if (!el) return;
-  const users = state.users.filter((user) => user.isActive && ["业务员", "管理员"].includes(user.role));
+  const source = state.users.length ? state.users : (state.customerSalespeople || []);
+  const users = source.filter((user) => user.isActive !== false && ["业务员", "管理员"].includes(user.role));
   el.innerHTML = `${includeBlank ? '<option value="">未分配</option>' : ""}${users.map((user) => (
     `<option value="${user.id}" ${user.id === selected ? "selected" : ""}>${escapeHtml(user.name)} / ${escapeHtml(user.role)}</option>`
   )).join("")}`;
@@ -1271,24 +1367,17 @@ async function loadData() {
       }
       return;
     }
-    const [data, availableData, rateSettings] = await Promise.all([
+    const [data, availableData] = await Promise.all([
       api(`/api/ledger?${filterParams().toString()}`),
       canWriteArea("orders") ? api("/api/customers/available") : Promise.resolve({ customers: [] }),
-      api("/api/exchange-rates/settings").catch(() => ({ settings: state.exchangeRateSettings })),
     ]);
     state.overview = data.overview;
     state.orders = data.orders || [];
     state.payments = data.payments || [];
     state.costs = [];
-    state.customers = data.customers || [];
-    state.suppliers = data.suppliers || [];
-    state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
     state.availableCustomers = availableData.customers || [];
-    state.exchangeRateSettings = rateSettings.settings || state.exchangeRateSettings;
-    state.users = data.users || [];
-    const logs = await api("/api/audit-logs?limit=100").catch(() => ({ logs: [] }));
-    state.auditLogs = logs.logs || [];
     renderAll();
+    if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
     if (state.view === "costs" && canReadArea("costs")) await loadCostList({ silent: true });
   } catch (error) {
@@ -1390,16 +1479,135 @@ async function loadTaxRefundList(options = {}) {
   }
 }
 
-async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword) {
-  if (!canReadArea("suppliers")) return;
-  const params = new URLSearchParams();
-  const normalized = String(keyword || "").trim();
-  if (normalized) params.set("keyword", normalized);
-  const data = await api(`/api/suppliers${params.toString() ? `?${params.toString()}` : ""}`);
-  state.supplierSettingsKeyword = normalized;
-  state.suppliers = data.suppliers || [];
-  state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
+function canReadSettingsTab(tabKey) {
+  const tab = settingsTabs.find((item) => item.key === tabKey);
+  return Boolean(tab && canReadArea(tab.readArea));
+}
+
+function firstAvailableSettingsTab() {
+  return settingsTabs.find((tab) => canReadSettingsTab(tab.key))?.key || "exchangeRates";
+}
+
+function normalizeSettingsTab() {
+  if (!settingsTabKeys.includes(state.settingsActiveTab) || !canReadSettingsTab(state.settingsActiveTab)) {
+    state.settingsActiveTab = firstAvailableSettingsTab();
+  }
+  return state.settingsActiveTab;
+}
+
+function mergePagination(current, next, fallbackPageSize = 20) {
+  const pageSize = Number(next?.pageSize || current?.pageSize || fallbackPageSize);
+  const total = Number(next?.total || 0);
+  return {
+    page: Number(next?.page || current?.page || 1),
+    pageSize,
+    total,
+    totalPages: Math.max(1, Number(next?.totalPages || Math.ceil(total / Math.max(pageSize, 1)) || 1)),
+  };
+}
+
+function settingsListParams(pagination, filters = {}) {
+  const params = new URLSearchParams({
+    page: String(Math.max(1, Number(filters.page || pagination.page || 1))),
+    pageSize: String(Math.max(1, Number(filters.pageSize || pagination.pageSize || 20))),
+  });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (["page", "pageSize"].includes(key)) return;
+    const text = String(value || "").trim();
+    if (text) params.set(key, text);
+  });
+  return params;
+}
+
+function setSettingsLoading(tabKey, loading) {
+  state.settingsLoading = { ...state.settingsLoading, [tabKey]: loading };
   renderSettings();
+}
+
+async function loadSettingsTab(tabKey = state.settingsActiveTab, options = {}) {
+  if (!canView("settings")) return;
+  if (!settingsTabKeys.includes(tabKey)) tabKey = firstAvailableSettingsTab();
+  state.settingsActiveTab = tabKey;
+  tabKey = normalizeSettingsTab();
+  if (!canReadSettingsTab(tabKey)) return renderSettings();
+  if (!options.force && state.settingsLoaded[tabKey] && !options.page && !options.pageSize) {
+    renderSettings();
+    return;
+  }
+  state.settingsErrors[tabKey] = "";
+  setSettingsLoading(tabKey, true);
+  try {
+    if (tabKey === "exchangeRates") {
+      const data = await api("/api/settings/exchange-rates");
+      state.exchangeRateSettings = data.settings || state.exchangeRateSettings;
+    }
+    if (tabKey === "customers") {
+      const params = settingsListParams(state.customersPagination, {
+        page: options.page,
+        pageSize: options.pageSize,
+        keyword: state.customerSettingsKeyword,
+      });
+      const data = await api(`/api/settings/customers?${params.toString()}`);
+      state.customers = data.customers || [];
+      state.customerSalespeople = data.salespeople || state.customerSalespeople || [];
+      state.customersPagination = mergePagination(state.customersPagination, data.pagination, 20);
+    }
+    if (tabKey === "suppliers") {
+      const params = settingsListParams(state.suppliersPagination, {
+        page: options.page,
+        pageSize: options.pageSize,
+        keyword: state.supplierSettingsKeyword,
+        type: state.supplierSettingsType,
+        status: state.supplierSettingsStatus,
+      });
+      const data = await api(`/api/settings/suppliers?${params.toString()}`);
+      state.suppliers = data.suppliers || [];
+      state.availableSuppliers = mergeSupplierCache(state.availableSuppliers, state.suppliers.filter((supplier) => supplier.status === "启用"));
+      state.suppliersPagination = mergePagination(state.suppliersPagination, data.pagination, 20);
+    }
+    if (tabKey === "users") {
+      const params = settingsListParams(state.usersPagination, {
+        page: options.page,
+        pageSize: options.pageSize,
+        keyword: state.userSettingsKeyword,
+        status: state.userSettingsStatus,
+        role: state.userSettingsRole,
+      });
+      const data = await api(`/api/settings/users?${params.toString()}`);
+      state.users = data.users || [];
+      state.usersPagination = mergePagination(state.usersPagination, data.pagination, 20);
+    }
+    if (tabKey === "auditLogs") {
+      const params = settingsListParams(state.auditLogsPagination, {
+        page: options.page,
+        pageSize: options.pageSize || 50,
+        keyword: state.auditLogSettingsKeyword,
+        action: state.auditLogSettingsAction,
+      });
+      const data = await api(`/api/settings/audit-logs?${params.toString()}`);
+      state.auditLogs = data.logs || [];
+      state.auditLogsPagination = mergePagination(state.auditLogsPagination, data.pagination, 50);
+    }
+    state.settingsLoaded = { ...state.settingsLoaded, [tabKey]: true };
+  } catch (error) {
+    state.settingsErrors[tabKey] = error.message || "加载失败";
+    if (!options.silent) toast(error.message);
+  } finally {
+    state.settingsLoading = { ...state.settingsLoading, [tabKey]: false };
+    renderSettings();
+    applyRateEditability();
+    applyAccessControl();
+  }
+}
+
+async function refreshCurrentSettingsTab() {
+  await loadSettingsTab(state.settingsActiveTab, { force: true, page: 1 });
+}
+
+async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword) {
+  state.supplierSettingsKeyword = String(keyword || "").trim();
+  state.settingsActiveTab = "suppliers";
+  return loadSettingsTab("suppliers", { force: true, page: 1 });
 }
 
 function renderAll() {
@@ -1452,8 +1660,8 @@ function applyAccessControl() {
   setHidden("[data-reset='order'], #order-submit-button", !canWriteArea("orders"));
   setHidden("[data-reset='payment'], #payment-form button[type='submit']", !canWriteArea("payments"));
   setHidden("[data-reset='cost'], #cost-submit-button, #add-cost-item, .delete-cost-item", !canWriteArea("costs"));
-  setHidden("[data-reset='customer'], #customer-form button[type='submit']", !canWriteArea("customers"));
-  setHidden("[data-reset='supplier'], #supplier-form button[type='submit']", !canWriteArea("suppliers"));
+  setHidden("[data-reset='customer'], #open-customer-drawer, #customer-form button[type='submit']", !canWriteArea("customers"));
+  setHidden("[data-reset='supplier'], #open-supplier-drawer, #supplier-form button[type='submit']", !canWriteArea("suppliers"));
   setHidden("#open-user-drawer, #user-form button[type='submit']", !canWriteArea("users"));
   setHidden("[data-order-commission-field]", !canWriteArea("commissions"));
   setHidden("#exchange-rate-settings-form", !canWriteArea("settings"));
@@ -2428,9 +2636,7 @@ function closeCostDrawer({ reset = false } = {}) {
   if (drawer) drawer.hidden = true;
   state.costDrawerOpen = false;
   if (reset) resetCostForm({ clearStoredDraft: true, reloadOrders: false });
-  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 function fillCostForm(cost) {
@@ -2517,9 +2723,7 @@ function closeCostDocuments() {
   const drawer = $("#cost-document-drawer");
   if (drawer) drawer.hidden = true;
   state.costDocumentCost = null;
-  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 function commissionActionCell(order) {
@@ -2716,6 +2920,37 @@ function renderPermissionGroup(selector, options, selected, name) {
   });
 }
 
+async function loadPermissionConfig() {
+  if (state.permissionConfigLoaded) return;
+  if (state.permissionConfigLoading && permissionConfigPromise) return permissionConfigPromise;
+  state.permissionConfigLoading = true;
+  state.permissionConfigError = "";
+  permissionConfigPromise = (async () => {
+    try {
+      const data = await api("/api/settings/permissions");
+      const config = data.permissions || {};
+      if (Array.isArray(config.roles)) constants.roles = config.roles;
+      if (Array.isArray(config.permissionModes)) constants.permissionModes = config.permissionModes;
+      if (Array.isArray(config.dataScopeOptions)) constants.dataScopeOptions = config.dataScopeOptions;
+      if (Array.isArray(config.menuPermissionOptions)) constants.menuPermissionOptions = config.menuPermissionOptions;
+      if (Array.isArray(config.readPermissionOptions)) constants.readPermissionOptions = config.readPermissionOptions;
+      if (Array.isArray(config.writePermissionOptions)) constants.writePermissionOptions = config.writePermissionOptions;
+      if (config.roleMenus) Object.assign(roleMenus, config.roleMenus);
+      if (config.roleReads) Object.assign(roleReads, config.roleReads);
+      if (config.roleWrites) Object.assign(roleWrites, config.roleWrites);
+      rolePermissionTemplateCache.clear();
+      state.permissionConfigLoaded = true;
+    } catch (error) {
+      state.permissionConfigError = error.message || "权限配置加载失败";
+      toast(state.permissionConfigError);
+    } finally {
+      state.permissionConfigLoading = false;
+      permissionConfigPromise = null;
+    }
+  })();
+  return permissionConfigPromise;
+}
+
 function clearPermissionEditor() {
   ["#user-menu-permissions", "#user-read-permissions", "#user-write-permissions"].forEach((selector) => {
     const box = $(selector);
@@ -2735,6 +2970,17 @@ function renderUserPermissionEditor(user = null) {
     clearPermissionEditor();
     return;
   }
+  if (!state.permissionConfigLoaded) {
+    if (editor) editor.open = true;
+    const message = state.permissionConfigLoading ? "正在加载权限配置..." : (state.permissionConfigError || "正在准备权限配置...");
+    ["#user-menu-permissions", "#user-read-permissions", "#user-write-permissions"].forEach((selector) => {
+      const box = $(selector);
+      if (box) box.innerHTML = `<div class="empty-state subtle">${escapeHtml(message)}</div>`;
+    });
+    if (state.permissionConfigError && !state.permissionConfigLoading) return;
+    loadPermissionConfig().then(() => renderUserPermissionEditor(user));
+    return;
+  }
   const roleTemplate = roleTemplatePermissions(role);
   const config = mode === "CUSTOM" ? userPermissionConfig(user) : roleTemplate;
   const menus = config.menus || roleTemplate.menus;
@@ -2751,6 +2997,7 @@ function renderUserPermissionEditor(user = null) {
 function readUserPermissionForm() {
   const mode = $("#user-permission-mode")?.value || "ROLE";
   if (mode !== "CUSTOM") return { mode: "ROLE" };
+  if (!state.permissionConfigLoaded) throw new Error("权限配置仍在加载，请稍后再保存");
   return {
     mode: "CUSTOM",
     menus: checkboxValues("#user-menu-permissions input[type='checkbox']"),
@@ -3133,9 +3380,7 @@ function closeTaxRefundDetail() {
   if (drawer) drawer.hidden = true;
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
-  if ($("#pdf-preview-modal")?.hidden && $("#cost-document-drawer")?.hidden && $("#cost-drawer")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 function findDocumentById(id) {
@@ -3161,9 +3406,7 @@ function closePdfPreview() {
   state.pdfPreviewObjectUrl = "";
   state.pdfPreviewError = "";
   if (errorBox) errorBox.hidden = true;
-  if (!state.taxRefundDetailOrder && $("#tax-detail-drawer")?.hidden && $("#cost-document-drawer")?.hidden && $("#cost-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 async function openPdfPreview(documentId) {
@@ -3228,47 +3471,136 @@ async function openPdfPreview(documentId) {
   }
 }
 
-function renderSettings() {
+function loadingRow(colspan, message = "正在加载...") {
+  return `<tr><td colspan="${colspan}" class="empty-cell">${escapeHtml(message)}</td></tr>`;
+}
+
+function settingsErrorRow(tabKey, colspan) {
+  const message = state.settingsErrors[tabKey];
+  return message ? `<tr><td colspan="${colspan}" class="empty-cell">${escapeHtml(message)}</td></tr>` : "";
+}
+
+function renderSettingsTabs() {
+  normalizeSettingsTab();
+  $$("#settings-tabs [data-settings-tab]").forEach((button) => {
+    const key = button.dataset.settingsTab;
+    const visible = canReadSettingsTab(key);
+    button.hidden = !visible;
+    button.classList.toggle("is-active", key === state.settingsActiveTab);
+    button.disabled = Boolean(state.settingsLoading[key]);
+  });
+  $$("[data-settings-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.settingsPanel !== state.settingsActiveTab;
+  });
+  $$("[data-settings-refresh]").forEach((button) => {
+    const key = button.dataset.settingsRefresh;
+    button.disabled = Boolean(state.settingsLoading[key]);
+  });
+}
+
+function renderSettingPagination(prefix, pagination, loading) {
+  const totalPages = pagination.totalPages || 1;
+  const page = Math.min(pagination.page || 1, totalPages);
+  const info = $(`#${prefix}-page-info`);
+  const prev = $(`#${prefix}-prev-page`);
+  const next = $(`#${prefix}-next-page`);
+  if (info) info.textContent = `第 ${page} / ${totalPages} 页`;
+  if (prev) prev.disabled = loading || page <= 1;
+  if (next) next.disabled = loading || page >= totalPages;
+}
+
+function renderExchangeRateSettings() {
+  if (!$("#exchange-rate-settings-form")) return;
   $("#exchange-source").value = state.exchangeRateSettings.source || "中国银行";
   $("#exchange-rate-type").value = state.exchangeRateSettings.rateType || "现汇买入价";
   $("#exchange-auto-update").value = String(state.exchangeRateSettings.autoUpdate !== false);
   $("#exchange-allow-manual").value = String(state.exchangeRateSettings.allowManualEdit !== false);
+  const status = $("#exchange-settings-status");
+  if (status) {
+    status.textContent = state.settingsLoading.exchangeRates
+      ? "正在加载汇率设置..."
+      : (state.settingsErrors.exchangeRates || "仅加载当前汇率设置。");
+  }
+}
+
+function renderCustomerSettings() {
+  const rows = state.customers || [];
+  const loading = Boolean(state.settingsLoading.customers);
+  const pagination = state.customersPagination || { page: 1, pageSize: 20, total: rows.length, totalPages: 1 };
   fillSalespersonSelect("#customer-salesperson", $("#customer-salesperson")?.value || "");
+  if ($("#customer-search-keyword")) $("#customer-search-keyword").value = state.customerSettingsKeyword || "";
+  if ($("#customers-count")) $("#customers-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个客户`;
+  if ($("#customers-table")) {
+    const error = settingsErrorRow("customers", 9);
+    $("#customers-table").innerHTML = loading && !rows.length ? loadingRow(9, "正在加载客户资料...")
+      : error || (rows.length ? rows.map((customer) => `
+        <tr>
+          <td>${escapeHtml(customer.name)}</td>
+          <td>${escapeHtml(customer.country || "-")}</td>
+          <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
+          <td>${escapeHtml(customer.salespersonName || "-")}</td>
+          <td>${Number(customer.commissionRate || 0).toFixed(2)}%</td>
+          <td><span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span></td>
+          <td>${escapeHtml(customer.contactPerson || "-")}</td>
+          <td>${escapeHtml(customer.remark || "-")}</td>
+          ${rowActions(canWriteArea("customers") ? `<button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button>` : "")}
+        </tr>
+      `).join("") : emptyRow(9));
+  }
+  renderSettingPagination("customers", pagination, loading);
+}
+
+function renderSupplierSettings() {
+  const rows = state.suppliers || [];
+  const loading = Boolean(state.settingsLoading.suppliers);
+  const pagination = state.suppliersPagination || { page: 1, pageSize: 20, total: rows.length, totalPages: 1 };
   if ($("#supplier-search-keyword")) $("#supplier-search-keyword").value = state.supplierSettingsKeyword || "";
-  $("#customers-count").textContent = `${state.customers.length} 个客户`;
-  $("#customers-table").innerHTML = state.customers.length ? state.customers.map((customer) => `
-    <tr>
-      <td>${escapeHtml(customer.name)}</td>
-      <td>${escapeHtml(customer.country || "-")}</td>
-      <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
-      <td>${escapeHtml(customer.salespersonName || "-")}</td>
-      <td>${Number(customer.commissionRate || 0).toFixed(2)}%</td>
-      <td><span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span></td>
-      <td>${escapeHtml(customer.contactPerson || "-")}</td>
-      <td>${escapeHtml(customer.remark || "-")}</td>
-      ${rowActions(canWriteArea("customers") ? `<button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button>` : "")}
-    </tr>
-  `).join("") : emptyRow(9);
+  if ($("#supplier-filter-type")) $("#supplier-filter-type").value = state.supplierSettingsType || "";
+  if ($("#supplier-filter-status")) $("#supplier-filter-status").value = state.supplierSettingsStatus || "";
+  if ($("#suppliers-count")) $("#suppliers-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个供应商`;
+  if ($("#suppliers-table")) {
+    const error = settingsErrorRow("suppliers", 8);
+    $("#suppliers-table").innerHTML = loading && !rows.length ? loadingRow(8, "正在加载供应商资料...")
+      : error || (rows.length ? rows.map((supplier) => `
+        <tr>
+          <td>${escapeHtml(supplier.supplierName)}</td>
+          <td>${escapeHtml(supplier.supplierType)}</td>
+          <td><span class="status ${statusClass(supplier.status)}">${escapeHtml(supplier.status || "-")}</span></td>
+          <td>${escapeHtml(supplier.contactPerson || "-")}</td>
+          <td>${escapeHtml(supplier.phone || "-")}</td>
+          <td>${escapeHtml(supplier.invoiceTitle || "-")}</td>
+          <td>${escapeHtml(supplier.bankAccount || "-")}</td>
+          ${rowActions(canWriteArea("suppliers") ? `<button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button>` : "")}
+        </tr>
+      `).join("") : emptyRow(8));
+  }
+  renderSettingPagination("suppliers", pagination, loading);
+}
 
-  $("#suppliers-count").textContent = `${state.suppliers.length} 个供应商`;
-  $("#suppliers-table").innerHTML = state.suppliers.length ? state.suppliers.map((supplier) => `
-    <tr>
-      <td>${escapeHtml(supplier.supplierName)}</td>
-      <td>${escapeHtml(supplier.supplierType)}</td>
-      <td><span class="status ${statusClass(supplier.status)}">${supplier.status}</span></td>
-      <td>${escapeHtml(supplier.contactPerson || "-")}</td>
-      <td>${escapeHtml(supplier.phone || "-")}</td>
-      <td>${escapeHtml(supplier.invoiceTitle || "-")}</td>
-      <td>${escapeHtml(supplier.bankAccount || "-")}</td>
-      ${rowActions(canWriteArea("suppliers") ? `<button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button>` : "")}
-    </tr>
-  `).join("") : emptyRow(8);
+function renderAuditLogSettings() {
+  const rows = state.auditLogs || [];
+  const loading = Boolean(state.settingsLoading.auditLogs);
+  const pagination = state.auditLogsPagination || { page: 1, pageSize: 50, total: rows.length, totalPages: 1 };
+  if ($("#audit-search-keyword")) $("#audit-search-keyword").value = state.auditLogSettingsKeyword || "";
+  if ($("#audit-search-action")) $("#audit-search-action").value = state.auditLogSettingsAction || "";
+  if ($("#audit-count")) $("#audit-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 条日志`;
+  if ($("#audit-table")) {
+    const error = settingsErrorRow("auditLogs", 5);
+    $("#audit-table").innerHTML = loading && !rows.length ? loadingRow(5, "正在加载操作日志...")
+      : error || (rows.length ? rows.map((log) => `
+        <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(auditEntityLabel(log))}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
+      `).join("") : emptyRow(5));
+  }
+  renderSettingPagination("audit", pagination, loading);
+}
 
-  renderUsersTable();
-
-  $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
-    <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(auditEntityLabel(log))}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
-  `).join("") : emptyRow(5);
+function renderSettings() {
+  renderSettingsTabs();
+  if (state.settingsActiveTab === "exchangeRates") renderExchangeRateSettings();
+  if (state.settingsActiveTab === "customers") renderCustomerSettings();
+  if (state.settingsActiveTab === "suppliers") renderSupplierSettings();
+  if (state.settingsActiveTab === "users") renderUsersTable();
+  if (state.settingsActiveTab === "auditLogs") renderAuditLogSettings();
 }
 
 function userRowHtml(user) {
@@ -3293,8 +3625,19 @@ function userRowHtml(user) {
 }
 
 function renderUsersTable() {
-  $("#users-count").textContent = `${state.users.length} 个用户`;
-  $("#users-table").innerHTML = state.users.length ? state.users.map(userRowHtml).join("") : emptyRow(6);
+  const rows = state.users || [];
+  const loading = Boolean(state.settingsLoading.users);
+  const pagination = state.usersPagination || { page: 1, pageSize: 20, total: rows.length, totalPages: 1 };
+  if ($("#user-search-keyword")) $("#user-search-keyword").value = state.userSettingsKeyword || "";
+  if ($("#user-filter-status")) $("#user-filter-status").value = state.userSettingsStatus || "";
+  if ($("#user-filter-role")) $("#user-filter-role").value = state.userSettingsRole || "";
+  if ($("#users-count")) $("#users-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个用户`;
+  if ($("#users-table")) {
+    const error = settingsErrorRow("users", 6);
+    $("#users-table").innerHTML = loading && !rows.length ? loadingRow(6, "正在加载用户列表...")
+      : error || (rows.length ? rows.map(userRowHtml).join("") : emptyRow(6));
+  }
+  renderSettingPagination("users", pagination, loading);
 }
 
 function userRowElement(user) {
@@ -3306,7 +3649,7 @@ function userRowElement(user) {
 function renderUserRowInPlace(user) {
   const table = $("#users-table");
   const count = $("#users-count");
-  if (count) count.textContent = `${state.users.length} 个用户`;
+  if (count) count.textContent = `${state.usersPagination.total || state.users.length} 个用户`;
   if (!table) return;
   if (!state.users.length) {
     table.innerHTML = emptyRow(6);
@@ -3398,6 +3741,17 @@ const costFields = [
 
 function supplierDisplayName(item = {}) {
   return item.supplierName || item.supplierNameSnapshot || item.vendorName || "";
+}
+
+function mergeSupplierCache(base = [], incoming = []) {
+  const rows = [...(Array.isArray(base) ? base : [])];
+  (Array.isArray(incoming) ? incoming : []).forEach((supplier) => {
+    if (!supplier?.id) return;
+    const index = rows.findIndex((item) => item.id === supplier.id);
+    if (index >= 0) rows[index] = { ...rows[index], ...supplier };
+    else rows.push(supplier);
+  });
+  return rows;
 }
 
 function supplierById(id) {
@@ -4739,7 +5093,15 @@ function upsertCustomer(list, customer) {
 
 function syncSavedCustomer(customer) {
   if (!customer?.id) return;
+  const existsInPage = state.customers.some((item) => item.id === customer.id);
   state.customers = upsertCustomer(state.customers, customer);
+  if (!existsInPage) {
+    state.customersPagination = {
+      ...state.customersPagination,
+      total: Number(state.customersPagination.total || 0) + 1,
+      totalPages: Math.max(1, Math.ceil((Number(state.customersPagination.total || 0) + 1) / Math.max(Number(state.customersPagination.pageSize || 20), 1))),
+    };
+  }
   if (canWriteArea("orders")) {
     state.availableCustomers = upsertCustomer(state.availableCustomers, customer);
   }
@@ -4750,6 +5112,54 @@ function refreshCustomerUiAfterSave() {
   renderOrderSelects();
   fillAvailableCustomerSelect($("#order-customer")?.value || "");
   updateOrderCustomerCountry();
+}
+
+function upsertSupplier(rows, supplier) {
+  if (!supplier?.id) return Array.isArray(rows) ? rows : [];
+  const next = Array.isArray(rows) ? [...rows] : [];
+  const index = next.findIndex((item) => item.id === supplier.id);
+  if (index >= 0) next[index] = { ...next[index], ...supplier };
+  else next.unshift(supplier);
+  return next.sort((a, b) => String(a.supplierName || "").localeCompare(String(b.supplierName || ""), "zh-CN"));
+}
+
+function syncSavedSupplier(supplier) {
+  if (!supplier?.id) return;
+  const existsInPage = state.suppliers.some((item) => item.id === supplier.id);
+  state.suppliers = upsertSupplier(state.suppliers, supplier);
+  if (!existsInPage) {
+    state.suppliersPagination = {
+      ...state.suppliersPagination,
+      total: Number(state.suppliersPagination.total || 0) + 1,
+      totalPages: Math.max(1, Math.ceil((Number(state.suppliersPagination.total || 0) + 1) / Math.max(Number(state.suppliersPagination.pageSize || 20), 1))),
+    };
+  }
+  state.availableSuppliers = supplier.status === "启用"
+    ? mergeSupplierCache(state.availableSuppliers, [supplier])
+    : state.availableSuppliers.filter((item) => item.id !== supplier.id);
+}
+
+function removeSettingsCustomer(id) {
+  state.customers = state.customers.filter((customer) => customer.id !== id);
+  state.availableCustomers = state.availableCustomers.filter((customer) => customer.id !== id);
+  state.customersPagination = {
+    ...state.customersPagination,
+    total: Math.max(0, Number(state.customersPagination.total || 0) - 1),
+  };
+  state.customersPagination.totalPages = Math.max(1, Math.ceil(state.customersPagination.total / Math.max(Number(state.customersPagination.pageSize || 20), 1)));
+  renderSettings();
+  renderOrderSelects();
+}
+
+function removeSettingsSupplier(id) {
+  state.suppliers = state.suppliers.filter((supplier) => supplier.id !== id);
+  state.availableSuppliers = state.availableSuppliers.filter((supplier) => supplier.id !== id);
+  state.suppliersPagination = {
+    ...state.suppliersPagination,
+    total: Math.max(0, Number(state.suppliersPagination.total || 0) - 1),
+  };
+  state.suppliersPagination.totalPages = Math.max(1, Math.ceil(state.suppliersPagination.total / Math.max(Number(state.suppliersPagination.pageSize || 20), 1)));
+  renderSettings();
 }
 
 async function submitCustomer(event) {
@@ -4784,6 +5194,7 @@ async function submitCustomer(event) {
     try {
       if (result.data) syncSavedCustomer(result.data);
       resetForm("customer");
+      closeCustomerDrawer();
       refreshCustomerUiAfterSave();
     } catch (refreshError) {
       console.warn("客户已保存，但列表刷新失败", refreshError);
@@ -4808,9 +5219,11 @@ async function submitSupplier(event) {
     delete data.id;
     const result = await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
     assertSuccessResponse(result, "供应商保存失败");
+    syncSavedSupplier(result.supplier || result.data);
     resetForm("supplier");
+    closeSupplierDrawer();
+    renderSettings();
     toast(result.message || "供应商已保存");
-    await refreshAfterSuccess(() => loadSupplierSettingsList(""), "供应商已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   } finally {
@@ -4883,6 +5296,11 @@ function upsertUser(user) {
     rows[index] = { ...rows[index], ...user };
   } else {
     rows.push(user);
+    state.usersPagination = {
+      ...state.usersPagination,
+      total: Number(state.usersPagination.total || 0) + 1,
+      totalPages: Math.max(1, Math.ceil((Number(state.usersPagination.total || 0) + 1) / Math.max(Number(state.usersPagination.pageSize || 20), 1))),
+    };
   }
   state.users = rows;
   renderUserRowInPlace(user);
@@ -4891,9 +5309,7 @@ function upsertUser(user) {
 function closeUserDrawer() {
   const drawer = $("#user-drawer");
   if (drawer) drawer.hidden = true;
-  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#cost-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 function openUserDrawer(user = null) {
@@ -5283,6 +5699,63 @@ function resetForm(name) {
   }
 }
 
+function fillCustomerForm(customer) {
+  if (!customer) return;
+  $("#customer-id").value = customer.id;
+  $("#customer-name").value = customer.name || "";
+  $("#customer-country").value = customer.country || "";
+  $("#customer-currency").value = customer.defaultCurrency || "";
+  fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
+  $("#customer-salesperson").value = customer.salespersonUserId || "";
+  $("#customer-commission-rate").value = Number(customer.commissionRate || 0).toFixed(2);
+  $("#customer-commission-status").value = customer.commissionStatus || "启用";
+  $("#customer-contact-person").value = customer.contactPerson || "";
+  $("#customer-contact-email").value = customer.contactEmail || "";
+  $("#customer-contact-phone").value = customer.contactPhone || "";
+  $("#customer-remark").value = customer.remark || "";
+}
+
+function openCustomerDrawer(customer = null) {
+  if (!canWriteArea("customers")) return toast("没有权限编辑客户资料");
+  state.settingsActiveTab = "customers";
+  resetForm("customer");
+  if (customer?.id) fillCustomerForm(customer);
+  if ($("#customer-drawer-title")) $("#customer-drawer-title").textContent = customer?.id ? "编辑客户资料" : "新建客户";
+  if ($("#customer-form-subtitle")) $("#customer-form-subtitle").textContent = customer?.id ? `正在编辑：${customer.name || "-"}` : "新建客户";
+  const drawer = $("#customer-drawer");
+  if (drawer) drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#customer-name")?.focus();
+}
+
+function closeCustomerDrawer() {
+  const drawer = $("#customer-drawer");
+  if (drawer) drawer.hidden = true;
+  syncBodyModalOpen();
+}
+
+function openSupplierDrawer(supplier = null) {
+  if (!canWriteArea("suppliers")) return toast("没有权限编辑供应商资料");
+  state.settingsActiveTab = "suppliers";
+  resetForm("supplier");
+  if (supplier?.id) {
+    setForm(supplierFields, supplier);
+    $("#supplier-id").value = supplier.id;
+  }
+  if ($("#supplier-drawer-title")) $("#supplier-drawer-title").textContent = supplier?.id ? "编辑供应商资料" : "新建供应商";
+  if ($("#supplier-form-subtitle")) $("#supplier-form-subtitle").textContent = supplier?.id ? `正在编辑：${supplier.supplierName || "-"}` : "新建供应商";
+  const drawer = $("#supplier-drawer");
+  if (drawer) drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#supplier-name")?.focus();
+}
+
+function closeSupplierDrawer() {
+  const drawer = $("#supplier-drawer");
+  if (drawer) drawer.hidden = true;
+  syncBodyModalOpen();
+}
+
 function editOrder(id) {
   if (!canWriteArea("orders")) return toast("没有权限编辑应收订单");
   const order = state.orders.find((item) => item.id === id);
@@ -5354,30 +5827,24 @@ async function editCost(id) {
 
 function editCustomer(id) {
   if (!canWriteArea("customers")) return toast("没有权限编辑客户资料");
-  const customer = state.customers.find((item) => item.id === id);
+  const customer = state.customers.find((item) => item.id === id)
+    || state.availableCustomers.find((item) => item.id === id);
   if (!customer) return;
-  $("#customer-id").value = customer.id;
-  $("#customer-name").value = customer.name;
-  $("#customer-country").value = customer.country;
-  $("#customer-currency").value = customer.defaultCurrency || "";
-  fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
-  $("#customer-salesperson").value = customer.salespersonUserId || "";
-  $("#customer-commission-rate").value = Number(customer.commissionRate || 0).toFixed(2);
-  $("#customer-commission-status").value = customer.commissionStatus || "启用";
-  $("#customer-contact-person").value = customer.contactPerson;
-  $("#customer-contact-email").value = customer.contactEmail;
-  $("#customer-contact-phone").value = customer.contactPhone;
-  $("#customer-remark").value = customer.remark;
-  switchView("settings");
+  state.settingsActiveTab = "customers";
+  if (state.view !== "settings") switchView("settings");
+  renderSettings();
+  openCustomerDrawer(customer);
 }
 
 function editSupplier(id) {
   if (!canWriteArea("suppliers")) return toast("没有权限编辑供应商资料");
-  const supplier = state.suppliers.find((item) => item.id === id);
+  const supplier = state.suppliers.find((item) => item.id === id)
+    || state.availableSuppliers.find((item) => item.id === id);
   if (!supplier) return;
-  setForm(supplierFields, supplier);
-  $("#supplier-id").value = supplier.id;
-  switchView("settings");
+  state.settingsActiveTab = "suppliers";
+  if (state.view !== "settings") switchView("settings");
+  renderSettings();
+  openSupplierDrawer(supplier);
 }
 
 function editUser(id) {
@@ -5420,6 +5887,14 @@ async function deleteRecord(kind, id, sourceButton = null) {
       await refreshAfterSuccess(() => loadCostList({ page: state.costPagination.page || 1, silent: true }), "成本已删除，但列表刷新失败，请手动刷新");
       return;
     }
+    if (kind === "customer") {
+      removeSettingsCustomer(id);
+      return;
+    }
+    if (kind === "supplier") {
+      removeSettingsSupplier(id);
+      return;
+    }
     await refreshAfterSuccess(loadData, "操作已完成，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
@@ -5450,6 +5925,7 @@ function switchView(view, options = {}) {
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
   if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
   if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
+  if (view === "settings") loadSettingsTab(state.settingsActiveTab);
   return true;
 }
 
@@ -5676,9 +6152,7 @@ function closeLoginModal() {
   const modal = $("#login-modal");
   if (!modal) return;
   modal.hidden = true;
-  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
-    document.body.classList.remove("modal-open");
-  }
+  syncBodyModalOpen();
 }
 
 function setMobileNav(open) {
@@ -5744,12 +6218,17 @@ function bindEvents() {
   }));
   $("#mobile-nav-toggle")?.addEventListener("click", () => setMobileNav(!document.body.classList.contains("nav-open")));
   $("#nav-backdrop")?.addEventListener("click", closeMobileNav);
-  $("#refresh-data").addEventListener("click", loadData);
+  $("#refresh-data").addEventListener("click", () => {
+    if (state.view === "settings") refreshCurrentSettingsTab().catch((error) => toast(error.message));
+    else loadData();
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#cost-document-drawer")?.hidden) closeCostDocuments();
     if (event.key === "Escape" && !$("#cost-drawer")?.hidden) closeCostDrawer();
     if (event.key === "Escape" && !$("#user-drawer")?.hidden) closeUserDrawer();
+    if (event.key === "Escape" && !$("#customer-drawer")?.hidden) closeCustomerDrawer();
+    if (event.key === "Escape" && !$("#supplier-drawer")?.hidden) closeSupplierDrawer();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
@@ -5824,6 +6303,14 @@ function bindEvents() {
   });
   $("#report-prev").addEventListener("click", () => queryReport(Math.max(1, (state.reportPagination.page || 1) - 1)));
   $("#report-next").addEventListener("click", () => queryReport(Math.min(state.reportPagination.totalPages || 1, (state.reportPagination.page || 1) + 1)));
+  $("#customers-prev-page")?.addEventListener("click", () => loadSettingsTab("customers", { force: true, page: Math.max(1, (state.customersPagination.page || 1) - 1) }));
+  $("#customers-next-page")?.addEventListener("click", () => loadSettingsTab("customers", { force: true, page: Math.min(state.customersPagination.totalPages || 1, (state.customersPagination.page || 1) + 1) }));
+  $("#suppliers-prev-page")?.addEventListener("click", () => loadSettingsTab("suppliers", { force: true, page: Math.max(1, (state.suppliersPagination.page || 1) - 1) }));
+  $("#suppliers-next-page")?.addEventListener("click", () => loadSettingsTab("suppliers", { force: true, page: Math.min(state.suppliersPagination.totalPages || 1, (state.suppliersPagination.page || 1) + 1) }));
+  $("#users-prev-page")?.addEventListener("click", () => loadSettingsTab("users", { force: true, page: Math.max(1, (state.usersPagination.page || 1) - 1) }));
+  $("#users-next-page")?.addEventListener("click", () => loadSettingsTab("users", { force: true, page: Math.min(state.usersPagination.totalPages || 1, (state.usersPagination.page || 1) + 1) }));
+  $("#audit-prev-page")?.addEventListener("click", () => loadSettingsTab("auditLogs", { force: true, page: Math.max(1, (state.auditLogsPagination.page || 1) - 1) }));
+  $("#audit-next-page")?.addEventListener("click", () => loadSettingsTab("auditLogs", { force: true, page: Math.min(state.auditLogsPagination.totalPages || 1, (state.auditLogsPagination.page || 1) + 1) }));
   $("#report-download-bar").addEventListener("click", (event) => {
     const button = event.target.closest("[data-report-export-scope]");
     if (button) downloadReport(button.dataset.reportExportScope, button.dataset.reportFormat);
@@ -5834,19 +6321,69 @@ function bindEvents() {
   $("#logistics-form").addEventListener("submit", submitLogistics);
   $("#customer-form").addEventListener("submit", submitCustomer);
   $("#supplier-form").addEventListener("submit", submitSupplier);
+  $("#customer-search-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.customerSettingsKeyword = $("#customer-search-keyword")?.value || "";
+    loadSettingsTab("customers", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
+  $("#customer-search-reset")?.addEventListener("click", () => {
+    state.customerSettingsKeyword = "";
+    if ($("#customer-search-keyword")) $("#customer-search-keyword").value = "";
+    loadSettingsTab("customers", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
   $("#supplier-search-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    loadSupplierSettingsList($("#supplier-search-keyword")?.value || "").catch((error) => toast(error.message));
+    state.supplierSettingsKeyword = $("#supplier-search-keyword")?.value || "";
+    state.supplierSettingsType = $("#supplier-filter-type")?.value || "";
+    state.supplierSettingsStatus = $("#supplier-filter-status")?.value || "";
+    loadSettingsTab("suppliers", { force: true, page: 1 }).catch((error) => toast(error.message));
   });
   $("#supplier-search-reset").addEventListener("click", () => {
     if ($("#supplier-search-keyword")) $("#supplier-search-keyword").value = "";
-    loadSupplierSettingsList("").catch((error) => toast(error.message));
+    if ($("#supplier-filter-type")) $("#supplier-filter-type").value = "";
+    if ($("#supplier-filter-status")) $("#supplier-filter-status").value = "";
+    state.supplierSettingsKeyword = "";
+    state.supplierSettingsType = "";
+    state.supplierSettingsStatus = "";
+    loadSettingsTab("suppliers", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
+  $("#user-search-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.userSettingsKeyword = $("#user-search-keyword")?.value || "";
+    state.userSettingsStatus = $("#user-filter-status")?.value || "";
+    state.userSettingsRole = $("#user-filter-role")?.value || "";
+    loadSettingsTab("users", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
+  $("#user-search-reset")?.addEventListener("click", () => {
+    state.userSettingsKeyword = "";
+    state.userSettingsStatus = "";
+    state.userSettingsRole = "";
+    if ($("#user-search-keyword")) $("#user-search-keyword").value = "";
+    if ($("#user-filter-status")) $("#user-filter-status").value = "";
+    if ($("#user-filter-role")) $("#user-filter-role").value = "";
+    loadSettingsTab("users", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
+  $("#audit-search-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.auditLogSettingsKeyword = $("#audit-search-keyword")?.value || "";
+    state.auditLogSettingsAction = $("#audit-search-action")?.value || "";
+    loadSettingsTab("auditLogs", { force: true, page: 1 }).catch((error) => toast(error.message));
+  });
+  $("#audit-search-reset")?.addEventListener("click", () => {
+    state.auditLogSettingsKeyword = "";
+    state.auditLogSettingsAction = "";
+    if ($("#audit-search-keyword")) $("#audit-search-keyword").value = "";
+    if ($("#audit-search-action")) $("#audit-search-action").value = "";
+    loadSettingsTab("auditLogs", { force: true, page: 1 }).catch((error) => toast(error.message));
   });
   $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
   $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
   $("#user-role").addEventListener("change", () => renderUserPermissionEditor());
-  $("#user-permission-mode").addEventListener("change", () => renderUserPermissionEditor());
+  $("#user-permission-mode").addEventListener("change", () => {
+    if ($("#user-permission-mode")?.value === "CUSTOM" && state.permissionConfigError) state.permissionConfigError = "";
+    renderUserPermissionEditor();
+  });
 
   ["order", "payment", "cost", "customer", "supplier", "user"].forEach((name) => {
     $$(`[data-reset="${name}"]`).forEach((button) => button.addEventListener("click", () => resetForm(name)));
@@ -6123,8 +6660,33 @@ function bindEvents() {
       closeUserDrawer();
       return;
     }
+    if (event.target.closest("[data-close-customer-drawer]")) {
+      closeCustomerDrawer();
+      return;
+    }
+    if (event.target.closest("[data-close-supplier-drawer]")) {
+      closeSupplierDrawer();
+      return;
+    }
     const target = event.target.closest("button");
     if (!target) return;
+    if (target.dataset.settingsTab) {
+      state.settingsActiveTab = target.dataset.settingsTab;
+      loadSettingsTab(state.settingsActiveTab).catch((error) => toast(error.message));
+      return;
+    }
+    if (target.dataset.settingsRefresh) {
+      loadSettingsTab(target.dataset.settingsRefresh, { force: true, page: 1 }).catch((error) => toast(error.message));
+      return;
+    }
+    if (target.id === "open-customer-drawer") {
+      openCustomerDrawer();
+      return;
+    }
+    if (target.id === "open-supplier-drawer") {
+      openSupplierDrawer();
+      return;
+    }
     if (target.id === "open-user-drawer") {
       openUserDrawer();
       return;
@@ -6187,6 +6749,8 @@ function initSelects() {
   fillSelect("#payment-status", constants.paymentStatuses, "待确认");
   fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
   fillSelect("#supplier-status", constants.supplierStatuses, "启用");
+  fillSelect("#supplier-filter-type", constants.supplierTypes, "", true, "全部供应商类型");
+  fillSelect("#supplier-filter-status", constants.supplierStatuses, "", true, "全部状态");
   fillSelect("#exchange-source", constants.exchangeRateSources, "中国银行");
   fillSelect("#exchange-rate-type", constants.exchangeRateTypes, "现汇买入价");
   fillSelect("#cost-type", constants.costTypes, "工厂货款");
@@ -6197,6 +6761,8 @@ function initSelects() {
   fillSelect("#logistics-invoice-status", constants.invoiceStatuses, "未收到");
   fillSelect("#user-role", constants.roles, "查看者");
   fillSelect("#user-approval-status", constants.userApprovalStatuses, "APPROVED");
+  fillSelect("#user-filter-status", constants.userApprovalStatuses, "", true, "全部状态");
+  fillSelect("#user-filter-role", constants.roles, "", true, "全部角色");
   fillSelect("#user-permission-mode", constants.permissionModes.map((item) => ({ value: item.value, label: item.label })), "ROLE");
   renderUserPermissionEditor();
 }
