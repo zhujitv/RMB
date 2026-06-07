@@ -12,9 +12,9 @@ export async function GET(request) {
       throw error;
     }
     const reminders = await getReminders(new URL(request.url).searchParams, actor);
-    await writeAudit(request, actor, "执行催款提醒任务", "reminders", "cron", null, {
+    writeAudit(request, actor, "执行催款提醒任务", "reminders", "cron", null, {
       count: reminders.length,
-    });
+    }).catch((error) => console.error("催款提醒操作日志写入失败", error));
     return ok({ count: reminders.length, reminders });
   } catch (error) {
     return apiError(error, "执行催款提醒失败");

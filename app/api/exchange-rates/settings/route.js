@@ -15,7 +15,8 @@ export async function PATCH(request) {
   try {
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ settings: await saveExchangeRateSettings(request, actor, body) });
+    const settings = await saveExchangeRateSettings(request, actor, body);
+    return ok({ success: true, settings, message: "汇率设置已保存" });
   } catch (error) {
     return apiError(error, "保存汇率设置失败");
   }

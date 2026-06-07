@@ -15,7 +15,8 @@ export async function POST(request) {
   try {
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ payment: await savePayment(request, actor, body) });
+    const payment = await savePayment(request, actor, body);
+    return ok({ success: true, payment, message: "收款已保存" }, { status: 201 });
   } catch (error) {
     return apiError(error, "保存收款失败");
   }

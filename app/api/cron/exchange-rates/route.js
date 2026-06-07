@@ -12,7 +12,7 @@ export async function GET(request) {
       throw error;
     }
     const result = await refreshExchangeRatesForDate();
-    await writeAudit(
+    writeAudit(
       request,
       actor,
       result.ok ? "自动更新汇率" : "自动更新汇率失败",
@@ -20,7 +20,7 @@ export async function GET(request) {
       result.rateDate,
       null,
       result,
-    );
+    ).catch((error) => console.error("自动汇率操作日志写入失败", error));
     return ok(result);
   } catch (error) {
     return apiError(error, "自动更新汇率失败");

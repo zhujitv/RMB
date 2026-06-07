@@ -6,7 +6,8 @@ export async function DELETE(request, { params }) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    return ok({ document: await deleteOrderDocument(request, actor, id) });
+    const document = await deleteOrderDocument(request, actor, id);
+    return ok({ success: true, document, message: "单证已删除" });
   } catch (error) {
     return apiError(error, "删除订单单证失败");
   }

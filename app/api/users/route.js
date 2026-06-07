@@ -15,7 +15,8 @@ export async function POST(request) {
   try {
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ user: await saveUser(request, actor, body) });
+    const user = await saveUser(request, actor, body);
+    return ok({ success: true, user, message: "用户已保存" }, { status: 201 });
   } catch (error) {
     return apiError(error, "保存用户失败");
   }

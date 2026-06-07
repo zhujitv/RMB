@@ -7,7 +7,8 @@ export async function PATCH(request, { params }) {
     const actor = await getActor(request);
     const { id } = await params;
     const body = await request.json();
-    return ok({ cost: await saveLogisticsCost(request, actor, body, id) });
+    const cost = await saveLogisticsCost(request, actor, body, id);
+    return ok({ success: true, cost, message: "物流费用已保存" });
   } catch (error) {
     return apiError(error, "更新物流费用失败");
   }
@@ -18,7 +19,7 @@ export async function DELETE(request, { params }) {
     const actor = await getActor(request);
     const { id } = await params;
     await deleteLogisticsCost(request, actor, id);
-    return ok({ ok: true });
+    return ok({ success: true, ok: true, message: "物流费用已删除" });
   } catch (error) {
     return apiError(error, "删除物流费用失败");
   }

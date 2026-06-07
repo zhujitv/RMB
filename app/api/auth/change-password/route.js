@@ -8,7 +8,7 @@ export async function POST(request) {
     const actor = await getActor(request, { allowPasswordChangeRequired: true });
     const body = await request.json();
     const user = await changeOwnPassword(request, actor, body);
-    const response = NextResponse.json({ ok: true, user, message: "密码已修改，请重新登录。" });
+    const response = NextResponse.json({ success: true, ok: true, user, message: "密码已修改，请重新登录。" });
     clearSessionCookies(response);
     return response;
   } catch (error) {

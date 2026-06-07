@@ -7,7 +7,8 @@ export async function PATCH(request, { params }) {
     const { id } = await params;
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ payment: await savePayment(request, actor, body, id) });
+    const payment = await savePayment(request, actor, body, id);
+    return ok({ success: true, payment, message: "收款已保存" });
   } catch (error) {
     return apiError(error, "更新收款失败");
   }
@@ -18,7 +19,7 @@ export async function DELETE(request, { params }) {
     const { id } = await params;
     const actor = await getActor(request);
     await deletePayment(request, actor, id);
-    return ok({ ok: true });
+    return ok({ success: true, ok: true, message: "收款已删除" });
   } catch (error) {
     return apiError(error, "删除收款失败");
   }

@@ -3615,6 +3615,42 @@ async function reloadOrderList() {
   await loadData();
 }
 
+function formSubmitInFlight(form) {
+  return form?.dataset.submitInFlight === "true";
+}
+
+function setFormSubmitLoading(form, loading, loadingText = "保存中...") {
+  if (!form) return;
+  const submitButton = form.querySelector("button[type='submit']");
+  if (loading) {
+    form.dataset.submitInFlight = "true";
+  } else {
+    delete form.dataset.submitInFlight;
+  }
+  if (!submitButton) return;
+  if (!submitButton.dataset.defaultText) submitButton.dataset.defaultText = submitButton.textContent;
+  submitButton.disabled = loading;
+  submitButton.classList.toggle("is-loading", loading);
+  if (loading) {
+    submitButton.dataset.loading = "true";
+    submitButton.setAttribute("aria-busy", "true");
+    submitButton.textContent = loadingText;
+  } else {
+    delete submitButton.dataset.loading;
+    submitButton.removeAttribute("aria-busy");
+    submitButton.textContent = submitButton.dataset.defaultText || submitButton.textContent;
+  }
+}
+
+async function refreshAfterSuccess(refreshTask, warningMessage) {
+  try {
+    await refreshTask();
+  } catch (refreshError) {
+    console.warn(warningMessage, refreshError);
+    toast(warningMessage);
+  }
+}
+
 async function submitOrder(event) {
   event.preventDefault();
   if (!canWriteArea("orders")) return toast("没有权限保存应收订单");
@@ -3653,12 +3689,7 @@ async function submitOrder(event) {
     clearDraft("order");
     resetForm("order");
     toast(result.message || "订单保存成功");
-    try {
-      await reloadOrderList();
-    } catch (refreshError) {
-      console.error("订单已保存，但列表刷新失败", refreshError);
-      toast("订单已保存，但列表刷新失败，请手动刷新");
-    }
+    await refreshAfterSuccess(reloadOrderList, "订单已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   } finally {
@@ -3673,8 +3704,11 @@ async function submitOrder(event) {
 async function submitLogistics(event) {
   event.preventDefault();
   if (!canWriteArea("logistics")) return toast("没有权限保存物流费用");
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
   const order = currentDetailOrder();
   if (!order) return toast("请先编辑一个应收订单");
+  setFormSubmitLoading(form, true);
   try {
     await ensureRateSnapshot("logistics");
     const data = {
@@ -3701,15 +3735,18 @@ async function submitLogistics(event) {
       data.manualRateConfirmed = true;
     }
     const id = $("#logistics-id").value;
-    await api(id ? `/api/logistics-costs/${id}` : "/api/logistics-costs", {
+    const result = await api(id ? `/api/logistics-costs/${id}` : "/api/logistics-costs", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),
     });
+    assertSuccessResponse(result, "物流费用保存失败");
     resetLogisticsForm();
-    await loadData();
-    toast("物流费用已保存");
+    toast(result.message || "物流费用已保存");
+    await refreshAfterSuccess(loadData, "物流费用已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -3745,9 +3782,10 @@ async function deleteLogistics(id) {
   if (!canWriteArea("logistics")) return toast("没有权限删除物流费用");
   if (!confirm("确认删除这条物流费用吗？")) return;
   try {
-    await api(`/api/logistics-costs/${id}`, { method: "DELETE" });
-    await loadData();
-    toast("物流费用已删除");
+    const result = await api(`/api/logistics-costs/${id}`, { method: "DELETE" });
+    assertSuccessResponse(result, "物流费用删除失败");
+    toast(result.message || "物流费用已删除");
+    await refreshAfterSuccess(loadData, "物流费用已删除，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   }
@@ -3951,25 +3989,27 @@ function startQueuedUpload(task) {
     refreshDocumentViews();
   };
   xhr.onload = async () => {
+    let data;
     try {
-      const data = JSON.parse(xhr.responseText || "{}");
-      if (xhr.status >= 200 && xhr.status < 300) {
-        task.uploadStatus = "SUCCESS";
-        task.uploadProgress = 100;
-        task.xhr = null;
-        state.documentUploads[task.id] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
-        state.uploadBatchCompleted += 1;
-        state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
-        refreshDocumentViews();
-        processUploadQueue();
-        await refreshAfterTaxRefundMutation(task.orderId);
-        delete state.documentUploads[task.id];
-        refreshDocumentViews();
-      } else {
-        markQueuedUploadFailed(task, data.error || "上传失败，请检查文件存储配置。", data.code || "");
-      }
+      data = JSON.parse(xhr.responseText || "{}");
     } catch {
       markQueuedUploadFailed(task, "上传失败，服务器返回内容无法解析。");
+      return;
+    }
+    if (xhr.status >= 200 && xhr.status < 300) {
+      task.uploadStatus = "SUCCESS";
+      task.uploadProgress = 100;
+      task.xhr = null;
+      state.documentUploads[task.id] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
+      state.uploadBatchCompleted += 1;
+      state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
+      refreshDocumentViews();
+      processUploadQueue();
+      await refreshAfterSuccess(() => refreshAfterTaxRefundMutation(task.orderId), "文件已上传，但列表刷新失败，请手动刷新");
+      delete state.documentUploads[task.id];
+      refreshDocumentViews();
+    } else {
+      markQueuedUploadFailed(task, data.error || "上传失败，请检查文件存储配置。", data.code || "");
     }
   };
   xhr.onerror = () => {
@@ -4069,9 +4109,13 @@ async function deleteDocument(id) {
     const document = Object.values(state.documentUploads).find((item) => item.id === id)
       || state.orders.flatMap((order) => order.documents || []).find((item) => item.id === id)
       || state.taxRefundDetailOrder?.documents?.find((item) => item.id === id);
-    await api(`/api/order-documents/${id}`, { method: "DELETE" });
-    await refreshAfterTaxRefundMutation(document?.orderId || state.taxRefundDetailOrder?.id || "");
-    toast("单证已删除");
+    const result = await api(`/api/order-documents/${id}`, { method: "DELETE" });
+    assertSuccessResponse(result, "单证删除失败");
+    toast(result.message || "单证已删除");
+    await refreshAfterSuccess(
+      () => refreshAfterTaxRefundMutation(document?.orderId || state.taxRefundDetailOrder?.id || ""),
+      "单证已删除，但列表刷新失败，请手动刷新",
+    );
   } catch (error) {
     toast(error.message);
   }
@@ -4080,13 +4124,16 @@ async function deleteDocument(id) {
 async function updateTaxStatus(orderId, status) {
   if (!canWriteArea("taxRefund")) return toast("没有权限修改退税状态");
   try {
-    await api(`/api/tax-refunds/${orderId}`, {
+    const result = await api(`/api/tax-refunds/${orderId}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     });
-    await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
-    if (state.taxRefundDetailOrder?.id === orderId) await openTaxRefundDetail(orderId);
-    toast("退税状态已更新");
+    assertSuccessResponse(result, "退税状态更新失败");
+    toast(result.message || "退税状态已更新");
+    await refreshAfterSuccess(async () => {
+      await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
+      if (state.taxRefundDetailOrder?.id === orderId) await openTaxRefundDetail(orderId);
+    }, "退税状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   }
@@ -4114,12 +4161,13 @@ async function settleCommission(orderId) {
   if (!confirmed) return;
   const remark = "";
   try {
-    await api(`/api/commissions/${orderId}/settle`, {
+    const result = await api(`/api/commissions/${orderId}/settle`, {
       method: "POST",
       body: JSON.stringify({ remark }),
     });
-    await loadData();
-    toast("业务员提成已结算");
+    assertSuccessResponse(result, "业务员提成结算失败");
+    toast(result.message || "业务员提成已结算");
+    await refreshAfterSuccess(loadData, "业务员提成已结算，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   }
@@ -4128,6 +4176,9 @@ async function settleCommission(orderId) {
 async function submitPayment(event) {
   event.preventDefault();
   if (!canWriteArea("payments")) return toast("没有权限保存收款");
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  setFormSubmitLoading(form, true);
   try {
     await ensureRateSnapshot("payment");
     const data = readForm("payment", paymentFields);
@@ -4137,16 +4188,19 @@ async function submitPayment(event) {
     }
     const id = data.id;
     delete data.id;
-    await api(id ? `/api/payments/${id}` : "/api/payments", {
+    const result = await api(id ? `/api/payments/${id}` : "/api/payments", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(data),
     });
+    assertSuccessResponse(result, "收款保存失败");
     clearDraft("payment");
     resetForm("payment");
-    await loadData();
-    toast("收款已保存");
+    toast(result.message || "收款已保存");
+    await refreshAfterSuccess(loadData, "收款已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4196,12 +4250,7 @@ async function submitCost(event) {
     assertSuccessResponse(result, "成本保存失败");
     resetCostFormAfterSave();
     toast("成本保存成功");
-    try {
-      await loadData();
-    } catch (refreshError) {
-      console.error("成本已保存，但列表刷新失败", refreshError);
-      toast("成本已保存，但列表刷新失败，请手动刷新");
-    }
+    await refreshAfterSuccess(loadData, "成本已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     if (await recoverCostSaveAfterError(submittedCost, error)) return;
     toast(error.message);
@@ -4309,22 +4358,31 @@ async function submitCustomer(event) {
 async function submitSupplier(event) {
   event.preventDefault();
   if (!canWriteArea("suppliers")) return toast("没有权限保存供应商资料");
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  setFormSubmitLoading(form, true);
   try {
     const data = readForm("supplier", supplierFields);
     const id = data.id;
     delete data.id;
-    await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    const result = await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    assertSuccessResponse(result, "供应商保存失败");
     resetForm("supplier");
-    await loadSupplierSettingsList("");
-    toast("供应商已保存");
+    toast(result.message || "供应商已保存");
+    await refreshAfterSuccess(() => loadSupplierSettingsList(""), "供应商已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
 async function submitExchangeRateSettings(event) {
   event.preventDefault();
   if (!canWriteArea("settings")) return toast("没有权限修改系统设置");
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  setFormSubmitLoading(form, true);
   try {
     const data = {
       source: $("#exchange-source").value,
@@ -4336,12 +4394,15 @@ async function submitExchangeRateSettings(event) {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+    assertSuccessResponse(result, "汇率设置保存失败");
     state.exchangeRateSettings = result.settings || state.exchangeRateSettings;
     renderSettings();
     applyRateEditability();
-    toast("汇率设置已保存");
+    toast(result.message || "汇率设置已保存");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4368,6 +4429,9 @@ async function refreshExchangeRates() {
 async function submitUser(event) {
   event.preventDefault();
   if (!canWriteArea("users")) return toast("没有权限保存用户");
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  setFormSubmitLoading(form, true);
   try {
     const data = {
       name: $("#user-name").value,
@@ -4378,12 +4442,15 @@ async function submitUser(event) {
       customPermissions: readUserPermissionForm(),
     };
     const id = $("#user-id").value;
-    await api(id ? `/api/users/${id}` : "/api/users", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    const result = await api(id ? `/api/users/${id}` : "/api/users", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
+    assertSuccessResponse(result, "用户保存失败");
     resetForm("user");
-    await loadData();
-    toast("用户已保存");
+    toast(result.message || "用户已保存");
+    await refreshAfterSuccess(loadData, "用户已保存，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4392,7 +4459,7 @@ async function updateUserApproval(id, approvalStatus) {
   const user = state.users.find((item) => item.id === id);
   if (!user) return;
   try {
-    await api(`/api/users/${id}`, {
+    const result = await api(`/api/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         name: user.name,
@@ -4402,8 +4469,9 @@ async function updateUserApproval(id, approvalStatus) {
         customPermissions: user.customPermissions || { mode: "ROLE" },
       }),
     });
-    await loadData();
+    assertSuccessResponse(result, "用户审核失败");
     toast(approvalStatus === "APPROVED" ? "用户审核已通过" : "用户审核已拒绝");
+    await refreshAfterSuccess(loadData, "用户状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   }
@@ -4440,6 +4508,7 @@ async function submitRegister(event) {
   event.preventDefault();
   const form = event.currentTarget;
   setFormError(form, "");
+  if (formSubmitInFlight(form)) return;
   const name = $("#register-name")?.value.trim() || "";
   const email = String($("#register-email")?.value || "").trim().toLowerCase();
   const password = $("#register-password")?.value || "";
@@ -4449,8 +4518,9 @@ async function submitRegister(event) {
   if (!password) return reportFrontendError(new Error("请输入密码"), "注册校验失败", form);
   if (password.length < 8) return reportFrontendError(new Error("密码长度不能少于 8 位"), "注册校验失败", form);
   if (password !== confirmPassword) return reportFrontendError(new Error("两次输入的密码不一致"), "注册校验失败", form);
+  setFormSubmitLoading(form, true);
   try {
-    await api("/api/auth/register", {
+    const result = await api("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({
         name,
@@ -4459,10 +4529,13 @@ async function submitRegister(event) {
         confirmPassword,
       }),
     });
+    assertSuccessResponse(result, "注册申请失败");
     $("#register-form")?.reset();
-    toast("注册申请已提交，请等待管理员审核");
+    toast(result.message || "注册申请已提交，请等待管理员审核");
   } catch (error) {
     reportFrontendError(error, "注册申请失败", form);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4470,6 +4543,7 @@ async function submitPasswordChange(event) {
   event.preventDefault();
   const form = event.currentTarget;
   setFormError(form, "");
+  if (formSubmitInFlight(form)) return;
   const currentPassword = $("#change-current-password")?.value || "";
   const newPassword = $("#change-new-password")?.value || "";
   const confirmPassword = $("#change-confirm-password")?.value || "";
@@ -4477,15 +4551,19 @@ async function submitPasswordChange(event) {
   if (!newPassword) return reportFrontendError(new Error("请输入新密码"), "修改密码校验失败", form);
   if (newPassword.length < 8) return reportFrontendError(new Error("新密码长度不能少于 8 位"), "修改密码校验失败", form);
   if (newPassword !== confirmPassword) return reportFrontendError(new Error("两次输入的新密码不一致"), "修改密码校验失败", form);
+  setFormSubmitLoading(form, true);
   try {
-    await api("/api/auth/change-password", {
+    const result = await api("/api/auth/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     });
+    assertSuccessResponse(result, "修改密码失败");
     $("#password-change-form")?.reset();
     handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
     reportFrontendError(error, "修改密码失败", form);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4493,22 +4571,27 @@ async function submitProfile(event) {
   event.preventDefault();
   const form = event.currentTarget;
   setFormError(form, "");
+  if (formSubmitInFlight(form)) return;
   const name = $("#profile-name")?.value.trim() || "";
   const phone = $("#profile-phone")?.value.trim() || "";
   const defaultLanguage = $("#profile-language")?.value || "zh-CN";
   if (!name) return reportFrontendError(new Error("请输入姓名"), "个人信息校验失败", form);
+  setFormSubmitLoading(form, true);
   try {
     const result = await api("/api/auth/profile", {
       method: "PATCH",
       body: JSON.stringify({ name, phone, defaultLanguage }),
     });
+    assertSuccessResponse(result, "个人信息保存失败");
     state.me = result.user || state.me;
     renderProfileModal();
     $("#current-user").textContent = state.me?.name || "未登录";
     $("#top-user-name").textContent = state.me?.name || "登录";
-    toast("个人信息已保存");
+    toast(result.message || "个人信息已保存");
   } catch (error) {
     reportFrontendError(error, "修改个人信息失败", form);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4516,6 +4599,7 @@ async function submitProfilePassword(event) {
   event.preventDefault();
   const form = event.currentTarget;
   setFormError(form, "");
+  if (formSubmitInFlight(form)) return;
   const currentPassword = $("#profile-current-password")?.value || "";
   const newPassword = $("#profile-new-password")?.value || "";
   const confirmPassword = $("#profile-confirm-password")?.value || "";
@@ -4523,16 +4607,20 @@ async function submitProfilePassword(event) {
   if (!newPassword) return reportFrontendError(new Error("请输入新密码"), "修改密码校验失败", form);
   if (newPassword.length < 8) return reportFrontendError(new Error("新密码长度不能少于 8 位"), "修改密码校验失败", form);
   if (newPassword !== confirmPassword) return reportFrontendError(new Error("两次输入的新密码不一致"), "修改密码校验失败", form);
+  setFormSubmitLoading(form, true);
   try {
-    await api("/api/auth/change-password", {
+    const result = await api("/api/auth/change-password", {
       method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     });
+    assertSuccessResponse(result, "修改密码失败");
     $("#profile-password-form")?.reset();
     closeLoginModal();
     handleAuthExpired("密码已修改，请重新登录");
   } catch (error) {
     reportFrontendError(error, "修改密码失败", form);
+  } finally {
+    setFormSubmitLoading(form, false);
   }
 }
 
@@ -4786,9 +4874,10 @@ async function deleteRecord(kind, id) {
     user: `/api/users/${id}`,
   };
   try {
-    await api(endpoints[kind], { method: "DELETE" });
-    await loadData();
-    toast("操作已完成");
+    const result = await api(endpoints[kind], { method: "DELETE" });
+    assertSuccessResponse(result, "操作失败");
+    toast(result.message || "操作已完成");
+    await refreshAfterSuccess(loadData, "操作已完成，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
   }
