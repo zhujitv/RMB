@@ -3268,8 +3268,6 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
     <div><span>客户简称</span><strong>${escapeHtml(row.customerShortName || row.customerName || "-")}</strong></div>
-    <div><span>目的国家</span><strong>${escapeHtml(row.destinationCountry || "-")}</strong></div>
-    <div><span>目的港</span><strong>${escapeHtml(row.destinationPort || "-")}</strong></div>
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
@@ -3316,8 +3314,6 @@ function renderDomesticLogistics() {
       <td><strong>${escapeHtml(row.orderNo || "-")}</strong></td>
       <td>${escapeHtml(row.blNo || "待发货")}</td>
       <td>${escapeHtml(row.customerShortName || row.customerName || "-")}</td>
-      <td>${escapeHtml(row.destinationCountry || "-")}</td>
-      <td>${escapeHtml(row.destinationPort || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
@@ -3331,7 +3327,7 @@ function renderDomesticLogistics() {
         <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="12" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+  `).join("") : `<tr><td colspan="10" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
 }
 
 function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
