@@ -16,9 +16,9 @@ export async function POST(request) {
     const actor = await getActor(request);
     const body = await request.json();
     if (Array.isArray(body.items)) {
-      return ok({ costs: await saveCosts(request, actor, body) });
+      return ok({ success: true, costs: await saveCosts(request, actor, body) });
     }
-    return ok({ cost: await saveCost(request, actor, body) });
+    return ok({ success: true, cost: await saveCost(request, actor, body) });
   } catch (error) {
     return apiError(error, "保存成本失败");
   }

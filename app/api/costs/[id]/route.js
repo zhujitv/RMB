@@ -7,7 +7,7 @@ export async function PATCH(request, { params }) {
     const { id } = await params;
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ cost: await saveCost(request, actor, body, id) });
+    return ok({ success: true, cost: await saveCost(request, actor, body, id) });
   } catch (error) {
     return apiError(error, "更新成本失败");
   }

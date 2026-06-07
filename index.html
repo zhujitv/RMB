@@ -343,7 +343,7 @@
                     <label><span>折人民币金额</span><input id="logistics-amount-cny" disabled /></label>
                     <label><span>是否已付款</span><select id="logistics-paid"><option value="false">未付款</option><option value="true">已付款</option></select></label>
                     <label><span>物流成本确认</span><select id="logistics-confirmed"><option value="false">未确认</option><option value="true">已确认</option></select></label>
-                    <label><span>发票状态</span><select id="logistics-invoice-status"></select></label>
+                    <label hidden><span>发票状态</span><select id="logistics-invoice-status"></select></label>
                     <label class="wide"><span>备注</span><textarea id="logistics-remark" rows="2"></textarea></label>
                   </div>
                   <div class="form-actions"><button class="primary-button" id="logistics-submit-button" type="submit">保存物流费用</button></div>
@@ -418,7 +418,7 @@
               <label><span>付款状态</span><select id="cost-payment-status"></select></label>
               <label><span>成本确认</span><select id="cost-confirmed"><option value="false">未确认</option><option value="true">已确认</option></select></label>
               <label><span>付款日期</span><input id="cost-payment-date" type="date" /></label>
-              <label><span>发票状态</span><select id="cost-invoice-status"></select></label>
+              <label hidden><span>发票状态</span><select id="cost-invoice-status"></select></label>
               <div class="wide cost-items-block">
                 <div class="cost-items-title"><strong>供应商成本明细</strong><button class="secondary-button" id="add-cost-item" type="button">添加供应商</button></div>
                 <div class="cost-items" id="cost-items"></div>
@@ -549,7 +549,7 @@
               <ol>
                 <li>选择对应应收订单，再录入成本类型、供应商、金额、币种、汇率和付款状态。</li>
                 <li>物流类费用可在应收订单详情中维护，也会进入成本和利润统计。</li>
-                <li>成本确认、发票状态和供应商资料会影响利润核算、退税资料完整度和提成结算。</li>
+                <li>成本确认和供应商资料会影响利润核算、退税资料完整度和提成结算；发票状态由已上传的工厂增值税发票 PDF 自动判断。</li>
               </ol>
             </article>
             <article class="manual-card">

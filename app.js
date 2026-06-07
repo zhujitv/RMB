@@ -61,6 +61,7 @@ const state = {
 
 const constants = {
   currencies: ["USD", "EUR", "GBP", "CNY", "HKD"],
+  costCurrencyOptions: ["USD", "EUR", "GBP", "HKD", "CNY"],
   defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
   exchangeRateSources: ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"],
   exchangeRateTypes: ["现汇买入价", "现汇卖出价", "中间价"],
@@ -69,7 +70,7 @@ const constants = {
   paymentStatuses: ["待确认", "已到账", "部分到账", "已退回", "已取消"],
   paymentTypes: ["预付款", "尾款", "补差款", "其他"],
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
-  invoiceStatuses: ["未收到", "已收到", "不需要发票"],
+  invoiceStatuses: ["未收到", "已收到"],
   tradeTerms: ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"],
   paymentTerms: [
     { value: "COPY_BL", label: "见提单复印件付款" },
@@ -78,7 +79,10 @@ const constants = {
     { value: "INSTALLMENT", label: "分批付款" },
   ],
   logisticsCostTypes: ["国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
-  costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "佣金", "样品费", "银行手续费", "其他物流费用", "其他费用"],
+  cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "银行手续费", "样品费", "其他费用"],
+  foreignCurrencyCostTypes: ["海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用"],
+  legacyForeignCurrencyCostTypes: ["佣金"],
+  costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用", "银行手续费", "样品费", "其他费用"],
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
@@ -268,6 +272,25 @@ function calcCny(amountValue, rateValue) {
   return ((Number(amountValue) || 0) * (Number(rateValue) || 0)).toFixed(2);
 }
 
+function selectedCostType() {
+  return $("#cost-type")?.value || costDefaultType();
+}
+
+function costTypeAllowsForeignCurrency(costType = selectedCostType()) {
+  return constants.foreignCurrencyCostTypes.includes(costType)
+    || constants.legacyForeignCurrencyCostTypes.includes(costType);
+}
+
+function costCurrencyOptions(costType = selectedCostType()) {
+  return costTypeAllowsForeignCurrency(costType) ? constants.costCurrencyOptions : ["CNY"];
+}
+
+function normalizeCostCurrencyForType(costType = selectedCostType(), currency = "CNY") {
+  const normalized = String(currency || "CNY").toUpperCase();
+  const options = costCurrencyOptions(costType);
+  return options.includes(normalized) ? normalized : "CNY";
+}
+
 const paymentTermLabels = Object.fromEntries(constants.paymentTerms.map((item) => [item.value, item.label]));
 const legacyPaymentTermValue = "__LEGACY__";
 
@@ -391,8 +414,13 @@ function applyRateEditability() {
     el.readOnly = currency === "CNY" || !editable;
   });
   const refreshDisabled = !canRefreshRate();
-  $$(".rate-refresh").forEach((button) => {
+  $$(".rate-refresh:not(.cost-item-rate-refresh)").forEach((button) => {
     button.hidden = refreshDisabled;
+  });
+  $$(".cost-item-rate-refresh").forEach((button) => {
+    const row = button.closest(".cost-item-row");
+    const currency = row?.querySelector(".cost-item-currency")?.value;
+    button.hidden = refreshDisabled || currency === "CNY";
   });
   const settingsDisabled = !canWriteArea("settings");
   $$("#exchange-rate-settings-form select, #exchange-rate-settings-form button[type='submit']").forEach((el) => {
@@ -586,6 +614,7 @@ async function ensureRateSnapshot(prefix) {
 }
 
 async function ensureCostRowRateSnapshot(row) {
+  applyCostRowCurrencyRules(row);
   const currency = row.querySelector(".cost-item-currency")?.value;
   const source = row.querySelector(".cost-item-rate-source")?.value;
   const rate = row.querySelector(".cost-item-rate")?.value;
@@ -605,6 +634,15 @@ async function ensureCostRowRateSnapshot(row) {
 
 function needsAdminRateConfirmation(currency, exchangeRate) {
   return state.me?.role === "管理员" && currency !== "CNY" && Math.abs(Number(exchangeRate) - 1) <= 0.000001;
+}
+
+function assertSuccessResponse(result, fallback = "操作失败") {
+  if (result?.success === false) {
+    throw new Error(result.message || result.error || fallback);
+  }
+  if (Object.prototype.hasOwnProperty.call(result || {}, "success") && result.success !== true) {
+    throw new Error(result.message || result.error || fallback);
+  }
 }
 
 function toast(message) {
@@ -1889,7 +1927,7 @@ function renderLogisticsTable(order) {
       <td>${moneyCell({ currency: "CNY", amountCny: cost.amountCny })}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus)}</span></td>
       <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
-      <td>${escapeHtml(cost.invoiceStatus)}</td>
+      <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
       <td>${escapeHtml(cost.remark || "-")}</td>
       ${rowActions(canWriteArea("logistics") ? `<button data-edit-logistics="${cost.id}">编辑</button><button data-delete-logistics="${cost.id}">删除</button>` : "")}
     </tr>
@@ -1926,6 +1964,15 @@ function costDocumentRowsForType(cost, type) {
       && !persisted.some((document) => document.id === item.id)
     ));
   return [...transient, ...persisted];
+}
+
+function hasSuccessfulCostInvoice(cost) {
+  return costDocumentRowsForType(cost, "SUPPLIER_INVOICE")
+    .some((document) => document.uploadStatus === "SUCCESS");
+}
+
+function costInvoiceStatus(cost) {
+  return hasSuccessfulCostInvoice(cost) ? "已收到" : "未收到";
 }
 
 function taxRefundSupplierRequired(cost) {
@@ -1993,19 +2040,41 @@ function renderPayments() {
 function supplierDocumentCell(cost) {
   if (!cost.supplierId) return `<span class="muted-cell">未关联供应商资料</span>`;
   const isRequired = taxRefundSupplierRequired(cost);
-  const archivedDocs = constants.supplierDocumentTypes.flatMap((type) => (
-    costDocumentRowsForType(cost, type.value).map((document) => ({ ...document, typeLabel: type.label }))
-  ));
+  const order = orderById(cost.orderId) || costOrderFromCost(cost);
   if (!isRequired) {
-    const archivedHtml = archivedDocs.length ? archivedDocs.map((document) => uploadedFileCard(document, { typeLabel: document.typeLabel })).join("") : "";
     return `
       <div class="supplier-doc-list is-optional">
         <span class="supplier-doc-note">非工厂供应商，不参与退税检查</span>
-        ${archivedHtml}
+        ${constants.supplierDocumentTypes.map((type) => {
+          const docs = costDocumentRowsForType(cost, type.value);
+          const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+          const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
+          const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
+          const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
+          const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+          return `
+            <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
+              <div class="supplier-doc-head">
+                <strong>${escapeHtml(type.label)}</strong>
+                ${documentStatusBadge(successCount)}
+              </div>
+              ${docsHtml}
+              ${canWriteArea("documents") ? `
+                <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+                  <span>${escapeHtml(uploadText)}</span>
+                  <input type="file" accept="application/pdf,.pdf"
+                    data-cost-document-type="${escapeHtml(type.value)}"
+                    data-order-id="${escapeHtml(order.id || cost.orderId)}"
+                    data-cost-id="${escapeHtml(cost.id)}"
+                    data-supplier-id="${escapeHtml(cost.supplierId)}" />
+                </label>
+              ` : ""}
+            </div>
+          `;
+        }).join("")}
       </div>
     `;
   }
-  const order = orderById(cost.orderId) || costOrderFromCost(cost);
   return `
     <div class="supplier-doc-list">
       ${constants.supplierDocumentTypes.map((type) => {
@@ -2051,7 +2120,7 @@ function renderCosts() {
       <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
       <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
       <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
-      <td>${escapeHtml(cost.invoiceStatus)}</td>
+      <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
       <td>${auditCell(cost)}</td>
       <td>${supplierDocumentCell(cost)}</td>
       ${rowActions(canWriteArea("costs") ? `<button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button>` : "")}
@@ -2734,7 +2803,11 @@ function readForm(prefix, fields) {
 function setForm(fields, data) {
   fields.forEach(([key, selector]) => {
     const el = $(selector);
-    if (el) el.value = data?.[key] ?? "";
+    const value = data?.[key] ?? "";
+    if (el?.tagName === "SELECT" && value && ![...el.options].some((option) => option.value === value)) {
+      el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
+    }
+    if (el) el.value = value;
   });
 }
 
@@ -2790,7 +2863,7 @@ const supplierFields = [
 
 const costFields = [
   ["id", "#cost-id"], ["orderId", "#cost-order"], ["costType", "#cost-type"],
-  ["paymentStatus", "#cost-payment-status"], ["costConfirmed", "#cost-confirmed"], ["paymentDate", "#cost-payment-date"], ["invoiceStatus", "#cost-invoice-status"],
+  ["paymentStatus", "#cost-payment-status"], ["costConfirmed", "#cost-confirmed"], ["paymentDate", "#cost-payment-date"],
 ];
 
 function supplierDisplayName(item = {}) {
@@ -2953,44 +3026,81 @@ function handleSupplierPickerClick(target) {
 }
 
 function costItemRow(item = {}) {
-  const currency = item.currency || "CNY";
+  const costType = selectedCostType();
+  const currency = normalizeCostCurrencyForType(costType, item.currency || "CNY");
+  const isCny = currency === "CNY";
   const selectedSupplier = item.supplierId ? (supplierById(item.supplierId) || {
     id: item.supplierId,
     supplierName: supplierDisplayName(item),
     supplierType: item.supplierType || "",
   }) : null;
-  const normalizedItem = currency === "CNY" ? {
+  const normalizedItem = isCny ? {
     ...item,
-    exchangeRate: item.exchangeRate || 1,
+    currency: "CNY",
+    exchangeRate: 1,
     exchangeRateDate: item.exchangeRateDate || rateDateFor("cost"),
-    exchangeRateSource: item.exchangeRateSource || "系统",
+    exchangeRateSource: "系统",
     exchangeRateType: item.exchangeRateType || state.exchangeRateSettings.rateType,
   } : item;
   return `
     <div class="cost-item-row">
       <label class="supplier-picker" data-supplier-picker="cost"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id supplier-picker-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search supplier-picker-input" value="${escapeHtml(selectedSupplier ? selectedSupplier.supplierName : "")}" placeholder="搜索供应商名称 / 类型 / 联系人 / 开票名称 / 税号" autocomplete="off" ${selectedSupplier ? "hidden" : ""} /><div class="supplier-selected" ${selectedSupplier ? "" : "hidden"}><span>${selectedSupplier ? `${escapeHtml(selectedSupplier.supplierName)} <small>${escapeHtml(selectedSupplier.supplierType || "")}</small>` : ""}</span><button class="link-button supplier-reselect" type="button">重新选择</button></div><div class="supplier-search-results"></div></label>
       <label><span>成本金额 *</span><input class="cost-item-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount ?? "")}" /></label>
-      <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
-      <div class="form-field rate-field">
+      <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(costCurrencyOptions(costType), currency)}</select></label>
+      <div class="form-field rate-field cost-item-rate-field" ${isCny ? "hidden" : ""}>
         <span>汇率 *</span>
         <div class="rate-input-row exchange-rate-field">
-          <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(normalizedItem.exchangeRate ?? "")}" ${currency === "CNY" ? "readonly" : ""} />
-          <button class="secondary-button rate-refresh cost-item-rate-refresh" type="button" aria-label="刷新汇率" title="刷新汇率">↻</button>
+          <input class="cost-item-rate" type="number" min="0" step="0.0001" value="${escapeHtml(normalizedItem.exchangeRate ?? "")}" ${isCny ? "readonly" : ""} />
+          <button class="secondary-button rate-refresh cost-item-rate-refresh" type="button" aria-label="刷新汇率" title="刷新汇率" ${isCny ? "hidden" : ""}>↻</button>
         </div>
-        <small class="rate-meta exchange-rate-meta cost-item-rate-meta">${escapeHtml(rateMetaText(normalizedItem))}</small>
+        <small class="rate-meta exchange-rate-meta cost-item-rate-meta" ${isCny ? "hidden" : ""}>${escapeHtml(rateMetaText(normalizedItem))}</small>
         <input class="cost-item-rate-date" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateDate || "")}" />
         <input class="cost-item-rate-source" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateSource || "")}" />
         <input class="cost-item-rate-type" type="hidden" value="${escapeHtml(normalizedItem.exchangeRateType || state.exchangeRateSettings.rateType)}" />
       </div>
-      <label><span>折人民币</span><input class="cost-item-amount-cny" disabled /></label>
+      <label class="cost-item-cny-field" ${isCny ? "hidden" : ""}><span>折人民币</span><input class="cost-item-amount-cny" disabled /></label>
       <label><span>备注</span><input class="cost-item-remark" value="${escapeHtml(item.remark || "")}" /></label>
       <button class="secondary-button delete-cost-item" type="button" title="删除">删</button>
     </div>
   `;
 }
 
+function syncCostRowCurrencyOptions(row) {
+  const select = row.querySelector(".cost-item-currency");
+  if (!select) return "CNY";
+  const costType = selectedCostType();
+  const currency = normalizeCostCurrencyForType(costType, select.value || "CNY");
+  select.innerHTML = optionHtml(costCurrencyOptions(costType), currency);
+  select.value = currency;
+  return currency;
+}
+
+function applyCostRowCurrencyRules(row) {
+  if (!row) return;
+  const currency = syncCostRowCurrencyOptions(row);
+  const isCny = currency === "CNY";
+  row.classList.toggle("is-cny-cost", isCny);
+  const rateField = row.querySelector(".cost-item-rate-field");
+  const refreshButton = row.querySelector(".cost-item-rate-refresh");
+  const meta = row.querySelector(".cost-item-rate-meta");
+  const cnyField = row.querySelector(".cost-item-cny-field");
+  if (rateField) rateField.hidden = isCny;
+  if (refreshButton) refreshButton.hidden = isCny || !canRefreshRate();
+  if (meta) meta.hidden = isCny;
+  if (cnyField) cnyField.hidden = isCny;
+  if (isCny) normalizeCostRowCnyRate(row);
+  else updateCostItemDerived(row);
+  applyRateEditability();
+}
+
+function applyCostTypeCurrencyRules() {
+  $$("#cost-items .cost-item-row").forEach(applyCostRowCurrencyRules);
+}
+
 function updateCostItemDerived(row) {
-  row.querySelector(".cost-item-amount-cny").value = calcCny(
+  const amountCnyInput = row.querySelector(".cost-item-amount-cny");
+  if (!amountCnyInput) return;
+  amountCnyInput.value = calcCny(
     row.querySelector(".cost-item-amount").value,
     row.querySelector(".cost-item-rate").value,
   );
@@ -2999,7 +3109,7 @@ function updateCostItemDerived(row) {
 function addCostItem(item = {}) {
   $("#cost-items").insertAdjacentHTML("beforeend", costItemRow(item));
   const row = $("#cost-items .cost-item-row:last-child");
-  applyRateEditability();
+  applyCostRowCurrencyRules(row);
   if (row.querySelector(".cost-item-currency")?.value === "CNY") normalizeCostRowCnyRate(row);
   else if (!item.exchangeRate && state.me) applyCostItemRate(row).catch(() => {});
   updateCostItemDerived(row);
@@ -3078,7 +3188,7 @@ function resetCostFormAfterSave() {
 
 function readCostItems(validate = false) {
   const rows = $$("#cost-items .cost-item-row");
-  rows.forEach(normalizeCostRowCnyRate);
+  rows.forEach(applyCostRowCurrencyRules);
   const items = rows.map((row) => ({
     supplierId: row.querySelector(".cost-item-supplier-id").value,
     supplierName: row.querySelector(".cost-item-supplier-search").value.trim(),
@@ -3099,8 +3209,15 @@ function readCostItems(validate = false) {
       if (!String(item.amount || "").trim()) throw new Error("请填写供应商成本金额");
       if (!(Number(item.amount) > 0)) throw new Error("供应商成本金额必须大于 0");
       if (!item.currency) throw new Error("请选择成本币种");
-      if (!String(item.exchangeRate || "").trim()) throw new Error("请填写汇率；CNY 成本汇率应自动为 1");
-      if (!(Number(item.exchangeRate) > 0)) throw new Error("成本汇率必须大于 0");
+      if (item.currency === "CNY") {
+        item.exchangeRate = "1";
+        item.exchangeRateDate = item.exchangeRateDate || rateDateFor("cost");
+        item.exchangeRateSource = "系统";
+        item.exchangeRateType = item.exchangeRateType || state.exchangeRateSettings.rateType;
+      } else {
+        if (!String(item.exchangeRate || "").trim()) throw new Error("请填写外币成本汇率");
+        if (!(Number(item.exchangeRate) > 0)) throw new Error("成本汇率必须大于 0");
+      }
     });
   }
   return items;
@@ -3136,7 +3253,13 @@ function loadCostDraft() {
     costFields.forEach(([key, selector]) => {
       if (key === "id") return;
       const el = $(selector);
-      if (el && Object.prototype.hasOwnProperty.call(data, key)) el.value = data[key] ?? "";
+      if (el && Object.prototype.hasOwnProperty.call(data, key)) {
+        const value = data[key] ?? "";
+        if (el.tagName === "SELECT" && value && ![...el.options].some((option) => option.value === value)) {
+          el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
+        }
+        el.value = value;
+      }
     });
     $("#cost-id").value = "";
     if (selectedOrder) selectCostOrder(selectedOrder, { persist: false });
@@ -3404,7 +3527,6 @@ async function submitLogistics(event) {
       exchangeRateType: $("#logistics-rate-type").value,
       isPaid: $("#logistics-paid").value === "true",
       costConfirmed: $("#logistics-confirmed").value === "true",
-      invoiceStatus: $("#logistics-invoice-status").value,
       remark: $("#logistics-remark").value,
     };
     if (!data.supplierId) throw new Error("请选择供应商，不能只输入供应商名称");
@@ -3905,9 +4027,15 @@ async function submitCost(event) {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
-    await loadData();
+    assertSuccessResponse(result, "成本保存失败");
     resetCostFormAfterSave();
     toast("成本保存成功");
+    try {
+      await loadData();
+    } catch (refreshError) {
+      console.error("成本已保存，但列表刷新失败", refreshError);
+      toast("成本已保存，但列表刷新失败，请手动刷新");
+    }
   } catch (error) {
     toast(error.message);
   } finally {
@@ -4968,6 +5096,10 @@ function bindEvents() {
     $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));
     saveCostDraft();
   });
+  $("#cost-type").addEventListener("change", () => {
+    applyCostTypeCurrencyRules();
+    saveCostDraft();
+  });
   $("#cost-order-search").addEventListener("input", scheduleCostOrderSearch);
   $("#cost-order-results").addEventListener("click", (event) => {
     const button = event.target.closest("[data-cost-order-id]");
@@ -4990,8 +5122,8 @@ function bindEvents() {
   $("#cost-items").addEventListener("change", (event) => {
     const row = event.target.closest(".cost-item-row");
     if (row && event.target.classList.contains("cost-item-currency")) {
-      if (event.target.value === "CNY") normalizeCostRowCnyRate(row);
-      else applyCostItemRate(row).catch(() => {});
+      applyCostRowCurrencyRules(row);
+      if (event.target.value !== "CNY") applyCostItemRate(row).catch(() => {});
     }
     saveCostDraft();
   });
