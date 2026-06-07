@@ -3412,12 +3412,10 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(order.customerName)}</td>
         <td>${escapeHtml(order.currency)}</td>
-        <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
-        <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
         <td>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${factoryCompletenessBadge(completeness)}</td>
-        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/4")}</td>
+        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -3426,7 +3424,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="13" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="11" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -3670,7 +3668,11 @@ function taxRefundLogisticsInvoiceCosts(order = {}) {
 
 function taxRefundLogisticsInvoiceGroups(order = {}) {
   const costs = taxRefundLogisticsInvoiceCosts(order);
-  return constants.taxRefundLogisticsInvoiceRequirements.map((requirement) => ({
+  const cachedRequirements = order.documentCompleteness?.logistics?.requirements;
+  const requirements = Array.isArray(cachedRequirements) && cachedRequirements.length
+    ? cachedRequirements
+    : constants.taxRefundLogisticsInvoiceRequirements.filter((requirement) => requirement.key !== "SEA");
+  return requirements.map((requirement) => ({
     ...requirement,
     costs: costs.filter((cost) => requirement.costTypes.includes(cost.costType)),
   }));
@@ -3758,7 +3760,7 @@ function renderTaxRefundDetail() {
       <div><span>报关资料</span>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</div>
       <div><span>国内物流信息</span>${completenessBadge(completeness.domesticLogistics, Boolean(completeness.domesticLogistics?.complete), "0/1")}</div>
       <div><span>工厂资料</span>${factoryCompletenessBadge(completeness)}</div>
-      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/4")}</div>
+      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
