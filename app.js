@@ -1293,6 +1293,7 @@ function costOrderLabel(order) {
 function renderCostOrderResults(message = "") {
   const box = $("#cost-order-results");
   if (!box) return;
+  box.dataset.activeIndex = "-1";
   if (message) {
     box.innerHTML = `<div class="order-search-empty">${escapeHtml(message)}</div>`;
     return;
@@ -1302,8 +1303,79 @@ function renderCostOrderResults(message = "") {
     return;
   }
   box.innerHTML = state.costOrderResults.map((order) => (
-    `<button class="order-search-option" type="button" role="option" data-cost-order-id="${escapeHtml(order.id)}"><strong>${escapeHtml(costOrderLabel(order))}</strong></button>`
+    `<button class="order-search-option" type="button" role="option" tabindex="-1" data-cost-order-id="${escapeHtml(order.id)}"><strong>${escapeHtml(costOrderLabel(order))}</strong></button>`
   )).join("");
+}
+
+function listboxOptions(box, selector) {
+  return box ? [...box.querySelectorAll(selector)] : [];
+}
+
+function setListboxActiveOption(box, selector, index) {
+  const options = listboxOptions(box, selector);
+  if (!options.length) return null;
+  const bounded = Math.max(0, Math.min(index, options.length - 1));
+  box.dataset.activeIndex = String(bounded);
+  options.forEach((option, optionIndex) => {
+    const active = optionIndex === bounded;
+    option.classList.toggle("is-keyboard-active", active);
+    option.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  options[bounded].scrollIntoView({ block: "nearest" });
+  return options[bounded];
+}
+
+function moveListboxActiveOption(box, selector, delta) {
+  const options = listboxOptions(box, selector);
+  if (!options.length) return null;
+  const current = Number.parseInt(box.dataset.activeIndex || "-1", 10);
+  const next = current < 0 ? (delta > 0 ? 0 : options.length - 1) : current + delta;
+  return setListboxActiveOption(box, selector, (next + options.length) % options.length);
+}
+
+function activeListboxOption(box, selector) {
+  const options = listboxOptions(box, selector);
+  const activeIndex = Number.parseInt(box?.dataset.activeIndex || "-1", 10);
+  return activeIndex >= 0 ? options[activeIndex] : null;
+}
+
+function handleListboxKeyboard(event, box, selector, onSelect, onEscape = null) {
+  if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return false;
+  const options = listboxOptions(box, selector);
+  if (!options.length && event.key !== "Escape") return false;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveListboxActiveOption(box, selector, 1);
+    return true;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveListboxActiveOption(box, selector, -1);
+    return true;
+  }
+  if (event.key === "Enter") {
+    const option = activeListboxOption(box, selector) || options[0];
+    if (!option) return false;
+    event.preventDefault();
+    onSelect(option);
+    return true;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (box) {
+      box.innerHTML = "";
+      box.dataset.activeIndex = "-1";
+    }
+    if (onEscape) onEscape();
+    return true;
+  }
+  return false;
+}
+
+function selectCostOrderOption(button) {
+  const order = state.costOrderResults.find((item) => item.id === button?.dataset.costOrderId)
+    || orderById(button?.dataset.costOrderId);
+  if (order) selectCostOrder(order);
 }
 
 function fillCostOrderDisplay(order = null) {
@@ -4644,12 +4716,13 @@ function supplierPickerKey(root) {
 function renderSupplierResults(root, suppliers = [], keyword = "") {
   const box = root.querySelector(".supplier-search-results");
   if (!box) return;
+  box.dataset.activeIndex = "-1";
   if (!suppliers.length) {
     box.innerHTML = `<div class="supplier-search-empty">${keyword ? "未找到匹配供应商，可先到系统设置新增供应商" : "请输入关键词搜索启用供应商"}</div>`;
     return;
   }
   box.innerHTML = suppliers.map((supplier) => (
-    `<button class="supplier-search-option" type="button" data-supplier-id="${escapeHtml(supplier.id)}"><strong>${escapeHtml(supplierLabel(supplier))}</strong></button>`
+    `<button class="supplier-search-option" type="button" role="option" tabindex="-1" data-supplier-id="${escapeHtml(supplier.id)}"><strong>${escapeHtml(supplierLabel(supplier))}</strong></button>`
   )).join("");
 }
 
@@ -4749,6 +4822,21 @@ function handleSupplierPickerClick(target) {
     return true;
   }
   return false;
+}
+
+function selectSupplierOption(button) {
+  const root = button?.closest(".supplier-picker");
+  const supplier = root ? supplierFromPicker(root, button.dataset.supplierId) : null;
+  if (root && supplier) selectSupplierForPicker(root, supplier);
+}
+
+function handleSupplierPickerKeydown(input, event) {
+  const root = input.closest(".supplier-picker");
+  if (!root) return false;
+  const box = root.querySelector(".supplier-search-results");
+  return handleListboxKeyboard(event, box, ".supplier-search-option", selectSupplierOption, () => {
+    if (input.value) input.select();
+  });
 }
 
 function costItemRow(item = {}) {
@@ -7704,11 +7792,15 @@ function bindEvents() {
     saveCostDraft();
   });
   $("#cost-order-search").addEventListener("input", scheduleCostOrderSearch);
+  $("#cost-order-search").addEventListener("keydown", (event) => {
+    handleListboxKeyboard(event, $("#cost-order-results"), ".order-search-option", selectCostOrderOption, () => {
+      if ($("#cost-order-search").value) $("#cost-order-search").select();
+    });
+  });
   $("#cost-order-results").addEventListener("click", (event) => {
     const button = event.target.closest("[data-cost-order-id]");
     if (!button) return;
-    const order = orderById(button.dataset.costOrderId);
-    if (order) selectCostOrder(order);
+    selectCostOrderOption(button);
   });
   $("#cost-order-reselect").addEventListener("click", () => clearCostOrderSelection());
   $("#add-cost-item").addEventListener("click", () => {
@@ -7721,6 +7813,11 @@ function bindEvents() {
     if (row && event.target.classList.contains("cost-item-rate")) markCostRowManualRate(row);
     if (row) updateCostItemDerived(row);
     saveCostDraft();
+  });
+  $("#cost-items").addEventListener("keydown", (event) => {
+    if (event.target.classList.contains("cost-item-supplier-search")) {
+      handleSupplierPickerKeydown(event.target, event);
+    }
   });
   $("#cost-items").addEventListener("change", (event) => {
     const row = event.target.closest(".cost-item-row");
@@ -7754,6 +7851,9 @@ function bindEvents() {
   });
   $("#logistics-supplier-picker").addEventListener("input", (event) => {
     if (event.target.classList.contains("supplier-picker-input")) handleSupplierPickerInput(event.target);
+  });
+  $("#logistics-supplier-picker").addEventListener("keydown", (event) => {
+    if (event.target.classList.contains("supplier-picker-input")) handleSupplierPickerKeydown(event.target, event);
   });
   $("#logistics-supplier-picker").addEventListener("click", (event) => {
     handleSupplierPickerClick(event.target);

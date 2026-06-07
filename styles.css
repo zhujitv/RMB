@@ -1420,8 +1420,14 @@ textarea:focus {
   cursor: pointer;
 }
 
-.order-search-option:hover {
+.order-search-option:hover,
+.order-search-option.is-keyboard-active {
   background: #eff6ff;
+}
+
+.order-search-option.is-keyboard-active {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .order-search-option:last-child,
@@ -2372,8 +2378,14 @@ textarea:focus {
   cursor: pointer;
 }
 
-.supplier-search-option:hover {
+.supplier-search-option:hover,
+.supplier-search-option.is-keyboard-active {
   background: #eff6ff;
+}
+
+.supplier-search-option.is-keyboard-active {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .supplier-search-option:last-child,
