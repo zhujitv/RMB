@@ -1244,6 +1244,27 @@ function fillSelect(id, values, selected = "", includeBlank = false, blankLabel 
   el.innerHTML = `${includeBlank ? `<option value="">${escapeHtml(blankLabel)}</option>` : ""}${optionHtml(values, selected)}`;
 }
 
+function formPaymentStatuses(selected = "") {
+  const base = ["待确认", "已退回", "已取消"];
+  if (selected && !base.includes(selected)) base.push(selected);
+  return base.filter((item, index, arr) => arr.indexOf(item) === index);
+}
+
+function refreshPaymentStatusOptions(selected = "") {
+  fillSelect("#payment-status", formPaymentStatuses(selected), selected || "待确认");
+}
+
+function canConfirmOrdinaryCost() {
+  return state.me?.role === "管理员";
+}
+
+function refreshCostConfirmOptions(selected = "false") {
+  const values = canConfirmOrdinaryCost()
+    ? [{ value: "false", label: "未确认" }, { value: "true", label: "已确认" }]
+    : [{ value: "false", label: "未确认" }];
+  fillSelect("#cost-confirmed", values, canConfirmOrdinaryCost() ? selected : "false");
+}
+
 function fillOrderSelect(id, selected = "") {
   const el = $(id);
   if (!el) return;
@@ -2124,6 +2145,8 @@ function applyAccessControl() {
   setHidden("[data-export='costs']", !canUseReports || !canReadArea("costs"));
   setHidden("[data-export='orders'], [data-export='profit'], [data-export='reminders']", !canUseReports || !canReadArea("orders"));
   setHidden("[data-export='commissions'], [data-export='commissions-xlsx']", !canUseReports || !canReadArea("commissions"));
+  refreshPaymentStatusOptions($("#payment-status")?.value || "待确认");
+  refreshCostConfirmOptions($("#cost-confirmed")?.value || "false");
   applyRateEditability();
 }
 
@@ -4869,7 +4892,7 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
   clearCostOrderSelection({ persist: false, reload: reloadOrders });
   $("#cost-type").value = costDefaultType();
   $("#cost-payment-status").value = "待支付";
-  $("#cost-confirmed").value = "false";
+  refreshCostConfirmOptions("false");
   $("#cost-payment-date").value = "";
   $("#cost-invoice-status").value = "未收到";
   resetCostItems([{}]);
@@ -4884,7 +4907,7 @@ function resetCostFormAfterSave() {
   $("#cost-id").value = "";
   $("#cost-type").value = costDefaultType();
   $("#cost-payment-status").value = "待支付";
-  $("#cost-confirmed").value = "false";
+  refreshCostConfirmOptions("false");
   $("#cost-invoice-status").value = "未收到";
   resetCostItems([{}]);
   setCostFormMode(null);
@@ -5907,6 +5930,9 @@ async function submitPayment(event) {
   try {
     await ensureRateSnapshot("payment");
     const data = readForm("payment", paymentFields);
+    if (!data.id && ["已到账", "部分到账"].includes(data.status)) {
+      throw new Error("新增收款只能保存为待确认，请由另一位财务或管理员复核到账。");
+    }
     if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
       if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
       data.manualRateConfirmed = true;
@@ -5937,6 +5963,7 @@ async function submitCost(event) {
   let submittedCost = null;
   try {
     const data = readForm("cost", costFields);
+    if (!canConfirmOrdinaryCost()) data.costConfirmed = "false";
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
       throw new Error("请从搜索结果中选择关联应收订单");
     }
@@ -6652,6 +6679,7 @@ function resetForm(name) {
     $("#payment-rate-type").value = "";
     $("#payment-rate-meta").textContent = "汇率来源：待获取";
     $("#payment-type").value = "尾款";
+    refreshPaymentStatusOptions("待确认");
     updatePaymentDerived();
     if (state.me) applyRateFor("payment").catch(() => {});
   }
@@ -6781,6 +6809,7 @@ function editPayment(id) {
   fillPaymentOrderSelect(payment.orderId, lockOrder, fallback);
   setForm(paymentFields, payment);
   $("#payment-id").value = payment.id;
+  refreshPaymentStatusOptions(payment.status || "待确认");
   setRateSnapshot("payment", {
     exchangeRate: payment.exchangeRate,
     exchangeRateDate: payment.exchangeRateDate || payment.paymentDate,
@@ -7869,7 +7898,7 @@ function initSelects() {
   fillPaymentTermSelect("COPY_BL");
   fillSelect("#order-status", constants.orderStatuses, "草稿");
   fillSelect("#payment-type", constants.paymentTypes, "尾款");
-  fillSelect("#payment-status", constants.paymentStatuses, "待确认");
+  refreshPaymentStatusOptions("待确认");
   fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
   fillSelect("#supplier-status", constants.supplierStatuses, "启用");
   fillSelect("#supplier-filter-type", constants.supplierTypes, "", true, "全部供应商类型");
@@ -7878,6 +7907,7 @@ function initSelects() {
   fillSelect("#exchange-rate-type", constants.exchangeRateTypes, "现汇买入价");
   fillSelect("#cost-type", constants.costTypes, "工厂货款");
   fillSelect("#cost-payment-status", constants.costPaymentStatuses, "待支付");
+  refreshCostConfirmOptions("false");
   fillSelect("#cost-invoice-status", constants.invoiceStatuses, "未收到");
   fillSelect("#logistics-type", constants.logisticsCostTypes, constants.logisticsCostTypes[0] || "其他物流费用");
   fillSelect("#logistics-currency", constants.currencies, "", true, "请选择币种");
