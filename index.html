@@ -84,6 +84,10 @@
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>
             <span>利润分析</span>
           </button>
+          <button class="nav-tab" data-view="domesticLogistics" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h1V9h4l3 4v4h-2"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg>
+            <span>国内物流信息</span>
+          </button>
           <button class="nav-tab" data-view="taxRefund" type="button">
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/><path d="m9 13 2 2 4-4"/></svg>
             <span>退税资料</span>
@@ -522,6 +526,50 @@
           </section>
         </section>
 
+        <section class="view-panel" id="domesticLogistics-view">
+          <section class="panel">
+            <div class="panel-title"><h3>国内物流信息</h3><span id="domestic-logistics-count">0 个订单</span></div>
+            <form class="inline-filter" id="domestic-logistics-filter-form" autocomplete="off">
+              <input id="domestic-logistics-search" type="search" placeholder="订单号 / 提单号" />
+              <button class="primary-button" type="submit">查询</button>
+              <button class="clear-button" id="domestic-logistics-reset" type="button">重置</button>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>订单号</th>
+                    <th>提单号</th>
+                    <th>客户简称</th>
+                    <th>目的国家</th>
+                    <th>物流状态</th>
+                    <th>财务审核</th>
+                    <th>录入时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="domestic-logistics-table"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel domestic-logistics-editor" id="domestic-logistics-editor" hidden>
+            <div class="panel-title"><h3 id="domestic-logistics-editor-title">录入国内物流信息</h3><span id="domestic-logistics-supplier-text">-</span></div>
+            <form class="entry-form" id="domestic-logistics-form" autocomplete="off">
+              <input type="hidden" id="domestic-logistics-order-id" />
+              <input type="hidden" id="domestic-logistics-info-id" />
+              <label><span>物流负责供应商 *</span><select id="domestic-logistics-supplier-id"></select></label>
+              <label><span>运输方式 *</span><select id="domestic-transport-type"><option value="TRUCK">车辆运输</option><option value="EXPRESS">快递运输</option><option value="MULTIMODAL">多式联运</option></select></label>
+              <label data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
+              <label data-domestic-field="truck"><span>挂车车牌</span><input id="domestic-trailer-plate" placeholder="浙D6789挂" /></label>
+              <label data-domestic-field="truck"><span id="domestic-place-label">起运地 *</span><input id="domestic-departure-place" placeholder="绍兴越城" /></label>
+              <label data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
+              <label data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
+              <label class="wide"><span>出口发票备注</span><textarea id="domestic-remark-preview" readonly rows="4"></textarea></label>
+              <div class="form-actions"><button class="primary-button" type="submit">提交国内物流信息</button></div>
+            </form>
+          </section>
+        </section>
+
         <section class="view-panel" id="reports-view">
           <section class="panel">
             <div class="panel-title"><h3>报表中心</h3><span>在线查询 · 按需下载</span></div>
@@ -774,6 +822,7 @@
               <label><span>供应商名称 *</span><input id="supplier-name" required /></label>
               <label><span>供应商类型</span><select id="supplier-type"></select></label>
               <label><span>状态</span><select id="supplier-status"></select></label>
+              <label><span>允许录入国内物流信息</span><select id="supplier-domestic-logistics-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>国家 / 地区</span><input id="supplier-country" /></label>
               <label><span>联系人</span><input id="supplier-contact-person" /></label>
               <label><span>联系电话</span><input id="supplier-phone" /></label>
@@ -801,6 +850,7 @@
               <label><span>姓名 *</span><input id="user-name" required /></label>
               <label><span>邮箱 *</span><input id="user-email" required /></label>
               <label><span>角色分类</span><select id="user-role"></select></label>
+              <label id="user-supplier-field" hidden><span>关联供应商 *</span><select id="user-supplier"></select></label>
               <label><span>账号状态</span><select id="user-approval-status"></select></label>
               <label><span>权限模式</span><select id="user-permission-mode"></select></label>
               <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新建用户必须设置初始密码，保存后用户需首次改密" /></label>

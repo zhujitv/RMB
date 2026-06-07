@@ -44,6 +44,7 @@ model User {
   avatarInitials String? @map("avatar_initials")
   defaultLanguage String? @map("default_language")
   customPermissions Json? @map("custom_permissions")
+  supplierId    String?   @map("supplier_id")
   mustChangePassword Boolean @default(false) @map("must_change_password")
   approvalStatus String @default("APPROVED") @map("approval_status")
   isActive     Boolean  @default(true) @map("is_active")
@@ -68,7 +69,11 @@ model User {
   sessions    UserSession[]
   loginAttempts LoginAttempt[]
   auditLogs   AuditLog[]
+  supplierOperator Supplier? @relation("SupplierOperators", fields: [supplierId], references: [id])
+  submittedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsSubmittedBy")
+  confirmedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsFinanceConfirmedBy")
 
+  @@index([supplierId])
   @@index([approvalStatus])
   @@map("users")
 }
@@ -150,6 +155,7 @@ model Supplier {
   bankAccount   String?   @map("bank_account")
   remark        String?
   status        String    @default("启用")
+  allowDomesticLogisticsEntry Boolean @default(false) @map("allow_domestic_logistics_entry")
   createdById   String?   @map("created_by")
   updatedById   String?   @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -160,10 +166,13 @@ model Supplier {
   updatedBy User?      @relation("SuppliersUpdated", fields: [updatedById], references: [id])
   costs     OrderCost[]
   documents OrderDocument[]
+  operatorUsers User[] @relation("SupplierOperators")
+  domesticLogisticsInfos DomesticLogisticsInfo[]
 
   @@index([supplierName])
   @@index([supplierType])
   @@index([status])
+  @@index([allowDomesticLogisticsEntry])
   @@index([deletedAt])
   @@map("suppliers")
 }
@@ -225,6 +234,7 @@ model ReceivableOrder {
   payments    Payment[]
   costs       OrderCost[]
   documents   OrderDocument[]
+  domesticLogisticsInfos DomesticLogisticsInfo[]
   commissionSettlementRecords CommissionSettlement[]
 
   @@index([orderNo])
@@ -240,6 +250,41 @@ model ReceivableOrder {
   @@index([dueDate])
   @@index([deletedAt])
   @@map("receivable_orders")
+}
+
+model DomesticLogisticsInfo {
+  id                    String    @id @default(cuid())
+  orderId               String    @map("order_id")
+  transportType         String    @map("transport_type")
+  truckPlateNo          String?   @map("truck_plate_no")
+  trailerPlateNo        String?   @map("trailer_plate_no")
+  departurePlace        String?   @map("departure_place")
+  departureDate         DateTime? @map("departure_date") @db.Date
+  expressTrackingNo     String?   @map("express_tracking_no")
+  remarkText            String?   @map("remark_text")
+  responsibleSupplierId String?   @map("responsible_supplier_id")
+  submittedByUserId     String?   @map("submitted_by_user_id")
+  submittedAt           DateTime? @map("submitted_at")
+  financeStatus         String    @default("PENDING") @map("finance_status")
+  financeConfirmedById  String?   @map("finance_confirmed_by")
+  financeConfirmedAt    DateTime? @map("finance_confirmed_at")
+  rejectReason          String?   @map("reject_reason")
+  correctionRequested   Boolean   @default(false) @map("correction_requested")
+  correctionReason      String?   @map("correction_reason")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  order ReceivableOrder @relation(fields: [orderId], references: [id])
+  responsibleSupplier Supplier? @relation(fields: [responsibleSupplierId], references: [id])
+  submittedBy User? @relation("DomesticLogisticsSubmittedBy", fields: [submittedByUserId], references: [id])
+  financeConfirmedBy User? @relation("DomesticLogisticsFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
+
+  @@index([orderId])
+  @@index([responsibleSupplierId])
+  @@index([submittedByUserId])
+  @@index([financeStatus])
+  @@index([submittedAt])
+  @@map("domestic_logistics_infos")
 }
 
 model CommissionSettlement {

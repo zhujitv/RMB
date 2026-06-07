@@ -1456,6 +1456,16 @@ textarea:focus {
   background: #fff;
 }
 
+.document-card.uploaded {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.document-card.missing {
+  background: #fff;
+  border-color: #fecaca;
+}
+
 .document-card-head {
   display: flex;
   align-items: center;
@@ -1983,6 +1993,30 @@ textarea:focus {
   margin: 0;
   font-size: 15px;
   color: #0f172a;
+}
+
+.domestic-logistics-editor {
+  margin-top: 16px;
+}
+
+.tax-remark-preview,
+#domestic-remark-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #0f172a;
+  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  margin: 8px 0 0;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.domestic-logistics-review .document-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .tax-detail-doc-grid {
