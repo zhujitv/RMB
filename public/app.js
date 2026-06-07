@@ -2509,7 +2509,7 @@ function logisticsInvoiceRequirementForCost(cost = {}) {
 }
 
 function logisticsInvoiceLabel(cost = {}) {
-  return logisticsInvoiceRequirementForCost(cost)?.label || "物流港杂发票";
+  return logisticsInvoiceRequirementForCost(cost)?.label || "物流资料";
 }
 
 function renderDocumentGrid(order) {
@@ -2986,8 +2986,8 @@ function missingDocumentTargets(order = {}) {
       documentType: item.documentType || "SUPPLIER_INVOICE",
       supplierId: item.supplierId || "",
       costId: item.costId || "",
-      label: item.invoiceLabel || "物流港杂资料",
-      title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流港杂资料"}`,
+      label: item.invoiceLabel || "物流资料",
+      title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流资料"}`,
     });
   });
   return [...exportTargets, ...domesticTargets, ...supplierTargets, ...logisticsTargets];
@@ -3760,7 +3760,7 @@ function renderTaxRefundDetail() {
       <div><span>报关资料</span>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</div>
       <div><span>国内物流信息</span>${completenessBadge(completeness.domesticLogistics, Boolean(completeness.domesticLogistics?.complete), "0/1")}</div>
       <div><span>工厂资料</span>${factoryCompletenessBadge(completeness)}</div>
-      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
+      <div><span>物流资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
@@ -3785,7 +3785,7 @@ function renderTaxRefundDetail() {
       `).join("") : ""}
     </section>
     <section class="tax-detail-section">
-      <h4>物流港杂资料</h4>
+      <h4>物流资料</h4>
       <div class="tax-logistics-invoice-list">${logisticsInvoiceGroups.map((requirement) => renderTaxLogisticsInvoiceGroup(order, requirement)).join("")}</div>
     </section>
   `;
