@@ -1,6 +1,16 @@
-import { apiError, deleteCost, getActor, ok, saveCost } from "../../../../lib/platform-db";
+import { apiError, deleteCost, getActor, getCost, ok, saveCost } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request, { params }) {
+  try {
+    const { id } = await params;
+    const actor = await getActor(request);
+    return ok({ success: true, cost: await getCost(id, actor) });
+  } catch (error) {
+    return apiError(error, "读取成本详情失败");
+  }
+}
 
 export async function PATCH(request, { params }) {
   try {

@@ -1,11 +1,15 @@
-import { apiError, getActor, listCosts, ok, saveCost, saveCosts } from "../../../lib/platform-db";
+import { apiError, getActor, listCostOrderSummaries, listCostsPage, ok, saveCost, saveCosts } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
     const actor = await getActor(request);
-    return ok({ costs: await listCosts(new URL(request.url).searchParams, actor) });
+    const query = new URL(request.url).searchParams;
+    const data = query.get("view") === "orders"
+      ? await listCostOrderSummaries(query, actor)
+      : await listCostsPage(query, actor);
+    return ok({ success: true, data, costs: data.rows });
   } catch (error) {
     return apiError(error, "读取成本失败");
   }

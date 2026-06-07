@@ -19,6 +19,14 @@ const state = {
   orders: [],
   payments: [],
   costs: [],
+  costView: "details",
+  costRows: [],
+  costOrderRows: [],
+  costPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  costFiltersOpen: true,
+  costListLoading: false,
+  costDrawerOpen: false,
+  costDocumentCost: null,
   taxRefundOrders: [],
   taxRefundPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   taxRefundKeyword: "",
@@ -772,6 +780,14 @@ function clearLocalCaches() {
   state.orders = [];
   state.payments = [];
   state.costs = [];
+  state.costView = "details";
+  state.costRows = [];
+  state.costOrderRows = [];
+  state.costPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.costFiltersOpen = true;
+  state.costListLoading = false;
+  state.costDrawerOpen = false;
+  state.costDocumentCost = null;
   state.taxRefundOrders = [];
   state.taxRefundPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
   state.taxRefundKeyword = "";
@@ -1139,9 +1155,29 @@ function fillSalespersonSelect(id, selected = "", includeBlank = true) {
   if (selected) el.value = selected;
 }
 
+function orderFallbackFromCost(cost = null) {
+  if (!cost) return null;
+  return {
+    id: cost.orderId,
+    orderNo: cost.orderNo || "",
+    blNo: cost.blNo || cost.billOfLadingNo || "",
+    billOfLadingNo: cost.billOfLadingNo || cost.blNo || "",
+    customerId: cost.customerId || "",
+    customerName: cost.customerName || "",
+    currency: cost.orderCurrency || "",
+    exchangeRate: cost.orderExchangeRate || 0,
+    status: cost.orderStatus || "",
+    summary: {},
+  };
+}
+
 function orderById(id) {
+  const costRow = state.costRows.find((cost) => cost.orderId === id);
   return state.orders.find((order) => order.id === id)
     || state.costOrderResults.find((order) => order.id === id)
+    || (state.taxRefundDetailOrder?.id === id ? state.taxRefundDetailOrder : null)
+    || state.costOrderRows.find((order) => order.orderId === id || order.id === id)
+    || orderFallbackFromCost(costRow)
     || (state.selectedCostOrder?.id === id ? state.selectedCostOrder : null);
 }
 
@@ -1243,7 +1279,7 @@ async function loadData() {
     state.overview = data.overview;
     state.orders = data.orders || [];
     state.payments = data.payments || [];
-    state.costs = data.costs || [];
+    state.costs = [];
     state.customers = data.customers || [];
     state.suppliers = data.suppliers || [];
     state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
@@ -1254,9 +1290,83 @@ async function loadData() {
     state.auditLogs = logs.logs || [];
     renderAll();
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
-    if (canWriteArea("costs") && !state.selectedCostOrder) await searchCostOrders("");
+    if (state.view === "costs" && canReadArea("costs")) await loadCostList({ silent: true });
   } catch (error) {
     toast(error.message);
+  }
+}
+
+function costListParams(options = {}) {
+  const page = Math.max(1, Number(options.page || state.costPagination.page || 1));
+  const pageSize = Number(options.pageSize || $("#cost-page-size")?.value || state.costPagination.pageSize || 20);
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    view: state.costView === "orders" ? "orders" : "details",
+  });
+  const fields = {
+    keyword: "#cost-filter-keyword",
+    orderNo: "#cost-filter-order-no",
+    blNo: "#cost-filter-bl-no",
+    customerName: "#cost-filter-customer",
+    supplierName: "#cost-filter-supplier",
+    costType: "#cost-filter-type",
+    paymentStatus: "#cost-filter-payment-status",
+    costConfirmed: "#cost-filter-confirmed",
+    invoiceStatus: "#cost-filter-invoice-status",
+    dateFrom: "#cost-filter-date-from",
+    dateTo: "#cost-filter-date-to",
+  };
+  Object.entries(fields).forEach(([key, selector]) => {
+    const value = $(selector)?.value?.trim?.() || $(selector)?.value || "";
+    if (value) params.set(key, value);
+  });
+  return params;
+}
+
+function normalizeCostPageData(data, fallbackPage = 1) {
+  const payload = data?.data || {};
+  const pageSize = Number(payload.pageSize || $("#cost-page-size")?.value || state.costPagination.pageSize || 20);
+  const total = Number(payload.total || 0);
+  return {
+    rows: payload.rows || data?.costs || [],
+    total,
+    page: Number(payload.page || fallbackPage || 1),
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / Math.max(pageSize, 1))),
+  };
+}
+
+async function loadCostList(options = {}) {
+  if (!canReadArea("costs")) return;
+  const page = Math.max(1, Number(options.page || state.costPagination.page || 1));
+  const params = costListParams({ ...options, page });
+  state.costListLoading = true;
+  renderCosts();
+  try {
+    const data = await api(`/api/costs?${params.toString()}`);
+    const pageData = normalizeCostPageData(data, page);
+    state.costPagination = {
+      page: pageData.page,
+      pageSize: pageData.pageSize,
+      total: pageData.total,
+      totalPages: pageData.totalPages,
+    };
+    if (state.costView === "orders") {
+      state.costOrderRows = pageData.rows;
+      state.costRows = [];
+      state.costs = [];
+    } else {
+      state.costRows = pageData.rows;
+      state.costOrderRows = [];
+      state.costs = pageData.rows;
+    }
+    renderCosts();
+  } catch (error) {
+    if (!options.silent) toast(error.message);
+  } finally {
+    state.costListLoading = false;
+    renderCosts();
   }
 }
 
@@ -1335,6 +1445,7 @@ function applyAccessControl() {
   setHidden("#order-form", !canWriteArea("orders"));
   setHidden("#payment-form", !canWriteArea("payments"));
   setHidden("#cost-form", !canWriteArea("costs"));
+  setHidden("#open-cost-drawer", !canWriteArea("costs"));
   setHidden("#logistics-form", !canWriteArea("logistics"));
   setHidden(".document-upload-control, [data-delete-document]", !canWriteArea("documents"));
   setHidden("#settings-view", !canView("settings"));
@@ -1687,13 +1798,7 @@ function renderDashboard() {
   renderSalespersonChart(rows);
   renderCommissionRank(rows);
   renderSalespersonProfitRank(rows);
-  const costRows = Object.values(state.costs.filter((cost) => cost.paymentStatus !== "已取消").reduce((acc, cost) => {
-    const key = cost.costType || "其他费用";
-    acc[key] ||= { label: key, amount: 0, count: 0 };
-    acc[key].amount += Number(cost.amountCny || 0);
-    acc[key].count += 1;
-    return acc;
-  }, {})).sort((a, b) => b.amount - a.amount);
+  const costRows = state.overview?.costStructure || [];
   renderCostStructure(costRows);
 
   const overdue = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0)
@@ -1841,6 +1946,7 @@ function missingSupplierDocumentLabel(type) {
 
 function costsForOrder(orderId) {
   const rows = new Map();
+  state.costRows.filter((cost) => cost.orderId === orderId).forEach((cost) => rows.set(cost.id, cost));
   state.costs.filter((cost) => cost.orderId === orderId).forEach((cost) => rows.set(cost.id, cost));
   (orderById(orderId)?.costs || []).forEach((cost) => rows.set(cost.id, { ...cost, orderId }));
   return [...rows.values()];
@@ -1885,7 +1991,7 @@ function documentActionsHtml(document) {
       </div>
     `;
   }
-  const preview = document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents") && canReadArea("taxRefund")
+  const preview = document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents")
     ? `<button class="secondary-button small-link" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
     : "";
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
@@ -1961,7 +2067,7 @@ function currentDetailOrder() {
 }
 
 function logisticsCostsForOrder(orderId) {
-  return state.costs.filter((cost) => cost.orderId === orderId && constants.logisticsCostTypes.includes(cost.costType));
+  return costsForOrder(orderId).filter((cost) => constants.logisticsCostTypes.includes(cost.costType));
 }
 
 function updateLogisticsDerived() {
@@ -2160,24 +2266,260 @@ function supplierDocumentCell(cost) {
   `;
 }
 
-function renderCosts() {
-  $("#costs-count").textContent = `${state.costs.length} 条`;
-  $("#costs-table").innerHTML = state.costs.length ? state.costs.map((cost) => `
+function costRequiredDocumentTypes(cost = {}) {
+  if (taxRefundSupplierRequired(cost)) return constants.supplierDocumentTypes;
+  if (taxRefundLogisticsInvoiceRequired(cost)) return [{ value: "SUPPLIER_INVOICE", label: logisticsInvoiceLabel(cost) }];
+  return [];
+}
+
+function costDocumentTypesForModal(cost = {}) {
+  const required = costRequiredDocumentTypes(cost);
+  if (required.length) return required.map((type) => ({ ...type, required: true }));
+  return [{ value: "SUPPLIER_INVOICE", label: "发票资料", required: false }];
+}
+
+function costMissingDocumentLabels(cost = {}) {
+  return costRequiredDocumentTypes(cost).filter((type) => (
+    !costDocumentRowsForType(cost, type.value).some((document) => document.uploadStatus === "SUCCESS")
+  )).map((type) => {
+    if (type.value === "SUPPLIER_PURCHASE_CONTRACT") return "缺合同";
+    if (taxRefundLogisticsInvoiceRequired(cost)) return cost.costType === "港杂费" ? "缺港杂发票" : "缺物流发票";
+    return "缺发票";
+  });
+}
+
+function costMaterialStatusHtml(cost = {}) {
+  const missing = [...new Set(costMissingDocumentLabels(cost))];
+  if (!missing.length) return `<div class="material-status"><span class="status success">完整</span></div>`;
+  return `<div class="material-status">${missing.map((label) => `<span class="status warning">${escapeHtml(label)}</span>`).join("")}</div>`;
+}
+
+function rowMoreMenu(html) {
+  return `
+    <details class="row-more">
+      <summary>更多</summary>
+      <div class="row-more-menu">${html}</div>
+    </details>
+  `;
+}
+
+function costActionMenu(cost) {
+  const actions = [
+    `<button data-cost-documents="${escapeHtml(cost.id)}" type="button">资料</button>`,
+    canWriteArea("costs") ? `<button data-edit-cost="${escapeHtml(cost.id)}" type="button">编辑</button>` : "",
+    canWriteArea("costs") ? `<button data-delete-cost="${escapeHtml(cost.id)}" type="button">删除</button>` : "",
+  ].filter(Boolean).join("");
+  return rowActions(actions ? rowMoreMenu(actions) : "");
+}
+
+function renderCostDetailsTable(rows = []) {
+  $("#costs-table").innerHTML = rows.length ? rows.map((cost) => `
     <tr>
-      <td>${escapeHtml(cost.orderNo)}</td>
-      <td>${escapeHtml(cost.customerName)}</td>
-      <td>${escapeHtml(cost.costType)}</td>
-      <td>${escapeHtml(cost.supplierName || cost.vendorName)}</td>
+      <td><strong>${escapeHtml(cost.orderNo || "-")}</strong></td>
+      <td>${escapeHtml(cost.blNo || cost.billOfLadingNo || "-")}</td>
+      <td>${escapeHtml(cost.customerName || "-")}</td>
+      <td>${escapeHtml(cost.costType || "-")}</td>
+      <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
       <td>${escapeHtml(cost.supplierType || "-")}</td>
       <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
-      <td><span class="status ${statusClass(cost.paymentStatus)}">${cost.paymentStatus}</span></td>
+      <td>${moneyCell({ currency: "CNY", amountCny: cost.amountCny })}</td>
+      <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span></td>
       <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
       <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
+      <td>${costMaterialStatusHtml(cost)}</td>
       <td>${auditCell(cost)}</td>
-      <td>${supplierDocumentCell(cost)}</td>
-      ${rowActions(canWriteArea("costs") ? `<button data-edit-cost="${cost.id}">编辑</button><button data-delete-cost="${cost.id}">删除</button>` : "")}
+      ${costActionMenu(cost)}
+    </tr>
+  `).join("") : emptyRow(14);
+}
+
+function progressStatus(progress = {}) {
+  const total = Number(progress.total || 0);
+  const completed = Number(progress.completed || 0);
+  const complete = total === 0 || completed >= total;
+  return `<span class="status ${complete ? "success" : "warning"}">${escapeHtml(progress.text || (total ? `${completed}/${total}` : "无需资料"))}</span>`;
+}
+
+function renderCostOrderSummaryTable(rows = []) {
+  $("#cost-orders-table-body").innerHTML = rows.length ? rows.map((order) => `
+    <tr>
+      <td><strong>${escapeHtml(order.orderNo || "-")}</strong></td>
+      <td>${escapeHtml(order.blNo || order.billOfLadingNo || "-")}</td>
+      <td>${escapeHtml(order.customerName || "-")}</td>
+      <td>${money(order.receivableAmountCny || 0)}</td>
+      <td>${money(order.totalCostCny || 0)}</td>
+      <td>${money(order.factoryCostCny || 0)}</td>
+      <td>${money(order.logisticsCostCny || 0)}</td>
+      <td>${money(order.portCostCny || 0)}</td>
+      <td>${money(order.otherCostCny || 0)}</td>
+      <td>${progressStatus(order.costConfirmProgress)}</td>
+      <td>${progressStatus(order.documentProgress)}</td>
+      ${rowActions(`<button data-cost-order-detail="${escapeHtml(order.orderNo || "")}" data-cost-order-id="${escapeHtml(order.orderId || order.id || "")}" type="button">查看明细</button>`)}
     </tr>
   `).join("") : emptyRow(12);
+}
+
+function renderCostPagination() {
+  const totalPages = state.costPagination.totalPages || 1;
+  const page = Math.min(state.costPagination.page || 1, totalPages);
+  if ($("#cost-page-size")) $("#cost-page-size").value = String(state.costPagination.pageSize || 20);
+  if ($("#cost-page-info")) $("#cost-page-info").textContent = `第 ${page} / ${totalPages} 页`;
+  if ($("#cost-prev-page")) $("#cost-prev-page").disabled = state.costListLoading || page <= 1;
+  if ($("#cost-next-page")) $("#cost-next-page").disabled = state.costListLoading || page >= totalPages;
+}
+
+function renderCosts() {
+  const detailsMode = state.costView !== "orders";
+  const rows = detailsMode ? state.costRows : state.costOrderRows;
+  const total = state.costPagination.total || rows.length || 0;
+  if ($("#costs-count")) $("#costs-count").textContent = state.costListLoading ? "正在加载..." : `${total} 条`;
+  if ($("#cost-details-table")) $("#cost-details-table").hidden = !detailsMode;
+  if ($("#cost-orders-table")) $("#cost-orders-table").hidden = detailsMode;
+  $$("#cost-view-switch button").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.costView === state.costView);
+  });
+  if (state.costListLoading && !rows.length) {
+    if (detailsMode) $("#costs-table").innerHTML = `<tr><td colspan="14" class="empty-cell">正在加载成本明细...</td></tr>`;
+    else $("#cost-orders-table-body").innerHTML = `<tr><td colspan="12" class="empty-cell">正在加载订单汇总...</td></tr>`;
+  } else if (detailsMode) {
+    renderCostDetailsTable(rows);
+  } else {
+    renderCostOrderSummaryTable(rows);
+  }
+  renderCostPagination();
+}
+
+function upsertCostRows(cost) {
+  if (!cost?.id) return;
+  const merge = (rows) => {
+    const next = [...rows];
+    const index = next.findIndex((item) => item.id === cost.id);
+    if (index >= 0) next[index] = { ...next[index], ...cost };
+    else next.unshift(cost);
+    return next;
+  };
+  state.costRows = merge(state.costRows);
+  state.costs = state.costRows;
+}
+
+function removeCostRow(id) {
+  state.costRows = state.costRows.filter((cost) => cost.id !== id);
+  state.costs = state.costRows;
+}
+
+function openCostDrawer(cost = null) {
+  if (!canWriteArea("costs")) return toast("没有权限保存成本");
+  const drawer = $("#cost-drawer");
+  if (!drawer) return;
+  state.costDrawerOpen = true;
+  drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  if (cost?.id) {
+    fillCostForm(cost);
+  } else {
+    resetCostForm({ clearStoredDraft: false, reloadOrders: true });
+    loadCostDraft();
+  }
+  $("#cost-order-search")?.focus();
+}
+
+function closeCostDrawer({ reset = false } = {}) {
+  const drawer = $("#cost-drawer");
+  if (drawer) drawer.hidden = true;
+  state.costDrawerOpen = false;
+  if (reset) resetCostForm({ clearStoredDraft: true, reloadOrders: false });
+  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function fillCostForm(cost) {
+  if (!cost) return;
+  clearDraft("cost");
+  setForm(costFields, cost);
+  $("#cost-id").value = cost.id;
+  selectCostOrder(costOrderFromCost(cost), { persist: false });
+  resetCostItems([cost]);
+  setCostFormMode(cost);
+  updateCostDerived();
+}
+
+async function fetchCostDetail(id) {
+  const data = await api(`/api/costs/${encodeURIComponent(id)}`);
+  if (!data.cost) throw new Error("未找到成本详情");
+  upsertCostRows(data.cost);
+  return data.cost;
+}
+
+function costDocumentRow(cost, type) {
+  const docs = costDocumentRowsForType(cost, type.value);
+  const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+  const missing = type.required && successCount === 0;
+  const order = orderById(cost.orderId) || orderFallbackFromCost(cost);
+  const busyStatus = uploadScopeStatus(order?.id || cost.orderId, type.value, { costId: cost.id, supplierId: cost.supplierId });
+  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "上传 PDF");
+  return `
+    <article class="cost-document-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order?.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="${escapeHtml(type.value)}">
+      <div>
+        <strong>${escapeHtml(type.label)}</strong>
+        ${type.required ? "" : `<small class="supplier-doc-note">非必需资料</small>`}
+      </div>
+      <div><span class="status ${missing ? "warning" : "success"}">${missing ? "缺失" : "完整"}</span></div>
+      <div class="document-file-list">${docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState()}</div>
+      ${canWriteArea("documents") ? `
+        <label class="supplier-doc-upload cost-document-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+          <span>${escapeHtml(uploadText)}</span>
+          <input type="file" accept="application/pdf,.pdf"
+            data-cost-document-type="${escapeHtml(type.value)}"
+            data-order-id="${escapeHtml(order?.id || cost.orderId)}"
+            data-cost-id="${escapeHtml(cost.id)}"
+            data-supplier-id="${escapeHtml(cost.supplierId || "")}" />
+        </label>
+      ` : ""}
+    </article>
+  `;
+}
+
+function renderCostDocuments() {
+  const drawer = $("#cost-document-drawer");
+  const body = $("#cost-document-body");
+  if (!drawer || !body || drawer.hidden) return;
+  const cost = state.costDocumentCost;
+  if (!cost) {
+    body.innerHTML = `<div class="empty-state">请选择一条成本记录。</div>`;
+    return;
+  }
+  $("#cost-document-title").textContent = "供应商资料 / 发票资料";
+  $("#cost-document-subtitle").textContent = `${cost.orderNo || "-"} · ${cost.supplierName || cost.vendorName || "-"} · ${cost.costType || "-"}`;
+  body.innerHTML = costDocumentTypesForModal(cost).map((type) => costDocumentRow(cost, type)).join("");
+  applyAccessControl();
+}
+
+async function openCostDocuments(id) {
+  const drawer = $("#cost-document-drawer");
+  if (!drawer) return;
+  const cached = state.costRows.find((cost) => cost.id === id) || state.costs.find((cost) => cost.id === id);
+  state.costDocumentCost = cached || null;
+  drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  renderCostDocuments();
+  try {
+    state.costDocumentCost = await fetchCostDetail(id);
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    renderCosts();
+    renderCostDocuments();
+  }
+}
+
+function closeCostDocuments() {
+  const drawer = $("#cost-document-drawer");
+  if (drawer) drawer.hidden = true;
+  state.costDocumentCost = null;
+  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-drawer")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
 }
 
 function commissionActionCell(order) {
@@ -2200,8 +2542,7 @@ function commissionAmountHint(order) {
 function renderProfit() {
   $("#profit-count").textContent = `${state.orders.length} 个订单`;
   $("#profit-table").innerHTML = state.orders.length ? state.orders.map((order) => {
-    const costGroups = state.costs
-      .filter((cost) => cost.orderId === order.id)
+    const costGroups = costsForOrder(order.id)
       .reduce((acc, cost) => {
         acc[cost.costType] = (acc[cost.costType] || 0) + cost.amountCny;
         return acc;
@@ -2792,7 +3133,9 @@ function closeTaxRefundDetail() {
   if (drawer) drawer.hidden = true;
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
-  document.body.classList.remove("modal-open");
+  if ($("#pdf-preview-modal")?.hidden && $("#cost-document-drawer")?.hidden && $("#cost-drawer")?.hidden && $("#login-modal")?.hidden && $("#user-drawer")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
 }
 
 function findDocumentById(id) {
@@ -2801,6 +3144,7 @@ function findDocumentById(id) {
     ...(state.taxRefundDetailOrder?.documents || []),
     ...state.orders.flatMap((order) => order.documents || []),
     ...state.costs.flatMap((cost) => cost.documents || []),
+    ...(state.costDocumentCost?.documents || []),
     ...Object.values(state.documentUploads),
   ];
   return pools.find((document) => document.id === id) || null;
@@ -2817,13 +3161,13 @@ function closePdfPreview() {
   state.pdfPreviewObjectUrl = "";
   state.pdfPreviewError = "";
   if (errorBox) errorBox.hidden = true;
-  if (!state.taxRefundDetailOrder && $("#tax-detail-drawer")?.hidden) {
+  if (!state.taxRefundDetailOrder && $("#tax-detail-drawer")?.hidden && $("#cost-document-drawer")?.hidden && $("#cost-drawer")?.hidden) {
     document.body.classList.remove("modal-open");
   }
 }
 
 async function openPdfPreview(documentId) {
-  if (!canReadArea("documents") || !canReadArea("taxRefund")) return toast("没有权限预览退税资料");
+  if (!canReadArea("documents")) return toast("没有权限预览资料");
   const doc = findDocumentById(documentId);
   if (!doc || doc.uploadStatus !== "SUCCESS") return toast("未找到可预览的 PDF 文件");
   state.pdfPreviewDocument = doc;
@@ -3161,6 +3505,12 @@ function clearSupplierSelection(root, { persist = true } = {}) {
 
 function selectSupplierForPicker(root, supplier, { persist = true } = {}) {
   if (!supplier) return;
+  const existingIndex = state.suppliers.findIndex((item) => item.id === supplier.id);
+  if (existingIndex >= 0) state.suppliers[existingIndex] = { ...state.suppliers[existingIndex], ...supplier };
+  else state.suppliers.push(supplier);
+  if (supplier.status !== "停用" && !state.availableSuppliers.some((item) => item.id === supplier.id)) {
+    state.availableSuppliers.push(supplier);
+  }
   const hidden = root.querySelector(".supplier-picker-id");
   const input = root.querySelector(".supplier-picker-input");
   const selected = root.querySelector(".supplier-selected");
@@ -3319,7 +3669,8 @@ function costFormLabel(cost = {}) {
 }
 
 function costOrderFromCost(cost) {
-  return orderById(cost.orderId) || {
+  const order = orderById(cost.orderId);
+  const fallback = {
     id: cost.orderId,
     orderNo: cost.orderNo || "",
     blNo: cost.blNo || cost.billOfLadingNo || "",
@@ -3331,6 +3682,7 @@ function costOrderFromCost(cost) {
     status: cost.orderStatus || "",
     summary: {},
   };
+  return order ? { ...fallback, ...order, id: order.id || cost.orderId } : fallback;
 }
 
 function setCostFormMode(cost = null) {
@@ -3361,7 +3713,7 @@ function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
 
 function resetCostFormAfterSave() {
   clearDraft("cost");
-  resetCostForm({ clearStoredDraft: true, reloadOrders: true });
+  resetCostForm({ clearStoredDraft: true, reloadOrders: false });
   $("#cost-id").value = "";
   $("#cost-type").value = costDefaultType();
   $("#cost-payment-status").value = "待支付";
@@ -3370,6 +3722,7 @@ function resetCostFormAfterSave() {
   resetCostItems([{}]);
   setCostFormMode(null);
   updateCostDerived();
+  closeCostDrawer();
 }
 
 function setCostSubmitLoading(loading) {
@@ -3444,9 +3797,9 @@ function costMatchesSubmittedItem(cost, data, item, submittedAt) {
 async function recoverCostSaveAfterError(submission, error) {
   if (!submission || !costSubmissionMayHaveSaved(error)) return false;
   try {
-    await loadData();
+    await loadCostList({ page: 1, silent: true });
     const recovered = submission.items.every((item) => (
-      state.costs.some((cost) => costMatchesSubmittedItem(cost, submission.data, item, submission.submittedAt))
+      state.costRows.some((cost) => costMatchesSubmittedItem(cost, submission.data, item, submission.submittedAt))
     ));
     if (!recovered) return false;
     resetCostFormAfterSave();
@@ -3824,7 +4177,8 @@ async function submitLogistics(event) {
 
 function editLogistics(id) {
   if (!canWriteArea("logistics")) return toast("没有权限编辑物流费用");
-  const cost = state.costs.find((item) => item.id === id);
+  const cost = state.costs.find((item) => item.id === id)
+    || costsForOrder(currentDetailOrder()?.id).find((item) => item.id === id);
   if (!cost) return;
   $("#logistics-id").value = cost.id;
   $("#logistics-type").value = cost.costType;
@@ -3954,6 +4308,7 @@ function updateUploadQueueNotice() {
 function refreshDocumentViews() {
   renderOrderDetails();
   renderCosts();
+  renderCostDocuments();
   renderTaxRefund();
   if (state.taxRefundDetailOrder && !$("#tax-detail-drawer")?.hidden) renderTaxRefundDetail();
   applyAccessControl();
@@ -4077,7 +4432,7 @@ function startQueuedUpload(task) {
       state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
       refreshDocumentViews();
       processUploadQueue();
-      await refreshAfterSuccess(() => refreshAfterTaxRefundMutation(task.orderId), "文件已上传，但列表刷新失败，请手动刷新");
+      await refreshAfterSuccess(() => refreshAfterTaxRefundMutation(task.orderId, task.costId || ""), "文件已上传，但列表刷新失败，请手动刷新");
       delete state.documentUploads[task.id];
       refreshDocumentViews();
     } else {
@@ -4166,8 +4521,16 @@ function uploadDocumentFile(order, documentType, file, scope = {}) {
   enqueueUploadTask(order, documentType, file, scope);
 }
 
-async function refreshAfterTaxRefundMutation(orderId = "") {
-  await loadData();
+async function refreshAfterTaxRefundMutation(orderId = "", costId = "") {
+  if (costId) {
+    await loadCostList({ page: state.costPagination.page || 1, silent: true });
+    if (state.costDocumentCost?.id === costId) {
+      state.costDocumentCost = await fetchCostDetail(costId);
+      renderCostDocuments();
+    }
+  } else {
+    await loadData();
+  }
   if (canReadArea("taxRefund")) await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
   if (orderId && state.taxRefundDetailOrder?.id === orderId) {
     await openTaxRefundDetail(orderId);
@@ -4180,12 +4543,13 @@ async function deleteDocument(id) {
   try {
     const document = Object.values(state.documentUploads).find((item) => item.id === id)
       || state.orders.flatMap((order) => order.documents || []).find((item) => item.id === id)
+      || state.costDocumentCost?.documents?.find((item) => item.id === id)
       || state.taxRefundDetailOrder?.documents?.find((item) => item.id === id);
     const result = await api(`/api/order-documents/${id}`, { method: "DELETE" });
     assertSuccessResponse(result, "单证删除失败");
     toast(result.message || "单证已删除");
     await refreshAfterSuccess(
-      () => refreshAfterTaxRefundMutation(document?.orderId || state.taxRefundDetailOrder?.id || ""),
+      () => refreshAfterTaxRefundMutation(document?.orderId || state.taxRefundDetailOrder?.id || "", document?.costId || ""),
       "单证已删除，但列表刷新失败，请手动刷新",
     );
   } catch (error) {
@@ -4322,7 +4686,12 @@ async function submitCost(event) {
     assertSuccessResponse(result, "成本保存失败");
     resetCostFormAfterSave();
     toast("成本保存成功");
-    await refreshAfterSuccess(loadData, "成本已保存，但列表刷新失败，请手动刷新");
+    if (id && result.cost && state.costView !== "orders") {
+      upsertCostRows(result.cost);
+      renderCosts();
+    } else {
+      await refreshAfterSuccess(() => loadCostList({ page: state.costPagination.page || 1, silent: true }), "成本已保存，但列表刷新失败，请手动刷新");
+    }
   } catch (error) {
     if (await recoverCostSaveAfterError(submittedCost, error)) return;
     toast(error.message);
@@ -4522,7 +4891,7 @@ function upsertUser(user) {
 function closeUserDrawer() {
   const drawer = $("#user-drawer");
   if (drawer) drawer.hidden = true;
-  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden) {
+  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden && $("#cost-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
     document.body.classList.remove("modal-open");
   }
 }
@@ -4970,18 +5339,17 @@ function editPayment(id) {
   switchView("payments");
 }
 
-function editCost(id) {
+async function editCost(id) {
   if (!canWriteArea("costs")) return toast("没有权限编辑成本");
-  const cost = state.costs.find((item) => item.id === id);
-  if (!cost) return;
-  clearDraft("cost");
-  setForm(costFields, cost);
-  $("#cost-id").value = cost.id;
-  selectCostOrder(costOrderFromCost(cost), { persist: false });
-  resetCostItems([cost]);
-  setCostFormMode(cost);
-  updateCostDerived();
   switchView("costs");
+  const cached = state.costRows.find((item) => item.id === id) || state.costs.find((item) => item.id === id);
+  if (cached) openCostDrawer(cached);
+  try {
+    const cost = await fetchCostDetail(id);
+    openCostDrawer(cost);
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
 function editCustomer(id) {
@@ -5047,6 +5415,11 @@ async function deleteRecord(kind, id, sourceButton = null) {
       return;
     }
     toast(result.message || "操作已完成");
+    if (kind === "cost") {
+      removeCostRow(id);
+      await refreshAfterSuccess(() => loadCostList({ page: state.costPagination.page || 1, silent: true }), "成本已删除，但列表刷新失败，请手动刷新");
+      return;
+    }
     await refreshAfterSuccess(loadData, "操作已完成，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
@@ -5075,6 +5448,7 @@ function switchView(view, options = {}) {
   state.view = view;
   updateCurrentView();
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
+  if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
   if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
   return true;
 }
@@ -5167,8 +5541,7 @@ function focusSupplierMissingDocument(orderId, supplierId, documentType) {
     return;
   }
   if (!switchView("costs", { skipOrderConfirm: true })) return;
-  renderCosts();
-  deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType));
+  openCostDocuments(cost.id).then(() => deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType)));
 }
 
 function focusCostMissingInvoice(orderId, costId, documentType) {
@@ -5182,8 +5555,7 @@ function focusCostMissingInvoice(orderId, costId, documentType) {
     return;
   }
   if (!switchView("costs", { skipOrderConfirm: true })) return;
-  renderCosts();
-  deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType));
+  openCostDocuments(cost.id).then(() => deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType)));
 }
 
 function focusMissingDocumentTarget(dataset = {}) {
@@ -5304,7 +5676,9 @@ function closeLoginModal() {
   const modal = $("#login-modal");
   if (!modal) return;
   modal.hidden = true;
-  document.body.classList.remove("modal-open");
+  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#user-drawer")?.hidden && $("#cost-drawer")?.hidden && $("#cost-document-drawer")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
 }
 
 function setMobileNav(open) {
@@ -5373,6 +5747,8 @@ function bindEvents() {
   $("#refresh-data").addEventListener("click", loadData);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
+    if (event.key === "Escape" && !$("#cost-document-drawer")?.hidden) closeCostDocuments();
+    if (event.key === "Escape" && !$("#cost-drawer")?.hidden) closeCostDrawer();
     if (event.key === "Escape" && !$("#user-drawer")?.hidden) closeUserDrawer();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeAccountMenu();
@@ -5550,6 +5926,30 @@ function bindEvents() {
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
   });
+  $("#cost-filter-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadCostList({ page: 1 });
+  });
+  $("#cost-filter-reset")?.addEventListener("click", () => {
+    $$("#cost-filter-form input, #cost-filter-form select").forEach((el) => (el.value = ""));
+    loadCostList({ page: 1 });
+  });
+  $("#cost-filter-panel")?.addEventListener("toggle", (event) => {
+    state.costFiltersOpen = event.currentTarget.open;
+  });
+  $("#cost-page-size")?.addEventListener("change", () => loadCostList({ page: 1, pageSize: $("#cost-page-size").value }));
+  $("#cost-prev-page")?.addEventListener("click", () => loadCostList({ page: Math.max(1, (state.costPagination.page || 1) - 1) }));
+  $("#cost-next-page")?.addEventListener("click", () => loadCostList({ page: Math.min(state.costPagination.totalPages || 1, (state.costPagination.page || 1) + 1) }));
+  $("#cost-view-switch")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-cost-view]");
+    if (!button) return;
+    state.costView = button.dataset.costView === "orders" ? "orders" : "details";
+    loadCostList({ page: 1 });
+  });
+  $("#open-cost-drawer")?.addEventListener("click", () => openCostDrawer());
+  $("#cost-drawer")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-cost-drawer]")) closeCostDrawer();
+  });
   $("#costs-table").addEventListener("change", (event) => {
     const input = event.target.closest("[data-cost-document-type]");
     if (!input) return;
@@ -5573,6 +5973,31 @@ function bindEvents() {
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const button = event.target.closest("[data-delete-document]");
     if (button) deleteDocument(button.dataset.deleteDocument);
+  });
+  $("#cost-document-drawer")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-cost-documents]")) return closeCostDocuments();
+    const retry = event.target.closest("[data-retry-upload]");
+    if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
+    const cancel = event.target.closest("[data-cancel-upload]");
+    if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
+    const preview = event.target.closest("[data-preview-document]");
+    if (preview) return openPdfPreview(preview.dataset.previewDocument);
+    const button = event.target.closest("[data-delete-document]");
+    if (button) deleteDocument(button.dataset.deleteDocument);
+  });
+  $("#cost-document-drawer")?.addEventListener("change", (event) => {
+    const input = event.target.closest("[data-cost-document-type]");
+    if (!input) return;
+    const cost = state.costDocumentCost;
+    const order = cost ? (orderById(cost.orderId) || orderFallbackFromCost(cost)) : null;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!cost || !order) return toast("请先选择有效成本记录");
+    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+      costId: cost.id,
+      supplierId: cost.supplierId,
+      relatedModule: "SUPPLIER",
+    });
   });
   $("#tax-refund-table").addEventListener("change", (event) => {
     const select = event.target.closest("[data-tax-status-order]");
@@ -5714,6 +6139,12 @@ function bindEvents() {
     if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
     if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
     if (target.dataset.editCost) editCost(target.dataset.editCost);
+    if (target.dataset.costDocuments) openCostDocuments(target.dataset.costDocuments);
+    if (target.dataset.costOrderDetail) {
+      $("#cost-filter-order-no").value = target.dataset.costOrderDetail;
+      state.costView = "details";
+      loadCostList({ page: 1 });
+    }
     if (target.dataset.editLogistics) editLogistics(target.dataset.editLogistics);
     if (target.dataset.editCustomer) editCustomer(target.dataset.editCustomer);
     if (target.dataset.editSupplier) editSupplier(target.dataset.editSupplier);
@@ -5738,6 +6169,9 @@ function initSelects() {
   fillSelect("#filter-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
   fillSelect("#filter-reminder-status", constants.reminderStatuses, "", true, "全部逾期状态");
   fillSelect("#filter-cost-type", constants.costTypes, "", true);
+  fillSelect("#cost-filter-type", constants.costTypes, "", true, "全部成本类型");
+  fillSelect("#cost-filter-payment-status", constants.costPaymentStatuses, "", true, "全部付款状态");
+  fillSelect("#cost-filter-invoice-status", constants.invoiceStatuses, "", true, "全部发票状态");
   fillSelect("#report-currency", constants.currencies, "", true, "全部币种");
   fillSelect("#report-order-status", constants.orderStatuses, "", true, "全部订单状态");
   fillSelect("#report-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
