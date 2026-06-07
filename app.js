@@ -261,7 +261,7 @@ const roleMenus = {
   业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
-  物流资料录入员: ["domesticLogistics", "manual"],
+  物流资料录入员: ["manual"],
   查看者: ["dashboard", "domesticLogistics", "profit", "reports", "manual"],
 };
 
@@ -270,7 +270,7 @@ const roleScopeTexts = {
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
   成本录入员: "仅可录入成本并查看成本相关数据",
-  物流资料录入员: "仅可录入本供应商关联订单的国内物流信息",
+  物流资料录入员: "物流资料录入角色已保留，当前版本暂未开放供应商登录录入",
   查看者: "只读权限",
 };
 
@@ -279,7 +279,7 @@ const roleWrites = {
   业务员: ["orders", "logistics", "documents"],
   财务: ["payments", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
-  物流资料录入员: ["domesticLogistics"],
+  物流资料录入员: [],
   查看者: [],
 };
 
@@ -288,7 +288,7 @@ const roleReads = {
   业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
-  物流资料录入员: ["domesticLogistics"],
+  物流资料录入员: [],
   查看者: ["orders", "payments", "costs", "domesticLogistics", "reports"],
 };
 
@@ -3140,7 +3140,6 @@ function domesticLogisticsRemarkPreview() {
 
 function updateDomesticLogisticsFormVisibility() {
   const type = $("#domestic-transport-type")?.value || "TRUCK";
-  const supplierMode = $("#domestic-logistics-supplier-mode")?.value || "existing";
   const isExpress = type === "EXPRESS";
   $$("[data-domestic-field='truck']").forEach((el) => {
     el.hidden = isExpress;
@@ -3153,55 +3152,8 @@ function updateDomesticLogisticsFormVisibility() {
   if ($("#domestic-truck-label")) $("#domestic-truck-label").textContent = type === "MULTIMODAL" ? "首程车牌号 *" : "车牌号 *";
   if ($("#domestic-place-label")) $("#domestic-place-label").textContent = type === "MULTIMODAL" ? "首程起运地 *" : "起运地 *";
   if ($("#domestic-date-label")) $("#domestic-date-label").textContent = type === "MULTIMODAL" ? "首程起运日期 *" : "起运日期 *";
-  const supplierField = $("#domestic-logistics-supplier-id")?.closest("label");
-  const tempSupplierField = $("#domestic-logistics-temporary-supplier-field");
-  if (supplierField) supplierField.hidden = supplierMode !== "existing";
-  if (tempSupplierField) tempSupplierField.hidden = supplierMode !== "temporary";
-  const supplierHint = $("#domestic-logistics-supplier-hint");
-  if (supplierHint && supplierMode !== "existing") supplierHint.hidden = true;
   const preview = $("#domestic-remark-preview");
   if (preview) preview.value = domesticLogisticsRemarkPreview();
-}
-
-const DOMESTIC_LOGISTICS_ALLOWED_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-
-function isDomesticLogisticsAllowedSupplier(supplier = {}) {
-  return Boolean(
-    supplier?.id
-    && supplier.status === "启用"
-    && supplier.allowDomesticLogisticsEntry
-    && DOMESTIC_LOGISTICS_ALLOWED_SUPPLIER_TYPES.includes(supplier.supplierType || "")
-  );
-}
-
-function mergeDomesticLogisticsSupplierCandidates(row = {}) {
-  const merged = [...state.suppliers, ...state.availableSuppliers, ...(row.candidateSuppliers || [])];
-  return merged
-    .filter((supplier, index, rows) => (
-      isDomesticLogisticsAllowedSupplier(supplier)
-      && rows.findIndex((item) => item.id === supplier.id) === index
-    ))
-    .sort((a, b) => String(a.supplierName || "").localeCompare(String(b.supplierName || ""), "zh-CN"));
-}
-
-async function ensureDomesticLogisticsSuppliersLoaded() {
-  if (mergeDomesticLogisticsSupplierCandidates().length) return;
-  try {
-    const data = await api("/api/suppliers/available?status=active");
-    state.availableSuppliers = mergeSupplierCache(state.availableSuppliers, data.suppliers || []);
-  } catch (error) {
-    console.error("加载国内物流供应商失败", error);
-  }
-}
-
-function renderDomesticLogisticsSupplierOptions(row = {}) {
-  const supplierSelect = $("#domestic-logistics-supplier-id");
-  const hint = $("#domestic-logistics-supplier-hint");
-  if (!supplierSelect) return [];
-  const candidates = mergeDomesticLogisticsSupplierCandidates(row);
-  supplierSelect.innerHTML = `<option value="">请选择物流负责供应商</option>${candidates.map((supplier) => `<option value="${escapeHtml(supplier.id)}">${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}</option>`).join("")}`;
-  if (hint) hint.hidden = candidates.length > 0;
-  return candidates;
 }
 
 function closeDomesticLogisticsEditor() {
@@ -3217,7 +3169,6 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   state.domesticLogisticsEditing = row;
   state.selectedDomesticLogisticsOrder = row;
   state.isDomesticLogisticsModalOpen = true;
-  await ensureDomesticLogisticsSuppliersLoaded();
   const info = row.domesticLogisticsInfo || {};
   $("#domestic-logistics-editor").hidden = false;
   $("#domestic-logistics-editor-title").textContent = `${mode === "view" ? "查看" : (info.id ? "编辑" : "录入")}国内物流信息 - ${row.orderNo || "-"}`;
@@ -3228,21 +3179,6 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
-  const supplierSelect = $("#domestic-logistics-supplier-id");
-  const candidates = renderDomesticLogisticsSupplierOptions(row);
-  const selectedSupplierId = row.responsibleSupplierId || info.responsibleSupplierId || (candidates.length === 1 ? candidates[0].id : "");
-  const currentUserIsLogisticsOperator = state.me?.role === "物流资料录入员";
-  const supplierMode = currentUserIsLogisticsOperator || selectedSupplierId
-    ? "existing"
-    : (info.temporarySupplierName || row.temporarySupplierName ? "temporary" : "none");
-  $("#domestic-logistics-supplier-mode").value = supplierMode;
-  $("#domestic-logistics-temporary-supplier-name").value = info.temporarySupplierName || row.temporarySupplierName || "";
-  if (selectedSupplierId && ![...supplierSelect.options].some((option) => option.value === selectedSupplierId)) {
-    supplierSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(selectedSupplierId)}">${escapeHtml(row.responsibleSupplierName || "已指定供应商")}</option>`);
-  }
-  const hint = $("#domestic-logistics-supplier-hint");
-  if (hint && selectedSupplierId) hint.hidden = true;
-  supplierSelect.value = selectedSupplierId;
   $("#domestic-transport-type").value = info.transportType || "TRUCK";
   $("#domestic-logistics-finance-status").value = "PENDING";
   $("#domestic-logistics-admin-confirm-field").hidden = state.me?.role !== "管理员";
@@ -3254,9 +3190,6 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   updateDomesticLogisticsFormVisibility();
   const readOnly = mode === "view" || !canWriteArea("domesticLogistics");
   [
-    "#domestic-logistics-supplier-id",
-    "#domestic-logistics-supplier-mode",
-    "#domestic-logistics-temporary-supplier-name",
     "#domestic-transport-type",
     "#domestic-truck-plate",
     "#domestic-trailer-plate",
@@ -3267,15 +3200,10 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     const el = $(selector);
     if (el) el.disabled = readOnly;
   });
-  if (currentUserIsLogisticsOperator) {
-    $("#domestic-logistics-supplier-mode").value = "existing";
-    $("#domestic-logistics-supplier-mode").disabled = true;
-    $("#domestic-logistics-supplier-id").disabled = true;
-  }
   const submitButton = $("#domestic-logistics-form button[type='submit']");
   if (submitButton) submitButton.hidden = readOnly;
   syncBodyModalOpen();
-  $("#domestic-logistics-supplier-id")?.focus();
+  $("#domestic-transport-type")?.focus();
 }
 
 function renderDomesticLogistics() {
@@ -3294,8 +3222,6 @@ function renderDomesticLogistics() {
       <td>${escapeHtml(row.customerShortName || row.customerName || "-")}</td>
       <td>${escapeHtml(row.destinationCountry || "-")}</td>
       <td>${escapeHtml(row.destinationPort || "-")}</td>
-      <td>${escapeHtml(row.responsibleSupplierName || "-")}</td>
-      <td>${escapeHtml(row.temporarySupplierName || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
       <td><span class="status ${statusClass(row.financeStatus || "")}">${escapeHtml(row.financeStatusLabel || "-")}</span></td>
@@ -3313,7 +3239,7 @@ function renderDomesticLogistics() {
         <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="16" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+  `).join("") : `<tr><td colspan="14" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
 }
 
 function renderDomesticLogisticsReviewCard(order = {}) {
@@ -3329,7 +3255,6 @@ function renderDomesticLogisticsReviewCard(order = {}) {
           <span class="status ${statusClass(info?.financeStatus || "NOT_READY")}">${escapeHtml(info?.financeStatusLabel || "未提交")}</span>
         </div>
         <div class="document-card-meta">
-          <span>物流供应商：${escapeHtml(info?.responsibleSupplierName || "-")}</span>
           <span>提交人：${escapeHtml(info?.submittedByName || "-")}</span>
           <span>提交时间：${formatDateTime(info?.submittedAt)}</span>
         </div>
@@ -3350,9 +3275,6 @@ function domesticLogisticsPayload() {
   const transportType = $("#domestic-transport-type").value;
   return {
     orderId: $("#domestic-logistics-order-id").value,
-    supplierMode: $("#domestic-logistics-supplier-mode").value,
-    responsibleSupplierId: $("#domestic-logistics-supplier-id").value,
-    temporarySupplierName: $("#domestic-logistics-temporary-supplier-name").value.trim(),
     transportType,
     truckPlateNo: $("#domestic-truck-plate").value.trim(),
     trailerPlateNo: $("#domestic-trailer-plate").value.trim(),
@@ -5805,25 +5727,13 @@ function openUserDrawer(user = null) {
   $("#user-name")?.focus();
 }
 
-function domesticLogisticsEnabledSuppliers() {
-  return [...state.suppliers, ...state.availableSuppliers]
-    .filter((supplier, index, rows) => (
-      supplier?.id
-      && rows.findIndex((item) => item.id === supplier.id) === index
-      && supplier.status === "启用"
-      && supplier.allowDomesticLogisticsEntry
-    ))
-    .sort((a, b) => String(a.supplierName || "").localeCompare(String(b.supplierName || ""), "zh-CN"));
-}
-
 function renderUserSupplierField(selected = $("#user-supplier")?.value || "") {
-  const role = $("#user-role")?.value || "查看者";
   const field = $("#user-supplier-field");
   const select = $("#user-supplier");
   if (!field || !select) return;
-  field.hidden = role !== "物流资料录入员";
-  select.innerHTML = `<option value="">请选择关联供应商</option>${domesticLogisticsEnabledSuppliers().map((supplier) => `<option value="${escapeHtml(supplier.id)}">${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}</option>`).join("")}`;
-  select.value = selected || "";
+  field.hidden = true;
+  select.innerHTML = "";
+  select.value = "";
 }
 
 function userPermissionConfigKey(config = {}) {
@@ -5869,7 +5779,7 @@ async function submitUser(event) {
       name: $("#user-name").value,
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
-      supplierId: $("#user-role").value === "物流资料录入员" ? $("#user-supplier").value : "",
+      supplierId: "",
       customPermissions: readUserPermissionForm(),
     };
     const password = $("#user-password").value;
@@ -7103,7 +7013,6 @@ function bindEvents() {
   });
   $$("[data-close-domestic-logistics]").forEach((button) => button.addEventListener("click", closeDomesticLogisticsEditor));
   $("#domestic-logistics-form")?.addEventListener("submit", submitDomesticLogistics);
-  $("#domestic-logistics-supplier-mode")?.addEventListener("change", updateDomesticLogisticsFormVisibility);
   $("#domestic-transport-type")?.addEventListener("change", updateDomesticLogisticsFormVisibility);
   ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-departure-date", "#domestic-express-no"].forEach((selector) => {
     $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);

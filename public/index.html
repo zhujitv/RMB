@@ -543,8 +543,6 @@
                     <th>客户简称</th>
                     <th>目的国家</th>
                     <th>目的港</th>
-                    <th>物流负责供应商</th>
-                    <th>临时供应商</th>
                     <th>运输方式</th>
                     <th>物流状态</th>
                     <th>财务审核</th>
@@ -574,10 +572,6 @@
             <form class="entry-form" id="domestic-logistics-form" autocomplete="off">
               <input type="hidden" id="domestic-logistics-order-id" />
               <input type="hidden" id="domestic-logistics-info-id" />
-              <label><span>供应商选择方式 *</span><select id="domestic-logistics-supplier-mode"><option value="existing">现有物流供应商</option><option value="temporary">临时物流供应商</option><option value="none">不指定供应商</option></select></label>
-              <label><span>物流负责供应商 *</span><select id="domestic-logistics-supplier-id"></select></label>
-              <label id="domestic-logistics-temporary-supplier-field" hidden><span>临时物流供应商名称 *</span><input id="domestic-logistics-temporary-supplier-name" placeholder="请输入物流供应商名称" /></label>
-              <p class="field-hint domestic-logistics-supplier-hint" id="domestic-logistics-supplier-hint" hidden>请先在系统设置 &gt; 供应商资料中启用“允许录入国内物流信息”。</p>
               <label id="domestic-logistics-admin-confirm-field" hidden><span>管理员提交状态</span><select id="domestic-logistics-finance-status"><option value="PENDING">提交待财务确认</option><option value="CONFIRMED">直接确认</option></select></label>
               <label><span>运输方式 *</span><select id="domestic-transport-type"><option value="TRUCK">车辆运输</option><option value="EXPRESS">快递运输</option><option value="MULTIMODAL">多式联运</option></select></label>
               <label data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
@@ -872,7 +866,6 @@
               <label><span>姓名 *</span><input id="user-name" required /></label>
               <label><span>邮箱 *</span><input id="user-email" required /></label>
               <label><span>角色分类</span><select id="user-role"></select></label>
-              <label id="user-supplier-field" hidden><span>关联供应商 *</span><select id="user-supplier"></select></label>
               <label><span>账号状态</span><select id="user-approval-status"></select></label>
               <label><span>权限模式</span><select id="user-permission-mode"></select></label>
               <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新建用户必须设置初始密码，保存后用户需首次改密" /></label>

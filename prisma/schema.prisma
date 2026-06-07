@@ -167,7 +167,6 @@ model Supplier {
   costs     OrderCost[]
   documents OrderDocument[]
   operatorUsers User[] @relation("SupplierOperators")
-  domesticLogisticsInfos DomesticLogisticsInfo[]
 
   @@index([supplierName])
   @@index([supplierType])
@@ -262,8 +261,6 @@ model DomesticLogisticsInfo {
   departureDate         DateTime? @map("departure_date") @db.Date
   expressTrackingNo     String?   @map("express_tracking_no")
   remarkText            String?   @map("remark_text")
-  responsibleSupplierId String?   @map("responsible_supplier_id")
-  temporarySupplierName String?   @map("temporary_supplier_name")
   submittedByUserId     String?   @map("submitted_by_user_id")
   submittedAt           DateTime? @map("submitted_at")
   submitterRole         String?   @map("submitter_role")
@@ -280,12 +277,10 @@ model DomesticLogisticsInfo {
   deletedAt             DateTime? @map("deleted_at")
 
   order ReceivableOrder @relation(fields: [orderId], references: [id])
-  responsibleSupplier Supplier? @relation(fields: [responsibleSupplierId], references: [id])
   submittedBy User? @relation("DomesticLogisticsSubmittedBy", fields: [submittedByUserId], references: [id])
   financeConfirmedBy User? @relation("DomesticLogisticsFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
 
   @@index([orderId])
-  @@index([responsibleSupplierId])
   @@index([submittedByUserId])
   @@index([financeStatus])
   @@index([submittedAt])
