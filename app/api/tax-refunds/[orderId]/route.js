@@ -19,7 +19,7 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);
-    return ok({ success: true, order, message: status === "ARCHIVED" ? "退税资料已办结归档" : "退税状态已更新" });
+    return ok({ success: true, order, message: status === "SUBMITTED" ? "退税资料已提交并归档" : "退税状态已更新" });
   } catch (error) {
     return apiError(error, "更新退税状态失败");
   }

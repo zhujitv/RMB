@@ -229,8 +229,6 @@ const constants = {
     { value: "NOT_READY", label: "资料不完整" },
     { value: "READY", label: "资料完整待提交" },
     { value: "SUBMITTED", label: "已提交退税" },
-    { value: "COMPLETED", label: "退税完成" },
-    { value: "ARCHIVED", label: "已办结" },
     { value: "PROBLEM", label: "资料异常" },
   ],
 };
@@ -2207,7 +2205,7 @@ function renderStats(items) {
 function statusClass(status) {
   if (["已逾期", "已退回", "已取消", "停用", "已停用", "已拒绝", "REJECTED", "DISABLED", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
   if (String(status || "").startsWith("不可结算")) return "danger";
-  if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "COMPLETED", "ARCHIVED", "可结算", "已结算"].includes(status)) return "success";
+  if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "可结算", "已结算"].includes(status)) return "success";
   if (["即将到期", "待确认", "待审核", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
   return "";
 }
@@ -3433,8 +3431,8 @@ function renderTaxRefund() {
   box.innerHTML = rows.length ? rows.map((order) => {
     const completeness = order.documentCompleteness || {};
     const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
-    const readOnlyArchive = state.taxRefundMode === "archive" || status === "ARCHIVED";
-    const canArchive = canWriteArea("taxRefund") && status === "COMPLETED";
+    const readOnlyArchive = state.taxRefundMode === "archive" || status === "SUBMITTED";
+    const canSubmitTaxRefund = canWriteArea("taxRefund") && !readOnlyArchive && status === "READY";
     const statusControl = canWriteArea("taxRefund") && !readOnlyArchive
       ? `<select class="tax-status-select" data-tax-status-order="${escapeHtml(order.id)}">${optionHtml(constants.taxRefundStatuses, status)}</select>`
       : `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`;
@@ -3452,7 +3450,7 @@ function renderTaxRefund() {
         <td>${statusControl}</td>
         <td class="row-actions">
           <button class="secondary-button small-link" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
-          ${canArchive ? `<button class="secondary-button small-link" data-archive-tax-refund="${escapeHtml(order.id)}" type="button">已办结归档</button>` : ""}
+          ${canSubmitTaxRefund ? `<button class="primary-button small-link" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
           <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
         </td>
       </tr>
@@ -3643,7 +3641,7 @@ function taxDetailDocumentRows(order, type, scope = {}) {
 function renderTaxDocumentItem(order, type, scope = {}) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-  const archived = order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive";
+  const archived = order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive";
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = scope.relatedModule === "SUPPLIER" ? { costId: scope.costId || "", supplierId: scope.supplierId || "", relatedModule: "SUPPLIER" } : {};
   const busyStatus = uploadScopeStatus(order.id, type.value, supplierScope);
@@ -3715,7 +3713,7 @@ function taxRefundLogisticsInvoiceGroups(order = {}) {
 function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel(cost)) {
   const docs = taxDetailDocumentRows(order, "SUPPLIER_INVOICE", { relatedModule: "SUPPLIER", costId: cost.id });
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-  const archived = order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive";
+  const archived = order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive";
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = { costId: cost.id, supplierId: cost.supplierId, relatedModule: "SUPPLIER" };
   const busyStatus = uploadScopeStatus(order.id, "SUPPLIER_INVOICE", supplierScope);
@@ -3789,14 +3787,14 @@ function renderTaxRefundDetail() {
   ];
   const supplierGroups = factorySupplierCosts(order);
   const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
-  const canArchive = canWriteArea("taxRefund") && order.taxRefundStatus === "COMPLETED";
-  const archiveInfoHtml = order.taxRefundStatus === "ARCHIVED" ? `
+  const canSubmitTaxRefund = canWriteArea("taxRefund") && state.taxRefundMode !== "archive" && order.taxRefundStatus === "READY";
+  const submittedInfoHtml = order.taxRefundStatus === "SUBMITTED" ? `
     <section class="tax-detail-section">
-      <h4>办结记录</h4>
+      <h4>提交记录</h4>
       <div class="document-card uploaded">
         <div class="document-card-meta">
-          <span>办结人：${escapeHtml(order.taxRefundArchivedByName || "-")}</span>
-          <span>办结时间：${formatDateTime(order.taxRefundArchivedAt)}</span>
+          <span>提交人：${escapeHtml(order.taxRefundArchivedByName || "-")}</span>
+          <span>提交时间：${formatDateTime(order.taxRefundArchivedAt)}</span>
           ${order.taxRefundArchiveRemark ? `<span>备注：${escapeHtml(order.taxRefundArchiveRemark)}</span>` : ""}
         </div>
       </div>
@@ -3804,7 +3802,7 @@ function renderTaxRefundDetail() {
   ` : "";
   body.innerHTML = `
     <div class="tax-detail-actions">
-      ${canArchive ? `<button class="primary-button" data-archive-tax-refund="${escapeHtml(order.id)}" type="button">已办结归档</button>` : ""}
+      ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
       <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
     </div>
     <div class="tax-detail-summary">
@@ -3815,7 +3813,7 @@ function renderTaxRefundDetail() {
       <div><span>物流资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
-    ${archiveInfoHtml}
+    ${submittedInfoHtml}
     ${taxMissingHtml(order)}
     ${renderDomesticLogisticsReviewCard(order)}
     <section class="tax-detail-section">
@@ -5399,7 +5397,7 @@ async function refreshAfterTaxRefundMutation(orderId = "", costId = "") {
 
 async function deleteDocument(id) {
   if (!canWriteArea("documents")) return toast("没有权限删除单证");
-  if (state.taxRefundDetailOrder?.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能删除资料");
+  if (state.taxRefundDetailOrder?.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") return toast("已提交退税档案只读，不能删除资料");
   if (!confirm("确认删除这份单证记录吗？R2 文件会保留归档。")) return;
   try {
     const document = Object.values(state.documentUploads).find((item) => item.id === id)
@@ -5427,8 +5425,12 @@ async function updateTaxStatus(orderId, status, extra = {}) {
     });
     assertSuccessResponse(result, "退税状态更新失败");
     toast(result.message || "退税状态已更新");
+    if (status === "SUBMITTED") {
+      state.taxRefundMode = "archive";
+      state.taxRefundStatusFilter = "SUBMITTED";
+    }
     await refreshAfterSuccess(async () => {
-      await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
+      await loadTaxRefundList({ page: status === "SUBMITTED" ? 1 : (state.taxRefundPagination.page || 1), silent: true });
       if (state.taxRefundDetailOrder?.id === orderId) await openTaxRefundDetail(orderId);
     }, "退税状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
@@ -5436,14 +5438,10 @@ async function updateTaxStatus(orderId, status, extra = {}) {
   }
 }
 
-async function archiveTaxRefund(orderId) {
-  if (!canWriteArea("taxRefund")) return toast("没有权限办结归档退税资料");
-  if (!window.confirm("确认该订单退税资料已办结并归档？")) return;
-  const archiveRemark = window.prompt("办结备注（可选）") || "";
-  await updateTaxStatus(orderId, "ARCHIVED", { archiveRemark });
-  state.taxRefundMode = "archive";
-  state.taxRefundStatusFilter = "ARCHIVED";
-  await loadTaxRefundList({ page: 1, silent: true });
+async function submitTaxRefund(orderId) {
+  if (!canWriteArea("taxRefund")) return toast("没有权限提交退税资料");
+  if (!window.confirm("确认该订单退税资料已递交税务局？提交后将自动归档到退税档案。")) return;
+  await updateTaxStatus(orderId, "SUBMITTED");
 }
 
 async function deleteDomesticLogistics(id) {
@@ -7110,11 +7108,14 @@ function bindEvents() {
   });
   $("#tax-refund-table").addEventListener("change", (event) => {
     const select = event.target.closest("[data-tax-status-order]");
-    if (select) updateTaxStatus(select.dataset.taxStatusOrder, select.value);
+    if (select) {
+      if (select.value === "SUBMITTED") return submitTaxRefund(select.dataset.taxStatusOrder);
+      updateTaxStatus(select.dataset.taxStatusOrder, select.value);
+    }
   });
   $("#tax-refund-table").addEventListener("click", (event) => {
-    const archiveButton = event.target.closest("[data-archive-tax-refund]");
-    if (archiveButton) return archiveTaxRefund(archiveButton.dataset.archiveTaxRefund);
+    const submitButton = event.target.closest("[data-submit-tax-refund]");
+    if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
     const detailButton = event.target.closest("[data-view-tax-detail]");
     if (detailButton) openTaxRefundDetail(detailButton.dataset.viewTaxDetail);
   });
@@ -7189,8 +7190,8 @@ function bindEvents() {
       closeTaxRefundDetail();
       focusMissingDocumentTarget(missing.dataset);
     }
-    const archiveButton = event.target.closest("[data-archive-tax-refund]");
-    if (archiveButton) return archiveTaxRefund(archiveButton.dataset.archiveTaxRefund);
+    const submitButton = event.target.closest("[data-submit-tax-refund]");
+    if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");
@@ -7203,7 +7204,7 @@ function bindEvents() {
       const file = documentInput.files?.[0];
       documentInput.value = "";
       if (!order) return toast("请先选择有效订单");
-      if (order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能上传资料");
+      if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") return toast("已提交退税档案只读，不能上传资料");
       uploadDocumentFile(order, documentInput.dataset.documentType, file);
       return;
     }
@@ -7214,7 +7215,7 @@ function bindEvents() {
     const file = input.files?.[0];
     input.value = "";
     if (!order || !cost) return toast("请先选择有效成本记录");
-    if (order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能上传资料");
+    if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") return toast("已提交退税档案只读，不能上传资料");
     uploadDocumentFile(order, input.dataset.costDocumentType, file, {
       costId: cost.id,
       supplierId: cost.supplierId,
