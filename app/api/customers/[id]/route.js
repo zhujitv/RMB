@@ -7,7 +7,12 @@ export async function PATCH(request, { params }) {
     const { id } = await params;
     const actor = await getActor(request);
     const body = await request.json();
-    return ok({ customer: await saveCustomer(request, actor, body, id) });
+    const customer = await saveCustomer(request, actor, body, id);
+    return ok({
+      success: true,
+      data: customer,
+      message: "客户资料已保存",
+    });
   } catch (error) {
     return apiError(error, "更新客户失败");
   }

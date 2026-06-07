@@ -50,6 +50,7 @@ const state = {
   costOrderSearchTimer: null,
   costOrderSearchRequestId: 0,
   costSubmitInFlight: false,
+  customerSubmitInFlight: false,
   overview: null,
   auditLogs: [],
   exchangeRateSettings: {
@@ -891,6 +892,54 @@ function apiErrorMessage(path, response, data) {
     return plainText ? `请求失败（${response.status}）：${plainText.slice(0, 120)}` : `请求失败（${response.status}）`;
   }
   return `请求失败（${response.status}）`;
+}
+
+async function saveCustomerRequest(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch (error) {
+    console.error("客户保存网络请求失败", { path, error });
+    const requestError = new Error("网络异常，请检查连接后重试。");
+    requestError.isNetworkError = true;
+    throw requestError;
+  }
+  const type = response.headers.get("content-type") || "";
+  let result;
+  try {
+    result = type.includes("application/json") ? await response.json() : await response.text();
+  } catch (error) {
+    console.error("客户保存响应解析失败", { path, status: response.status, error });
+    const parseError = new Error("服务器响应异常，请稍后重试。");
+    parseError.status = response.status;
+    parseError.responseOk = response.ok;
+    throw parseError;
+  }
+  const saveSucceeded = response.ok === true && result?.success === true;
+  if (!saveSucceeded) {
+    if (!response.ok) {
+      if (response.status === 401) handleAuthExpired(result?.error || "登录已过期，请重新登录");
+      if (result?.code === "PASSWORD_CHANGE_REQUIRED") {
+        state.passwordChangeRequired = true;
+        setAuthenticatedShell(true, true);
+      }
+    }
+    const message = response.ok
+      ? (result?.success === false ? (result.message || result.error || "客户保存失败") : "客户保存失败")
+      : apiErrorMessage(path, response, result);
+    const requestError = new Error(message);
+    requestError.status = response.status;
+    requestError.data = result;
+    requestError.responseOk = response.ok;
+    throw requestError;
+  }
+  return result;
 }
 
 function optionHtml(values, selected = "") {
@@ -4162,9 +4211,62 @@ async function submitCost(event) {
   }
 }
 
+function setCustomerSubmitLoading(loading) {
+  state.customerSubmitInFlight = loading;
+  const form = $("#customer-form");
+  const submitButton = form?.querySelector("button[type='submit']");
+  if (form) form.setAttribute("aria-busy", loading ? "true" : "false");
+  if (!submitButton) return;
+  if (!submitButton.dataset.defaultText) submitButton.dataset.defaultText = submitButton.textContent;
+  submitButton.disabled = loading;
+  submitButton.classList.toggle("is-loading", loading);
+  if (loading) {
+    submitButton.dataset.loading = "true";
+    submitButton.setAttribute("aria-busy", "true");
+    submitButton.textContent = "保存中...";
+  } else {
+    delete submitButton.dataset.loading;
+    submitButton.removeAttribute("aria-busy");
+    submitButton.textContent = submitButton.dataset.defaultText || "保存客户";
+  }
+}
+
+function sortedCustomerList(customers) {
+  return [...customers].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
+}
+
+function upsertCustomer(list, customer) {
+  if (!customer?.id) return list;
+  const rows = Array.isArray(list) ? [...list] : [];
+  const index = rows.findIndex((item) => item.id === customer.id);
+  if (index >= 0) {
+    rows[index] = { ...rows[index], ...customer };
+  } else {
+    rows.push(customer);
+  }
+  return sortedCustomerList(rows);
+}
+
+function syncSavedCustomer(customer) {
+  if (!customer?.id) return;
+  state.customers = upsertCustomer(state.customers, customer);
+  if (canWriteArea("orders")) {
+    state.availableCustomers = upsertCustomer(state.availableCustomers, customer);
+  }
+}
+
+function refreshCustomerUiAfterSave() {
+  renderSettings();
+  renderOrderSelects();
+  fillAvailableCustomerSelect($("#order-customer")?.value || "");
+  updateOrderCustomerCountry();
+}
+
 async function submitCustomer(event) {
   event.preventDefault();
+  if (state.customerSubmitInFlight) return;
   if (!canWriteArea("customers")) return toast("没有权限保存客户资料");
+  setCustomerSubmitLoading(true);
   try {
     const id = $("#customer-id").value;
     const name = $("#customer-name").value.trim();
@@ -4184,12 +4286,23 @@ async function submitCustomer(event) {
       commissionStatus: $("#customer-commission-status").value,
       remark: $("#customer-remark").value,
     };
-    await api(id ? `/api/customers/${id}` : "/api/customers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
-    resetForm("customer");
-    await loadData();
-    toast("客户已保存");
+    const result = await saveCustomerRequest(id ? `/api/customers/${id}` : "/api/customers", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(data),
+    });
+    toast("保存成功");
+    try {
+      if (result.data) syncSavedCustomer(result.data);
+      resetForm("customer");
+      refreshCustomerUiAfterSave();
+    } catch (refreshError) {
+      console.warn("客户已保存，但列表刷新失败", refreshError);
+      toast("客户已保存，但列表刷新失败，请手动刷新。");
+    }
   } catch (error) {
     toast(error.message);
+  } finally {
+    setCustomerSubmitLoading(false);
   }
 }
 
