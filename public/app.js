@@ -2473,7 +2473,6 @@ function costDocumentUploadItem(cost, type, { label = type.label, required = tru
         <strong>${escapeHtml(label)}</strong>
         ${documentStatusBadge(successCount)}
       </div>
-      ${required ? "" : `<span class="supplier-doc-note">非退税必检资料</span>`}
       ${docsHtml}
       ${canWriteArea("documents") ? `
         <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
@@ -2499,7 +2498,6 @@ function supplierDocumentCell(cost) {
   const invoiceType = { value: "SUPPLIER_INVOICE", label: logisticsInvoiceLabel(cost) };
   return `
     <div class="supplier-doc-list ${logisticsInvoiceRequired ? "" : "is-optional"}">
-      ${logisticsInvoiceRequired ? "" : `<span class="supplier-doc-note">当前成本不参与退税完整度检查</span>`}
       ${costDocumentUploadItem(cost, invoiceType, { required: logisticsInvoiceRequired })}
     </div>
   `;
@@ -2699,7 +2697,6 @@ function costDocumentRow(cost, type) {
     <article class="cost-document-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order?.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="${escapeHtml(type.value)}">
       <div>
         <strong>${escapeHtml(type.label)}</strong>
-        ${type.required ? "" : `<small class="supplier-doc-note">非必需资料</small>`}
       </div>
       <div><span class="status ${missing ? "warning" : "success"}">${missing ? "缺失" : "完整"}</span></div>
       <div class="document-file-list">${docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState()}</div>
@@ -3266,12 +3263,6 @@ function renderTaxDocumentItem(order, type, scope = {}) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
-  const customsNotice = type.value === "CUSTOMS_ENTRY_FORM"
-    ? `<div class="customs-important-note">用于核对供应商开票品名、数量、单位、金额</div>`
-    : "";
-  const exportInvoiceNotice = type.value === "EXPORT_INVOICE"
-    ? `<div class="customs-important-note">由公司财务开具的正式出口发票，用于退税资料归档。</div>`
-    : "";
   const supplierScope = scope.relatedModule === "SUPPLIER" ? { costId: scope.costId || "", supplierId: scope.supplierId || "", relatedModule: "SUPPLIER" } : {};
   const busyStatus = uploadScopeStatus(order.id, type.value, supplierScope);
   const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
@@ -3291,8 +3282,6 @@ function renderTaxDocumentItem(order, type, scope = {}) {
         <strong>${escapeHtml(type.label)}</strong>
         ${documentStatusBadge(successCount)}
       </div>
-      ${customsNotice}
-      ${exportInvoiceNotice}
       <div class="document-file-list">${docsHtml}</div>
       ${canUpload ? `
         <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
@@ -3371,7 +3360,6 @@ function renderTaxLogisticsInvoiceGroup(order, requirement) {
           <strong>${escapeHtml(requirement.label)}</strong>
           <span class="status warning">${escapeHtml(requirement.missingCostLabel)}</span>
         </div>
-        <div class="empty-state subtle">未录入对应费用，录入 ${escapeHtml(requirement.costTypes.join(" / "))} 后再上传对应发票。</div>
       </article>
     `;
   }
@@ -3426,7 +3414,7 @@ function renderTaxRefundDetail() {
             ${constants.supplierDocumentTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "SUPPLIER", supplierId: supplier.supplierId, costId: supplier.costs?.[0]?.id || "" })).join("")}
           </div>
         </div>
-      `).join("") : `<div class="empty-state subtle">请先在成本管理中录入工厂货款，并选择工厂供应商；系统将按供应商生成采购合同和增值税发票上传要求。</div>`}
+      `).join("") : ""}
     </section>
     <section class="tax-detail-section">
       <h4>物流港杂资料</h4>

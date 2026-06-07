@@ -1811,12 +1811,6 @@ textarea:focus {
   min-width: 220px;
 }
 
-.supplier-doc-note {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .muted-cell,
 .missing-docs {
   color: var(--red);
@@ -2008,18 +2002,6 @@ textarea:focus {
 .tax-detail-document.is-customs-entry {
   border-color: #93c5fd;
   background: #eff6ff;
-}
-
-.customs-important-note {
-  margin: 8px 0 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 10px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.5;
 }
 
 .tax-detail-supplier {
