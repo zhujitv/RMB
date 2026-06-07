@@ -2510,6 +2510,11 @@ th {
   color: #c2410c;
 }
 
+.status.muted {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;

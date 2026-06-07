@@ -123,7 +123,7 @@ const constants = {
   exchangeRateTypes: ["现汇买入价", "现汇卖出价", "中间价"],
   roles: ["管理员", "业务员", "财务", "成本录入员", "物流资料录入员", "查看者"],
   orderStatuses: ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"],
-  paymentStatuses: ["待确认", "已到账", "部分到账", "已退回", "已取消"],
+  paymentStatuses: ["待确认", "已到账", "已退回", "已取消"],
   paymentTypes: ["预付款", "尾款", "补差款", "其他"],
   costPaymentStatuses: ["待支付", "部分支付", "已支付", "已取消"],
   invoiceStatuses: ["未收到", "已收到"],
@@ -1245,7 +1245,7 @@ function fillSelect(id, values, selected = "", includeBlank = false, blankLabel 
 }
 
 function formPaymentStatuses(selected = "") {
-  const base = ["待确认", "已退回", "已取消"];
+  const base = canWriteArea("payments") ? ["待确认", "已到账", "已退回", "已取消"] : ["待确认", "已退回", "已取消"];
   if (selected && !base.includes(selected)) base.push(selected);
   return base.filter((item, index, arr) => arr.indexOf(item) === index);
 }
@@ -2603,7 +2603,8 @@ function renderStats(items) {
 }
 
 function statusClass(status) {
-  if (["已逾期", "已退回", "已取消", "停用", "已停用", "已拒绝", "REJECTED", "DISABLED", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
+  if (["已取消"].includes(status)) return "muted";
+  if (["已逾期", "已退回", "停用", "已停用", "已拒绝", "REJECTED", "DISABLED", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
   if (String(status || "").startsWith("不可结算")) return "danger";
   if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "可结算", "已结算"].includes(status)) return "success";
   if (["即将到期", "待确认", "待审核", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
@@ -6018,9 +6019,6 @@ async function submitPayment(event) {
   try {
     await ensureRateSnapshot("payment");
     const data = readForm("payment", paymentFields);
-    if (!data.id && ["已到账", "部分到账"].includes(data.status)) {
-      throw new Error("新增收款只能保存为待确认，请由另一位财务或管理员复核到账。");
-    }
     if (needsAdminRateConfirmation(data.currency, data.exchangeRate)) {
       if (!confirm("非人民币汇率为 1，确认以管理员身份手动保存？")) return;
       data.manualRateConfirmed = true;
