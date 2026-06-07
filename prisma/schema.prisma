@@ -372,6 +372,7 @@ model OrderCost {
   @@index([costType])
   @@index([paymentStatus])
   @@index([costConfirmed])
+  @@index([orderId, supplierId, costType, amount, createdById, createdAt], map: "order_costs_duplicate_lookup_idx")
   @@index([deletedAt])
   @@map("order_costs")
 }

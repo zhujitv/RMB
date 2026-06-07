@@ -49,6 +49,7 @@ const state = {
   orderFormPopulating: false,
   costOrderSearchTimer: null,
   costOrderSearchRequestId: 0,
+  costSubmitInFlight: false,
   overview: null,
   auditLogs: [],
   exchangeRateSettings: {
@@ -846,7 +847,9 @@ async function api(path, options = {}) {
     });
   } catch (error) {
     console.error("API 网络请求失败", { path, error });
-    throw new Error("网络异常，请检查连接后重试。");
+    const requestError = new Error("网络异常，请检查连接后重试。");
+    requestError.isNetworkError = true;
+    throw requestError;
   }
   const type = response.headers.get("content-type") || "";
   let data;
@@ -854,7 +857,10 @@ async function api(path, options = {}) {
     data = type.includes("application/json") ? await response.json() : await response.text();
   } catch (error) {
     console.error("API 响应解析失败", { path, status: response.status, error });
-    throw new Error("服务器响应异常，请稍后重试。");
+    const parseError = new Error("服务器响应异常，请稍后重试。");
+    parseError.status = response.status;
+    parseError.responseOk = response.ok;
+    throw parseError;
   }
   if (!response.ok) {
     if (response.status === 401) handleAuthExpired(data?.error || "登录已过期，请重新登录");
@@ -863,7 +869,10 @@ async function api(path, options = {}) {
       setAuthenticatedShell(true, true);
     }
     console.error("API 请求失败", { path, status: response.status, error: data?.error || data });
-    throw new Error(apiErrorMessage(path, response, data));
+    const requestError = new Error(apiErrorMessage(path, response, data));
+    requestError.status = response.status;
+    requestError.data = data;
+    throw requestError;
   }
   return data;
 }
@@ -3155,7 +3164,7 @@ function setCostFormMode(cost = null) {
     mode.textContent = isEditing ? `编辑成本：${costFormLabel(cost)}` : "新建成本";
     mode.classList.toggle("is-editing", isEditing);
   }
-  if (submitButton) submitButton.textContent = isEditing ? "更新成本" : "保存成本";
+  if (submitButton && !state.costSubmitInFlight) submitButton.textContent = isEditing ? "更新成本" : "保存成本";
 }
 
 function resetCostForm({ clearStoredDraft = true, reloadOrders = true } = {}) {
@@ -3184,6 +3193,24 @@ function resetCostFormAfterSave() {
   resetCostItems([{}]);
   setCostFormMode(null);
   updateCostDerived();
+}
+
+function setCostSubmitLoading(loading) {
+  state.costSubmitInFlight = loading;
+  const form = $("#cost-form");
+  const submitButton = $("#cost-submit-button");
+  if (form) form.setAttribute("aria-busy", loading ? "true" : "false");
+  if (!submitButton) return;
+  submitButton.disabled = loading;
+  submitButton.classList.toggle("is-loading", loading);
+  if (loading) {
+    submitButton.dataset.loading = "true";
+    submitButton.setAttribute("aria-busy", "true");
+    submitButton.textContent = "保存中...";
+  } else {
+    delete submitButton.dataset.loading;
+    submitButton.removeAttribute("aria-busy");
+  }
 }
 
 function readCostItems(validate = false) {
@@ -3221,6 +3248,37 @@ function readCostItems(validate = false) {
     });
   }
   return items;
+}
+
+function costSubmissionMayHaveSaved(error) {
+  return Boolean(error?.isNetworkError || error?.responseOk || Number(error?.status || 0) >= 500);
+}
+
+function costMatchesSubmittedItem(cost, data, item, submittedAt) {
+  if (!cost || cost.orderId !== data.orderId) return false;
+  if (cost.costType !== (item.costType || data.costType)) return false;
+  if ((cost.supplierId || "") !== (item.supplierId || "")) return false;
+  if (Math.abs(Number(cost.amount || 0) - Number(item.amount || 0)) > 0.005) return false;
+  if (state.me?.id && cost.createdBy?.id && cost.createdBy.id !== state.me.id) return false;
+  const createdAt = new Date(cost.createdAt || 0).getTime();
+  return Number.isFinite(createdAt) && createdAt >= submittedAt - 120000;
+}
+
+async function recoverCostSaveAfterError(submission, error) {
+  if (!submission || !costSubmissionMayHaveSaved(error)) return false;
+  try {
+    await loadData();
+    const recovered = submission.items.every((item) => (
+      state.costs.some((cost) => costMatchesSubmittedItem(cost, submission.data, item, submission.submittedAt))
+    ));
+    if (!recovered) return false;
+    resetCostFormAfterSave();
+    toast("成本已保存，刚才的错误来自网络或刷新异常");
+    return true;
+  } catch (recoveryError) {
+    console.error("成本保存失败后核对记录失败", recoveryError);
+    return false;
+  }
 }
 
 function saveCostDraft() {
@@ -3989,12 +4047,9 @@ async function submitPayment(event) {
 async function submitCost(event) {
   event.preventDefault();
   if (!canWriteArea("costs")) return toast("没有权限保存成本");
-  const submitButton = $("#cost-submit-button");
-  if (submitButton?.disabled) return;
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "保存中...";
-  }
+  if (state.costSubmitInFlight) return;
+  setCostSubmitLoading(true);
+  let submittedCost = null;
   try {
     const data = readForm("cost", costFields);
     if (!data.orderId || state.selectedCostOrder?.id !== data.orderId) {
@@ -4023,6 +4078,11 @@ async function submitCost(event) {
     if (items.some((item) => item.manualRateConfirmed) && !confirm("存在非人民币汇率为 1 的成本明细，确认以管理员身份手动保存？")) return;
     delete data.id;
     const payload = id ? { ...data, ...items[0] } : { ...data, items };
+    submittedCost = id ? null : {
+      data: { ...data },
+      items: items.map((item) => ({ ...item })),
+      submittedAt: Date.now(),
+    };
     const result = await api(id ? `/api/costs/${id}` : "/api/costs", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(payload),
@@ -4037,12 +4097,11 @@ async function submitCost(event) {
       toast("成本已保存，但列表刷新失败，请手动刷新");
     }
   } catch (error) {
+    if (await recoverCostSaveAfterError(submittedCost, error)) return;
     toast(error.message);
   } finally {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent = $("#cost-id")?.value ? "更新成本" : "保存成本";
-    }
+    setCostSubmitLoading(false);
+    setCostFormMode($("#cost-id")?.value ? state.costs.find((cost) => cost.id === $("#cost-id").value) : null);
   }
 }
 
