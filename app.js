@@ -105,6 +105,7 @@ const state = {
   customerSubmitInFlight: false,
   overview: null,
   auditLogs: [],
+  globalRefreshLoading: false,
   exchangeRateSettings: {
     source: "中国银行",
     rateType: "现汇买入价",
@@ -249,6 +250,19 @@ const viewTitles = {
   reports: "报表中心",
   manual: "操作说明书",
   settings: "系统设置",
+};
+
+const refreshViewLabels = {
+  dashboard: "刷新总览",
+  orders: "刷新订单",
+  payments: "刷新收款",
+  costs: "刷新成本",
+  domesticLogistics: "刷新物流信息",
+  taxRefund: "刷新退税资料",
+  profit: "刷新利润",
+  reports: "刷新报表",
+  manual: "重新加载说明书",
+  settings: "刷新设置",
 };
 
 const settingsTabs = [
@@ -1513,7 +1527,7 @@ async function loadMe() {
   return loggedIn && !state.passwordChangeRequired;
 }
 
-async function loadData() {
+async function loadData(options = {}) {
   try {
     const loggedIn = await loadMe();
     if (!loggedIn) {
@@ -1564,7 +1578,7 @@ async function loadData() {
     if (state.view === "costs" && canReadArea("costs")) await loadCostList({ silent: true });
   } catch (error) {
     toast(error.message);
-    if (extra.rethrow) throw error;
+    if (options.rethrow) throw error;
   }
 }
 
@@ -1646,6 +1660,7 @@ async function loadCostList(options = {}) {
     renderCosts();
   } catch (error) {
     if (!options.silent) toast(error.message);
+    if (options.rethrow) throw error;
   } finally {
     state.costListLoading = false;
     renderCosts();
@@ -1672,6 +1687,7 @@ async function loadTaxRefundList(options = {}) {
     renderTaxRefund();
   } catch (error) {
     if (!options.silent) toast(error.message);
+    if (options.rethrow) throw error;
   }
 }
 
@@ -1687,6 +1703,7 @@ async function loadDomesticLogisticsList(options = {}) {
     renderDomesticLogistics();
   } catch (error) {
     if (!options.silent) toast(error.message);
+    if (options.rethrow) throw error;
   }
 }
 
@@ -1806,16 +1823,99 @@ async function loadSettingsTab(tabKey = state.settingsActiveTab, options = {}) {
   } catch (error) {
     state.settingsErrors[tabKey] = error.message || "加载失败";
     if (!options.silent) toast(error.message);
+    if (options.rethrow) throw error;
   } finally {
     state.settingsLoading = { ...state.settingsLoading, [tabKey]: false };
     renderSettings();
     applyRateEditability();
     applyAccessControl();
+    updateGlobalRefreshButton();
   }
 }
 
 async function refreshCurrentSettingsTab() {
-  await loadSettingsTab(state.settingsActiveTab, { force: true, page: 1 });
+  await loadSettingsTab(state.settingsActiveTab, { force: true, page: 1, rethrow: true });
+}
+
+function currentRefreshLabel() {
+  if (state.view === "settings") {
+    const tab = settingsTabs.find((item) => item.key === state.settingsActiveTab);
+    return tab ? `刷新${tab.label}` : "刷新设置";
+  }
+  return refreshViewLabels[state.view] || "刷新";
+}
+
+function updateGlobalRefreshButton() {
+  const button = $("#refresh-data");
+  if (!button) return;
+  if (!button.dataset.defaultRefreshText) button.dataset.defaultRefreshText = "刷新";
+  if (state.globalRefreshLoading) return;
+  button.textContent = currentRefreshLabel();
+  button.disabled = !state.me || !state.view;
+  button.hidden = !state.me;
+}
+
+async function reloadManualView() {
+  renderAll();
+  await Promise.resolve();
+}
+
+async function refreshCurrentView() {
+  if (!state.me) throw new Error("请先登录");
+  if (state.view === "manual") {
+    await reloadManualView();
+    toast("操作说明书已重新加载");
+    return;
+  }
+  if (state.view === "settings") {
+    await refreshCurrentSettingsTab();
+    toast("当前设置已刷新");
+    return;
+  }
+  if (state.view === "costs") {
+    await loadCostList({ page: state.costPagination.page || 1, rethrow: true });
+    toast("成本管理已刷新");
+    return;
+  }
+  if (state.view === "taxRefund") {
+    await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, rethrow: true });
+    toast("退税资料已刷新");
+    return;
+  }
+  if (state.view === "domesticLogistics") {
+    await loadDomesticLogisticsList({ rethrow: true });
+    toast("国内物流信息已刷新");
+    return;
+  }
+  if (state.view === "reports") {
+    await queryReport(state.reportQueried ? (state.reportPagination.page || 1) : 1, { rethrow: true });
+    toast("报表中心已刷新");
+    return;
+  }
+  if (["dashboard", "orders", "payments", "profit"].includes(state.view)) {
+    await loadData({ rethrow: true });
+    toast(`${viewTitles[state.view] || "当前页面"}已刷新`);
+    return;
+  }
+  await loadData({ rethrow: true });
+  toast("页面数据已刷新");
+}
+
+async function handleGlobalRefresh() {
+  const button = $("#refresh-data");
+  if (state.globalRefreshLoading) return;
+  state.globalRefreshLoading = true;
+  setActionButtonLoading(button, true, "刷新中...");
+  try {
+    await refreshCurrentView();
+  } catch (error) {
+    console.error("刷新当前模块失败", error);
+    toast(`刷新失败：${error.message || "请稍后重试"}`);
+  } finally {
+    state.globalRefreshLoading = false;
+    setActionButtonLoading(button, false);
+    updateGlobalRefreshButton();
+  }
 }
 
 async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword) {
@@ -1850,6 +1950,7 @@ function updateCurrentView() {
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
   $$(".dashboard-only").forEach((panel) => panel.classList.toggle("is-hidden", state.view !== "dashboard"));
+  updateGlobalRefreshButton();
 }
 
 function setHidden(selector, hidden) {
@@ -1883,6 +1984,7 @@ function applyAccessControl() {
   setHidden("#supplier-form", !canWriteArea("suppliers"));
   setHidden("#user-form", !canWriteArea("users"));
   setHidden("#logout-button, #account-menu-logout", !loggedIn);
+  updateGlobalRefreshButton();
   const canUseReports = canView("reports");
   setHidden("[data-export='backup-json']", !canUseReports || state.me?.role !== "管理员");
   setHidden("[data-export='payments']", !canUseReports || !canReadArea("payments"));
@@ -3576,7 +3678,7 @@ function reportQueryParams(page = 1) {
   return params;
 }
 
-async function queryReport(page = 1) {
+async function queryReport(page = 1, options = {}) {
   if (!canReadArea("reports")) return toast("没有权限查看报表");
   try {
     const data = await api(`${reportEndpoint()}?${reportQueryParams(page).toString()}`);
@@ -3587,6 +3689,7 @@ async function queryReport(page = 1) {
     renderReports();
   } catch (error) {
     toast(error.message);
+    if (options.rethrow) throw error;
   }
 }
 
@@ -5978,8 +6081,9 @@ async function submitExchangeRateSettings(event) {
   }
 }
 
-async function refreshExchangeRates() {
+async function refreshExchangeRates(sourceButton = null) {
   if (!canWriteArea("exchangeRates")) return toast("没有权限手动刷新汇率");
+  setActionButtonLoading(sourceButton, true, "刷新中...");
   try {
     const result = await api("/api/exchange-rates/refresh", {
       method: "POST",
@@ -5995,6 +6099,8 @@ async function refreshExchangeRates() {
     await Promise.all($$("#cost-items .cost-item-row").map((row) => applyCostItemRate(row, { force: true })));
   } catch (error) {
     toast(error.message);
+  } finally {
+    setActionButtonLoading(sourceButton, false);
   }
 }
 
@@ -6978,10 +7084,7 @@ function bindEvents() {
   }));
   $("#mobile-nav-toggle")?.addEventListener("click", () => setMobileNav(!document.body.classList.contains("nav-open")));
   $("#nav-backdrop")?.addEventListener("click", closeMobileNav);
-  $("#refresh-data").addEventListener("click", () => {
-    if (state.view === "settings") refreshCurrentSettingsTab().catch((error) => toast(error.message));
-    else loadData();
-  });
+  $("#refresh-data").addEventListener("click", handleGlobalRefresh);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
     if (event.key === "Escape" && !$("#cost-document-drawer")?.hidden) closeCostDocuments();
@@ -7138,7 +7241,7 @@ function bindEvents() {
     loadSettingsTab("auditLogs", { force: true, page: 1 }).catch((error) => toast(error.message));
   });
   $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
-  $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
+  $("#refresh-exchange-rates").addEventListener("click", (event) => refreshExchangeRates(event.currentTarget));
   $("#user-form").addEventListener("submit", submitUser);
   $("#user-role").addEventListener("change", () => {
     renderUserSupplierField();
@@ -7469,7 +7572,15 @@ function bindEvents() {
     const rateButton = event.target.closest(".cost-item-rate-refresh");
     if (rateButton) {
       const row = rateButton.closest(".cost-item-row");
-      if (row) applyCostItemRate(row, { force: true }).catch(() => {});
+      if (row) {
+        setActionButtonLoading(rateButton, true, "刷新中...");
+        applyCostItemRate(row, { force: true })
+          .catch((error) => {
+            console.error("刷新成本明细汇率失败", error);
+            toast(`刷新失败：${error.message || "请稍后重试"}`);
+          })
+          .finally(() => setActionButtonLoading(rateButton, false));
+      }
       return;
     }
     const button = event.target.closest(".delete-cost-item");
@@ -7516,11 +7627,19 @@ function bindEvents() {
     if (!target) return;
     if (target.dataset.settingsTab) {
       state.settingsActiveTab = target.dataset.settingsTab;
+      updateGlobalRefreshButton();
       loadSettingsTab(state.settingsActiveTab).catch((error) => toast(error.message));
       return;
     }
     if (target.dataset.settingsRefresh) {
-      loadSettingsTab(target.dataset.settingsRefresh, { force: true, page: 1 }).catch((error) => toast(error.message));
+      setActionButtonLoading(target, true, "刷新中...");
+      loadSettingsTab(target.dataset.settingsRefresh, { force: true, page: 1, rethrow: true })
+        .then(() => toast("数据已刷新"))
+        .catch((error) => {
+          console.error("刷新系统设置子模块失败", error);
+          toast(`刷新失败：${error.message || "请稍后重试"}`);
+        })
+        .finally(() => setActionButtonLoading(target, false));
       return;
     }
     if (target.id === "open-customer-drawer") {
@@ -7537,10 +7656,35 @@ function bindEvents() {
     }
     if (target.dataset.rateRefresh === "order") {
       markOrderFormDirty();
-      applyRateFor("order", { force: true }).catch(() => {});
+      setActionButtonLoading(target, true, "刷新中...");
+      applyRateFor("order", { force: true })
+        .catch((error) => {
+          console.error("刷新应收订单汇率失败", error);
+          toast(`刷新失败：${error.message || "请稍后重试"}`);
+        })
+        .finally(() => setActionButtonLoading(target, false));
+      return;
     }
-    if (target.dataset.rateRefresh === "payment") applyRateFor("payment", { force: true }).catch(() => {});
-    if (target.dataset.rateRefresh === "logistics") applyRateFor("logistics", { force: true }).catch(() => {});
+    if (target.dataset.rateRefresh === "payment") {
+      setActionButtonLoading(target, true, "刷新中...");
+      applyRateFor("payment", { force: true })
+        .catch((error) => {
+          console.error("刷新收款汇率失败", error);
+          toast(`刷新失败：${error.message || "请稍后重试"}`);
+        })
+        .finally(() => setActionButtonLoading(target, false));
+      return;
+    }
+    if (target.dataset.rateRefresh === "logistics") {
+      setActionButtonLoading(target, true, "刷新中...");
+      applyRateFor("logistics", { force: true })
+        .catch((error) => {
+          console.error("刷新物流费用汇率失败", error);
+          toast(`刷新失败：${error.message || "请稍后重试"}`);
+        })
+        .finally(() => setActionButtonLoading(target, false));
+      return;
+    }
     if (target.dataset.dashboardKind) openDashboardDetail(target.dataset.dashboardKind, target.dataset.dashboardValue).catch((error) => toast(error.message));
     if (target.dataset.editOrder) editOrder(target.dataset.editOrder);
     if (target.dataset.editPayment) editPayment(target.dataset.editPayment);
