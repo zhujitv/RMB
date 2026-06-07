@@ -3244,6 +3244,22 @@ function renderTaxDocumentItem(order, type, scope = {}) {
   const customsNotice = type.value === "CUSTOMS_ENTRY_FORM"
     ? `<div class="customs-important-note">用于核对供应商开票品名、数量、单位、金额</div>`
     : "";
+  const exportInvoiceNotice = type.value === "EXPORT_INVOICE"
+    ? `<div class="customs-important-note">由公司财务开具的正式出口发票，用于退税资料归档。</div>`
+    : "";
+  const supplierScope = scope.relatedModule === "SUPPLIER" ? { costId: scope.costId || "", supplierId: scope.supplierId || "", relatedModule: "SUPPLIER" } : {};
+  const busyStatus = uploadScopeStatus(order.id, type.value, supplierScope);
+  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  const uploadInput = scope.relatedModule === "SUPPLIER"
+    ? `<input type="file" accept="application/pdf,.pdf"
+          data-cost-document-type="${escapeHtml(type.value)}"
+          data-order-id="${escapeHtml(order.id)}"
+          data-cost-id="${escapeHtml(scope.costId || "")}"
+          data-supplier-id="${escapeHtml(scope.supplierId || "")}" />`
+    : `<input type="file" accept="application/pdf,.pdf"
+          data-document-type="${escapeHtml(type.value)}"
+          data-related-module="${escapeHtml(scope.relatedModule || documentRelatedModule(type.value))}" />`;
+  const canUpload = canWriteArea("documents") && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
       <div class="document-card-head">
@@ -3251,7 +3267,14 @@ function renderTaxDocumentItem(order, type, scope = {}) {
         ${documentStatusBadge(successCount)}
       </div>
       ${customsNotice}
+      ${exportInvoiceNotice}
       <div class="document-file-list">${docsHtml}</div>
+      ${canUpload ? `
+        <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+          <span>${escapeHtml(uploadText)}</span>
+          ${uploadInput}
+        </label>
+      ` : ""}
     </article>
   `;
 }
@@ -3375,7 +3398,7 @@ function renderTaxRefundDetail() {
         <div class="tax-detail-supplier">
           <strong>${escapeHtml(supplier.supplierName)}</strong>
           <div class="tax-detail-doc-grid">
-            ${constants.supplierDocumentTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "SUPPLIER", supplierId: supplier.supplierId })).join("")}
+            ${constants.supplierDocumentTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "SUPPLIER", supplierId: supplier.supplierId, costId: supplier.costs?.[0]?.id || "" })).join("")}
           </div>
         </div>
       `).join("") : `<div class="empty-state subtle">请先在成本管理中录入工厂货款，并选择工厂供应商；系统将按供应商生成采购合同和增值税发票上传要求。</div>`}
@@ -6609,6 +6632,15 @@ function bindEvents() {
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
   });
   $("#tax-detail-drawer").addEventListener("change", (event) => {
+    const documentInput = event.target.closest("[data-document-type]");
+    if (documentInput) {
+      const order = state.taxRefundDetailOrder;
+      const file = documentInput.files?.[0];
+      documentInput.value = "";
+      if (!order) return toast("请先选择有效订单");
+      uploadDocumentFile(order, documentInput.dataset.documentType, file);
+      return;
+    }
     const input = event.target.closest("[data-cost-document-type]");
     if (!input) return;
     const order = state.taxRefundDetailOrder;
