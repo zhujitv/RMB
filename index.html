@@ -544,6 +544,8 @@
                     <th>目的国家</th>
                     <th>目的港</th>
                     <th>运输方式</th>
+                    <th>到达地</th>
+                    <th>运输货物名称</th>
                     <th>物流状态</th>
                     <th>财务审核</th>
                     <th>录入人</th>
@@ -574,8 +576,10 @@
               <label data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
               <label data-domestic-field="truck"><span>挂车车牌</span><input id="domestic-trailer-plate" placeholder="浙D6789挂" /></label>
               <label data-domestic-field="truck"><span id="domestic-place-label">起运地 *</span><input id="domestic-departure-place" placeholder="绍兴越城" /></label>
+              <label><span>到达地 *</span><input id="domestic-destination-place" placeholder="上海洋山港" /></label>
               <label data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
               <label data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
+              <label><span>运输货物名称 *</span><input id="domestic-cargo-description" placeholder="木塑地板" /></label>
               <label class="wide"><span>出口发票备注</span><textarea id="domestic-remark-preview" readonly rows="4"></textarea></label>
               <div class="form-actions"><button class="primary-button" type="submit">提交国内物流信息</button></div>
             </form>

@@ -3215,8 +3215,10 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-truck-plate").value = info.truckPlateNo || "";
   $("#domestic-trailer-plate").value = info.trailerPlateNo || "";
   $("#domestic-departure-place").value = info.departurePlace || "";
+  $("#domestic-destination-place").value = info.destinationPlace || "";
   $("#domestic-departure-date").value = info.departureDate || "";
   $("#domestic-express-no").value = info.expressTrackingNo || "";
+  $("#domestic-cargo-description").value = info.cargoDescription || "";
   updateDomesticLogisticsFormVisibility();
   const readOnly = mode === "view" || !canWriteArea("domesticLogistics");
   [
@@ -3224,8 +3226,10 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     "#domestic-truck-plate",
     "#domestic-trailer-plate",
     "#domestic-departure-place",
+    "#domestic-destination-place",
     "#domestic-departure-date",
     "#domestic-express-no",
+    "#domestic-cargo-description",
   ].forEach((selector) => {
     const el = $(selector);
     if (el) el.disabled = readOnly;
@@ -3253,6 +3257,8 @@ function renderDomesticLogistics() {
       <td>${escapeHtml(row.destinationCountry || "-")}</td>
       <td>${escapeHtml(row.destinationPort || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
+      <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
+      <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
       <td><span class="status ${statusClass(row.financeStatus || "")}">${escapeHtml(row.financeStatusLabel || "-")}</span></td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")}</td>
@@ -3266,7 +3272,23 @@ function renderDomesticLogistics() {
         <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="11" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+  `).join("") : `<tr><td colspan="13" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+}
+
+function domesticLogisticsDetailMeta(info = {}) {
+  return [
+    ["运输方式", info.transportTypeLabel],
+    ["车牌号", info.truckPlateNo],
+    ["挂车车牌", info.trailerPlateNo],
+    ["起运地", info.departurePlace],
+    ["到达地", info.destinationPlace],
+    ["起运日期", info.departureDate],
+    ["运输货物名称", info.cargoDescription],
+    ["快递单号", info.expressTrackingNo],
+    ["财务审核状态", info.financeStatusLabel],
+    ["提交人", info.submittedByName],
+    ["提交时间", formatDateTime(info.submittedAt)],
+  ].filter(([, value]) => value).map(([label, value]) => `<span>${label}：${escapeHtml(value)}</span>`).join("");
 }
 
 function renderDomesticLogisticsReviewCard(order = {}) {
@@ -3281,10 +3303,7 @@ function renderDomesticLogisticsReviewCard(order = {}) {
           <strong>${missing ? "缺失" : escapeHtml(info.transportTypeLabel || "-")}</strong>
           <span class="status ${statusClass(info?.financeStatus || "NOT_READY")}">${escapeHtml(info?.financeStatusLabel || "未提交")}</span>
         </div>
-        <div class="document-card-meta">
-          <span>提交人：${escapeHtml(info?.submittedByName || "-")}</span>
-          <span>提交时间：${formatDateTime(info?.submittedAt)}</span>
-        </div>
+        <div class="document-card-meta">${domesticLogisticsDetailMeta(info || {})}</div>
         <pre class="tax-remark-preview">${escapeHtml(info?.remarkText || "缺少国内物流信息")}</pre>
         ${info?.rejectReason ? `<div class="form-error inline-error">驳回原因：${escapeHtml(info.rejectReason)}</div>` : ""}
         ${canWriteArea("taxRefund") && info?.id ? `
@@ -3306,10 +3325,24 @@ function domesticLogisticsPayload() {
     truckPlateNo: $("#domestic-truck-plate").value.trim(),
     trailerPlateNo: $("#domestic-trailer-plate").value.trim(),
     departurePlace: $("#domestic-departure-place").value.trim(),
+    destinationPlace: $("#domestic-destination-place").value.trim(),
     departureDate: $("#domestic-departure-date").value,
     expressTrackingNo: $("#domestic-express-no").value.trim(),
+    cargoDescription: $("#domestic-cargo-description").value.trim(),
     financeStatus: $("#domestic-logistics-finance-status")?.value || "PENDING",
   };
+}
+
+function validateDomesticLogisticsPayload(data) {
+  if (!data.destinationPlace) throw new Error("请填写到达地");
+  if (!data.cargoDescription) throw new Error("请填写运输货物名称");
+  if (data.transportType === "EXPRESS") {
+    if (!data.expressTrackingNo) throw new Error("请填写快递单号");
+    return;
+  }
+  if (!data.truckPlateNo) throw new Error(data.transportType === "MULTIMODAL" ? "请填写首程车牌号" : "请填写车牌号");
+  if (!data.departurePlace) throw new Error(data.transportType === "MULTIMODAL" ? "请填写首程起运地" : "请填写起运地");
+  if (!data.departureDate) throw new Error(data.transportType === "MULTIMODAL" ? "请选择首程起运日期" : "请选择起运日期");
 }
 
 async function submitDomesticLogistics(event) {
@@ -3317,9 +3350,11 @@ async function submitDomesticLogistics(event) {
   if (!canWriteArea("domesticLogistics")) return toast("没有权限录入国内物流信息");
   const id = $("#domestic-logistics-info-id").value;
   try {
+    const payload = domesticLogisticsPayload();
+    validateDomesticLogisticsPayload(payload);
     const result = await api(id ? `/api/domestic-logistics/${encodeURIComponent(id)}` : "/api/domestic-logistics", {
       method: id ? "PATCH" : "POST",
-      body: JSON.stringify(domesticLogisticsPayload()),
+      body: JSON.stringify(payload),
     });
     assertSuccessResponse(result, "保存国内物流信息失败");
     toast(result.message || "国内物流信息已提交");
@@ -7043,7 +7078,7 @@ function bindEvents() {
   $$("[data-close-domestic-logistics]").forEach((button) => button.addEventListener("click", closeDomesticLogisticsEditor));
   $("#domestic-logistics-form")?.addEventListener("submit", submitDomesticLogistics);
   $("#domestic-transport-type")?.addEventListener("change", updateDomesticLogisticsFormVisibility);
-  ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-departure-date", "#domestic-express-no"].forEach((selector) => {
+  ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-destination-place", "#domestic-departure-date", "#domestic-express-no", "#domestic-cargo-description"].forEach((selector) => {
     $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);
   });
   $("#tax-detail-drawer").addEventListener("click", (event) => {

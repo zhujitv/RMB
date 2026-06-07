@@ -258,8 +258,10 @@ model DomesticLogisticsInfo {
   truckPlateNo          String?   @map("truck_plate_no")
   trailerPlateNo        String?   @map("trailer_plate_no")
   departurePlace        String?   @map("departure_place")
+  destinationPlace      String?   @map("destination_place")
   departureDate         DateTime? @map("departure_date") @db.Date
   expressTrackingNo     String?   @map("express_tracking_no")
+  cargoDescription      String?   @map("cargo_description")
   remarkText            String?   @map("remark_text")
   submittedByUserId     String?   @map("submitted_by_user_id")
   submittedAt           DateTime? @map("submitted_at")
