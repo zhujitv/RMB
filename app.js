@@ -3441,11 +3441,6 @@ function renderTaxRefund() {
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(order.customerName)}</td>
-        <td>${escapeHtml(order.currency)}</td>
-        <td>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</td>
-        <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
-        <td>${factoryCompletenessBadge(completeness)}</td>
-        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -3455,7 +3450,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="11" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
