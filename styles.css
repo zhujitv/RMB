@@ -2013,8 +2013,81 @@ textarea:focus {
   color: #0f172a;
 }
 
-.domestic-logistics-editor {
-  margin-top: 16px;
+.domestic-logistics-drawer[hidden] {
+  display: none;
+}
+
+.domestic-logistics-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 72;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.drawer-panel {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  overflow-y: auto;
+  border-left: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: -18px 0 42px rgba(15, 23, 42, 0.16);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.domestic-logistics-panel {
+  width: min(560px, 100vw);
+  padding: 22px;
+}
+
+.domestic-logistics-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.domestic-logistics-summary div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.domestic-logistics-summary span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.domestic-logistics-summary strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domestic-logistics-supplier-hint {
+  grid-column: 1 / -1;
+  margin: -6px 0 2px;
+  color: #b45309;
 }
 
 .tax-remark-preview,

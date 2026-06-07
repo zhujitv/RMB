@@ -542,6 +542,7 @@
                     <th>提单号</th>
                     <th>客户简称</th>
                     <th>目的国家</th>
+                    <th>目的港</th>
                     <th>物流状态</th>
                     <th>财务审核</th>
                     <th>录入时间</th>
@@ -552,12 +553,22 @@
               </table>
             </div>
           </section>
-          <section class="panel domestic-logistics-editor" id="domestic-logistics-editor" hidden>
-            <div class="panel-title"><h3 id="domestic-logistics-editor-title">录入国内物流信息</h3><span id="domestic-logistics-supplier-text">-</span></div>
+          <section class="domestic-logistics-drawer" id="domestic-logistics-editor" hidden>
+            <div class="drawer-backdrop" data-close-domestic-logistics></div>
+            <div class="drawer-panel domestic-logistics-panel" role="dialog" aria-modal="true" aria-labelledby="domestic-logistics-editor-title">
+            <div class="drawer-header">
+              <div>
+                <p class="eyebrow">国内物流信息</p>
+                <h3 id="domestic-logistics-editor-title">录入国内物流信息</h3>
+              </div>
+              <button class="icon-button" data-close-domestic-logistics type="button" aria-label="关闭">×</button>
+            </div>
+            <div class="domestic-logistics-summary" id="domestic-logistics-order-summary"></div>
             <form class="entry-form" id="domestic-logistics-form" autocomplete="off">
               <input type="hidden" id="domestic-logistics-order-id" />
               <input type="hidden" id="domestic-logistics-info-id" />
               <label><span>物流负责供应商 *</span><select id="domestic-logistics-supplier-id"></select></label>
+              <p class="field-hint domestic-logistics-supplier-hint" id="domestic-logistics-supplier-hint" hidden>请先在系统设置 &gt; 供应商资料中启用“允许录入国内物流信息”。</p>
               <label><span>运输方式 *</span><select id="domestic-transport-type"><option value="TRUCK">车辆运输</option><option value="EXPRESS">快递运输</option><option value="MULTIMODAL">多式联运</option></select></label>
               <label data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
               <label data-domestic-field="truck"><span>挂车车牌</span><input id="domestic-trailer-plate" placeholder="浙D6789挂" /></label>
@@ -567,6 +578,7 @@
               <label class="wide"><span>出口发票备注</span><textarea id="domestic-remark-preview" readonly rows="4"></textarea></label>
               <div class="form-actions"><button class="primary-button" type="submit">提交国内物流信息</button></div>
             </form>
+            </div>
           </section>
         </section>
 
