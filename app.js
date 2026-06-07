@@ -261,7 +261,7 @@ const roleMenus = {
   业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
-  物流资料录入员: ["manual"],
+  物流资料录入员: ["domesticLogistics"],
   查看者: ["dashboard", "domesticLogistics", "profit", "reports", "manual"],
 };
 
@@ -270,7 +270,7 @@ const roleScopeTexts = {
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
   成本录入员: "仅可录入成本并查看成本相关数据",
-  物流资料录入员: "物流资料录入角色已保留，当前版本暂未开放供应商登录录入",
+  物流资料录入员: "仅可录入国内物流信息",
   查看者: "只读权限",
 };
 
@@ -279,7 +279,7 @@ const roleWrites = {
   业务员: ["orders", "logistics", "documents"],
   财务: ["payments", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
-  物流资料录入员: [],
+  物流资料录入员: ["domesticLogistics"],
   查看者: [],
 };
 
@@ -288,7 +288,7 @@ const roleReads = {
   业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
-  物流资料录入员: [],
+  物流资料录入员: ["domesticLogistics"],
   查看者: ["orders", "payments", "costs", "domesticLogistics", "reports"],
 };
 
@@ -826,9 +826,29 @@ function installFrontendErrorBoundary() {
 }
 
 function canView(view) {
-  if (view === "manual") return Boolean(state.me);
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
+}
+
+function defaultViewForCurrentUser() {
+  const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
+  const roleDefaultViews = {
+    管理员: "dashboard",
+    财务: canView("taxRefund") ? "taxRefund" : "dashboard",
+    业务员: canView("orders") ? "orders" : "dashboard",
+    物流资料录入员: "domesticLogistics",
+    查看者: "dashboard",
+  };
+  const preferred = roleDefaultViews[state.me?.role];
+  if (preferred && menus.includes(preferred)) return preferred;
+  return menus[0] || "";
+}
+
+function ensureAuthorizedView() {
+  if (!state.me) return;
+  if (!state.view || !canView(state.view)) {
+    state.view = defaultViewForCurrentUser();
+  }
 }
 
 function canWriteArea(area) {
@@ -1018,7 +1038,7 @@ function resetAuthState({ clearDrafts = false } = {}) {
   state.session = null;
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
-  state.view = "dashboard";
+  state.view = "";
   clearAuthStorage();
   if (clearDrafts) clearLocalCaches();
   else {
@@ -1433,6 +1453,7 @@ async function loadMe() {
   }
   const loggedIn = Boolean(state.me);
   state.passwordChangeRequired = Boolean(state.me?.mustChangePassword);
+  if (loggedIn && !state.passwordChangeRequired) ensureAuthorizedView();
   setAuthenticatedShell(loggedIn, state.passwordChangeRequired);
   return loggedIn && !state.passwordChangeRequired;
 }
@@ -1442,21 +1463,32 @@ async function loadData() {
     const loggedIn = await loadMe();
     if (!loggedIn) {
       if (!state.me) {
-        state.view = "dashboard";
+        state.view = "";
         clearLocalCaches();
         setAuthenticatedShell(false);
       }
       return;
     }
-    const [data, availableData] = await Promise.all([
-      api(`/api/ledger?${filterParams().toString()}`),
-      canWriteArea("orders") ? api("/api/customers/available") : Promise.resolve({ customers: [] }),
-    ]);
-    state.overview = data.overview;
-    state.orders = data.orders || [];
-    state.payments = data.payments || [];
-    state.costs = [];
-    state.availableCustomers = availableData.customers || [];
+    ensureAuthorizedView();
+    if (state.view === "domesticLogistics" && !canReadArea("orders") && !canReadArea("payments") && !canReadArea("costs")) {
+      state.overview = null;
+      state.orders = [];
+      state.payments = [];
+      state.costs = [];
+      state.availableCustomers = [];
+    } else {
+      const [data, availableData] = await Promise.all([
+        canView("dashboard") || canReadArea("orders") || canReadArea("payments") || canReadArea("costs")
+          ? api(`/api/ledger?${filterParams().toString()}`)
+          : Promise.resolve({ overview: null, orders: [], payments: [], costs: [] }),
+        canWriteArea("orders") ? api("/api/customers/available") : Promise.resolve({ customers: [] }),
+      ]);
+      state.overview = data.overview;
+      state.orders = data.orders || [];
+      state.payments = data.payments || [];
+      state.costs = [];
+      state.availableCustomers = availableData.customers || [];
+    }
     renderAll();
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
@@ -1726,11 +1758,9 @@ function renderAll() {
 }
 
 function updateCurrentView() {
-  const menus = state.permissions?.menus || [];
-  if (state.me && !canView(state.view)) {
-    state.view = menus[0] || "dashboard";
-  }
-  $("#view-title").textContent = viewTitles[state.view];
+  if (state.me) ensureAuthorizedView();
+  const title = viewTitles[state.view] || "无权限";
+  $("#view-title").textContent = title;
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
   $$(".dashboard-only").forEach((panel) => panel.classList.toggle("is-hidden", state.view !== "dashboard"));
@@ -3225,11 +3255,8 @@ function renderDomesticLogistics() {
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
       <td><span class="status ${statusClass(row.financeStatus || "")}">${escapeHtml(row.financeStatusLabel || "-")}</span></td>
-      <td>${escapeHtml(row.domesticLogisticsInfo?.submitterRole || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")}</td>
       <td>${formatDateTime(row.submittedAt)}</td>
-      <td>${escapeHtml(row.domesticLogisticsInfo?.financeConfirmedByName || "-")}</td>
-      <td>${formatDateTime(row.domesticLogisticsInfo?.financeConfirmedAt)}</td>
       <td class="row-actions">
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
         ${canEditDomestic && row.domesticLogisticsInfo?.id && (isAdmin || row.financeStatus !== "CONFIRMED") ? `<button class="secondary-button small-link" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
@@ -3239,7 +3266,7 @@ function renderDomesticLogistics() {
         <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="14" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+  `).join("") : `<tr><td colspan="11" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
 }
 
 function renderDomesticLogisticsReviewCard(order = {}) {
@@ -6329,6 +6356,8 @@ function switchView(view, options = {}) {
   }
   if (!canView(view)) {
     toast("没有权限进入该模块");
+    ensureAuthorizedView();
+    updateCurrentView();
     return false;
   }
   if (state.view === "orders" && view !== "orders" && !options.skipOrderConfirm) {
