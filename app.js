@@ -120,18 +120,25 @@ const constants = {
     { value: "AFTER_ARRIVAL", label: "到港后付款" },
     { value: "INSTALLMENT", label: "分批付款" },
   ],
-  logisticsCostTypes: ["国内物流费", "国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
+  legacyCostTypeLabels: {
+    国内物流费: "拖车费",
+    国内拖车费: "拖车费",
+    文件费: "港杂费",
+    订舱费: "港杂费",
+  },
+  nonParticipatingCostTypes: ["目的港费用"],
+  logisticsCostTypes: ["拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用"],
   taxRefundLogisticsInvoiceRequirements: [
-    { key: "DOMESTIC_LOGISTICS", label: "国内物流费发票", missingCostLabel: "未录入国内物流费", costTypes: ["国内物流费"] },
+    { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "未录入拖车费", costTypes: ["拖车费", "国内物流费", "国内拖车费"] },
     { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
     { key: "PORT", label: "港杂费发票", missingCostLabel: "未录入港杂费", costTypes: ["港杂费"] },
   ],
-  taxRefundLogisticsInvoiceCostTypes: ["国内物流费", "报关费", "港杂费"],
+  taxRefundLogisticsInvoiceCostTypes: ["拖车费", "国内物流费", "国内拖车费", "报关费", "港杂费"],
   taxRefundLogisticsInvoiceSupplierTypes: ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"],
-  cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "银行手续费", "样品费", "其他费用"],
-  foreignCurrencyCostTypes: ["海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用"],
+  cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "拖车费", "报关费", "港杂费", "银行手续费", "样品费", "其他费用"],
+  foreignCurrencyCostTypes: ["海运费", "国外佣金", "国外代理费", "其他物流费用"],
   legacyForeignCurrencyCostTypes: ["佣金"],
-  costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用", "银行手续费", "样品费", "其他费用"],
+  costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用", "国外佣金", "国外代理费", "银行手续费", "样品费", "其他费用"],
   supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
@@ -362,8 +369,16 @@ function selectedCostType() {
 }
 
 function costTypeAllowsForeignCurrency(costType = selectedCostType()) {
-  return constants.foreignCurrencyCostTypes.includes(costType)
+  return constants.foreignCurrencyCostTypes.includes(normalizeCostType(costType))
     || constants.legacyForeignCurrencyCostTypes.includes(costType);
+}
+
+function normalizeCostType(costType = "") {
+  return constants.legacyCostTypeLabels[costType] || costType || "";
+}
+
+function costParticipatesInBusiness(cost = {}) {
+  return !constants.nonParticipatingCostTypes.includes(cost.costType);
 }
 
 function costCurrencyOptions(costType = selectedCostType()) {
@@ -2289,7 +2304,7 @@ function currentDetailOrder() {
 }
 
 function logisticsCostsForOrder(orderId) {
-  return costsForOrder(orderId).filter((cost) => constants.logisticsCostTypes.includes(cost.costType));
+  return costsForOrder(orderId).filter((cost) => constants.logisticsCostTypes.includes(normalizeCostType(cost.costType)));
 }
 
 function updateLogisticsDerived() {
@@ -2316,7 +2331,7 @@ function renderLogisticsTable(order) {
   $("#logistics-count").textContent = `${rows.length} 条`;
   $("#logistics-table").innerHTML = rows.length ? rows.map((cost) => `
     <tr>
-      <td>${escapeHtml(cost.costType)}</td>
+      <td>${escapeHtml(normalizeCostType(cost.costType))}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
       <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
       <td>${moneyCell({ currency: "CNY", amountCny: cost.amountCny })}</td>
@@ -2542,7 +2557,7 @@ function renderCostDetailsTable(rows = []) {
       <td><strong>${escapeHtml(cost.orderNo || "-")}</strong></td>
       <td>${escapeHtml(cost.blNo || cost.billOfLadingNo || "-")}</td>
       <td>${escapeHtml(cost.customerName || "-")}</td>
-      <td>${escapeHtml(cost.costType || "-")}</td>
+      <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
       <td>${escapeHtml(cost.supplierType || "-")}</td>
       <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
@@ -2658,7 +2673,7 @@ function closeCostDrawer({ reset = false } = {}) {
 function fillCostForm(cost) {
   if (!cost) return;
   clearDraft("cost");
-  setForm(costFields, cost);
+  setForm(costFields, { ...cost, costType: normalizeCostType(cost.costType) });
   $("#cost-id").value = cost.id;
   selectCostOrder(costOrderFromCost(cost), { persist: false });
   resetCostItems([cost]);
@@ -2712,7 +2727,7 @@ function renderCostDocuments() {
     return;
   }
   $("#cost-document-title").textContent = "供应商资料 / 发票资料";
-  $("#cost-document-subtitle").textContent = `${cost.orderNo || "-"} · ${cost.supplierName || cost.vendorName || "-"} · ${cost.costType || "-"}`;
+  $("#cost-document-subtitle").textContent = `${cost.orderNo || "-"} · ${cost.supplierName || cost.vendorName || "-"} · ${normalizeCostType(cost.costType) || "-"}`;
   body.innerHTML = costDocumentTypesForModal(cost).map((type) => costDocumentRow(cost, type)).join("");
   applyAccessControl();
 }
@@ -2763,8 +2778,10 @@ function renderProfit() {
   $("#profit-count").textContent = `${state.orders.length} 个订单`;
   $("#profit-table").innerHTML = state.orders.length ? state.orders.map((order) => {
     const costGroups = costsForOrder(order.id)
+      .filter(costParticipatesInBusiness)
       .reduce((acc, cost) => {
-        acc[cost.costType] = (acc[cost.costType] || 0) + cost.amountCny;
+        const label = normalizeCostType(cost.costType);
+        acc[label] = (acc[label] || 0) + cost.amountCny;
         return acc;
       }, {});
     return `
@@ -3327,7 +3344,7 @@ function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel
       <div class="tax-logistics-invoice-meta">
         <strong>${escapeHtml(label)}</strong>
         <span>${escapeHtml(cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-")}</span>
-        <span>${escapeHtml(cost.costType || "-")}</span>
+        <span>${escapeHtml(normalizeCostType(cost.costType) || "-")}</span>
         <span>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</span>
         <span class="status ${successCount ? "success" : "warning"}">${successCount ? "已收到" : "未收到"}</span>
       </div>
@@ -4606,7 +4623,7 @@ function editLogistics(id) {
     || costsForOrder(currentDetailOrder()?.id).find((item) => item.id === id);
   if (!cost) return;
   $("#logistics-id").value = cost.id;
-  $("#logistics-type").value = cost.costType;
+  $("#logistics-type").value = normalizeCostType(cost.costType);
   const supplier = cost.supplierId ? (supplierById(cost.supplierId) || {
     id: cost.supplierId,
     supplierName: cost.supplierName || cost.vendorName || "",
