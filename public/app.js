@@ -120,8 +120,13 @@ const constants = {
     { value: "AFTER_ARRIVAL", label: "到港后付款" },
     { value: "INSTALLMENT", label: "分批付款" },
   ],
-  logisticsCostTypes: ["国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
-  taxRefundLogisticsInvoiceCostTypes: ["国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "其他物流费用"],
+  logisticsCostTypes: ["国内物流费", "国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
+  taxRefundLogisticsInvoiceRequirements: [
+    { key: "DOMESTIC_LOGISTICS", label: "国内物流费发票", missingCostLabel: "未录入国内物流费", costTypes: ["国内物流费"] },
+    { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
+    { key: "PORT", label: "港杂费发票", missingCostLabel: "未录入港杂费", costTypes: ["港杂费"] },
+  ],
+  taxRefundLogisticsInvoiceCostTypes: ["国内物流费", "报关费", "港杂费"],
   taxRefundLogisticsInvoiceSupplierTypes: ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"],
   cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "银行手续费", "样品费", "其他费用"],
   foreignCurrencyCostTypes: ["海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用"],
@@ -192,6 +197,7 @@ const constants = {
     { value: "BILL_OF_LADING", label: "提单" },
     { value: "COMMERCIAL_INVOICE", label: "商业发票" },
     { value: "PACKING_LIST", label: "装箱单" },
+    { value: "EXPORT_INVOICE", label: "出口发票" },
   ],
   salesDocumentTypes: [
     { value: "SALES_CONTRACT", label: "销售合同" },
@@ -2361,13 +2367,15 @@ function taxRefundSupplierRequired(cost) {
 }
 
 function taxRefundLogisticsInvoiceRequired(cost = {}) {
-  if (!cost.supplierId) return false;
-  if (constants.taxRefundLogisticsInvoiceSupplierTypes.includes(cost.supplierType)) return true;
-  return cost.supplierType === "其他供应商" && constants.taxRefundLogisticsInvoiceCostTypes.includes(cost.costType);
+  return Boolean(cost.supplierId && logisticsInvoiceRequirementForCost(cost));
+}
+
+function logisticsInvoiceRequirementForCost(cost = {}) {
+  return constants.taxRefundLogisticsInvoiceRequirements.find((item) => item.costTypes.includes(cost.costType)) || null;
 }
 
 function logisticsInvoiceLabel(cost = {}) {
-  return cost.costType === "港杂费" ? "港杂费发票" : "物流发票";
+  return logisticsInvoiceRequirementForCost(cost)?.label || "物流港杂发票";
 }
 
 function renderDocumentGrid(order) {
@@ -2491,7 +2499,7 @@ function costMissingDocumentLabels(cost = {}) {
     !costDocumentRowsForType(cost, type.value).some((document) => document.uploadStatus === "SUCCESS")
   )).map((type) => {
     if (type.value === "SUPPLIER_PURCHASE_CONTRACT") return "缺合同";
-    if (taxRefundLogisticsInvoiceRequired(cost)) return cost.costType === "港杂费" ? "缺港杂发票" : "缺物流发票";
+    if (taxRefundLogisticsInvoiceRequired(cost)) return `缺${logisticsInvoiceLabel(cost)}`;
     return "缺发票";
   });
 }
@@ -2839,8 +2847,8 @@ function missingDocumentTargets(order = {}) {
       documentType: item.documentType || "SUPPLIER_INVOICE",
       supplierId: item.supplierId || "",
       costId: item.costId || "",
-      label: item.invoiceLabel || "物流发票",
-      title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流发票"}`,
+      label: item.invoiceLabel || "物流港杂资料",
+      title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流港杂资料"}`,
     });
   });
   return [...exportTargets, ...supplierTargets, ...logisticsTargets];
@@ -2867,14 +2875,18 @@ function taxMissingHtml(order = {}) {
   const factoryCostMissingLabels = [...new Set((completeness.supplier?.missing || [])
     .filter((item) => item.missingFactoryCost)
     .map(() => "缺少工厂供应商成本记录"))];
+  const logisticsCostMissingLabels = [...new Set((completeness.logistics?.missing || [])
+    .filter((item) => item.missingCost)
+    .map((item) => item.label || "未录入对应费用"))];
   const reminderCount = (completeness.supplier?.reminders?.length || 0) + (completeness.logistics?.reminders?.length || 0);
   const targetHtml = [
     ...(targets.length
       ? targets.map((target) => missingDocumentButton(order, target))
       : labels
-        .filter((label) => !factoryCostMissingLabels.includes(label))
+        .filter((label) => !factoryCostMissingLabels.includes(label) && !logisticsCostMissingLabels.includes(label))
         .map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`)),
     ...factoryCostMissingLabels.map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`),
+    ...logisticsCostMissingLabels.map((label) => `<span class="missing-doc-chip">${escapeHtml(label)}</span>`),
   ].join("");
   return `<div class="missing-docs tax-missing-docs">缺失：<span class="missing-doc-actions">${targetHtml}</span>${reminderCount ? `<small>${reminderCount} 项已超过 3 天</small>` : ""}</div>`;
 }
@@ -3033,7 +3045,7 @@ function renderTaxRefund() {
         <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${factoryCompletenessBadge(completeness)}</td>
-        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/0")}</td>
+        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -3264,7 +3276,15 @@ function taxRefundLogisticsInvoiceCosts(order = {}) {
   return (order.costs || []).filter(taxRefundLogisticsInvoiceRequired);
 }
 
-function renderTaxLogisticsInvoiceRow(order, cost) {
+function taxRefundLogisticsInvoiceGroups(order = {}) {
+  const costs = taxRefundLogisticsInvoiceCosts(order);
+  return constants.taxRefundLogisticsInvoiceRequirements.map((requirement) => ({
+    ...requirement,
+    costs: costs.filter((cost) => requirement.costTypes.includes(cost.costType)),
+  }));
+}
+
+function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel(cost)) {
   const docs = taxDetailDocumentRows(order, "SUPPLIER_INVOICE", { relatedModule: "SUPPLIER", costId: cost.id });
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
@@ -3274,8 +3294,9 @@ function renderTaxLogisticsInvoiceRow(order, cost) {
   return `
     <article class="tax-logistics-invoice-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="SUPPLIER_INVOICE">
       <div class="tax-logistics-invoice-meta">
-        <strong>${escapeHtml(cost.costType || "-")}</strong>
+        <strong>${escapeHtml(label)}</strong>
         <span>${escapeHtml(cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-")}</span>
+        <span>${escapeHtml(cost.costType || "-")}</span>
         <span>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</span>
         <span class="status ${successCount ? "success" : "warning"}">${successCount ? "已收到" : "未收到"}</span>
       </div>
@@ -3291,6 +3312,25 @@ function renderTaxLogisticsInvoiceRow(order, cost) {
         </label>
       ` : ""}
     </article>
+  `;
+}
+
+function renderTaxLogisticsInvoiceGroup(order, requirement) {
+  if (!requirement.costs.length) {
+    return `
+      <article class="tax-logistics-invoice-row is-missing-cost">
+        <div class="tax-logistics-invoice-meta">
+          <strong>${escapeHtml(requirement.label)}</strong>
+          <span class="status warning">${escapeHtml(requirement.missingCostLabel)}</span>
+        </div>
+        <div class="empty-state subtle">未录入对应费用，录入 ${escapeHtml(requirement.costTypes.join(" / "))} 后再上传对应发票。</div>
+      </article>
+    `;
+  }
+  return `
+    <div class="tax-logistics-invoice-group">
+      ${requirement.costs.map((cost) => renderTaxLogisticsInvoiceRow(order, cost, requirement.label)).join("")}
+    </div>
   `;
 }
 
@@ -3316,12 +3356,12 @@ function renderTaxRefundDetail() {
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const exportTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
   const supplierGroups = factorySupplierCosts(order);
-  const logisticsInvoiceCosts = taxRefundLogisticsInvoiceCosts(order);
+  const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
   body.innerHTML = `
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
       <div><span>工厂资料</span>${factoryCompletenessBadge(completeness)}</div>
-      <div><span>物流/港杂发票</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/0")}</div>
+      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
@@ -3341,8 +3381,8 @@ function renderTaxRefundDetail() {
       `).join("") : `<div class="empty-state subtle">请先在成本管理中录入工厂货款，并选择工厂供应商；系统将按供应商生成采购合同和增值税发票上传要求。</div>`}
     </section>
     <section class="tax-detail-section">
-      <h4>物流 / 港杂发票资料</h4>
-      ${logisticsInvoiceCosts.length ? `<div class="tax-logistics-invoice-list">${logisticsInvoiceCosts.map((cost) => renderTaxLogisticsInvoiceRow(order, cost)).join("")}</div>` : `<div class="empty-state subtle">当前订单没有需要纳入退税完整度的物流、报关、港杂或海运类发票。</div>`}
+      <h4>物流港杂资料</h4>
+      <div class="tax-logistics-invoice-list">${logisticsInvoiceGroups.map((requirement) => renderTaxLogisticsInvoiceGroup(order, requirement)).join("")}</div>
     </section>
   `;
   applyAccessControl();
