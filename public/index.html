@@ -641,101 +641,218 @@
 
         <section class="view-panel" id="manual-view">
           <section class="manual-hero">
-            <div>
-              <span>操作说明书</span>
-              <h3>外贸应收与单证协同平台</h3>
-              <p>TRD Platform</p>
-              <p>适用于业务、财务、成本录入、退税资料跟进和管理员日常维护。</p>
+            <div class="manual-hero-copy">
+              <span class="manual-kicker">TRD Platform Handbook</span>
+              <h3>操作说明书</h3>
+              <p>外贸应收、成本、物流与退税资料协同平台使用指南</p>
+              <div class="manual-meta-row">
+                <span>当前版本：v2.0</span>
+                <span>适用对象：业务 / 财务 / 成本 / 物流 / 管理员</span>
+                <span>更新时间：<time id="manual-updated-at">--</time></span>
+              </div>
             </div>
-            <div class="manual-version">
-              <strong>v1.0.1</strong>
-              <small data-app-version>当前版本：v1.0.1</small>
+            <div class="manual-hero-badge">
+              <strong>一票业务</strong>
+              <small>一个订单贯穿应收、成本、物流、退税和归档</small>
             </div>
           </section>
 
-          <section class="manual-grid">
-            <article class="manual-card">
-              <h4>1. 登录与权限</h4>
-              <ol>
-                <li>使用公司分配的邮箱和密码登录系统。</li>
-                <li>登录后左侧菜单会按账号权限显示，可进入的模块代表当前账号具备相应查看权限。</li>
-                <li>管理员可在系统设置中维护用户、角色、自定义菜单权限和基础资料。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>2. 经营总览</h4>
-              <ol>
-                <li>通过月份、关键词、币种、订单状态、收款状态和逾期状态筛选数据。</li>
-                <li>查看应收、回款、未收、逾期、低毛利、成本结构和业务员绩效。</li>
-                <li>点击重点列表中的订单或客户信息，可快速定位到相关业务数据。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>3. 应收订单</h4>
-              <ol>
-                <li>先选择客户，系统会带出业务员、客户国家和默认币种；提成比例由系统后台锁定。</li>
-                <li>录入订单号、金额、付款条款、交易条款、预计日期、提醒天数和订单状态。</li>
-                <li>付款条款选择见提单复印件、OA账期、到港后付款或分批付款时，按页面要求补齐对应日期或节点。</li>
-                <li>保存订单后，在订单详情资料中维护物流费用、出口单证和销售合同。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>4. 收款管理</h4>
-              <ol>
-                <li>搜索并选择应收订单，确认客户、订单号和币种无误。</li>
-                <li>录入收款日期、收款类型、金额、汇率、流水号、到账状态和备注。</li>
-                <li>保存后系统会更新订单已收、未收、多收、预付款差额和收款状态。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>5. 成本管理</h4>
-              <ol>
-                <li>选择对应应收订单，再录入成本类型、供应商、金额、币种、汇率和付款状态。</li>
-                <li>物流类费用可在应收订单详情中维护，也会进入成本和利润统计。</li>
-                <li>成本确认和供应商资料会影响利润核算、退税资料完整度和提成结算；发票状态由已上传的工厂增值税发票 PDF 自动判断。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>6. 利润分析</h4>
-              <ol>
-                <li>查看每个订单的最终应收、已到账金额、总成本、预计毛利、已实现毛利和成本结构。</li>
-                <li>当订单已收齐且物流成本确认完成后，财务或管理员可进行业务员提成结算。</li>
-                <li>低毛利、成本异常或未确认费用应先回到订单或成本模块核对来源数据。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>7. 退税资料</h4>
-              <ol>
-                <li>按订单查看出口资料、工厂资料和物流资料完整度。</li>
-                <li>资料完整后可提交退税，系统会自动归档到退税档案。</li>
-                <li>如系统提示资料异常，需回到订单详情或成本供应商资料中补齐 PDF 文件。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>8. 报表中心</h4>
-              <ol>
-                <li>先在经营总览设置筛选条件，再进入报表中心导出对应范围数据。</li>
-                <li>可导出应收订单、收款、成本、利润、提成、逾期催款等 CSV 或 Excel 报表。</li>
-                <li>完整数据备份仅管理员可导出，用于归档和迁移前留存。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>9. 系统设置</h4>
-              <ol>
-                <li>管理员可维护客户、供应商、用户、权限和汇率设置。</li>
-                <li>新增用户默认可设置角色权限，也可切换为自定义组合权限。</li>
-                <li>汇率设置会影响外币订单、收款和成本折人民币金额，修改前应确认公司口径。</li>
-              </ol>
-            </article>
-            <article class="manual-card">
-              <h4>10. 日常注意事项</h4>
-              <ol>
-                <li>订单号、客户、币种、金额和付款条款是后续收款、成本和利润核算的关键字段，保存前请重点核对。</li>
-                <li>附件和单证仅支持系统允许的文件类型和大小，上传失败时可重新选择文件。</li>
-                <li>删除、停用、状态变更和关键资料修改会写入操作日志，便于后续追溯。</li>
-              </ol>
-            </article>
+          <section class="manual-toolbar" aria-label="说明书工具">
+            <label class="manual-search">
+              <span>搜索说明书</span>
+              <input id="manual-search-input" type="search" placeholder="搜索章节、操作步骤、注意事项" />
+            </label>
+            <div class="manual-toolbar-actions">
+              <button class="secondary-button" id="manual-expand-all" type="button">展开全部</button>
+              <button class="secondary-button" id="manual-collapse-all" type="button">收起全部</button>
+            </div>
           </section>
+
+          <section class="manual-flow" id="manual-section-flow-overview" aria-label="业务流程卡片">
+            <article><strong>应收订单</strong><small>建立一票业务主索引</small></article>
+            <article><strong>收款管理</strong><small>登记客户实际回款</small></article>
+            <article><strong>成本管理</strong><small>录入并确认各类费用</small></article>
+            <article><strong>国内物流信息</strong><small>填写首程运输资料</small></article>
+            <article><strong>退税资料</strong><small>汇总单证与发票</small></article>
+            <article><strong>提交退税</strong><small>完整度 100% 后提交</small></article>
+            <article><strong>自动归档</strong><small>移入退税档案</small></article>
+            <article><strong>档案查询</strong><small>随时调取历史资料</small></article>
+          </section>
+
+          <section class="manual-rule-card">
+            <div>
+              <span>重要规则</span>
+              <h4>提交退税前必须总体完整度 100%</h4>
+            </div>
+            <ul>
+              <li>已提交退税后，订单自动归档。</li>
+              <li>归档不是删除，所有数据和附件完整保留。</li>
+              <li>已归档业务可在退税档案和报表中心随时调取。</li>
+              <li>退税归档不代表收款完成，收款管理不因退税归档而隐藏。</li>
+            </ul>
+          </section>
+
+          <section class="manual-layout">
+            <aside class="manual-toc" aria-label="操作说明书目录">
+              <button data-manual-target="manual-section-positioning" type="button">系统定位</button>
+              <button data-manual-target="manual-section-process" type="button">业务流程</button>
+              <button data-manual-target="manual-section-orders" type="button">应收订单</button>
+              <button data-manual-target="manual-section-payments" type="button">收款管理</button>
+              <button data-manual-target="manual-section-costs" type="button">成本管理</button>
+              <button data-manual-target="manual-section-domestic" type="button">国内物流信息</button>
+              <button data-manual-target="manual-section-tax" type="button">退税资料</button>
+              <button data-manual-target="manual-section-archive" type="button">提交退税与归档</button>
+              <button data-manual-target="manual-section-reports" type="button">报表中心</button>
+              <button data-manual-target="manual-section-settings" type="button">系统设置</button>
+              <button data-manual-target="manual-section-notes" type="button">日常注意事项</button>
+            </aside>
+
+            <div class="manual-content" id="manual-content">
+              <details class="manual-section-card" id="manual-section-positioning" data-manual-section open>
+                <summary><span>01</span><strong>系统定位</strong></summary>
+                <div class="manual-searchable">
+                  <p>本系统用于管理外贸业务从应收订单、客户回款、成本录入、国内物流资料、退税资料收集，到退税提交和资料归档的全过程。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>核心原则</h5><p>一票业务 = 一个订单。所有收款、成本、物流资料、退税资料都必须围绕订单进行管理。</p></div>
+                    <div><h5>模块入口</h5><p>从左侧菜单进入应收订单、收款管理、成本管理、国内物流信息、退税资料和报表中心。</p></div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-process" data-manual-section open>
+                <summary><span>02</span><strong>业务流程</strong></summary>
+                <div class="manual-searchable">
+                  <p>标准流程用于保证订单、资金、成本、资料和档案之间不断链。</p>
+                  <ol>
+                    <li>建立应收订单</li>
+                    <li>登记客户回款</li>
+                    <li>录入成本费用</li>
+                    <li>录入国内物流信息</li>
+                    <li>汇总退税资料</li>
+                    <li>检查总体完整度</li>
+                    <li>提交退税</li>
+                    <li>自动归档</li>
+                    <li>后续在档案中查询</li>
+                  </ol>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-orders" data-manual-section>
+                <summary><span>03</span><strong>应收订单</strong></summary>
+                <div class="manual-searchable">
+                  <p>业务员负责创建应收订单。订单是后续收款、成本、物流、退税资料的唯一业务主线。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>主要填写</h5><ul><li>客户名称、订单号、提单号</li><li>币种、汇率、预计应收金额、最终应收金额</li><li>付款条款、预计发货日期、提单日期、到期日、订单状态</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>订单号必须唯一。</li><li>客户名称统一大写。</li><li>币种来自客户资料或手动选择。</li><li>后续收款、成本、物流、退税都会关联该订单。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：应收订单</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-payments" data-manual-section>
+                <summary><span>04</span><strong>收款管理</strong></summary>
+                <div class="manual-searchable">
+                  <p>财务负责登记客户实际回款，系统根据已到账收款自动更新订单回款状态。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>支持类型</h5><ul><li>预付款</li><li>尾款</li><li>补差款</li><li>其他收款</li></ul></div>
+                    <div><h5>系统自动计算</h5><ul><li>已收金额、未收金额、多收金额</li><li>回款率、是否逾期</li><li>退税归档不会影响收款管理。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：收款管理</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-costs" data-manual-section>
+                <summary><span>05</span><strong>成本管理</strong></summary>
+                <div class="manual-searchable">
+                  <p>成本管理用于记录每票订单产生的全部费用，成本确认后进入利润分析和相关资料完整度计算。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>成本包括</h5><ul><li>工厂货款、拖车费、报关费、港杂费、海运费</li><li>银行手续费、国外佣金、样品费、其他费用</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>所有成本必须关联订单。</li><li>成本确认后才进入利润分析。</li><li>发票状态会影响退税资料完整度。</li><li>默认只显示当前业务，已归档业务可通过筛选查询。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：成本管理</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-domestic" data-manual-section>
+                <summary><span>06</span><strong>国内物流信息</strong></summary>
+                <div class="manual-searchable">
+                  <p>物流资料录入员、业务员或管理员填写国内首程运输信息，并上传报关资料。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>主要内容</h5><ul><li>运输方式、起运地、到达地</li><li>运输货物名称、起运日期</li><li>车牌号或快递单号</li><li>出口发票备注</li></ul></div>
+                    <div><h5>上传资料</h5><ul><li>报关单</li><li>放行通知书</li><li>报关委托书</li><li>上传后自动归属订单并进入退税资料统计。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：国内物流信息</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-tax" data-manual-section>
+                <summary><span>07</span><strong>退税资料</strong></summary>
+                <div class="manual-searchable">
+                  <p>退税资料模块用于按订单汇总出口退税所需资料，列表只保留总体完整度，详细资料在查看资料中展开。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>系统汇总</h5><ul><li>出口资料：销售合同、发票、提单、报关单、放行通知书、报关委托书</li><li>工厂资料：工厂合同、工厂发票</li><li>物流资料：报关费发票、拖车费发票、港杂费发票</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>退税资料只保留总体完整度。</li><li>缺失资料需要回到对应上传区域补齐。</li><li>总体完整度不足 100% 时不能提交退税。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：退税资料</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-archive" data-manual-section open>
+                <summary><span>08</span><strong>提交退税与归档</strong></summary>
+                <div class="manual-searchable">
+                  <p>提交退税必须满足总体完整度 = 100%。如果资料不足，系统会阻止提交并提示缺失资料。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>提交后系统自动执行</h5><ul><li>状态变为已提交退税。</li><li>订单自动归档。</li><li>从退税资料当前列表、成本管理当前业务、国内物流当前业务和经营总览待处理提醒中隐藏。</li></ul></div>
+                    <div><h5>归档说明</h5><ul><li>归档不是删除。</li><li>归档后的订单可在退税档案、报表中心、已归档业务筛选中查询和调取。</li><li>退税归档只代表资料链完成，不代表货款已经收齐。</li><li>收款管理不受退税归档影响。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：退税资料 → 查看资料 / 提交退税 / 退税档案</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-reports" data-manual-section>
+                <summary><span>09</span><strong>报表中心</strong></summary>
+                <div class="manual-searchable">
+                  <p>报表中心用于在线查询和按需下载业务数据，日常查询默认当前业务，历史查询可选择已归档业务或全部业务。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>支持报表</h5><ul><li>应收订单明细、收款明细、成本明细</li><li>利润分析、业务员提成、逾期催款、退税资料</li></ul></div>
+                    <div><h5>业务范围</h5><ul><li>当前业务</li><li>已归档业务</li><li>全部业务</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：报表中心</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-settings" data-manual-section>
+                <summary><span>10</span><strong>系统设置</strong></summary>
+                <div class="manual-searchable">
+                  <p>管理员维护基础资料、权限和系统口径。系统设置中的变更会影响业务数据展示和权限边界。</p>
+                  <div class="manual-section-grid">
+                    <div><h5>可维护内容</h5><ul><li>汇率设置、客户资料、供应商资料</li><li>用户与权限、操作日志</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>汇率影响所有外币折人民币金额。</li><li>客户资料中的业务员和提成比例会影响利润与提成统计。</li><li>用户权限决定能看到哪些模块。</li><li>操作日志用于追溯关键修改。</li></ul></div>
+                  </div>
+                  <p class="manual-entry-tip">相关入口：系统设置</p>
+                </div>
+              </details>
+
+              <details class="manual-section-card" id="manual-section-notes" data-manual-section>
+                <summary><span>11</span><strong>日常注意事项</strong></summary>
+                <div class="manual-searchable">
+                  <ol>
+                    <li>订单号、客户、币种、金额、付款条款保存前必须核对。</li>
+                    <li>所有收款、成本、物流、退税资料必须关联订单。</li>
+                    <li>成本未确认时，不应进入最终利润结算。</li>
+                    <li>总体完整度不足 100%，不允许提交退税。</li>
+                    <li>已提交退税后自动归档。</li>
+                    <li>归档不是删除，只是放入档案室。</li>
+                    <li>已归档业务可随时调取。</li>
+                    <li>收款未完成不影响退税归档。</li>
+                    <li>退税归档不等于订单关闭。</li>
+                    <li>任何关键修改都必须写入操作日志。</li>
+                  </ol>
+                </div>
+              </details>
+            </div>
+          </section>
+          <button class="manual-back-top" id="manual-back-top" type="button" hidden>返回顶部</button>
         </section>
 
         <section class="view-panel" id="settings-view">

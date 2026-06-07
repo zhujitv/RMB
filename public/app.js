@@ -1850,6 +1850,10 @@ function updateGlobalRefreshButton() {
   if (!button) return;
   if (!button.dataset.defaultRefreshText) button.dataset.defaultRefreshText = "刷新";
   if (state.globalRefreshLoading) return;
+  if (state.view === "manual") {
+    button.hidden = true;
+    return;
+  }
   button.textContent = currentRefreshLabel();
   button.disabled = !state.me || !state.view;
   button.hidden = !state.me;
@@ -1916,6 +1920,135 @@ async function handleGlobalRefresh() {
     setActionButtonLoading(button, false);
     updateGlobalRefreshButton();
   }
+}
+
+function formatManualUpdatedAt() {
+  const raw = document.lastModified;
+  const date = raw ? new Date(raw) : new Date();
+  if (Number.isNaN(date.getTime())) return today();
+  return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function clearManualHighlights() {
+  $$(".manual-highlight").forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+    parent.normalize();
+  });
+  $$("[data-manual-section]").forEach((section) => section.classList.remove("is-search-match"));
+}
+
+function highlightTextNode(node, keywordRegex) {
+  const text = node.nodeValue || "";
+  if (!keywordRegex.test(text)) return false;
+  keywordRegex.lastIndex = 0;
+  const fragment = document.createDocumentFragment();
+  let lastIndex = 0;
+  let matched = false;
+  text.replace(keywordRegex, (match, offset) => {
+    if (offset > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, offset)));
+    const mark = document.createElement("mark");
+    mark.className = "manual-highlight";
+    mark.textContent = match;
+    fragment.appendChild(mark);
+    lastIndex = offset + match.length;
+    matched = true;
+    return match;
+  });
+  if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+  node.parentNode?.replaceChild(fragment, node);
+  return matched;
+}
+
+function highlightManualSection(section, keywordRegex) {
+  const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest("button, input, textarea, select, mark")) return NodeFilter.FILTER_REJECT;
+      return node.nodeValue?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  return nodes.some((node) => highlightTextNode(node, keywordRegex));
+}
+
+function searchManual(keyword) {
+  clearManualHighlights();
+  const query = String(keyword || "").trim();
+  if (!query) return;
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const matches = [];
+  $$("[data-manual-section]").forEach((section) => {
+    const matched = highlightManualSection(section, regex);
+    section.classList.toggle("is-search-match", matched);
+    if (matched) {
+      section.open = true;
+      matches.push(section);
+    }
+  });
+  if (matches[0]) {
+    matches[0].scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    toast("未找到匹配的说明内容");
+  }
+}
+
+function updateManualTocActive() {
+  if (state.view !== "manual") return;
+  const sections = $$("[data-manual-section]");
+  let active = sections[0]?.id || "";
+  const top = 120;
+  sections.forEach((section) => {
+    if (section.getBoundingClientRect().top <= top) active = section.id;
+  });
+  $$(".manual-toc [data-manual-target]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.manualTarget === active);
+  });
+}
+
+function updateManualBackTop() {
+  const button = $("#manual-back-top");
+  if (!button) return;
+  button.hidden = state.view !== "manual" || window.scrollY < 360;
+}
+
+function bindManualEvents() {
+  const updatedAt = $("#manual-updated-at");
+  if (updatedAt) updatedAt.textContent = formatManualUpdatedAt();
+  $("#manual-search-input")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    searchManual(event.currentTarget.value);
+  });
+  $("#manual-search-input")?.addEventListener("input", (event) => {
+    if (!event.currentTarget.value.trim()) clearManualHighlights();
+  });
+  $("#manual-expand-all")?.addEventListener("click", () => {
+    $$("[data-manual-section]").forEach((section) => (section.open = true));
+    updateManualTocActive();
+  });
+  $("#manual-collapse-all")?.addEventListener("click", () => {
+    $$("[data-manual-section]").forEach((section) => (section.open = false));
+    clearManualHighlights();
+    if ($("#manual-search-input")) $("#manual-search-input").value = "";
+  });
+  $$(".manual-toc [data-manual-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const section = document.getElementById(button.dataset.manualTarget);
+      if (!section) return;
+      section.open = true;
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  $("#manual-back-top")?.addEventListener("click", () => {
+    $("#manual-view")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  window.addEventListener("scroll", () => {
+    updateManualBackTop();
+    updateManualTocActive();
+  }, { passive: true });
 }
 
 async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword) {
@@ -7078,6 +7211,7 @@ function bindAuthEvents() {
 
 function bindEvents() {
   bindAuthEvents();
+  bindManualEvents();
   $$(".nav-tab").forEach((button) => button.addEventListener("click", () => {
     switchView(button.dataset.view);
     closeMobileNav();
