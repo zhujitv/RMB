@@ -1,10 +1,11 @@
 const DRAFT_PREFIX = "fta-platform-draft:";
+const LAST_VIEW_PREFIX = "fta-platform-last-view:";
 const MAX_PDF_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_CONCURRENT_UPLOADS = 3;
 const APP_VERSION = "v1.0.1";
 
 const state = {
-  view: "dashboard",
+  view: "",
   me: null,
   session: null,
   passwordChangeRequired: false,
@@ -268,7 +269,7 @@ const roleMenus = {
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
   物流资料录入员: ["domesticLogistics"],
-  查看者: ["dashboard", "domesticLogistics", "profit", "reports", "manual"],
+  查看者: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
 };
 
 const roleScopeTexts = {
@@ -840,14 +841,43 @@ function canView(view) {
   return menus.includes(view);
 }
 
+function lastViewStorageKey(user = state.me) {
+  return user?.id ? `${LAST_VIEW_PREFIX}${user.id}` : "";
+}
+
+function rememberedViewForCurrentUser() {
+  const key = lastViewStorageKey();
+  if (!key) return "";
+  try {
+    const view = localStorage.getItem(key) || "";
+    return view && canView(view) ? view : "";
+  } catch (error) {
+    console.error("读取上次打开模块失败", error);
+    return "";
+  }
+}
+
+function rememberCurrentView() {
+  const key = lastViewStorageKey();
+  if (!key || !state.view || !canView(state.view)) return;
+  try {
+    localStorage.setItem(key, state.view);
+  } catch (error) {
+    console.error("保存上次打开模块失败", error);
+  }
+}
+
 function defaultViewForCurrentUser() {
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
+  const rememberedView = rememberedViewForCurrentUser();
+  if (rememberedView) return rememberedView;
   const roleDefaultViews = {
-    管理员: "dashboard",
-    财务: canView("taxRefund") ? "taxRefund" : "dashboard",
+    管理员: "orders",
+    财务: "payments",
     业务员: canView("orders") ? "orders" : "dashboard",
+    成本录入员: "costs",
     物流资料录入员: "domesticLogistics",
-    查看者: "dashboard",
+    查看者: "orders",
   };
   const preferred = roleDefaultViews[state.me?.role];
   if (preferred && menus.includes(preferred)) return preferred;
@@ -1483,25 +1513,28 @@ async function loadData() {
       return;
     }
     ensureAuthorizedView();
-    if (state.view === "domesticLogistics" && !canReadArea("orders") && !canReadArea("payments") && !canReadArea("costs")) {
-      state.overview = null;
-      state.orders = [];
-      state.payments = [];
-      state.costs = [];
-      state.availableCustomers = [];
-    } else {
-      const [data, availableData] = await Promise.all([
-        canView("dashboard") || canReadArea("orders") || canReadArea("payments") || canReadArea("costs")
-          ? api(`/api/ledger?${filterParams().toString()}`)
-          : Promise.resolve({ overview: null, orders: [], payments: [], costs: [] }),
-        canWriteArea("orders") ? api("/api/customers/available") : Promise.resolve({ customers: [] }),
-      ]);
-      state.overview = data.overview;
-      state.orders = data.orders || [];
-      state.payments = data.payments || [];
-      state.costs = [];
-      state.availableCustomers = availableData.customers || [];
-    }
+    const params = filterParams().toString();
+    const wantsOrders = ["dashboard", "orders", "payments", "profit"].includes(state.view) && canReadArea("orders");
+    const wantsPayments = ["dashboard", "payments"].includes(state.view) && canReadArea("payments");
+    const [ledgerData, ordersData, paymentsData, availableData] = await Promise.all([
+      state.view === "dashboard" && (canReadArea("orders") || canReadArea("payments") || canReadArea("costs"))
+        ? api(`/api/ledger?${params}`)
+        : Promise.resolve(null),
+      state.view !== "dashboard" && wantsOrders
+        ? api(`/api/orders?${params}`)
+        : Promise.resolve(null),
+      state.view !== "dashboard" && wantsPayments
+        ? api(`/api/payments?${params}`)
+        : Promise.resolve(null),
+      canWriteArea("orders") && state.view === "orders"
+        ? api("/api/customers/available")
+        : Promise.resolve({ customers: [] }),
+    ]);
+    state.overview = ledgerData?.overview || null;
+    state.orders = ledgerData?.orders || ordersData?.orders || [];
+    state.payments = ledgerData?.payments || paymentsData?.payments || [];
+    state.costs = [];
+    state.availableCustomers = availableData.customers || [];
     renderAll();
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
@@ -6468,8 +6501,10 @@ function switchView(view, options = {}) {
     resetOrderForm();
   }
   state.view = view;
+  if (!options.skipRemember) rememberCurrentView();
   updateCurrentView();
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
+  if (["dashboard", "orders", "payments", "profit"].includes(view)) loadData();
   if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
   if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
   if (view === "domesticLogistics") loadDomesticLogisticsList({ silent: true });
@@ -6743,6 +6778,7 @@ async function logoutCurrentUser() {
   state.session = null;
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+  state.view = "";
   clearLocalCaches();
   closeAccountMenu();
   closeLoginModal();
