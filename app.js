@@ -62,6 +62,9 @@ const state = {
   taxRefundOrders: [],
   taxRefundPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   taxRefundKeyword: "",
+  taxRefundMode: "current",
+  taxRefundMonth: "",
+  taxRefundStatusFilter: "",
   taxRefundDetailOrder: null,
   taxRefundDetailLoading: false,
   domesticLogisticsRows: [],
@@ -227,6 +230,7 @@ const constants = {
     { value: "READY", label: "资料完整待提交" },
     { value: "SUBMITTED", label: "已提交退税" },
     { value: "COMPLETED", label: "退税完成" },
+    { value: "ARCHIVED", label: "已办结" },
     { value: "PROBLEM", label: "资料异常" },
   ],
 };
@@ -927,6 +931,9 @@ function clearLocalCaches() {
   state.taxRefundOrders = [];
   state.taxRefundPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
   state.taxRefundKeyword = "";
+  state.taxRefundMode = "current";
+  state.taxRefundMonth = "";
+  state.taxRefundStatusFilter = "";
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
   state.domesticLogisticsRows = [];
@@ -1587,6 +1594,9 @@ async function loadTaxRefundList(options = {}) {
   });
   const keyword = String(state.taxRefundKeyword || "").trim();
   if (keyword) params.set("q", keyword);
+  params.set("mode", state.taxRefundMode || "current");
+  if (state.taxRefundMonth) params.set("month", state.taxRefundMonth);
+  if (state.taxRefundStatusFilter) params.set("status", state.taxRefundStatusFilter);
   try {
     const data = await api(`/api/tax-refunds?${params.toString()}`);
     state.taxRefundOrders = data.orders || [];
@@ -2177,7 +2187,7 @@ function renderStats(items) {
 function statusClass(status) {
   if (["已逾期", "已退回", "已取消", "停用", "已停用", "已拒绝", "REJECTED", "DISABLED", "FAILED", "PROBLEM", "NOT_READY"].includes(status)) return "danger";
   if (String(status || "").startsWith("不可结算")) return "danger";
-  if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "COMPLETED", "可结算", "已结算"].includes(status)) return "success";
+  if (["已收齐", "已结清", "已到账", "已支付", "启用", "已通过", "APPROVED", "SUCCESS", "READY", "COMPLETED", "ARCHIVED", "可结算", "已结算"].includes(status)) return "success";
   if (["即将到期", "待确认", "待审核", "部分收款", "部分到账", "部分支付", "多收款", "PENDING", "UPLOADING", "SUBMITTED", "未结算"].includes(status)) return "warning";
   return "";
 }
@@ -3395,15 +3405,20 @@ function renderTaxRefund() {
   if (!box) return;
   const rows = canReadArea("taxRefund") ? state.taxRefundOrders : [];
   const pagination = state.taxRefundPagination || { page: 1, pageSize: 20, total: rows.length, totalPages: 1 };
-  $("#tax-refund-count").textContent = `${pagination.total || 0} 个订单`;
+  $("#tax-refund-count").textContent = `${state.taxRefundMode === "archive" ? "档案" : "当前"} ${pagination.total || 0} 个订单`;
+  if ($("#tax-refund-mode")) $("#tax-refund-mode").value = state.taxRefundMode || "current";
   if ($("#tax-refund-search")) $("#tax-refund-search").value = state.taxRefundKeyword || "";
+  if ($("#tax-refund-month")) $("#tax-refund-month").value = state.taxRefundMonth || "";
+  if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = state.taxRefundStatusFilter || "";
   if ($("#tax-refund-page-info")) $("#tax-refund-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
   if ($("#tax-refund-prev")) $("#tax-refund-prev").disabled = (pagination.page || 1) <= 1;
   if ($("#tax-refund-next")) $("#tax-refund-next").disabled = (pagination.page || 1) >= (pagination.totalPages || 1);
   box.innerHTML = rows.length ? rows.map((order) => {
     const completeness = order.documentCompleteness || {};
     const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
-    const statusControl = canWriteArea("taxRefund")
+    const readOnlyArchive = state.taxRefundMode === "archive" || status === "ARCHIVED";
+    const canArchive = canWriteArea("taxRefund") && status === "COMPLETED";
+    const statusControl = canWriteArea("taxRefund") && !readOnlyArchive
       ? `<select class="tax-status-select" data-tax-status-order="${escapeHtml(order.id)}">${optionHtml(constants.taxRefundStatuses, status)}</select>`
       : `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`;
     return `
@@ -3420,6 +3435,7 @@ function renderTaxRefund() {
         <td>${statusControl}</td>
         <td class="row-actions">
           <button class="secondary-button small-link" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
+          ${canArchive ? `<button class="secondary-button small-link" data-archive-tax-refund="${escapeHtml(order.id)}" type="button">已办结归档</button>` : ""}
           <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
         </td>
       </tr>
@@ -3610,7 +3626,8 @@ function taxDetailDocumentRows(order, type, scope = {}) {
 function renderTaxDocumentItem(order, type, scope = {}) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+  const archived = order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive";
+  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = scope.relatedModule === "SUPPLIER" ? { costId: scope.costId || "", supplierId: scope.supplierId || "", relatedModule: "SUPPLIER" } : {};
   const busyStatus = uploadScopeStatus(order.id, type.value, supplierScope);
   const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
@@ -3625,7 +3642,7 @@ function renderTaxDocumentItem(order, type, scope = {}) {
           data-related-module="${escapeHtml(scope.relatedModule || documentRelatedModule(type.value))}" />`;
   const customsUpload = constants.domesticLogisticsDocumentTypes.some((item) => item.value === type.value);
   const exportOrSalesUpload = ["EXPORT", "SALES"].includes(scope.relatedModule || documentRelatedModule(type.value));
-  const canUpload = canWriteArea("documents")
+  const canUpload = !archived && canWriteArea("documents")
     && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
     && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
@@ -3681,7 +3698,8 @@ function taxRefundLogisticsInvoiceGroups(order = {}) {
 function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel(cost)) {
   const docs = taxDetailDocumentRows(order, "SUPPLIER_INVOICE", { relatedModule: "SUPPLIER", costId: cost.id });
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+  const archived = order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive";
+  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = { costId: cost.id, supplierId: cost.supplierId, relatedModule: "SUPPLIER" };
   const busyStatus = uploadScopeStatus(order.id, "SUPPLIER_INVOICE", supplierScope);
   const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
@@ -3695,7 +3713,7 @@ function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel
         <span class="status ${successCount ? "success" : "warning"}">${successCount ? "已收到" : "未收到"}</span>
       </div>
       <div class="document-file-list">${docsHtml}</div>
-      ${canWriteArea("documents") ? `
+      ${!archived && canWriteArea("documents") ? `
         <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
           <span>${escapeHtml(uploadText)}</span>
           <input type="file" accept="application/pdf,.pdf"
@@ -3754,7 +3772,24 @@ function renderTaxRefundDetail() {
   ];
   const supplierGroups = factorySupplierCosts(order);
   const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
+  const canArchive = canWriteArea("taxRefund") && order.taxRefundStatus === "COMPLETED";
+  const archiveInfoHtml = order.taxRefundStatus === "ARCHIVED" ? `
+    <section class="tax-detail-section">
+      <h4>办结记录</h4>
+      <div class="document-card uploaded">
+        <div class="document-card-meta">
+          <span>办结人：${escapeHtml(order.taxRefundArchivedByName || "-")}</span>
+          <span>办结时间：${formatDateTime(order.taxRefundArchivedAt)}</span>
+          ${order.taxRefundArchiveRemark ? `<span>备注：${escapeHtml(order.taxRefundArchiveRemark)}</span>` : ""}
+        </div>
+      </div>
+    </section>
+  ` : "";
   body.innerHTML = `
+    <div class="tax-detail-actions">
+      ${canArchive ? `<button class="primary-button" data-archive-tax-refund="${escapeHtml(order.id)}" type="button">已办结归档</button>` : ""}
+      <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
+    </div>
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
       <div><span>报关资料</span>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</div>
@@ -3763,6 +3798,7 @@ function renderTaxRefundDetail() {
       <div><span>物流资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
+    ${archiveInfoHtml}
     ${taxMissingHtml(order)}
     ${renderDomesticLogisticsReviewCard(order)}
     <section class="tax-detail-section">
@@ -5346,6 +5382,7 @@ async function refreshAfterTaxRefundMutation(orderId = "", costId = "") {
 
 async function deleteDocument(id) {
   if (!canWriteArea("documents")) return toast("没有权限删除单证");
+  if (state.taxRefundDetailOrder?.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能删除资料");
   if (!confirm("确认删除这份单证记录吗？R2 文件会保留归档。")) return;
   try {
     const document = Object.values(state.documentUploads).find((item) => item.id === id)
@@ -5364,12 +5401,12 @@ async function deleteDocument(id) {
   }
 }
 
-async function updateTaxStatus(orderId, status) {
+async function updateTaxStatus(orderId, status, extra = {}) {
   if (!canWriteArea("taxRefund")) return toast("没有权限修改退税状态");
   try {
     const result = await api(`/api/tax-refunds/${orderId}`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...extra }),
     });
     assertSuccessResponse(result, "退税状态更新失败");
     toast(result.message || "退税状态已更新");
@@ -5380,6 +5417,16 @@ async function updateTaxStatus(orderId, status) {
   } catch (error) {
     toast(error.message);
   }
+}
+
+async function archiveTaxRefund(orderId) {
+  if (!canWriteArea("taxRefund")) return toast("没有权限办结归档退税资料");
+  if (!window.confirm("确认该订单退税资料已办结并归档？")) return;
+  const archiveRemark = window.prompt("办结备注（可选）") || "";
+  await updateTaxStatus(orderId, "ARCHIVED", { archiveRemark });
+  state.taxRefundMode = "archive";
+  state.taxRefundStatusFilter = "ARCHIVED";
+  await loadTaxRefundList({ page: 1, silent: true });
 }
 
 async function deleteDomesticLogistics(id) {
@@ -7049,17 +7096,28 @@ function bindEvents() {
     if (select) updateTaxStatus(select.dataset.taxStatusOrder, select.value);
   });
   $("#tax-refund-table").addEventListener("click", (event) => {
+    const archiveButton = event.target.closest("[data-archive-tax-refund]");
+    if (archiveButton) return archiveTaxRefund(archiveButton.dataset.archiveTaxRefund);
     const detailButton = event.target.closest("[data-view-tax-detail]");
     if (detailButton) openTaxRefundDetail(detailButton.dataset.viewTaxDetail);
   });
   $("#tax-refund-filter-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    state.taxRefundMode = $("#tax-refund-mode")?.value || "current";
     state.taxRefundKeyword = $("#tax-refund-search")?.value || "";
+    state.taxRefundMonth = $("#tax-refund-month")?.value || "";
+    state.taxRefundStatusFilter = $("#tax-refund-status-filter")?.value || "";
     loadTaxRefundList({ page: 1 });
   });
   $("#tax-refund-reset").addEventListener("click", () => {
+    state.taxRefundMode = "current";
     state.taxRefundKeyword = "";
+    state.taxRefundMonth = "";
+    state.taxRefundStatusFilter = "";
+    if ($("#tax-refund-mode")) $("#tax-refund-mode").value = "current";
     if ($("#tax-refund-search")) $("#tax-refund-search").value = "";
+    if ($("#tax-refund-month")) $("#tax-refund-month").value = "";
+    if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = "";
     loadTaxRefundList({ page: 1 });
   });
   $("#tax-refund-prev").addEventListener("click", () => loadTaxRefundList({ page: Math.max(1, (state.taxRefundPagination.page || 1) - 1) }));
@@ -7114,6 +7172,8 @@ function bindEvents() {
       closeTaxRefundDetail();
       focusMissingDocumentTarget(missing.dataset);
     }
+    const archiveButton = event.target.closest("[data-archive-tax-refund]");
+    if (archiveButton) return archiveTaxRefund(archiveButton.dataset.archiveTaxRefund);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");
@@ -7126,6 +7186,7 @@ function bindEvents() {
       const file = documentInput.files?.[0];
       documentInput.value = "";
       if (!order) return toast("请先选择有效订单");
+      if (order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能上传资料");
       uploadDocumentFile(order, documentInput.dataset.documentType, file);
       return;
     }
@@ -7136,6 +7197,7 @@ function bindEvents() {
     const file = input.files?.[0];
     input.value = "";
     if (!order || !cost) return toast("请先选择有效成本记录");
+    if (order.taxRefundStatus === "ARCHIVED" || state.taxRefundMode === "archive") return toast("已办结档案只读，不能上传资料");
     uploadDocumentFile(order, input.dataset.costDocumentType, file, {
       costId: cost.id,
       supplierId: cost.supplierId,
@@ -7299,6 +7361,7 @@ function initSelects() {
   fillSelect("#report-payment-status", constants.paymentStatuses, "", true, "全部收款状态");
   fillSelect("#report-cost-type", constants.costTypes, "", true, "全部成本类型");
   fillSelect("#report-tax-status", constants.taxRefundStatuses, "", true, "全部退税状态");
+  fillSelect("#tax-refund-status-filter", constants.taxRefundStatuses, "", true, "全部退税状态");
   fillSelect("#order-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#payment-currency", constants.currencies, "USD");
   fillSelect("#customer-currency", constants.currencies, "", true, "不设置默认币种");

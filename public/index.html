@@ -513,7 +513,10 @@
           <section class="panel">
             <div class="panel-title"><h3>退税资料管理</h3><span id="tax-refund-count">0 个订单</span></div>
             <form class="tax-refund-toolbar" id="tax-refund-filter-form">
+              <select id="tax-refund-mode"><option value="current">当前资料</option><option value="archive">已办结档案</option></select>
               <input id="tax-refund-search" type="search" placeholder="搜索订单号 / 提单号 / 客户 / 供应商" />
+              <input id="tax-refund-month" type="month" />
+              <select id="tax-refund-status-filter"><option value="">全部退税状态</option></select>
               <button class="primary-button" type="submit">查询</button>
               <button class="secondary-button" id="tax-refund-reset" type="button">重置</button>
             </form>
