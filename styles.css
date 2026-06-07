@@ -26,6 +26,24 @@
   display: none !important;
 }
 
+body.auth-login #password-change-screen,
+body.auth-login #app-shell,
+body.auth-password #login-screen,
+body.auth-password #app-shell,
+body.auth-app #login-screen,
+body.auth-app #password-change-screen {
+  display: none !important;
+}
+
+body.auth-login #login-screen,
+body.auth-password #password-change-screen {
+  display: grid !important;
+}
+
+body.auth-app #app-shell {
+  display: block !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;

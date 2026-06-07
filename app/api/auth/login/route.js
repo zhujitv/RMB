@@ -18,6 +18,58 @@ import { prisma } from "../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+const LOGIN_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  passwordHash: true,
+  role: true,
+  phone: true,
+  avatarInitials: true,
+  defaultLanguage: true,
+  customPermissions: true,
+  mustChangePassword: true,
+  approvalStatus: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+function loginFailure(message, status, code) {
+  return NextResponse.json({
+    success: false,
+    error: message,
+    message,
+    code,
+  }, { status });
+}
+
+function classifyLoginServiceError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  if (
+    code === "P2022"
+    || /column .* does not exist/i.test(message)
+    || /unknown column/i.test(message)
+    || /supplier_id|allow_domestic_logistics_entry|domestic_logistics/i.test(message)
+  ) {
+    return {
+      code: "PRISMA_SCHEMA_MISMATCH",
+      message: "数据库结构未同步，请执行 npx prisma migrate deploy && npx prisma generate。",
+    };
+  }
+  if (["P1000", "P1001", "P1002", "P1017"].includes(code) || /database_url|connect|authentication failed/i.test(message)) {
+    return {
+      code: "DATABASE_CONNECTION_ERROR",
+      message: "数据库连接失败，请检查 DATABASE_URL 和数据库账号密码。",
+    };
+  }
+  return {
+    code: code || "LOGIN_SERVICE_ERROR",
+    message: "登录服务异常，请联系管理员查看部署日志。",
+  };
+}
+
 export async function POST(request) {
   try {
     await ensureDefaultUsers();
@@ -26,38 +78,51 @@ export async function POST(request) {
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {
       await recordLoginAttempt(request, email, false, null);
-      return NextResponse.json({ success: false, error: "默认管理员账号已禁用，请使用公司管理员账号登录。", message: "默认管理员账号已禁用，请使用公司管理员账号登录。" }, { status: 403 });
+      console.error("login failed: default admin disabled", { email });
+      return loginFailure("默认管理员账号已禁用，请使用公司管理员账号登录。", 403, "DEFAULT_ADMIN_DISABLED");
     }
     let user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" } },
+      select: LOGIN_USER_SELECT,
     });
-    if (!user || !(await verifyPassword(body.password || "", user.passwordHash))) {
+    if (!user) {
+      console.error("login failed: user not found", { email });
+      await recordLoginAttempt(request, email, false, null);
+      return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
+    }
+    if (!(await verifyPassword(body.password || "", user.passwordHash))) {
+      console.error("login failed: wrong password", { email, userId: user.id });
       await recordLoginAttempt(request, email, false, user?.id || null);
-      return NextResponse.json({ success: false, error: "邮箱或密码错误", message: "邮箱或密码错误" }, { status: 401 });
+      return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
+      console.error("login failed: user pending approval", { email, userId: user.id });
       await recordLoginAttempt(request, email, false, user.id);
-      return NextResponse.json({ success: false, error: "账号待管理员审核", message: "账号待管理员审核" }, { status: 403 });
+      return loginFailure("账号待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
+      console.error("login failed: user rejected", { email, userId: user.id });
       await recordLoginAttempt(request, email, false, user.id);
-      return NextResponse.json({ success: false, error: "账号审核未通过，请联系管理员。", message: "账号审核未通过，请联系管理员。" }, { status: 403 });
+      return loginFailure("账号审核未通过，请联系管理员。", 403, "USER_REJECTED");
     }
     if (!user.isActive || approvalStatus === "DISABLED") {
+      console.error("login failed: user disabled", { email, userId: user.id });
       await recordLoginAttempt(request, email, false, user.id);
-      return NextResponse.json({ success: false, error: "账号已停用", message: "账号已停用" }, { status: 403 });
+      return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
     if (passwordHashNeedsUpgrade(user.passwordHash)) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { passwordHash: upgradePasswordHash(body.password || "") },
+        select: LOGIN_USER_SELECT,
       });
     }
     if (!user.mustChangePassword && isInitialAdminPasswordLogin(user, body.password || "")) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { mustChangePassword: true },
+        select: LOGIN_USER_SELECT,
       });
     }
     await recordLoginAttempt(request, email, true, user.id);
@@ -73,12 +138,17 @@ export async function POST(request) {
     return response;
   } catch (error) {
     if (error?.status) return apiError(error, "登录失败");
-    console.error("登录服务异常", error);
+    const classified = classifyLoginServiceError(error);
+    console.error("login failed: database error", {
+      code: classified.code,
+      prismaCode: error?.code || "",
+      message: error?.message || "",
+    });
     return NextResponse.json({
       success: false,
-      error: "登录服务异常，请联系管理员查看部署日志。",
-      message: "登录服务异常，请联系管理员查看部署日志。",
-      code: error?.code || "LOGIN_SERVICE_ERROR",
+      error: classified.message,
+      message: classified.message,
+      code: classified.code,
     }, { status: 500 });
   }
 }

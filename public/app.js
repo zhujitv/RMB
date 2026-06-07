@@ -975,11 +975,24 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   if (loginScreen) loginScreen.hidden = Boolean(loggedIn);
   if (passwordChangeScreen) passwordChangeScreen.hidden = !showPasswordChange;
   if (appShell) appShell.hidden = !loggedIn || showPasswordChange;
+  document.body.classList.remove("auth-login", "auth-password", "auth-app");
+  document.body.classList.add(!loggedIn ? "auth-login" : (showPasswordChange ? "auth-password" : "auth-app"));
   document.body.classList.toggle("is-authenticated", Boolean(loggedIn && !showPasswordChange));
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
   }
+}
+
+function clearAuthStorage() {
+  ["token", "session", "currentUser", "authToken", "fta_user_id", "fta_session"].forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch (error) {
+      console.error("清理认证缓存失败", { key, error });
+    }
+  });
 }
 
 function resetAuthState({ clearDrafts = false } = {}) {
@@ -988,6 +1001,7 @@ function resetAuthState({ clearDrafts = false } = {}) {
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "dashboard";
+  clearAuthStorage();
   if (clearDrafts) clearLocalCaches();
   else {
     state.orders = [];
