@@ -389,6 +389,10 @@ function percent(value) {
   return `${(((Number(value) || 0) * 100)).toFixed(2)}%`;
 }
 
+function percentOrDash(value) {
+  return value == null || !Number.isFinite(Number(value)) ? "--" : percent(value);
+}
+
 function today() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -1847,12 +1851,29 @@ function orderDashboardRows() {
     const receivable = Number(order.summary?.receivableCny || 0);
     const paid = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
     const unpaid = Math.max(receivable - paid, 0);
-    const cost = Number(order.summary?.totalCostCny || 0);
+    const cost = Number(order.summary?.confirmedTotalCostCny ?? order.summary?.totalCostCny ?? 0);
+    const paidConfirmedCost = Number(order.summary?.paidConfirmedCostCny || 0);
     const dueNo = dayNumber(order.dueDate);
     const remainingDays = dueNo == null || todayNo == null ? null : dueNo - todayNo;
-    const grossProfit = receivable - cost;
-    const grossMargin = receivable > 0 ? grossProfit / receivable : 0;
-    return { order, receivable, paid, unpaid, cost, remainingDays, grossProfit, grossMargin };
+    const expectedGrossProfit = Number(order.summary?.expectedGrossProfit ?? (receivable - cost));
+    const expectedGrossMargin = order.summary?.expectedGrossMargin ?? (receivable > 0 ? expectedGrossProfit / receivable : null);
+    const realizedGrossProfit = Number(order.summary?.realizedGrossProfit ?? (paid - paidConfirmedCost));
+    const realizedGrossMargin = order.summary?.realizedGrossMargin ?? (paid > 0 ? realizedGrossProfit / paid : null);
+    return {
+      order,
+      receivable,
+      paid,
+      unpaid,
+      cost,
+      paidConfirmedCost,
+      remainingDays,
+      grossProfit: expectedGrossProfit,
+      grossMargin: expectedGrossMargin,
+      expectedGrossProfit,
+      expectedGrossMargin,
+      realizedGrossProfit,
+      realizedGrossMargin,
+    };
   });
 }
 
@@ -1992,7 +2013,7 @@ function renderCommissionRank(rows) {
         const createdMonth = String(row.order.createdAt || "").slice(0, 7);
         const createdYear = createdMonth.slice(0, 4);
         const estimated = Number(row.order.summary?.estimatedCommissionCny || 0);
-        const settleable = Number(row.order.summary?.settleableCommissionCny || row.order.summary?.commissionAmountCny || 0);
+        const settleable = Number(row.order.summary?.settleableCommissionCny ?? row.order.summary?.commissionAmountCny ?? 0);
         const settled = row.order.commissionStatus === "已结算" ? settleable : 0;
         const pending = row.order.commissionStatus === "已结算" ? 0 : estimated;
         if (createdMonth === month) acc.month += row.order.commissionStatus === "已结算" ? settled : estimated;
@@ -2127,21 +2148,20 @@ function renderDashboard() {
   const paidTotal = rows.reduce((sum, row) => sum + row.paid, 0);
   const unpaidTotal = rows.reduce((sum, row) => sum + row.unpaid, 0);
   const overdueAmount = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0).reduce((sum, row) => sum + row.unpaid, 0);
-  const dueSoonAmount = rows.filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7).reduce((sum, row) => sum + row.unpaid, 0);
-  const costTotal = rows.reduce((sum, row) => sum + row.cost, 0);
-  const actualProfit = paidTotal - costTotal;
-  const averageMargin = receivableTotal > 0 ? (receivableTotal - costTotal) / receivableTotal : 0;
-  const commissionTotal = rows.reduce((sum, row) => sum + Number(row.order.summary?.estimatedCommissionCny || row.order.summary?.settleableCommissionCny || row.order.summary?.commissionAmountCny || 0), 0);
+  const expectedProfit = rows.reduce((sum, row) => sum + row.expectedGrossProfit, 0);
+  const expectedMargin = receivableTotal > 0 ? expectedProfit / receivableTotal : null;
+  const realizedProfit = rows.reduce((sum, row) => sum + row.realizedGrossProfit, 0);
+  const realizedMargin = paidTotal > 0 ? realizedProfit / paidTotal : null;
 
   $("#metric-grid").innerHTML = [
     metric("应收总额", money(receivableTotal), `${rows.length} 个订单`, "tone-blue"),
     metric("已收回款", money(paidTotal), "只统计已到账收款", "tone-green"),
     metric("未收余额", money(unpaidTotal), "最终应收 - 已到账", "tone-red"),
     metric("逾期金额", money(overdueAmount), "已过到期日且未收齐", "tone-red strong-alert"),
-    metric("实际毛利", money(actualProfit), "已到账金额 - 已确认成本", actualProfit >= 0 ? "tone-green" : "tone-red"),
-    metric("平均毛利率", percent(averageMargin), "按当前订单加权计算", averageMargin >= 0.08 ? "tone-indigo" : "tone-orange"),
-    metric("业务员提成", canReadArea("commissions") ? money(commissionTotal) : "无权限", "预计提成合计", "tone-purple"),
-    metric("订单数量", `${rows.length}`, `即将到期 ${money(dueSoonAmount)}`, "tone-blue"),
+    metric("预计毛利", money(expectedProfit), "最终应收 - 已确认总成本", expectedProfit >= 0 ? "tone-green" : "tone-red"),
+    metric("预计毛利率", percentOrDash(expectedMargin), "预计毛利 ÷ 最终应收", Number(expectedMargin || 0) >= 0.08 ? "tone-indigo" : "tone-orange"),
+    metric("已实现毛利", money(realizedProfit), "已到账 - 已支付且已确认成本", realizedProfit >= 0 ? "tone-green" : "tone-red"),
+    metric("已实现毛利率", percentOrDash(realizedMargin), "已实现毛利 ÷ 已到账", realizedProfit >= 0 ? "tone-indigo" : "tone-orange"),
   ].join("");
 
   renderTrendChart(rows);
@@ -2897,6 +2917,7 @@ function renderProfit() {
   $("#profit-table").innerHTML = state.orders.length ? state.orders.map((order) => {
     const costGroups = costsForOrder(order.id)
       .filter(costParticipatesInBusiness)
+      .filter((cost) => cost.costConfirmed === true)
       .reduce((acc, cost) => {
         const label = normalizeCostType(cost.costType);
         acc[label] = (acc[label] || 0) + cost.amountCny;
@@ -2905,25 +2926,21 @@ function renderProfit() {
     return `
       <tr>
         <td>${escapeHtml(order.orderNo)}</td>
-        <td>${escapeHtml(order.blNo || "-")}</td>
         <td>${escapeHtml(order.customerName)}</td>
-        <td>${escapeHtml(order.salespersonName || "-")}</td>
-        <td>${Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2)}%</td>
-        <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
-        <td>${money(order.summary.logisticsCostCny || 0)}</td>
-        <td>${money(order.summary.commissionBaseCny || 0)}</td>
-        <td>${money(order.summary.commissionAmountCny || order.summary.estimatedCommissionCny || 0)}<small>${escapeHtml(commissionAmountHint(order))}</small></td>
-        <td><span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span></td>
         <td>${money(order.summary.receivableCny)}</td>
-        <td>${money(order.summary.outstandingCny)}</td>
-        <td>${money(order.summary.totalCostCny)}</td>
-        <td>${money(order.summary.actualGrossProfit)}</td>
-        <td>${percent(order.summary.grossMargin)}</td>
+        <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
+        <td>${money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)}</td>
+        <td>${money(order.summary.expectedGrossProfit)}</td>
+        <td>${percentOrDash(order.summary.expectedGrossMargin ?? order.summary.grossMargin)}</td>
+        <td>${money(order.summary.realizedGrossProfit ?? order.summary.actualGrossProfit)}</td>
+        <td>${percentOrDash(order.summary.realizedGrossMargin)}</td>
+        <td>${money(order.summary.commissionAmountCny ?? order.summary.estimatedCommissionCny ?? 0)}<small>${escapeHtml(commissionAmountHint(order))}</small></td>
+        <td><span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span></td>
         <td>${Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"}</td>
         ${rowActions(commissionActionCell(order))}
       </tr>
     `;
-  }).join("") : emptyRow(17);
+  }).join("") : emptyRow(13);
 }
 
 function completenessText(part = {}) {
@@ -5448,16 +5465,16 @@ async function settleCommission(orderId) {
   if (!order) return toast("未找到对应订单");
   const summary = order.summary || {};
   const paidAmount = Number(summary.arrivedPaymentsCny || 0);
-  const logisticsCost = Number(summary.confirmedLogisticsCostCny || summary.logisticsCostCny || 0);
-  const commissionBase = Number(summary.settleableCommissionBaseCny ?? Math.max(paidAmount - logisticsCost, 0));
+  const confirmedCost = Number(summary.confirmedTotalCostCny ?? summary.totalCostCny ?? 0);
+  const commissionBase = Number(summary.settleableCommissionBaseCny ?? Math.max(Number(summary.receivableCny || 0) - confirmedCost, 0));
   const commissionRate = Number(summary.commissionRate ?? order.salespersonCommissionRate ?? 0);
-  const commissionAmount = Number(summary.commissionAmountCny || summary.settleableCommissionCny || 0);
+  const commissionAmount = Number(summary.commissionAmountCny ?? summary.settleableCommissionCny ?? 0);
   const confirmed = confirm([
     "确认结算业务员提成？",
     `订单号：${order.orderNo}`,
     `已到账：${money(paidAmount)}`,
-    `已确认物流成本：${money(logisticsCost)}`,
-    `提成基数：${money(commissionBase)}`,
+    `已确认总成本：${money(confirmedCost)}`,
+    `提成基数（预计毛利）：${money(commissionBase)}`,
     `提成比例：${commissionRate.toFixed(2)}%`,
     `应结算提成：${money(commissionAmount)}`,
   ].join("\n"));
