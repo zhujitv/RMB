@@ -2154,6 +2154,14 @@ function documentTypeLabel(type) {
   return constants.allDocumentTypes.find((item) => item.value === type)?.label || type || "-";
 }
 
+function displayDocumentLabel(value) {
+  return constants.allDocumentTypes.find((item) => item.value === value)?.label || value || "-";
+}
+
+function displayCompletenessText(text = "") {
+  return String(text || "").replace(/\b[A-Z_]+\b/g, (match) => displayDocumentLabel(match));
+}
+
 function missingSupplierDocumentLabel(type) {
   return type === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票";
 }
@@ -2380,7 +2388,7 @@ function logisticsInvoiceLabel(cost = {}) {
 
 function renderDocumentGrid(order) {
   const completeness = order.documentCompleteness || { text: "暂无单证", completed: 0, total: constants.documentTypes.length };
-  $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${completeness.text || "-"}`;
+  $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${displayCompletenessText(completeness.text || "-")}`;
   $("#document-grid").innerHTML = constants.documentTypes.map((type) => {
     const docs = documentRowsForType(order, type.value);
     const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
@@ -2869,7 +2877,7 @@ function missingDocumentButton(order, target) {
 
 function taxMissingHtml(order = {}) {
   const completeness = order.documentCompleteness || {};
-  const labels = completeness.missingLabels || [];
+  const labels = (completeness.missingLabels || []).map(displayDocumentLabel);
   if (!labels.length) return `<small class="positive-note">资料完整</small>`;
   const targets = missingDocumentTargets(order);
   const factoryCostMissingLabels = [...new Set((completeness.supplier?.missing || [])
