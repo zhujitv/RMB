@@ -80,11 +80,13 @@ const constants = {
     { value: "INSTALLMENT", label: "分批付款" },
   ],
   logisticsCostTypes: ["国内拖车费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "保险费", "其他物流费用"],
+  taxRefundLogisticsInvoiceCostTypes: ["国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "其他物流费用"],
+  taxRefundLogisticsInvoiceSupplierTypes: ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"],
   cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "银行手续费", "样品费", "其他费用"],
   foreignCurrencyCostTypes: ["海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用"],
   legacyForeignCurrencyCostTypes: ["佣金"],
   costTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "国内物流费", "报关费", "港杂费", "文件费", "订舱费", "海运费", "目的港费用", "国外佣金", "国外代理费", "其他物流费用", "银行手续费", "样品费", "其他费用"],
-  supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "其他供应商"],
+  supplierTypes: ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"],
   supplierStatuses: ["启用", "停用"],
   reminderStatuses: ["未到期", "即将到期", "已逾期", "已结清"],
   permissionModes: [
@@ -1988,6 +1990,16 @@ function taxRefundSupplierRequired(cost) {
   return ["工厂货款", "原材料货款", "采购货款", "产品货款"].includes(cost.costType) && cost.supplierType === "工厂供应商";
 }
 
+function taxRefundLogisticsInvoiceRequired(cost = {}) {
+  if (!cost.supplierId) return false;
+  if (constants.taxRefundLogisticsInvoiceSupplierTypes.includes(cost.supplierType)) return true;
+  return cost.supplierType === "其他供应商" && constants.taxRefundLogisticsInvoiceCostTypes.includes(cost.costType);
+}
+
+function logisticsInvoiceLabel(cost = {}) {
+  return cost.costType === "港杂费" ? "港杂费发票" : "物流发票";
+}
+
 function renderDocumentGrid(order) {
   const completeness = order.documentCompleteness || { text: "暂无单证", completed: 0, total: constants.documentTypes.length };
   $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${completeness.text || "-"}`;
@@ -2046,73 +2058,48 @@ function renderPayments() {
   `).join("") : emptyRow(10);
 }
 
+function costDocumentUploadItem(cost, type, { label = type.label, required = true } = {}) {
+  const order = orderById(cost.orderId) || costOrderFromCost(cost);
+  const docs = costDocumentRowsForType(cost, type.value);
+  const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+  const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
+  const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
+  const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
+  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  return `
+    <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
+      <div class="supplier-doc-head">
+        <strong>${escapeHtml(label)}</strong>
+        ${documentStatusBadge(successCount)}
+      </div>
+      ${required ? "" : `<span class="supplier-doc-note">非退税必检资料</span>`}
+      ${docsHtml}
+      ${canWriteArea("documents") ? `
+        <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+          <span>${escapeHtml(uploadText)}</span>
+          <input type="file" accept="application/pdf,.pdf"
+            data-cost-document-type="${escapeHtml(type.value)}"
+            data-order-id="${escapeHtml(order.id || cost.orderId)}"
+            data-cost-id="${escapeHtml(cost.id)}"
+            data-supplier-id="${escapeHtml(cost.supplierId)}" />
+        </label>
+      ` : ""}
+    </div>
+  `;
+}
+
 function supplierDocumentCell(cost) {
   if (!cost.supplierId) return `<span class="muted-cell">未关联供应商资料</span>`;
-  const isRequired = taxRefundSupplierRequired(cost);
-  const order = orderById(cost.orderId) || costOrderFromCost(cost);
-  if (!isRequired) {
-    return `
-      <div class="supplier-doc-list is-optional">
-        <span class="supplier-doc-note">非工厂供应商，不参与退税检查</span>
-        ${constants.supplierDocumentTypes.map((type) => {
-          const docs = costDocumentRowsForType(cost, type.value);
-          const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-          const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
-          const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
-          const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
-          const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
-          return `
-            <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
-              <div class="supplier-doc-head">
-                <strong>${escapeHtml(type.label)}</strong>
-                ${documentStatusBadge(successCount)}
-              </div>
-              ${docsHtml}
-              ${canWriteArea("documents") ? `
-                <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
-                  <span>${escapeHtml(uploadText)}</span>
-                  <input type="file" accept="application/pdf,.pdf"
-                    data-cost-document-type="${escapeHtml(type.value)}"
-                    data-order-id="${escapeHtml(order.id || cost.orderId)}"
-                    data-cost-id="${escapeHtml(cost.id)}"
-                    data-supplier-id="${escapeHtml(cost.supplierId)}" />
-                </label>
-              ` : ""}
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
+  const factoryRequired = taxRefundSupplierRequired(cost);
+  const logisticsInvoiceRequired = taxRefundLogisticsInvoiceRequired(cost);
+  if (factoryRequired) {
+    return `<div class="supplier-doc-list">${constants.supplierDocumentTypes.map((type) => costDocumentUploadItem(cost, type)).join("")}</div>`;
   }
+  const invoiceType = { value: "SUPPLIER_INVOICE", label: logisticsInvoiceLabel(cost) };
   return `
-    <div class="supplier-doc-list">
-      ${constants.supplierDocumentTypes.map((type) => {
-        const docs = costDocumentRowsForType(cost, type.value);
-        const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-        const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
-        const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
-        const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
-        const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
-        return `
-          <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
-            <div class="supplier-doc-head">
-              <strong>${escapeHtml(type.label)}</strong>
-              ${documentStatusBadge(successCount)}
-            </div>
-            ${docsHtml}
-            ${canWriteArea("documents") ? `
-              <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
-                <span>${escapeHtml(uploadText)}</span>
-                <input type="file" accept="application/pdf,.pdf"
-                  data-cost-document-type="${escapeHtml(type.value)}"
-                  data-order-id="${escapeHtml(order.id || cost.orderId)}"
-                  data-cost-id="${escapeHtml(cost.id)}"
-                  data-supplier-id="${escapeHtml(cost.supplierId)}" />
-              </label>
-            ` : ""}
-          </div>
-        `;
-      }).join("")}
+    <div class="supplier-doc-list ${logisticsInvoiceRequired ? "" : "is-optional"}">
+      ${logisticsInvoiceRequired ? "" : `<span class="supplier-doc-note">当前成本不参与退税完整度检查</span>`}
+      ${costDocumentUploadItem(cost, invoiceType, { required: logisticsInvoiceRequired })}
     </div>
   `;
 }
@@ -2215,6 +2202,10 @@ function supplierCompletenessBadge(part = {}) {
   return `${completenessBadge(normalized, complete)}${note}`;
 }
 
+function factoryCompletenessBadge(completeness = {}) {
+  return supplierCompletenessBadge(completeness.factory || completeness.supplier || {});
+}
+
 function missingDocumentTargets(order = {}) {
   const completeness = order.documentCompleteness || {};
   const exportTargets = (completeness.export?.missingTypes || []).map((type) => ({
@@ -2226,8 +2217,9 @@ function missingDocumentTargets(order = {}) {
   const seenSupplierTypes = new Set();
   (completeness.supplier?.missing || []).forEach((item) => {
     if (item.missingFactoryCost) return;
-    if (!item.documentType || seenSupplierTypes.has(item.documentType)) return;
-    seenSupplierTypes.add(item.documentType);
+    const key = `${item.supplierId || ""}:${item.documentType || ""}`;
+    if (!item.documentType || seenSupplierTypes.has(key)) return;
+    seenSupplierTypes.add(key);
     supplierTargets.push({
       module: "supplier",
       documentType: item.documentType,
@@ -2236,7 +2228,21 @@ function missingDocumentTargets(order = {}) {
       title: item.supplierName ? `${item.supplierName}${missingSupplierDocumentLabel(item.documentType)}` : missingSupplierDocumentLabel(item.documentType),
     });
   });
-  return [...exportTargets, ...supplierTargets];
+  const logisticsTargets = [];
+  const seenLogisticsCosts = new Set();
+  (completeness.logistics?.missing || []).forEach((item) => {
+    if (!item.costId || seenLogisticsCosts.has(item.costId)) return;
+    seenLogisticsCosts.add(item.costId);
+    logisticsTargets.push({
+      module: "logisticsInvoice",
+      documentType: item.documentType || "SUPPLIER_INVOICE",
+      supplierId: item.supplierId || "",
+      costId: item.costId || "",
+      label: item.invoiceLabel || "物流发票",
+      title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流发票"}`,
+    });
+  });
+  return [...exportTargets, ...supplierTargets, ...logisticsTargets];
 }
 
 function missingDocumentButton(order, target) {
@@ -2247,6 +2253,7 @@ function missingDocumentButton(order, target) {
       data-missing-order-id="${escapeHtml(order.id)}"
       data-missing-document-type="${escapeHtml(target.documentType)}"
       data-missing-supplier-id="${escapeHtml(target.supplierId || "")}"
+      data-missing-cost-id="${escapeHtml(target.costId || "")}"
       title="${escapeHtml(target.title || target.label)}">${escapeHtml(target.label)}</button>
   `;
 }
@@ -2259,7 +2266,7 @@ function taxMissingHtml(order = {}) {
   const factoryCostMissingLabels = [...new Set((completeness.supplier?.missing || [])
     .filter((item) => item.missingFactoryCost)
     .map(() => "缺少工厂供应商成本记录"))];
-  const reminderCount = completeness.supplier?.reminders?.length || 0;
+  const reminderCount = (completeness.supplier?.reminders?.length || 0) + (completeness.logistics?.reminders?.length || 0);
   const targetHtml = [
     ...(targets.length
       ? targets.map((target) => missingDocumentButton(order, target))
@@ -2348,7 +2355,8 @@ function renderTaxRefund() {
         <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
         <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
-        <td>${supplierCompletenessBadge(completeness.supplier)}</td>
+        <td>${factoryCompletenessBadge(completeness)}</td>
+        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/0")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -2357,7 +2365,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="11" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="12" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -2530,11 +2538,19 @@ function taxDetailDocumentRows(order, type, scope = {}) {
     if (scope.costId && document.costId !== scope.costId) return false;
     return true;
   });
-  return documents;
+  const transient = Object.values(state.documentUploads)
+    .filter((item) => (
+      item.orderId === order.id
+      && item.documentType === type
+      && documentMatchesScope(item, scope)
+      && !documents.some((document) => document.id === item.id)
+    ));
+  return [...transient, ...documents];
 }
 
 function renderTaxDocumentItem(order, type, scope = {}) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
+  const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
   const customsNotice = type.value === "CUSTOMS_ENTRY_FORM"
     ? `<div class="customs-important-note">用于核对供应商开票品名、数量、单位、金额</div>`
@@ -2543,7 +2559,7 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
       <div class="document-card-head">
         <strong>${escapeHtml(type.label)}</strong>
-        ${documentStatusBadge(docs.length)}
+        ${documentStatusBadge(successCount)}
       </div>
       ${customsNotice}
       <div class="document-file-list">${docsHtml}</div>
@@ -2554,7 +2570,7 @@ function renderTaxDocumentItem(order, type, scope = {}) {
 function factorySupplierCosts(order = {}) {
   const bySupplier = {};
   (order.costs || [])
-    .filter((cost) => cost.supplierId && cost.supplierType === "工厂供应商")
+    .filter(taxRefundSupplierRequired)
     .forEach((cost) => {
       const key = cost.supplierId;
       bySupplier[key] ||= {
@@ -2565,6 +2581,40 @@ function factorySupplierCosts(order = {}) {
       bySupplier[key].costs.push(cost);
     });
   return Object.values(bySupplier);
+}
+
+function taxRefundLogisticsInvoiceCosts(order = {}) {
+  return (order.costs || []).filter(taxRefundLogisticsInvoiceRequired);
+}
+
+function renderTaxLogisticsInvoiceRow(order, cost) {
+  const docs = taxDetailDocumentRows(order, "SUPPLIER_INVOICE", { relatedModule: "SUPPLIER", costId: cost.id });
+  const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+  const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document)).join("") : emptyUploadState();
+  const supplierScope = { costId: cost.id, supplierId: cost.supplierId, relatedModule: "SUPPLIER" };
+  const busyStatus = uploadScopeStatus(order.id, "SUPPLIER_INVOICE", supplierScope);
+  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  return `
+    <article class="tax-logistics-invoice-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="SUPPLIER_INVOICE">
+      <div class="tax-logistics-invoice-meta">
+        <strong>${escapeHtml(cost.costType || "-")}</strong>
+        <span>${escapeHtml(cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-")}</span>
+        <span>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</span>
+        <span class="status ${successCount ? "success" : "warning"}">${successCount ? "已收到" : "未收到"}</span>
+      </div>
+      <div class="document-file-list">${docsHtml}</div>
+      ${canWriteArea("documents") ? `
+        <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+          <span>${escapeHtml(uploadText)}</span>
+          <input type="file" accept="application/pdf,.pdf"
+            data-cost-document-type="SUPPLIER_INVOICE"
+            data-order-id="${escapeHtml(order.id)}"
+            data-cost-id="${escapeHtml(cost.id)}"
+            data-supplier-id="${escapeHtml(cost.supplierId || "")}" />
+        </label>
+      ` : ""}
+    </article>
+  `;
 }
 
 function renderTaxRefundDetail() {
@@ -2589,10 +2639,12 @@ function renderTaxRefundDetail() {
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const exportTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
   const supplierGroups = factorySupplierCosts(order);
+  const logisticsInvoiceCosts = taxRefundLogisticsInvoiceCosts(order);
   body.innerHTML = `
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
-      <div><span>供应商资料</span>${supplierCompletenessBadge(completeness.supplier)}</div>
+      <div><span>工厂资料</span>${factoryCompletenessBadge(completeness)}</div>
+      <div><span>物流/港杂发票</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/0")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
@@ -2610,6 +2662,10 @@ function renderTaxRefundDetail() {
           </div>
         </div>
       `).join("") : `<div class="empty-state subtle">请先在成本管理中录入工厂货款，并选择工厂供应商；系统将按供应商生成采购合同和增值税发票上传要求。</div>`}
+    </section>
+    <section class="tax-detail-section">
+      <h4>物流 / 港杂发票资料</h4>
+      ${logisticsInvoiceCosts.length ? `<div class="tax-logistics-invoice-list">${logisticsInvoiceCosts.map((cost) => renderTaxLogisticsInvoiceRow(order, cost)).join("")}</div>` : `<div class="empty-state subtle">当前订单没有需要纳入退税完整度的物流、报关、港杂或海运类发票。</div>`}
     </section>
   `;
   applyAccessControl();
@@ -3740,6 +3796,7 @@ function refreshDocumentViews() {
   renderOrderDetails();
   renderCosts();
   renderTaxRefund();
+  if (state.taxRefundDetailOrder && !$("#tax-detail-drawer")?.hidden) renderTaxRefundDetail();
   applyAccessControl();
   updateUploadQueueNotice();
 }
@@ -4712,6 +4769,10 @@ function findMissingSupplierCost(orderId, supplierId, documentType) {
   return candidates.find((cost) => !successfulCostDocument(cost, documentType)) || candidates[0] || null;
 }
 
+function findTaxRefundCost(orderId, costId) {
+  return costsForOrder(orderId).find((cost) => cost.id === costId) || null;
+}
+
 function findSupplierDocumentUploadItem(costId, documentType) {
   return $$("[data-supplier-doc-item]").find((element) => (
     element.dataset.costId === costId && element.dataset.documentType === documentType
@@ -4733,10 +4794,29 @@ function focusSupplierMissingDocument(orderId, supplierId, documentType) {
   deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType));
 }
 
+function focusCostMissingInvoice(orderId, costId, documentType) {
+  const cost = findTaxRefundCost(orderId, costId);
+  if (!cost) {
+    toast("未找到对应成本记录");
+    return;
+  }
+  if (!canView("costs")) {
+    toast("没有权限进入成本录入模块");
+    return;
+  }
+  if (!switchView("costs", { skipOrderConfirm: true })) return;
+  renderCosts();
+  deferHighlightUploadArea(() => findSupplierDocumentUploadItem(cost.id, documentType));
+}
+
 function focusMissingDocumentTarget(dataset = {}) {
   const orderId = dataset.missingOrderId || "";
   const documentType = dataset.missingDocumentType || "";
   if (!orderId || !documentType) return;
+  if (dataset.missingModule === "logisticsInvoice") {
+    focusCostMissingInvoice(orderId, dataset.missingCostId || "", documentType);
+    return;
+  }
   if (dataset.missingModule === "supplier") {
     focusSupplierMissingDocument(orderId, dataset.missingSupplierId || "", documentType);
     return;
@@ -5147,6 +5227,20 @@ function bindEvents() {
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
+  });
+  $("#tax-detail-drawer").addEventListener("change", (event) => {
+    const input = event.target.closest("[data-cost-document-type]");
+    if (!input) return;
+    const order = state.taxRefundDetailOrder;
+    const cost = order?.costs?.find((item) => item.id === input.dataset.costId);
+    const file = input.files?.[0];
+    input.value = "";
+    if (!order || !cost) return toast("请先选择有效成本记录");
+    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+      costId: cost.id,
+      supplierId: cost.supplierId,
+      relatedModule: "SUPPLIER",
+    });
   });
   $("#pdf-preview-modal").addEventListener("click", (event) => {
     if (event.target.closest("[data-close-pdf-preview]")) closePdfPreview();

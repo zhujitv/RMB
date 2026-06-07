@@ -1688,6 +1688,33 @@ textarea:focus {
   gap: 10px;
 }
 
+.tax-logistics-invoice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tax-logistics-invoice-row {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+
+.tax-logistics-invoice-meta {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(140px, 1.4fr) minmax(130px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #334155;
+}
+
+.tax-logistics-invoice-meta strong {
+  color: #0f172a;
+}
+
 .pdf-preview-modal[hidden] {
   display: none;
 }
@@ -3116,6 +3143,10 @@ body.modal-open {
 
   .tax-detail-summary,
   .tax-detail-doc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-logistics-invoice-meta {
     grid-template-columns: 1fr;
   }
 
