@@ -46,6 +46,9 @@ const state = {
   userSettingsRole: "",
   auditLogSettingsKeyword: "",
   auditLogSettingsAction: "",
+  costArchiveScope: "current",
+  domesticLogisticsArchiveScope: "current",
+  reportArchiveScope: "current",
   permissionConfigLoaded: false,
   permissionConfigLoading: false,
   permissionConfigError: "",
@@ -107,6 +110,7 @@ const state = {
     rateType: "现汇买入价",
     autoUpdate: true,
     allowManualEdit: true,
+    allowAdminIncompleteTaxSubmit: false,
   },
 };
 
@@ -229,8 +233,8 @@ const constants = {
   taxRefundStatuses: [
     { value: "NOT_READY", label: "资料不完整" },
     { value: "READY", label: "资料完整待提交" },
-    { value: "SUBMITTED", label: "已提交退税" },
     { value: "PROBLEM", label: "资料异常" },
+    { value: "SUBMITTED", label: "已提交退税" },
   ],
 };
 
@@ -335,6 +339,20 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function customerDisplayName(value, fallback = "") {
+  const text = String(value || "").trim();
+  return text ? text.toUpperCase() : fallback;
+}
+
+function normalizeCustomerNameFields(record = {}) {
+  return {
+    ...record,
+    customerName: customerDisplayName(record.customerName),
+    customerShortName: customerDisplayName(record.customerShortName, record.customerShortName || ""),
+    name: customerDisplayName(record.name, record.name || ""),
+  };
 }
 
 function money(value) {
@@ -1019,6 +1037,9 @@ function clearLocalCaches() {
   state.userSettingsRole = "";
   state.auditLogSettingsKeyword = "";
   state.auditLogSettingsAction = "";
+  state.costArchiveScope = "current";
+  state.domesticLogisticsArchiveScope = "current";
+  state.reportArchiveScope = "current";
   state.permissionConfigLoaded = false;
   state.permissionConfigLoading = false;
   state.permissionConfigError = "";
@@ -1222,7 +1243,7 @@ function fillOrderSelect(id, selected = "") {
   const el = $(id);
   if (!el) return;
   el.innerHTML = `<option value="">请选择应收订单</option>${state.orders.map((order) => (
-    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(order.customerName)} - 未收 ${money(order.summary.outstandingCny)}</option>`
+    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(customerDisplayName(order.customerName))} - 未收 ${money(order.summary.outstandingCny)}</option>`
   )).join("")}`;
 }
 
@@ -1237,7 +1258,7 @@ function costOrderLabel(order) {
   return [
     order?.orderNo || "-",
     order?.billOfLadingNo || order?.blNo || "-",
-    order?.customerName || "-",
+    customerDisplayName(order?.customerName || "-"),
     `未收 ${currencyAmount(order?.currency, orderOutstandingOriginal(order))}`,
     order?.status || "-",
   ].join(" | ");
@@ -1264,7 +1285,7 @@ function fillCostOrderDisplay(order = null) {
   $("#cost-customer-id").value = order?.customerId || "";
   $("#cost-order-no").value = order?.orderNo || "";
   $("#cost-bl-no").value = order?.billOfLadingNo || order?.blNo || "";
-  $("#cost-customer").value = order?.customerName || "";
+  $("#cost-customer").value = customerDisplayName(order?.customerName || "");
   $("#cost-order-currency").value = order ? `${order.currency || "-"} / ${Number(order.exchangeRate || 0).toFixed(4)}` : "";
 }
 
@@ -1337,7 +1358,7 @@ function canReceivePayment(order) {
 function paymentOrderLabel(order) {
   const outstanding = order.summary?.outstandingCny;
   const outstandingText = Number.isFinite(Number(outstanding)) ? money(outstanding) : "-";
-  return `${order.orderNo} | ${order.customerName} | 未收 ${outstandingText}`;
+  return `${order.orderNo} | ${customerDisplayName(order?.customerName)} | 未收 ${outstandingText}`;
 }
 
 function paymentOrderSort(a, b) {
@@ -1366,7 +1387,7 @@ function fillAvailableCustomerSelect(selected = "") {
   if (!el) return;
   const options = state.availableCustomers.map((customer) => {
     const note = customer.country ? ` / ${customer.country}` : "";
-    return `<option value="${customer.id}" ${customer.id === selected ? "selected" : ""}>${escapeHtml(customer.name)}${escapeHtml(note)}</option>`;
+    return `<option value="${customer.id}" ${customer.id === selected ? "selected" : ""}>${escapeHtml(customerDisplayName(customer.name))}${escapeHtml(note)}</option>`;
   }).join("");
   el.innerHTML = `<option value="">请选择客户</option>${options}`;
   if (selected) el.value = selected;
@@ -1403,7 +1424,7 @@ function orderFallbackFromCost(cost = null) {
     blNo: cost.blNo || cost.billOfLadingNo || "",
     billOfLadingNo: cost.billOfLadingNo || cost.blNo || "",
     customerId: cost.customerId || "",
-    customerName: cost.customerName || "",
+    customerName: customerDisplayName(cost?.customerName || ""),
     currency: cost.orderCurrency || "",
     exchangeRate: cost.orderExchangeRate || 0,
     status: cost.orderStatus || "",
@@ -1531,10 +1552,13 @@ async function loadData() {
         : Promise.resolve({ customers: [] }),
     ]);
     state.overview = ledgerData?.overview || null;
-    state.orders = ledgerData?.orders || ordersData?.orders || [];
-    state.payments = ledgerData?.payments || paymentsData?.payments || [];
+    state.orders = (ledgerData?.orders || ordersData?.orders || []).map((order) => normalizeCustomerNameFields(order));
+    state.payments = (ledgerData?.payments || paymentsData?.payments || []).map((payment) => ({
+      ...normalizeCustomerNameFields(payment),
+      customerName: customerDisplayName(payment.customerName),
+    }));
     state.costs = [];
-    state.availableCustomers = availableData.customers || [];
+    state.availableCustomers = (availableData.customers || []).map((customer) => normalizeCustomerNameFields(customer));
     renderAll();
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
@@ -1552,6 +1576,7 @@ function costListParams(options = {}) {
     page: String(page),
     pageSize: String(pageSize),
     view: state.costView === "orders" ? "orders" : "details",
+    archiveScope: state.costArchiveScope || "current",
   });
   const fields = {
     keyword: "#cost-filter-keyword",
@@ -1602,13 +1627,19 @@ async function loadCostList(options = {}) {
       totalPages: pageData.totalPages,
     };
     if (state.costView === "orders") {
-      state.costOrderRows = pageData.rows;
+      state.costOrderRows = (pageData.rows || []).map((row) => ({
+        ...normalizeCustomerNameFields(row),
+      }));
       state.costRows = [];
       state.costs = [];
     } else {
-      state.costRows = pageData.rows;
+      state.costRows = (pageData.rows || []).map((row) => ({
+        ...normalizeCustomerNameFields(row),
+      }));
       state.costOrderRows = [];
-      state.costs = pageData.rows;
+      state.costs = (pageData.rows || []).map((row) => ({
+        ...normalizeCustomerNameFields(row),
+      }));
     }
     renderCosts();
   } catch (error) {
@@ -1634,7 +1665,11 @@ async function loadTaxRefundList(options = {}) {
   if (state.taxRefundStatusFilter) params.set("status", state.taxRefundStatusFilter);
   try {
     const data = await api(`/api/tax-refunds?${params.toString()}`);
-    state.taxRefundOrders = data.orders || [];
+    state.taxRefundOrders = (data.orders || []).map((order) => ({
+      ...normalizeCustomerNameFields(order),
+      customerName: customerDisplayName(order.customerName),
+      customerShortName: customerDisplayName(order.customerShortName),
+    }));
     state.taxRefundPagination = data.pagination || { page, pageSize, total: state.taxRefundOrders.length, totalPages: 1 };
     renderTaxRefund();
   } catch (error) {
@@ -1647,9 +1682,14 @@ async function loadDomesticLogisticsList(options = {}) {
   const params = new URLSearchParams();
   const keyword = String(state.domesticLogisticsKeyword || "").trim();
   if (keyword) params.set("keyword", keyword);
+  params.set("archiveScope", state.domesticLogisticsArchiveScope || "current");
   try {
     const data = await api(`/api/domestic-logistics?${params.toString()}`);
-    state.domesticLogisticsRows = data.rows || [];
+    state.domesticLogisticsRows = (data.rows || []).map((row) => ({
+      ...normalizeCustomerNameFields(row),
+      customerName: customerDisplayName(row.customerName),
+      customerShortName: customerDisplayName(row.customerShortName),
+    }));
     renderDomesticLogistics();
   } catch (error) {
     if (!options.silent) toast(error.message);
@@ -1725,7 +1765,7 @@ async function loadSettingsTab(tabKey = state.settingsActiveTab, options = {}) {
         keyword: state.customerSettingsKeyword,
       });
       const data = await api(`/api/settings/customers?${params.toString()}`);
-      state.customers = data.customers || [];
+      state.customers = (data.customers || []).map((customer) => normalizeCustomerNameFields(customer));
       state.customerSalespeople = data.salespeople || state.customerSalespeople || [];
       state.customersPagination = mergePagination(state.customersPagination, data.pagination, 20);
     }
@@ -2107,7 +2147,7 @@ function renderRiskList(id, rows, mode) {
     <article class="rank-item risk-item ${isOverdue ? "is-danger" : "is-warning"}">
       <span class="rank-index">${index + 1}</span>
       <div class="rank-main">
-        <strong>${dashboardLink(order.customerName, "party", order.customerName)} · ${dashboardLink(order.orderNo, "order", order.orderNo)}</strong>
+        <strong>${dashboardLink(customerDisplayName(order.customerName), "party", customerDisplayName(order.customerName))} · ${dashboardLink(order.orderNo, "order", order.orderNo)}</strong>
         <small>提单号 ${escapeHtml(order.blNo || "待发货")} · 到期日 ${escapeHtml(order.dueDate || "-")} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
       </div>
       <div class="rank-value ${isOverdue ? "negative" : ""}">
@@ -2126,7 +2166,7 @@ function renderLowMarginList(rows) {
     <article class="rank-item ${grossProfit < 0 || grossMargin < 0.08 ? "risk-item is-danger" : ""}">
       <span class="rank-index">${index + 1}</span>
       <div class="rank-main">
-        <strong>${dashboardLink(order.orderNo, "order", order.orderNo)} · ${dashboardLink(order.customerName, "party", order.customerName)}</strong>
+        <strong>${dashboardLink(order.orderNo, "order", order.orderNo)} · ${dashboardLink(customerDisplayName(order.customerName), "party", customerDisplayName(order.customerName))}</strong>
         <small>应收 ${money(receivable)} · 成本 ${money(cost)} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
         <i class="mini-progress"><b class="${grossProfit < 0 ? "negative" : ""}" style="width:${Math.max(4, (Math.abs(grossProfit) / max) * 100)}%"></b></i>
       </div>
@@ -2318,7 +2358,7 @@ function renderOrders() {
     <tr>
       <td><strong>${escapeHtml(order.orderNo)}</strong></td>
       <td>${escapeHtml(order.blNo || "待发货")}</td>
-      <td>${escapeHtml(order.customerName)}</td>
+      <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
       <td>${paymentTermCell(order)}</td>
       <td>${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary.reminderStatus)}</small></td>
       <td>${moneyCell({ currency: order.currency, amount: order.estimatedReceivableAmount, amountCny: order.estimatedReceivableAmountCny })}</td>
@@ -2607,7 +2647,7 @@ function renderOrderDetails() {
   const order = currentDetailOrder();
   panel.hidden = !order;
   if (!order) return;
-  $("#order-detail-title").textContent = `${order.orderNo} · ${order.customerName} · ${order.blNo || "待发货"}`;
+  $("#order-detail-title").textContent = `${order.orderNo} · ${customerDisplayName(order.customerName)} · ${order.blNo || "待发货"}`;
   renderLogisticsTable(order);
   renderDocumentGrid(order);
   applyAccessControl();
@@ -2618,7 +2658,7 @@ function renderPayments() {
   $("#payments-table").innerHTML = state.payments.length ? state.payments.map((payment) => `
     <tr>
       <td>${escapeHtml(payment.orderNo)}</td>
-      <td>${escapeHtml(payment.customerName)}</td>
+      <td>${escapeHtml(customerDisplayName(payment.customerName))}</td>
       <td>${payment.paymentDate}</td>
       <td>${escapeHtml(payment.paymentType || "尾款")}</td>
       <td>${moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny })}</td>
@@ -2726,7 +2766,7 @@ function renderCostDetailsTable(rows = []) {
     <tr>
       <td><strong>${escapeHtml(cost.orderNo || "-")}</strong></td>
       <td>${escapeHtml(cost.blNo || cost.billOfLadingNo || "-")}</td>
-      <td>${escapeHtml(cost.customerName || "-")}</td>
+      <td>${escapeHtml(customerDisplayName(cost.customerName || "-"))}</td>
       <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
       <td>${escapeHtml(cost.supplierType || "-")}</td>
@@ -2754,7 +2794,7 @@ function renderCostOrderSummaryTable(rows = []) {
     <tr>
       <td><strong>${escapeHtml(order.orderNo || "-")}</strong></td>
       <td>${escapeHtml(order.blNo || order.billOfLadingNo || "-")}</td>
-      <td>${escapeHtml(order.customerName || "-")}</td>
+      <td>${escapeHtml(customerDisplayName(order.customerName || "-"))}</td>
       <td>${money(order.receivableAmountCny || 0)}</td>
       <td>${money(order.totalCostCny || 0)}</td>
       <td>${money(order.factoryCostCny || 0)}</td>
@@ -2781,6 +2821,7 @@ function renderCosts() {
   const detailsMode = state.costView !== "orders";
   const rows = detailsMode ? state.costRows : state.costOrderRows;
   const total = state.costPagination.total || rows.length || 0;
+  if ($("#cost-filter-archive-scope")) $("#cost-filter-archive-scope").value = state.costArchiveScope || "current";
   if ($("#costs-count")) $("#costs-count").textContent = state.costListLoading ? "正在加载..." : `${total} 条`;
   if ($("#cost-details-table")) $("#cost-details-table").hidden = !detailsMode;
   if ($("#cost-orders-table")) $("#cost-orders-table").hidden = detailsMode;
@@ -2957,7 +2998,7 @@ function renderProfit() {
     return `
       <tr>
         <td>${escapeHtml(order.orderNo)}</td>
-        <td>${escapeHtml(order.customerName)}</td>
+        <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
         <td>${money(order.summary.receivableCny)}</td>
         <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)}</td>
@@ -2989,6 +3030,13 @@ function completenessBadge(part = {}, completeOverride = null, emptyText = "") {
   const complete = completeOverride == null ? completed >= total : completeOverride;
   const stateClass = complete ? "is-complete" : (completed > 0 ? "is-partial" : "is-missing");
   return `<span class="tax-completeness ${stateClass}">${escapeHtml(completenessText(part))}</span>`;
+}
+
+function taxOverallPercentBadge(completeness = {}) {
+  const { completed, total, percent } = taxCompletenessProgress(completeness);
+  const stateClass = percent >= 100 ? "is-complete" : (percent >= 80 ? "is-partial" : "is-missing");
+  const title = total ? `${completed}/${total}` : "0/0";
+  return `<span class="tax-completeness ${stateClass}" title="${escapeHtml(title)}">${percent}%</span>`;
 }
 
 function supplierCompletenessBadge(part = {}) {
@@ -3267,7 +3315,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-logistics-order-summary").innerHTML = `
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
-    <div><span>客户简称</span><strong>${escapeHtml(row.customerShortName || row.customerName || "-")}</strong></div>
+    <div><span>客户简称</span><strong>${escapeHtml(customerDisplayName(row.customerShortName || row.customerName || "-"))}</strong></div>
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
@@ -3307,13 +3355,14 @@ function renderDomesticLogistics() {
   const rows = canReadArea("domesticLogistics") ? state.domesticLogisticsRows : [];
   $("#domestic-logistics-count").textContent = `${rows.length} 个订单`;
   if ($("#domestic-logistics-search")) $("#domestic-logistics-search").value = state.domesticLogisticsKeyword || "";
+  if ($("#domestic-logistics-archive-scope")) $("#domestic-logistics-archive-scope").value = state.domesticLogisticsArchiveScope || "current";
   const canEditDomestic = canWriteArea("domesticLogistics");
   const isAdmin = state.me?.role === "管理员";
   box.innerHTML = rows.length ? rows.map((row) => `
     <tr>
       <td><strong>${escapeHtml(row.orderNo || "-")}</strong></td>
       <td>${escapeHtml(row.blNo || "待发货")}</td>
-      <td>${escapeHtml(row.customerShortName || row.customerName || "-")}</td>
+      <td>${escapeHtml(customerDisplayName(row.customerShortName || row.customerName || "-"))}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
@@ -3462,6 +3511,7 @@ function renderTaxRefund() {
     const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
     const readOnlyArchive = state.taxRefundMode === "archive" || status === "SUBMITTED";
     const canSubmitTaxRefund = canWriteArea("taxRefund") && !readOnlyArchive && status === "READY";
+    const canCancelArchive = state.me?.role === "管理员" && readOnlyArchive;
     const statusControl = canWriteArea("taxRefund") && !readOnlyArchive
       ? `<select class="tax-status-select" data-tax-status-order="${escapeHtml(order.id)}">${optionHtml(constants.taxRefundStatuses, status)}</select>`
       : `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`;
@@ -3469,12 +3519,13 @@ function renderTaxRefund() {
       <tr>
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
-        <td>${escapeHtml(order.customerName)}</td>
-        <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
+        <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
+        <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
           <button class="secondary-button small-link" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
           ${canSubmitTaxRefund ? `<button class="primary-button small-link" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
+          ${canCancelArchive ? `<button class="secondary-button small-link" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
           <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
         </td>
       </tr>
@@ -3511,6 +3562,7 @@ function reportFilters() {
     paymentStatus: $("#report-payment-status")?.value || "",
     costType: $("#report-cost-type")?.value || "",
     taxRefundStatus: $("#report-tax-status")?.value || "",
+    archiveScope: $("#report-archive-scope")?.value || state.reportArchiveScope || "current",
     keyword: $("#report-keyword")?.value.trim() || "",
   };
 }
@@ -3580,6 +3632,8 @@ function renderReports() {
 
 function resetReportForm() {
   $$("#report-query-form input, #report-query-form select").forEach((el) => (el.value = ""));
+  state.reportArchiveScope = "current";
+  if ($("#report-archive-scope")) $("#report-archive-scope").value = "current";
   state.reportRows = [];
   state.reportColumns = [];
   state.reportPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
@@ -3802,7 +3856,7 @@ function renderTaxRefundDetail() {
     return;
   }
   const completeness = order.documentCompleteness || {};
-  $("#tax-detail-title").textContent = `${order.orderNo} · ${order.customerName}`;
+  $("#tax-detail-title").textContent = `${order.orderNo} · ${customerDisplayName(order.customerName)}`;
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const customsTypes = constants.domesticLogisticsDocumentTypes;
   const exportTypes = [
@@ -3812,13 +3866,16 @@ function renderTaxRefundDetail() {
   const supplierGroups = factorySupplierCosts(order);
   const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
   const canSubmitTaxRefund = canWriteArea("taxRefund") && state.taxRefundMode !== "archive" && order.taxRefundStatus === "READY";
+  const canCancelArchive = state.me?.role === "管理员" && (state.taxRefundMode === "archive" || order.taxArchived || order.taxRefundStatus === "SUBMITTED");
   const submittedInfoHtml = order.taxRefundStatus === "SUBMITTED" ? `
     <section class="tax-detail-section">
       <h4>提交记录</h4>
       <div class="document-card uploaded">
         <div class="document-card-meta">
-          <span>提交人：${escapeHtml(order.taxRefundArchivedByName || "-")}</span>
-          <span>提交时间：${formatDateTime(order.taxRefundArchivedAt)}</span>
+          <span>提交人：${escapeHtml(order.taxSubmittedByName || order.taxRefundArchivedByName || "-")}</span>
+          <span>提交时间：${formatDateTime(order.taxSubmittedAt || order.taxRefundArchivedAt)}</span>
+          <span>归档人：${escapeHtml(order.taxRefundArchivedByName || "-")}</span>
+          <span>归档时间：${formatDateTime(order.taxRefundArchivedAt)}</span>
           ${order.taxRefundArchiveRemark ? `<span>备注：${escapeHtml(order.taxRefundArchiveRemark)}</span>` : ""}
         </div>
       </div>
@@ -3827,6 +3884,7 @@ function renderTaxRefundDetail() {
   body.innerHTML = `
     <div class="tax-detail-actions">
       ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
+      ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
       <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
     </div>
     <div class="tax-detail-summary">
@@ -4034,6 +4092,9 @@ function renderExchangeRateSettings() {
   $("#exchange-rate-type").value = state.exchangeRateSettings.rateType || "现汇买入价";
   $("#exchange-auto-update").value = String(state.exchangeRateSettings.autoUpdate !== false);
   $("#exchange-allow-manual").value = String(state.exchangeRateSettings.allowManualEdit !== false);
+  if ($("#tax-allow-admin-incomplete-submit")) {
+    $("#tax-allow-admin-incomplete-submit").value = String(state.exchangeRateSettings.allowAdminIncompleteTaxSubmit === true);
+  }
   const status = $("#exchange-settings-status");
   if (status) {
     status.textContent = state.settingsLoading.exchangeRates
@@ -4054,7 +4115,7 @@ function renderCustomerSettings() {
     $("#customers-table").innerHTML = loading && !rows.length ? loadingRow(9, "正在加载客户资料...")
       : error || (rows.length ? rows.map((customer) => `
         <tr>
-          <td>${escapeHtml(customer.name)}</td>
+          <td>${escapeHtml(customerDisplayName(customer.name || ""))}</td>
           <td>${escapeHtml(customer.country || "-")}</td>
           <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
           <td>${escapeHtml(customer.salespersonName || "-")}</td>
@@ -4549,7 +4610,7 @@ function costOrderFromCost(cost) {
     blNo: cost.blNo || cost.billOfLadingNo || "",
     billOfLadingNo: cost.billOfLadingNo || cost.blNo || "",
     customerId: cost.customerId || "",
-    customerName: cost.customerName || "",
+    customerName: customerDisplayName(cost.customerName),
     currency: cost.orderCurrency || "",
     exchangeRate: cost.orderExchangeRate || 0,
     status: cost.orderStatus || "",
@@ -4885,7 +4946,7 @@ function updatePaymentDerived() {
   const order = orderById(selectedOrderId)
     || (currentPayment?.orderId === selectedOrderId ? currentPayment : null);
   $("#payment-order-no").value = order?.orderNo || "";
-  $("#payment-customer").value = order?.customerName || "";
+  $("#payment-customer").value = customerDisplayName(order?.customerName || "");
   if (order && !$("#payment-id").value) {
     $("#payment-currency").value = order.currency;
   }
@@ -5442,10 +5503,11 @@ async function deleteDocument(id) {
 
 async function updateTaxStatus(orderId, status, extra = {}) {
   if (!canWriteArea("taxRefund")) return toast("没有权限修改退税状态");
+  const { rethrow = false, ...payloadExtra } = extra;
   try {
     const result = await api(`/api/tax-refunds/${orderId}`, {
       method: "PATCH",
-      body: JSON.stringify({ status, ...extra }),
+      body: JSON.stringify({ status, ...payloadExtra }),
     });
     assertSuccessResponse(result, "退税状态更新失败");
     toast(result.message || "退税状态已更新");
@@ -5459,13 +5521,101 @@ async function updateTaxStatus(orderId, status, extra = {}) {
     }, "退税状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+    if (rethrow) throw error;
+  }
+}
+
+function taxCompletenessProgress(completeness = {}) {
+  const completed = Number(completeness.completed || 0);
+  const total = Number(completeness.total || 0);
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return { completed, total, percent };
+}
+
+async function showIncompleteTaxRefundPrompt(orderId, details = null) {
+  const order = state.taxRefundOrders.find((item) => item.id === orderId)
+    || state.taxRefundDetailOrder
+    || null;
+  const completeness = details || order?.documentCompleteness || {};
+  const progress = taxCompletenessProgress(completeness);
+  const message = [
+    "资料尚未完整，无法提交退税。",
+    "",
+    `当前完整度：${progress.completed} / ${progress.total}（${progress.percent}%）`,
+    "",
+    "请先补齐缺失资料后再提交。",
+    "",
+    "点击“确定”查看缺失资料；点击“取消”关闭。",
+  ].join("\n");
+  if (window.confirm(message)) {
+    await openTaxRefundDetail(orderId);
   }
 }
 
 async function submitTaxRefund(orderId) {
   if (!canWriteArea("taxRefund")) return toast("没有权限提交退税资料");
-  if (!window.confirm("确认该订单退税资料已递交税务局？提交后将自动归档到退税档案。")) return;
-  await updateTaxStatus(orderId, "SUBMITTED");
+  const order = state.taxRefundOrders.find((item) => item.id === orderId)
+    || (state.taxRefundDetailOrder?.id === orderId ? state.taxRefundDetailOrder : null);
+  if (order?.taxRefundStatus === "SUBMITTED" || order?.taxArchived) return toast("该订单已提交退税并归档");
+  if (state.me?.role === "管理员") {
+    const settingsData = await api("/api/exchange-rates/settings").catch(() => null);
+    if (settingsData?.settings) state.exchangeRateSettings = settingsData.settings;
+  }
+  if (order?.documentCompleteness && !order.documentCompleteness.complete) {
+    if (state.me?.role === "管理员" && state.exchangeRateSettings.allowAdminIncompleteTaxSubmit === true) {
+      const reason = window.prompt("资料尚未完整。管理员强制提交必须填写原因：", "");
+      if (!reason?.trim()) return toast("强制提交退税必须填写原因");
+      const confirmForceMessage = [
+        "确认强制提交退税并归档该订单吗？",
+        "",
+        "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+      ].join("\n");
+      if (!window.confirm(confirmForceMessage)) return;
+      await updateTaxStatus(orderId, "SUBMITTED", { forceSubmit: true, forceReason: reason.trim(), rethrow: true });
+      return;
+    }
+    await showIncompleteTaxRefundPrompt(orderId, order.documentCompleteness);
+    return;
+  }
+  const confirmMessage = [
+    "确认提交退税并归档该订单吗？",
+    "",
+    "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+  ].join("\n");
+  if (!window.confirm(confirmMessage)) return;
+  try {
+    await updateTaxStatus(orderId, "SUBMITTED", { rethrow: true });
+  } catch (error) {
+    const data = error?.data || {};
+    if (data.code === "TAX_REFUND_COMPLETENESS_REQUIRED") {
+      await showIncompleteTaxRefundPrompt(orderId, data.details);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function cancelTaxArchive(orderId) {
+  if (state.me?.role !== "管理员") return toast("只有管理员可以取消归档");
+  const ready = window.confirm("取消归档后订单将重新回到当前业务列表。\n\n点击“确定”恢复为资料完整待提交；点击“取消”恢复为资料不完整。");
+  const status = ready ? "READY" : "NOT_READY";
+  const remark = window.prompt("请输入取消归档备注（可选）", "") || "";
+  try {
+    const result = await api(`/api/tax-refunds/${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ cancelArchive: true, status, remark }),
+    });
+    assertSuccessResponse(result, "取消归档失败");
+    toast(result.message || "退税资料已取消归档");
+    state.taxRefundMode = "current";
+    state.taxRefundStatusFilter = "";
+    await refreshAfterSuccess(async () => {
+      await loadTaxRefundList({ page: 1, silent: true });
+      if (state.taxRefundDetailOrder?.id === orderId) await openTaxRefundDetail(orderId);
+    }, "取消归档成功，但列表刷新失败，请手动刷新");
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
 async function deleteDomesticLogistics(id) {
@@ -5628,7 +5778,11 @@ function setCustomerSubmitLoading(loading) {
 }
 
 function sortedCustomerList(customers) {
-  return [...customers].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
+  const list = Array.isArray(customers) ? customers.map((customer) => ({
+    ...customer,
+    name: customerDisplayName(customer?.name || ""),
+  })) : [];
+  return [...list].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
 }
 
 function upsertCustomer(list, customer) {
@@ -5721,9 +5875,9 @@ async function submitCustomer(event) {
   setCustomerSubmitLoading(true);
   try {
     const id = $("#customer-id").value;
-    const name = $("#customer-name").value.trim();
+    const name = customerDisplayName($("#customer-name").value);
     const duplicate = state.customers.find((customer) => (
-      customer.id !== id && customer.name.trim().toLowerCase() === name.toLowerCase()
+      customer.id !== id && customerDisplayName(customer.name || "").toLowerCase() === name.toLowerCase()
     ));
     if (duplicate) throw new Error("客户名称已存在，不能重复创建");
     const data = {
@@ -5795,6 +5949,7 @@ async function submitExchangeRateSettings(event) {
       rateType: $("#exchange-rate-type").value,
       autoUpdate: $("#exchange-auto-update").value === "true",
       allowManualEdit: $("#exchange-allow-manual").value === "true",
+      allowAdminIncompleteTaxSubmit: $("#tax-allow-admin-incomplete-submit")?.value === "true",
     };
     const result = await api("/api/exchange-rates/settings", {
       method: "PATCH",
@@ -6276,7 +6431,7 @@ function resetForm(name) {
 function fillCustomerForm(customer) {
   if (!customer) return;
   $("#customer-id").value = customer.id;
-  $("#customer-name").value = customer.name || "";
+  $("#customer-name").value = customerDisplayName(customer.name || "");
   $("#customer-country").value = customer.country || "";
   $("#customer-currency").value = customer.defaultCurrency || "";
   fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
@@ -6295,7 +6450,7 @@ function openCustomerDrawer(customer = null) {
   resetForm("customer");
   if (customer?.id) fillCustomerForm(customer);
   if ($("#customer-drawer-title")) $("#customer-drawer-title").textContent = customer?.id ? "编辑客户资料" : "新建客户";
-  if ($("#customer-form-subtitle")) $("#customer-form-subtitle").textContent = customer?.id ? `正在编辑：${customer.name || "-"}` : "新建客户";
+  if ($("#customer-form-subtitle")) $("#customer-form-subtitle").textContent = customer?.id ? `正在编辑：${customerDisplayName(customer.name || "-")}` : "新建客户";
   const drawer = $("#customer-drawer");
   if (drawer) drawer.hidden = false;
   document.body.classList.add("modal-open");
@@ -6366,7 +6521,7 @@ function editPayment(id) {
   const fallback = order || {
     id: payment.orderId,
     orderNo: payment.orderNo || "",
-    customerName: payment.customerName || "",
+    customerName: customerDisplayName(payment.customerName || ""),
     summary: { outstandingCny: null },
     dueDate: "",
     createdAt: payment.createdAt,
@@ -6850,6 +7005,7 @@ function bindEvents() {
   $("#report-query-form").addEventListener("submit", (event) => {
     event.preventDefault();
     state.reportSelectedIds = new Set();
+    state.reportArchiveScope = $("#report-archive-scope")?.value || "current";
     queryReport(1);
   });
   $("#report-reset").addEventListener("click", resetReportForm);
@@ -7062,10 +7218,13 @@ function bindEvents() {
   });
   $("#cost-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
+    state.costArchiveScope = $("#cost-filter-archive-scope")?.value || "current";
     loadCostList({ page: 1 });
   });
   $("#cost-filter-reset")?.addEventListener("click", () => {
     $$("#cost-filter-form input, #cost-filter-form select").forEach((el) => (el.value = ""));
+    state.costArchiveScope = "current";
+    if ($("#cost-filter-archive-scope")) $("#cost-filter-archive-scope").value = "current";
     loadCostList({ page: 1 });
   });
   $("#cost-filter-panel")?.addEventListener("toggle", (event) => {
@@ -7143,6 +7302,8 @@ function bindEvents() {
   $("#tax-refund-table").addEventListener("click", (event) => {
     const submitButton = event.target.closest("[data-submit-tax-refund]");
     if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
+    const cancelArchiveButton = event.target.closest("[data-cancel-tax-archive]");
+    if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
     const detailButton = event.target.closest("[data-view-tax-detail]");
     if (detailButton) openTaxRefundDetail(detailButton.dataset.viewTaxDetail);
   });
@@ -7170,11 +7331,14 @@ function bindEvents() {
   $("#domestic-logistics-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     state.domesticLogisticsKeyword = $("#domestic-logistics-search")?.value || "";
+    state.domesticLogisticsArchiveScope = $("#domestic-logistics-archive-scope")?.value || "current";
     loadDomesticLogisticsList();
   });
   $("#domestic-logistics-reset")?.addEventListener("click", () => {
     state.domesticLogisticsKeyword = "";
+    state.domesticLogisticsArchiveScope = "current";
     if ($("#domestic-logistics-search")) $("#domestic-logistics-search").value = "";
+    if ($("#domestic-logistics-archive-scope")) $("#domestic-logistics-archive-scope").value = "current";
     loadDomesticLogisticsList();
   });
   $("#domestic-logistics-table")?.addEventListener("click", (event) => {
@@ -7219,6 +7383,8 @@ function bindEvents() {
     }
     const submitButton = event.target.closest("[data-submit-tax-refund]");
     if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
+    const cancelArchiveButton = event.target.closest("[data-cancel-tax-archive]");
+    if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");

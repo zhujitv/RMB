@@ -409,6 +409,7 @@
                 <label><span>付款状态</span><select id="cost-filter-payment-status"><option value="">全部付款状态</option></select></label>
                 <label><span>成本确认</span><select id="cost-filter-confirmed"><option value="">全部确认状态</option><option value="true">已确认</option><option value="false">未确认</option></select></label>
                 <label><span>发票状态</span><select id="cost-filter-invoice-status"><option value="">全部发票状态</option></select></label>
+                <label><span>业务范围</span><select id="cost-filter-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select></label>
                 <label><span>开始日期</span><input id="cost-filter-date-from" type="date" /></label>
                 <label><span>结束日期</span><input id="cost-filter-date-to" type="date" /></label>
                 <label class="wide"><span>关键词</span><input id="cost-filter-keyword" type="search" placeholder="订单、提单、客户、供应商、成本类型" /></label>
@@ -534,6 +535,7 @@
             <div class="panel-title"><h3>国内物流信息</h3><span id="domestic-logistics-count">0 个订单</span></div>
             <form class="inline-filter" id="domestic-logistics-filter-form" autocomplete="off">
               <input id="domestic-logistics-search" type="search" placeholder="订单号 / 提单号" />
+              <select id="domestic-logistics-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select>
               <button class="primary-button" type="submit">查询</button>
               <button class="clear-button" id="domestic-logistics-reset" type="button">重置</button>
             </form>
@@ -614,6 +616,7 @@
               <label><span>收款状态</span><select id="report-payment-status"><option value="">全部收款状态</option></select></label>
               <label><span>成本类型</span><select id="report-cost-type"><option value="">全部成本类型</option></select></label>
               <label><span>退税状态</span><select id="report-tax-status"><option value="">全部退税状态</option></select></label>
+              <label><span>业务范围</span><select id="report-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select></label>
               <label><span>关键词</span><input id="report-keyword" type="search" placeholder="订单、客户、供应商、国家/地区" /></label>
               <div class="report-query-actions">
                 <button class="primary-button" type="submit">查询</button>
@@ -753,6 +756,7 @@
                   <label><span>汇率类型</span><select id="exchange-rate-type"></select></label>
                   <label><span>自动更新</span><select id="exchange-auto-update"><option value="true">开启</option><option value="false">关闭</option></select></label>
                   <label><span>允许手动修改</span><select id="exchange-allow-manual"><option value="true">是</option><option value="false">否</option></select></label>
+                  <label><span>管理员忽略退税完整度</span><select id="tax-allow-admin-incomplete-submit"><option value="false">关闭</option><option value="true">开启</option></select></label>
                 </div>
                 <div class="form-actions"><button class="secondary-button" data-settings-refresh="exchangeRates" type="button">刷新</button><button class="primary-button" type="submit">保存汇率设置</button></div>
               </form>

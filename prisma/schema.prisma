@@ -75,6 +75,7 @@ model User {
   commissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSettledBy")
   salespersonCommissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSalesperson")
   archivedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundArchivedBy")
+  submittedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundSubmittedBy")
   attachments Attachment[]
   sessions    UserSession[]
   loginAttempts LoginAttempt[]
@@ -225,9 +226,12 @@ model ReceivableOrder {
   taxRefundStatus      String    @default("NOT_READY") @map("tax_refund_status")
   taxRefundCompleteness Json?    @map("tax_refund_completeness")
   taxRefundCompletenessUpdatedAt DateTime? @map("tax_refund_completeness_updated_at")
+  taxArchived          Boolean   @default(false) @map("tax_archived")
   taxRefundArchivedById String?  @map("tax_refund_archived_by")
   taxRefundArchivedAt DateTime?  @map("tax_refund_archived_at")
   taxRefundArchiveRemark String? @map("tax_refund_archive_remark")
+  taxSubmittedById     String?   @map("tax_submitted_by")
+  taxSubmittedAt       DateTime? @map("tax_submitted_at")
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
   reminderDays        Int       @default(7) @map("reminder_days")
@@ -243,6 +247,7 @@ model ReceivableOrder {
   salesperson User?    @relation("SalesOrders", fields: [salespersonUserId], references: [id])
   commissionSettledBy User? @relation("CommissionSettlements", fields: [commissionSettledById], references: [id])
   taxRefundArchivedBy User? @relation("TaxRefundArchivedBy", fields: [taxRefundArchivedById], references: [id])
+  taxSubmittedBy User? @relation("TaxRefundSubmittedBy", fields: [taxSubmittedById], references: [id])
   createdBy   User?    @relation("OrdersCreated", fields: [createdById], references: [id])
   updatedBy   User?    @relation("OrdersUpdated", fields: [updatedById], references: [id])
   payments    Payment[]
@@ -261,9 +266,12 @@ model ReceivableOrder {
   @@index([status])
   @@index([paymentTermType])
   @@index([taxRefundStatus])
+  @@index([taxArchived])
   @@index([taxRefundCompletenessUpdatedAt])
   @@index([taxRefundArchivedAt])
   @@index([taxRefundArchivedById])
+  @@index([taxSubmittedAt])
+  @@index([taxSubmittedById])
   @@index([dueDate])
   @@index([deletedAt])
   @@map("receivable_orders")
