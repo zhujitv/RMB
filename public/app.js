@@ -137,8 +137,9 @@ const constants = {
     { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "未录入拖车费", costTypes: ["拖车费", "国内物流费", "国内拖车费"] },
     { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
     { key: "PORT", label: "港杂费发票", missingCostLabel: "未录入港杂费", costTypes: ["港杂费"] },
+    { key: "SEA", label: "海运费发票", missingCostLabel: "未录入海运费", costTypes: ["海运费"] },
   ],
-  taxRefundLogisticsInvoiceCostTypes: ["拖车费", "国内物流费", "国内拖车费", "报关费", "港杂费"],
+  taxRefundLogisticsInvoiceCostTypes: ["拖车费", "国内物流费", "国内拖车费", "报关费", "港杂费", "海运费"],
   taxRefundLogisticsInvoiceSupplierTypes: ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"],
   cnyOnlyCostTypes: ["工厂货款", "原材料货款", "采购货款", "产品货款", "拖车费", "报关费", "港杂费", "银行手续费", "样品费", "其他费用"],
   foreignCurrencyCostTypes: ["海运费", "国外佣金", "国外代理费", "其他物流费用"],
@@ -206,7 +207,7 @@ const constants = {
     { value: "exchangeRates", label: "汇率刷新" },
   ],
   exportDocumentTypes: [
-    { value: "CUSTOMS_ENTRY_FORM", label: "货物报关单" },
+    { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
     { value: "RELEASE_NOTICE", label: "放行通知书" },
     { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
     { value: "BILL_OF_LADING", label: "提单" },
@@ -255,6 +256,9 @@ const settingsTabKeys = settingsTabs.map((tab) => tab.key);
 
 constants.documentTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
 constants.allDocumentTypes = [...constants.documentTypes, ...constants.supplierDocumentTypes];
+constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter((type) => (
+  ["CUSTOMS_ENTRY_FORM", "RELEASE_NOTICE", "CUSTOMS_POWER_OF_ATTORNEY"].includes(type.value)
+));
 
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
@@ -276,10 +280,10 @@ const roleScopeTexts = {
 
 const roleWrites = {
   管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
-  业务员: ["orders", "logistics", "documents"],
-  财务: ["payments", "taxRefund", "commissions", "exchangeRates"],
+  业务员: ["orders", "logistics", "domesticLogistics", "documents"],
+  财务: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
-  物流资料录入员: ["domesticLogistics"],
+  物流资料录入员: ["domesticLogistics", "documents"],
   查看者: [],
 };
 
@@ -288,8 +292,8 @@ const roleReads = {
   业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
-  物流资料录入员: ["domesticLogistics"],
-  查看者: ["orders", "payments", "costs", "domesticLogistics", "reports"],
+  物流资料录入员: ["domesticLogistics", "documents"],
+  查看者: ["orders", "payments", "costs", "domesticLogistics", "documents", "reports"],
 };
 
 const rolePermissionTemplateCache = new Map();
@@ -2325,7 +2329,7 @@ function uploadFailureReason(document = {}) {
   return message || "上传失败，请重试";
 }
 
-function documentActionsHtml(document) {
+function documentActionsHtml(document, options = {}) {
   const transient = !isPersistedDocument(document);
   if (transient && ["WAITING", "UPLOADING", "FAILED"].includes(document.uploadStatus)) {
     return `
@@ -2341,7 +2345,7 @@ function documentActionsHtml(document) {
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
     ? `<a class="secondary-button small-link" href="/api/order-documents/${encodeURIComponent(document.id)}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
-  const remove = document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
+  const remove = options.allowDelete !== false && document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
     ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
     : "";
   return preview || download || remove ? `<div class="row-actions file-actions">${preview}${download}${remove}</div>` : "";
@@ -2388,7 +2392,7 @@ function uploadedFileCard(document, options = {}) {
         <small>${humanFileSize(document.fileSize)}</small>
         ${bodyHtml}
       </div>
-      ${documentActionsHtml(document)}
+      ${documentActionsHtml(document, options)}
     </article>
   `;
 }
@@ -3206,12 +3210,12 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
     <div><span>客户简称</span><strong>${escapeHtml(row.customerShortName || row.customerName || "-")}</strong></div>
+    <div><span>目的国家</span><strong>${escapeHtml(row.destinationCountry || "-")}</strong></div>
+    <div><span>目的港</span><strong>${escapeHtml(row.destinationPort || "-")}</strong></div>
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
   $("#domestic-transport-type").value = info.transportType || "TRUCK";
-  $("#domestic-logistics-finance-status").value = "PENDING";
-  $("#domestic-logistics-admin-confirm-field").hidden = state.me?.role !== "管理员";
   $("#domestic-truck-plate").value = info.truckPlateNo || "";
   $("#domestic-trailer-plate").value = info.trailerPlateNo || "";
   $("#domestic-departure-place").value = info.departurePlace || "";
@@ -3219,6 +3223,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-departure-date").value = info.departureDate || "";
   $("#domestic-express-no").value = info.expressTrackingNo || "";
   $("#domestic-cargo-description").value = info.cargoDescription || "";
+  renderDomesticLogisticsDocuments(row);
   updateDomesticLogisticsFormVisibility();
   const readOnly = mode === "view" || !canWriteArea("domesticLogistics");
   [
@@ -3247,7 +3252,6 @@ function renderDomesticLogistics() {
   $("#domestic-logistics-count").textContent = `${rows.length} 个订单`;
   if ($("#domestic-logistics-search")) $("#domestic-logistics-search").value = state.domesticLogisticsKeyword || "";
   const canEditDomestic = canWriteArea("domesticLogistics");
-  const canReviewDomestic = canWriteArea("taxRefund");
   const isAdmin = state.me?.role === "管理员";
   box.innerHTML = rows.length ? rows.map((row) => `
     <tr>
@@ -3260,19 +3264,49 @@ function renderDomesticLogistics() {
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
-      <td><span class="status ${statusClass(row.financeStatus || "")}">${escapeHtml(row.financeStatusLabel || "-")}</span></td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")}</td>
       <td>${formatDateTime(row.submittedAt)}</td>
       <td class="row-actions">
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
-        ${canEditDomestic && row.domesticLogisticsInfo?.id && (isAdmin || row.financeStatus !== "CONFIRMED") ? `<button class="secondary-button small-link" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
-        ${canReviewDomestic && row.domesticLogisticsInfo?.id && row.financeStatus === "PENDING" ? `<button class="secondary-button small-link" data-review-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" data-finance-status="CONFIRMED" type="button">审核</button><button class="secondary-button small-link danger" data-review-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" data-finance-status="REJECTED" type="button">驳回</button>` : ""}
-        ${isAdmin && row.domesticLogisticsInfo?.id && row.financeStatus === "CONFIRMED" ? `<button class="secondary-button small-link" data-unlock-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">解锁</button>` : ""}
+        ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
         ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link danger" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
         <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
-  `).join("") : `<tr><td colspan="13" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+  `).join("") : `<tr><td colspan="12" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+}
+
+function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
+  const box = $("#domestic-logistics-documents");
+  if (!box) return;
+  if (!order?.id && !order?.orderId) {
+    box.innerHTML = `<div class="empty-state">请选择订单后上传报关资料。</div>`;
+    return;
+  }
+  const normalizedOrder = { ...order, id: order.orderId || order.id, documents: order.documents || [] };
+  const canUpload = ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) && canWriteArea("documents");
+  box.innerHTML = constants.domesticLogisticsDocumentTypes.map((type) => {
+    const docs = taxDetailDocumentRows(normalizedOrder, type.value, { relatedModule: "EXPORT" });
+    const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
+    const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: false })).join("") : emptyUploadState();
+    const busyStatus = uploadScopeStatus(normalizedOrder.id, type.value, { relatedModule: "EXPORT" });
+    const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : (successCount ? "替换/上传新版PDF" : "选择PDF文件"));
+    return `
+      <article class="tax-detail-document" data-document-upload-card="true" data-order-id="${escapeHtml(normalizedOrder.id)}" data-document-type="${escapeHtml(type.value)}">
+        <div class="document-card-head">
+          <strong>${escapeHtml(type.label)}</strong>
+          ${documentStatusBadge(successCount)}
+        </div>
+        <div class="document-file-list">${docsHtml}</div>
+        ${canUpload ? `
+          <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
+            <span>${escapeHtml(uploadText)}</span>
+            <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" data-related-module="EXPORT" />
+          </label>
+        ` : ""}
+      </article>
+    `;
+  }).join("");
 }
 
 function domesticLogisticsDetailMeta(info = {}) {
@@ -3285,7 +3319,6 @@ function domesticLogisticsDetailMeta(info = {}) {
     ["起运日期", info.departureDate],
     ["运输货物名称", info.cargoDescription],
     ["快递单号", info.expressTrackingNo],
-    ["财务审核状态", info.financeStatusLabel],
     ["提交人", info.submittedByName],
     ["提交时间", formatDateTime(info.submittedAt)],
   ].filter(([, value]) => value).map(([label, value]) => `<span>${label}：${escapeHtml(value)}</span>`).join("");
@@ -3301,17 +3334,10 @@ function renderDomesticLogisticsReviewCard(order = {}) {
       <div class="document-card ${complete ? "uploaded" : "missing"}">
         <div class="document-card-head">
           <strong>${missing ? "缺失" : escapeHtml(info.transportTypeLabel || "-")}</strong>
-          <span class="status ${statusClass(info?.financeStatus || "NOT_READY")}">${escapeHtml(info?.financeStatusLabel || "未提交")}</span>
+          <span class="status ${complete ? "done" : "warning"}">${complete ? "已归档" : "未完成"}</span>
         </div>
         <div class="document-card-meta">${domesticLogisticsDetailMeta(info || {})}</div>
         <pre class="tax-remark-preview">${escapeHtml(info?.remarkText || "缺少国内物流信息")}</pre>
-        ${info?.rejectReason ? `<div class="form-error inline-error">驳回原因：${escapeHtml(info.rejectReason)}</div>` : ""}
-        ${canWriteArea("taxRefund") && info?.id ? `
-          <div class="row-actions">
-            <button class="secondary-button small-link" data-review-domestic-logistics="${escapeHtml(info.id)}" data-finance-status="CONFIRMED" type="button">确认</button>
-            <button class="secondary-button small-link danger" data-review-domestic-logistics="${escapeHtml(info.id)}" data-finance-status="REJECTED" type="button">驳回</button>
-          </div>
-        ` : ""}
       </div>
     </section>
   `;
@@ -3329,7 +3355,6 @@ function domesticLogisticsPayload() {
     departureDate: $("#domestic-departure-date").value,
     expressTrackingNo: $("#domestic-express-no").value.trim(),
     cargoDescription: $("#domestic-cargo-description").value.trim(),
-    financeStatus: $("#domestic-logistics-finance-status")?.value || "PENDING",
   };
 }
 
@@ -3389,9 +3414,10 @@ function renderTaxRefund() {
         <td>${escapeHtml(order.currency)}</td>
         <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
         <td>${moneyCell({ currency: order.currency, amount: order.receivedAmount, amountCny: order.receivedAmountCny ?? 0, exchangeRate: order.exchangeRate })}</td>
+        <td>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</td>
         <td>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</td>
         <td>${factoryCompletenessBadge(completeness)}</td>
-        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</td>
+        <td>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/4")}</td>
         <td>${completenessBadge(completeness, Boolean(completeness.complete))}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -3400,7 +3426,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="12" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="13" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -3599,7 +3625,12 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     : `<input type="file" accept="application/pdf,.pdf"
           data-document-type="${escapeHtml(type.value)}"
           data-related-module="${escapeHtml(scope.relatedModule || documentRelatedModule(type.value))}" />`;
-  const canUpload = canWriteArea("documents") && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
+  const customsUpload = constants.domesticLogisticsDocumentTypes.some((item) => item.value === type.value);
+  const exportOrSalesUpload = ["EXPORT", "SALES"].includes(scope.relatedModule || documentRelatedModule(type.value));
+  const canUpload = canWriteArea("documents")
+    && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
+    && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
+    && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
       <div class="document-card-head">
@@ -3714,19 +3745,28 @@ function renderTaxRefundDetail() {
   const completeness = order.documentCompleteness || {};
   $("#tax-detail-title").textContent = `${order.orderNo} · ${order.customerName}`;
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
-  const exportTypes = [...constants.exportDocumentTypes, ...constants.salesDocumentTypes];
+  const customsTypes = constants.domesticLogisticsDocumentTypes;
+  const exportTypes = [
+    ...constants.exportDocumentTypes.filter((type) => !customsTypes.some((customsType) => customsType.value === type.value)),
+    ...constants.salesDocumentTypes,
+  ];
   const supplierGroups = factorySupplierCosts(order);
   const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
   body.innerHTML = `
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>
+      <div><span>报关资料</span>${completenessBadge(completeness.customs, Boolean(completeness.customs?.complete), "0/3")}</div>
       <div><span>国内物流信息</span>${completenessBadge(completeness.domesticLogistics, Boolean(completeness.domesticLogistics?.complete), "0/1")}</div>
       <div><span>工厂资料</span>${factoryCompletenessBadge(completeness)}</div>
-      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/3")}</div>
+      <div><span>物流港杂资料</span>${completenessBadge(completeness.logistics, Number(completeness.logistics?.completed || 0) >= Number(completeness.logistics?.total || 0), "0/4")}</div>
       <div><span>总体完整度</span>${completenessBadge(completeness, Boolean(completeness.complete))}</div>
     </div>
     ${taxMissingHtml(order)}
     ${renderDomesticLogisticsReviewCard(order)}
+    <section class="tax-detail-section">
+      <h4>报关资料</h4>
+      <div class="tax-detail-doc-grid">${customsTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "EXPORT" })).join("")}</div>
+    </section>
     <section class="tax-detail-section">
       <h4>出口资料</h4>
       <div class="tax-detail-doc-grid">${exportTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: type.value === "SALES_CONTRACT" ? "SALES" : "EXPORT" })).join("")}</div>
@@ -5066,6 +5106,7 @@ function refreshDocumentViews() {
   renderCosts();
   renderCostDocuments();
   renderTaxRefund();
+  renderDomesticLogisticsDocuments();
   if (state.taxRefundDetailOrder && !$("#tax-detail-drawer")?.hidden) renderTaxRefundDetail();
   applyAccessControl();
   updateUploadQueueNotice();
@@ -5287,6 +5328,14 @@ async function refreshAfterTaxRefundMutation(orderId = "", costId = "") {
   } else {
     await loadData();
   }
+  if (state.selectedDomesticLogisticsOrder?.orderId || state.selectedDomesticLogisticsOrder?.id) {
+    const selectedId = state.selectedDomesticLogisticsOrder.orderId || state.selectedDomesticLogisticsOrder.id;
+    const updatedDomesticOrder = state.domesticLogisticsRows.find((item) => item.orderId === selectedId || item.id === selectedId);
+    if (updatedDomesticOrder) {
+      state.selectedDomesticLogisticsOrder = updatedDomesticOrder;
+      state.domesticLogisticsEditing = updatedDomesticOrder;
+    }
+  }
   if (canReadArea("taxRefund")) await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
   if (orderId && state.taxRefundDetailOrder?.id === orderId) {
     await openTaxRefundDetail(orderId);
@@ -5328,46 +5377,6 @@ async function updateTaxStatus(orderId, status) {
     }, "退税状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
-  }
-}
-
-async function reviewDomesticLogistics(id, financeStatus) {
-  if (!canWriteArea("taxRefund")) return toast("没有权限审核国内物流信息");
-  const body = { action: "review", financeStatus };
-  if (financeStatus === "REJECTED") {
-    const reason = window.prompt("请输入驳回原因");
-    if (!reason) return;
-    body.rejectReason = reason;
-  }
-  try {
-    const result = await api(`/api/domestic-logistics/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
-    assertSuccessResponse(result, "审核国内物流信息失败");
-    toast(financeStatus === "CONFIRMED" ? "国内物流信息已确认" : "国内物流信息已驳回");
-    if (state.taxRefundDetailOrder?.id) await openTaxRefundDetail(state.taxRefundDetailOrder.id);
-    await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
-    if (state.view === "domesticLogistics") await loadDomesticLogisticsList({ silent: true });
-  } catch (error) {
-    reportFrontendError(error, "审核国内物流信息失败");
-  }
-}
-
-async function unlockDomesticLogistics(id) {
-  if (state.me?.role !== "管理员") return toast("只有管理员可以解锁国内物流信息");
-  const reason = window.prompt("请输入解锁原因");
-  if (!reason) return;
-  try {
-    const result = await api(`/api/domestic-logistics/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ action: "unlock", reason }),
-    });
-    assertSuccessResponse(result, "解锁国内物流信息失败");
-    toast("国内物流信息已解锁");
-    await loadDomesticLogisticsList({ silent: true });
-  } catch (error) {
-    reportFrontendError(error, "解锁国内物流信息失败");
   }
 }
 
@@ -7064,10 +7073,6 @@ function bindEvents() {
     loadDomesticLogisticsList();
   });
   $("#domestic-logistics-table")?.addEventListener("click", (event) => {
-    const review = event.target.closest("[data-review-domestic-logistics]");
-    if (review) return reviewDomesticLogistics(review.dataset.reviewDomesticLogistics, review.dataset.financeStatus);
-    const unlock = event.target.closest("[data-unlock-domestic-logistics]");
-    if (unlock) return unlockDomesticLogistics(unlock.dataset.unlockDomesticLogistics);
     const deleteButton = event.target.closest("[data-delete-domestic-logistics]");
     if (deleteButton) return deleteDomesticLogistics(deleteButton.dataset.deleteDomesticLogistics);
     const button = event.target.closest("[data-domestic-logistics-action]");
@@ -7077,6 +7082,25 @@ function bindEvents() {
   });
   $$("[data-close-domestic-logistics]").forEach((button) => button.addEventListener("click", closeDomesticLogisticsEditor));
   $("#domestic-logistics-form")?.addEventListener("submit", submitDomesticLogistics);
+  $("#domestic-logistics-editor")?.addEventListener("change", (event) => {
+    const documentInput = event.target.closest("[data-document-type]");
+    if (!documentInput) return;
+    const order = state.selectedDomesticLogisticsOrder;
+    const file = documentInput.files?.[0];
+    documentInput.value = "";
+    if (!order) return toast("请先选择有效订单");
+    uploadDocumentFile({ ...order, id: order.orderId || order.id }, documentInput.dataset.documentType, file, { relatedModule: "EXPORT" });
+  });
+  $("#domestic-logistics-editor")?.addEventListener("click", (event) => {
+    const retry = event.target.closest("[data-retry-upload]");
+    if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
+    const cancel = event.target.closest("[data-cancel-upload]");
+    if (cancel) return cancelQueuedUpload(cancel.dataset.cancelUpload);
+    const preview = event.target.closest("[data-preview-document]");
+    if (preview) return openPdfPreview(preview.dataset.previewDocument);
+    const deleteButton = event.target.closest("[data-delete-document]");
+    if (deleteButton) return deleteDocument(deleteButton.dataset.deleteDocument);
+  });
   $("#domestic-transport-type")?.addEventListener("change", updateDomesticLogisticsFormVisibility);
   ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-destination-place", "#domestic-departure-date", "#domestic-express-no", "#domestic-cargo-description"].forEach((selector) => {
     $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);
@@ -7090,8 +7114,6 @@ function bindEvents() {
     }
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
-    const review = event.target.closest("[data-review-domestic-logistics]");
-    if (review) return reviewDomesticLogistics(review.dataset.reviewDomesticLogistics, review.dataset.financeStatus);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
   });

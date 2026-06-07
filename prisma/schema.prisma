@@ -34,6 +34,15 @@ enum UploadStatus {
   FAILED
 }
 
+enum DomesticLogisticsDocumentCategory {
+  CUSTOMS_DECLARATION
+  CUSTOMS_RELEASE_NOTICE
+  CUSTOMS_POWER_OF_ATTORNEY
+  CUSTOMS_FEE_INVOICE
+  TRUCKING_FEE_INVOICE
+  OTHER
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -72,6 +81,7 @@ model User {
   supplierOperator Supplier? @relation("SupplierOperators", fields: [supplierId], references: [id])
   submittedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsSubmittedBy")
   confirmedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsFinanceConfirmedBy")
+  uploadedDomesticLogisticsDocuments DomesticLogisticsDocument[]
 
   @@index([supplierId])
   @@index([approvalStatus])
@@ -234,6 +244,7 @@ model ReceivableOrder {
   costs       OrderCost[]
   documents   OrderDocument[]
   domesticLogisticsInfos DomesticLogisticsInfo[]
+  domesticLogisticsDocuments DomesticLogisticsDocument[]
   commissionSettlementRecords CommissionSettlement[]
 
   @@index([orderNo])
@@ -288,6 +299,31 @@ model DomesticLogisticsInfo {
   @@index([submittedAt])
   @@index([deletedAt])
   @@map("domestic_logistics_infos")
+}
+
+model DomesticLogisticsDocument {
+  id               String   @id @default(cuid())
+  orderId          String   @map("order_id")
+  documentCategory DomesticLogisticsDocumentCategory @map("document_category")
+  fileName         String   @map("file_name")
+  filePath         String   @map("file_path")
+  fileSize         Int      @map("file_size")
+  fileType         String   @map("file_type")
+  uploadedById     String?  @map("uploaded_by")
+  uploadedAt       DateTime @default(now()) @map("uploaded_at")
+  version          Int      @default(1)
+  status           String   @default("UPLOADED")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  order      ReceivableOrder @relation(fields: [orderId], references: [id])
+  uploadedBy User?           @relation(fields: [uploadedById], references: [id])
+
+  @@index([orderId])
+  @@index([documentCategory])
+  @@index([status])
+  @@index([uploadedAt])
+  @@map("domestic_logistics_documents")
 }
 
 model CommissionSettlement {
