@@ -1912,6 +1912,36 @@ textarea:focus {
   color: var(--muted);
 }
 
+.supplier-selected {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.supplier-selected small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.inline-filter {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+
+.inline-filter input {
+  min-width: 320px;
+}
+
 .cost-item-row {
   display: grid;
   grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.8fr) minmax(90px, 0.6fr) minmax(110px, 0.8fr) minmax(120px, 0.8fr) minmax(150px, 1fr) 42px;

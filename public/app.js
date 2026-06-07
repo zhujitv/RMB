@@ -15,6 +15,7 @@ const state = {
   availableCustomers: [],
   suppliers: [],
   availableSuppliers: [],
+  supplierSettingsKeyword: "",
   orders: [],
   payments: [],
   costs: [],
@@ -36,6 +37,8 @@ const state = {
   reportQueried: false,
   costOrderResults: [],
   selectedCostOrder: null,
+  supplierSearchTimers: {},
+  supplierSearchResults: {},
   documentUploads: {},
   uploadQueue: [],
   uploadBatchTotal: 0,
@@ -739,10 +742,13 @@ function clearLocalCaches() {
   state.suppliers = [];
   state.availableCustomers = [];
   state.availableSuppliers = [];
+  state.supplierSettingsKeyword = "";
   state.users = [];
   state.auditLogs = [];
   state.costOrderResults = [];
   state.selectedCostOrder = null;
+  state.supplierSearchTimers = {};
+  state.supplierSearchResults = {};
   state.uploadQueue.forEach((task) => {
     task.uploadStatus = "CANCELED";
     if (task.xhr) task.xhr.abort();
@@ -1167,6 +1173,18 @@ async function loadTaxRefundList(options = {}) {
   } catch (error) {
     if (!options.silent) toast(error.message);
   }
+}
+
+async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword) {
+  if (!canReadArea("suppliers")) return;
+  const params = new URLSearchParams();
+  const normalized = String(keyword || "").trim();
+  if (normalized) params.set("keyword", normalized);
+  const data = await api(`/api/suppliers${params.toString() ? `?${params.toString()}` : ""}`);
+  state.supplierSettingsKeyword = normalized;
+  state.suppliers = data.suppliers || [];
+  state.availableSuppliers = state.suppliers.filter((supplier) => supplier.status === "启用");
+  renderSettings();
 }
 
 function renderAll() {
@@ -1850,6 +1868,8 @@ function updateLogisticsDerived() {
 function resetLogisticsForm() {
   $("#logistics-form")?.reset();
   if ($("#logistics-id")) $("#logistics-id").value = "";
+  if ($("#logistics-supplier-id")) $("#logistics-supplier-id").value = "";
+  clearSupplierSelection($("#logistics-supplier-picker"), { persist: false });
   if ($("#logistics-type")) $("#logistics-type").value = constants.logisticsCostTypes[0] || "其他物流费用";
   if ($("#logistics-currency")) $("#logistics-currency").value = currentDetailOrder()?.currency || "";
   if ($("#logistics-confirmed")) $("#logistics-confirmed").value = "false";
@@ -2647,6 +2667,7 @@ function renderSettings() {
   $("#exchange-auto-update").value = String(state.exchangeRateSettings.autoUpdate !== false);
   $("#exchange-allow-manual").value = String(state.exchangeRateSettings.allowManualEdit !== false);
   fillSalespersonSelect("#customer-salesperson", $("#customer-salesperson")?.value || "");
+  if ($("#supplier-search-keyword")) $("#supplier-search-keyword").value = state.supplierSettingsKeyword || "";
   $("#customers-count").textContent = `${state.customers.length} 个客户`;
   $("#customers-table").innerHTML = state.customers.length ? state.customers.map((customer) => `
     <tr>
@@ -2815,20 +2836,23 @@ function supplierLabel(supplier) {
     supplier.supplierType,
     supplier.invoiceTitle ? `开票 ${supplier.invoiceTitle}` : "",
     supplier.contactPerson ? `联系人 ${supplier.contactPerson}` : "",
+    supplier.taxNumber ? `税号 ${supplier.taxNumber}` : "",
   ].filter(Boolean).join(" | ");
 }
 
-function supplierMatches(supplier, keyword) {
-  if (!keyword) return true;
-  const text = [supplier.supplierName, supplier.invoiceTitle, supplier.contactPerson, supplier.supplierType].join(" ").toLowerCase();
-  return text.includes(keyword.toLowerCase());
+function supplierPickerKey(root) {
+  if (!root) return "";
+  if (!root.dataset.supplierPickerKey) {
+    root.dataset.supplierPickerKey = `supplier-picker-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+  return root.dataset.supplierPickerKey;
 }
 
-function renderSupplierResults(row, keyword = "") {
-  const box = row.querySelector(".supplier-search-results");
-  const suppliers = state.availableSuppliers.filter((supplier) => supplierMatches(supplier, keyword)).slice(0, 20);
+function renderSupplierResults(root, suppliers = [], keyword = "") {
+  const box = root.querySelector(".supplier-search-results");
+  if (!box) return;
   if (!suppliers.length) {
-    box.innerHTML = `<div class="supplier-search-empty">未找到启用供应商，请先创建供应商资料。</div>`;
+    box.innerHTML = `<div class="supplier-search-empty">${keyword ? "未找到匹配供应商，可先到系统设置新增供应商" : "请输入关键词搜索启用供应商"}</div>`;
     return;
   }
   box.innerHTML = suppliers.map((supplier) => (
@@ -2836,16 +2860,105 @@ function renderSupplierResults(row, keyword = "") {
   )).join("");
 }
 
-function selectSupplierForRow(row, supplier, { persist = true } = {}) {
+async function searchSuppliersForPicker(root, keyword = "") {
+  const key = supplierPickerKey(root);
+  const params = new URLSearchParams({ keyword: keyword.trim() });
+  if (root.dataset.supplierType) params.set("type", root.dataset.supplierType);
+  try {
+    const data = await api(`/api/suppliers/search?${params.toString()}`);
+    const suppliers = data.suppliers || [];
+    state.supplierSearchResults[key] = suppliers;
+    renderSupplierResults(root, suppliers, keyword.trim());
+  } catch (error) {
+    console.error("供应商搜索失败", error);
+    root.querySelector(".supplier-search-results").innerHTML = `<div class="supplier-search-empty">${escapeHtml(error.message || "供应商搜索失败")}</div>`;
+  }
+}
+
+function scheduleSupplierSearch(root, keyword = "") {
+  const key = supplierPickerKey(root);
+  clearTimeout(state.supplierSearchTimers[key]);
+  state.supplierSearchTimers[key] = setTimeout(() => searchSuppliersForPicker(root, keyword), 250);
+}
+
+function clearSupplierSelection(root, { persist = true } = {}) {
+  if (!root) return;
+  const hidden = root.querySelector(".supplier-picker-id");
+  const input = root.querySelector(".supplier-picker-input");
+  const selected = root.querySelector(".supplier-selected");
+  if (hidden) hidden.value = "";
+  if (input) {
+    input.value = "";
+    input.hidden = false;
+    input.focus();
+  }
+  if (selected) {
+    selected.hidden = true;
+    selected.innerHTML = "";
+  }
+  root.querySelector(".supplier-search-results").innerHTML = "";
+  if (persist && root.dataset.supplierPicker === "cost") saveCostDraft();
+}
+
+function selectSupplierForPicker(root, supplier, { persist = true } = {}) {
   if (!supplier) return;
-  row.querySelector(".cost-item-supplier-id").value = supplier.id;
-  row.querySelector(".cost-item-supplier-search").value = supplier.supplierName;
-  row.querySelector(".supplier-search-results").innerHTML = "";
-  if (persist) saveCostDraft();
+  const hidden = root.querySelector(".supplier-picker-id");
+  const input = root.querySelector(".supplier-picker-input");
+  const selected = root.querySelector(".supplier-selected");
+  if (hidden) hidden.value = supplier.id;
+  if (input) {
+    input.value = supplier.supplierName;
+    input.hidden = true;
+  }
+  if (selected) {
+    selected.hidden = false;
+    selected.innerHTML = `
+      <span>${escapeHtml(supplier.supplierName)} <small>${escapeHtml(supplier.supplierType || "")}</small></span>
+      <button class="link-button supplier-reselect" type="button">重新选择</button>
+    `;
+  }
+  root.querySelector(".supplier-search-results").innerHTML = "";
+  if (persist && root.dataset.supplierPicker === "cost") saveCostDraft();
+}
+
+function supplierFromPicker(root, id) {
+  const key = supplierPickerKey(root);
+  return (state.supplierSearchResults[key] || []).find((supplier) => supplier.id === id)
+    || supplierById(id);
+}
+
+function handleSupplierPickerInput(input) {
+  const root = input.closest(".supplier-picker");
+  if (!root) return;
+  const hidden = root.querySelector(".supplier-picker-id");
+  if (hidden) hidden.value = "";
+  renderSupplierResults(root, [], input.value.trim());
+  scheduleSupplierSearch(root, input.value);
+}
+
+function handleSupplierPickerClick(target) {
+  const reselect = target.closest(".supplier-reselect");
+  if (reselect) {
+    clearSupplierSelection(reselect.closest(".supplier-picker"));
+    return true;
+  }
+  const supplierButton = target.closest(".supplier-search-option");
+  if (supplierButton) {
+    const root = supplierButton.closest(".supplier-picker");
+    const supplier = supplierFromPicker(root, supplierButton.dataset.supplierId);
+    if (root && supplier) selectSupplierForPicker(root, supplier);
+    return true;
+  }
+  return false;
 }
 
 function costItemRow(item = {}) {
   const currency = item.currency || "CNY";
+  const selectedSupplier = item.supplierId ? (supplierById(item.supplierId) || {
+    id: item.supplierId,
+    supplierName: supplierDisplayName(item),
+    supplierType: item.supplierType || "",
+  }) : null;
   const normalizedItem = currency === "CNY" ? {
     ...item,
     exchangeRate: item.exchangeRate || 1,
@@ -2855,7 +2968,7 @@ function costItemRow(item = {}) {
   } : item;
   return `
     <div class="cost-item-row">
-      <label class="supplier-picker"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search" value="${escapeHtml(supplierDisplayName(item))}" placeholder="搜索供应商" autocomplete="off" /><div class="supplier-search-results"></div></label>
+      <label class="supplier-picker" data-supplier-picker="cost"><span>供应商 / 收款方 *</span><input class="cost-item-supplier-id supplier-picker-id" type="hidden" value="${escapeHtml(item.supplierId || "")}" /><input class="cost-item-supplier-search supplier-picker-input" value="${escapeHtml(selectedSupplier ? selectedSupplier.supplierName : "")}" placeholder="搜索供应商名称 / 类型 / 联系人 / 开票名称 / 税号" autocomplete="off" ${selectedSupplier ? "hidden" : ""} /><div class="supplier-selected" ${selectedSupplier ? "" : "hidden"}><span>${selectedSupplier ? `${escapeHtml(selectedSupplier.supplierName)} <small>${escapeHtml(selectedSupplier.supplierType || "")}</small>` : ""}</span><button class="link-button supplier-reselect" type="button">重新选择</button></div><div class="supplier-search-results"></div></label>
       <label><span>成本金额 *</span><input class="cost-item-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount ?? "")}" /></label>
       <label><span>币种 *</span><select class="cost-item-currency">${optionHtml(constants.currencies, currency)}</select></label>
       <div class="form-field rate-field">
@@ -3281,6 +3394,7 @@ async function submitLogistics(event) {
     const data = {
       orderId: order.id,
       costType: $("#logistics-type").value,
+      supplierId: $("#logistics-supplier-id").value,
       supplierName: $("#logistics-supplier").value,
       currency: $("#logistics-currency").value,
       amount: $("#logistics-amount").value,
@@ -3293,7 +3407,7 @@ async function submitLogistics(event) {
       invoiceStatus: $("#logistics-invoice-status").value,
       remark: $("#logistics-remark").value,
     };
-    if (!String(data.supplierName || "").trim()) throw new Error("请填写供应商名称");
+    if (!data.supplierId) throw new Error("请选择供应商，不能只输入供应商名称");
     if (!data.currency) throw new Error("请选择币种");
     if (!(Number(data.amount) > 0)) throw new Error("物流费用金额必须大于 0");
     if (!(Number(data.exchangeRate) > 0)) throw new Error("汇率必须大于 0");
@@ -3320,7 +3434,13 @@ function editLogistics(id) {
   if (!cost) return;
   $("#logistics-id").value = cost.id;
   $("#logistics-type").value = cost.costType;
-  $("#logistics-supplier").value = cost.supplierName || cost.vendorName || "";
+  const supplier = cost.supplierId ? (supplierById(cost.supplierId) || {
+    id: cost.supplierId,
+    supplierName: cost.supplierName || cost.vendorName || "",
+    supplierType: cost.supplierType || "",
+  }) : null;
+  if (supplier) selectSupplierForPicker($("#logistics-supplier-picker"), supplier, { persist: false });
+  else clearSupplierSelection($("#logistics-supplier-picker"), { persist: false });
   $("#logistics-currency").value = cost.currency;
   $("#logistics-amount").value = cost.amount;
   setRateSnapshot("logistics", {
@@ -3838,7 +3958,7 @@ async function submitSupplier(event) {
     delete data.id;
     await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
     resetForm("supplier");
-    await loadData();
+    await loadSupplierSettingsList("");
     toast("供应商已保存");
   } catch (error) {
     toast(error.message);
@@ -4693,6 +4813,14 @@ function bindEvents() {
   $("#logistics-form").addEventListener("submit", submitLogistics);
   $("#customer-form").addEventListener("submit", submitCustomer);
   $("#supplier-form").addEventListener("submit", submitSupplier);
+  $("#supplier-search-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadSupplierSettingsList($("#supplier-search-keyword")?.value || "").catch((error) => toast(error.message));
+  });
+  $("#supplier-search-reset").addEventListener("click", () => {
+    if ($("#supplier-search-keyword")) $("#supplier-search-keyword").value = "";
+    loadSupplierSettingsList("").catch((error) => toast(error.message));
+  });
   $("#exchange-rate-settings-form").addEventListener("submit", submitExchangeRateSettings);
   $("#refresh-exchange-rates").addEventListener("click", refreshExchangeRates);
   $("#user-form").addEventListener("submit", submitUser);
@@ -4854,10 +4982,7 @@ function bindEvents() {
   });
   $("#cost-items").addEventListener("input", (event) => {
     const row = event.target.closest(".cost-item-row");
-    if (row && event.target.classList.contains("cost-item-supplier-search")) {
-      row.querySelector(".cost-item-supplier-id").value = "";
-      renderSupplierResults(row, event.target.value);
-    }
+    if (row && event.target.classList.contains("cost-item-supplier-search")) handleSupplierPickerInput(event.target);
     if (row && event.target.classList.contains("cost-item-rate")) markCostRowManualRate(row);
     if (row) updateCostItemDerived(row);
     saveCostDraft();
@@ -4871,17 +4996,11 @@ function bindEvents() {
     saveCostDraft();
   });
   $("#cost-items").addEventListener("click", (event) => {
+    if (handleSupplierPickerClick(event.target)) return;
     const rateButton = event.target.closest(".cost-item-rate-refresh");
     if (rateButton) {
       const row = rateButton.closest(".cost-item-row");
       if (row) applyCostItemRate(row, { force: true }).catch(() => {});
-      return;
-    }
-    const supplierButton = event.target.closest("[data-supplier-id]");
-    if (supplierButton) {
-      const supplier = supplierById(supplierButton.dataset.supplierId);
-      const row = supplierButton.closest(".cost-item-row");
-      if (row && supplier) selectSupplierForRow(row, supplier);
       return;
     }
     const button = event.target.closest(".delete-cost-item");
@@ -4889,6 +5008,12 @@ function bindEvents() {
     if ($$("#cost-items .cost-item-row").length > 1) button.closest(".cost-item-row").remove();
     else resetCostItems([{}]);
     saveCostDraft();
+  });
+  $("#logistics-supplier-picker").addEventListener("input", (event) => {
+    if (event.target.classList.contains("supplier-picker-input")) handleSupplierPickerInput(event.target);
+  });
+  $("#logistics-supplier-picker").addEventListener("click", (event) => {
+    handleSupplierPickerClick(event.target);
   });
   $("#order-currency").addEventListener("change", () => {
     applyRateFor("order").catch(() => {});
