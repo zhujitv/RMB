@@ -968,27 +968,39 @@ function clearLocalCaches() {
 }
 
 function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
+  const showPasswordChange = Boolean(loggedIn && passwordChangeRequired);
   const loginScreen = $("#login-screen");
   const passwordChangeScreen = $("#password-change-screen");
   const appShell = $("#app-shell");
-  if (loginScreen) loginScreen.hidden = loggedIn || passwordChangeRequired;
-  if (passwordChangeScreen) passwordChangeScreen.hidden = !passwordChangeRequired;
-  if (appShell) appShell.hidden = !loggedIn || passwordChangeRequired;
-  document.body.classList.toggle("is-authenticated", loggedIn && !passwordChangeRequired);
+  if (loginScreen) loginScreen.hidden = Boolean(loggedIn);
+  if (passwordChangeScreen) passwordChangeScreen.hidden = !showPasswordChange;
+  if (appShell) appShell.hidden = !loggedIn || showPasswordChange;
+  document.body.classList.toggle("is-authenticated", Boolean(loggedIn && !showPasswordChange));
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
   }
 }
 
-function handleAuthExpired(message = "登录已过期，请重新登录") {
+function resetAuthState({ clearDrafts = false } = {}) {
   state.me = null;
   state.session = null;
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "dashboard";
-  clearLocalCaches();
+  if (clearDrafts) clearLocalCaches();
+  else {
+    state.orders = [];
+    state.payments = [];
+    state.costs = [];
+    state.overview = null;
+  }
   setAuthenticatedShell(false);
+  renderAll();
+}
+
+function handleAuthExpired(message = "登录已过期，请重新登录") {
+  resetAuthState({ clearDrafts: true });
   toast(message);
 }
 
@@ -1020,8 +1032,9 @@ async function api(path, options = {}) {
     throw parseError;
   }
   if (!response.ok) {
-    if (response.status === 401) handleAuthExpired(data?.error || "登录已过期，请重新登录");
-    if (data?.code === "PASSWORD_CHANGE_REQUIRED") {
+    const isLoginRequest = path.startsWith("/api/auth/login");
+    if (response.status === 401 && !isLoginRequest) handleAuthExpired(data?.error || "登录已过期，请重新登录");
+    if (data?.code === "PASSWORD_CHANGE_REQUIRED" && !isLoginRequest) {
       state.passwordChangeRequired = true;
       setAuthenticatedShell(true, true);
     }
@@ -1358,15 +1371,15 @@ function renderFilterSummary() {
 async function loadMe() {
   const response = await fetch("/api/auth/me");
   if (response.status === 401) {
-    state.me = null;
-    state.session = null;
     state.roles = constants.roles;
-    state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
-    setAuthenticatedShell(false);
+    resetAuthState();
     return false;
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "校验登录状态失败");
+  if (!response.ok) {
+    resetAuthState();
+    throw new Error(data.error || data.message || "校验登录状态失败");
+  }
   state.me = data.user;
   state.session = data.session || null;
   state.roles = data.roles || constants.roles;
@@ -5733,18 +5746,28 @@ async function submitLogin(event) {
     const payload = loginPayloadFromForm(form);
     if (submitButton) submitButton.disabled = true;
     console.debug("发送登录请求", { email: payload.email });
-    clearLocalCaches();
+    resetAuthState({ clearDrafts: true });
     const loginResult = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    assertSuccessResponse(loginResult, "登录失败");
     if (!loginResult?.user) throw new Error("登录接口未返回用户信息，请联系管理员。");
     state.me = loginResult.user;
     state.passwordChangeRequired = Boolean(loginResult.mustChangePassword ?? loginResult.user.mustChangePassword);
-    await loadData();
+    setAuthenticatedShell(true, state.passwordChangeRequired);
+    if (!state.passwordChangeRequired) await loadData();
+    else {
+      renderProfileModal();
+      $("#change-current-password").value = "";
+      $("#change-new-password").value = "";
+      $("#change-confirm-password").value = "";
+      $("#change-current-password")?.focus();
+    }
     closeLoginModal();
     toast(state.passwordChangeRequired ? "请先修改初始密码" : "登录成功");
   } catch (error) {
+    resetAuthState({ clearDrafts: true });
     reportFrontendError(error, "登录失败", form);
   } finally {
     if (submitButton) submitButton.disabled = false;
