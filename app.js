@@ -216,6 +216,10 @@ const roleReads = {
   查看者: ["orders", "payments", "costs", "reports"],
 };
 
+const rolePermissionTemplateCache = new Map();
+const permissionOptionHtmlCache = new Map();
+const userStatusInFlight = new Set();
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -727,6 +731,7 @@ function scopeText() {
 }
 
 function roleTemplatePermissions(role) {
+  if (rolePermissionTemplateCache.has(role)) return rolePermissionTemplateCache.get(role);
   const dataScopeMap = {
     管理员: "ALL",
     财务: "ALL",
@@ -734,13 +739,15 @@ function roleTemplatePermissions(role) {
     业务员: "OWN",
     成本录入员: "OWN_COST",
   };
-  return {
+  const template = {
     mode: "ROLE",
     menus: roleMenus[role] || [],
     reads: roleReads[role] || [],
     writes: roleWrites[role] || [],
     dataScope: dataScopeMap[role] || "NONE",
   };
+  rolePermissionTemplateCache.set(role, template);
+  return template;
 }
 
 function permissionListFromMap(map = {}) {
@@ -1336,7 +1343,7 @@ function applyAccessControl() {
   setHidden("[data-reset='cost'], #cost-submit-button, #add-cost-item, .delete-cost-item", !canWriteArea("costs"));
   setHidden("[data-reset='customer'], #customer-form button[type='submit']", !canWriteArea("customers"));
   setHidden("[data-reset='supplier'], #supplier-form button[type='submit']", !canWriteArea("suppliers"));
-  setHidden("[data-reset='user'], #user-form button[type='submit']", !canWriteArea("users"));
+  setHidden("#open-user-drawer, #user-form button[type='submit']", !canWriteArea("users"));
   setHidden("[data-order-commission-field]", !canWriteArea("commissions"));
   setHidden("#exchange-rate-settings-form", !canWriteArea("settings"));
   setHidden("#customer-form", !canWriteArea("customers"));
@@ -2345,22 +2352,55 @@ function permissionCheckHtml(option, selected, name) {
   `;
 }
 
+function permissionOptionsHtml(options, name) {
+  const key = `${name}:${options.map((option) => `${option.value}:${option.label}`).join("|")}`;
+  if (!permissionOptionHtmlCache.has(key)) {
+    permissionOptionHtmlCache.set(key, options.map((option) => permissionCheckHtml(option, [], name)).join(""));
+  }
+  return permissionOptionHtmlCache.get(key);
+}
+
 function renderPermissionGroup(selector, options, selected, name) {
   const box = $(selector);
   if (!box) return;
-  box.innerHTML = options.map((option) => permissionCheckHtml(option, selected, name)).join("");
+  const optionKey = `${name}:${options.length}`;
+  if (box.dataset.rendered !== "true" || box.dataset.optionKey !== optionKey) {
+    box.innerHTML = permissionOptionsHtml(options, name);
+    box.dataset.rendered = "true";
+    box.dataset.optionKey = optionKey;
+  }
+  const selectedSet = new Set(selected || []);
+  box.querySelectorAll("input[type='checkbox']").forEach((input) => {
+    input.checked = selectedSet.has(input.value);
+  });
+}
+
+function clearPermissionEditor() {
+  ["#user-menu-permissions", "#user-read-permissions", "#user-write-permissions"].forEach((selector) => {
+    const box = $(selector);
+    if (!box) return;
+    box.innerHTML = "";
+    delete box.dataset.rendered;
+    delete box.dataset.optionKey;
+  });
 }
 
 function renderUserPermissionEditor(user = null) {
   const role = $("#user-role")?.value || user?.role || "查看者";
   const mode = $("#user-permission-mode")?.value || user?.permissionMode || "ROLE";
+  const editor = $("#user-permission-editor");
+  if (editor) editor.hidden = mode !== "CUSTOM";
+  if (mode !== "CUSTOM") {
+    clearPermissionEditor();
+    return;
+  }
   const roleTemplate = roleTemplatePermissions(role);
   const config = mode === "CUSTOM" ? userPermissionConfig(user) : roleTemplate;
   const menus = config.menus || roleTemplate.menus;
   const reads = config.reads || config.readKeys || roleTemplate.reads;
   const writes = config.writes || config.writeKeys || roleTemplate.writes;
   const dataScope = config.dataScope || roleTemplate.dataScope || "NONE";
-  $("#user-permission-editor").hidden = mode !== "CUSTOM";
+  if (editor) editor.open = false;
   fillSelect("#user-data-scope", constants.dataScopeOptions, dataScope);
   renderPermissionGroup("#user-menu-permissions", constants.menuPermissionOptions, menus, "userMenus");
   renderPermissionGroup("#user-read-permissions", constants.readPermissionOptions, reads, "userReads");
@@ -2880,31 +2920,63 @@ function renderSettings() {
     </tr>
   `).join("") : emptyRow(8);
 
-  $("#users-count").textContent = `${state.users.length} 个用户`;
-  $("#users-table").innerHTML = state.users.length ? state.users.map((user) => {
-    const approvalLabel = approvalStatusLabel(user.approvalStatus, user.isActive);
-    const actions = canWriteArea("users")
-      ? [
-          user.approvalStatus === "PENDING" ? `<button data-approve-user="${user.id}">通过</button><button data-reject-user="${user.id}">拒绝</button>` : "",
-          `<button data-edit-user="${user.id}">编辑</button>`,
-          user.approvalStatus !== "DISABLED" ? `<button data-delete-user="${user.id}">停用</button>` : "",
-        ].filter(Boolean).join("")
-      : "";
-    return `
-      <tr>
-        <td>${escapeHtml(user.name)}</td>
-        <td>${escapeHtml(user.email)}</td>
-        <td>${escapeHtml(user.role)}</td>
-        <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
-        <td><span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span></td>
-        ${rowActions(actions)}
-      </tr>
-    `;
-  }).join("") : emptyRow(6);
+  renderUsersTable();
 
   $("#audit-table").innerHTML = state.auditLogs.length ? state.auditLogs.map((log) => `
     <tr><td>${new Date(log.createdAt).toLocaleString("zh-CN")}</td><td>${escapeHtml(log.user?.name || "-")}</td><td>${escapeHtml(log.action)}</td><td>${escapeHtml(auditEntityLabel(log))}</td><td>${escapeHtml(log.ipAddress || "-")}</td></tr>
   `).join("") : emptyRow(5);
+}
+
+function userRowHtml(user) {
+  const approvalLabel = approvalStatusLabel(user.approvalStatus, user.isActive);
+  const actions = canWriteArea("users")
+    ? [
+        user.approvalStatus === "PENDING" ? `<button data-approve-user="${user.id}">通过</button><button data-reject-user="${user.id}">拒绝</button>` : "",
+        `<button data-edit-user="${user.id}">编辑</button>`,
+        user.approvalStatus !== "DISABLED" ? `<button data-delete-user="${user.id}">停用</button>` : "",
+      ].filter(Boolean).join("")
+    : "";
+  return `
+    <tr data-user-row="${escapeHtml(user.id)}">
+      <td>${escapeHtml(user.name)}</td>
+      <td>${escapeHtml(user.email)}</td>
+      <td>${escapeHtml(user.role)}</td>
+      <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
+      <td><span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span></td>
+      ${rowActions(actions)}
+    </tr>
+  `;
+}
+
+function renderUsersTable() {
+  $("#users-count").textContent = `${state.users.length} 个用户`;
+  $("#users-table").innerHTML = state.users.length ? state.users.map(userRowHtml).join("") : emptyRow(6);
+}
+
+function userRowElement(user) {
+  const template = document.createElement("template");
+  template.innerHTML = userRowHtml(user).trim();
+  return template.content.firstElementChild;
+}
+
+function renderUserRowInPlace(user) {
+  const table = $("#users-table");
+  const count = $("#users-count");
+  if (count) count.textContent = `${state.users.length} 个用户`;
+  if (!table) return;
+  if (!state.users.length) {
+    table.innerHTML = emptyRow(6);
+    return;
+  }
+  const nextRow = userRowElement(user);
+  if (!nextRow) return renderUsersTable();
+  const currentRow = $$("#users-table [data-user-row]").find((row) => row.dataset.userRow === user.id);
+  if (currentRow) {
+    currentRow.replaceWith(nextRow);
+    return;
+  }
+  if (table.querySelector(".empty-row")) table.innerHTML = "";
+  table.appendChild(nextRow);
 }
 
 function readForm(prefix, fields) {
@@ -4426,6 +4498,85 @@ async function refreshExchangeRates() {
   }
 }
 
+function setActionButtonLoading(button, loading, loadingText = "处理中…") {
+  if (!button) return;
+  if (!button.dataset.defaultText) button.dataset.defaultText = button.textContent;
+  button.disabled = loading;
+  button.classList.toggle("is-loading", loading);
+  button.textContent = loading ? loadingText : (button.dataset.defaultText || button.textContent);
+}
+
+function upsertUser(user) {
+  if (!user?.id) return;
+  const rows = Array.isArray(state.users) ? [...state.users] : [];
+  const index = rows.findIndex((item) => item.id === user.id);
+  if (index >= 0) {
+    rows[index] = { ...rows[index], ...user };
+  } else {
+    rows.push(user);
+  }
+  state.users = rows;
+  renderUserRowInPlace(user);
+}
+
+function closeUserDrawer() {
+  const drawer = $("#user-drawer");
+  if (drawer) drawer.hidden = true;
+  if ($("#tax-detail-drawer")?.hidden && $("#pdf-preview-modal")?.hidden && $("#login-modal")?.hidden) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function openUserDrawer(user = null) {
+  if (!canWriteArea("users")) return toast("没有权限保存用户");
+  const drawer = $("#user-drawer");
+  if (!drawer) return;
+  resetForm("user");
+  const editing = Boolean(user?.id);
+  $("#user-id").value = user?.id || "";
+  $("#user-name").value = user?.name || "";
+  $("#user-email").value = user?.email || "";
+  $("#user-role").value = user?.role || "查看者";
+  $("#user-approval-status").value = user?.approvalStatus || (user?.isActive ? "APPROVED" : "APPROVED");
+  $("#user-permission-mode").value = user?.permissionMode || user?.customPermissions?.mode || "ROLE";
+  $("#user-password").value = "";
+  $("#user-drawer-title").textContent = editing ? "编辑用户和权限" : "新建用户";
+  $("#user-form-subtitle").textContent = editing ? `正在编辑：${user.name || user.email}` : "新建用户";
+  renderUserPermissionEditor(user);
+  drawer.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#user-name")?.focus();
+}
+
+function userPermissionConfigKey(config = {}) {
+  if (config?.mode !== "CUSTOM") return "ROLE";
+  return JSON.stringify({
+    mode: "CUSTOM",
+    menus: config.menus || [],
+    reads: config.reads || config.readKeys || [],
+    writes: config.writes || config.writeKeys || [],
+    dataScope: config.dataScope || "NONE",
+  });
+}
+
+function userBasicPayloadChanged(before, payload) {
+  if (!before) return true;
+  if ((before.name || "") !== (payload.name || "")) return true;
+  if ((before.email || "").toLowerCase() !== (payload.email || "").toLowerCase()) return true;
+  if ((before.role || "") !== (payload.role || "")) return true;
+  if (payload.password) return true;
+  return userPermissionConfigKey(before.customPermissions || { mode: "ROLE" }) !== userPermissionConfigKey(payload.customPermissions);
+}
+
+async function saveUserStatus(id, status) {
+  const result = await api(`/api/users/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  assertSuccessResponse(result, "用户状态更新失败");
+  return result.user;
+}
+
 async function submitUser(event) {
   event.preventDefault();
   if (!canWriteArea("users")) return toast("没有权限保存用户");
@@ -4433,20 +4584,37 @@ async function submitUser(event) {
   if (formSubmitInFlight(form)) return;
   setFormSubmitLoading(form, true);
   try {
+    const id = $("#user-id").value;
+    const before = id ? state.users.find((item) => item.id === id) : null;
+    const approvalStatus = $("#user-approval-status").value;
     const data = {
       name: $("#user-name").value,
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
-      approvalStatus: $("#user-approval-status").value,
-      password: $("#user-password").value,
       customPermissions: readUserPermissionForm(),
     };
-    const id = $("#user-id").value;
+    const password = $("#user-password").value;
+    if (password) data.password = password;
+    if (!id) data.approvalStatus = approvalStatus;
+    const currentStatus = before?.approvalStatus || (before?.isActive ? "APPROVED" : "DISABLED");
+    const statusChanged = Boolean(id && before && approvalStatus !== currentStatus);
+    if (statusChanged && !userBasicPayloadChanged(before, data)) {
+      const user = await saveUserStatus(id, approvalStatus);
+      upsertUser(user || { ...before, approvalStatus, isActive: approvalStatus === "APPROVED" });
+      closeUserDrawer();
+      toast("用户状态已更新");
+      return;
+    }
     const result = await api(id ? `/api/users/${id}` : "/api/users", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
     assertSuccessResponse(result, "用户保存失败");
     resetForm("user");
-    toast(result.message || "用户已保存");
-    await refreshAfterSuccess(loadData, "用户已保存，但列表刷新失败，请手动刷新");
+    let user = result.user;
+    if (statusChanged) {
+      user = await saveUserStatus(id, approvalStatus) || { ...user, approvalStatus, isActive: approvalStatus === "APPROVED" };
+    }
+    upsertUser(user);
+    closeUserDrawer();
+    toast(statusChanged ? "用户已保存，状态已更新" : (result.message || "用户已保存"));
   } catch (error) {
     toast(error.message);
   } finally {
@@ -4458,22 +4626,21 @@ async function updateUserApproval(id, approvalStatus) {
   if (!canWriteArea("users")) return toast("没有权限审核用户");
   const user = state.users.find((item) => item.id === id);
   if (!user) return;
+  if (userStatusInFlight.has(id)) return;
+  const selector = approvalStatus === "APPROVED" ? `[data-approve-user="${id}"]` : `[data-reject-user="${id}"]`;
+  const button = $(selector);
+  if (button?.disabled) return;
+  userStatusInFlight.add(id);
+  setActionButtonLoading(button, true);
   try {
-    const result = await api(`/api/users/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        name: user.name,
-        email: user.email,
-        role: user.role || "查看者",
-        approvalStatus,
-        customPermissions: user.customPermissions || { mode: "ROLE" },
-      }),
-    });
-    assertSuccessResponse(result, "用户审核失败");
+    const updated = await saveUserStatus(id, approvalStatus);
+    upsertUser(updated || { ...user, approvalStatus, isActive: approvalStatus === "APPROVED" });
     toast(approvalStatus === "APPROVED" ? "用户审核已通过" : "用户审核已拒绝");
-    await refreshAfterSuccess(loadData, "用户状态已更新，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    userStatusInFlight.delete(id);
+    setActionButtonLoading(button, false);
   }
 }
 
@@ -4849,21 +5016,14 @@ function editUser(id) {
   if (!canWriteArea("users")) return toast("没有权限编辑用户");
   const user = state.users.find((item) => item.id === id);
   if (!user) return;
-  $("#user-id").value = user.id;
-  $("#user-name").value = user.name;
-  $("#user-email").value = user.email;
-  $("#user-role").value = user.role;
-  $("#user-approval-status").value = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
-  $("#user-permission-mode").value = user.permissionMode || user.customPermissions?.mode || "ROLE";
-  $("#user-password").value = "";
-  renderUserPermissionEditor(user);
-  switchView("settings");
+  openUserDrawer(user);
 }
 
-async function deleteRecord(kind, id) {
+async function deleteRecord(kind, id, sourceButton = null) {
   const labels = { order: "应收订单", payment: "收款", cost: "成本", customer: "客户", supplier: "供应商", user: "用户" };
   const areas = { order: "orders", payment: "payments", cost: "costs", customer: "customers", supplier: "suppliers", user: "users" };
   if (!canWriteArea(areas[kind])) return toast(`没有权限删除/停用${labels[kind]}`);
+  if (kind === "user" && userStatusInFlight.has(id)) return;
   if (!confirm(`确认删除/停用这条${labels[kind]}吗？该操作会写入操作日志。`)) return;
   const endpoints = {
     order: `/api/orders/${id}`,
@@ -4873,13 +5033,28 @@ async function deleteRecord(kind, id) {
     supplier: `/api/suppliers/${id}`,
     user: `/api/users/${id}`,
   };
+  if (kind === "user") {
+    userStatusInFlight.add(id);
+    setActionButtonLoading(sourceButton, true);
+  }
   try {
     const result = await api(endpoints[kind], { method: "DELETE" });
     assertSuccessResponse(result, "操作失败");
+    if (kind === "user") {
+      const current = state.users.find((item) => item.id === id);
+      upsertUser(result.user || { ...(current || { id }), approvalStatus: "DISABLED", isActive: false });
+      toast(result.message || "用户已停用");
+      return;
+    }
     toast(result.message || "操作已完成");
     await refreshAfterSuccess(loadData, "操作已完成，但列表刷新失败，请手动刷新");
   } catch (error) {
     toast(error.message);
+  } finally {
+    if (kind === "user") {
+      userStatusInFlight.delete(id);
+      setActionButtonLoading(sourceButton, false);
+    }
   }
 }
 
@@ -5198,6 +5373,7 @@ function bindEvents() {
   $("#refresh-data").addEventListener("click", loadData);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#pdf-preview-modal")?.hidden) closePdfPreview();
+    if (event.key === "Escape" && !$("#user-drawer")?.hidden) closeUserDrawer();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
     if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
@@ -5518,8 +5694,16 @@ function bindEvents() {
   $$("#cost-form input, #cost-form select, #cost-form textarea").forEach((el) => el.addEventListener("input", saveCostDraft));
 
   document.body.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-user-drawer]")) {
+      closeUserDrawer();
+      return;
+    }
     const target = event.target.closest("button");
     if (!target) return;
+    if (target.id === "open-user-drawer") {
+      openUserDrawer();
+      return;
+    }
     if (target.dataset.rateRefresh === "order") {
       markOrderFormDirty();
       applyRateFor("order", { force: true }).catch(() => {});
@@ -5542,7 +5726,7 @@ function bindEvents() {
     if (target.dataset.deleteLogistics) deleteLogistics(target.dataset.deleteLogistics);
     if (target.dataset.deleteCustomer) deleteRecord("customer", target.dataset.deleteCustomer);
     if (target.dataset.deleteSupplier) deleteRecord("supplier", target.dataset.deleteSupplier);
-    if (target.dataset.deleteUser) deleteRecord("user", target.dataset.deleteUser);
+    if (target.dataset.deleteUser) deleteRecord("user", target.dataset.deleteUser, target);
     if (target.dataset.settleCommission) settleCommission(target.dataset.settleCommission);
     if (target.dataset.export) exportReport(target.dataset.export);
   });

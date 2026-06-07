@@ -808,6 +808,14 @@ textarea:focus {
   margin-bottom: 14px;
 }
 
+.panel-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .panel-title h3,
 .form-header h3 {
   margin: 0;
@@ -852,11 +860,37 @@ textarea:focus {
   background: #fbfcfe;
 }
 
+.permission-editor[hidden] {
+  display: none;
+}
+
+.permission-editor[open] {
+  display: grid;
+}
+
 .permission-editor-title {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.permission-editor-title::-webkit-details-marker {
+  display: none;
+}
+
+.permission-editor-title::after {
+  content: "展开";
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.permission-editor[open] .permission-editor-title::after {
+  content: "收起";
 }
 
 .permission-editor-title small {
@@ -1620,6 +1654,36 @@ textarea:focus {
 .tax-detail-body {
   display: grid;
   gap: 18px;
+}
+
+.user-drawer-panel {
+  width: min(720px, 100%);
+}
+
+.user-drawer-form {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.user-drawer-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.user-drawer-form .form-actions {
+  position: sticky;
+  bottom: -22px;
+  z-index: 2;
+  margin: 18px -22px -22px;
+  padding: 14px 22px;
+  border-top: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+}
+
+.user-drawer-form .permission-groups {
+  grid-template-columns: 1fr;
 }
 
 .tax-detail-summary {
@@ -3090,6 +3154,7 @@ body.modal-open {
 
   .metric-grid,
   .form-grid,
+  .user-drawer-form .form-grid,
   .permission-groups,
   .cost-item-row,
   .document-grid,

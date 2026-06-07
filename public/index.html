@@ -637,28 +637,6 @@
               </div>
               <div class="form-actions"><button class="primary-button" type="submit">保存供应商</button></div>
             </form>
-            <form class="entry-form" id="user-form" autocomplete="off">
-              <input type="hidden" id="user-id" />
-              <div class="form-header"><div><h3>用户和权限</h3></div><button class="secondary-button" type="button" data-reset="user">新建</button></div>
-              <div class="form-grid">
-                <label><span>姓名 *</span><input id="user-name" required /></label>
-                <label><span>邮箱 *</span><input id="user-email" required /></label>
-                <label><span>角色分类</span><select id="user-role"></select></label>
-                <label><span>账号状态</span><select id="user-approval-status"></select></label>
-                <label><span>权限模式</span><select id="user-permission-mode"></select></label>
-                <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新建用户必须设置初始密码，保存后用户需首次改密" /></label>
-                <div class="wide permission-editor" id="user-permission-editor" hidden>
-                  <div class="permission-editor-title"><strong>自定义权限组合</strong><small>菜单决定可进入页面，查看/操作权限由后端再次校验。</small></div>
-                  <label class="permission-scope-field"><span>数据范围</span><select id="user-data-scope"></select></label>
-                  <div class="permission-groups">
-                    <div class="permission-group"><h4>菜单权限</h4><div class="permission-checks" id="user-menu-permissions"></div></div>
-                    <div class="permission-group"><h4>查看权限</h4><div class="permission-checks" id="user-read-permissions"></div></div>
-                    <div class="permission-group"><h4>操作权限</h4><div class="permission-checks" id="user-write-permissions"></div></div>
-                  </div>
-                </div>
-              </div>
-              <div class="form-actions"><button class="primary-button" type="submit">保存用户</button></div>
-            </form>
           </div>
           <section class="panel"><div class="panel-title"><h3>客户列表</h3><span id="customers-count">0 个客户</span></div><div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>提成比例</th><th>提成状态</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div></section>
           <section class="panel">
@@ -670,10 +648,39 @@
             </form>
             <div class="table-wrap"><table><thead><tr><th>供应商</th><th>类型</th><th>状态</th><th>联系人</th><th>电话</th><th>开票名称</th><th>银行账号</th><th>操作</th></tr></thead><tbody id="suppliers-table"></tbody></table></div>
           </section>
-          <section class="panel"><div class="panel-title"><h3>用户列表</h3><span id="users-count">0 个用户</span></div><div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>权限模式</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>用户列表</h3><div class="panel-title-actions"><span id="users-count">0 个用户</span><button class="primary-button" id="open-user-drawer" type="button">新建用户</button></div></div><div class="table-wrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>权限模式</th><th>状态</th><th>操作</th></tr></thead><tbody id="users-table"></tbody></table></div></section>
           <section class="panel"><div class="panel-title"><h3>操作日志</h3><span>最近 100 条</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>IP</th></tr></thead><tbody id="audit-table"></tbody></table></div></section>
         </section>
       </main>
+
+      <aside class="tax-detail-drawer user-drawer" id="user-drawer" hidden>
+        <div class="tax-detail-backdrop" data-close-user-drawer></div>
+        <section class="tax-detail-panel user-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="user-drawer-title">
+          <button class="modal-close" data-close-user-drawer type="button" aria-label="关闭用户编辑">×</button>
+          <form class="entry-form user-drawer-form" id="user-form" autocomplete="off">
+            <input type="hidden" id="user-id" />
+            <div class="form-header"><div><h3 id="user-drawer-title">用户和权限</h3><p id="user-form-subtitle">新建用户</p></div></div>
+            <div class="form-grid">
+              <label><span>姓名 *</span><input id="user-name" required /></label>
+              <label><span>邮箱 *</span><input id="user-email" required /></label>
+              <label><span>角色分类</span><select id="user-role"></select></label>
+              <label><span>账号状态</span><select id="user-approval-status"></select></label>
+              <label><span>权限模式</span><select id="user-permission-mode"></select></label>
+              <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新建用户必须设置初始密码，保存后用户需首次改密" /></label>
+              <details class="wide permission-editor" id="user-permission-editor" hidden>
+                <summary class="permission-editor-title"><strong>自定义权限组合</strong><small>展开配置菜单、查看和操作权限</small></summary>
+                <label class="permission-scope-field"><span>数据范围</span><select id="user-data-scope"></select></label>
+                <div class="permission-groups">
+                  <div class="permission-group"><h4>菜单权限</h4><div class="permission-checks" id="user-menu-permissions"></div></div>
+                  <div class="permission-group"><h4>查看权限</h4><div class="permission-checks" id="user-read-permissions"></div></div>
+                  <div class="permission-group"><h4>操作权限</h4><div class="permission-checks" id="user-write-permissions"></div></div>
+                </div>
+              </details>
+            </div>
+            <div class="form-actions"><button class="secondary-button" data-close-user-drawer type="button">取消</button><button class="primary-button" type="submit">保存用户</button></div>
+          </form>
+        </section>
+      </aside>
 
       <aside class="tax-detail-drawer" id="tax-detail-drawer" hidden>
         <div class="tax-detail-backdrop" data-close-tax-detail></div>
