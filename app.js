@@ -4213,8 +4213,26 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
     && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
+  const hasCustomsDocument = type.value === "CUSTOMS_ENTRY_FORM"
+    && docs.some((document) => document.uploadStatus === "SUCCESS" && isPersistedDocument(document));
+  const customsDocumentId = (() => {
+    if (type.value !== "CUSTOMS_ENTRY_FORM") return "";
+    return docs
+      .filter((document) => document.uploadStatus === "SUCCESS" && isPersistedDocument(document))
+      .reduce((latest, item) => {
+        const current = new Date(latest.uploadedAt || latest.createdAt || "").getTime();
+        const candidate = new Date(item.uploadedAt || item.createdAt || "").getTime();
+        return Number.isNaN(current) || candidate > current ? item : latest;
+      }, { id: "", uploadedAt: "" }).id;
+  })();
   const reparseButton = type.value === "CUSTOMS_ENTRY_FORM" && canEditCustomsRecognition()
-    ? `<button class="secondary-button" data-reparse-customs="${escapeHtml(order.id)}" type="button">重新识别报关单信息</button>`
+    ? `<button class="secondary-button"
+        data-reparse-customs="${escapeHtml(order.id)}"
+        data-reparse-customs-document="${escapeHtml(customsDocumentId)}"
+        data-reparse-customs-status="${escapeHtml(order.customsParseStatus || "")}"
+        type="button"
+        title="${hasCustomsDocument ? "点击后将重新识别报关单 PDF" : "请先上传报关单 PDF"}"
+        ${hasCustomsDocument ? "" : "disabled"}>重新识别报关单信息</button>`
     : "";
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
@@ -6239,21 +6257,34 @@ function customsPreviewText(data = {}) {
   ].join("\n");
 }
 
-async function reparseCustomsRecognition(orderId) {
+async function handleReparseCustomsDeclaration(orderId, documentId, button = null) {
   const order = state.taxRefundDetailOrder?.id === orderId ? state.taxRefundDetailOrder : state.taxRefundOrders.find((item) => item.id === orderId);
   if (!order) return toast("请先打开退税资料详情");
   if (!canEditCustomsRecognition()) return toast("没有权限重新识别报关单信息");
+  if (!documentId) return toast("请先上传报关单 PDF");
+  if (button && button.disabled) return;
+  const customsStatus = order.customsParseStatus || "";
   try {
-    if (order.customsParseStatus === "MANUAL" && !window.confirm("当前报关单信息为人工修改状态。重新识别会覆盖人工填写内容，是否继续？")) return;
-    const preview = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ action: "previewCustomsRecognition" }),
+    if (customsStatus === "MANUAL" && !window.confirm("当前报关单信息已人工修改，重新识别会覆盖现有内容，是否继续？")) return;
+    setActionButtonLoading(button, true, "识别中...");
+    const preview = await api("/api/tax-refunds/customs/reparse", {
+      method: "POST",
+      body: JSON.stringify({
+        orderId,
+        documentId,
+        documentType: "CUSTOMS_ENTRY_FORM",
+      }),
     });
     assertSuccessResponse(preview, "报关单预识别失败");
     if (!window.confirm(customsPreviewText(preview.data || {}))) return;
     const result = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
       method: "PATCH",
-      body: JSON.stringify({ action: "reparseCustomsRecognition", confirmManualOverride: order.customsParseStatus === "MANUAL" }),
+      body: JSON.stringify({
+        action: "reparseCustomsRecognition",
+        documentId,
+        documentType: "CUSTOMS_ENTRY_FORM",
+        confirmManualOverride: customsStatus === "MANUAL",
+      }),
     });
     assertSuccessResponse(result, "重新识别报关单失败");
     state.taxRefundDetailOrder = result.order;
@@ -6263,6 +6294,8 @@ async function reparseCustomsRecognition(orderId) {
     toast(result.message || "报关单信息已重新识别");
   } catch (error) {
     toast(error.message);
+  } finally {
+    setActionButtonLoading(button, false);
   }
 }
 
@@ -8163,7 +8196,7 @@ function bindEvents() {
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const reparseButton = event.target.closest("[data-reparse-customs]");
-    if (reparseButton) return reparseCustomsRecognition(reparseButton.dataset.reparseCustoms);
+    if (reparseButton) return handleReparseCustomsDeclaration(reparseButton.dataset.reparseCustoms, reparseButton.dataset.reparseCustomsDocument, reparseButton);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
   });
