@@ -67,9 +67,8 @@ const state = {
   taxRefundPagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
   taxRefundKeyword: "",
   taxRefundMode: "current",
-  taxRefundMonth: "",
-  taxRefundDeclarationMonth: "",
-  taxRefundExportMonth: "",
+  taxRefundDeclarationStartMonth: "",
+  taxRefundDeclarationEndMonth: "",
   taxRefundStatusFilter: "",
   taxRefundDetailOrder: null,
   taxRefundDetailLoading: false,
@@ -993,9 +992,8 @@ function clearLocalCaches() {
   state.taxRefundPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
   state.taxRefundKeyword = "";
   state.taxRefundMode = "current";
-  state.taxRefundMonth = "";
-  state.taxRefundDeclarationMonth = "";
-  state.taxRefundExportMonth = "";
+  state.taxRefundDeclarationStartMonth = "";
+  state.taxRefundDeclarationEndMonth = "";
   state.taxRefundStatusFilter = "";
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
@@ -1797,9 +1795,8 @@ async function loadTaxRefundList(options = {}) {
   const keyword = String(state.taxRefundKeyword || "").trim();
   if (keyword) params.set("q", keyword);
   params.set("mode", state.taxRefundMode || "current");
-  if (state.taxRefundMonth) params.set("month", state.taxRefundMonth);
-  if (state.taxRefundDeclarationMonth) params.set("declarationMonth", state.taxRefundDeclarationMonth);
-  if (state.taxRefundExportMonth) params.set("exportMonth", state.taxRefundExportMonth);
+  if (state.taxRefundDeclarationStartMonth) params.set("declarationStartMonth", state.taxRefundDeclarationStartMonth);
+  if (state.taxRefundDeclarationEndMonth) params.set("declarationEndMonth", state.taxRefundDeclarationEndMonth);
   if (state.taxRefundStatusFilter) params.set("status", state.taxRefundStatusFilter);
   try {
     const data = await api(`/api/tax-refunds?${params.toString()}`);
@@ -2762,9 +2759,7 @@ function taxStatusLabel(status) {
 }
 
 function customsDateRangeText(order = {}) {
-  const declarationDate = order.customsDeclarationDate || "-";
-  const exportDate = order.customsExportDate || "-";
-  return `${declarationDate} / ${exportDate}`;
+  return order.customsDeclarationDate || "-";
 }
 
 function customsParseStatusText(order = {}) {
@@ -3949,9 +3944,8 @@ function renderTaxRefund() {
   $("#tax-refund-count").textContent = `${state.taxRefundMode === "archive" ? "档案" : "当前"} ${pagination.total || 0} 个订单`;
   if ($("#tax-refund-mode")) $("#tax-refund-mode").value = state.taxRefundMode || "current";
   if ($("#tax-refund-search")) $("#tax-refund-search").value = state.taxRefundKeyword || "";
-  if ($("#tax-refund-month")) $("#tax-refund-month").value = state.taxRefundMonth || "";
-  if ($("#tax-refund-declaration-month")) $("#tax-refund-declaration-month").value = state.taxRefundDeclarationMonth || "";
-  if ($("#tax-refund-export-month")) $("#tax-refund-export-month").value = state.taxRefundExportMonth || "";
+  if ($("#tax-refund-declaration-start-month")) $("#tax-refund-declaration-start-month").value = state.taxRefundDeclarationStartMonth || "";
+  if ($("#tax-refund-declaration-end-month")) $("#tax-refund-declaration-end-month").value = state.taxRefundDeclarationEndMonth || "";
   if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = state.taxRefundStatusFilter || "";
   if ($("#tax-refund-page-info")) $("#tax-refund-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
   if ($("#tax-refund-prev")) $("#tax-refund-prev").disabled = (pagination.page || 1) <= 1;
@@ -3970,7 +3964,7 @@ function renderTaxRefund() {
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
-        <td><span class="muted-cell">申报出口日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
+        <td><span class="muted-cell">申报日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -8110,24 +8104,21 @@ function bindEvents() {
     event.preventDefault();
     state.taxRefundMode = $("#tax-refund-mode")?.value || "current";
     state.taxRefundKeyword = $("#tax-refund-search")?.value || "";
-    state.taxRefundMonth = $("#tax-refund-month")?.value || "";
-    state.taxRefundDeclarationMonth = $("#tax-refund-declaration-month")?.value || "";
-    state.taxRefundExportMonth = $("#tax-refund-export-month")?.value || "";
+    state.taxRefundDeclarationStartMonth = $("#tax-refund-declaration-start-month")?.value || "";
+    state.taxRefundDeclarationEndMonth = $("#tax-refund-declaration-end-month")?.value || "";
     state.taxRefundStatusFilter = $("#tax-refund-status-filter")?.value || "";
     loadTaxRefundList({ page: 1 });
   });
   $("#tax-refund-reset").addEventListener("click", () => {
     state.taxRefundMode = "current";
     state.taxRefundKeyword = "";
-    state.taxRefundMonth = "";
-    state.taxRefundDeclarationMonth = "";
-    state.taxRefundExportMonth = "";
+    state.taxRefundDeclarationStartMonth = "";
+    state.taxRefundDeclarationEndMonth = "";
     state.taxRefundStatusFilter = "";
     if ($("#tax-refund-mode")) $("#tax-refund-mode").value = "current";
     if ($("#tax-refund-search")) $("#tax-refund-search").value = "";
-    if ($("#tax-refund-month")) $("#tax-refund-month").value = "";
-    if ($("#tax-refund-declaration-month")) $("#tax-refund-declaration-month").value = "";
-    if ($("#tax-refund-export-month")) $("#tax-refund-export-month").value = "";
+    if ($("#tax-refund-declaration-start-month")) $("#tax-refund-declaration-start-month").value = "";
+    if ($("#tax-refund-declaration-end-month")) $("#tax-refund-declaration-end-month").value = "";
     if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = "";
     loadTaxRefundList({ page: 1 });
   });
