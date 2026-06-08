@@ -68,6 +68,8 @@ const state = {
   taxRefundKeyword: "",
   taxRefundMode: "current",
   taxRefundMonth: "",
+  taxRefundDeclarationMonth: "",
+  taxRefundExportMonth: "",
   taxRefundStatusFilter: "",
   taxRefundDetailOrder: null,
   taxRefundDetailLoading: false,
@@ -87,6 +89,8 @@ const state = {
   reportSortDir: "asc",
   reportSelectedIds: new Set(),
   reportQueried: false,
+  reportDeclarationMonth: "",
+  reportExportMonth: "",
   costOrderResults: [],
   selectedCostOrder: null,
   supplierSearchTimers: {},
@@ -990,6 +994,8 @@ function clearLocalCaches() {
   state.taxRefundKeyword = "";
   state.taxRefundMode = "current";
   state.taxRefundMonth = "";
+  state.taxRefundDeclarationMonth = "";
+  state.taxRefundExportMonth = "";
   state.taxRefundStatusFilter = "";
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
@@ -1792,6 +1798,8 @@ async function loadTaxRefundList(options = {}) {
   if (keyword) params.set("q", keyword);
   params.set("mode", state.taxRefundMode || "current");
   if (state.taxRefundMonth) params.set("month", state.taxRefundMonth);
+  if (state.taxRefundDeclarationMonth) params.set("declarationMonth", state.taxRefundDeclarationMonth);
+  if (state.taxRefundExportMonth) params.set("exportMonth", state.taxRefundExportMonth);
   if (state.taxRefundStatusFilter) params.set("status", state.taxRefundStatusFilter);
   try {
     const data = await api(`/api/tax-refunds?${params.toString()}`);
@@ -2753,6 +2761,20 @@ function taxStatusLabel(status) {
   return constants.taxRefundStatuses.find((item) => item.value === status)?.label || status || "-";
 }
 
+function customsDateRangeText(order = {}) {
+  const declarationDate = order.customsDeclarationDate || "-";
+  const exportDate = order.customsExportDate || "-";
+  return `${declarationDate} / ${exportDate}`;
+}
+
+function customsParseStatusText(order = {}) {
+  return order.customsParseStatusLabel || ({ SUCCESS: "成功", FAILED: "失败", MANUAL: "人工修改" }[order.customsParseStatus] || "未识别");
+}
+
+function canEditCustomsRecognition() {
+  return ["管理员", "财务", "业务员"].includes(state.me?.role);
+}
+
 function humanFileSize(size) {
   const bytes = Number(size || 0);
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -3624,8 +3646,54 @@ function domesticLogisticsRemarkPreview() {
   const trailer = $("#domestic-trailer-plate")?.value.trim() || "";
   const date = $("#domestic-departure-date")?.value || "";
   const place = $("#domestic-departure-place")?.value.trim() || "";
+  const destination = $("#domestic-destination-place")?.value.trim() || "";
+  const cargo = $("#domestic-cargo-description")?.value.trim() || "";
   const plate = trailer ? `${truck}/${trailer}` : truck;
-  return [plate ? `车牌号：${plate}` : "", date ? `起运日：${date}` : "", place ? `起运地：${place}` : ""].filter(Boolean).join("\n");
+  return [
+    plate ? `车牌号：${plate}` : "",
+    date ? `起运日：${date}` : "",
+    place ? `起运地：${place}` : "",
+    destination ? `到达地：${destination}` : "",
+    cargo ? `运输货物名称：${cargo}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function isDomesticRemarkManualEdited() {
+  return String($("#domestic-remark-manual-edited")?.value || "false") === "true";
+}
+
+function setDomesticRemarkManualEdited(next = false) {
+  const marker = $("#domestic-remark-manual-edited");
+  const status = $("#domestic-remark-status");
+  if (!marker) return;
+  marker.value = next ? "true" : "false";
+  if (status) status.textContent = next ? "已手工修改，不再自动覆盖。" : "字段变更后将自动更新备注。";
+}
+
+function syncDomesticRemarkAuto(force = false) {
+  const preview = $("#domestic-remark-preview");
+  if (!preview) return;
+  if (isDomesticRemarkManualEdited() && !force) return;
+  window.__updatingDomesticRemark = true;
+  preview.value = domesticLogisticsRemarkPreview();
+  window.__updatingDomesticRemark = false;
+  if (force) setDomesticRemarkManualEdited(false);
+}
+
+function handleDomesticRemarkManualChange() {
+  if (window.__updatingDomesticRemark) return;
+  setDomesticRemarkManualEdited(true);
+}
+
+function handleDomesticRemarkRegenerateClick() {
+  if (isDomesticRemarkManualEdited() && !window.confirm("该备注已手动修改，重新生成将覆盖当前内容，是否确认？")) return;
+  syncDomesticRemarkAuto(true);
+  const remark = $("#domestic-remark-preview");
+  if (remark) remark.focus();
+}
+
+function domesticRemarkNeedsRegeneration(text = "") {
+  return !String(text || "").includes("到达地：") || !String(text || "").includes("运输货物名称：");
 }
 
 function updateDomesticLogisticsFormVisibility() {
@@ -3643,7 +3711,7 @@ function updateDomesticLogisticsFormVisibility() {
   if ($("#domestic-place-label")) $("#domestic-place-label").textContent = type === "MULTIMODAL" ? "首程起运地 *" : "起运地 *";
   if ($("#domestic-date-label")) $("#domestic-date-label").textContent = type === "MULTIMODAL" ? "首程起运日期 *" : "起运日期 *";
   const preview = $("#domestic-remark-preview");
-  if (preview) preview.value = domesticLogisticsRemarkPreview();
+  if (preview) syncDomesticRemarkAuto();
 }
 
 function closeDomesticLogisticsEditor() {
@@ -3694,8 +3762,30 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     const el = $(selector);
     if (el) el.disabled = readOnly;
   });
+  const remark = $("#domestic-remark-preview");
+  if (remark) remark.disabled = readOnly;
+  const regenerate = $("#domestic-regenerate-remark");
+  if (regenerate) regenerate.hidden = readOnly;
   const submitButton = $("#domestic-logistics-form button[type='submit']");
   if (submitButton) submitButton.hidden = readOnly;
+  const existingRemark = info.remarkText || "";
+  if (remark) {
+    window.__updatingDomesticRemark = true;
+    remark.value = existingRemark;
+    window.__updatingDomesticRemark = false;
+  }
+  setDomesticRemarkManualEdited(Boolean(info.remarkTextManualEdited));
+  if (!readOnly && !isDomesticRemarkManualEdited()) {
+    if (mode === "edit" && existingRemark && domesticRemarkNeedsRegeneration(existingRemark)) {
+      setTimeout(() => {
+        if (window.confirm("当前备注缺少到达地或运输货物名称，是否重新生成？")) {
+          syncDomesticRemarkAuto(true);
+        }
+      }, 20);
+    } else {
+      syncDomesticRemarkAuto(!existingRemark);
+    }
+  }
   syncBodyModalOpen();
   $("#domestic-transport-type")?.focus();
 }
@@ -3810,6 +3900,8 @@ function domesticLogisticsPayload() {
     departureDate: $("#domestic-departure-date").value,
     expressTrackingNo: $("#domestic-express-no").value.trim(),
     cargoDescription: $("#domestic-cargo-description").value.trim(),
+    remarkText: $("#domestic-remark-preview").value,
+    remarkTextManualEdited: isDomesticRemarkManualEdited(),
   };
 }
 
@@ -3831,6 +3923,10 @@ async function submitDomesticLogistics(event) {
   const id = $("#domestic-logistics-info-id").value;
   try {
     const payload = domesticLogisticsPayload();
+    if (!isDomesticRemarkManualEdited()) {
+      payload.remarkText = domesticLogisticsRemarkPreview();
+      payload.remarkTextManualEdited = false;
+    }
     validateDomesticLogisticsPayload(payload);
     const result = await api(id ? `/api/domestic-logistics/${encodeURIComponent(id)}` : "/api/domestic-logistics", {
       method: id ? "PATCH" : "POST",
@@ -3854,6 +3950,8 @@ function renderTaxRefund() {
   if ($("#tax-refund-mode")) $("#tax-refund-mode").value = state.taxRefundMode || "current";
   if ($("#tax-refund-search")) $("#tax-refund-search").value = state.taxRefundKeyword || "";
   if ($("#tax-refund-month")) $("#tax-refund-month").value = state.taxRefundMonth || "";
+  if ($("#tax-refund-declaration-month")) $("#tax-refund-declaration-month").value = state.taxRefundDeclarationMonth || "";
+  if ($("#tax-refund-export-month")) $("#tax-refund-export-month").value = state.taxRefundExportMonth || "";
   if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = state.taxRefundStatusFilter || "";
   if ($("#tax-refund-page-info")) $("#tax-refund-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
   if ($("#tax-refund-prev")) $("#tax-refund-prev").disabled = (pagination.page || 1) <= 1;
@@ -3872,6 +3970,7 @@ function renderTaxRefund() {
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
         <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
+        <td><span class="muted-cell">申报出口日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
@@ -3882,7 +3981,7 @@ function renderTaxRefund() {
         </td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -3914,9 +4013,16 @@ function reportFilters() {
     paymentStatus: $("#report-payment-status")?.value || "",
     costType: $("#report-cost-type")?.value || "",
     taxRefundStatus: $("#report-tax-status")?.value || "",
+    declarationMonth: $("#report-declaration-month")?.value || "",
+    exportMonth: $("#report-export-month")?.value || "",
     archiveScope: $("#report-archive-scope")?.value || state.reportArchiveScope || "current",
     keyword: $("#report-keyword")?.value.trim() || "",
   };
+}
+
+function syncReportFilterInputs() {
+  if ($("#report-declaration-month")) $("#report-declaration-month").value = state.reportDeclarationMonth || "";
+  if ($("#report-export-month")) $("#report-export-month").value = state.reportExportMonth || "";
 }
 
 function reportQueryParams(page = 1) {
@@ -3963,6 +4069,12 @@ function renderReports() {
   if ($("#report-next")) $("#report-next").disabled = (pagination.page || 1) >= (pagination.totalPages || 1);
   const columns = state.reportColumns || [];
   const allChecked = state.reportRows.length > 0 && state.reportRows.every((row) => state.reportSelectedIds.has(row.id));
+  const showTaxRefundReportFilters = state.reportType === "tax-refunds";
+  const declarationMonthLabel = $("#report-declaration-month")?.closest("label");
+  const exportMonthLabel = $("#report-export-month")?.closest("label");
+  if (declarationMonthLabel) declarationMonthLabel.hidden = !showTaxRefundReportFilters;
+  if (exportMonthLabel) exportMonthLabel.hidden = !showTaxRefundReportFilters;
+  syncReportFilterInputs();
   head.innerHTML = `
     <tr>
       <th><input id="report-select-page" type="checkbox" ${allChecked ? "checked" : ""} /></th>
@@ -3994,7 +4106,16 @@ function resetReportForm() {
   state.reportSortDir = "asc";
   state.reportSelectedIds = new Set();
   state.reportQueried = false;
+  state.reportDeclarationMonth = "";
+  state.reportExportMonth = "";
+  if ($("#report-declaration-month")) $("#report-declaration-month").value = "";
+  if ($("#report-export-month")) $("#report-export-month").value = "";
   renderReports();
+}
+
+function syncReportFilterState() {
+  state.reportDeclarationMonth = $("#report-declaration-month")?.value || "";
+  state.reportExportMonth = $("#report-export-month")?.value || "";
 }
 
 function openReportDetail(rowId) {
@@ -4092,6 +4213,9 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
     && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
+  const reparseButton = type.value === "CUSTOMS_ENTRY_FORM" && canEditCustomsRecognition()
+    ? `<button class="secondary-button small-link" data-reparse-customs="${escapeHtml(order.id)}" type="button">重新识别报关单信息</button>`
+    : "";
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
       <div class="document-card-head">
@@ -4105,7 +4229,33 @@ function renderTaxDocumentItem(order, type, scope = {}) {
           ${uploadInput}
         </label>
       ` : ""}
+      ${reparseButton ? `<div class="row-actions file-actions">${reparseButton}</div>` : ""}
     </article>
+  `;
+}
+
+function renderCustomsRecognitionPanel(order = {}) {
+  const editable = canEditCustomsRecognition() && state.taxRefundMode !== "archive" && order.taxRefundStatus !== "SUBMITTED";
+  const failed = order.customsParseStatus === "FAILED" || !order.customsParseStatus;
+  return `
+    <div class="document-card ${failed ? "missing" : "uploaded"} customs-recognition-card">
+      <div class="document-card-head">
+        <strong>报关单识别信息</strong>
+        <span class="status ${order.customsParseStatus === "SUCCESS" ? "success" : (order.customsParseStatus === "MANUAL" ? "warning" : "danger")}">${escapeHtml(customsParseStatusText(order))}</span>
+      </div>
+      ${failed ? `<p class="muted-cell">未识别，请手工填写。${order.customsParseMessage ? `原因：${escapeHtml(order.customsParseMessage)}` : ""}</p>` : ""}
+      <form class="compact-form customs-recognition-form" data-customs-form="${escapeHtml(order.id)}">
+        <div class="form-grid">
+          <label><span>报关单号</span><input name="customsDeclarationNo" value="${escapeHtml(order.customsDeclarationNo || "")}" ${editable ? "" : "disabled"} /></label>
+          <label><span>申报日期</span><input name="customsDeclarationDate" type="date" value="${escapeHtml(order.customsDeclarationDate || "")}" ${editable ? "" : "disabled"} /></label>
+          <label><span>出口日期</span><input name="customsExportDate" type="date" value="${escapeHtml(order.customsExportDate || "")}" ${editable ? "" : "disabled"} /></label>
+          <label><span>申报口岸</span><input name="customsPort" value="${escapeHtml(order.customsPort || "")}" ${editable ? "" : "disabled"} /></label>
+          <label><span>识别时间</span><input value="${escapeHtml(formatDateTime(order.customsParsedAt))}" disabled /></label>
+          <label><span>识别状态</span><input value="${escapeHtml(customsParseStatusText(order))}" disabled /></label>
+        </div>
+        ${editable ? `<div class="form-actions"><button class="primary-button small-link" type="submit">保存报关单信息</button></div>` : ""}
+      </form>
+    </div>
   `;
 }
 
@@ -4253,6 +4403,7 @@ function renderTaxRefundDetail() {
     ${renderDomesticLogisticsReviewCard(order)}
     <section class="tax-detail-section">
       <h4>报关资料</h4>
+      ${renderCustomsRecognitionPanel(order)}
       <div class="tax-detail-doc-grid">${customsTypes.map((type) => renderTaxDocumentItem(order, type, { relatedModule: "EXPORT" })).join("")}</div>
     </section>
     <section class="tax-detail-section">
@@ -5979,6 +6130,10 @@ async function refreshUploadedDocumentScope(task = {}) {
   const data = await api(`/api/order-documents?${uploadScopeQuery(task).toString()}`);
   const documents = data.documents || data.data?.documents || [];
   replaceUploadedDocumentsInState(task, documents);
+  if (task.documentType === "CUSTOMS_ENTRY_FORM" && canReadArea("taxRefund")) {
+    await loadTaxRefundList({ page: state.taxRefundPagination.page || 1, silent: true });
+    if (state.taxRefundDetailOrder?.id === task.orderId) await openTaxRefundDetail(task.orderId);
+  }
   refreshDocumentViews();
 }
 
@@ -6048,6 +6203,66 @@ async function updateTaxStatus(orderId, status, extra = {}) {
   } catch (error) {
     toast(error.message);
     if (rethrow) throw error;
+  }
+}
+
+async function saveCustomsRecognition(form) {
+  const order = state.taxRefundDetailOrder;
+  if (!order) return toast("请先打开退税资料详情");
+  if (!canEditCustomsRecognition()) return toast("没有权限修改报关单信息");
+  const payload = Object.fromEntries(new FormData(form).entries());
+  try {
+    const result = await api(`/api/tax-refunds/${encodeURIComponent(order.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "updateCustomsRecognition", ...payload }),
+    });
+    assertSuccessResponse(result, "报关单信息保存失败");
+    state.taxRefundDetailOrder = result.order;
+    state.taxRefundOrders = state.taxRefundOrders.map((item) => (item.id === result.order.id ? { ...item, ...result.order } : item));
+    renderTaxRefund();
+    renderTaxRefundDetail();
+    toast(result.message || "报关单信息已保存");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function customsPreviewText(data = {}) {
+  return [
+    "识别结果如下，确认覆盖当前报关单信息吗？",
+    "",
+    `报关单号：${data.customsDeclarationNo || "-"}`,
+    `申报日期：${data.customsDeclarationDate || "-"}`,
+    `出口日期：${data.customsExportDate || "-"}`,
+    `申报口岸：${data.customsPort || "-"}`,
+    `识别来源：${data.source || "-"}`,
+  ].join("\n");
+}
+
+async function reparseCustomsRecognition(orderId) {
+  const order = state.taxRefundDetailOrder?.id === orderId ? state.taxRefundDetailOrder : state.taxRefundOrders.find((item) => item.id === orderId);
+  if (!order) return toast("请先打开退税资料详情");
+  if (!canEditCustomsRecognition()) return toast("没有权限重新识别报关单信息");
+  try {
+    if (order.customsParseStatus === "MANUAL" && !window.confirm("当前报关单信息为人工修改状态。重新识别会覆盖人工填写内容，是否继续？")) return;
+    const preview = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "previewCustomsRecognition" }),
+    });
+    assertSuccessResponse(preview, "报关单预识别失败");
+    if (!window.confirm(customsPreviewText(preview.data || {}))) return;
+    const result = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "reparseCustomsRecognition", confirmManualOverride: order.customsParseStatus === "MANUAL" }),
+    });
+    assertSuccessResponse(result, "重新识别报关单失败");
+    state.taxRefundDetailOrder = result.order;
+    state.taxRefundOrders = state.taxRefundOrders.map((item) => (item.id === result.order.id ? { ...item, ...result.order } : item));
+    renderTaxRefund();
+    renderTaxRefundDetail();
+    toast(result.message || "报关单信息已重新识别");
+  } catch (error) {
+    toast(error.message);
   }
 }
 
@@ -7555,6 +7770,7 @@ function bindEvents() {
   $("#report-query-form").addEventListener("submit", (event) => {
     event.preventDefault();
     state.reportSelectedIds = new Set();
+    syncReportFilterState();
     state.reportArchiveScope = $("#report-archive-scope")?.value || "current";
     queryReport(1);
   });
@@ -7569,6 +7785,7 @@ function bindEvents() {
     state.reportSortBy = "";
     state.reportSortDir = "asc";
     state.reportQueried = false;
+    syncReportFilterInputs();
     renderReports();
   });
   $("#report-table-head").addEventListener("click", (event) => {
@@ -7861,6 +8078,8 @@ function bindEvents() {
     state.taxRefundMode = $("#tax-refund-mode")?.value || "current";
     state.taxRefundKeyword = $("#tax-refund-search")?.value || "";
     state.taxRefundMonth = $("#tax-refund-month")?.value || "";
+    state.taxRefundDeclarationMonth = $("#tax-refund-declaration-month")?.value || "";
+    state.taxRefundExportMonth = $("#tax-refund-export-month")?.value || "";
     state.taxRefundStatusFilter = $("#tax-refund-status-filter")?.value || "";
     loadTaxRefundList({ page: 1 });
   });
@@ -7868,10 +8087,14 @@ function bindEvents() {
     state.taxRefundMode = "current";
     state.taxRefundKeyword = "";
     state.taxRefundMonth = "";
+    state.taxRefundDeclarationMonth = "";
+    state.taxRefundExportMonth = "";
     state.taxRefundStatusFilter = "";
     if ($("#tax-refund-mode")) $("#tax-refund-mode").value = "current";
     if ($("#tax-refund-search")) $("#tax-refund-search").value = "";
     if ($("#tax-refund-month")) $("#tax-refund-month").value = "";
+    if ($("#tax-refund-declaration-month")) $("#tax-refund-declaration-month").value = "";
+    if ($("#tax-refund-export-month")) $("#tax-refund-export-month").value = "";
     if ($("#tax-refund-status-filter")) $("#tax-refund-status-filter").value = "";
     loadTaxRefundList({ page: 1 });
   });
@@ -7924,6 +8147,8 @@ function bindEvents() {
   ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-destination-place", "#domestic-departure-date", "#domestic-express-no", "#domestic-cargo-description"].forEach((selector) => {
     $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);
   });
+  $("#domestic-remark-preview")?.addEventListener("input", handleDomesticRemarkManualChange);
+  $("#domestic-regenerate-remark")?.addEventListener("click", handleDomesticRemarkRegenerateClick);
   $("#tax-detail-drawer").addEventListener("click", (event) => {
     if (event.target.closest("[data-close-tax-detail]")) return closeTaxRefundDetail();
     const missing = event.target.closest("[data-missing-document]");
@@ -7937,8 +8162,16 @@ function bindEvents() {
     if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
+    const reparseButton = event.target.closest("[data-reparse-customs]");
+    if (reparseButton) return reparseCustomsRecognition(reparseButton.dataset.reparseCustoms);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
+  });
+  $("#tax-detail-drawer").addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-customs-form]");
+    if (!form) return;
+    event.preventDefault();
+    saveCustomsRecognition(form);
   });
   $("#tax-detail-drawer").addEventListener("change", (event) => {
     const documentInput = event.target.closest("[data-document-type]");

@@ -517,11 +517,13 @@
               <select id="tax-refund-mode"><option value="current">当前资料</option><option value="archive">退税档案</option></select>
               <input id="tax-refund-search" type="search" placeholder="搜索订单号 / 提单号 / 客户 / 供应商" />
               <input id="tax-refund-month" type="month" />
+              <input id="tax-refund-declaration-month" type="month" title="申报月份" />
+              <input id="tax-refund-export-month" type="month" title="出口月份" />
               <select id="tax-refund-status-filter"><option value="">全部退税状态</option></select>
               <button class="primary-button" type="submit">查询</button>
               <button class="secondary-button" id="tax-refund-reset" type="button">重置</button>
             </form>
-            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户名称</th><th>总体完整度</th><th>退税状态</th><th>操作</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户名称</th><th>申报出口日期</th><th>总体完整度</th><th>退税状态</th><th>操作</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
             <div class="pagination-bar">
               <button class="secondary-button" id="tax-refund-prev" type="button">上一页</button>
               <span id="tax-refund-page-info">第 1 / 1 页</span>
@@ -581,17 +583,9 @@
               <label data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
               <label data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
               <label><span>运输货物名称 *</span><input id="domestic-cargo-description" placeholder="木塑地板" /></label>
-              <label class="wide">
-                <span>出口发票备注</span>
-                <textarea id="domestic-remark-preview" rows="4" placeholder="根据录入字段自动生成，如需手动调整可直接修改"></textarea>
-                <input type="hidden" id="domestic-remark-manual-edited" value="false" />
-              </label>
-              <div class="form-actions">
-                <button type="button" class="secondary-button" id="domestic-regenerate-remark" style="margin-bottom: 8px;">重新生成备注</button>
-                <button class="primary-button" type="submit">提交国内物流信息</button>
-              </div>
-              <p id="domestic-remark-status" class="form-help subtle"></p>
-              </form>
+              <label class="wide"><span>出口发票备注</span><textarea id="domestic-remark-preview" readonly rows="4"></textarea></label>
+              <div class="form-actions"><button class="primary-button" type="submit">提交国内物流信息</button></div>
+            </form>
             <section class="domestic-logistics-documents">
               <div class="panel-title compact"><h3>报关资料上传</h3><span>自动归档到订单</span></div>
               <div class="tax-detail-doc-grid" id="domestic-logistics-documents"></div>
@@ -624,6 +618,8 @@
               <label><span>收款状态</span><select id="report-payment-status"><option value="">全部收款状态</option></select></label>
               <label><span>成本类型</span><select id="report-cost-type"><option value="">全部成本类型</option></select></label>
               <label><span>退税状态</span><select id="report-tax-status"><option value="">全部退税状态</option></select></label>
+              <label><span>申报月份</span><input id="report-declaration-month" type="month" /></label>
+              <label><span>出口月份</span><input id="report-export-month" type="month" /></label>
               <label><span>业务范围</span><select id="report-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select></label>
               <label><span>关键词</span><input id="report-keyword" type="search" placeholder="订单、客户、供应商、国家/地区" /></label>
               <div class="report-query-actions">
