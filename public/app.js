@@ -1231,10 +1231,12 @@ async function saveCustomerRequest(path, options = {}) {
 }
 
 function optionHtml(values, selected = "") {
+  const selectedValue = selected == null ? "" : String(selected);
   return values.map((item) => {
     const value = typeof item === "object" ? item.value : item;
+    const optionValue = value == null ? "" : String(value);
     const label = typeof item === "object" ? item.label : item;
-    return `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    return `<option value="${escapeHtml(optionValue)}" ${optionValue === selectedValue ? "selected" : ""}>${escapeHtml(label)}</option>`;
   }).join("");
 }
 
@@ -1242,6 +1244,13 @@ function fillSelect(id, values, selected = "", includeBlank = false, blankLabel 
   const el = $(id);
   if (!el) return;
   el.innerHTML = `${includeBlank ? `<option value="">${escapeHtml(blankLabel)}</option>` : ""}${optionHtml(values, selected)}`;
+}
+
+function appendMissingSelectOption(el, value) {
+  if (!el || el.tagName !== "SELECT" || !value) return;
+  if (["true", "false"].includes(value)) return;
+  if ([...el.options].some((option) => option.value === value)) return;
+  el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
 }
 
 function formPaymentStatuses(selected = "") {
@@ -1263,6 +1272,13 @@ function refreshCostConfirmOptions(selected = "false") {
     ? [{ value: "false", label: "未确认" }, { value: "true", label: "已确认" }]
     : [{ value: "false", label: "未确认" }];
   fillSelect("#cost-confirmed", values, canConfirmOrdinaryCost() ? selected : "false");
+}
+
+function refreshSupplierDomesticLogisticsEntryOptions(selected = "false") {
+  fillSelect("#supplier-domestic-logistics-entry", [
+    { value: "false", label: "关闭" },
+    { value: "true", label: "开启" },
+  ], String(selected ?? "false"));
 }
 
 function fillOrderSelect(id, selected = "") {
@@ -4585,10 +4601,9 @@ function readForm(prefix, fields) {
 function setForm(fields, data) {
   fields.forEach(([key, selector]) => {
     const el = $(selector);
-    const value = data?.[key] ?? "";
-    if (el?.tagName === "SELECT" && value && ![...el.options].some((option) => option.value === value)) {
-      el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
-    }
+    const rawValue = data?.[key] ?? "";
+    const value = rawValue == null ? "" : String(rawValue);
+    appendMissingSelectOption(el, value);
     if (el) el.value = value;
   });
 }
@@ -5121,10 +5136,8 @@ function loadCostDraft() {
       if (key === "id") return;
       const el = $(selector);
       if (el && Object.prototype.hasOwnProperty.call(data, key)) {
-        const value = data[key] ?? "";
-        if (el.tagName === "SELECT" && value && ![...el.options].some((option) => option.value === value)) {
-          el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
-        }
+        const value = data[key] == null ? "" : String(data[key]);
+        appendMissingSelectOption(el, value);
         el.value = value;
       }
     });
@@ -6780,7 +6793,13 @@ function resetForm(name) {
     $("#customer-commission-rate").value = "";
     $("#customer-commission-status").value = "启用";
   }
-  if (name === "supplier") $("#supplier-form").reset(), $("#supplier-id").value = "", $("#supplier-status").value = "启用", $("#supplier-type").value = "其他供应商", $("#supplier-domestic-logistics-entry").value = "false";
+  if (name === "supplier") {
+    $("#supplier-form").reset();
+    $("#supplier-id").value = "";
+    $("#supplier-status").value = "启用";
+    $("#supplier-type").value = "其他供应商";
+    refreshSupplierDomesticLogisticsEntryOptions("false");
+  }
   if (name === "user") {
     $("#user-form").reset();
     $("#user-id").value = "";
@@ -7999,6 +8018,7 @@ function initSelects() {
   refreshPaymentStatusOptions("待确认");
   fillSelect("#supplier-type", constants.supplierTypes, "其他供应商");
   fillSelect("#supplier-status", constants.supplierStatuses, "启用");
+  refreshSupplierDomesticLogisticsEntryOptions("false");
   fillSelect("#supplier-filter-type", constants.supplierTypes, "", true, "全部供应商类型");
   fillSelect("#supplier-filter-status", constants.supplierStatuses, "", true, "全部状态");
   fillSelect("#exchange-source", constants.exchangeRateSources, "中国银行");
