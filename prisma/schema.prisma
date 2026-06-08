@@ -232,6 +232,13 @@ model ReceivableOrder {
   taxRefundArchiveRemark String? @map("tax_refund_archive_remark")
   taxSubmittedById     String?   @map("tax_submitted_by")
   taxSubmittedAt       DateTime? @map("tax_submitted_at")
+  customsDeclarationNo String?   @map("customs_declaration_no")
+  customsDeclarationDate DateTime? @map("customs_declaration_date") @db.Date
+  customsExportDate    DateTime? @map("customs_export_date") @db.Date
+  customsPort          String?   @map("customs_port")
+  customsParsedAt      DateTime? @map("customs_parsed_at")
+  customsParseStatus   String?   @map("customs_parse_status")
+  customsParseMessage  String?   @map("customs_parse_message")
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
   reminderDays        Int       @default(7) @map("reminder_days")
@@ -272,6 +279,9 @@ model ReceivableOrder {
   @@index([taxRefundArchivedById])
   @@index([taxSubmittedAt])
   @@index([taxSubmittedById])
+  @@index([customsDeclarationDate])
+  @@index([customsExportDate])
+  @@index([customsParseStatus])
   @@index([dueDate])
   @@index([deletedAt])
   @@map("receivable_orders")

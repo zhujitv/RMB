@@ -1,4 +1,4 @@
-import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, requireText, updateTaxRefundStatus } from "../../../../lib/platform-db";
+import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, previewCustomsRecognition, reparseCustomsRecognition, requireText, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,18 @@ export async function PATCH(request, { params }) {
     if (body.cancelArchive === true) {
       const order = await cancelTaxRefundArchive(request, actor, orderId, body.status || "NOT_READY", body);
       return ok({ success: true, order, message: "退税资料已取消归档" });
+    }
+    if (body.action === "updateCustomsRecognition") {
+      const order = await updateCustomsRecognition(request, actor, orderId, body);
+      return ok({ success: true, order, message: "报关单信息已保存" });
+    }
+    if (body.action === "previewCustomsRecognition") {
+      const result = await previewCustomsRecognition(actor, orderId);
+      return ok({ success: true, data: result, message: "报关单识别结果已生成" });
+    }
+    if (body.action === "reparseCustomsRecognition") {
+      const order = await reparseCustomsRecognition(request, actor, orderId, body);
+      return ok({ success: true, order, message: "报关单信息已重新识别" });
     }
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);
