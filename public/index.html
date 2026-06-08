@@ -572,17 +572,17 @@
               <button class="icon-button" data-close-domestic-logistics type="button" aria-label="关闭">×</button>
             </div>
             <div class="domestic-logistics-summary" id="domestic-logistics-order-summary"></div>
-            <form class="entry-form" id="domestic-logistics-form" autocomplete="off">
+            <form class="entry-form domestic-logistics-form" id="domestic-logistics-form" autocomplete="off">
               <input type="hidden" id="domestic-logistics-order-id" />
               <input type="hidden" id="domestic-logistics-info-id" />
-              <label><span>运输方式 *</span><select id="domestic-transport-type"><option value="TRUCK">车辆运输</option><option value="EXPRESS">快递运输</option><option value="MULTIMODAL">多式联运</option></select></label>
-              <label data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
-              <label data-domestic-field="truck"><span>挂车车牌</span><input id="domestic-trailer-plate" placeholder="浙D6789挂" /></label>
-              <label data-domestic-field="truck"><span id="domestic-place-label">起运地 *</span><input id="domestic-departure-place" placeholder="绍兴越城" /></label>
-              <label><span>到达地 *</span><input id="domestic-destination-place" placeholder="上海洋山港" /></label>
-              <label data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
-              <label data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
-              <label><span>运输货物名称 *</span><input id="domestic-cargo-description" placeholder="木塑地板" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-transport"><span>运输方式 *</span><select id="domestic-transport-type"><option value="TRUCK">车辆运输</option><option value="EXPRESS">快递运输</option><option value="MULTIMODAL">多式联运</option></select></label>
+              <label class="domestic-logistics-field domestic-logistics-field-truck" data-domestic-field="truck"><span id="domestic-truck-label">车牌号 *</span><input id="domestic-truck-plate" placeholder="浙D12345" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-trailer" data-domestic-field="truck"><span>挂车车牌</span><input id="domestic-trailer-plate" placeholder="浙D6789挂" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-departure-date" data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-origin" data-domestic-field="truck"><span id="domestic-place-label">起运地 *</span><input id="domestic-departure-place" placeholder="绍兴越城" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-destination"><span>到达地 *</span><input id="domestic-destination-place" placeholder="上海洋山港" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-cargo"><span>运输货物名称 *</span><input id="domestic-cargo-description" placeholder="木塑地板" /></label>
+              <label class="domestic-logistics-field domestic-logistics-field-express" data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
               <label class="wide">
                 <span>出口发票备注</span>
                 <textarea id="domestic-remark-preview" rows="4"></textarea>

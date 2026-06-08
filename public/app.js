@@ -2805,8 +2805,8 @@ function documentActionsHtml(document, options = {}) {
   if (transient && ["WAITING", "UPLOADING", "FAILED"].includes(document.uploadStatus)) {
     return `
       <div class="row-actions file-actions">
-        ${document.uploadStatus === "FAILED" ? `<button data-retry-upload="${escapeHtml(document.id)}" type="button">重新上传</button>` : ""}
-        <button data-cancel-upload="${escapeHtml(document.id)}" type="button">${document.uploadStatus === "FAILED" ? "移除" : "取消"}</button>
+        ${document.uploadStatus === "FAILED" ? `<button class="secondary-button" data-retry-upload="${escapeHtml(document.id)}" type="button">重新上传</button>` : ""}
+        <button class="secondary-button" data-cancel-upload="${escapeHtml(document.id)}" type="button">${document.uploadStatus === "FAILED" ? "移除" : "取消"}</button>
       </div>
     `;
   }

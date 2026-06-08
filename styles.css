@@ -2049,6 +2049,23 @@ button.small-link {
   gap: 10px;
 }
 
+.tax-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tax-detail-actions .primary-button,
+.tax-detail-actions .secondary-button,
+.tax-detail-actions .danger-button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 700;
+}
+
 .tax-detail-summary > div {
   display: flex;
   justify-content: space-between;
@@ -2065,6 +2082,33 @@ button.small-link {
 .tax-detail-section {
   display: grid;
   gap: 12px;
+}
+
+.customs-recognition-form .form-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tax-detail-drawer .file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tax-detail-drawer .file-actions a,
+.tax-detail-drawer .file-actions button,
+.tax-detail-drawer .row-actions button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.tax-detail-drawer .file-actions button:not(.primary-button):not(.secondary-button):not(.danger-button) {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 
 .tax-detail-section h4 {
@@ -2144,6 +2188,25 @@ button.small-link {
   white-space: nowrap;
 }
 
+.domestic-logistics-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.domestic-logistics-form > label {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.domestic-logistics-form .wide,
+.domestic-logistics-form .form-actions {
+  grid-column: 1 / -1;
+}
+
 .domestic-logistics-supplier-hint {
   grid-column: 1 / -1;
   margin: -6px 0 2px;
@@ -2156,10 +2219,29 @@ button.small-link {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   color: #0f172a;
-  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font: 13px/1.78 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   margin: 8px 0 0;
   padding: 12px;
+  min-height: 140px;
+  resize: vertical;
   white-space: pre-wrap;
+}
+
+.domestic-logistics-form .form-actions {
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.domestic-logistics-form .form-actions .primary-button,
+.domestic-logistics-form .form-actions .secondary-button,
+.domestic-logistics-form .form-actions button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 700;
 }
 
 .domestic-logistics-review .document-card-meta {
@@ -3963,7 +4045,8 @@ body.modal-open {
   .filter-advanced,
   .report-query-form,
   .cost-filter-grid,
-  .cost-document-row {
+  .cost-document-row,
+  .domestic-logistics-form {
     grid-template-columns: 1fr;
   }
 
