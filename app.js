@@ -3646,8 +3646,54 @@ function domesticLogisticsRemarkPreview() {
   const trailer = $("#domestic-trailer-plate")?.value.trim() || "";
   const date = $("#domestic-departure-date")?.value || "";
   const place = $("#domestic-departure-place")?.value.trim() || "";
+  const destination = $("#domestic-destination-place")?.value.trim() || "";
+  const cargo = $("#domestic-cargo-description")?.value.trim() || "";
   const plate = trailer ? `${truck}/${trailer}` : truck;
-  return [plate ? `车牌号：${plate}` : "", date ? `起运日：${date}` : "", place ? `起运地：${place}` : ""].filter(Boolean).join("\n");
+  return [
+    plate ? `车牌号：${plate}` : "",
+    date ? `起运日：${date}` : "",
+    place ? `起运地：${place}` : "",
+    destination ? `到达地：${destination}` : "",
+    cargo ? `运输货物名称：${cargo}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function isDomesticRemarkManualEdited() {
+  return String($("#domestic-remark-manual-edited")?.value || "false") === "true";
+}
+
+function setDomesticRemarkManualEdited(next = false) {
+  const marker = $("#domestic-remark-manual-edited");
+  const status = $("#domestic-remark-status");
+  if (!marker) return;
+  marker.value = next ? "true" : "false";
+  if (status) status.textContent = next ? "已手工修改，不再自动覆盖。" : "字段变更后将自动更新备注。";
+}
+
+function syncDomesticRemarkAuto(force = false) {
+  const preview = $("#domestic-remark-preview");
+  if (!preview) return;
+  if (isDomesticRemarkManualEdited() && !force) return;
+  window.__updatingDomesticRemark = true;
+  preview.value = domesticLogisticsRemarkPreview();
+  window.__updatingDomesticRemark = false;
+  if (force) setDomesticRemarkManualEdited(false);
+}
+
+function handleDomesticRemarkManualChange() {
+  if (window.__updatingDomesticRemark) return;
+  setDomesticRemarkManualEdited(true);
+}
+
+function handleDomesticRemarkRegenerateClick() {
+  if (isDomesticRemarkManualEdited() && !window.confirm("该备注已手动修改，重新生成将覆盖当前内容，是否确认？")) return;
+  syncDomesticRemarkAuto(true);
+  const remark = $("#domestic-remark-preview");
+  if (remark) remark.focus();
+}
+
+function domesticRemarkNeedsRegeneration(text = "") {
+  return !String(text || "").includes("到达地：") || !String(text || "").includes("运输货物名称：");
 }
 
 function updateDomesticLogisticsFormVisibility() {
@@ -3665,7 +3711,7 @@ function updateDomesticLogisticsFormVisibility() {
   if ($("#domestic-place-label")) $("#domestic-place-label").textContent = type === "MULTIMODAL" ? "首程起运地 *" : "起运地 *";
   if ($("#domestic-date-label")) $("#domestic-date-label").textContent = type === "MULTIMODAL" ? "首程起运日期 *" : "起运日期 *";
   const preview = $("#domestic-remark-preview");
-  if (preview) preview.value = domesticLogisticsRemarkPreview();
+  if (preview) syncDomesticRemarkAuto();
 }
 
 function closeDomesticLogisticsEditor() {
@@ -3716,8 +3762,30 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
     const el = $(selector);
     if (el) el.disabled = readOnly;
   });
+  const remark = $("#domestic-remark-preview");
+  if (remark) remark.disabled = readOnly;
+  const regenerate = $("#domestic-regenerate-remark");
+  if (regenerate) regenerate.hidden = readOnly;
   const submitButton = $("#domestic-logistics-form button[type='submit']");
   if (submitButton) submitButton.hidden = readOnly;
+  const existingRemark = info.remarkText || "";
+  if (remark) {
+    window.__updatingDomesticRemark = true;
+    remark.value = existingRemark;
+    window.__updatingDomesticRemark = false;
+  }
+  setDomesticRemarkManualEdited(Boolean(info.remarkTextManualEdited));
+  if (!readOnly && !isDomesticRemarkManualEdited()) {
+    if (mode === "edit" && existingRemark && domesticRemarkNeedsRegeneration(existingRemark)) {
+      setTimeout(() => {
+        if (window.confirm("当前备注缺少到达地或运输货物名称，是否重新生成？")) {
+          syncDomesticRemarkAuto(true);
+        }
+      }, 20);
+    } else {
+      syncDomesticRemarkAuto(!existingRemark);
+    }
+  }
   syncBodyModalOpen();
   $("#domestic-transport-type")?.focus();
 }
@@ -3832,6 +3900,8 @@ function domesticLogisticsPayload() {
     departureDate: $("#domestic-departure-date").value,
     expressTrackingNo: $("#domestic-express-no").value.trim(),
     cargoDescription: $("#domestic-cargo-description").value.trim(),
+    remarkText: $("#domestic-remark-preview").value,
+    remarkTextManualEdited: isDomesticRemarkManualEdited(),
   };
 }
 
@@ -3853,6 +3923,10 @@ async function submitDomesticLogistics(event) {
   const id = $("#domestic-logistics-info-id").value;
   try {
     const payload = domesticLogisticsPayload();
+    if (!isDomesticRemarkManualEdited()) {
+      payload.remarkText = domesticLogisticsRemarkPreview();
+      payload.remarkTextManualEdited = false;
+    }
     validateDomesticLogisticsPayload(payload);
     const result = await api(id ? `/api/domestic-logistics/${encodeURIComponent(id)}` : "/api/domestic-logistics", {
       method: id ? "PATCH" : "POST",
@@ -8073,6 +8147,8 @@ function bindEvents() {
   ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-destination-place", "#domestic-departure-date", "#domestic-express-no", "#domestic-cargo-description"].forEach((selector) => {
     $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);
   });
+  $("#domestic-remark-preview")?.addEventListener("input", handleDomesticRemarkManualChange);
+  $("#domestic-regenerate-remark")?.addEventListener("click", handleDomesticRemarkRegenerateClick);
   $("#tax-detail-drawer").addEventListener("click", (event) => {
     if (event.target.closest("[data-close-tax-detail]")) return closeTaxRefundDetail();
     const missing = event.target.closest("[data-missing-document]");

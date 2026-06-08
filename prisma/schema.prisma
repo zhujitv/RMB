@@ -298,6 +298,7 @@ model DomesticLogisticsInfo {
   departureDate         DateTime? @map("departure_date") @db.Date
   expressTrackingNo     String?   @map("express_tracking_no")
   cargoDescription      String?   @map("cargo_description")
+  remarkTextManualEdited Boolean   @default(false) @map("remark_text_manual_edited")
   remarkText            String?   @map("remark_text")
   submittedByUserId     String?   @map("submitted_by_user_id")
   submittedAt           DateTime? @map("submitted_at")

@@ -581,9 +581,17 @@
               <label data-domestic-field="truck"><span id="domestic-date-label">起运日期 *</span><input id="domestic-departure-date" type="date" /></label>
               <label data-domestic-field="express" hidden><span>快递单号 *</span><input id="domestic-express-no" placeholder="SF123456789" /></label>
               <label><span>运输货物名称 *</span><input id="domestic-cargo-description" placeholder="木塑地板" /></label>
-              <label class="wide"><span>出口发票备注</span><textarea id="domestic-remark-preview" readonly rows="4"></textarea></label>
-              <div class="form-actions"><button class="primary-button" type="submit">提交国内物流信息</button></div>
-            </form>
+              <label class="wide">
+                <span>出口发票备注</span>
+                <textarea id="domestic-remark-preview" rows="4" placeholder="根据录入字段自动生成，如需手动调整可直接修改"></textarea>
+                <input type="hidden" id="domestic-remark-manual-edited" value="false" />
+              </label>
+              <div class="form-actions">
+                <button type="button" class="secondary-button" id="domestic-regenerate-remark" style="margin-bottom: 8px;">重新生成备注</button>
+                <button class="primary-button" type="submit">提交国内物流信息</button>
+              </div>
+              <p id="domestic-remark-status" class="form-help subtle"></p>
+              </form>
             <section class="domestic-logistics-documents">
               <div class="panel-title compact"><h3>报关资料上传</h3><span>自动归档到订单</span></div>
               <div class="tax-detail-doc-grid" id="domestic-logistics-documents"></div>
