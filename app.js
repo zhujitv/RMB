@@ -92,6 +92,8 @@ const state = {
   supplierSearchTimers: {},
   supplierSearchResults: {},
   documentUploads: {},
+  uploadingMap: {},
+  uploadInputVersions: {},
   uploadQueue: [],
   uploadBatchTotal: 0,
   uploadBatchCompleted: 0,
@@ -1061,6 +1063,8 @@ function clearLocalCaches() {
   state.uploadBatchCompleted = 0;
   clearTimeout(state.uploadNoticeTimer);
   state.documentUploads = {};
+  state.uploadingMap = {};
+  state.uploadInputVersions = {};
   if ($("#upload-queue-notice")) $("#upload-queue-notice").hidden = true;
   ["#order-id", "#payment-id", "#cost-id", "#customer-id", "#supplier-id", "#user-id"].forEach((selector) => {
     const el = $(selector);
@@ -2968,7 +2972,7 @@ function renderDocumentGrid(order) {
       <div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>
     ` : "";
     const busyStatus = uploadScopeStatus(order.id, type.value);
-    const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+    const uploadText = busyStatus ? "上传中..." : "选择PDF文件";
     return `
       <article class="document-card" data-document-upload-card="true" data-order-id="${escapeHtml(order.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
@@ -2977,7 +2981,7 @@ function renderDocumentGrid(order) {
         </div>
         <label class="document-upload-control ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
           <span>${escapeHtml(uploadText)}</span>
-          <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" />
+          <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" ${uploadInputAttributes(order.id, type.value)} />
         </label>
         ${docsHtml}
       </article>
@@ -3022,7 +3026,7 @@ function costDocumentUploadItem(cost, type, { label = type.label, required = tru
   const docsHtml = docs.length ? `<div class="document-file-list">${docs.map((document) => uploadedFileCard(document)).join("")}</div>` : "";
   const supplierScope = { costId: cost.id, supplierId: cost.supplierId };
   const busyStatus = uploadScopeStatus(order.id || cost.orderId, type.value, supplierScope);
-  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  const uploadText = busyStatus ? "上传中..." : "选择PDF文件";
   return `
     <div class="supplier-doc-item" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId)}" data-document-type="${escapeHtml(type.value)}">
       <div class="supplier-doc-head">
@@ -3037,7 +3041,7 @@ function costDocumentUploadItem(cost, type, { label = type.label, required = tru
             data-cost-document-type="${escapeHtml(type.value)}"
             data-order-id="${escapeHtml(order.id || cost.orderId)}"
             data-cost-id="${escapeHtml(cost.id)}"
-            data-supplier-id="${escapeHtml(cost.supplierId)}" />
+            data-supplier-id="${escapeHtml(cost.supplierId)}" ${uploadInputAttributes(order.id || cost.orderId, type.value, supplierScope)} />
         </label>
       ` : ""}
     </div>
@@ -3248,8 +3252,9 @@ function costDocumentRow(cost, type) {
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
   const missing = type.required && successCount === 0;
   const order = orderById(cost.orderId) || orderFallbackFromCost(cost);
-  const busyStatus = uploadScopeStatus(order?.id || cost.orderId, type.value, { costId: cost.id, supplierId: cost.supplierId });
-  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "上传 PDF");
+  const supplierScope = { costId: cost.id, supplierId: cost.supplierId, relatedModule: "SUPPLIER" };
+  const busyStatus = uploadScopeStatus(order?.id || cost.orderId, type.value, supplierScope);
+  const uploadText = busyStatus ? "上传中..." : "上传 PDF";
   return `
     <article class="cost-document-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order?.id || cost.orderId)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="${escapeHtml(type.value)}">
       <div>
@@ -3264,7 +3269,7 @@ function costDocumentRow(cost, type) {
             data-cost-document-type="${escapeHtml(type.value)}"
             data-order-id="${escapeHtml(order?.id || cost.orderId)}"
             data-cost-id="${escapeHtml(cost.id)}"
-            data-supplier-id="${escapeHtml(cost.supplierId || "")}" />
+            data-supplier-id="${escapeHtml(cost.supplierId || "")}" ${uploadInputAttributes(order?.id || cost.orderId, type.value, supplierScope)} />
         </label>
       ` : ""}
     </article>
@@ -3306,6 +3311,7 @@ async function openCostDocuments(id) {
 
 function closeCostDocuments() {
   const drawer = $("#cost-document-drawer");
+  clearFileInputs(drawer);
   if (drawer) drawer.hidden = true;
   state.costDocumentCost = null;
   syncBodyModalOpen();
@@ -3642,6 +3648,7 @@ function updateDomesticLogisticsFormVisibility() {
 
 function closeDomesticLogisticsEditor() {
   const editor = $("#domestic-logistics-editor");
+  clearFileInputs(editor);
   if (editor) editor.hidden = true;
   state.domesticLogisticsEditing = null;
   state.selectedDomesticLogisticsOrder = null;
@@ -3736,8 +3743,9 @@ function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogistic
     const docs = taxDetailDocumentRows(normalizedOrder, type.value, { relatedModule: "EXPORT" });
     const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
     const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: false })).join("") : emptyUploadState();
-    const busyStatus = uploadScopeStatus(normalizedOrder.id, type.value, { relatedModule: "EXPORT" });
-    const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : (successCount ? "替换/上传新版PDF" : "选择PDF文件"));
+    const exportScope = { relatedModule: "EXPORT" };
+    const busyStatus = uploadScopeStatus(normalizedOrder.id, type.value, exportScope);
+    const uploadText = busyStatus ? "上传中..." : (successCount ? "替换/上传新版PDF" : "选择PDF文件");
     return `
       <article class="tax-detail-document" data-document-upload-card="true" data-order-id="${escapeHtml(normalizedOrder.id)}" data-document-type="${escapeHtml(type.value)}">
         <div class="document-card-head">
@@ -3748,7 +3756,7 @@ function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogistic
         ${canUpload ? `
           <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
             <span>${escapeHtml(uploadText)}</span>
-            <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" data-related-module="EXPORT" />
+            <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" data-related-module="EXPORT" ${uploadInputAttributes(normalizedOrder.id, type.value, exportScope)} />
           </label>
         ` : ""}
       </article>
@@ -4068,16 +4076,16 @@ function renderTaxDocumentItem(order, type, scope = {}) {
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = scope.relatedModule === "SUPPLIER" ? { costId: scope.costId || "", supplierId: scope.supplierId || "", relatedModule: "SUPPLIER" } : {};
   const busyStatus = uploadScopeStatus(order.id, type.value, supplierScope);
-  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  const uploadText = busyStatus ? "上传中..." : "选择PDF文件";
   const uploadInput = scope.relatedModule === "SUPPLIER"
     ? `<input type="file" accept="application/pdf,.pdf"
           data-cost-document-type="${escapeHtml(type.value)}"
           data-order-id="${escapeHtml(order.id)}"
           data-cost-id="${escapeHtml(scope.costId || "")}"
-          data-supplier-id="${escapeHtml(scope.supplierId || "")}" />`
+          data-supplier-id="${escapeHtml(scope.supplierId || "")}" ${uploadInputAttributes(order.id, type.value, supplierScope)} />`
     : `<input type="file" accept="application/pdf,.pdf"
           data-document-type="${escapeHtml(type.value)}"
-          data-related-module="${escapeHtml(scope.relatedModule || documentRelatedModule(type.value))}" />`;
+          data-related-module="${escapeHtml(scope.relatedModule || documentRelatedModule(type.value))}" ${uploadInputAttributes(order.id, type.value)} />`;
   const customsUpload = constants.domesticLogisticsDocumentTypes.some((item) => item.value === type.value);
   const exportOrSalesUpload = ["EXPORT", "SALES"].includes(scope.relatedModule || documentRelatedModule(type.value));
   const canUpload = !archived && canWriteArea("documents")
@@ -4140,7 +4148,7 @@ function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel
   const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: !archived })).join("") : emptyUploadState();
   const supplierScope = { costId: cost.id, supplierId: cost.supplierId, relatedModule: "SUPPLIER" };
   const busyStatus = uploadScopeStatus(order.id, "SUPPLIER_INVOICE", supplierScope);
-  const uploadText = busyStatus === "UPLOADING" ? "上传中" : (busyStatus === "WAITING" ? "等待上传" : "选择PDF文件");
+  const uploadText = busyStatus ? "上传中..." : "选择PDF文件";
   return `
     <article class="tax-logistics-invoice-row" data-supplier-doc-item="true" data-order-id="${escapeHtml(order.id)}" data-cost-id="${escapeHtml(cost.id)}" data-supplier-id="${escapeHtml(cost.supplierId || "")}" data-document-type="SUPPLIER_INVOICE">
       <div class="tax-logistics-invoice-meta">
@@ -4158,7 +4166,7 @@ function renderTaxLogisticsInvoiceRow(order, cost, label = logisticsInvoiceLabel
             data-cost-document-type="SUPPLIER_INVOICE"
             data-order-id="${escapeHtml(order.id)}"
             data-cost-id="${escapeHtml(cost.id)}"
-            data-supplier-id="${escapeHtml(cost.supplierId || "")}" />
+            data-supplier-id="${escapeHtml(cost.supplierId || "")}" ${uploadInputAttributes(order.id, "SUPPLIER_INVOICE", supplierScope)} />
         </label>
       ` : ""}
     </article>
@@ -4299,6 +4307,7 @@ async function openTaxRefundDetail(orderId) {
 
 function closeTaxRefundDetail() {
   const drawer = $("#tax-detail-drawer");
+  clearFileInputs(drawer);
   if (drawer) drawer.hidden = true;
   state.taxRefundDetailOrder = null;
   state.taxRefundDetailLoading = false;
@@ -5509,24 +5518,70 @@ async function deleteLogistics(id) {
   }
 }
 
-function documentUploadKey(orderId, documentType, fileName, scope = {}) {
-  return `${orderId}:${scope.costId || "order"}:${scope.supplierId || "none"}:${documentType}:${fileName}`;
+function normalizedUploadScope(scope = {}, documentType = "") {
+  return {
+    costId: scope.costId || "",
+    supplierId: scope.supplierId || "",
+    relatedModule: scope.relatedModule || documentRelatedModule(documentType),
+  };
+}
+
+function uploadScopeKey(orderId, documentType, scope = {}) {
+  const normalizedScope = normalizedUploadScope(scope, documentType);
+  return [
+    orderId || "",
+    documentType || "",
+    normalizedScope.relatedModule || "",
+    normalizedScope.costId || "",
+    normalizedScope.supplierId || "",
+  ].join("_");
+}
+
+function documentUploadKey(orderId, documentType, scope = {}) {
+  return `${uploadScopeKey(orderId, documentType, scope)}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function uploadScopeMatches(item = {}, orderId, documentType, scope = {}) {
-  return item.orderId === orderId
-    && item.documentType === documentType
-    && (item.costId || "") === (scope.costId || "")
-    && (item.supplierId || "") === (scope.supplierId || "");
+  return uploadScopeKey(item.orderId, item.documentType, item) === uploadScopeKey(orderId, documentType, scope);
 }
 
 function uploadScopeStatus(orderId, documentType, scope = {}) {
   const task = state.uploadQueue.find((item) => uploadScopeMatches(item, orderId, documentType, scope) && ["WAITING", "UPLOADING"].includes(item.uploadStatus));
-  return task?.uploadStatus || "";
+  if (task?.uploadStatus) return task.uploadStatus;
+  return state.uploadingMap[uploadScopeKey(orderId, documentType, scope)] ? "UPLOADING" : "";
 }
 
 function uploadScopeBusy(orderId, documentType, scope = {}) {
-  return Boolean(uploadScopeStatus(orderId, documentType, scope));
+  return Boolean(state.uploadingMap[uploadScopeKey(orderId, documentType, scope)] || uploadScopeStatus(orderId, documentType, scope));
+}
+
+function setUploadScopeBusy(taskOrOrderId, documentType = "", scope = {}, busy = false) {
+  const source = typeof taskOrOrderId === "object" ? taskOrOrderId : { orderId: taskOrOrderId, documentType, ...scope };
+  if (!source.orderId || !source.documentType) return;
+  const key = uploadScopeKey(source.orderId, source.documentType, source);
+  if (busy) state.uploadingMap[key] = true;
+  else delete state.uploadingMap[key];
+}
+
+function bumpUploadInputVersion(taskOrOrderId, documentType = "", scope = {}) {
+  const source = typeof taskOrOrderId === "object" ? taskOrOrderId : { orderId: taskOrOrderId, documentType, ...scope };
+  const key = uploadScopeKey(source.orderId, source.documentType, source);
+  state.uploadInputVersions[key] = Number(state.uploadInputVersions[key] || 0) + 1;
+}
+
+function uploadInputAttributes(orderId, documentType, scope = {}) {
+  const key = uploadScopeKey(orderId, documentType, scope);
+  const version = Number(state.uploadInputVersions[key] || 0);
+  const disabled = uploadScopeBusy(orderId, documentType, scope) ? " disabled" : "";
+  return `data-upload-key="${escapeHtml(key)}" data-upload-version="${version}"${disabled}`;
+}
+
+function resetFileInput(input) {
+  if (input && input.type === "file") input.value = "";
+}
+
+function clearFileInputs(root = document) {
+  root?.querySelectorAll?.("input[type='file']").forEach(resetFileInput);
 }
 
 function clearFailedTransientUploads(orderId, documentType, scope = {}) {
@@ -5540,7 +5595,7 @@ function clearFailedTransientUploads(orderId, documentType, scope = {}) {
 
 function showLocalUploadFailure(order, documentType, file, scope = {}, message = "上传失败，请重试。", code = "") {
   clearFailedTransientUploads(order.id, documentType, scope);
-  const key = documentUploadKey(order.id, documentType, file?.name || "upload-error.pdf", scope);
+  const key = documentUploadKey(order.id, documentType, scope);
   state.documentUploads[key] = {
     id: key,
     orderId: order.id,
@@ -5629,11 +5684,23 @@ function syncUploadTaskToDocument(task) {
   };
 }
 
+function finishUploadTask(task) {
+  if (!task) return;
+  if (!task.uploadFinished) {
+    state.uploadBatchCompleted += 1;
+    task.uploadFinished = true;
+  }
+  task.xhr = null;
+  setUploadScopeBusy(task, "", {}, false);
+  bumpUploadInputVersion(task);
+}
+
 function enqueueUploadTask(order, documentType, file, scope = {}) {
   if (!canWriteArea("documents")) return toast("没有权限上传单证");
-  if (!file) return;
+  if (!order?.id || !documentType) return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+  if (!file) return toast("请选择 PDF 文件");
   if (uploadScopeBusy(order.id, documentType, scope)) {
-    toast("当前资料正在上传，请等待完成或取消后重新上传。");
+    toast("该资料正在上传，请等待完成后再操作。");
     return;
   }
   if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
@@ -5648,14 +5715,16 @@ function enqueueUploadTask(order, documentType, file, scope = {}) {
     state.uploadBatchTotal = 0;
     state.uploadBatchCompleted = 0;
   }
+  const normalizedScope = normalizedUploadScope(scope, documentType);
+  setUploadScopeBusy(order.id, documentType, normalizedScope, true);
   clearFailedTransientUploads(order.id, documentType, scope);
-  const key = documentUploadKey(order.id, documentType, file.name, scope);
+  const key = documentUploadKey(order.id, documentType, normalizedScope);
   const task = {
     id: key,
     orderId: order.id,
-    costId: scope.costId || "",
-    supplierId: scope.supplierId || "",
-    relatedModule: scope.relatedModule || documentRelatedModule(documentType),
+    costId: normalizedScope.costId,
+    supplierId: normalizedScope.supplierId,
+    relatedModule: normalizedScope.relatedModule,
     documentType,
     fileName: file.name,
     fileSize: file.size,
@@ -5673,14 +5742,21 @@ function enqueueUploadTask(order, documentType, file, scope = {}) {
 }
 
 function markQueuedUploadFailed(task, message, code = "") {
+  if (task.uploadFinished) return;
   task.uploadStatus = "FAILED";
   task.uploadProgress = 0;
   task.failureCode = code;
   task.failureMessage = message || "上传失败，请重试。";
-  task.xhr = null;
-  state.uploadBatchCompleted += 1;
+  finishUploadTask(task);
   syncUploadTaskToDocument(task);
   refreshDocumentViews();
+  console.error("文件上传失败", {
+    orderId: task.orderId,
+    documentType: task.documentType,
+    fileName: task.fileName,
+    message: task.failureMessage,
+    code: task.failureCode,
+  });
   toast(`${uploadFailureReason(task)}：${task.failureMessage}`);
   processUploadQueue();
 }
@@ -5693,11 +5769,11 @@ function startQueuedUpload(task) {
   syncUploadTaskToDocument(task);
   refreshDocumentViews();
   const formData = new FormData();
+  formData.append("file", task.file);
   formData.append("orderId", task.orderId);
   formData.append("documentType", task.documentType);
   if (task.costId) formData.append("costId", task.costId);
   if (task.supplierId) formData.append("supplierId", task.supplierId);
-  formData.append("file", task.file);
   const xhr = new XMLHttpRequest();
   task.xhr = xhr;
   xhr.open("POST", "/api/order-documents");
@@ -5716,20 +5792,26 @@ function startQueuedUpload(task) {
       markQueuedUploadFailed(task, "上传失败，服务器返回内容无法解析。");
       return;
     }
-    if (xhr.status >= 200 && xhr.status < 300) {
+    const documentPayload = data.data || data.document;
+    const uploadSucceeded = xhr.status >= 200 && xhr.status < 300 && data?.success === true && documentPayload;
+    if (uploadSucceeded) {
       task.uploadStatus = "SUCCESS";
       task.uploadProgress = 100;
-      task.xhr = null;
-      state.documentUploads[task.id] = { ...data.document, uploadStatus: "SUCCESS", uploadProgress: 100 };
-      state.uploadBatchCompleted += 1;
+      finishUploadTask(task);
+      state.documentUploads[task.id] = { ...documentPayload, uploadStatus: "SUCCESS", uploadProgress: 100 };
       state.uploadQueue = state.uploadQueue.filter((item) => item.id !== task.id);
       refreshDocumentViews();
       processUploadQueue();
-      await refreshAfterSuccess(() => refreshAfterTaxRefundMutation(task.orderId, task.costId || ""), "文件已上传，但列表刷新失败，请手动刷新");
-      delete state.documentUploads[task.id];
+      try {
+        await refreshUploadedDocumentScope(task);
+        delete state.documentUploads[task.id];
+      } catch (refreshError) {
+        console.warn("文件已上传，但当前资料列表刷新失败，请手动刷新", refreshError);
+        toast("文件已上传，但当前资料列表刷新失败，请手动刷新");
+      }
       refreshDocumentViews();
     } else {
-      markQueuedUploadFailed(task, data.error || "上传失败，请检查文件存储配置。", data.code || "");
+      markQueuedUploadFailed(task, data.message || data.error || "上传失败，请检查文件存储配置。", data.code || data.errorCode || "");
     }
   };
   xhr.onerror = () => {
@@ -5768,7 +5850,7 @@ function cancelQueuedUpload(id) {
   if (task.xhr) task.xhr.abort();
   state.uploadQueue = state.uploadQueue.filter((item) => item.id !== id);
   delete state.documentUploads[id];
-  if (shouldCount) state.uploadBatchCompleted += 1;
+  if (shouldCount) finishUploadTask(task);
   refreshDocumentViews();
   processUploadQueue();
 }
@@ -5779,7 +5861,7 @@ function retryQueuedUpload(id) {
   if (!source?.file) return toast("无法重新上传，请重新选择 PDF 文件。");
   const scope = { costId: source.costId || "", supplierId: source.supplierId || "", relatedModule: source.relatedModule || documentRelatedModule(source.documentType) };
   if (uploadScopeBusy(source.orderId, source.documentType, scope)) {
-    toast("当前资料正在上传，请等待完成或取消后重新上传。");
+    toast("该资料正在上传，请等待完成后再操作。");
     return;
   }
   if (!pendingUploadCount()) {
@@ -5802,7 +5884,9 @@ function retryQueuedUpload(id) {
   task.uploadProgress = 0;
   task.failureCode = "";
   task.failureMessage = "";
+  task.uploadFinished = false;
   task.uploadedAt = new Date().toISOString();
+  setUploadScopeBusy(task, "", {}, true);
   if (!existing) state.uploadQueue.push(task);
   state.uploadBatchTotal += 1;
   syncUploadTaskToDocument(task);
@@ -5812,6 +5896,90 @@ function retryQueuedUpload(id) {
 
 function uploadDocumentFile(order, documentType, file, scope = {}) {
   enqueueUploadTask(order, documentType, file, scope);
+}
+
+function handleUploadInputChange(input, order, documentType, scope = {}) {
+  const file = input?.files?.[0] || null;
+  resetFileInput(input);
+  uploadDocumentFile(order, documentType, file, scope);
+}
+
+function uploadScopeQuery(task = {}) {
+  const params = new URLSearchParams({
+    orderId: task.orderId || "",
+    documentType: task.documentType || "",
+  });
+  if (task.relatedModule) params.set("relatedModule", task.relatedModule);
+  if (task.costId) params.set("costId", task.costId);
+  if (task.supplierId) params.set("supplierId", task.supplierId);
+  return params;
+}
+
+function documentMatchesUploadRefreshScope(document = {}, orderId, documentType, scope = {}) {
+  return document.orderId === orderId
+    && document.documentType === documentType
+    && documentMatchesScope(document, scope);
+}
+
+function replaceDocumentRowsForScope(existing = [], freshDocuments = [], orderId, documentType, scope = {}) {
+  const incoming = (freshDocuments || []).filter((document) => documentMatchesUploadRefreshScope(document, orderId, documentType, scope));
+  const kept = (existing || []).filter((document) => !documentMatchesUploadRefreshScope(document, orderId, documentType, scope));
+  return [...incoming, ...kept];
+}
+
+function replaceCostDocumentsForScope(cost = {}, freshDocuments = [], orderId, documentType, scope = {}) {
+  if (!cost?.id || (scope.costId && cost.id !== scope.costId)) return cost;
+  return {
+    ...cost,
+    documents: replaceDocumentRowsForScope(cost.documents || [], freshDocuments, orderId, documentType, scope),
+  };
+}
+
+function replaceOrderDocumentsForScope(order = {}, freshDocuments = [], orderId, documentType, scope = {}) {
+  const normalizedOrderId = order.id || order.orderId;
+  if (!normalizedOrderId || normalizedOrderId !== orderId) return order;
+  return {
+    ...order,
+    documents: replaceDocumentRowsForScope(order.documents || [], freshDocuments, orderId, documentType, scope),
+    costs: (order.costs || []).map((cost) => replaceCostDocumentsForScope(cost, freshDocuments, orderId, documentType, scope)),
+  };
+}
+
+function replaceUploadedDocumentsInState(task = {}, freshDocuments = []) {
+  const scope = normalizedUploadScope(task, task.documentType);
+  state.orders = state.orders.map((order) => replaceOrderDocumentsForScope(order, freshDocuments, task.orderId, task.documentType, scope));
+  state.taxRefundOrders = state.taxRefundOrders.map((order) => replaceOrderDocumentsForScope(order, freshDocuments, task.orderId, task.documentType, scope));
+  state.costs = state.costs.map((cost) => replaceCostDocumentsForScope(cost, freshDocuments, task.orderId, task.documentType, scope));
+  state.costRows = state.costRows.map((cost) => replaceCostDocumentsForScope(cost, freshDocuments, task.orderId, task.documentType, scope));
+  state.costOrderRows = state.costOrderRows.map((order) => replaceOrderDocumentsForScope(order, freshDocuments, task.orderId, task.documentType, scope));
+  if (state.costDocumentCost?.id) {
+    state.costDocumentCost = replaceCostDocumentsForScope(state.costDocumentCost, freshDocuments, task.orderId, task.documentType, scope);
+  }
+  if (state.taxRefundDetailOrder?.id === task.orderId) {
+    state.taxRefundDetailOrder = replaceOrderDocumentsForScope(state.taxRefundDetailOrder, freshDocuments, task.orderId, task.documentType, scope);
+  }
+  state.domesticLogisticsRows = state.domesticLogisticsRows.map((order) => {
+    const normalizedOrderId = order.orderId || order.id;
+    if (normalizedOrderId !== task.orderId) return order;
+    return {
+      ...order,
+      documents: replaceDocumentRowsForScope(order.documents || [], freshDocuments, task.orderId, task.documentType, scope),
+    };
+  });
+  if ((state.selectedDomesticLogisticsOrder?.orderId || state.selectedDomesticLogisticsOrder?.id) === task.orderId) {
+    state.selectedDomesticLogisticsOrder = {
+      ...state.selectedDomesticLogisticsOrder,
+      documents: replaceDocumentRowsForScope(state.selectedDomesticLogisticsOrder.documents || [], freshDocuments, task.orderId, task.documentType, scope),
+    };
+    state.domesticLogisticsEditing = state.selectedDomesticLogisticsOrder;
+  }
+}
+
+async function refreshUploadedDocumentScope(task = {}) {
+  const data = await api(`/api/order-documents?${uploadScopeQuery(task).toString()}`);
+  const documents = data.documents || data.data?.documents || [];
+  replaceUploadedDocumentsInState(task, documents);
+  refreshDocumentViews();
 }
 
 async function refreshAfterTaxRefundMutation(orderId = "", costId = "") {
@@ -7583,10 +7751,7 @@ function bindEvents() {
     const input = event.target.closest("[data-document-type]");
     if (!input) return;
     const order = currentDetailOrder();
-    const file = input.files?.[0];
-    input.value = "";
-    if (!order) return toast("请先编辑一个应收订单");
-    uploadDocumentFile(order, input.dataset.documentType, file);
+    handleUploadInputChange(input, order, input.dataset.documentType);
   });
   $("#document-grid").addEventListener("click", (event) => {
     const retry = event.target.closest("[data-retry-upload]");
@@ -7630,10 +7795,11 @@ function bindEvents() {
     if (!input) return;
     const cost = state.costs.find((item) => item.id === input.dataset.costId);
     const order = cost ? (orderById(cost.orderId) || costOrderFromCost(cost)) : null;
-    const file = input.files?.[0];
-    input.value = "";
-    if (!cost || !order) return toast("请先选择有效成本记录");
-    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+    if (!cost || !order) {
+      resetFileInput(input);
+      return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+    }
+    handleUploadInputChange(input, order, input.dataset.costDocumentType, {
       costId: cost.id,
       supplierId: cost.supplierId,
       relatedModule: "SUPPLIER",
@@ -7665,10 +7831,11 @@ function bindEvents() {
     if (!input) return;
     const cost = state.costDocumentCost;
     const order = cost ? (orderById(cost.orderId) || orderFallbackFromCost(cost)) : null;
-    const file = input.files?.[0];
-    input.value = "";
-    if (!cost || !order) return toast("请先选择有效成本记录");
-    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+    if (!cost || !order) {
+      resetFileInput(input);
+      return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+    }
+    handleUploadInputChange(input, order, input.dataset.costDocumentType, {
       costId: cost.id,
       supplierId: cost.supplierId,
       relatedModule: "SUPPLIER",
@@ -7737,10 +7904,11 @@ function bindEvents() {
     const documentInput = event.target.closest("[data-document-type]");
     if (!documentInput) return;
     const order = state.selectedDomesticLogisticsOrder;
-    const file = documentInput.files?.[0];
-    documentInput.value = "";
-    if (!order) return toast("请先选择有效订单");
-    uploadDocumentFile({ ...order, id: order.orderId || order.id }, documentInput.dataset.documentType, file, { relatedModule: "EXPORT" });
+    if (!order) {
+      resetFileInput(documentInput);
+      return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+    }
+    handleUploadInputChange(documentInput, { ...order, id: order.orderId || order.id }, documentInput.dataset.documentType, { relatedModule: "EXPORT" });
   });
   $("#domestic-logistics-editor")?.addEventListener("click", (event) => {
     const retry = event.target.closest("[data-retry-upload]");
@@ -7776,22 +7944,30 @@ function bindEvents() {
     const documentInput = event.target.closest("[data-document-type]");
     if (documentInput) {
       const order = state.taxRefundDetailOrder;
-      const file = documentInput.files?.[0];
-      documentInput.value = "";
-      if (!order) return toast("请先选择有效订单");
-      if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") return toast("已提交退税档案只读，不能上传资料");
-      uploadDocumentFile(order, documentInput.dataset.documentType, file);
+      if (!order) {
+        resetFileInput(documentInput);
+        return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+      }
+      if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") {
+        resetFileInput(documentInput);
+        return toast("已提交退税档案只读，不能上传资料");
+      }
+      handleUploadInputChange(documentInput, order, documentInput.dataset.documentType);
       return;
     }
     const input = event.target.closest("[data-cost-document-type]");
     if (!input) return;
     const order = state.taxRefundDetailOrder;
     const cost = order?.costs?.find((item) => item.id === input.dataset.costId);
-    const file = input.files?.[0];
-    input.value = "";
-    if (!order || !cost) return toast("请先选择有效成本记录");
-    if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") return toast("已提交退税档案只读，不能上传资料");
-    uploadDocumentFile(order, input.dataset.costDocumentType, file, {
+    if (!order || !cost) {
+      resetFileInput(input);
+      return toast("缺少订单信息，不能上传文件，请刷新后重试。");
+    }
+    if (order.taxRefundStatus === "SUBMITTED" || state.taxRefundMode === "archive") {
+      resetFileInput(input);
+      return toast("已提交退税档案只读，不能上传资料");
+    }
+    handleUploadInputChange(input, order, input.dataset.costDocumentType, {
       costId: cost.id,
       supplierId: cost.supplierId,
       relatedModule: "SUPPLIER",

@@ -374,6 +374,7 @@ model OrderDocument {
   relatedModule  String            @default("EXPORT") @map("related_module")
   documentType   OrderDocumentType @map("document_type")
   fileName       String            @map("file_name")
+  originalName   String?           @map("original_name")
   fileSize       Int               @map("file_size")
   mimeType       String            @map("mime_type")
   r2Bucket       String            @map("r2_bucket")
