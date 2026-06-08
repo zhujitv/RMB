@@ -2811,13 +2811,13 @@ function documentActionsHtml(document, options = {}) {
     `;
   }
   const preview = document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents")
-    ? `<button class="secondary-button small-link" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
+    ? `<button class="secondary-button" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
     : "";
   const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
-    ? `<a class="secondary-button small-link" href="/api/order-documents/${encodeURIComponent(document.id)}/download" target="_blank" rel="noreferrer">下载</a>`
+    ? `<a class="secondary-button" href="/api/order-documents/${encodeURIComponent(document.id)}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
   const remove = options.allowDelete !== false && document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
-    ? `<button data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
+    ? `<button class="danger-button" data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
     : "";
   return preview || download || remove ? `<div class="row-actions file-actions">${preview}${download}${remove}</div>` : "";
 }
@@ -3811,10 +3811,10 @@ function renderDomesticLogistics() {
       <td>${escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")}</td>
       <td>${formatDateTime(row.submittedAt)}</td>
       <td class="row-actions">
-        ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
-        ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
-        ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="secondary-button small-link danger" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
-        <button class="secondary-button small-link" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
+        ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
+        ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
+        ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
+        <button class="secondary-button" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
       </td>
     </tr>
   `).join("") : `<tr><td colspan="10" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
@@ -3974,10 +3974,10 @@ function renderTaxRefund() {
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
         <td class="row-actions">
-          <button class="secondary-button small-link" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
-          ${canSubmitTaxRefund ? `<button class="primary-button small-link" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
-          ${canCancelArchive ? `<button class="secondary-button small-link" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
-          <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
+          <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
+          ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
+          ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
+          <a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
         </td>
       </tr>
     `;
@@ -4089,7 +4089,7 @@ function renderReports() {
       <tr>
         <td><input data-report-row-select="${escapeHtml(row.id)}" type="checkbox" ${state.reportSelectedIds.has(row.id) ? "checked" : ""} /></td>
         ${columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
-        <td class="row-actions"><button class="secondary-button small-link" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button></td>
+        <td class="row-actions"><button class="secondary-button" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button></td>
       </tr>
     `).join("") : emptyRow(columns.length + 2))
     : `<tr><td colspan="${columns.length + 2 || 8}"><div class="empty-state">请选择报表类型并点击查询。</div></td></tr>`;
@@ -4214,7 +4214,7 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
   const reparseButton = type.value === "CUSTOMS_ENTRY_FORM" && canEditCustomsRecognition()
-    ? `<button class="secondary-button small-link" data-reparse-customs="${escapeHtml(order.id)}" type="button">重新识别报关单信息</button>`
+    ? `<button class="secondary-button" data-reparse-customs="${escapeHtml(order.id)}" type="button">重新识别报关单信息</button>`
     : "";
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}">
@@ -4253,7 +4253,7 @@ function renderCustomsRecognitionPanel(order = {}) {
           <label><span>识别时间</span><input value="${escapeHtml(formatDateTime(order.customsParsedAt))}" disabled /></label>
           <label><span>识别状态</span><input value="${escapeHtml(customsParseStatusText(order))}" disabled /></label>
         </div>
-        ${editable ? `<div class="form-actions"><button class="primary-button small-link" type="submit">保存报关单信息</button></div>` : ""}
+        ${editable ? `<div class="form-actions"><button class="primary-button" type="submit">保存报关单信息</button></div>` : ""}
       </form>
     </div>
   `;
@@ -4388,7 +4388,7 @@ function renderTaxRefundDetail() {
     <div class="tax-detail-actions">
       ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
       ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
-      <a class="secondary-button small-link" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
+      <a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
     </div>
     <div class="tax-detail-summary">
       <div><span>出口资料</span>${completenessBadge(completeness.export, (completeness.export?.missingTypes || []).length === 0)}</div>

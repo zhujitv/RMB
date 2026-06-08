@@ -526,6 +526,7 @@ td small {
 .secondary-button,
 .clear-button,
 .primary-button,
+.danger-button,
 .export-card,
 .row-actions button {
   min-height: 38px;
@@ -534,6 +535,12 @@ td small {
   background: #fff;
   color: var(--text);
   padding: 0 14px;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
 }
 
 .primary-button {
@@ -545,6 +552,41 @@ td small {
 
 .secondary-button {
   background: #f8fafc;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #0b5f57;
+  border-color: #0b5f57;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #93c5fd;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled,
+.clear-button:disabled,
+.row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: #cbd5e1;
+  border-color: #94a3b8;
+  color: #64748b;
+  box-shadow: none;
+}
+
+.danger-button {
+  border-color: #b91c1c;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 700;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
 }
 
 .clear-button {
@@ -1505,10 +1547,22 @@ textarea:focus {
 }
 
 .document-card-head a,
-.small-link {
+a.small-link {
   color: var(--blue);
   font-size: 12px;
   text-decoration: none;
+}
+
+button.small-link {
+  color: var(--blue);
+  font-size: 12px;
+  text-decoration: none;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0 14px;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .document-upload-control {
