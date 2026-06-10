@@ -184,7 +184,7 @@ const constants = {
     { value: "payments", label: "收款管理" },
     { value: "costs", label: "成本管理" },
     { value: "profit", label: "利润分析" },
-    { value: "domesticLogistics", label: "国内物流信息" },
+    { value: "domesticLogistics", label: "物流信息" },
     { value: "taxRefund", label: "退税资料" },
     { value: "reports", label: "报表中心" },
     { value: "manual", label: "操作说明书" },
@@ -197,7 +197,7 @@ const constants = {
     { value: "orders", label: "应收订单查看" },
     { value: "payments", label: "收款查看" },
     { value: "costs", label: "成本查看" },
-    { value: "domesticLogistics", label: "国内物流查看" },
+    { value: "domesticLogistics", label: "物流查看" },
     { value: "documents", label: "单证查看" },
     { value: "taxRefund", label: "退税查看" },
     { value: "commissions", label: "提成查看" },
@@ -212,7 +212,7 @@ const constants = {
     { value: "payments", label: "收款登记" },
     { value: "costs", label: "成本录入" },
     { value: "logistics", label: "物流费用" },
-    { value: "domesticLogistics", label: "国内物流录入" },
+    { value: "domesticLogistics", label: "物流录入" },
     { value: "documents", label: "单证上传/删除" },
     { value: "taxRefund", label: "退税状态" },
     { value: "commissions", label: "提成结算" },
@@ -250,7 +250,7 @@ const viewTitles = {
   payments: "收款管理",
   costs: "成本管理",
   profit: "利润分析",
-  domesticLogistics: "国内物流信息",
+  domesticLogistics: "物流信息",
   taxRefund: "退税资料",
   reports: "报表中心",
   manual: "操作说明书",
@@ -288,7 +288,7 @@ constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter(
 
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "domesticLogistics", "reports", "manual"],
+  业务员: ["orders", "costs", "domesticLogistics", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
   物流资料录入员: ["domesticLogistics"],
@@ -306,7 +306,7 @@ const roleScopeTexts = {
 
 const roleWrites = {
   管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
-  业务员: ["orders", "logistics", "domesticLogistics", "documents"],
+  业务员: ["orders", "costs", "logistics", "domesticLogistics", "documents"],
   财务: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
@@ -315,7 +315,7 @@ const roleWrites = {
 
 const roleReads = {
   管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
-  业务员: ["customers", "orders", "payments", "domesticLogistics", "documents", "commissions", "reports"],
+  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
@@ -1272,7 +1272,7 @@ function refreshPaymentStatusOptions(selected = "") {
 }
 
 function canConfirmOrdinaryCost() {
-  return state.me?.role === "管理员";
+  return ["管理员", "业务员"].includes(state.me?.role);
 }
 
 function refreshCostConfirmOptions(selected = "false") {
