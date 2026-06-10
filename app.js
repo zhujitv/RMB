@@ -288,7 +288,7 @@ constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter(
 
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
+  业务员: ["orders", "domesticLogistics", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
   物流资料录入员: ["domesticLogistics"],
@@ -315,7 +315,7 @@ const roleWrites = {
 
 const roleReads = {
   管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
-  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
+  业务员: ["customers", "orders", "payments", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
