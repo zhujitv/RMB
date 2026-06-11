@@ -160,10 +160,12 @@
 .expanded-detail-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 14px;
-  border-top: 1px solid #e2e8f0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
   white-space: normal;
 }
 
@@ -201,14 +203,14 @@
 
   .expanded-actions,
   .expanded-detail-actions {
-    justify-content: stretch;
+    justify-content: flex-start;
   }
 
   .expanded-actions button,
   .expanded-actions a,
   .expanded-detail-actions button,
   .expanded-detail-actions a {
-    flex: 1 1 100%;
+    flex: 1 1 120px;
     text-align: center;
   }
 }
@@ -2452,6 +2454,72 @@ button.small-link {
   font-weight: 800;
 }
 
+.tax-refund-expanded-panel {
+  gap: 16px;
+}
+
+.tax-refund-expanded-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 16px;
+  align-items: stretch;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.tax-refund-expanded-title {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tax-refund-expanded-title h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.tax-refund-expanded-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tax-refund-expanded-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tax-refund-expanded-metrics > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.tax-refund-expanded-metrics span,
+.tax-refund-expanded-metrics small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tax-refund-expanded-metrics strong {
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
 .tax-detail-workflow-actions {
   display: flex;
   justify-content: flex-end;
@@ -4542,6 +4610,28 @@ body.modal-open {
   .cost-document-panel {
     width: 100%;
     border-left: 0;
+  }
+
+  .tax-refund-expanded-head,
+  .tax-refund-expanded-metrics,
+  .tax-status-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-status-overview-head,
+  .tax-status-item,
+  .tax-status-item-side {
+    align-items: flex-start;
+  }
+
+  .tax-status-overview-head,
+  .tax-status-item {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-status-item-side {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .filter-main-row button,

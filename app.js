@@ -2807,8 +2807,8 @@ function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
     <tr class="expanded-row expanded-detail-row">
       <td colSpan="${colspan}" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card" data-expanded-panel="${escapeHtml(scope)}">
-          ${sectionHtml}
           ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
+          ${sectionHtml}
         </div>
       </td>
     </tr>
@@ -2870,8 +2870,8 @@ function renderDomesticLogisticsDetailRow(row, actions = "") {
     <tr class="expanded-row expanded-detail-row domestic-logistics-expanded-row">
       <td colSpan="6" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card domestic-logistics-detail-card" data-expanded-panel="domesticLogistics">
-          ${sectionHtml}
           ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
+          ${sectionHtml}
         </div>
       </td>
     </tr>
@@ -3702,7 +3702,12 @@ function factoryCompletenessBadge(completeness = {}) {
 function missingDocumentTargets(order = {}) {
   const completeness = order.documentCompleteness || {};
   const exportTargets = (completeness.export?.missingTypes || []).map((type) => ({
-    module: "order",
+    module: "taxDetailDocument",
+    documentType: type,
+    label: documentTypeLabel(type),
+  }));
+  const customsTargets = (completeness.customs?.missingTypes || []).map((type) => ({
+    module: "taxDetailDocument",
     documentType: type,
     label: documentTypeLabel(type),
   }));
@@ -3741,7 +3746,7 @@ function missingDocumentTargets(order = {}) {
       title: `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.invoiceLabel || "物流资料"}`,
     });
   });
-  return [...exportTargets, ...domesticTargets, ...supplierTargets, ...logisticsTargets];
+  return [...exportTargets, ...customsTargets, ...domesticTargets, ...supplierTargets, ...logisticsTargets];
 }
 
 function missingDocumentButton(order, target) {
@@ -3814,6 +3819,10 @@ function taxDetailStatusBadge(status) {
   return `<span class="status ${className}">${escapeHtml(taxDetailStatusText(status))}</span>`;
 }
 
+function taxHasLoadedDocuments(order = {}) {
+  return Array.isArray(order.documents);
+}
+
 function taxDocumentOverviewItem(order, type, scope = {}, target = null, label = type.label) {
   const docs = taxDetailDocumentRows(order, type.value, scope);
   const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
@@ -3825,6 +3834,20 @@ function taxDocumentOverviewItem(order, type, scope = {}, target = null, label =
     count: successCount,
     target,
     actionText: failed ? "重新上传" : "去上传",
+  };
+}
+
+function taxCachedDocumentOverviewItem(order, type, completenessPart = {}, scope = {}, target = null, label = type.label) {
+  if (taxHasLoadedDocuments(order)) return taxDocumentOverviewItem(order, type, scope, target, label);
+  const missingTypes = completenessPart?.missingTypes || [];
+  const hasCompletenessPart = Array.isArray(completenessPart?.missingTypes) || Number(completenessPart?.total || 0) > 0;
+  const status = hasCompletenessPart && !missingTypes.includes(type.value) ? "complete" : "missing";
+  return {
+    label,
+    status,
+    count: status === "complete" ? 1 : 0,
+    target: status === "complete" ? null : target,
+    actionText: "去上传",
   };
 }
 
@@ -3858,6 +3881,46 @@ function taxDetailDomesticOverviewItem(order = {}) {
 }
 
 function taxDetailFactoryOverviewItems(order = {}) {
+  const completeness = order.documentCompleteness || {};
+  const supplierPart = completeness.supplier || completeness.factory || {};
+  if (!Array.isArray(order.costs)) {
+    const supplierGroups = supplierPart.suppliers || [];
+    if (supplierPart.missingFactoryCost || !supplierGroups.length) {
+      const target = taxDetailCostOrderTarget(order, "去补录");
+      return constants.supplierDocumentTypes.map((type) => ({
+        label: type.value === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票",
+        status: "unrecorded",
+        count: 0,
+        target,
+        actionText: "去补录",
+      }));
+    }
+    const missingItems = supplierPart.missing || [];
+    return supplierGroups.flatMap((supplier) => constants.supplierDocumentTypes.map((type) => {
+      const typeLabel = type.value === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票";
+      const label = supplierGroups.length > 1 ? `${supplier.supplierName} · ${typeLabel}` : typeLabel;
+      const missing = missingItems.find((item) => (
+        item.documentType === type.value
+        && (!supplier.supplierId || item.supplierId === supplier.supplierId)
+      ));
+      const status = missing ? "missing" : "complete";
+      return {
+        label,
+        status,
+        count: status === "complete" ? 1 : 0,
+        target: status === "complete" ? null : {
+          module: "supplier",
+          documentType: type.value,
+          supplierId: supplier.supplierId || "",
+          costId: supplier.costIds?.[0] || "",
+          label: typeLabel,
+          title: `${supplier.supplierName || "工厂供应商"}${typeLabel}`,
+          actionText: "去上传",
+        },
+        actionText: "去上传",
+      };
+    }));
+  }
   const supplierGroups = factorySupplierCosts(order);
   if (!supplierGroups.length) {
     const target = taxDetailCostOrderTarget(order, "去补录");
@@ -3894,6 +3957,39 @@ function taxDetailLogisticsInvoiceLabel(requirement = {}) {
 }
 
 function taxDetailLogisticsOverviewItems(order = {}) {
+  const completeness = order.documentCompleteness || {};
+  const logisticsPart = completeness.logistics || {};
+  if (!Array.isArray(order.costs)) {
+    return (logisticsPart.requirements || []).map((requirement) => {
+      const label = taxDetailLogisticsInvoiceLabel(requirement);
+      const missing = (logisticsPart.missing || []).find((item) => item.requirementKey === requirement.key);
+      if (!requirement.costs?.length || missing?.missingCost) {
+        return {
+          label,
+          status: "unrecorded",
+          count: 0,
+          target: taxDetailCostOrderTarget(order, "去补录"),
+          actionText: "去补录",
+        };
+      }
+      const status = requirement.completed && !missing ? "complete" : "missing";
+      return {
+        label,
+        status,
+        count: status === "complete" ? 1 : 0,
+        target: status === "complete" ? null : {
+          module: "logisticsInvoice",
+          documentType: "SUPPLIER_INVOICE",
+          supplierId: missing?.supplierId || requirement.costs?.[0]?.supplierId || "",
+          costId: missing?.costId || requirement.costs?.[0]?.costId || "",
+          label,
+          title: `${missing?.costType || requirement.costs?.[0]?.costType || "-"} / ${missing?.supplierName || requirement.costs?.[0]?.supplierName || "-"} / ${label}`,
+          actionText: "去上传",
+        },
+        actionText: "去上传",
+      };
+    });
+  }
   return taxRefundLogisticsInvoiceGroups(order).map((requirement) => {
     const label = taxDetailLogisticsInvoiceLabel(requirement);
     if (!requirement.costs.length) {
@@ -3932,13 +4028,14 @@ function taxDetailLogisticsOverviewItems(order = {}) {
 }
 
 function taxDetailOverviewGroups(order = {}) {
+  const completeness = order.documentCompleteness || {};
   const exportItems = [
     { value: "BILL_OF_LADING", label: "提单" },
     { value: "COMMERCIAL_INVOICE", label: "商业发票" },
     { value: "PACKING_LIST", label: "装箱单" },
     { value: "EXPORT_INVOICE", label: "出口发票" },
     { value: "SALES_CONTRACT", label: "销售合同" },
-  ].map((type) => taxDocumentOverviewItem(order, type, {
+  ].map((type) => taxCachedDocumentOverviewItem(order, type, completeness.export, {
     relatedModule: type.value === "SALES_CONTRACT" ? "SALES" : "EXPORT",
   }, {
     module: "taxDetailDocument",
@@ -3951,7 +4048,7 @@ function taxDetailOverviewGroups(order = {}) {
     { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
     { value: "RELEASE_NOTICE", label: "放行通知书" },
     { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
-  ].map((type) => taxDocumentOverviewItem(order, type, { relatedModule: "EXPORT" }, {
+  ].map((type) => taxCachedDocumentOverviewItem(order, type, completeness.customs, { relatedModule: "EXPORT" }, {
     module: "taxDetailDocument",
     documentType: type.value,
     label: type.label,
@@ -4029,6 +4126,67 @@ function renderTaxDetailOverview(order = {}) {
         }).join("")}
       </div>
     </section>
+  `;
+}
+
+function taxRefundHasPackageContent(order = {}) {
+  if (taxDetailHasPackageFiles(order)) return true;
+  const completeness = order.documentCompleteness || {};
+  return Number(completeness.completed || 0) > 0;
+}
+
+function renderTaxRefundExpandedRow(order = {}, options = {}) {
+  if (!isRowExpanded("taxRefund", order.id)) return "";
+  const completeness = order.documentCompleteness || {};
+  const progress = taxCompletenessProgress(completeness);
+  const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
+  const missingItems = taxDetailOverviewFlatItems(order).filter((item) => item.status !== "complete");
+  const canDownloadPackage = taxRefundHasPackageContent(order);
+  const actions = `
+    <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
+    ${canDownloadPackage
+      ? `<a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>`
+      : `<button class="secondary-button" type="button" disabled>下载资料包</button>`}
+    ${options.canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
+    ${options.canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
+  `;
+  return `
+    <tr class="expanded-row expanded-detail-row tax-refund-expanded-row">
+      <td colSpan="6" class="expanded-detail-cell">
+        <div class="expanded-panel expanded-detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
+          <div class="expanded-actions expanded-detail-actions">${actions}</div>
+          <section class="tax-refund-expanded-head">
+            <div class="tax-refund-expanded-title">
+              <span class="eyebrow">退税资料状态看板</span>
+              <h4>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order) || "-")}</h4>
+              <div class="tax-refund-expanded-meta">
+                <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
+                <span>币种：${escapeHtml(order.currency || "-")}</span>
+                <span>申报日期：${escapeHtml(customsDateRangeText(order))}</span>
+              </div>
+            </div>
+            <div class="tax-refund-expanded-metrics">
+              <div>
+                <span>总体完整度</span>
+                <strong>${progress.percent}%</strong>
+                <small>${progress.completed}/${progress.total}</small>
+              </div>
+              <div>
+                <span>退税状态</span>
+                <strong class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</strong>
+              </div>
+              <div>
+                <span>缺失资料</span>
+                <strong>${missingItems.length}</strong>
+                <small>${missingItems.length ? "项待处理" : "资料完整"}</small>
+              </div>
+            </div>
+          </section>
+          ${renderTaxDetailMissingSummary(order)}
+          ${renderTaxDetailOverview(order)}
+        </div>
+      </td>
+    </tr>
   `;
 }
 
@@ -4546,23 +4704,7 @@ function renderTaxRefund() {
         <td>${statusControl}</td>
         ${rowActions(detailButton("taxRefund", order.id))}
       </tr>
-      ${expandedDetailRow("taxRefund", order.id, 6, [
-        { title: "退税资料", items: [
-          ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
-          ["提单号", escapeHtml(order.blNo || "待发货")],
-          ["客户简称", customerNameCell(order)],
-          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
-          ["申报日期", escapeHtml(customsDateRangeText(order))],
-          ["总体完整度", taxOverallPercentBadge(completeness), { strong: true }],
-          ["退税状态", `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`],
-          ["缺失资料", displayCompletenessText(completeness.missingText || order.missingText || "-"), { wide: true }],
-        ] },
-      ], `
-          <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
-          ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
-          ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
-          <a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
-        `)}
+      ${renderTaxRefundExpandedRow(order, { canSubmitTaxRefund, canCancelArchive })}
     `;
   }).join("") : `<tr><td colspan="6" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
@@ -8133,7 +8275,13 @@ function findTaxDetailDocumentCard(orderId, documentType) {
 function focusTaxDetailDocumentCard(orderId, documentType) {
   const drawer = $("#tax-detail-drawer");
   if (!drawer || drawer.hidden || state.taxRefundDetailOrder?.id !== orderId) {
-    focusOrderMissingDocument(orderId, documentType);
+    if (!canReadArea("taxRefund")) {
+      focusOrderMissingDocument(orderId, documentType);
+      return;
+    }
+    openTaxRefundDetail(orderId)
+      .then(() => deferHighlightUploadArea(() => findTaxDetailDocumentCard(orderId, documentType)))
+      .catch((error) => toast(error.message));
     return;
   }
   deferHighlightUploadArea(() => findTaxDetailDocumentCard(orderId, documentType));
@@ -8777,6 +8925,11 @@ function bindEvents() {
   });
   $("#tax-refund-table").addEventListener("click", (event) => {
     if (handleExpandableRowClick(event)) return;
+    const missing = event.target.closest("[data-missing-document]");
+    if (missing) {
+      focusMissingDocumentTarget(missing.dataset);
+      return;
+    }
     const submitButton = event.target.closest("[data-submit-tax-refund]");
     if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
     const cancelArchiveButton = event.target.closest("[data-cancel-tax-archive]");
