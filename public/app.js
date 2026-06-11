@@ -2795,9 +2795,18 @@ function detailItems(items = []) {
   `).join("");
 }
 
+function hasDetailValue(value) {
+  const text = String(value ?? "").trim();
+  return Boolean(text && text !== "-");
+}
+
+function optionalDetailItem(label, value, options = {}) {
+  return hasDetailValue(value) ? [label, value, options] : null;
+}
+
 function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
   if (!isRowExpanded(scope, id)) return "";
-  const sectionHtml = sections.filter(Boolean).map((section) => `
+  const sectionHtml = sections.filter((section) => section && (section.items || []).filter(Boolean).length).map((section) => `
     <section class="expanded-section expanded-detail-section">
       <h4 class="expanded-section-title">${escapeHtml(section.title)}</h4>
       <div class="expanded-grid expanded-detail-grid">${detailItems(section.items || [])}</div>
@@ -2828,39 +2837,39 @@ function renderDomesticLogisticsDetailRow(row, actions = "") {
       title: "订单基础信息",
       items: [
         ["订单号", escapeHtml(row.orderNo || "-"), { strong: true }],
-        ["提单号", escapeHtml(row.blNo || "待发货")],
-        ["客户简称", customerNameCell(row)],
+        optionalDetailItem("提单号", escapeHtml(row.blNo || "")),
       ],
     },
     {
       title: "运输信息",
       items: [
-        ["运输方式", escapeHtml(info.transportTypeLabel || "-")],
-        ["起运地", escapeHtml(info.departurePlace || "-")],
-        ["到达地", escapeHtml(info.destinationPlace || "-")],
-        ["起运日期", escapeHtml(info.departureDate || "-")],
-        ["运输货物名称", escapeHtml(info.cargoDescription || "-")],
-        ["车牌号", escapeHtml(info.truckPlateNo || "-")],
-        ["挂车车牌", escapeHtml(info.trailerPlateNo || "-")],
-        ["快递单号", escapeHtml(info.expressTrackingNo || "-")],
+        optionalDetailItem("运输方式", escapeHtml(info.transportTypeLabel || "")),
+        optionalDetailItem("起运地", escapeHtml(info.departurePlace || "")),
+        optionalDetailItem("到达地", escapeHtml(info.destinationPlace || "")),
+        optionalDetailItem("起运日期", escapeHtml(info.departureDate || "")),
+        optionalDetailItem("运输货物名称", escapeHtml(info.cargoDescription || "")),
+        optionalDetailItem("车牌号", escapeHtml(info.truckPlateNo || "")),
+        optionalDetailItem("挂车车牌", escapeHtml(info.trailerPlateNo || "")),
+        optionalDetailItem("快递单号", escapeHtml(info.expressTrackingNo || "")),
       ],
     },
     {
       title: "录入信息",
       items: [
         ["物流状态", escapeHtml(row.logisticsStatus || "未提交")],
-        ["录入人", escapeHtml(info.submittedByName || "-")],
-        ["录入时间", formatDateTime(info.submittedAt || row.submittedAt)],
+        optionalDetailItem("录入人", escapeHtml(info.submittedByName || "")),
+        optionalDetailItem("录入时间", formatDateTime(info.submittedAt || row.submittedAt)),
+        optionalDetailItem("修改人", escapeHtml(info.updatedByName || row.updatedByName || "")),
       ],
     },
     {
       title: "出口发票备注",
       items: [
-        ["出口发票备注", escapeHtml(info.remarkText || "-"), { wide: true, pre: true }],
+        optionalDetailItem("出口发票备注", escapeHtml(info.remarkText || ""), { wide: true, pre: true }),
       ],
     },
   ];
-  const sectionHtml = sections.map((section) => `
+  const sectionHtml = sections.filter((section) => (section.items || []).filter(Boolean).length).map((section) => `
     <section class="expanded-section expanded-detail-section">
       <h4 class="expanded-section-title">${escapeHtml(section.title)}</h4>
       <div class="expanded-grid expanded-detail-grid">${detailItems(section.items)}</div>
@@ -2904,8 +2913,7 @@ function renderOrders() {
       ${expandedDetailRow("orders", orderId, colspan, [
         { title: "订单基础信息", items: [
           ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
-          ["客户简称", customerNameCell(order)],
-          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
+          ["客户全称", escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")],
           ["提单号", escapeHtml(order.blNo || "待发货")],
           ["业务员", escapeHtml(order.salespersonName || "-")],
           ["状态", `<span class="status ${statusClass(order.status)}">${escapeHtml(order.status || "-")}</span>`],
@@ -2921,7 +2929,7 @@ function renderOrders() {
           ["预付款差额", moneyCell({ currency: order.currency, amountCny: order.summary.depositGapCny, exchangeRate: order.exchangeRate })],
           ["币种 / 汇率", `${escapeHtml(order.currency || "-")} / ${escapeHtml(order.exchangeRate || "-")}`],
         ] },
-        { title: "备注", items: [["备注", escapeHtml(order.remark || "-"), { wide: true, pre: true }]] },
+        hasDetailValue(order.remark) ? { title: "备注", items: [["备注", escapeHtml(order.remark), { wide: true, pre: true }]] } : null,
       ], actions)}
     `;
   }).join("") : emptyRow(colspan);
@@ -3209,7 +3217,7 @@ function renderOrderDetails() {
   const order = currentDetailOrder();
   panel.hidden = !order;
   if (!order) return;
-  $("#order-detail-title").textContent = `${order.orderNo} · ${customerShortNameOf(order) || customerFullNameOf(order)} · ${order.blNo || "待发货"}`;
+  $("#order-detail-title").textContent = `${order.orderNo} · ${customerFullNameOf(order) || customerShortNameOf(order)} · ${order.blNo || "待发货"}`;
   renderLogisticsTable(order);
   renderDocumentGrid(order);
   applyAccessControl();
@@ -3236,8 +3244,7 @@ function renderPayments() {
       ${expandedDetailRow("payments", paymentId, colspan, [
         { title: "收款信息", items: [
           ["订单号", escapeHtml(payment.orderNo || "-"), { strong: true }],
-          ["客户简称", customerNameCell(payment)],
-          ["客户全称", escapeHtml(customerFullNameOf(payment) || "-")],
+          ["客户全称", escapeHtml(customerFullNameOf(payment) || customerShortNameOf(payment) || "-")],
           ["收款日期", escapeHtml(payment.paymentDate || "-")],
           ["收款类型", escapeHtml(payment.paymentType || "尾款")],
           ["收款状态", `<span class="status ${statusClass(payment.status)}">${escapeHtml(payment.status || "-")}</span>`],
@@ -3246,9 +3253,9 @@ function renderPayments() {
           ["币种 / 汇率", `${escapeHtml(payment.currency || "-")} / ${escapeHtml(payment.exchangeRate || "-")}`],
           ["收款金额", moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny }), { strong: true }],
           ["折人民币", moneyCell({ currency: "CNY", amountCny: payment.amountCny })],
-          ["银行流水号", escapeHtml(payment.bankReference || "-")],
+          optionalDetailItem("银行流水号", escapeHtml(payment.bankReference || "")),
           ["创建 / 修改", auditCell(payment)],
-          ["备注", escapeHtml(payment.remark || "-"), { wide: true, pre: true }],
+          optionalDetailItem("备注", escapeHtml(payment.remark || ""), { wide: true, pre: true }),
         ] },
       ], actions)}
     `;
@@ -3349,6 +3356,8 @@ function renderCostDetailsTable(rows = []) {
   const colspan = 8;
   $("#costs-table").innerHTML = rows.length ? rows.map((cost) => {
     const costId = cost.id;
+    const createdByName = cost.createdBy?.name || cost.createdByName || "-";
+    const updatedByName = cost.updatedBy?.name || cost.updatedByName || "-";
     const actions = [
       `<button data-cost-documents="${escapeHtml(cost.id)}" type="button">资料维护</button>`,
       canWriteArea("costs") ? `<button data-edit-cost="${escapeHtml(cost.id)}" type="button">编辑</button>` : "",
@@ -3366,30 +3375,24 @@ function renderCostDetailsTable(rows = []) {
         ${rowActions(detailButton("costs", costId))}
       </tr>
       ${expandedDetailRow("costs", costId, colspan, [
-        { title: "成本基础信息", items: [
+        { title: "核心信息", items: [
           ["订单号", escapeHtml(cost.orderNo || "-"), { strong: true }],
-          ["提单号", escapeHtml(cost.blNo || cost.billOfLadingNo || "-")],
-          ["客户简称", customerNameCell(cost)],
-          ["客户全称", escapeHtml(customerFullNameOf(cost) || "-")],
+          optionalDetailItem("提单号", escapeHtml(cost.blNo || cost.billOfLadingNo || "")),
           ["成本类型", escapeHtml(normalizeCostType(cost.costType) || "-")],
           ["供应商", escapeHtml(cost.supplierName || cost.vendorName || "-")],
-          ["供应商类型", escapeHtml(cost.supplierType || "-")],
         ] },
-        { title: "金额与状态", items: [
+        { title: "金额状态", items: [
           ["成本金额", moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny }), { strong: true }],
           ["折人民币", moneyCell({ currency: "CNY", amountCny: cost.amountCny })],
           ["付款状态", `<span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span>`],
           ["成本确认", `<span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span>`],
           ["发票状态", `<span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span>`],
-        ] },
-        { title: "资料状态", items: [
           ["资料状态", costMaterialStatusHtml(cost)],
         ] },
-        { title: "创建 / 修改", items: [
-          ["创建 / 修改", auditCell(cost)],
-        ] },
-        { title: "备注", items: [
-          ["备注", escapeHtml(cost.remark || "-"), { wide: true, pre: true }],
+        { title: "辅助信息", items: [
+          optionalDetailItem("创建人", escapeHtml(createdByName)),
+          optionalDetailItem("修改人", escapeHtml(updatedByName)),
+          optionalDetailItem("备注", escapeHtml(cost.remark || ""), { wide: true, pre: true }),
         ] },
       ], actions)}
     `;
@@ -3421,8 +3424,8 @@ function renderCostOrderSummaryTable(rows = []) {
       ${expandedDetailRow("costOrders", rowId, colspan, [
         { title: "订单成本汇总", items: [
           ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
-          ["提单号", escapeHtml(order.blNo || order.billOfLadingNo || "-")],
-          ["客户简称", customerNameCell(order)],
+          optionalDetailItem("提单号", escapeHtml(order.blNo || order.billOfLadingNo || "")),
+          ["客户全称", escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")],
           ["应收金额", money(order.receivableAmountCny || 0)],
           ["总成本", money(order.totalCostCny || 0), { strong: true }],
           ["工厂货款", money(order.factoryCostCny || 0)],
@@ -3638,8 +3641,7 @@ function renderProfit() {
       ${expandedDetailRow("profit", orderId, 7, [
         { title: "订单利润", items: [
           ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
-          ["客户简称", customerNameCell(order)],
-          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
+          ["客户全称", escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")],
           ["最终应收", money(order.summary.receivableCny), { strong: true }],
           ["已到账金额", money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)],
           ["总成本", money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)],
@@ -4158,10 +4160,9 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
           <section class="tax-refund-expanded-head">
             <div class="tax-refund-expanded-title">
               <span class="eyebrow">退税资料概览</span>
-              <h4>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order) || "-")}</h4>
+              <h4>${escapeHtml(order.orderNo || "-")}</h4>
               <div class="tax-refund-expanded-meta">
                 <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
-                <span>币种：${escapeHtml(order.currency || "-")}</span>
                 <span>申报日期：${escapeHtml(customsDateRangeText(order))}</span>
               </div>
             </div>
@@ -4207,11 +4208,10 @@ function renderTaxDetailHeader(order = {}, canSubmitTaxRefund = false, canCancel
     <section class="tax-detail-hero">
       <div class="tax-detail-hero-main">
         <span class="eyebrow">退税资料状态总览</span>
-        <h3>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order) || "-")}</h3>
+        <h3>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")}</h3>
         <div class="tax-detail-hero-meta">
           <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
           <span>币种：${escapeHtml(order.currency || "-")}</span>
-          <span>客户全称：${escapeHtml(customerFullNameOf(order) || "-")}</span>
         </div>
       </div>
       <div class="tax-detail-hero-side">
@@ -4463,7 +4463,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-logistics-order-summary").innerHTML = `
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
-    <div><span>客户简称</span><strong>${customerNameCell(row)}</strong></div>
+    <div><span>客户全称</span><strong>${escapeHtml(customerFullNameOf(row) || customerShortNameOf(row) || "-")}</strong></div>
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
@@ -4724,6 +4724,17 @@ function reportArea(type) {
   }[type] || "orders";
 }
 
+function reportExpandedItems(row = {}, columns = []) {
+  return columns
+    .filter((column) => !["customerShortName"].includes(column.key))
+    .map((column) => {
+      if (column.key === "customerName" || column.label === "客户简称") {
+        return ["客户全称", escapeHtml(row.customerFullName || row.customerName || row.customerShortName || "")];
+      }
+      return [column.label, escapeHtml(row[column.key] ?? "")];
+    });
+}
+
 function reportFilters() {
   return {
     dateFrom: $("#report-date-from")?.value || "",
@@ -4816,7 +4827,7 @@ function renderReports() {
         ${rowActions(detailButton("reports", row.id))}
       </tr>
       ${expandedDetailRow("reports", row.id, Math.min(columns.length, 5) + 2, [
-        { title: "报表明细", items: columns.map((column) => [column.label, escapeHtml(row[column.key] ?? "")]) },
+        { title: "报表明细", items: reportExpandedItems(row, columns) },
       ], `<button class="secondary-button" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button>`)}
     `).join("") : emptyRow(Math.min(columns.length, 5) + 2))
     : `<tr><td colspan="${Math.min(columns.length, 5) + 2 || 8}"><div class="empty-state">请选择报表类型并点击查询。</div></td></tr>`;
@@ -5110,7 +5121,7 @@ function renderTaxRefundDetail() {
     return;
   }
   const completeness = order.documentCompleteness || {};
-  $("#tax-detail-title").textContent = `${order.orderNo} · ${customerShortNameOf(order) || customerFullNameOf(order)}`;
+  $("#tax-detail-title").textContent = `${order.orderNo} · ${customerFullNameOf(order) || customerShortNameOf(order)}`;
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const customsTypes = constants.domesticLogisticsDocumentTypes;
   const exportTypes = [
@@ -5368,17 +5379,16 @@ function renderCustomerSettings() {
         </tr>
         ${expandedDetailRow("customers", customer.id, columnCount, [
           { title: "客户资料", items: [
-            ["客户简称", customerShortNameCell(customer)],
             ["客户全称", escapeHtml(customerFullNameOf(customer) || "-"), { strong: true }],
             ["国家 / 地区", escapeHtml(customer.country || "-")],
             ["默认币种", escapeHtml(customer.defaultCurrency || "-")],
             ["负责业务员", escapeHtml(customer.salespersonName || "-")],
             ["提成比例", `${Number(customer.commissionRate || 0).toFixed(2)}%`],
             ["提成状态", `<span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span>`],
-            ["联系人", escapeHtml(customer.contactPerson || "-")],
-            ["联系邮箱", escapeHtml(customer.contactEmail || "-")],
-            ["联系电话", escapeHtml(customer.contactPhone || "-")],
-            ["备注", escapeHtml(customer.remark || "-"), { wide: true, pre: true }],
+            optionalDetailItem("联系人", escapeHtml(customer.contactPerson || "")),
+            optionalDetailItem("联系邮箱", escapeHtml(customer.contactEmail || "")),
+            optionalDetailItem("联系电话", escapeHtml(customer.contactPhone || "")),
+            optionalDetailItem("备注", escapeHtml(customer.remark || ""), { wide: true, pre: true }),
           ] },
         ], canWriteArea("customers") ? `<button data-edit-customer="${escapeHtml(customer.id)}">编辑</button><button data-delete-customer="${escapeHtml(customer.id)}">删除</button>` : "")}
       `).join("") : emptyRow(columnCount));
@@ -5411,15 +5421,15 @@ function renderSupplierSettings() {
             ["供应商", escapeHtml(supplier.supplierName || "-"), { strong: true }],
             ["类型", escapeHtml(supplier.supplierType || "-")],
             ["状态", `<span class="status ${statusClass(supplier.status)}">${escapeHtml(supplier.status || "-")}</span>`],
-            ["联系人", escapeHtml(supplier.contactPerson || "-")],
-            ["电话", escapeHtml(supplier.phone || "-")],
-            ["邮箱", escapeHtml(supplier.email || "-")],
-            ["开票名称", escapeHtml(supplier.invoiceTitle || "-")],
-            ["税号", escapeHtml(supplier.taxNumber || "-")],
-            ["银行名称", escapeHtml(supplier.bankName || "-")],
-            ["银行账号", escapeHtml(supplier.bankAccount || "-")],
-            ["地址", escapeHtml(supplier.address || "-")],
-            ["备注", escapeHtml(supplier.remark || "-"), { wide: true, pre: true }],
+            optionalDetailItem("联系人", escapeHtml(supplier.contactPerson || "")),
+            optionalDetailItem("电话", escapeHtml(supplier.phone || "")),
+            optionalDetailItem("邮箱", escapeHtml(supplier.email || "")),
+            optionalDetailItem("开票名称", escapeHtml(supplier.invoiceTitle || "")),
+            optionalDetailItem("税号", escapeHtml(supplier.taxNumber || "")),
+            optionalDetailItem("银行名称", escapeHtml(supplier.bankName || "")),
+            optionalDetailItem("银行账号", escapeHtml(supplier.bankAccount || "")),
+            optionalDetailItem("地址", escapeHtml(supplier.address || "")),
+            optionalDetailItem("备注", escapeHtml(supplier.remark || ""), { wide: true, pre: true }),
           ] },
         ], canWriteArea("suppliers") ? `<button data-edit-supplier="${escapeHtml(supplier.id)}">编辑</button><button data-delete-supplier="${escapeHtml(supplier.id)}">删除</button>` : "")}
       `).join("") : emptyRow(columnCount));
