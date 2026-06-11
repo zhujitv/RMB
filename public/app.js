@@ -3322,8 +3322,14 @@ function renderCostDetailsTable(rows = []) {
           ["付款状态", `<span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span>`],
           ["成本确认", `<span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span>`],
           ["发票状态", `<span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span>`],
+        ] },
+        { title: "资料状态", items: [
           ["资料状态", costMaterialStatusHtml(cost)],
+        ] },
+        { title: "创建 / 修改", items: [
           ["创建 / 修改", auditCell(cost)],
+        ] },
+        { title: "备注", items: [
           ["备注", escapeHtml(cost.remark || "-"), { wide: true, pre: true }],
         ] },
       ], actions)}

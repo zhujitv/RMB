@@ -36,8 +36,11 @@
 
 .expanded-row > td,
 .expanded-detail-row > td {
-  padding: 0 12px 14px;
+  padding: 0 12px 16px;
   background: #f8fafc;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .expanded-panel,
@@ -45,6 +48,9 @@
   display: grid;
   gap: 16px;
   padding: 18px 20px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
@@ -53,12 +59,18 @@
 
 .expanded-section,
 .expanded-detail-section {
+  display: grid;
+  gap: 10px;
   min-width: 0;
+  padding: 14px;
+  border: 1px solid #edf2f7;
+  border-radius: 12px;
+  background: #fbfdff;
 }
 
 .expanded-section-title,
 .expanded-detail-section > h4 {
-  margin: 0 0 10px;
+  margin: 0;
   color: #0f172a;
   font-size: 14px;
   font-weight: 700;
@@ -77,6 +89,10 @@
   padding: 10px 12px;
   border-radius: 10px;
   background: #f8fafc;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
 }
 
 .expanded-field.is-wide,
@@ -99,8 +115,10 @@
   color: #0f172a;
   font-size: 13px;
   font-weight: 600;
-  line-height: 1.45;
-  word-break: break-word;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .expanded-field.is-pre .expanded-value,
@@ -137,8 +155,17 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 10px;
+  padding-top: 14px;
   border-top: 1px solid #e2e8f0;
+  white-space: normal;
+}
+
+.expanded-actions button,
+.expanded-actions a,
+.expanded-detail-actions button,
+.expanded-detail-actions a {
+  margin: 0;
+  white-space: nowrap;
 }
 
 @media (max-width: 1100px) {
@@ -871,7 +898,7 @@ button:focus-visible {
 }
 
 .cost-table-wrap table {
-  min-width: 1280px;
+  min-width: 0;
 }
 
 .cost-table-wrap th {
@@ -2761,13 +2788,14 @@ button.small-link {
 
 .table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 table {
   width: 100%;
-  min-width: 920px;
+  min-width: 0;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
 th,
@@ -2776,8 +2804,14 @@ td {
   padding: 11px 10px;
   text-align: left;
   vertical-align: top;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
   font-size: 13px;
+}
+
+th {
+  white-space: nowrap;
 }
 
 th {
