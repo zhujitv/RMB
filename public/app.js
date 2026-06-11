@@ -88,6 +88,7 @@ const state = {
   reportSortDir: "asc",
   reportSelectedIds: new Set(),
   reportQueried: false,
+  expandedRows: {},
   reportDeclarationMonth: "",
   reportExportMonth: "",
   costOrderResults: [],
@@ -378,6 +379,13 @@ function customerNameCell(row = {}, fallback = "-") {
   const fullName = customerFullNameOf(row) || display;
   const title = fullName && fullName !== display ? ` title="${escapeHtml(fullName)}"` : "";
   return `<span class="customer-name-cell"${title}>${escapeHtml(display)}</span>`;
+}
+
+function customerShortNameCell(row = {}, fallback = "-") {
+  const shortName = customerDisplayName(row.customerShortName || row.shortName || "");
+  const fullName = customerFullNameOf(row);
+  const title = fullName && fullName !== shortName ? ` title="${escapeHtml(fullName)}"` : "";
+  return `<span class="customer-name-cell"${title}>${escapeHtml(shortName || fallback)}</span>`;
 }
 
 function money(value) {
@@ -2735,29 +2743,129 @@ function rowActions(html) {
   return html ? `<td class="row-actions">${html}</td>` : `<td class="row-actions"></td>`;
 }
 
+function isRowExpanded(scope, id) {
+  return String(state.expandedRows?.[scope] || "") === String(id || "");
+}
+
+function expandArrow(scope, id) {
+  return `<span class="row-expand-arrow" aria-hidden="true">${isRowExpanded(scope, id) ? "▼" : "▶"}</span>`;
+}
+
+function setExpandedRow(scope, id) {
+  state.expandedRows = {
+    ...state.expandedRows,
+    [scope]: isRowExpanded(scope, id) ? "" : String(id || ""),
+  };
+}
+
+function rerenderExpandedScope(scope) {
+  if (scope === "orders") return renderOrders();
+  if (scope === "payments") return renderPayments();
+  if (scope === "costs") return renderCosts();
+  if (scope === "costOrders") return renderCosts();
+  if (scope === "profit") return renderProfit();
+  if (scope === "domesticLogistics") return renderDomesticLogistics();
+  if (scope === "taxRefund") return renderTaxRefund();
+  if (scope === "reports") return renderReports();
+  if (scope === "customers") return renderCustomerSettings();
+  if (scope === "suppliers") return renderSupplierSettings();
+  if (scope === "users") return renderUsersTable();
+  return renderAll();
+}
+
+function handleExpandableRowClick(event) {
+  const target = event.target.closest("[data-expand-row]");
+  if (!target) return false;
+  const interactive = event.target.closest("a, input, select, textarea, label, summary, details");
+  const button = event.target.closest("button");
+  if (interactive || (button && !button.dataset.expandRow)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  setExpandedRow(target.dataset.expandRow, target.dataset.expandId);
+  rerenderExpandedScope(target.dataset.expandRow);
+  return true;
+}
+
+function detailItems(items = []) {
+  return items.filter(Boolean).map(([label, value, options = {}]) => `
+    <div class="expanded-detail-item ${options.strong ? "is-strong" : ""}">
+      <span>${escapeHtml(label)}</span>
+      <div class="expanded-detail-value">${value || "-"}</div>
+    </div>
+  `).join("");
+}
+
+function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
+  if (!isRowExpanded(scope, id)) return "";
+  const sectionHtml = sections.filter(Boolean).map((section) => `
+    <section class="expanded-detail-section">
+      <h4>${escapeHtml(section.title)}</h4>
+      <div class="expanded-detail-grid">${detailItems(section.items || [])}</div>
+    </section>
+  `).join("");
+  return `
+    <tr class="expanded-detail-row">
+      <td colspan="${colspan}">
+        <div class="expanded-detail-card">
+          ${sectionHtml}
+          ${actions ? `<div class="expanded-detail-actions">${actions}</div>` : ""}
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function detailButton(scope, id) {
+  return `<button class="secondary-button" data-expand-row="${escapeHtml(scope)}" data-expand-id="${escapeHtml(id)}" type="button">${isRowExpanded(scope, id) ? "收起" : "详情"}</button>`;
+}
+
 function renderOrders() {
   $("#orders-count").textContent = `${state.orders.length} 条`;
-  $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => `
-    <tr>
-      <td><strong>${escapeHtml(order.orderNo)}</strong></td>
-      <td>${escapeHtml(order.blNo || "待发货")}</td>
-      <td>${customerNameCell(order)}</td>
-      <td>${paymentTermCell(order)}</td>
-      <td>${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary.reminderStatus)}</small></td>
-      <td>${moneyCell({ currency: order.currency, amount: order.estimatedReceivableAmount, amountCny: order.estimatedReceivableAmountCny })}</td>
-      <td>${moneyCell({ currency: order.currency, amount: order.actualShipmentAmount, amountCny: order.actualShipmentAmountCny })}</td>
-      <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
-      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.requiredDepositAmount, exchangeRate: order.exchangeRate })}</td>
-      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.receivedDepositCny, exchangeRate: order.exchangeRate })}</td>
-      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.depositGapCny, exchangeRate: order.exchangeRate })}</td>
-      <td>${moneyCell({ currency: order.currency, amountCny: order.summary.confirmedPaymentsCny, exchangeRate: order.exchangeRate })}</td>
-      <td>${order.summary.overpaidCny > 0
+  const colspan = 8;
+  $("#orders-table").innerHTML = state.orders.length ? state.orders.map((order) => {
+    const orderId = order.id;
+    const outstanding = order.summary.overpaidCny > 0
         ? moneyCell({ currency: order.currency, amount: order.summary.overpaidAmount, amountCny: order.summary.overpaidCny, exchangeRate: order.exchangeRate, prefix: "多收 " })
-        : moneyCell({ currency: order.currency, amount: order.summary.outstandingAmount, amountCny: order.summary.outstandingCny, exchangeRate: order.exchangeRate, prefix: "未收 " })}</td>
-      <td><span class="status ${statusClass(order.status)}">${order.status}</span></td>
-      ${rowActions(canWriteArea("orders") ? `<button data-edit-order="${order.id}">编辑</button><button data-delete-order="${order.id}">删除</button>` : "")}
-    </tr>
-  `).join("") : emptyRow(15);
+        : moneyCell({ currency: order.currency, amount: order.summary.outstandingAmount, amountCny: order.summary.outstandingCny, exchangeRate: order.exchangeRate, prefix: "未收 " });
+    const actions = [
+      canWriteArea("orders") ? `<button data-edit-order="${escapeHtml(order.id)}" type="button">编辑</button>` : "",
+      canWriteArea("orders") ? `<button data-delete-order="${escapeHtml(order.id)}" type="button">删除</button>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <tr class="expandable-row" data-expand-row="orders" data-expand-id="${escapeHtml(orderId)}">
+        <td><strong>${expandArrow("orders", orderId)}${escapeHtml(order.orderNo)}</strong></td>
+        <td>${customerNameCell(order)}</td>
+        <td>${escapeHtml(order.blNo || "待发货")}</td>
+        <td>${moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny })}</td>
+        <td>${moneyCell({ currency: order.currency, amountCny: order.summary.confirmedPaymentsCny, exchangeRate: order.exchangeRate })}</td>
+        <td>${outstanding}</td>
+        <td><span class="status ${statusClass(order.status)}">${escapeHtml(order.status)}</span></td>
+        ${rowActions(detailButton("orders", orderId))}
+      </tr>
+      ${expandedDetailRow("orders", orderId, colspan, [
+        { title: "订单基础信息", items: [
+          ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
+          ["客户简称", customerNameCell(order)],
+          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
+          ["提单号", escapeHtml(order.blNo || "待发货")],
+          ["业务员", escapeHtml(order.salespersonName || "-")],
+          ["状态", `<span class="status ${statusClass(order.status)}">${escapeHtml(order.status || "-")}</span>`],
+        ] },
+        { title: "付款与金额", items: [
+          ["付款条款", paymentTermCell(order)],
+          ["到期日", `${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary?.reminderStatus || "")}</small>`],
+          ["预计应收", moneyCell({ currency: order.currency, amount: order.estimatedReceivableAmount, amountCny: order.estimatedReceivableAmountCny })],
+          ["实际发货金额", moneyCell({ currency: order.currency, amount: order.actualShipmentAmount, amountCny: order.actualShipmentAmountCny })],
+          ["最终应收", moneyCell({ currency: order.currency, amount: order.finalReceivableAmount, amountCny: order.finalReceivableAmountCny }), { strong: true }],
+          ["预付款要求", moneyCell({ currency: order.currency, amountCny: order.summary.requiredDepositAmount, exchangeRate: order.exchangeRate })],
+          ["已收预付款", moneyCell({ currency: order.currency, amountCny: order.summary.receivedDepositCny, exchangeRate: order.exchangeRate })],
+          ["预付款差额", moneyCell({ currency: order.currency, amountCny: order.summary.depositGapCny, exchangeRate: order.exchangeRate })],
+          ["币种 / 汇率", `${escapeHtml(order.currency || "-")} / ${escapeHtml(order.exchangeRate || "-")}`],
+        ] },
+        { title: "备注", items: [["备注", escapeHtml(order.remark || "-")]] },
+      ], actions)}
+    `;
+  }).join("") : emptyRow(colspan);
 }
 
 function documentTypeLabel(type) {
@@ -3050,20 +3158,42 @@ function renderOrderDetails() {
 
 function renderPayments() {
   $("#payments-count").textContent = `${state.payments.length} 条`;
-  $("#payments-table").innerHTML = state.payments.length ? state.payments.map((payment) => `
-    <tr>
-      <td>${escapeHtml(payment.orderNo)}</td>
-      <td>${customerNameCell(payment)}</td>
-      <td>${payment.paymentDate}</td>
-      <td>${escapeHtml(payment.paymentType || "尾款")}</td>
-      <td>${moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny })}</td>
-      <td>${moneyCell({ currency: "CNY", amountCny: payment.amountCny })}</td>
-      <td><span class="status ${statusClass(payment.status)}">${payment.status}</span></td>
-      <td>${escapeHtml(payment.bankReference || "-")}</td>
-      <td>${auditCell(payment)}</td>
-      ${rowActions(canWriteArea("payments") ? `<button data-edit-payment="${payment.id}">编辑</button><button data-delete-payment="${payment.id}">删除</button>` : "")}
-    </tr>
-  `).join("") : emptyRow(10);
+  const colspan = 6;
+  $("#payments-table").innerHTML = state.payments.length ? state.payments.map((payment) => {
+    const paymentId = payment.id;
+    const actions = [
+      canWriteArea("payments") ? `<button data-edit-payment="${escapeHtml(payment.id)}" type="button">编辑</button>` : "",
+      canWriteArea("payments") ? `<button data-delete-payment="${escapeHtml(payment.id)}" type="button">删除</button>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <tr class="expandable-row" data-expand-row="payments" data-expand-id="${escapeHtml(paymentId)}">
+        <td><strong>${expandArrow("payments", paymentId)}${escapeHtml(payment.orderNo)}</strong></td>
+        <td>${customerNameCell(payment)}</td>
+        <td>${escapeHtml(payment.paymentDate || "-")}</td>
+        <td>${moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny })}</td>
+        <td><span class="status ${statusClass(payment.status)}">${escapeHtml(payment.status || "-")}</span></td>
+        ${rowActions(detailButton("payments", paymentId))}
+      </tr>
+      ${expandedDetailRow("payments", paymentId, colspan, [
+        { title: "收款信息", items: [
+          ["订单号", escapeHtml(payment.orderNo || "-"), { strong: true }],
+          ["客户简称", customerNameCell(payment)],
+          ["客户全称", escapeHtml(customerFullNameOf(payment) || "-")],
+          ["收款日期", escapeHtml(payment.paymentDate || "-")],
+          ["收款类型", escapeHtml(payment.paymentType || "尾款")],
+          ["收款状态", `<span class="status ${statusClass(payment.status)}">${escapeHtml(payment.status || "-")}</span>`],
+        ] },
+        { title: "金额与流水", items: [
+          ["币种 / 汇率", `${escapeHtml(payment.currency || "-")} / ${escapeHtml(payment.exchangeRate || "-")}`],
+          ["收款金额", moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny }), { strong: true }],
+          ["折人民币", moneyCell({ currency: "CNY", amountCny: payment.amountCny })],
+          ["银行流水号", escapeHtml(payment.bankReference || "-")],
+          ["创建 / 修改", auditCell(payment)],
+          ["备注", escapeHtml(payment.remark || "-")],
+        ] },
+      ], actions)}
+    `;
+  }).join("") : emptyRow(colspan);
 }
 
 function costDocumentUploadItem(cost, type, { label = type.label, required = true } = {}) {
@@ -3157,24 +3287,48 @@ function costActionMenu(cost) {
 }
 
 function renderCostDetailsTable(rows = []) {
-  $("#costs-table").innerHTML = rows.length ? rows.map((cost) => `
-    <tr>
-      <td><strong>${escapeHtml(cost.orderNo || "-")}</strong></td>
-      <td>${escapeHtml(cost.blNo || cost.billOfLadingNo || "-")}</td>
-      <td>${customerNameCell(cost)}</td>
-      <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
-      <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
-      <td>${escapeHtml(cost.supplierType || "-")}</td>
-      <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
-      <td>${moneyCell({ currency: "CNY", amountCny: cost.amountCny })}</td>
-      <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span></td>
-      <td><span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span></td>
-      <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
-      <td>${costMaterialStatusHtml(cost)}</td>
-      <td>${auditCell(cost)}</td>
-      ${costActionMenu(cost)}
-    </tr>
-  `).join("") : emptyRow(14);
+  const colspan = 8;
+  $("#costs-table").innerHTML = rows.length ? rows.map((cost) => {
+    const costId = cost.id;
+    const actions = [
+      `<button data-cost-documents="${escapeHtml(cost.id)}" type="button">资料维护</button>`,
+      canWriteArea("costs") ? `<button data-edit-cost="${escapeHtml(cost.id)}" type="button">编辑</button>` : "",
+      canWriteArea("costs") ? `<button data-delete-cost="${escapeHtml(cost.id)}" type="button">删除</button>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <tr class="expandable-row" data-expand-row="costs" data-expand-id="${escapeHtml(costId)}">
+        <td><strong>${expandArrow("costs", costId)}${escapeHtml(cost.orderNo || "-")}</strong></td>
+        <td>${customerNameCell(cost)}</td>
+        <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
+        <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
+        <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
+        <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span></td>
+        <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
+        ${rowActions(detailButton("costs", costId))}
+      </tr>
+      ${expandedDetailRow("costs", costId, colspan, [
+        { title: "成本基础信息", items: [
+          ["订单号", escapeHtml(cost.orderNo || "-"), { strong: true }],
+          ["提单号", escapeHtml(cost.blNo || cost.billOfLadingNo || "-")],
+          ["客户简称", customerNameCell(cost)],
+          ["客户全称", escapeHtml(customerFullNameOf(cost) || "-")],
+          ["成本类型", escapeHtml(normalizeCostType(cost.costType) || "-")],
+          ["供应商", escapeHtml(cost.supplierName || cost.vendorName || "-")],
+          ["供应商类型", escapeHtml(cost.supplierType || "-")],
+        ] },
+        { title: "金额与状态", items: [
+          ["成本金额", moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny }), { strong: true }],
+          ["折人民币", moneyCell({ currency: "CNY", amountCny: cost.amountCny })],
+          ["付款状态", `<span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span>`],
+          ["成本确认", `<span class="status ${cost.costConfirmed ? "success" : "warning"}">${cost.costConfirmed ? "已确认" : "未确认"}</span>`],
+          ["发票状态", `<span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span>`],
+          ["资料状态", costMaterialStatusHtml(cost)],
+          ["创建 / 修改", auditCell(cost)],
+          ["备注", escapeHtml(cost.remark || "-")],
+        ] },
+      ], actions)}
+    `;
+  }).join("") : emptyRow(colspan);
 }
 
 function progressStatus(progress = {}) {
@@ -3185,22 +3339,35 @@ function progressStatus(progress = {}) {
 }
 
 function renderCostOrderSummaryTable(rows = []) {
-  $("#cost-orders-table-body").innerHTML = rows.length ? rows.map((order) => `
-    <tr>
-      <td><strong>${escapeHtml(order.orderNo || "-")}</strong></td>
-      <td>${escapeHtml(order.blNo || order.billOfLadingNo || "-")}</td>
-      <td>${customerNameCell(order)}</td>
-      <td>${money(order.receivableAmountCny || 0)}</td>
-      <td>${money(order.totalCostCny || 0)}</td>
-      <td>${money(order.factoryCostCny || 0)}</td>
-      <td>${money(order.logisticsCostCny || 0)}</td>
-      <td>${money(order.portCostCny || 0)}</td>
-      <td>${money(order.otherCostCny || 0)}</td>
-      <td>${progressStatus(order.costConfirmProgress)}</td>
-      <td>${progressStatus(order.documentProgress)}</td>
-      ${rowActions(`<button data-cost-order-detail="${escapeHtml(order.orderNo || "")}" data-cost-order-id="${escapeHtml(order.orderId || order.id || "")}" type="button">查看明细</button>`)}
-    </tr>
-  `).join("") : emptyRow(12);
+  const colspan = 7;
+  $("#cost-orders-table-body").innerHTML = rows.length ? rows.map((order) => {
+    const rowId = order.orderId || order.id || order.orderNo;
+    const actions = `<button data-cost-order-detail="${escapeHtml(order.orderNo || "")}" data-cost-order-id="${escapeHtml(order.orderId || order.id || "")}" type="button">查看明细</button>`;
+    return `
+      <tr class="expandable-row" data-expand-row="costOrders" data-expand-id="${escapeHtml(rowId)}">
+        <td><strong>${expandArrow("costOrders", rowId)}${escapeHtml(order.orderNo || "-")}</strong></td>
+        <td>${customerNameCell(order)}</td>
+        <td>${money(order.receivableAmountCny || 0)}</td>
+        <td>${money(order.totalCostCny || 0)}</td>
+        <td>${progressStatus(order.costConfirmProgress)}</td>
+        <td>${progressStatus(order.documentProgress)}</td>
+        ${rowActions(detailButton("costOrders", rowId))}
+      </tr>
+      ${expandedDetailRow("costOrders", rowId, colspan, [
+        { title: "订单成本汇总", items: [
+          ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
+          ["提单号", escapeHtml(order.blNo || order.billOfLadingNo || "-")],
+          ["客户简称", customerNameCell(order)],
+          ["应收金额", money(order.receivableAmountCny || 0)],
+          ["总成本", money(order.totalCostCny || 0), { strong: true }],
+          ["工厂货款", money(order.factoryCostCny || 0)],
+          ["物流费用", money(order.logisticsCostCny || 0)],
+          ["港杂费", money(order.portCostCny || 0)],
+          ["其他费用", money(order.otherCostCny || 0)],
+        ] },
+      ], actions)}
+    `;
+  }).join("") : emptyRow(colspan);
 }
 
 function renderCostPagination() {
@@ -3384,6 +3551,7 @@ function commissionAmountHint(order) {
 function renderProfit() {
   $("#profit-count").textContent = `${state.orders.length} 个订单`;
   $("#profit-table").innerHTML = state.orders.length ? state.orders.map((order) => {
+    const orderId = order.id;
     const costGroups = costsForOrder(order.id)
       .filter(costParticipatesInBusiness)
       .filter((cost) => cost.costConfirmed === true)
@@ -3393,23 +3561,36 @@ function renderProfit() {
         return acc;
       }, {});
     return `
-      <tr>
-        <td>${escapeHtml(order.orderNo)}</td>
+      <tr class="expandable-row" data-expand-row="profit" data-expand-id="${escapeHtml(orderId)}">
+        <td><strong>${expandArrow("profit", orderId)}${escapeHtml(order.orderNo)}</strong></td>
         <td>${customerNameCell(order)}</td>
         <td>${money(order.summary.receivableCny)}</td>
-        <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)}</td>
         <td>${money(order.summary.expectedGrossProfit)}</td>
         <td>${percentOrDash(order.summary.expectedGrossMargin ?? order.summary.grossMargin)}</td>
-        <td>${money(order.summary.realizedGrossProfit ?? order.summary.actualGrossProfit)}</td>
-        <td>${percentOrDash(order.summary.realizedGrossMargin)}</td>
-        <td>${money(order.summary.commissionAmountCny ?? order.summary.estimatedCommissionCny ?? 0)}<small>${escapeHtml(commissionAmountHint(order))}</small></td>
-        <td><span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span></td>
-        <td>${Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"}</td>
-        ${rowActions(commissionActionCell(order))}
+        ${rowActions(detailButton("profit", orderId))}
       </tr>
+      ${expandedDetailRow("profit", orderId, 7, [
+        { title: "订单利润", items: [
+          ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
+          ["客户简称", customerNameCell(order)],
+          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
+          ["最终应收", money(order.summary.receivableCny), { strong: true }],
+          ["已到账金额", money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)],
+          ["总成本", money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)],
+          ["预计毛利", money(order.summary.expectedGrossProfit), { strong: true }],
+          ["预计毛利率", percentOrDash(order.summary.expectedGrossMargin ?? order.summary.grossMargin)],
+          ["已实现毛利", money(order.summary.realizedGrossProfit ?? order.summary.actualGrossProfit)],
+          ["已实现毛利率", percentOrDash(order.summary.realizedGrossMargin)],
+        ] },
+        { title: "提成与成本结构", items: [
+          ["业务员提成", `${money(order.summary.commissionAmountCny ?? order.summary.estimatedCommissionCny ?? 0)}<small>${escapeHtml(commissionAmountHint(order))}</small>`],
+          ["提成状态", `<span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span>`],
+          ["成本结构", Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"],
+        ] },
+      ], commissionActionCell(order))}
     `;
-  }).join("") : emptyRow(13);
+  }).join("") : emptyRow(7);
 }
 
 function completenessText(part = {}) {
@@ -3825,24 +4006,37 @@ function renderDomesticLogistics() {
   const canEditDomestic = canWriteArea("domesticLogistics");
   const isAdmin = state.me?.role === "管理员";
   box.innerHTML = rows.length ? rows.map((row) => `
-    <tr>
-      <td><strong>${escapeHtml(row.orderNo || "-")}</strong></td>
-      <td>${escapeHtml(row.blNo || "待发货")}</td>
+    <tr class="expandable-row" data-expand-row="domesticLogistics" data-expand-id="${escapeHtml(row.orderId || row.id)}">
+      <td><strong>${expandArrow("domesticLogistics", row.orderId || row.id)}${escapeHtml(row.orderNo || "-")}</strong></td>
       <td>${customerNameCell(row)}</td>
-      <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
-      <td>${escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")}</td>
-      <td>${formatDateTime(row.submittedAt)}</td>
-      <td class="row-actions">
+      ${rowActions(detailButton("domesticLogistics", row.orderId || row.id))}
+    </tr>
+    ${expandedDetailRow("domesticLogistics", row.orderId || row.id, 6, [
+      { title: "国内物流信息", items: [
+        ["订单号", escapeHtml(row.orderNo || "-"), { strong: true }],
+        ["提单号", escapeHtml(row.blNo || "待发货")],
+        ["客户简称", customerNameCell(row)],
+        ["运输方式", escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")],
+        ["起运地", escapeHtml(row.domesticLogisticsInfo?.departurePlace || "-")],
+        ["到达地", escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")],
+        ["起运日期", escapeHtml(row.domesticLogisticsInfo?.departureDate || "-")],
+        ["运输货物名称", escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")],
+        ["车牌号", escapeHtml(row.domesticLogisticsInfo?.truckPlateNo || "-")],
+        ["快递单号", escapeHtml(row.domesticLogisticsInfo?.expressTrackingNo || "-")],
+        ["录入人", escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")],
+        ["录入时间", formatDateTime(row.submittedAt)],
+        ["出口发票备注", escapeHtml(row.domesticLogisticsInfo?.remarkText || "-")],
+      ] },
+    ], `
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
         ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
         ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
         <button class="secondary-button" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
-      </td>
-    </tr>
-  `).join("") : `<tr><td colspan="10" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+      `)}
+  `).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
 }
 
 function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
@@ -3990,22 +4184,33 @@ function renderTaxRefund() {
       ? `<select class="tax-status-select" data-tax-status-order="${escapeHtml(order.id)}">${optionHtml(constants.taxRefundStatuses, status)}</select>`
       : `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`;
     return `
-      <tr>
-        <td><strong>${escapeHtml(order.orderNo)}</strong></td>
-        <td>${escapeHtml(order.blNo || "待发货")}</td>
+      <tr class="expandable-row" data-expand-row="taxRefund" data-expand-id="${escapeHtml(order.id)}">
+        <td><strong>${expandArrow("taxRefund", order.id)}${escapeHtml(order.orderNo)}</strong></td>
         <td>${customerNameCell(order)}</td>
         <td><span class="muted-cell">申报日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
-        <td class="row-actions">
+        ${rowActions(detailButton("taxRefund", order.id))}
+      </tr>
+      ${expandedDetailRow("taxRefund", order.id, 6, [
+        { title: "退税资料", items: [
+          ["订单号", escapeHtml(order.orderNo || "-"), { strong: true }],
+          ["提单号", escapeHtml(order.blNo || "待发货")],
+          ["客户简称", customerNameCell(order)],
+          ["客户全称", escapeHtml(customerFullNameOf(order) || "-")],
+          ["申报日期", escapeHtml(customsDateRangeText(order))],
+          ["总体完整度", taxOverallPercentBadge(completeness), { strong: true }],
+          ["退税状态", `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`],
+          ["缺失资料", displayCompletenessText(completeness.missingText || order.missingText || "-")],
+        ] },
+      ], `
           <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
           ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
           ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
           <a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>
-        </td>
-      </tr>
+        `)}
     `;
-  }).join("") : `<tr><td colspan="7" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -4102,7 +4307,7 @@ function renderReports() {
   head.innerHTML = `
     <tr>
       <th><input id="report-select-page" type="checkbox" ${allChecked ? "checked" : ""} /></th>
-      ${columns.map((column) => `
+      ${columns.slice(0, 5).map((column) => `
         <th><button class="table-sort-button" data-report-sort="${escapeHtml(column.key)}" type="button">${escapeHtml(column.label)}${state.reportSortBy === column.key ? (state.reportSortDir === "desc" ? " ↓" : " ↑") : ""}</button></th>
       `).join("")}
       <th>操作</th>
@@ -4110,13 +4315,16 @@ function renderReports() {
   `;
   body.innerHTML = state.reportQueried
     ? (state.reportRows.length ? state.reportRows.map((row) => `
-      <tr>
+      <tr class="expandable-row" data-expand-row="reports" data-expand-id="${escapeHtml(row.id)}">
         <td><input data-report-row-select="${escapeHtml(row.id)}" type="checkbox" ${state.reportSelectedIds.has(row.id) ? "checked" : ""} /></td>
-        ${columns.map((column) => `<td>${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
-        <td class="row-actions"><button class="secondary-button" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button></td>
+        ${columns.slice(0, 5).map((column, index) => `<td>${index === 0 ? expandArrow("reports", row.id) : ""}${escapeHtml(row[column.key] ?? "")}</td>`).join("")}
+        ${rowActions(detailButton("reports", row.id))}
       </tr>
-    `).join("") : emptyRow(columns.length + 2))
-    : `<tr><td colspan="${columns.length + 2 || 8}"><div class="empty-state">请选择报表类型并点击查询。</div></td></tr>`;
+      ${expandedDetailRow("reports", row.id, Math.min(columns.length, 5) + 2, [
+        { title: "报表明细", items: columns.map((column) => [column.label, escapeHtml(row[column.key] ?? "")]) },
+      ], `<button class="secondary-button" data-report-detail="${escapeHtml(row.id)}" type="button">查看详情</button>`)}
+    `).join("") : emptyRow(Math.min(columns.length, 5) + 2))
+    : `<tr><td colspan="${Math.min(columns.length, 5) + 2 || 8}"><div class="empty-state">请选择报表类型并点击查询。</div></td></tr>`;
 }
 
 function resetReportForm() {
@@ -4658,21 +4866,33 @@ function renderCustomerSettings() {
   if ($("#customer-search-keyword")) $("#customer-search-keyword").value = state.customerSettingsKeyword || "";
   if ($("#customers-count")) $("#customers-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个客户`;
   if ($("#customers-table")) {
-    const error = settingsErrorRow("customers", 9);
-    $("#customers-table").innerHTML = loading && !rows.length ? loadingRow(9, "正在加载客户资料...")
+    const columnCount = 5;
+    const error = settingsErrorRow("customers", columnCount);
+    $("#customers-table").innerHTML = loading && !rows.length ? loadingRow(columnCount, "正在加载客户资料...")
       : error || (rows.length ? rows.map((customer) => `
-        <tr>
-          <td>${customerNameCell(customer)}</td>
+        <tr class="expandable-row" data-expand-row="customers" data-expand-id="${escapeHtml(customer.id)}">
+          <td>${customerShortNameCell(customer)}</td>
           <td>${escapeHtml(customer.country || "-")}</td>
           <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
           <td>${escapeHtml(customer.salespersonName || "-")}</td>
-          <td>${Number(customer.commissionRate || 0).toFixed(2)}%</td>
-          <td><span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span></td>
-          <td>${escapeHtml(customer.contactPerson || "-")}</td>
-          <td>${escapeHtml(customer.remark || "-")}</td>
-          ${rowActions(canWriteArea("customers") ? `<button data-edit-customer="${customer.id}">编辑</button><button data-delete-customer="${customer.id}">删除</button>` : "")}
+          ${rowActions(detailButton("customers", customer.id))}
         </tr>
-      `).join("") : emptyRow(9));
+        ${expandedDetailRow("customers", customer.id, columnCount, [
+          { title: "客户资料", items: [
+            ["客户简称", customerShortNameCell(customer)],
+            ["客户全称", escapeHtml(customerFullNameOf(customer) || "-"), { strong: true }],
+            ["国家 / 地区", escapeHtml(customer.country || "-")],
+            ["默认币种", escapeHtml(customer.defaultCurrency || "-")],
+            ["负责业务员", escapeHtml(customer.salespersonName || "-")],
+            ["提成比例", `${Number(customer.commissionRate || 0).toFixed(2)}%`],
+            ["提成状态", `<span class="status ${statusClass(customer.commissionStatus)}">${escapeHtml(customer.commissionStatus || "启用")}</span>`],
+            ["联系人", escapeHtml(customer.contactPerson || "-")],
+            ["联系邮箱", escapeHtml(customer.contactEmail || "-")],
+            ["联系电话", escapeHtml(customer.contactPhone || "-")],
+            ["备注", escapeHtml(customer.remark || "-")],
+          ] },
+        ], canWriteArea("customers") ? `<button data-edit-customer="${escapeHtml(customer.id)}">编辑</button><button data-delete-customer="${escapeHtml(customer.id)}">删除</button>` : "")}
+      `).join("") : emptyRow(columnCount));
   }
   renderSettingPagination("customers", pagination, loading);
 }
@@ -4686,20 +4906,34 @@ function renderSupplierSettings() {
   if ($("#supplier-filter-status")) $("#supplier-filter-status").value = state.supplierSettingsStatus || "";
   if ($("#suppliers-count")) $("#suppliers-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个供应商`;
   if ($("#suppliers-table")) {
-    const error = settingsErrorRow("suppliers", 8);
-    $("#suppliers-table").innerHTML = loading && !rows.length ? loadingRow(8, "正在加载供应商资料...")
+    const columnCount = 5;
+    const error = settingsErrorRow("suppliers", columnCount);
+    $("#suppliers-table").innerHTML = loading && !rows.length ? loadingRow(columnCount, "正在加载供应商资料...")
       : error || (rows.length ? rows.map((supplier) => `
-        <tr>
-          <td>${escapeHtml(supplier.supplierName)}</td>
+        <tr class="expandable-row" data-expand-row="suppliers" data-expand-id="${escapeHtml(supplier.id)}">
+          <td><strong>${expandArrow("suppliers", supplier.id)}${escapeHtml(supplier.supplierName)}</strong></td>
           <td>${escapeHtml(supplier.supplierType)}</td>
           <td><span class="status ${statusClass(supplier.status)}">${escapeHtml(supplier.status || "-")}</span></td>
           <td>${escapeHtml(supplier.contactPerson || "-")}</td>
-          <td>${escapeHtml(supplier.phone || "-")}</td>
-          <td>${escapeHtml(supplier.invoiceTitle || "-")}</td>
-          <td>${escapeHtml(supplier.bankAccount || "-")}</td>
-          ${rowActions(canWriteArea("suppliers") ? `<button data-edit-supplier="${supplier.id}">编辑</button><button data-delete-supplier="${supplier.id}">删除</button>` : "")}
+          ${rowActions(detailButton("suppliers", supplier.id))}
         </tr>
-      `).join("") : emptyRow(8));
+        ${expandedDetailRow("suppliers", supplier.id, columnCount, [
+          { title: "供应商资料", items: [
+            ["供应商", escapeHtml(supplier.supplierName || "-"), { strong: true }],
+            ["类型", escapeHtml(supplier.supplierType || "-")],
+            ["状态", `<span class="status ${statusClass(supplier.status)}">${escapeHtml(supplier.status || "-")}</span>`],
+            ["联系人", escapeHtml(supplier.contactPerson || "-")],
+            ["电话", escapeHtml(supplier.phone || "-")],
+            ["邮箱", escapeHtml(supplier.email || "-")],
+            ["开票名称", escapeHtml(supplier.invoiceTitle || "-")],
+            ["税号", escapeHtml(supplier.taxNumber || "-")],
+            ["银行名称", escapeHtml(supplier.bankName || "-")],
+            ["银行账号", escapeHtml(supplier.bankAccount || "-")],
+            ["地址", escapeHtml(supplier.address || "-")],
+            ["备注", escapeHtml(supplier.remark || "-")],
+          ] },
+        ], canWriteArea("suppliers") ? `<button data-edit-supplier="${escapeHtml(supplier.id)}">编辑</button><button data-delete-supplier="${escapeHtml(supplier.id)}">删除</button>` : "")}
+      `).join("") : emptyRow(columnCount));
   }
   renderSettingPagination("suppliers", pagination, loading);
 }
@@ -4740,14 +4974,26 @@ function userRowHtml(user) {
       ].filter(Boolean).join("")
     : "";
   return `
-    <tr data-user-row="${escapeHtml(user.id)}">
-      <td>${escapeHtml(user.name)}</td>
+    <tr data-user-row="${escapeHtml(user.id)}" class="expandable-row" data-expand-row="users" data-expand-id="${escapeHtml(user.id)}">
+      <td><strong>${expandArrow("users", user.id)}${escapeHtml(user.name)}</strong></td>
       <td>${escapeHtml(user.email)}</td>
       <td>${escapeHtml(user.role)}</td>
-      <td>${escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))}</td>
       <td><span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span></td>
-      ${rowActions(actions)}
+      ${rowActions(detailButton("users", user.id))}
     </tr>
+    ${expandedDetailRow("users", user.id, 5, [
+      { title: "用户与权限", items: [
+        ["姓名", escapeHtml(user.name || "-"), { strong: true }],
+        ["邮箱", escapeHtml(user.email || "-")],
+        ["角色", escapeHtml(user.role || "-")],
+        ["状态", `<span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span>`],
+        ["权限模式", escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))],
+        ["数据范围", escapeHtml(user.customPermissions?.scope || user.scopeText || "-")],
+        ["菜单权限", escapeHtml((user.customPermissions?.menus || []).join("、") || "-")],
+        ["查看权限", escapeHtml((user.customPermissions?.reads || []).join("、") || "-")],
+        ["操作权限", escapeHtml((user.customPermissions?.writes || []).join("、") || "-")],
+      ] },
+    ], actions)}
   `;
 }
 
@@ -4760,9 +5006,9 @@ function renderUsersTable() {
   if ($("#user-filter-role")) $("#user-filter-role").value = state.userSettingsRole || "";
   if ($("#users-count")) $("#users-count").textContent = loading && !rows.length ? "正在加载..." : `${pagination.total || 0} 个用户`;
   if ($("#users-table")) {
-    const error = settingsErrorRow("users", 6);
-    $("#users-table").innerHTML = loading && !rows.length ? loadingRow(6, "正在加载用户列表...")
-      : error || (rows.length ? rows.map(userRowHtml).join("") : emptyRow(6));
+    const error = settingsErrorRow("users", 5);
+    $("#users-table").innerHTML = loading && !rows.length ? loadingRow(5, "正在加载用户列表...")
+      : error || (rows.length ? rows.map(userRowHtml).join("") : emptyRow(5));
   }
   renderSettingPagination("users", pagination, loading);
 }
@@ -4779,7 +5025,7 @@ function renderUserRowInPlace(user) {
   if (count) count.textContent = `${state.usersPagination.total || state.users.length} 个用户`;
   if (!table) return;
   if (!state.users.length) {
-    table.innerHTML = emptyRow(6);
+    table.innerHTML = emptyRow(5);
     return;
   }
   const nextRow = userRowElement(user);
@@ -7884,6 +8130,7 @@ function bindEvents() {
     renderReports();
   });
   $("#report-table-body").addEventListener("click", (event) => {
+    if (handleExpandableRowClick(event)) return;
     const detail = event.target.closest("[data-report-detail]");
     if (detail) openReportDetail(detail.dataset.reportDetail);
   });
@@ -8135,6 +8382,7 @@ function bindEvents() {
     }
   });
   $("#tax-refund-table").addEventListener("click", (event) => {
+    if (handleExpandableRowClick(event)) return;
     const submitButton = event.target.closest("[data-submit-tax-refund]");
     if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
     const cancelArchiveButton = event.target.closest("[data-cancel-tax-archive]");
@@ -8180,6 +8428,7 @@ function bindEvents() {
     loadDomesticLogisticsList();
   });
   $("#domestic-logistics-table")?.addEventListener("click", (event) => {
+    if (handleExpandableRowClick(event)) return;
     const deleteButton = event.target.closest("[data-delete-domestic-logistics]");
     if (deleteButton) return deleteDomesticLogistics(deleteButton.dataset.deleteDomesticLogistics);
     const button = event.target.closest("[data-domestic-logistics-action]");
@@ -8378,6 +8627,7 @@ function bindEvents() {
       closeSupplierDrawer();
       return;
     }
+    if (handleExpandableRowClick(event)) return;
     const target = event.target.closest("button");
     if (!target) return;
     if (target.dataset.settingsTab) {
