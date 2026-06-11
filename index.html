@@ -88,10 +88,6 @@
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M10 17h4V5H2v12h3"/><path d="M14 17h1V9h4l3 4v4h-2"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/></svg>
             <span>物流信息</span>
           </button>
-          <button class="nav-tab" data-view="logisticsExpenses" type="button">
-            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 7h11v10H3z"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M7 11h4"/></svg>
-            <span>物流费用登记</span>
-          </button>
           <button class="nav-tab" data-view="taxRefund" type="button">
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/><path d="m9 13 2 2 4-4"/></svg>
             <span>退税资料</span>
@@ -601,91 +597,6 @@
           </section>
         </section>
 
-        <section class="view-panel" id="logisticsExpenses-view">
-          <section class="panel">
-            <div class="panel-title">
-              <div><h3>物流供应商费用登记 / 月结审核</h3><span id="logistics-expense-count">0 条</span></div>
-              <div class="panel-title-actions">
-                <button class="primary-button" id="open-logistics-expense-drawer" type="button">新增费用</button>
-              </div>
-            </div>
-            <form class="inline-filter" id="logistics-expense-filter-form" autocomplete="off">
-              <input id="logistics-expense-keyword" type="search" placeholder="订单号 / 提单号 / 客户 / 供应商 / 费用项目" />
-              <input id="logistics-expense-month" type="month" />
-              <select id="logistics-expense-type-filter"><option value="">全部费用类型</option></select>
-              <select id="logistics-expense-review-filter"><option value="">全部审核状态</option></select>
-              <select id="logistics-expense-payment-filter"><option value="">全部付款状态</option></select>
-              <select id="logistics-expense-invoice-filter"><option value="">全部发票状态</option></select>
-              <button class="primary-button" type="submit">查询</button>
-              <button class="clear-button" id="logistics-expense-reset" type="button">重置</button>
-            </form>
-            <div class="summary-grid compact-summary" id="logistics-expense-summary"></div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>月结月份</th>
-                    <th>供应商</th>
-                    <th>订单号</th>
-                    <th>客户简称</th>
-                    <th>费用类型</th>
-                    <th>金额</th>
-                    <th>发票状态</th>
-                    <th>审核状态</th>
-                    <th>付款状态</th>
-                    <th>详情</th>
-                  </tr>
-                </thead>
-                <tbody id="logistics-expense-table"></tbody>
-              </table>
-            </div>
-            <div class="pagination-bar">
-              <button class="secondary-button" id="logistics-expense-prev" type="button">上一页</button>
-              <span id="logistics-expense-page-info">第 1 / 1 页</span>
-              <button class="secondary-button" id="logistics-expense-next" type="button">下一页</button>
-            </div>
-          </section>
-          <aside class="cost-drawer" id="logistics-expense-drawer" hidden>
-            <div class="cost-drawer-backdrop" data-close-logistics-expense></div>
-            <form class="entry-form cost-drawer-panel" id="logistics-expense-form" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="logistics-expense-form-title">
-              <input type="hidden" id="logistics-expense-id" />
-              <input type="hidden" id="logistics-expense-order-id" />
-              <button class="modal-close" data-close-logistics-expense type="button" aria-label="关闭物流费用表单">×</button>
-              <div class="form-header"><div><h3 id="logistics-expense-form-title">新增物流费用</h3><p>按订单登记供应商月结费用，审核后自动进入成本管理。</p></div></div>
-              <div class="form-grid">
-                <div class="wide form-field">
-                  <span>关联订单 *</span>
-                  <div class="order-search-picker">
-                    <div class="order-search-row">
-                      <input id="logistics-expense-order-search" type="search" placeholder="输入订单号、提单号、客户简称搜索" autocomplete="off" />
-                      <button class="secondary-button" id="logistics-expense-order-reselect" type="button" hidden>重新选择订单</button>
-                    </div>
-                    <div class="order-search-results" id="logistics-expense-order-results" role="listbox"></div>
-                  </div>
-                </div>
-                <label><span>订单号</span><input id="logistics-expense-order-no" disabled /></label>
-                <label><span>提单号</span><input id="logistics-expense-bl-no" disabled /></label>
-                <label><span>客户简称</span><input id="logistics-expense-customer" disabled /></label>
-                <label><span>供应商 *</span><select id="logistics-expense-supplier"></select></label>
-                <label><span>费用类型 *</span><select id="logistics-expense-type"></select></label>
-                <label id="logistics-expense-custom-name-field" hidden><span>自定义费用名称 *</span><input id="logistics-expense-custom-name" placeholder="查验费 / 超重费 / 压车费" maxlength="60" /></label>
-                <label><span>费用金额 *</span><input id="logistics-expense-amount" type="number" min="0" step="0.01" /></label>
-                <label><span>币种 *</span><select id="logistics-expense-currency"></select></label>
-                <label><span>汇率 *</span><input id="logistics-expense-rate" type="number" min="0" step="0.0001" /></label>
-                <label><span>折人民币</span><input id="logistics-expense-amount-cny" disabled /></label>
-                <label><span>费用发生日期 *</span><input id="logistics-expense-date" type="date" /></label>
-                <label><span>月结月份 *</span><input id="logistics-expense-settlement-month" type="month" /></label>
-                <label><span>退税资料归属</span><select id="logistics-expense-tax-document-type"></select></label>
-                <label class="wide"><span>备注</span><textarea id="logistics-expense-remark" rows="3"></textarea></label>
-              </div>
-              <div class="form-actions">
-                <button class="secondary-button" data-close-logistics-expense type="button">取消</button>
-                <button class="primary-button" id="logistics-expense-submit-button" type="submit">保存草稿</button>
-              </div>
-            </form>
-          </aside>
-        </section>
-
         <section class="view-panel" id="reports-view">
           <section class="panel">
             <div class="panel-title"><h3>报表中心</h3><span>在线查询 · 按需下载</span></div>
@@ -1087,7 +998,6 @@
               <label><span>姓名 *</span><input id="user-name" required /></label>
               <label><span>邮箱 *</span><input id="user-email" required /></label>
               <label><span>角色分类</span><select id="user-role"></select></label>
-              <label id="user-supplier-field" hidden><span>关联供应商 *</span><select id="user-supplier"></select></label>
               <label><span>账号状态</span><select id="user-approval-status"></select></label>
               <label><span>权限模式</span><select id="user-permission-mode"></select></label>
               <label><span>初始/新密码</span><input id="user-password" type="password" placeholder="新建用户必须设置初始密码，保存后用户需首次改密" /></label>

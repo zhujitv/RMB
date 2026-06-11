@@ -77,13 +77,6 @@ const state = {
   domesticLogisticsEditing: null,
   isDomesticLogisticsModalOpen: false,
   selectedDomesticLogisticsOrder: null,
-  logisticsExpenseRows: [],
-  logisticsExpensePagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
-  logisticsExpenseSummary: null,
-  logisticsExpenseOrders: [],
-  logisticsExpenseEditing: null,
-  logisticsExpenseKeyword: "",
-  logisticsExpenseLoading: false,
   pdfPreviewDocument: null,
   pdfPreviewObjectUrl: "",
   pdfPreviewError: "",
@@ -134,7 +127,7 @@ const constants = {
   defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
   exchangeRateSources: ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"],
   exchangeRateTypes: ["现汇买入价", "现汇卖出价", "中间价"],
-  roles: ["管理员", "业务员", "财务", "成本录入员", "物流资料录入员", "物流供应商", "查看者"],
+  roles: ["管理员", "业务员", "财务", "成本录入员", "物流资料录入员", "查看者"],
   orderStatuses: ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"],
   paymentStatuses: ["待确认", "已到账", "已退回", "已取消"],
   paymentTypes: ["预付款", "尾款", "补差款", "其他"],
@@ -155,12 +148,6 @@ const constants = {
   },
   nonParticipatingCostTypes: ["目的港费用"],
   logisticsCostTypes: ["拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用"],
-  logisticsSupplierExpenseTypes: ["拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用", "自定义费用"],
-  logisticsSupplierExpenseReviewStatuses: ["草稿", "已提交", "已审核", "已退回", "已作废"],
-  logisticsSupplierExpensePaymentStatuses: ["未付款", "已申请付款", "已付款"],
-  logisticsSupplierExpenseInvoiceStatuses: ["未上传", "已上传", "已审核", "已退回"],
-  logisticsSupplierExpenseDocumentTypes: ["发票", "对账单", "报关费发票", "拖车费发票", "港杂费发票", "其他证明资料"],
-  logisticsSupplierExpenseTaxDocumentTypes: ["不计入退税资料", "报关费发票", "拖车费发票", "港杂费发票", "其他物流资料"],
   taxRefundLogisticsInvoiceRequirements: [
     { key: "CUSTOMS", label: "报关费资料", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
     { key: "TRUCKING", label: "拖车费资料", missingCostLabel: "未录入拖车费", costTypes: ["拖车费", "国内物流费", "国内拖车费"] },
@@ -199,7 +186,6 @@ const constants = {
     { value: "costs", label: "成本管理" },
     { value: "profit", label: "利润分析" },
     { value: "domesticLogistics", label: "国内物流信息" },
-    { value: "logisticsExpenses", label: "物流费用登记" },
     { value: "taxRefund", label: "退税资料" },
     { value: "reports", label: "报表中心" },
     { value: "manual", label: "操作说明书" },
@@ -213,7 +199,6 @@ const constants = {
     { value: "payments", label: "收款查看" },
     { value: "costs", label: "成本查看" },
     { value: "domesticLogistics", label: "国内物流查看" },
-    { value: "logisticsExpenses", label: "物流费用查看" },
     { value: "documents", label: "单证查看" },
     { value: "taxRefund", label: "退税查看" },
     { value: "commissions", label: "提成查看" },
@@ -229,7 +214,6 @@ const constants = {
     { value: "costs", label: "成本录入" },
     { value: "logistics", label: "物流费用" },
     { value: "domesticLogistics", label: "国内物流录入" },
-    { value: "logisticsExpenses", label: "物流费用登记" },
     { value: "documents", label: "单证上传/删除" },
     { value: "taxRefund", label: "退税状态" },
     { value: "commissions", label: "提成结算" },
@@ -268,7 +252,6 @@ const viewTitles = {
   costs: "成本管理",
   profit: "利润分析",
   domesticLogistics: "国内物流信息",
-  logisticsExpenses: "物流费用登记",
   taxRefund: "退税资料",
   reports: "报表中心",
   manual: "操作说明书",
@@ -281,7 +264,6 @@ const refreshViewLabels = {
   payments: "刷新收款",
   costs: "刷新成本",
   domesticLogistics: "刷新物流信息",
-  logisticsExpenses: "刷新物流费用",
   taxRefund: "刷新退税资料",
   profit: "刷新利润",
   reports: "刷新报表",
@@ -306,12 +288,11 @@ constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter(
 ));
 
 const roleMenus = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsExpenses", "taxRefund", "reports", "manual", "settings"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
   业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
-  财务: ["dashboard", "payments", "profit", "domesticLogistics", "logisticsExpenses", "taxRefund", "reports", "manual"],
-  成本录入员: ["costs", "logisticsExpenses", "profit", "manual"],
+  财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
+  成本录入员: ["costs", "profit", "manual"],
   物流资料录入员: ["domesticLogistics"],
-  物流供应商: ["logisticsExpenses"],
   查看者: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
 };
 
@@ -321,27 +302,24 @@ const roleScopeTexts = {
   财务: "可查看全部应收和收款数据",
   成本录入员: "仅可录入成本并查看成本相关数据",
   物流资料录入员: "仅可录入国内物流信息",
-  物流供应商: "仅可登记本供应商物流费用",
   查看者: "只读权限",
 };
 
 const roleWrites = {
-  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "logisticsExpenses", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
+  管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
   业务员: ["orders", "logistics", "domesticLogistics", "documents"],
-  财务: ["payments", "logisticsExpenses", "documents", "taxRefund", "commissions", "exchangeRates"],
-  成本录入员: ["costs", "logisticsExpenses", "documents"],
+  财务: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
+  成本录入员: ["costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
-  物流供应商: ["logisticsExpenses"],
   查看者: [],
 };
 
 const roleReads = {
-  管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "logisticsExpenses", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
+  管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
   业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
-  财务: ["orders", "payments", "costs", "domesticLogistics", "logisticsExpenses", "documents", "taxRefund", "commissions", "reports"],
-  成本录入员: ["suppliers", "orders", "costs", "logisticsExpenses", "documents"],
+  财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
+  成本录入员: ["suppliers", "orders", "costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
-  物流供应商: ["logisticsExpenses", "documents"],
   查看者: ["orders", "payments", "costs", "domesticLogistics", "documents", "reports"],
 };
 
@@ -950,7 +928,6 @@ function defaultViewForCurrentUser() {
     业务员: canView("orders") ? "orders" : "dashboard",
     成本录入员: "costs",
     物流资料录入员: "domesticLogistics",
-    物流供应商: "logisticsExpenses",
     查看者: "orders",
   };
   const preferred = roleDefaultViews[state.me?.role];
@@ -1295,7 +1272,7 @@ function optionHtml(values, selected = "") {
 }
 
 function fillSelect(id, values, selected = "", includeBlank = false, blankLabel = "全部") {
-  const el = typeof id === "string" ? $(id) : id;
+  const el = $(id);
   if (!el) return;
   el.innerHTML = `${includeBlank ? `<option value="">${escapeHtml(blankLabel)}</option>` : ""}${optionHtml(values, selected)}`;
 }
@@ -1744,7 +1721,6 @@ async function loadData(options = {}) {
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
     if (state.view === "domesticLogistics" && canReadArea("domesticLogistics")) await loadDomesticLogisticsList({ silent: true });
-    if (state.view === "logisticsExpenses" && canReadArea("logisticsExpenses")) await loadLogisticsExpenseList({ silent: true });
     if (state.view === "costs" && canReadArea("costs")) await loadCostList({ silent: true });
   } catch (error) {
     toast(error.message);
@@ -1841,68 +1817,6 @@ async function loadCostList(options = {}) {
     state.costListLoading = false;
     renderCosts();
   }
-}
-
-function logisticsExpenseListParams(options = {}) {
-  const page = Math.max(1, Number(options.page || state.logisticsExpensePagination.page || 1));
-  const pageSize = Number(options.pageSize || state.logisticsExpensePagination.pageSize || 20);
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  const fields = {
-    keyword: "#logistics-expense-keyword",
-    settlementMonth: "#logistics-expense-month",
-    expenseType: "#logistics-expense-type-filter",
-    reviewStatus: "#logistics-expense-review-filter",
-    paymentStatus: "#logistics-expense-payment-filter",
-    invoiceStatus: "#logistics-expense-invoice-filter",
-  };
-  Object.entries(fields).forEach(([key, selector]) => {
-    const value = $(selector)?.value?.trim?.() || $(selector)?.value || "";
-    if (value) params.set(key, value);
-  });
-  return params;
-}
-
-async function loadLogisticsExpenseList(options = {}) {
-  if (!canReadArea("logisticsExpenses")) return;
-  const page = Math.max(1, Number(options.page || state.logisticsExpensePagination.page || 1));
-  const params = logisticsExpenseListParams({ ...options, page });
-  state.logisticsExpenseLoading = true;
-  renderLogisticsExpenses();
-  try {
-    const result = await api(`/api/logistics-expenses?${params.toString()}`);
-    const data = result.data || {};
-    state.logisticsExpenseRows = (data.rows || result.expenses || []).map(normalizeCustomerRecordNames);
-    state.logisticsExpensePagination = {
-      page: Number(data.page || page),
-      pageSize: Number(data.pageSize || 20),
-      total: Number(data.total || state.logisticsExpenseRows.length),
-      totalPages: Number(data.totalPages || 1),
-    };
-    state.logisticsExpenseSummary = data.summary || null;
-    renderLogisticsExpenses();
-  } catch (error) {
-    if (!options.silent) toast(error.message);
-    if (options.rethrow) throw error;
-  } finally {
-    state.logisticsExpenseLoading = false;
-    renderLogisticsExpenses();
-  }
-}
-
-async function searchLogisticsExpenseOrders(keyword = "") {
-  if (!canReadArea("logisticsExpenses")) return [];
-  const params = new URLSearchParams({ view: "orders" });
-  if (keyword.trim()) params.set("keyword", keyword.trim());
-  const result = await api(`/api/logistics-expenses?${params.toString()}`);
-  const rows = result?.data?.rows || [];
-  state.logisticsExpenseOrders = rows.map(normalizeCustomerRecordNames);
-  return state.logisticsExpenseOrders;
-}
-
-async function loadLogisticsExpenseSuppliers() {
-  const result = await api("/api/logistics-expenses?view=suppliers");
-  state.availableSuppliers = mergeSupplierCache(state.availableSuppliers, result?.data?.rows || []);
-  return result?.data?.rows || [];
 }
 
 async function loadTaxRefundList(options = {}) {
@@ -2133,11 +2047,6 @@ async function refreshCurrentView() {
     toast("国内物流信息已刷新");
     return;
   }
-  if (state.view === "logisticsExpenses") {
-    await loadLogisticsExpenseList({ page: state.logisticsExpensePagination.page || 1, rethrow: true });
-    toast("物流费用登记已刷新");
-    return;
-  }
   if (state.view === "reports") {
     await queryReport(state.reportQueried ? (state.reportPagination.page || 1) : 1, { rethrow: true });
     toast("报表中心已刷新");
@@ -2317,7 +2226,6 @@ function renderAll() {
   renderProfit();
   renderTaxRefund();
   renderDomesticLogistics();
-  renderLogisticsExpenses();
   renderReports();
   renderSettings();
   applyRateEditability();
@@ -2857,7 +2765,6 @@ function rerenderExpandedScope(scope) {
   if (scope === "costOrders") return renderCosts();
   if (scope === "profit") return renderProfit();
   if (scope === "domesticLogistics") return renderDomesticLogistics();
-  if (scope === "logisticsExpenses") return renderLogisticsExpenses();
   if (scope === "taxRefund") return renderTaxRefund();
   if (scope === "reports") return renderReports();
   if (scope === "customers") return renderCustomerSettings();
@@ -4641,311 +4548,6 @@ function renderDomesticLogistics() {
     ${renderDomesticLogisticsDetailRow(row, actions)}
   `;
   }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
-}
-
-function logisticsExpenseStatusBadge(value) {
-  const text = escapeHtml(value || "-");
-  const className = value === "已审核" || value === "已付款" || value === "已上传" || value === "已审核"
-    ? "status-good"
-    : (value === "已退回" || value === "已作废" ? "status-danger" : "status-warning");
-  return `<span class="status-badge ${className}">${text}</span>`;
-}
-
-function canReviewLogisticsExpense() {
-  return ["管理员", "财务", "成本录入员"].includes(state.me?.role) && canWriteArea("logisticsExpenses");
-}
-
-function isLogisticsSupplierUser() {
-  return state.me?.role === "物流供应商";
-}
-
-function logisticsExpenseCanEdit(expense = {}) {
-  if (canReviewLogisticsExpense()) return !["已审核", "已作废"].includes(expense.reviewStatus);
-  return isLogisticsSupplierUser() && ["草稿", "已退回"].includes(expense.reviewStatus);
-}
-
-function logisticsExpenseCanSubmit(expense = {}) {
-  return ["草稿", "已退回"].includes(expense.reviewStatus) && (isLogisticsSupplierUser() || canReviewLogisticsExpense());
-}
-
-function logisticsExpenseActions(expense = {}) {
-  const buttons = [];
-  if (logisticsExpenseCanEdit(expense)) buttons.push(`<button class="secondary-button" data-edit-logistics-expense="${escapeHtml(expense.id)}" type="button">编辑</button>`);
-  if (logisticsExpenseCanSubmit(expense)) buttons.push(`<button class="primary-button" data-logistics-expense-action="submit" data-logistics-expense-id="${escapeHtml(expense.id)}" type="button">提交</button>`);
-  if (canReviewLogisticsExpense() && expense.reviewStatus === "已提交") {
-    buttons.push(`<button class="primary-button" data-logistics-expense-action="approve" data-logistics-expense-id="${escapeHtml(expense.id)}" type="button">审核通过</button>`);
-    buttons.push(`<button class="secondary-button" data-logistics-expense-action="reject" data-logistics-expense-id="${escapeHtml(expense.id)}" type="button">退回</button>`);
-  }
-  if (canReviewLogisticsExpense() && expense.reviewStatus !== "已作废") buttons.push(`<button class="danger-button" data-logistics-expense-action="void" data-logistics-expense-id="${escapeHtml(expense.id)}" type="button">作废</button>`);
-  if (canReviewLogisticsExpense() && expense.reviewStatus === "已审核" && expense.paymentStatus !== "已付款") buttons.push(`<button class="secondary-button" data-logistics-expense-action="paid" data-logistics-expense-id="${escapeHtml(expense.id)}" type="button">标记付款</button>`);
-  return buttons.join("");
-}
-
-function renderLogisticsExpenseDocuments(expense = {}) {
-  const docs = expense.documents || [];
-  const list = docs.length ? docs.map((doc) => `
-    <div class="file-card">
-      <div><strong>${escapeHtml(doc.fileName || "-")}</strong><small>${escapeHtml(doc.logisticsDocumentType || doc.documentTypeLabel || "-")} · ${humanFileSize(doc.fileSize || 0)}</small></div>
-      <div class="file-card-actions">
-        <button class="secondary-button" data-preview-document="${escapeHtml(doc.id)}" type="button">预览</button>
-        <a class="secondary-button" href="/api/order-documents/${encodeURIComponent(doc.id)}/download" target="_blank" rel="noreferrer">下载</a>
-      </div>
-    </div>
-  `).join("") : `<div class="empty-inline">暂未上传附件</div>`;
-  const canUpload = canWriteArea("logisticsExpenses") && expense.reviewStatus !== "已作废";
-  return `
-    <div class="logistics-expense-documents">
-      ${canUpload ? `
-        <label class="compact-upload">
-          <span>上传附件</span>
-          <select data-logistics-expense-doc-type="${escapeHtml(expense.id)}">${optionHtml(constants.logisticsSupplierExpenseDocumentTypes, "发票")}</select>
-          <input data-logistics-expense-file="${escapeHtml(expense.id)}" type="file" accept="application/pdf,.pdf" />
-        </label>
-      ` : ""}
-      ${list}
-    </div>
-  `;
-}
-
-function renderLogisticsExpenses() {
-  const table = $("#logistics-expense-table");
-  if (!table) return;
-  if ($("#logistics-expense-keyword")) $("#logistics-expense-keyword").value = state.logisticsExpenseKeyword || "";
-  const rows = canReadArea("logisticsExpenses") ? state.logisticsExpenseRows : [];
-  const colspan = 10;
-  table.innerHTML = state.logisticsExpenseLoading
-    ? `<tr><td colspan="${colspan}" class="empty-cell">正在加载物流费用...</td></tr>`
-    : (rows.length ? rows.map((expense) => {
-      const id = expense.id;
-      const actions = logisticsExpenseActions(expense);
-      return `
-        <tr class="expandable-row" data-expand-row="logisticsExpenses" data-expand-id="${escapeHtml(id)}">
-          <td><strong>${expandArrow("logisticsExpenses", id)}${escapeHtml(expense.settlementMonth || "-")}</strong></td>
-          <td>${escapeHtml(expense.supplierName || "-")}</td>
-          <td>${escapeHtml(expense.orderNo || "-")}</td>
-          <td>${customerNameCell(expense)}</td>
-          <td>${escapeHtml(expense.displayExpenseName || expense.expenseType || "-")}</td>
-          <td>${moneyCell({ currency: expense.currency, amount: expense.amount, amountCny: expense.amountCny })}</td>
-          <td>${logisticsExpenseStatusBadge(expense.invoiceStatus)}</td>
-          <td>${logisticsExpenseStatusBadge(expense.reviewStatus)}</td>
-          <td>${logisticsExpenseStatusBadge(expense.paymentStatus)}</td>
-          ${rowActions(detailButton("logisticsExpenses", id))}
-        </tr>
-        ${expandedDetailRow("logisticsExpenses", id, colspan, [
-          { title: "订单与费用", items: [
-            ["订单号", escapeHtml(expense.orderNo || "-")],
-            optionalDetailItem("提单号", escapeHtml(expense.blNo || "")),
-            ["客户全称", escapeHtml(customerFullNameOf(expense) || customerShortNameOf(expense) || "-")],
-            ["费用项目", escapeHtml(expense.displayExpenseName || expense.expenseType || "-")],
-            optionalDetailItem("退税资料归属", escapeHtml(expense.taxDocumentType || "")),
-          ] },
-          { title: "金额与月结", items: [
-            ["费用金额", moneyCell({ currency: expense.currency, amount: expense.amount, amountCny: expense.amountCny }), { strong: true }],
-            ["币种 / 汇率", escapeHtml(`${expense.currency || "CNY"} / ${Number(expense.exchangeRate || 1).toFixed(4)}`)],
-            ["费用发生日期", escapeHtml(expense.expenseDate || "-")],
-            ["月结月份", escapeHtml(expense.settlementMonth || "-")],
-            ["发票状态", logisticsExpenseStatusBadge(expense.invoiceStatus)],
-            ["审核状态", logisticsExpenseStatusBadge(expense.reviewStatus)],
-            ["付款状态", logisticsExpenseStatusBadge(expense.paymentStatus)],
-          ] },
-          { title: "附件与意见", items: [
-            ["附件列表", renderLogisticsExpenseDocuments(expense), { wide: true }],
-            optionalDetailItem("退回原因", escapeHtml(expense.rejectReason || ""), { wide: true }),
-            optionalDetailItem("作废原因", escapeHtml(expense.voidReason || ""), { wide: true }),
-            optionalDetailItem("备注", escapeHtml(expense.remark || ""), { wide: true }),
-            ["创建人 / 审核人", escapeHtml(`${expense.createdBy?.name || "-"} / ${expense.reviewedByName || "-"}`)],
-          ] },
-        ], actions)}
-      `;
-    }).join("") : `<tr><td colspan="${colspan}" class="empty-cell">暂无物流供应商费用</td></tr>`);
-  const pagination = state.logisticsExpensePagination;
-  if ($("#logistics-expense-count")) $("#logistics-expense-count").textContent = `${pagination.total || rows.length || 0} 条`;
-  if ($("#logistics-expense-page-info")) $("#logistics-expense-page-info").textContent = `第 ${pagination.page || 1} / ${pagination.totalPages || 1} 页`;
-  renderLogisticsExpenseSummary();
-}
-
-function renderLogisticsExpenseSummary() {
-  const box = $("#logistics-expense-summary");
-  if (!box) return;
-  const summary = state.logisticsExpenseSummary || {};
-  box.innerHTML = [
-    ["应付总额", money(summary.totalAmountCny || 0)],
-    ["已付款金额", money(summary.paidAmountCny || 0)],
-    ["未付款金额", money(summary.unpaidAmountCny || 0)],
-  ].map(([label, value]) => `<article class="mini-metric"><span>${label}</span><strong>${value}</strong></article>`).join("");
-}
-
-function logisticsExpenseOrderLabel(order = {}) {
-  return [order.orderNo || "-", order.blNo || "-", customerShortNameOf(order) || customerFullNameOf(order) || "-"].join(" | ");
-}
-
-function renderLogisticsExpenseOrderResults(rows = state.logisticsExpenseOrders, message = "") {
-  const box = $("#logistics-expense-order-results");
-  if (!box) return;
-  if (message) {
-    box.innerHTML = `<div class="order-search-empty">${escapeHtml(message)}</div>`;
-    return;
-  }
-  box.innerHTML = rows.length ? rows.map((order) => (
-    `<button class="order-search-option" type="button" data-logistics-expense-order-id="${escapeHtml(order.id)}"><strong>${escapeHtml(logisticsExpenseOrderLabel(order))}</strong></button>`
-  )).join("") : `<div class="order-search-empty">未找到可登记物流费用的订单。</div>`;
-}
-
-function selectLogisticsExpenseOrder(order) {
-  if (!order) return;
-  $("#logistics-expense-order-id").value = order.id || "";
-  $("#logistics-expense-order-no").value = order.orderNo || "";
-  $("#logistics-expense-bl-no").value = order.blNo || "";
-  $("#logistics-expense-customer").value = customerShortNameOf(order) || customerFullNameOf(order) || "";
-  $("#logistics-expense-order-search").value = logisticsExpenseOrderLabel(order);
-  $("#logistics-expense-order-results").innerHTML = "";
-  $("#logistics-expense-order-reselect").hidden = false;
-}
-
-function resetLogisticsExpenseForm(expense = null) {
-  $("#logistics-expense-form")?.reset();
-  $("#logistics-expense-id").value = expense?.id || "";
-  $("#logistics-expense-order-id").value = expense?.orderId || "";
-  $("#logistics-expense-order-no").value = expense?.orderNo || "";
-  $("#logistics-expense-bl-no").value = expense?.blNo || "";
-  $("#logistics-expense-customer").value = expense ? (customerShortNameOf(expense) || customerFullNameOf(expense)) : "";
-  $("#logistics-expense-order-search").value = expense ? logisticsExpenseOrderLabel(expense) : "";
-  $("#logistics-expense-order-reselect").hidden = !expense;
-  $("#logistics-expense-order-results").innerHTML = "";
-  const supplierOptions = state.availableSuppliers.filter((supplier) => constants.taxRefundLogisticsInvoiceSupplierTypes.includes(supplier.supplierType));
-  fillSelect("#logistics-expense-supplier", supplierOptions.map((supplier) => ({ value: supplier.id, label: supplier.supplierName })), expense?.supplierId || state.me?.supplierId || "", true, "请选择供应商");
-  $("#logistics-expense-supplier").disabled = isLogisticsSupplierUser();
-  $("#logistics-expense-type").value = expense?.expenseType || "拖车费";
-  $("#logistics-expense-custom-name").value = expense?.customExpenseName || "";
-  $("#logistics-expense-amount").value = expense?.amount || "";
-  $("#logistics-expense-currency").value = expense?.currency || "CNY";
-  $("#logistics-expense-rate").value = Number(expense?.exchangeRate || 1).toFixed(4);
-  $("#logistics-expense-amount-cny").value = expense?.amountCny ? money(expense.amountCny) : "";
-  $("#logistics-expense-date").value = expense?.expenseDate || today();
-  $("#logistics-expense-settlement-month").value = expense?.settlementMonth || today().slice(0, 7);
-  $("#logistics-expense-tax-document-type").value = expense?.taxDocumentType || "不计入退税资料";
-  $("#logistics-expense-remark").value = expense?.remark || "";
-  updateLogisticsExpenseFormDerived();
-}
-
-function updateLogisticsExpenseFormDerived() {
-  const type = $("#logistics-expense-type")?.value || "";
-  const customField = $("#logistics-expense-custom-name-field");
-  if (customField) customField.hidden = !["自定义费用", "其他物流费用"].includes(type);
-  const currency = $("#logistics-expense-currency")?.value || "CNY";
-  const rate = $("#logistics-expense-rate");
-  if (currency === "CNY") {
-    rate.value = "1.0000";
-    rate.readOnly = true;
-  } else {
-    rate.readOnly = false;
-  }
-  const amountValue = Number($("#logistics-expense-amount")?.value || 0);
-  const rateValue = Number(rate?.value || 0);
-  $("#logistics-expense-amount-cny").value = amountValue && rateValue ? money(amountValue * rateValue) : "";
-}
-
-function openLogisticsExpenseDrawer(expense = null) {
-  if (!canWriteArea("logisticsExpenses")) return toast("没有权限登记物流费用");
-  state.logisticsExpenseEditing = expense;
-  loadLogisticsExpenseSuppliers()
-    .catch(() => [])
-    .finally(() => {
-      resetLogisticsExpenseForm(expense);
-      $("#logistics-expense-form-title").textContent = expense?.id ? "编辑物流费用" : "新增物流费用";
-      $("#logistics-expense-drawer").hidden = false;
-      syncBodyModalOpen();
-    });
-}
-
-function closeLogisticsExpenseDrawer() {
-  $("#logistics-expense-drawer").hidden = true;
-  state.logisticsExpenseEditing = null;
-  syncBodyModalOpen();
-}
-
-async function submitLogisticsExpense(event) {
-  event.preventDefault();
-  if (!canWriteArea("logisticsExpenses")) return toast("没有权限登记物流费用");
-  const type = $("#logistics-expense-type").value;
-  const customExpenseName = $("#logistics-expense-custom-name").value.trim();
-  if (["自定义费用", "其他物流费用"].includes(type) && !customExpenseName) return toast("请填写自定义费用名称");
-  const payload = {
-    orderId: $("#logistics-expense-order-id").value,
-    supplierId: $("#logistics-expense-supplier").value,
-    expenseType: type,
-    customExpenseName,
-    amount: $("#logistics-expense-amount").value,
-    currency: $("#logistics-expense-currency").value,
-    exchangeRate: $("#logistics-expense-rate").value,
-    expenseDate: $("#logistics-expense-date").value,
-    settlementMonth: $("#logistics-expense-settlement-month").value,
-    taxDocumentType: $("#logistics-expense-tax-document-type").value,
-    remark: $("#logistics-expense-remark").value,
-  };
-  const id = $("#logistics-expense-id").value;
-  const button = $("#logistics-expense-submit-button");
-  setActionButtonLoading(button, true, "保存中...");
-  try {
-    const result = await api(id ? `/api/logistics-expenses/${encodeURIComponent(id)}` : "/api/logistics-expenses", {
-      method: id ? "PATCH" : "POST",
-      body: JSON.stringify(payload),
-    });
-    assertSuccessResponse(result, "保存物流费用失败");
-    toast(result.message || "物流费用已保存");
-    closeLogisticsExpenseDrawer();
-    await loadLogisticsExpenseList({ page: state.logisticsExpensePagination.page || 1, silent: true });
-  } catch (error) {
-    reportFrontendError(error, "保存物流费用失败");
-  } finally {
-    setActionButtonLoading(button, false);
-  }
-}
-
-async function updateLogisticsExpenseAction(id, action) {
-  const body = { action };
-  if (action === "reject") {
-    const reason = window.prompt("请输入退回原因：", "");
-    if (!reason?.trim()) return;
-    body.rejectReason = reason.trim();
-  }
-  if (action === "void") {
-    const reason = window.prompt("请输入作废原因：", "");
-    if (!reason?.trim()) return;
-    body.voidReason = reason.trim();
-  }
-  if (action === "approve") {
-    const taxType = window.prompt("退税资料归属：不计入退税资料 / 报关费发票 / 拖车费发票 / 港杂费发票 / 其他物流资料", "不计入退税资料");
-    if (taxType) body.taxDocumentType = taxType.trim();
-  }
-  const result = await api(`/api/logistics-expenses/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  assertSuccessResponse(result, "更新物流费用状态失败");
-  toast(result.message || "物流费用状态已更新");
-  await loadLogisticsExpenseList({ page: state.logisticsExpensePagination.page || 1, silent: true });
-}
-
-async function uploadLogisticsExpenseDocument(input) {
-  const id = input.dataset.logisticsExpenseFile;
-  const file = input.files?.[0];
-  if (!id || !file) return;
-  const select = $(`[data-logistics-expense-doc-type="${CSS.escape(id)}"]`);
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("logisticsDocumentType", select?.value || "发票");
-  try {
-    const result = await fetch(`/api/logistics-expenses/${encodeURIComponent(id)}/documents`, { method: "POST", body: formData });
-    const data = await result.json();
-    if (!result.ok || data.success === false) throw new Error(data.message || "上传失败");
-    toast("附件上传成功");
-    await loadLogisticsExpenseList({ page: state.logisticsExpensePagination.page || 1, silent: true });
-  } catch (error) {
-    toast(`上传失败：${error.message}`);
-  } finally {
-    input.value = "";
-  }
 }
 
 function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
@@ -8000,9 +7602,6 @@ function openUserDrawer(user = null) {
   $("#user-email").value = user?.email || "";
   $("#user-role").value = user?.role || "查看者";
   renderUserSupplierField(user?.supplierId || "");
-  if ($("#user-role")?.value === "物流供应商" && !state.logisticsExpenseSuppliers.length) {
-    loadLogisticsExpenseSuppliers().then(() => renderUserSupplierField(user?.supplierId || "")).catch((error) => toast(error.message));
-  }
   $("#user-approval-status").value = user?.approvalStatus || (user?.isActive ? "APPROVED" : "APPROVED");
   $("#user-permission-mode").value = user?.permissionMode || user?.customPermissions?.mode || "ROLE";
   $("#user-password").value = "";
@@ -8018,27 +7617,9 @@ function renderUserSupplierField(selected = $("#user-supplier")?.value || "") {
   const field = $("#user-supplier-field");
   const select = $("#user-supplier");
   if (!field || !select) return;
-  const needsSupplier = ($("#user-role")?.value || "") === "物流供应商";
-  field.hidden = !needsSupplier;
-  select.required = needsSupplier;
-  if (!needsSupplier) {
-    select.innerHTML = "";
-    select.value = "";
-    return;
-  }
-  const supplierTypes = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-  const rows = mergeSupplierCache(
-    state.logisticsExpenseSuppliers || [],
-    [...(state.availableSuppliers || []), ...(state.suppliers || [])].filter((supplier) => supplierTypes.includes(supplier.supplierType) && supplier.status !== "停用"),
-  );
-  const options = rows.map((supplier) => ({
-    value: supplier.id,
-    label: `${supplier.supplierName}${supplier.supplierType ? `（${supplier.supplierType}）` : ""}`,
-  }));
-  if (selected && !options.some((option) => option.value === selected)) {
-    options.unshift({ value: selected, label: "当前关联供应商" });
-  }
-  fillSelect(select, options, selected, true, "请选择关联供应商");
+  field.hidden = true;
+  select.innerHTML = "";
+  select.value = "";
 }
 
 function userPermissionConfigKey(config = {}) {
@@ -8057,7 +7638,6 @@ function userBasicPayloadChanged(before, payload) {
   if ((before.name || "") !== (payload.name || "")) return true;
   if ((before.email || "").toLowerCase() !== (payload.email || "").toLowerCase()) return true;
   if ((before.role || "") !== (payload.role || "")) return true;
-  if ((before.supplierId || "") !== (payload.supplierId || "")) return true;
   if (payload.password) return true;
   return userPermissionConfigKey(before.customPermissions || { mode: "ROLE" }) !== userPermissionConfigKey(payload.customPermissions);
 }
@@ -8085,10 +7665,9 @@ async function submitUser(event) {
       name: $("#user-name").value,
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
-      supplierId: $("#user-role").value === "物流供应商" ? ($("#user-supplier")?.value || "") : "",
+      supplierId: "",
       customPermissions: readUserPermissionForm(),
     };
-    if (data.role === "物流供应商" && !data.supplierId) throw new Error("请选择关联供应商");
     const password = $("#user-password").value;
     if (password) data.password = password;
     if (!id) data.approvalStatus = approvalStatus;
@@ -8661,7 +8240,6 @@ function switchView(view, options = {}) {
   if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
   if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
   if (view === "domesticLogistics") loadDomesticLogisticsList({ silent: true });
-  if (view === "logisticsExpenses") loadLogisticsExpenseList({ page: state.logisticsExpensePagination.page || 1 });
   if (view === "settings") loadSettingsTab(state.settingsActiveTab);
   return true;
 }
@@ -9187,9 +8765,6 @@ function bindEvents() {
   $("#user-form").addEventListener("submit", submitUser);
   $("#user-role").addEventListener("change", () => {
     renderUserSupplierField();
-    if ($("#user-role")?.value === "物流供应商" && !state.logisticsExpenseSuppliers.length) {
-      loadLogisticsExpenseSuppliers().then(() => renderUserSupplierField()).catch((error) => toast(error.message));
-    }
     renderUserPermissionEditor();
   });
   $("#user-permission-mode").addEventListener("change", () => {
@@ -9445,64 +9020,6 @@ function bindEvents() {
   });
   $("#domestic-remark-preview")?.addEventListener("input", handleDomesticRemarkManualChange);
   $("#domestic-regenerate-remark")?.addEventListener("click", handleDomesticRemarkRegenerateClick);
-  $("#logistics-expense-filter-form")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    state.logisticsExpenseKeyword = $("#logistics-expense-keyword")?.value || "";
-    loadLogisticsExpenseList({ page: 1 });
-  });
-  $("#logistics-expense-reset")?.addEventListener("click", () => {
-    state.logisticsExpenseKeyword = "";
-    ["#logistics-expense-keyword", "#logistics-expense-month", "#logistics-expense-type-filter", "#logistics-expense-review-filter", "#logistics-expense-payment-filter", "#logistics-expense-invoice-filter"].forEach((selector) => {
-      const el = $(selector);
-      if (el) el.value = "";
-    });
-    loadLogisticsExpenseList({ page: 1 });
-  });
-  $("#logistics-expense-prev")?.addEventListener("click", () => loadLogisticsExpenseList({ page: Math.max(1, (state.logisticsExpensePagination.page || 1) - 1) }));
-  $("#logistics-expense-next")?.addEventListener("click", () => loadLogisticsExpenseList({ page: Math.min(state.logisticsExpensePagination.totalPages || 1, (state.logisticsExpensePagination.page || 1) + 1) }));
-  $("#open-logistics-expense-drawer")?.addEventListener("click", () => openLogisticsExpenseDrawer());
-  $("#logistics-expense-drawer")?.addEventListener("click", (event) => {
-    if (event.target.closest("[data-close-logistics-expense]")) closeLogisticsExpenseDrawer();
-  });
-  $("#logistics-expense-form")?.addEventListener("submit", submitLogisticsExpense);
-  ["#logistics-expense-type", "#logistics-expense-currency", "#logistics-expense-amount", "#logistics-expense-rate"].forEach((selector) => {
-    $(selector)?.addEventListener("input", updateLogisticsExpenseFormDerived);
-    $(selector)?.addEventListener("change", updateLogisticsExpenseFormDerived);
-  });
-  $("#logistics-expense-order-search")?.addEventListener("input", async (event) => {
-    try {
-      renderLogisticsExpenseOrderResults(await searchLogisticsExpenseOrders(event.target.value || ""));
-    } catch (error) {
-      renderLogisticsExpenseOrderResults([], error.message || "订单搜索失败");
-    }
-  });
-  $("#logistics-expense-order-results")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-logistics-expense-order-id]");
-    if (!button) return;
-    selectLogisticsExpenseOrder(state.logisticsExpenseOrders.find((item) => item.id === button.dataset.logisticsExpenseOrderId));
-  });
-  $("#logistics-expense-order-reselect")?.addEventListener("click", () => {
-    $("#logistics-expense-order-id").value = "";
-    $("#logistics-expense-order-search").value = "";
-    $("#logistics-expense-order-reselect").hidden = true;
-  });
-  $("#logistics-expense-table")?.addEventListener("change", (event) => {
-    const input = event.target.closest("[data-logistics-expense-file]");
-    if (input) uploadLogisticsExpenseDocument(input);
-  });
-  $("#logistics-expense-table")?.addEventListener("click", (event) => {
-    if (handleExpandableRowClick(event)) return;
-    const preview = event.target.closest("[data-preview-document]");
-    if (preview) return openPdfPreview(preview.dataset.previewDocument);
-    const edit = event.target.closest("[data-edit-logistics-expense]");
-    if (edit) {
-      const expense = state.logisticsExpenseRows.find((item) => item.id === edit.dataset.editLogisticsExpense);
-      if (expense) openLogisticsExpenseDrawer(expense);
-      return;
-    }
-    const action = event.target.closest("[data-logistics-expense-action]");
-    if (action) updateLogisticsExpenseAction(action.dataset.logisticsExpenseId, action.dataset.logisticsExpenseAction).catch((error) => reportFrontendError(error, "更新物流费用状态失败"));
-  });
   $("#tax-detail-drawer").addEventListener("click", (event) => {
     if (event.target.closest("[data-close-tax-detail]")) return closeTaxRefundDetail();
     const missing = event.target.closest("[data-missing-document]");
@@ -9795,13 +9312,6 @@ function initSelects() {
   fillSelect("#logistics-type", constants.logisticsCostTypes, constants.logisticsCostTypes[0] || "其他物流费用");
   fillSelect("#logistics-currency", constants.currencies, "", true, "请选择币种");
   fillSelect("#logistics-invoice-status", constants.invoiceStatuses, "未收到");
-  fillSelect("#logistics-expense-type-filter", constants.logisticsSupplierExpenseTypes, "", true, "全部费用类型");
-  fillSelect("#logistics-expense-review-filter", constants.logisticsSupplierExpenseReviewStatuses, "", true, "全部审核状态");
-  fillSelect("#logistics-expense-payment-filter", constants.logisticsSupplierExpensePaymentStatuses, "", true, "全部付款状态");
-  fillSelect("#logistics-expense-invoice-filter", constants.logisticsSupplierExpenseInvoiceStatuses, "", true, "全部发票状态");
-  fillSelect("#logistics-expense-type", constants.logisticsSupplierExpenseTypes, "拖车费");
-  fillSelect("#logistics-expense-currency", constants.currencies, "CNY");
-  fillSelect("#logistics-expense-tax-document-type", constants.logisticsSupplierExpenseTaxDocumentTypes, "不计入退税资料");
   fillSelect("#user-role", constants.roles, "查看者");
   fillSelect("#user-approval-status", constants.userApprovalStatuses, "APPROVED");
   fillSelect("#user-filter-status", constants.userApprovalStatuses, "", true, "全部状态");
