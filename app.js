@@ -310,7 +310,7 @@ const roleMenus = {
   业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "logisticsExpenses", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "logisticsExpenses", "profit", "manual"],
-  物流资料录入员: ["domesticLogistics"],
+  物流资料录入员: ["domesticLogistics", "logisticsExpenses"],
   物流供应商: ["logisticsExpenses"],
   查看者: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
 };
@@ -340,7 +340,7 @@ const roleReads = {
   业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "logisticsExpenses", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "logisticsExpenses", "documents"],
-  物流资料录入员: ["domesticLogistics", "documents"],
+  物流资料录入员: ["domesticLogistics", "logisticsExpenses", "documents"],
   物流供应商: ["logisticsExpenses", "documents"],
   查看者: ["orders", "payments", "costs", "domesticLogistics", "documents", "reports"],
 };
@@ -910,6 +910,7 @@ function installFrontendErrorBoundary() {
 }
 
 function canView(view) {
+  if (state.me?.role === "管理员" && view === "logisticsExpenses") return true;
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
@@ -966,6 +967,7 @@ function ensureAuthorizedView() {
 }
 
 function canWriteArea(area) {
+  if (state.me?.role === "管理员" && area === "logisticsExpenses") return true;
   if (state.permissions?.writes && Object.prototype.hasOwnProperty.call(state.permissions.writes, area)) {
     return Boolean(state.permissions.writes[area]);
   }
@@ -973,6 +975,7 @@ function canWriteArea(area) {
 }
 
 function canReadArea(area) {
+  if (state.me?.role === "管理员" && area === "logisticsExpenses") return true;
   if (state.permissions?.reads && Object.prototype.hasOwnProperty.call(state.permissions.reads, area)) {
     return Boolean(state.permissions.reads[area]);
   }
