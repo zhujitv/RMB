@@ -184,7 +184,7 @@ const constants = {
     { value: "payments", label: "收款管理" },
     { value: "costs", label: "成本管理" },
     { value: "profit", label: "利润分析" },
-    { value: "domesticLogistics", label: "物流信息" },
+    { value: "domesticLogistics", label: "国内物流信息" },
     { value: "taxRefund", label: "退税资料" },
     { value: "reports", label: "报表中心" },
     { value: "manual", label: "操作说明书" },
@@ -197,7 +197,7 @@ const constants = {
     { value: "orders", label: "应收订单查看" },
     { value: "payments", label: "收款查看" },
     { value: "costs", label: "成本查看" },
-    { value: "domesticLogistics", label: "物流查看" },
+    { value: "domesticLogistics", label: "国内物流查看" },
     { value: "documents", label: "单证查看" },
     { value: "taxRefund", label: "退税查看" },
     { value: "commissions", label: "提成查看" },
@@ -212,7 +212,7 @@ const constants = {
     { value: "payments", label: "收款登记" },
     { value: "costs", label: "成本录入" },
     { value: "logistics", label: "物流费用" },
-    { value: "domesticLogistics", label: "物流录入" },
+    { value: "domesticLogistics", label: "国内物流录入" },
     { value: "documents", label: "单证上传/删除" },
     { value: "taxRefund", label: "退税状态" },
     { value: "commissions", label: "提成结算" },
@@ -250,7 +250,7 @@ const viewTitles = {
   payments: "收款管理",
   costs: "成本管理",
   profit: "利润分析",
-  domesticLogistics: "物流信息",
+  domesticLogistics: "国内物流信息",
   taxRefund: "退税资料",
   reports: "报表中心",
   manual: "操作说明书",
@@ -288,7 +288,7 @@ constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter(
 
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "costs", "domesticLogistics", "manual"],
+  业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
   财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   成本录入员: ["costs", "profit", "manual"],
   物流资料录入员: ["domesticLogistics"],
@@ -306,7 +306,7 @@ const roleScopeTexts = {
 
 const roleWrites = {
   管理员: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings", "exchangeRates"],
-  业务员: ["orders", "costs", "logistics", "domesticLogistics", "documents"],
+  业务员: ["orders", "logistics", "domesticLogistics", "documents"],
   财务: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
@@ -315,7 +315,7 @@ const roleWrites = {
 
 const roleReads = {
   管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
-  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions"],
+  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
   财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
   物流资料录入员: ["domesticLogistics", "documents"],
@@ -363,6 +363,21 @@ function escapeHtml(value) {
 function customerDisplayName(value, fallback = "") {
   const text = String(value || "").trim();
   return text ? text.toUpperCase() : fallback;
+}
+
+function customerFullNameOf(row = {}) {
+  return customerDisplayName(row.customerFullName || row.customerNameSnapshot || row.fullName || row.name || row.customerName || "");
+}
+
+function customerShortNameOf(row = {}) {
+  return customerDisplayName(row.customerShortName || row.shortName || row.displayName || row.customerName || row.name || "");
+}
+
+function customerNameCell(row = {}, fallback = "-") {
+  const display = customerShortNameOf(row) || customerFullNameOf(row) || fallback;
+  const fullName = customerFullNameOf(row) || display;
+  const title = fullName && fullName !== display ? ` title="${escapeHtml(fullName)}"` : "";
+  return `<span class="customer-name-cell"${title}>${escapeHtml(display)}</span>`;
 }
 
 function money(value) {
@@ -1272,7 +1287,7 @@ function refreshPaymentStatusOptions(selected = "") {
 }
 
 function canConfirmOrdinaryCost() {
-  return ["管理员", "业务员"].includes(state.me?.role);
+  return state.me?.role === "管理员";
 }
 
 function refreshCostConfirmOptions(selected = "false") {
@@ -1293,7 +1308,7 @@ function fillOrderSelect(id, selected = "") {
   const el = $(id);
   if (!el) return;
   el.innerHTML = `<option value="">请选择应收订单</option>${state.orders.map((order) => (
-    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(customerDisplayName(order.customerName))} - 未收 ${money(order.summary.outstandingCny)}</option>`
+    `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order))} - 未收 ${money(order.summary.outstandingCny)}</option>`
   )).join("")}`;
 }
 
@@ -1509,7 +1524,7 @@ function fillAvailableCustomerSelect(selected = "") {
   if (!el) return;
   const options = state.availableCustomers.map((customer) => {
     const note = customer.country ? ` / ${customer.country}` : "";
-    return `<option value="${customer.id}" ${customer.id === selected ? "selected" : ""}>${escapeHtml(customerDisplayName(customer.name))}${escapeHtml(note)}</option>`;
+    return `<option value="${customer.id}" ${customer.id === selected ? "selected" : ""}>${escapeHtml(customerShortNameOf(customer) || customerFullNameOf(customer))}${escapeHtml(note)}</option>`;
   }).join("");
   el.innerHTML = `<option value="">请选择客户</option>${options}`;
   if (selected) el.value = selected;
@@ -1676,17 +1691,23 @@ async function loadData(options = {}) {
     state.overview = ledgerData?.overview || null;
     state.orders = (ledgerData?.orders || ordersData?.orders || []).map((order) => ({
       ...normalizeCustomerRecordNames(order),
-      customerName: customerDisplayName(order?.customerName || order?.customerNameSnapshot || ""),
+      customerName: customerDisplayName(order?.customerName || order?.customerShortName || order?.customerNameSnapshot || ""),
+      customerFullName: customerDisplayName(order?.customerFullName || order?.customerNameSnapshot || order?.customerName || ""),
       customerShortName: customerDisplayName(order?.customerShortName || ""),
     }));
     state.payments = (ledgerData?.payments || paymentsData?.payments || []).map((payment) => ({
       ...normalizeCustomerRecordNames(payment),
-      customerName: customerDisplayName(payment?.customerName || ""),
+      customerName: customerDisplayName(payment?.customerName || payment?.customerShortName || ""),
+      customerFullName: customerDisplayName(payment?.customerFullName || payment?.customerName || ""),
+      customerShortName: customerDisplayName(payment?.customerShortName || ""),
     }));
     state.costs = [];
     state.availableCustomers = (availableData.customers || []).map((customer) => ({
       ...customer,
       name: customerDisplayName(customer.name || ""),
+      fullName: customerDisplayName(customer.fullName || customer.name || ""),
+      shortName: customerDisplayName(customer.shortName || ""),
+      displayName: customerDisplayName(customer.displayName || customer.shortName || customer.name || ""),
     }));
     renderAll();
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
@@ -1759,19 +1780,25 @@ async function loadCostList(options = {}) {
     if (state.costView === "orders") {
       state.costOrderRows = (pageData.rows || []).map((cost) => ({
         ...normalizeCustomerRecordNames(cost),
-        customerName: customerDisplayName(cost?.customerName || ""),
+        customerName: customerDisplayName(cost?.customerName || cost?.customerShortName || ""),
+        customerFullName: customerDisplayName(cost?.customerFullName || cost?.customerName || ""),
+        customerShortName: customerDisplayName(cost?.customerShortName || ""),
       }));
       state.costRows = [];
       state.costs = [];
     } else {
       state.costRows = (pageData.rows || []).map((cost) => ({
         ...normalizeCustomerRecordNames(cost),
-        customerName: customerDisplayName(cost?.customerName || ""),
+        customerName: customerDisplayName(cost?.customerName || cost?.customerShortName || ""),
+        customerFullName: customerDisplayName(cost?.customerFullName || cost?.customerName || ""),
+        customerShortName: customerDisplayName(cost?.customerShortName || ""),
       }));
       state.costOrderRows = [];
       state.costs = (pageData.rows || []).map((cost) => ({
         ...normalizeCustomerRecordNames(cost),
-        customerName: customerDisplayName(cost?.customerName || ""),
+        customerName: customerDisplayName(cost?.customerName || cost?.customerShortName || ""),
+        customerFullName: customerDisplayName(cost?.customerFullName || cost?.customerName || ""),
+        customerShortName: customerDisplayName(cost?.customerShortName || ""),
       }));
     }
     renderCosts();
@@ -1897,6 +1924,9 @@ async function loadSettingsTab(tabKey = state.settingsActiveTab, options = {}) {
       state.customers = (data.customers || []).map((customer) => ({
         ...customer,
         name: customerDisplayName(customer.name || ""),
+        fullName: customerDisplayName(customer.fullName || customer.name || ""),
+        shortName: customerDisplayName(customer.shortName || ""),
+        displayName: customerDisplayName(customer.displayName || customer.shortName || customer.name || ""),
       }));
       state.customerSalespeople = data.salespeople || state.customerSalespeople || [];
       state.customersPagination = mergePagination(state.customersPagination, data.pagination, 20);
@@ -2499,7 +2529,7 @@ function renderRiskList(id, rows, mode) {
     <article class="rank-item risk-item ${isOverdue ? "is-danger" : "is-warning"}">
       <span class="rank-index">${index + 1}</span>
       <div class="rank-main">
-        <strong>${dashboardLink(customerDisplayName(order.customerName), "party", customerDisplayName(order.customerName))} · ${dashboardLink(order.orderNo, "order", order.orderNo)}</strong>
+        <strong>${dashboardLink(customerShortNameOf(order) || customerFullNameOf(order), "party", customerShortNameOf(order) || customerFullNameOf(order))} · ${dashboardLink(order.orderNo, "order", order.orderNo)}</strong>
         <small>提单号 ${escapeHtml(order.blNo || "待发货")} · 到期日 ${escapeHtml(order.dueDate || "-")} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
       </div>
       <div class="rank-value ${isOverdue ? "negative" : ""}">
@@ -2518,7 +2548,7 @@ function renderLowMarginList(rows) {
     <article class="rank-item ${grossProfit < 0 || grossMargin < 0.08 ? "risk-item is-danger" : ""}">
       <span class="rank-index">${index + 1}</span>
       <div class="rank-main">
-        <strong>${dashboardLink(order.orderNo, "order", order.orderNo)} · ${dashboardLink(customerDisplayName(order.customerName), "party", customerDisplayName(order.customerName))}</strong>
+        <strong>${dashboardLink(order.orderNo, "order", order.orderNo)} · ${dashboardLink(customerShortNameOf(order) || customerFullNameOf(order), "party", customerShortNameOf(order) || customerFullNameOf(order))}</strong>
         <small>应收 ${money(receivable)} · 成本 ${money(cost)} · ${dashboardLink(order.salespersonName || "-", "party", order.salespersonName || "")}</small>
         <i class="mini-progress"><b class="${grossProfit < 0 ? "negative" : ""}" style="width:${Math.max(4, (Math.abs(grossProfit) / max) * 100)}%"></b></i>
       </div>
@@ -2711,7 +2741,7 @@ function renderOrders() {
     <tr>
       <td><strong>${escapeHtml(order.orderNo)}</strong></td>
       <td>${escapeHtml(order.blNo || "待发货")}</td>
-      <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
+      <td>${customerNameCell(order)}</td>
       <td>${paymentTermCell(order)}</td>
       <td>${escapeHtml(order.dueDate || "-")}<small>${escapeHtml(order.summary.reminderStatus)}</small></td>
       <td>${moneyCell({ currency: order.currency, amount: order.estimatedReceivableAmount, amountCny: order.estimatedReceivableAmountCny })}</td>
@@ -3012,7 +3042,7 @@ function renderOrderDetails() {
   const order = currentDetailOrder();
   panel.hidden = !order;
   if (!order) return;
-  $("#order-detail-title").textContent = `${order.orderNo} · ${customerDisplayName(order.customerName)} · ${order.blNo || "待发货"}`;
+  $("#order-detail-title").textContent = `${order.orderNo} · ${customerShortNameOf(order) || customerFullNameOf(order)} · ${order.blNo || "待发货"}`;
   renderLogisticsTable(order);
   renderDocumentGrid(order);
   applyAccessControl();
@@ -3023,7 +3053,7 @@ function renderPayments() {
   $("#payments-table").innerHTML = state.payments.length ? state.payments.map((payment) => `
     <tr>
       <td>${escapeHtml(payment.orderNo)}</td>
-      <td>${escapeHtml(customerDisplayName(payment.customerName))}</td>
+      <td>${customerNameCell(payment)}</td>
       <td>${payment.paymentDate}</td>
       <td>${escapeHtml(payment.paymentType || "尾款")}</td>
       <td>${moneyCell({ currency: payment.currency, amount: payment.amount, amountCny: payment.amountCny })}</td>
@@ -3131,7 +3161,7 @@ function renderCostDetailsTable(rows = []) {
     <tr>
       <td><strong>${escapeHtml(cost.orderNo || "-")}</strong></td>
       <td>${escapeHtml(cost.blNo || cost.billOfLadingNo || "-")}</td>
-      <td>${escapeHtml(customerDisplayName(cost.customerName || "-"))}</td>
+      <td>${customerNameCell(cost)}</td>
       <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
       <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
       <td>${escapeHtml(cost.supplierType || "-")}</td>
@@ -3159,7 +3189,7 @@ function renderCostOrderSummaryTable(rows = []) {
     <tr>
       <td><strong>${escapeHtml(order.orderNo || "-")}</strong></td>
       <td>${escapeHtml(order.blNo || order.billOfLadingNo || "-")}</td>
-      <td>${escapeHtml(customerDisplayName(order.customerName || "-"))}</td>
+      <td>${customerNameCell(order)}</td>
       <td>${money(order.receivableAmountCny || 0)}</td>
       <td>${money(order.totalCostCny || 0)}</td>
       <td>${money(order.factoryCostCny || 0)}</td>
@@ -3365,7 +3395,7 @@ function renderProfit() {
     return `
       <tr>
         <td>${escapeHtml(order.orderNo)}</td>
-        <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
+        <td>${customerNameCell(order)}</td>
         <td>${money(order.summary.receivableCny)}</td>
         <td>${money(order.summary.arrivedPaymentsCny ?? order.summary.confirmedPaymentsCny)}</td>
         <td>${money(order.summary.confirmedTotalCostCny ?? order.summary.totalCostCny)}</td>
@@ -3729,7 +3759,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-logistics-order-summary").innerHTML = `
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
-    <div><span>客户简称</span><strong>${escapeHtml(customerDisplayName(row.customerShortName || row.customerName || "-"))}</strong></div>
+    <div><span>客户简称</span><strong>${customerNameCell(row)}</strong></div>
   `;
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
@@ -3798,7 +3828,7 @@ function renderDomesticLogistics() {
     <tr>
       <td><strong>${escapeHtml(row.orderNo || "-")}</strong></td>
       <td>${escapeHtml(row.blNo || "待发货")}</td>
-      <td>${escapeHtml(customerDisplayName(row.customerShortName || row.customerName || "-"))}</td>
+      <td>${customerNameCell(row)}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
@@ -3963,7 +3993,7 @@ function renderTaxRefund() {
       <tr>
         <td><strong>${escapeHtml(order.orderNo)}</strong></td>
         <td>${escapeHtml(order.blNo || "待发货")}</td>
-        <td>${escapeHtml(customerDisplayName(order.customerName))}</td>
+        <td>${customerNameCell(order)}</td>
         <td><span class="muted-cell">申报日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
@@ -4371,7 +4401,7 @@ function renderTaxRefundDetail() {
     return;
   }
   const completeness = order.documentCompleteness || {};
-  $("#tax-detail-title").textContent = `${order.orderNo} · ${customerDisplayName(order.customerName)}`;
+  $("#tax-detail-title").textContent = `${order.orderNo} · ${customerShortNameOf(order) || customerFullNameOf(order)}`;
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const customsTypes = constants.domesticLogisticsDocumentTypes;
   const exportTypes = [
@@ -4632,7 +4662,7 @@ function renderCustomerSettings() {
     $("#customers-table").innerHTML = loading && !rows.length ? loadingRow(9, "正在加载客户资料...")
       : error || (rows.length ? rows.map((customer) => `
         <tr>
-          <td>${escapeHtml(customerDisplayName(customer.name || ""))}</td>
+          <td>${customerNameCell(customer)}</td>
           <td>${escapeHtml(customer.country || "-")}</td>
           <td>${escapeHtml(customer.defaultCurrency || "-")}</td>
           <td>${escapeHtml(customer.salespersonName || "-")}</td>
@@ -6550,8 +6580,11 @@ function sortedCustomerList(customers) {
   const list = customers.map((customer) => ({
     ...customer,
     name: customerDisplayName(customer?.name || ""),
+    fullName: customerDisplayName(customer?.fullName || customer?.name || ""),
+    shortName: customerDisplayName(customer?.shortName || ""),
+    displayName: customerDisplayName(customer?.shortName || customer?.displayName || customer?.name || ""),
   }));
-  return [...list].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
+  return [...list].sort((a, b) => String(a.displayName || a.name || "").localeCompare(String(b.displayName || b.name || ""), "zh-Hans-CN"));
 }
 
 function normalizeCustomerRecordNames(record = {}) {
@@ -6559,8 +6592,12 @@ function normalizeCustomerRecordNames(record = {}) {
   return {
     ...record,
     name: record.name ? String(record.name).trim().toUpperCase() : record.name,
+    fullName: record.fullName ? String(record.fullName).trim().toUpperCase() : record.fullName,
+    shortName: record.shortName ? String(record.shortName).trim().toUpperCase() : record.shortName,
+    displayName: record.displayName ? String(record.displayName).trim().toUpperCase() : record.displayName,
     customerName: record.customerName ? String(record.customerName).trim().toUpperCase() : record.customerName,
     customerShortName: record.customerShortName ? String(record.customerShortName).trim().toUpperCase() : record.customerShortName,
+    customerFullName: record.customerFullName ? String(record.customerFullName).trim().toUpperCase() : record.customerFullName,
   };
 }
 
@@ -6581,6 +6618,9 @@ function syncSavedCustomer(customer) {
   const normalizedCustomer = {
     ...customer,
     name: customerDisplayName(customer.name || ""),
+    fullName: customerDisplayName(customer.fullName || customer.name || ""),
+    shortName: customerDisplayName(customer.shortName || ""),
+    displayName: customerDisplayName(customer.displayName || customer.shortName || customer.name || ""),
   };
   const existsInPage = state.customers.some((item) => item.id === normalizedCustomer.id);
   state.customers = upsertCustomer(state.customers, normalizedCustomer);
@@ -6665,6 +6705,7 @@ async function submitCustomer(event) {
     if (duplicate) throw new Error("客户名称已存在，不能重复创建");
     const data = {
       name,
+      shortName: customerDisplayName($("#customer-short-name")?.value || ""),
       country: $("#customer-country").value,
       defaultCurrency: $("#customer-currency").value,
       contactPerson: $("#customer-contact-person").value,
@@ -7225,6 +7266,7 @@ function fillCustomerForm(customer) {
   if (!customer) return;
   $("#customer-id").value = customer.id;
   $("#customer-name").value = customerDisplayName(customer.name || "");
+  if ($("#customer-short-name")) $("#customer-short-name").value = customerDisplayName(customer.shortName || "");
   $("#customer-country").value = customer.country || "";
   $("#customer-currency").value = customer.defaultCurrency || "";
   fillSalespersonSelect("#customer-salesperson", customer.salespersonUserId || "");
@@ -7243,7 +7285,7 @@ function openCustomerDrawer(customer = null) {
   resetForm("customer");
   if (customer?.id) fillCustomerForm(customer);
   if ($("#customer-drawer-title")) $("#customer-drawer-title").textContent = customer?.id ? "编辑客户资料" : "新建客户";
-  if ($("#customer-form-subtitle")) $("#customer-form-subtitle").textContent = customer?.id ? `正在编辑：${customerDisplayName(customer.name || "-")}` : "新建客户";
+  if ($("#customer-form-subtitle")) $("#customer-form-subtitle").textContent = customer?.id ? `正在编辑：${customerShortNameOf(customer) || customerFullNameOf(customer) || "-"}` : "新建客户";
   const drawer = $("#customer-drawer");
   if (drawer) drawer.hidden = false;
   document.body.classList.add("modal-open");

@@ -129,6 +129,7 @@ model LoginAttempt {
 model Customer {
   id              String    @id @default(cuid())
   name            String
+  shortName       String?   @map("short_name")
   country         String?
   defaultCurrency String?   @map("default_currency")
   salespersonUserId String?   @map("salesperson_user_id")
@@ -146,6 +147,7 @@ model Customer {
   orders ReceivableOrder[]
 
   @@index([name])
+  @@index([shortName])
   @@index([salespersonUserId])
   @@index([commissionStatus])
   @@index([deletedAt])

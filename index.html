@@ -360,7 +360,7 @@
               </section>
             </div>
           </section>
-          <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>付款条款</th><th>到期日</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>应收订单列表</h3><span id="orders-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户简称</th><th>付款条款</th><th>到期日</th><th>预计应收</th><th>实际发货金额</th><th>最终应收</th><th>预付款要求</th><th>已收预付款</th><th>预付款差额</th><th>已收</th><th>未收/多收</th><th>状态</th><th>操作</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="payments-view">
@@ -393,7 +393,7 @@
             </div>
             <div class="form-actions"><button class="primary-button" type="submit">保存收款</button></div>
           </form>
-          <section class="panel"><div class="panel-title"><h3>收款明细</h3><span id="payments-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>收款日期</th><th>类型</th><th>金额</th><th>折人民币</th><th>状态</th><th>流水号</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="payments-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>收款明细</h3><span id="payments-count">0 条</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户简称</th><th>收款日期</th><th>类型</th><th>金额</th><th>折人民币</th><th>状态</th><th>流水号</th><th>创建/修改</th><th>操作</th></tr></thead><tbody id="payments-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="costs-view">
@@ -403,7 +403,7 @@
               <div class="cost-filter-grid">
                 <label><span>订单号</span><input id="cost-filter-order-no" type="search" placeholder="订单号" /></label>
                 <label><span>提单号</span><input id="cost-filter-bl-no" type="search" placeholder="提单号" /></label>
-                <label><span>客户名称</span><input id="cost-filter-customer" type="search" placeholder="客户名称" /></label>
+                <label><span>客户简称</span><input id="cost-filter-customer" type="search" placeholder="客户简称 / 客户名称" /></label>
                 <label><span>供应商名称</span><input id="cost-filter-supplier" type="search" placeholder="供应商名称" /></label>
                 <label><span>成本类型</span><select id="cost-filter-type"><option value="">全部成本类型</option></select></label>
                 <label><span>付款状态</span><select id="cost-filter-payment-status"><option value="">全部付款状态</option></select></label>
@@ -437,11 +437,11 @@
             </div>
             <div class="table-wrap cost-table-wrap">
               <table id="cost-details-table">
-                <thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>成本类型</th><th>供应商名称</th><th>供应商类型</th><th>成本金额</th><th>折人民币</th><th>付款状态</th><th>成本确认</th><th>发票状态</th><th>资料状态</th><th>创建/修改人</th><th>操作</th></tr></thead>
+                <thead><tr><th>订单号</th><th>提单号</th><th>客户简称</th><th>成本类型</th><th>供应商名称</th><th>供应商类型</th><th>成本金额</th><th>折人民币</th><th>付款状态</th><th>成本确认</th><th>发票状态</th><th>资料状态</th><th>创建/修改人</th><th>操作</th></tr></thead>
                 <tbody id="costs-table"></tbody>
               </table>
               <table id="cost-orders-table" hidden>
-                <thead><tr><th>订单号</th><th>提单号</th><th>客户</th><th>应收金额</th><th>总成本</th><th>工厂货款</th><th>物流费用</th><th>港杂费</th><th>其他费用</th><th>成本确认进度</th><th>发票资料进度</th><th>操作</th></tr></thead>
+                <thead><tr><th>订单号</th><th>提单号</th><th>客户简称</th><th>应收金额</th><th>总成本</th><th>工厂货款</th><th>物流费用</th><th>港杂费</th><th>其他费用</th><th>成本确认进度</th><th>发票资料进度</th><th>操作</th></tr></thead>
                 <tbody id="cost-orders-table-body"></tbody>
               </table>
             </div>
@@ -466,7 +466,7 @@
                   <input type="hidden" id="cost-customer-id" />
                   <div class="order-search-picker" id="cost-order-picker">
                     <div class="order-search-row">
-                      <input id="cost-order-search" type="search" placeholder="输入订单号、提单号、客户名称搜索" autocomplete="off" />
+                      <input id="cost-order-search" type="search" placeholder="输入订单号、提单号、客户简称搜索" autocomplete="off" />
                       <button class="secondary-button" id="cost-order-reselect" type="button" hidden>重新选择订单</button>
                     </div>
                     <div class="order-search-results" id="cost-order-results" role="listbox"></div>
@@ -475,7 +475,7 @@
                 </div>
                 <label><span>订单号</span><input id="cost-order-no" disabled /></label>
                 <label><span>提单号</span><input id="cost-bl-no" disabled /></label>
-                <label><span>客户名称</span><input id="cost-customer" disabled /></label>
+                <label><span>客户简称</span><input id="cost-customer" disabled /></label>
                 <label><span>币种 / 汇率</span><input id="cost-order-currency" disabled /></label>
                 <label><span>成本类型</span><select id="cost-type"></select></label>
                 <label><span>付款状态</span><select id="cost-payment-status"></select></label>
@@ -507,7 +507,7 @@
         </section>
 
         <section class="view-panel" id="profit-view">
-          <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>最终应收</th><th>已到账金额</th><th>总成本</th><th>预计毛利</th><th>预计毛利率</th><th>已实现毛利</th><th>已实现毛利率</th><th>业务员提成</th><th>提成状态</th><th>成本结构</th><th>操作</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
+          <section class="panel"><div class="panel-title"><h3>订单利润分析</h3><span id="profit-count">0 个订单</span></div><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户简称</th><th>最终应收</th><th>已到账金额</th><th>总成本</th><th>预计毛利</th><th>预计毛利率</th><th>已实现毛利</th><th>已实现毛利率</th><th>业务员提成</th><th>提成状态</th><th>成本结构</th><th>操作</th></tr></thead><tbody id="profit-table"></tbody></table></div></section>
         </section>
 
         <section class="view-panel" id="taxRefund-view">
@@ -522,7 +522,7 @@
               <button class="primary-button" type="submit">查询</button>
               <button class="secondary-button" id="tax-refund-reset" type="button">重置</button>
             </form>
-            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户名称</th><th>申报日期</th><th>总体完整度</th><th>退税状态</th><th>操作</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>提单号</th><th>客户简称</th><th>申报日期</th><th>总体完整度</th><th>退税状态</th><th>操作</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
             <div class="pagination-bar">
               <button class="secondary-button" id="tax-refund-prev" type="button">上一页</button>
               <span id="tax-refund-page-info">第 1 / 1 页</span>
@@ -616,7 +616,7 @@
             <form class="report-query-form" id="report-query-form">
               <label><span>开始日期</span><input id="report-date-from" type="date" /></label>
               <label><span>结束日期</span><input id="report-date-to" type="date" /></label>
-              <label><span>客户名称</span><input id="report-customer" type="search" placeholder="客户名称" /></label>
+              <label><span>客户简称</span><input id="report-customer" type="search" placeholder="客户简称 / 客户名称" /></label>
               <label><span>订单号</span><input id="report-order-no" type="search" placeholder="订单号" /></label>
               <label><span>提单号</span><input id="report-bl-no" type="search" placeholder="提单号" /></label>
               <label><span>币种</span><select id="report-currency"><option value="">全部币种</option></select></label>
@@ -894,11 +894,11 @@
               <section class="panel">
                 <div class="panel-title"><h3>客户资料</h3><div class="panel-title-actions"><span id="customers-count">0 个客户</span><button class="secondary-button" data-settings-refresh="customers" type="button">刷新</button><button class="primary-button" id="open-customer-drawer" type="button">新建客户</button></div></div>
                 <form class="inline-filter" id="customer-search-form" autocomplete="off">
-                  <input id="customer-search-keyword" placeholder="搜索客户名称 / 国家地区" />
+                  <input id="customer-search-keyword" placeholder="搜索客户简称 / 客户名称 / 国家地区" />
                   <button class="primary-button" type="submit">查询</button>
                   <button class="secondary-button" id="customer-search-reset" type="button">重置</button>
                 </form>
-                <div class="table-wrap"><table><thead><tr><th>客户</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>提成比例</th><th>提成状态</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div>
+                <div class="table-wrap"><table><thead><tr><th>客户简称</th><th>国家</th><th>默认币种</th><th>负责业务员</th><th>提成比例</th><th>提成状态</th><th>联系人</th><th>备注</th><th>操作</th></tr></thead><tbody id="customers-table"></tbody></table></div>
                 <div class="pagination-bar"><button class="secondary-button" id="customers-prev-page" type="button">上一页</button><span id="customers-page-info">第 1 / 1 页</span><button class="secondary-button" id="customers-next-page" type="button">下一页</button></div>
               </section>
             </section>
@@ -957,7 +957,7 @@
           <form class="entry-form" id="customer-form" autocomplete="off">
             <input type="hidden" id="customer-id" />
             <div class="form-header"><div><h3 id="customer-drawer-title">客户资料</h3><p id="customer-form-subtitle">新建客户</p></div></div>
-            <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
+            <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>客户简称</span><input id="customer-short-name" /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
             <div class="form-actions"><button class="secondary-button" data-close-customer-drawer type="button">取消</button><button class="primary-button" type="submit">保存客户</button></div>
           </form>
         </section>
