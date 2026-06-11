@@ -35,12 +35,19 @@
 }
 
 .expanded-row > td,
-.expanded-detail-row > td {
+.expanded-detail-row > td,
+.expanded-detail-cell {
   padding: 0 12px 16px;
   background: #f8fafc;
   white-space: normal;
   word-break: normal;
   overflow-wrap: anywhere;
+  width: 100%;
+  max-width: 100%;
+}
+
+.expanded-detail-row {
+  width: 100%;
 }
 
 .expanded-panel,
@@ -182,7 +189,8 @@
   }
 
   .expanded-row > td,
-  .expanded-detail-row > td {
+  .expanded-detail-row > td,
+  .expanded-detail-cell {
     padding: 0 8px 12px;
   }
 

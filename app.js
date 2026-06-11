@@ -2805,7 +2805,7 @@ function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
   `).join("");
   return `
     <tr class="expanded-row expanded-detail-row">
-      <td colspan="${colspan}">
+      <td colSpan="${colspan}" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card" data-expanded-panel="${escapeHtml(scope)}">
           ${sectionHtml}
           ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
@@ -2817,6 +2817,65 @@ function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
 
 function detailButton(scope, id) {
   return `<button class="secondary-button" data-expand-row="${escapeHtml(scope)}" data-expand-id="${escapeHtml(id)}" type="button">${isRowExpanded(scope, id) ? "收起" : "详情"}</button>`;
+}
+
+function renderDomesticLogisticsDetailRow(row, actions = "") {
+  const rowId = row.orderId || row.id;
+  if (!isRowExpanded("domesticLogistics", rowId)) return "";
+  const info = row.domesticLogisticsInfo || {};
+  const sections = [
+    {
+      title: "订单基础信息",
+      items: [
+        ["订单号", escapeHtml(row.orderNo || "-"), { strong: true }],
+        ["提单号", escapeHtml(row.blNo || "待发货")],
+        ["客户简称", customerNameCell(row)],
+      ],
+    },
+    {
+      title: "运输信息",
+      items: [
+        ["运输方式", escapeHtml(info.transportTypeLabel || "-")],
+        ["起运地", escapeHtml(info.departurePlace || "-")],
+        ["到达地", escapeHtml(info.destinationPlace || "-")],
+        ["起运日期", escapeHtml(info.departureDate || "-")],
+        ["运输货物名称", escapeHtml(info.cargoDescription || "-")],
+        ["车牌号", escapeHtml(info.truckPlateNo || "-")],
+        ["挂车车牌", escapeHtml(info.trailerPlateNo || "-")],
+        ["快递单号", escapeHtml(info.expressTrackingNo || "-")],
+      ],
+    },
+    {
+      title: "录入信息",
+      items: [
+        ["物流状态", escapeHtml(row.logisticsStatus || "未提交")],
+        ["录入人", escapeHtml(info.submittedByName || "-")],
+        ["录入时间", formatDateTime(info.submittedAt || row.submittedAt)],
+      ],
+    },
+    {
+      title: "出口发票备注",
+      items: [
+        ["出口发票备注", escapeHtml(info.remarkText || "-"), { wide: true, pre: true }],
+      ],
+    },
+  ];
+  const sectionHtml = sections.map((section) => `
+    <section class="expanded-section expanded-detail-section">
+      <h4 class="expanded-section-title">${escapeHtml(section.title)}</h4>
+      <div class="expanded-grid expanded-detail-grid">${detailItems(section.items)}</div>
+    </section>
+  `).join("");
+  return `
+    <tr class="expanded-row expanded-detail-row domestic-logistics-expanded-row">
+      <td colSpan="6" class="expanded-detail-cell">
+        <div class="expanded-panel expanded-detail-card domestic-logistics-detail-card" data-expanded-panel="domesticLogistics">
+          ${sectionHtml}
+          ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
+        </div>
+      </td>
+    </tr>
+  `;
 }
 
 function renderOrders() {
@@ -4013,42 +4072,26 @@ function renderDomesticLogistics() {
   if ($("#domestic-logistics-archive-scope")) $("#domestic-logistics-archive-scope").value = state.domesticLogisticsArchiveScope || "current";
   const canEditDomestic = canWriteArea("domesticLogistics");
   const isAdmin = state.me?.role === "管理员";
-  box.innerHTML = rows.length ? rows.map((row) => `
-    <tr class="expandable-row" data-expand-row="domesticLogistics" data-expand-id="${escapeHtml(row.orderId || row.id)}">
-      <td><strong>${expandArrow("domesticLogistics", row.orderId || row.id)}${escapeHtml(row.orderNo || "-")}</strong></td>
+  box.innerHTML = rows.length ? rows.map((row) => {
+    const rowId = row.orderId || row.id;
+    const actions = `
+        ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">录入</button>` : ""}
+        ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">编辑</button>` : ""}
+        ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
+        <button class="secondary-button" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">查看</button>
+      `;
+    return `
+    <tr class="expandable-row" data-expand-row="domesticLogistics" data-expand-id="${escapeHtml(rowId)}">
+      <td><strong>${expandArrow("domesticLogistics", rowId)}${escapeHtml(row.orderNo || "-")}</strong></td>
       <td>${customerNameCell(row)}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")}</td>
       <td>${escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")}</td>
       <td>${escapeHtml(row.logisticsStatus || "未提交")}</td>
-      ${rowActions(detailButton("domesticLogistics", row.orderId || row.id))}
+      ${rowActions(detailButton("domesticLogistics", rowId))}
     </tr>
-    ${expandedDetailRow("domesticLogistics", row.orderId || row.id, 6, [
-      { title: "订单基础信息", items: [
-        ["订单号", escapeHtml(row.orderNo || "-"), { strong: true }],
-        ["提单号", escapeHtml(row.blNo || "待发货")],
-        ["客户简称", customerNameCell(row)],
-      ] },
-      { title: "运输信息", items: [
-        ["运输方式", escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")],
-        ["起运地", escapeHtml(row.domesticLogisticsInfo?.departurePlace || "-")],
-        ["到达地", escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")],
-        ["起运日期", escapeHtml(row.domesticLogisticsInfo?.departureDate || "-")],
-        ["运输货物名称", escapeHtml(row.domesticLogisticsInfo?.cargoDescription || "-")],
-        ["车牌号", escapeHtml(row.domesticLogisticsInfo?.truckPlateNo || "-")],
-        ["快递单号", escapeHtml(row.domesticLogisticsInfo?.expressTrackingNo || "-")],
-        ["录入人", escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")],
-        ["录入时间", formatDateTime(row.submittedAt)],
-      ] },
-      { title: "出口发票备注", items: [
-        ["出口发票备注", escapeHtml(row.domesticLogisticsInfo?.remarkText || "-"), { wide: true, pre: true }],
-      ] },
-    ], `
-        ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
-        ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">编辑</button>` : ""}
-        ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
-        <button class="secondary-button" data-domestic-logistics-action="view" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">查看</button>
-      `)}
-  `).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+    ${renderDomesticLogisticsDetailRow(row, actions)}
+  `;
+  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
 }
 
 function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
