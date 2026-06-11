@@ -71,6 +71,9 @@ model User {
   createdSuppliers Supplier[] @relation("SuppliersCreated")
   updatedSuppliers Supplier[] @relation("SuppliersUpdated")
   uploadedDocuments OrderDocument[] @relation("DocumentsUploaded")
+  createdLogisticsSupplierExpenses LogisticsSupplierExpense[] @relation("LogisticsSupplierExpensesCreated")
+  updatedLogisticsSupplierExpenses LogisticsSupplierExpense[] @relation("LogisticsSupplierExpensesUpdated")
+  reviewedLogisticsSupplierExpenses LogisticsSupplierExpense[] @relation("LogisticsSupplierExpensesReviewed")
   commissionSettlements ReceivableOrder[] @relation("CommissionSettlements")
   commissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSettledBy")
   salespersonCommissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSalesperson")
@@ -181,6 +184,7 @@ model Supplier {
   costs     OrderCost[]
   documents OrderDocument[]
   operatorUsers User[] @relation("SupplierOperators")
+  logisticsSupplierExpenses LogisticsSupplierExpense[]
 
   @@index([supplierName])
   @@index([supplierType])
@@ -262,6 +266,7 @@ model ReceivableOrder {
   payments    Payment[]
   costs       OrderCost[]
   documents   OrderDocument[]
+  logisticsSupplierExpenses LogisticsSupplierExpense[]
   domesticLogisticsInfos DomesticLogisticsInfo[]
   domesticLogisticsDocuments DomesticLogisticsDocument[]
   commissionSettlementRecords CommissionSettlement[]
@@ -384,8 +389,10 @@ model OrderDocument {
   orderId        String            @map("order_id")
   costId         String?           @map("cost_id")
   supplierId     String?           @map("supplier_id")
+  logisticsSupplierExpenseId String? @map("logistics_supplier_expense_id")
   relatedModule  String            @default("EXPORT") @map("related_module")
   documentType   OrderDocumentType @map("document_type")
+  logisticsDocumentType String?     @map("logistics_document_type")
   fileName       String            @map("file_name")
   originalName   String?           @map("original_name")
   fileSize       Int               @map("file_size")
@@ -404,13 +411,16 @@ model OrderDocument {
   order      ReceivableOrder @relation(fields: [orderId], references: [id])
   cost       OrderCost?      @relation(fields: [costId], references: [id])
   supplier   Supplier?       @relation(fields: [supplierId], references: [id])
+  logisticsSupplierExpense LogisticsSupplierExpense? @relation(fields: [logisticsSupplierExpenseId], references: [id])
   uploadedBy User?           @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
 
   @@index([orderId])
   @@index([costId])
   @@index([supplierId])
+  @@index([logisticsSupplierExpenseId])
   @@index([relatedModule])
   @@index([documentType])
+  @@index([logisticsDocumentType])
   @@index([uploadStatus])
   @@index([uploadedById])
   @@index([deletedAt])
@@ -453,6 +463,8 @@ model OrderCost {
   id            String    @id @default(cuid())
   orderId       String    @map("order_id")
   supplierId    String?   @map("supplier_id")
+  logisticsSupplierExpenseId String? @unique @map("logistics_supplier_expense_id")
+  customCostName String?   @map("custom_cost_name")
   supplierNameSnapshot String @default("") @map("supplier_name_snapshot")
   costType      String    @map("cost_type")
   vendorName    String    @map("vendor_name")
@@ -477,18 +489,73 @@ model OrderCost {
 
   order     ReceivableOrder @relation(fields: [orderId], references: [id])
   supplier  Supplier?       @relation(fields: [supplierId], references: [id])
+  logisticsSupplierExpense LogisticsSupplierExpense? @relation(fields: [logisticsSupplierExpenseId], references: [id])
   createdBy User?           @relation("CostsCreated", fields: [createdById], references: [id])
   updatedBy User?           @relation("CostsUpdated", fields: [updatedById], references: [id])
   documents OrderDocument[]
 
   @@index([orderId])
   @@index([supplierId])
+  @@index([logisticsSupplierExpenseId])
   @@index([costType])
   @@index([paymentStatus])
   @@index([costConfirmed])
   @@index([orderId, supplierId, costType, amount, createdById, createdAt], map: "order_costs_duplicate_lookup_idx")
   @@index([deletedAt])
   @@map("order_costs")
+}
+
+model LogisticsSupplierExpense {
+  id            String    @id @default(cuid())
+  orderId       String    @map("order_id")
+  supplierId    String    @map("supplier_id")
+  orderCostId   String?   @map("order_cost_id")
+  expenseType   String    @map("expense_type")
+  customExpenseName String? @map("custom_expense_name")
+  taxDocumentType String? @map("tax_document_type")
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String    @default("CNY")
+  exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  expenseDate   DateTime  @map("expense_date") @db.Date
+  settlementMonth String  @map("settlement_month")
+  invoiceStatus String    @default("未上传") @map("invoice_status")
+  paymentStatus String    @default("未付款") @map("payment_status")
+  reviewStatus  String    @default("草稿") @map("review_status")
+  reviewedById  String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  rejectReason  String?   @map("reject_reason")
+  remark        String?
+  voidedAt      DateTime? @map("voided_at")
+  voidReason    String?   @map("void_reason")
+  paidAt        DateTime? @map("paid_at")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  order     ReceivableOrder @relation(fields: [orderId], references: [id])
+  supplier  Supplier        @relation(fields: [supplierId], references: [id])
+  orderCost OrderCost?
+  createdBy User?           @relation("LogisticsSupplierExpensesCreated", fields: [createdById], references: [id])
+  updatedBy User?           @relation("LogisticsSupplierExpensesUpdated", fields: [updatedById], references: [id])
+  reviewedBy User?          @relation("LogisticsSupplierExpensesReviewed", fields: [reviewedById], references: [id])
+  documents OrderDocument[]
+
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([orderCostId])
+  @@index([expenseType])
+  @@index([customExpenseName])
+  @@index([settlementMonth])
+  @@index([invoiceStatus])
+  @@index([paymentStatus])
+  @@index([reviewStatus])
+  @@index([reviewedById])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("logistics_supplier_expenses")
 }
 
 model ExchangeRate {
