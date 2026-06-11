@@ -4157,7 +4157,7 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
           <div class="expanded-actions expanded-detail-actions">${actions}</div>
           <section class="tax-refund-expanded-head">
             <div class="tax-refund-expanded-title">
-              <span class="eyebrow">退税资料状态看板</span>
+              <span class="eyebrow">退税资料概览</span>
               <h4>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order) || "-")}</h4>
               <div class="tax-refund-expanded-meta">
                 <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
@@ -4183,7 +4183,6 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
             </div>
           </section>
           ${renderTaxDetailMissingSummary(order)}
-          ${renderTaxDetailOverview(order)}
         </div>
       </td>
     </tr>
