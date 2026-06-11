@@ -2788,9 +2788,9 @@ function handleExpandableRowClick(event) {
 
 function detailItems(items = []) {
   return items.filter(Boolean).map(([label, value, options = {}]) => `
-    <div class="expanded-detail-item ${options.strong ? "is-strong" : ""}">
-      <span>${escapeHtml(label)}</span>
-      <div class="expanded-detail-value">${value || "-"}</div>
+    <div class="expanded-field expanded-detail-item ${options.strong ? "is-strong" : ""} ${options.wide ? "is-wide" : ""} ${options.pre ? "is-pre" : ""}">
+      <span class="expanded-label">${escapeHtml(label)}</span>
+      <div class="expanded-value expanded-detail-value">${value || "-"}</div>
     </div>
   `).join("");
 }
@@ -2798,17 +2798,17 @@ function detailItems(items = []) {
 function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
   if (!isRowExpanded(scope, id)) return "";
   const sectionHtml = sections.filter(Boolean).map((section) => `
-    <section class="expanded-detail-section">
-      <h4>${escapeHtml(section.title)}</h4>
-      <div class="expanded-detail-grid">${detailItems(section.items || [])}</div>
+    <section class="expanded-section expanded-detail-section">
+      <h4 class="expanded-section-title">${escapeHtml(section.title)}</h4>
+      <div class="expanded-grid expanded-detail-grid">${detailItems(section.items || [])}</div>
     </section>
   `).join("");
   return `
-    <tr class="expanded-detail-row">
+    <tr class="expanded-row expanded-detail-row">
       <td colspan="${colspan}">
-        <div class="expanded-detail-card">
+        <div class="expanded-panel expanded-detail-card" data-expanded-panel="${escapeHtml(scope)}">
           ${sectionHtml}
-          ${actions ? `<div class="expanded-detail-actions">${actions}</div>` : ""}
+          ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
         </div>
       </td>
     </tr>
@@ -2862,7 +2862,7 @@ function renderOrders() {
           ["预付款差额", moneyCell({ currency: order.currency, amountCny: order.summary.depositGapCny, exchangeRate: order.exchangeRate })],
           ["币种 / 汇率", `${escapeHtml(order.currency || "-")} / ${escapeHtml(order.exchangeRate || "-")}`],
         ] },
-        { title: "备注", items: [["备注", escapeHtml(order.remark || "-")]] },
+        { title: "备注", items: [["备注", escapeHtml(order.remark || "-"), { wide: true, pre: true }]] },
       ], actions)}
     `;
   }).join("") : emptyRow(colspan);
@@ -3189,7 +3189,7 @@ function renderPayments() {
           ["折人民币", moneyCell({ currency: "CNY", amountCny: payment.amountCny })],
           ["银行流水号", escapeHtml(payment.bankReference || "-")],
           ["创建 / 修改", auditCell(payment)],
-          ["备注", escapeHtml(payment.remark || "-")],
+          ["备注", escapeHtml(payment.remark || "-"), { wide: true, pre: true }],
         ] },
       ], actions)}
     `;
@@ -3324,7 +3324,7 @@ function renderCostDetailsTable(rows = []) {
           ["发票状态", `<span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span>`],
           ["资料状态", costMaterialStatusHtml(cost)],
           ["创建 / 修改", auditCell(cost)],
-          ["备注", escapeHtml(cost.remark || "-")],
+          ["备注", escapeHtml(cost.remark || "-"), { wide: true, pre: true }],
         ] },
       ], actions)}
     `;
@@ -3583,10 +3583,12 @@ function renderProfit() {
           ["已实现毛利", money(order.summary.realizedGrossProfit ?? order.summary.actualGrossProfit)],
           ["已实现毛利率", percentOrDash(order.summary.realizedGrossMargin)],
         ] },
-        { title: "提成与成本结构", items: [
+        { title: "提成信息", items: [
           ["业务员提成", `${money(order.summary.commissionAmountCny ?? order.summary.estimatedCommissionCny ?? 0)}<small>${escapeHtml(commissionAmountHint(order))}</small>`],
           ["提成状态", `<span class="status ${statusClass(order.commissionStatus)}">${escapeHtml(order.commissionStatus || "-")}</span>`],
-          ["成本结构", Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-"],
+        ] },
+        { title: "成本结构", items: [
+          ["成本结构", Object.entries(costGroups).map(([key, value]) => `${escapeHtml(key)} ${money(value)}`).join("<br>") || "-", { wide: true }],
         ] },
       ], commissionActionCell(order))}
     `;
@@ -4015,10 +4017,12 @@ function renderDomesticLogistics() {
       ${rowActions(detailButton("domesticLogistics", row.orderId || row.id))}
     </tr>
     ${expandedDetailRow("domesticLogistics", row.orderId || row.id, 6, [
-      { title: "国内物流信息", items: [
+      { title: "订单基础信息", items: [
         ["订单号", escapeHtml(row.orderNo || "-"), { strong: true }],
         ["提单号", escapeHtml(row.blNo || "待发货")],
         ["客户简称", customerNameCell(row)],
+      ] },
+      { title: "运输信息", items: [
         ["运输方式", escapeHtml(row.domesticLogisticsInfo?.transportTypeLabel || "-")],
         ["起运地", escapeHtml(row.domesticLogisticsInfo?.departurePlace || "-")],
         ["到达地", escapeHtml(row.domesticLogisticsInfo?.destinationPlace || "-")],
@@ -4028,7 +4032,9 @@ function renderDomesticLogistics() {
         ["快递单号", escapeHtml(row.domesticLogisticsInfo?.expressTrackingNo || "-")],
         ["录入人", escapeHtml(row.domesticLogisticsInfo?.submittedByName || "-")],
         ["录入时间", formatDateTime(row.submittedAt)],
-        ["出口发票备注", escapeHtml(row.domesticLogisticsInfo?.remarkText || "-")],
+      ] },
+      { title: "出口发票备注", items: [
+        ["出口发票备注", escapeHtml(row.domesticLogisticsInfo?.remarkText || "-"), { wide: true, pre: true }],
       ] },
     ], `
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(row.orderId || row.id)}" type="button">录入</button>` : ""}
@@ -4201,7 +4207,7 @@ function renderTaxRefund() {
           ["申报日期", escapeHtml(customsDateRangeText(order))],
           ["总体完整度", taxOverallPercentBadge(completeness), { strong: true }],
           ["退税状态", `<span class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</span>`],
-          ["缺失资料", displayCompletenessText(completeness.missingText || order.missingText || "-")],
+          ["缺失资料", displayCompletenessText(completeness.missingText || order.missingText || "-"), { wide: true }],
         ] },
       ], `
           <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
@@ -4889,7 +4895,7 @@ function renderCustomerSettings() {
             ["联系人", escapeHtml(customer.contactPerson || "-")],
             ["联系邮箱", escapeHtml(customer.contactEmail || "-")],
             ["联系电话", escapeHtml(customer.contactPhone || "-")],
-            ["备注", escapeHtml(customer.remark || "-")],
+            ["备注", escapeHtml(customer.remark || "-"), { wide: true, pre: true }],
           ] },
         ], canWriteArea("customers") ? `<button data-edit-customer="${escapeHtml(customer.id)}">编辑</button><button data-delete-customer="${escapeHtml(customer.id)}">删除</button>` : "")}
       `).join("") : emptyRow(columnCount));
@@ -4930,7 +4936,7 @@ function renderSupplierSettings() {
             ["银行名称", escapeHtml(supplier.bankName || "-")],
             ["银行账号", escapeHtml(supplier.bankAccount || "-")],
             ["地址", escapeHtml(supplier.address || "-")],
-            ["备注", escapeHtml(supplier.remark || "-")],
+            ["备注", escapeHtml(supplier.remark || "-"), { wide: true, pre: true }],
           ] },
         ], canWriteArea("suppliers") ? `<button data-edit-supplier="${escapeHtml(supplier.id)}">编辑</button><button data-delete-supplier="${escapeHtml(supplier.id)}">删除</button>` : "")}
       `).join("") : emptyRow(columnCount));
