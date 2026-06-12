@@ -1394,9 +1394,9 @@ function isLogisticsSupplierOption(supplier = {}) {
   return ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"].includes(supplier.supplierType);
 }
 
-async function ensureAvailableSuppliersLoaded() {
+async function ensureAvailableSuppliersLoaded(options = {}) {
   if (!state.me) return;
-  if (state.availableSuppliers.length) return;
+  if (state.availableSuppliers.length && !options.force) return;
   try {
     const data = await api("/api/suppliers/available");
     state.availableSuppliers = mergeSupplierCache(state.availableSuppliers, data.suppliers || data.rows || []);
@@ -6206,6 +6206,7 @@ function renderSettings() {
 
 function userRowHtml(user) {
   const approvalLabel = approvalStatusLabel(user.approvalStatus, user.isActive);
+  const boundSupplier = user.supplierId ? (supplierById(user.supplierId) || state.availableSuppliers.find((supplier) => supplier.id === user.supplierId)) : null;
   const actions = canWriteArea("users")
     ? [
         user.approvalStatus === "PENDING" ? `<button data-approve-user="${user.id}">通过</button><button data-reject-user="${user.id}">拒绝</button>` : "",
@@ -6226,6 +6227,7 @@ function userRowHtml(user) {
         ["姓名", escapeHtml(user.name || "-"), { strong: true }],
         ["邮箱", escapeHtml(user.email || "-")],
         ["角色", escapeHtml(user.role || "-")],
+        ["所属供应商", escapeHtml(user.role === "物流供应商" ? (boundSupplier?.supplierName || user.supplierId || "-") : "-")],
         ["状态", `<span class="status ${statusClass(approvalLabel)}">${escapeHtml(approvalLabel)}</span>`],
         ["权限模式", escapeHtml(permissionModeLabel(user.permissionMode || user.customPermissions?.mode || "ROLE"))],
         ["数据范围", escapeHtml(user.customPermissions?.scope || user.scopeText || "-")],
@@ -8559,9 +8561,31 @@ function renderUserSupplierField(selected = $("#user-supplier")?.value || "") {
   const field = $("#user-supplier-field");
   const select = $("#user-supplier");
   if (!field || !select) return;
-  field.hidden = true;
-  select.innerHTML = "";
-  select.value = "";
+  const role = $("#user-role")?.value || "查看者";
+  const required = role === "物流供应商";
+  field.hidden = !required;
+  select.required = required;
+  if (!required) {
+    select.innerHTML = "";
+    select.value = "";
+    delete select.dataset.triedLoadSuppliers;
+    delete select.dataset.loadingSuppliers;
+    return;
+  }
+  const suppliers = state.availableSuppliers.filter((supplier) => supplier.status !== "停用" && isLogisticsSupplierOption(supplier));
+  if (suppliers.length) delete select.dataset.triedLoadSuppliers;
+  select.innerHTML = `<option value="">请选择所属供应商</option>${suppliers.map((supplier) => `
+    <option value="${escapeHtml(supplier.id)}" ${supplier.id === selected ? "selected" : ""}>${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}</option>
+  `).join("")}`;
+  select.value = selected || "";
+  if (!suppliers.length && !select.dataset.loadingSuppliers && select.dataset.triedLoadSuppliers !== "true") {
+    select.dataset.triedLoadSuppliers = "true";
+    select.dataset.loadingSuppliers = "true";
+    ensureAvailableSuppliersLoaded({ force: true }).finally(() => {
+      delete select.dataset.loadingSuppliers;
+      renderUserSupplierField(selected);
+    });
+  }
 }
 
 function userPermissionConfigKey(config = {}) {
@@ -8580,6 +8604,7 @@ function userBasicPayloadChanged(before, payload) {
   if ((before.name || "") !== (payload.name || "")) return true;
   if ((before.email || "").toLowerCase() !== (payload.email || "").toLowerCase()) return true;
   if ((before.role || "") !== (payload.role || "")) return true;
+  if ((before.supplierId || "") !== (payload.supplierId || "")) return true;
   if (payload.password) return true;
   return userPermissionConfigKey(before.customPermissions || { mode: "ROLE" }) !== userPermissionConfigKey(payload.customPermissions);
 }
@@ -8607,9 +8632,10 @@ async function submitUser(event) {
       name: $("#user-name").value,
       email: $("#user-email").value.trim().toLowerCase(),
       role: $("#user-role").value,
-      supplierId: "",
+      supplierId: $("#user-role").value === "物流供应商" ? ($("#user-supplier")?.value || "") : "",
       customPermissions: readUserPermissionForm(),
     };
+    if (data.role === "物流供应商" && !data.supplierId) throw new Error("物流供应商账号必须绑定一个供应商。");
     const password = $("#user-password").value;
     if (password) data.password = password;
     if (!id) data.approvalStatus = approvalStatus;

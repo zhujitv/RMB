@@ -43,6 +43,21 @@ test("supplier role is renamed and scoped to assigned logistics work", () => {
   assert.doesNotMatch(backend, /documents: \["管理员", "业务员", "财务", "成本录入员", LOGISTICS_OPERATOR_ROLE\]/);
 });
 
+test("logistics supplier users must bind to one supplier account", () => {
+  assert.match(schema, /model User[\s\S]*supplierId\s+String\?\s+@map\("supplier_id"\)/);
+  assert.match(backend, /const USER_AUTH_SELECT = \{[\s\S]*supplierId: true/);
+  assert.match(backend, /物流供应商账号必须绑定一个供应商。/);
+  assert.match(backend, /LOGISTICS_USER_SUPPLIER_REQUIRED/);
+  assert.match(backend, /data\.supplierId = supplier\.id/);
+});
+
+test("supplier account data scope is supplier-based, not user-created fallback", () => {
+  assert.match(backend, /if \(actor\.supplierId\) return \{ supplierId: actor\.supplierId \};/);
+  assert.doesNotMatch(backend, /createdById: actor\.id \}, \{ supplierId: "__no_supplier__"/);
+  assert.doesNotMatch(backend, /submittedByUserId === actor\.id/);
+  assert.match(backend, /order: \{ is: \{ logisticsSuppliers: \{ some: \{ supplierId: actor\.supplierId \} \} \} \}/);
+});
+
 test("supplier settings include logistics expense and invoice permissions", () => {
   for (const source of [html, publicHtml]) {
     assert.match(source, /supplier-logistics-expense-entry/);
@@ -75,6 +90,15 @@ test("logistics information page exposes expense entry list and actions", () => 
     assert.match(source, /open-logistics-expense-drawer/);
     assert.match(source, /export-logistics-statement/);
   }
+});
+
+test("user management exposes supplier binding for logistics supplier accounts", () => {
+  for (const source of [html, publicHtml]) {
+    assert.match(source, /user-supplier-field/);
+    assert.match(source, /一个供应商可绑定多个用户账号/);
+  }
+  assert.match(app, /supplierId: \$\("#user-role"\)\.value === "物流供应商" \? \(\$\("#user-supplier"\)\?\.value \|\| ""\) : ""/);
+  assert.match(publicApp, /supplierId: \$\("#user-role"\)\.value === "物流供应商" \? \(\$\("#user-supplier"\)\?\.value \|\| ""\) : ""/);
 });
 
 test("cost list displays official cost source", () => {
