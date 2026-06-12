@@ -2445,18 +2445,21 @@ button.small-link {
 }
 
 .tax-refund-expanded-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
 }
 
 .tax-refund-expanded-top .expanded-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   margin: 0;
   justify-content: flex-start;
 }
 
+.tax-overview-action,
 .tax-package-button {
   display: inline-flex;
   align-items: center;
@@ -2473,6 +2476,7 @@ button.small-link {
   white-space: nowrap;
 }
 
+.tax-overview-action:hover,
 .tax-package-button:hover {
   text-decoration: none;
 }
@@ -2480,10 +2484,10 @@ button.small-link {
 .tax-refund-expanded-summary {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
-  min-width: min(100%, 420px);
+  width: 100%;
 }
 
 .tax-refund-status-summary {
@@ -4763,10 +4767,6 @@ body.modal-open {
   .tax-refund-expanded-summary,
   .tax-completeness-meter {
     width: 100%;
-  }
-
-  .tax-refund-status-summary {
-    border-radius: 12px;
   }
 
   .tax-status-overview-head,

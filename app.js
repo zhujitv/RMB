@@ -2967,10 +2967,6 @@ function customsDateRangeText(order = {}) {
   return order.customsDeclarationDate || "-";
 }
 
-function customsParseStatusText(order = {}) {
-  return order.customsParseStatusLabel || ({ SUCCESS: "成功", FAILED: "失败", MANUAL: "人工修改" }[order.customsParseStatus] || "未识别");
-}
-
 function canEditCustomsRecognition() {
   return ["管理员", "财务", "业务员"].includes(state.me?.role);
 }
@@ -4177,10 +4173,10 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
   const missingItems = taxDetailOverviewFlatItems(order).filter((item) => item.status !== "complete");
   const canDownloadPackage = taxRefundHasPackageContent(order);
   const actions = `
-    <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
+    <button class="secondary-button tax-overview-action" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
     ${canDownloadPackage
-      ? `<a class="secondary-button tax-package-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer"><span aria-hidden="true">↓</span>下载资料包</a>`
-      : `<button class="secondary-button tax-package-button" type="button" disabled><span aria-hidden="true">↓</span>下载资料包</button>`}
+      ? `<button class="secondary-button tax-overview-action tax-package-button" data-download-tax-package="${escapeHtml(order.id)}" type="button"><span aria-hidden="true">↓</span>下载资料包</button>`
+      : `<button class="secondary-button tax-overview-action tax-package-button" type="button" disabled><span aria-hidden="true">↓</span>下载资料包</button>`}
     ${options.canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
     ${options.canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
   `;
@@ -4192,10 +4188,6 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
             <div class="expanded-actions expanded-detail-actions">${actions}</div>
             <div class="tax-refund-expanded-summary">
               ${taxCompletenessMeter(progress)}
-              <div class="tax-refund-status-summary">
-                <span>退税状态</span>
-                ${taxStatusBadge(status)}
-              </div>
             </div>
           </div>
           <section class="tax-refund-expanded-head">
@@ -4224,49 +4216,6 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
 
 function taxDetailHasPackageFiles(order = {}) {
   return (order.documents || []).some((document) => document.uploadStatus === "SUCCESS");
-}
-
-function renderTaxDetailPackageButton(order = {}) {
-  if (!taxDetailHasPackageFiles(order)) {
-    return `<button class="secondary-button tax-package-button" type="button" disabled>下载资料包</button>`;
-  }
-  return `<a class="secondary-button tax-package-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>`;
-}
-
-function renderTaxDetailHeader(order = {}, canSubmitTaxRefund = false, canCancelArchive = false) {
-  const completeness = order.documentCompleteness || {};
-  const progress = taxCompletenessProgress(completeness);
-  return `
-    <section class="tax-detail-hero">
-      <div class="tax-detail-hero-main">
-        <span class="eyebrow">退税资料明细</span>
-        <h3>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")}</h3>
-        <div class="tax-detail-hero-meta">
-          <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
-          <span>币种：${escapeHtml(order.currency || "-")}</span>
-        </div>
-      </div>
-      <div class="tax-detail-hero-side">
-        ${renderTaxDetailPackageButton(order)}
-        <div class="tax-detail-overall-card">
-          <span>总体完整度</span>
-          <strong>${progress.percent}%</strong>
-          <small>${progress.completed}/${progress.total}</small>
-        </div>
-        <div class="tax-detail-status-card">
-          <span>当前退税状态</span>
-          <strong class="status ${statusClass(order.taxRefundStatus)}">${escapeHtml(taxStatusLabel(order.taxRefundStatus))}</strong>
-        </div>
-      </div>
-    </section>
-    ${renderTaxDetailMissingSummary(order)}
-    ${(canSubmitTaxRefund || canCancelArchive) ? `
-      <div class="tax-detail-workflow-actions">
-        ${canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
-        ${canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
-      </div>
-    ` : ""}
-  `;
 }
 
 function permissionModeLabel(mode) {
@@ -4616,34 +4565,33 @@ function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogistic
   }).join("");
 }
 
-function domesticLogisticsDetailMeta(info = {}) {
-  return [
-    ["运输方式", info.transportTypeLabel],
-    ["车牌号", info.truckPlateNo],
-    ["挂车车牌", info.trailerPlateNo],
-    ["起运地", info.departurePlace],
-    ["到达地", info.destinationPlace],
-    ["起运日期", info.departureDate],
-    ["运输货物名称", info.cargoDescription],
-    ["快递单号", info.expressTrackingNo],
-    ["提交人", info.submittedByName],
-    ["提交时间", formatDateTime(info.submittedAt)],
-  ].filter(([, value]) => value).map(([label, value]) => `<span>${label}：${escapeHtml(value)}</span>`).join("");
+function domesticLogisticsExportInvoiceRemark(info = {}) {
+  return info.exportInvoiceRemark || info.invoiceRemark || info.remarkText || "";
 }
 
 function renderDomesticLogisticsReviewCard(order = {}) {
   const info = order.domesticLogisticsInfo || order.documentCompleteness?.domesticLogistics?.info || null;
   const complete = Boolean(order.documentCompleteness?.domesticLogistics?.complete);
   const missing = !info;
+  const remark = domesticLogisticsExportInvoiceRemark(info || {});
   return `
     <section class="tax-detail-section domestic-logistics-review">
       <h4>国内物流信息</h4>
       <div class="document-card ${complete ? "uploaded" : "missing"}">
         <div class="document-card-head">
-          <strong>${missing ? "缺失" : escapeHtml(info.transportTypeLabel || "-")}</strong>
-          <span class="status ${complete ? "done" : "warning"}">${complete ? "已归档" : "未完成"}</span>
+          <strong>出口发票备注</strong>
+          <span class="status ${complete ? "done" : "warning"}">${complete ? "已归档" : (missing ? "未提交" : "已提交")}</span>
         </div>
-        <div class="document-card-meta">${domesticLogisticsDetailMeta(info || {})}</div>
+        ${remark
+          ? `<pre class="tax-remark-preview">${escapeHtml(remark)}</pre>`
+          : `<div class="empty-inline">暂无出口发票备注，请前往国内物流信息维护。</div>`}
+        <div class="row-actions file-actions">
+          <button class="secondary-button" type="button"
+            data-missing-document="true"
+            data-missing-module="domesticLogistics"
+            data-missing-order-id="${escapeHtml(order.id)}"
+            data-missing-document-type="DOMESTIC_LOGISTICS_INFO">去维护国内物流信息</button>
+        </div>
       </div>
     </section>
   `;
@@ -4982,27 +4930,6 @@ function renderTaxDocumentItem(order, type, scope = {}) {
     && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
     && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
-  const hasCustomsDocument = type.value === "CUSTOMS_ENTRY_FORM"
-    && docs.some((document) => document.uploadStatus === "SUCCESS" && isPersistedDocument(document));
-  const customsDocumentId = (() => {
-    if (type.value !== "CUSTOMS_ENTRY_FORM") return "";
-    return docs
-      .filter((document) => document.uploadStatus === "SUCCESS" && isPersistedDocument(document))
-      .reduce((latest, item) => {
-        const current = new Date(latest.uploadedAt || latest.createdAt || "").getTime();
-        const candidate = new Date(item.uploadedAt || item.createdAt || "").getTime();
-        return Number.isNaN(current) || candidate > current ? item : latest;
-      }, { id: "", uploadedAt: "" }).id;
-  })();
-  const reparseButton = type.value === "CUSTOMS_ENTRY_FORM" && canEditCustomsRecognition()
-    ? `<button class="secondary-button"
-        data-reparse-customs="${escapeHtml(order.id)}"
-        data-reparse-customs-document="${escapeHtml(customsDocumentId)}"
-        data-reparse-customs-status="${escapeHtml(order.customsParseStatus || "")}"
-        type="button"
-        title="${hasCustomsDocument ? "点击后将重新识别报关单 PDF" : "请先上传报关单 PDF"}"
-        ${hasCustomsDocument ? "" : "disabled"}>重新识别报关单信息</button>`
-    : "";
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}"
       data-tax-detail-doc-item="true"
@@ -5022,29 +4949,24 @@ function renderTaxDocumentItem(order, type, scope = {}) {
           ${uploadInput}
         </label>
       ` : ""}
-      ${reparseButton ? `<div class="row-actions file-actions">${reparseButton}</div>` : ""}
     </article>
   `;
 }
 
 function renderCustomsRecognitionPanel(order = {}) {
   const editable = canEditCustomsRecognition() && state.taxRefundMode !== "archive" && order.taxRefundStatus !== "SUBMITTED";
-  const failed = order.customsParseStatus === "FAILED" || !order.customsParseStatus;
   return `
-    <div class="document-card ${failed ? "missing" : "uploaded"} customs-recognition-card">
+    <div class="document-card customs-recognition-card">
       <div class="document-card-head">
-        <strong>报关单识别信息</strong>
-        <span class="status ${order.customsParseStatus === "SUCCESS" ? "success" : (order.customsParseStatus === "MANUAL" ? "warning" : "danger")}">${escapeHtml(customsParseStatusText(order))}</span>
+        <strong>报关单信息</strong>
       </div>
-      ${failed ? `<p class="muted-cell">未识别，请手工填写。${order.customsParseMessage ? `原因：${escapeHtml(order.customsParseMessage)}` : ""}</p>` : ""}
+      <p class="muted-cell">请手工填写报关单关键信息。</p>
       <form class="compact-form customs-recognition-form" data-customs-form="${escapeHtml(order.id)}">
         <div class="form-grid">
           <label><span>报关单号</span><input name="customsDeclarationNo" value="${escapeHtml(order.customsDeclarationNo || "")}" ${editable ? "" : "disabled"} /></label>
           <label><span>申报日期</span><input name="customsDeclarationDate" type="date" value="${escapeHtml(order.customsDeclarationDate || "")}" ${editable ? "" : "disabled"} /></label>
           <label><span>出口日期</span><input name="customsExportDate" type="date" value="${escapeHtml(order.customsExportDate || "")}" ${editable ? "" : "disabled"} /></label>
           <label><span>申报口岸</span><input name="customsPort" value="${escapeHtml(order.customsPort || "")}" ${editable ? "" : "disabled"} /></label>
-          <label><span>识别时间</span><input value="${escapeHtml(formatDateTime(order.customsParsedAt))}" disabled /></label>
-          <label><span>识别状态</span><input value="${escapeHtml(customsParseStatusText(order))}" disabled /></label>
         </div>
         ${editable ? `<div class="form-actions"><button class="primary-button" type="submit">保存报关单信息</button></div>` : ""}
       </form>
@@ -5151,7 +5073,6 @@ function renderTaxRefundDetail() {
     body.innerHTML = `<div class="empty-state">请选择一个订单查看资料。</div>`;
     return;
   }
-  const completeness = order.documentCompleteness || {};
   $("#tax-detail-title").textContent = `${order.orderNo} · ${customerFullNameOf(order) || customerShortNameOf(order)}`;
   $("#tax-detail-subtitle").textContent = `提单号：${order.blNo || "待发货"} · ${order.currency || "-"}`;
   const customsTypes = constants.domesticLogisticsDocumentTypes;
@@ -5161,8 +5082,6 @@ function renderTaxRefundDetail() {
   ];
   const supplierGroups = factorySupplierCosts(order);
   const logisticsInvoiceGroups = taxRefundLogisticsInvoiceGroups(order);
-  const canSubmitTaxRefund = canWriteArea("taxRefund") && state.taxRefundMode !== "archive" && order.taxRefundStatus === "READY";
-  const canCancelArchive = state.me?.role === "管理员" && (state.taxRefundMode === "archive" || order.taxArchived || order.taxRefundStatus === "SUBMITTED");
   const submittedInfoHtml = order.taxRefundStatus === "SUBMITTED" ? `
     <section class="tax-detail-section">
       <h4>提交记录</h4>
@@ -5178,7 +5097,6 @@ function renderTaxRefundDetail() {
     </section>
   ` : "";
   body.innerHTML = `
-    ${renderTaxDetailHeader(order, canSubmitTaxRefund, canCancelArchive)}
     ${submittedInfoHtml}
     ${renderDomesticLogisticsReviewCard(order)}
     <section class="tax-detail-section">
@@ -7041,60 +6959,6 @@ async function saveCustomsRecognition(form) {
     toast(result.message || "报关单信息已保存");
   } catch (error) {
     toast(error.message);
-  }
-}
-
-function customsPreviewText(data = {}) {
-  return [
-    "识别结果如下，确认覆盖当前报关单信息吗？",
-    "",
-    `报关单号：${data.customsDeclarationNo || "-"}`,
-    `申报日期：${data.customsDeclarationDate || "-"}`,
-    `出口日期：${data.customsExportDate || "-"}`,
-    `申报口岸：${data.customsPort || "-"}`,
-    `识别来源：${data.source || "-"}`,
-  ].join("\n");
-}
-
-async function handleReparseCustomsDeclaration(orderId, documentId, button = null) {
-  const order = state.taxRefundDetailOrder?.id === orderId ? state.taxRefundDetailOrder : state.taxRefundOrders.find((item) => item.id === orderId);
-  if (!order) return toast("请先打开退税资料详情");
-  if (!canEditCustomsRecognition()) return toast("没有权限重新识别报关单信息");
-  if (!documentId) return toast("请先上传报关单 PDF");
-  if (button && button.disabled) return;
-  const customsStatus = order.customsParseStatus || "";
-  try {
-    if (customsStatus === "MANUAL" && !window.confirm("当前报关单信息已人工修改，重新识别会覆盖现有内容，是否继续？")) return;
-    setActionButtonLoading(button, true, "识别中...");
-    const preview = await api("/api/tax-refunds/customs/reparse", {
-      method: "POST",
-      body: JSON.stringify({
-        orderId,
-        documentId,
-        documentType: "CUSTOMS_ENTRY_FORM",
-      }),
-    });
-    assertSuccessResponse(preview, "报关单预识别失败");
-    if (!window.confirm(customsPreviewText(preview.data || {}))) return;
-    const result = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        action: "reparseCustomsRecognition",
-        documentId,
-        documentType: "CUSTOMS_ENTRY_FORM",
-        confirmManualOverride: customsStatus === "MANUAL",
-      }),
-    });
-    assertSuccessResponse(result, "重新识别报关单失败");
-    state.taxRefundDetailOrder = result.order;
-    state.taxRefundOrders = state.taxRefundOrders.map((item) => (item.id === result.order.id ? { ...item, ...result.order } : item));
-    renderTaxRefund();
-    renderTaxRefundDetail();
-    toast(result.message || "报关单信息已重新识别");
-  } catch (error) {
-    toast(error.message);
-  } finally {
-    setActionButtonLoading(button, false);
   }
 }
 
@@ -8975,6 +8839,10 @@ function bindEvents() {
     if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
     const detailButton = event.target.closest("[data-view-tax-detail]");
     if (detailButton) openTaxRefundDetail(detailButton.dataset.viewTaxDetail);
+    const packageButton = event.target.closest("[data-download-tax-package]");
+    if (packageButton) {
+      window.open(`/api/tax-refunds/package?orderId=${encodeURIComponent(packageButton.dataset.downloadTaxPackage)}`, "_blank", "noopener,noreferrer");
+    }
   });
   $("#tax-refund-filter-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -9064,8 +8932,6 @@ function bindEvents() {
     if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
-    const reparseButton = event.target.closest("[data-reparse-customs]");
-    if (reparseButton) return handleReparseCustomsDeclaration(reparseButton.dataset.reparseCustoms, reparseButton.dataset.reparseCustomsDocument, reparseButton);
     const deleteButton = event.target.closest("[data-delete-document]");
     if (deleteButton) deleteDocument(deleteButton.dataset.deleteDocument);
   });
