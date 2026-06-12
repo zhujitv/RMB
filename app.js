@@ -1770,7 +1770,6 @@ function customerById(id) {
 
 function filterParams() {
   const params = new URLSearchParams();
-  params.set("pageSize", "20");
   const map = {
     month: "#filter-month",
     keyword: "#filter-keyword",
@@ -1866,17 +1865,13 @@ async function loadData(options = {}) {
       return;
     }
     ensureAuthorizedView();
-    if (options.authOnly) {
-      renderAll();
-      return;
-    }
     if (topLevelLoad) setWorkspaceLoading(true, "数据加载中...", ["数据加载中..."]);
     const params = filterParams().toString();
     const wantsOrders = ["dashboard", "orders", "payments", "profit"].includes(state.view) && canReadArea("orders");
     const wantsPayments = ["dashboard", "payments"].includes(state.view) && canReadArea("payments");
     const [ledgerData, ordersData, paymentsData, availableData] = await Promise.all([
       state.view === "dashboard" && (canReadArea("orders") || canReadArea("payments") || canReadArea("costs"))
-        ? api(`/api/overview?${params}`)
+        ? api(`/api/ledger?${params}`)
         : Promise.resolve(null),
       state.view !== "dashboard" && wantsOrders
         ? api(`/api/orders?${params}`)
@@ -2048,7 +2043,7 @@ async function loadDomesticLogisticsList(options = {}) {
     const data = await api(`/api/domestic-logistics?${params.toString()}`);
     state.domesticLogisticsRows = data.rows || [];
     renderDomesticLogistics();
-    if (options.loadExpenses) await loadLogisticsExpenses({ silent: true });
+    if (!options.skipExpenses) await loadLogisticsExpenses({ silent: true });
   } catch (error) {
     if (!options.silent) toast(error.message);
     if (options.rethrow) throw error;
@@ -7131,7 +7126,7 @@ async function saveOrderRequest(id, data) {
 }
 
 async function reloadOrderList() {
-  await loadData({ loadingTitle: "数据加载中...", loadingSteps: ["数据加载中..."] });
+  await loadData();
 }
 
 function formSubmitInFlight(form) {
@@ -8818,7 +8813,7 @@ async function submitLogin(event) {
     state.passwordChangeRequired = Boolean(loginResult.mustChangePassword ?? loginResult.user.mustChangePassword);
     if (!state.passwordChangeRequired) setWorkspaceLoading(true, "正在同步权限数据...", ["正在同步权限数据..."]);
     setAuthenticatedShell(true, state.passwordChangeRequired);
-    if (!state.passwordChangeRequired) await loadData({ authOnly: true });
+    if (!state.passwordChangeRequired) await loadData();
     else {
       renderProfileModal();
       $("#change-current-password").value = "";
@@ -9556,7 +9551,7 @@ async function openDashboardDetail(kind, value) {
   if (!text) return;
   $("#filter-keyword").value = text;
   if (!switchView("orders")) return;
-  await loadData({ loadingTitle: "数据加载中...", loadingSteps: ["数据加载中..."] });
+  await loadData();
 }
 
 function exportReport(type) {
@@ -10569,7 +10564,7 @@ async function init() {
   updateOrderDerived();
   updatePaymentDerived();
   updateCostDerived();
-  await loadData({ authOnly: true });
+  await loadData();
 }
 
 installFrontendErrorBoundary();
