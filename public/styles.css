@@ -2859,8 +2859,87 @@ button.small-link {
 }
 
 .domestic-logistics-form .wide,
-.domestic-logistics-form .form-actions {
+.domestic-logistics-form .form-actions,
+.domestic-transport-items {
   grid-column: 1 / -1;
+}
+
+.domestic-transport-items {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.domestic-transport-items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.domestic-transport-items-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.domestic-transport-items-head strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.domestic-transport-items-head small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.domestic-transport-items-list {
+  display: grid;
+  gap: 10px;
+}
+
+.domestic-transport-item-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.domestic-transport-item-row label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.domestic-transport-item-row label span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.domestic-transport-item-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.domestic-transport-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.domestic-transport-row-actions button {
+  min-height: 34px;
+  white-space: nowrap;
 }
 
 .domestic-logistics-supplier-hint {
@@ -2906,6 +2985,34 @@ button.small-link {
   gap: 8px 16px;
   color: #64748b;
   font-size: 12px;
+}
+
+.expanded-transport-items {
+  display: grid;
+  gap: 10px;
+}
+
+.expanded-transport-item {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 12px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.expanded-transport-item strong {
+  grid-column: 1 / -1;
+  color: #0f172a;
+}
+
+.expanded-transport-item span {
+  min-width: 0;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .tax-detail-doc-grid {
@@ -4711,6 +4818,8 @@ body.modal-open {
   .report-query-form,
   .cost-filter-grid,
   .cost-document-row,
+  .domestic-transport-item-row,
+  .expanded-transport-item,
   .domestic-logistics-form {
     grid-template-columns: 1fr;
   }

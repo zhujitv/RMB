@@ -2832,6 +2832,22 @@ function renderDomesticLogisticsDetailRow(row, actions = "") {
   const rowId = row.orderId || row.id;
   if (!isRowExpanded("domesticLogistics", rowId)) return "";
   const info = row.domesticLogisticsInfo || {};
+  const transportItems = Array.isArray(info.transportItems) ? info.transportItems : [];
+  const transportItemsHtml = transportItems.length ? `
+    <div class="expanded-transport-items">
+      ${transportItems.map((item, index) => `
+        <div class="expanded-transport-item">
+          <strong>明细 ${index + 1}${item.containerNo ? ` · ${escapeHtml(item.containerNo)}` : ""}</strong>
+          <span>车牌号：${escapeHtml(item.truckPlateNo || "-")}</span>
+          <span>挂车车牌：${escapeHtml(item.trailerPlateNo || "-")}</span>
+          <span>起运日期：${escapeHtml(item.departureDate || "-")}</span>
+          <span>起运地：${escapeHtml(item.departurePlace || "-")}</span>
+          <span>到达地：${escapeHtml(item.arrivalPlace || "-")}</span>
+          <span>运输货物名称：${escapeHtml(item.cargoName || "-")}</span>
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
   const sections = [
     {
       title: "订单基础信息",
@@ -2844,6 +2860,7 @@ function renderDomesticLogisticsDetailRow(row, actions = "") {
       title: "运输信息",
       items: [
         optionalDetailItem("运输方式", escapeHtml(info.transportTypeLabel || "")),
+        transportItemsHtml ? optionalDetailItem("集装箱运输明细", transportItemsHtml, { wide: true }) : null,
         optionalDetailItem("起运地", escapeHtml(info.departurePlace || "")),
         optionalDetailItem("到达地", escapeHtml(info.destinationPlace || "")),
         optionalDetailItem("起运日期", escapeHtml(info.departureDate || "")),
@@ -4346,26 +4363,95 @@ function readUserPermissionForm() {
   };
 }
 
+function normalizeDomesticTransportItem(item = {}) {
+  return {
+    id: item.id || "",
+    containerNo: item.containerNo || "",
+    truckPlateNo: item.truckPlateNo || "",
+    trailerPlateNo: item.trailerPlateNo || "",
+    departureDate: item.departureDate || "",
+    departurePlace: item.departurePlace || "",
+    arrivalPlace: item.arrivalPlace || item.destinationPlace || "",
+    cargoName: item.cargoName || item.cargoDescription || "",
+    remark: item.remark || "",
+  };
+}
+
+function fallbackDomesticTransportItems(info = {}) {
+  const items = Array.isArray(info.transportItems) ? info.transportItems.map(normalizeDomesticTransportItem) : [];
+  if (items.length) return items;
+  if (info.truckPlateNo || info.trailerPlateNo || info.departureDate || info.departurePlace || info.destinationPlace || info.cargoDescription) {
+    return [normalizeDomesticTransportItem({
+      truckPlateNo: info.truckPlateNo,
+      trailerPlateNo: info.trailerPlateNo,
+      departureDate: info.departureDate,
+      departurePlace: info.departurePlace,
+      arrivalPlace: info.destinationPlace,
+      cargoName: info.cargoDescription,
+    })];
+  }
+  return [normalizeDomesticTransportItem()];
+}
+
+function domesticTransportItemsFromForm() {
+  return $$("#domestic-transport-items [data-domestic-transport-item]").map((row, index) => ({
+    id: row.dataset.itemId || "",
+    containerNo: row.querySelector("[data-domestic-item='containerNo']")?.value.trim() || "",
+    truckPlateNo: row.querySelector("[data-domestic-item='truckPlateNo']")?.value.trim() || "",
+    trailerPlateNo: row.querySelector("[data-domestic-item='trailerPlateNo']")?.value.trim() || "",
+    departureDate: row.querySelector("[data-domestic-item='departureDate']")?.value || "",
+    departurePlace: row.querySelector("[data-domestic-item='departurePlace']")?.value.trim() || "",
+    arrivalPlace: row.querySelector("[data-domestic-item='arrivalPlace']")?.value.trim() || "",
+    cargoName: row.querySelector("[data-domestic-item='cargoName']")?.value.trim() || "",
+    remark: row.querySelector("[data-domestic-item='remark']")?.value.trim() || "",
+    sortOrder: index,
+  }));
+}
+
+function domesticTransportItemsRemark(items = []) {
+  return items.map((item) => [
+    item.containerNo ? `集装箱号：${item.containerNo}` : "",
+    item.truckPlateNo ? `车牌号：${item.truckPlateNo}` : "",
+    item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
+    item.departureDate ? `起运日：${item.departureDate}` : "",
+    item.departurePlace ? `起运地：${item.departurePlace}` : "",
+    item.arrivalPlace ? `到达地：${item.arrivalPlace}` : "",
+    item.cargoName ? `运输货物名称：${item.cargoName}` : "",
+  ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
+}
+
+function renderDomesticTransportItems(items = [normalizeDomesticTransportItem()], readOnly = false) {
+  const box = $("#domestic-transport-items");
+  if (!box) return;
+  const normalized = (items && items.length ? items : [normalizeDomesticTransportItem()]).map(normalizeDomesticTransportItem);
+  const disabled = readOnly ? "disabled" : "";
+  box.innerHTML = normalized.map((item, index) => `
+    <article class="domestic-transport-item-row" data-domestic-transport-item="true" data-item-id="${escapeHtml(item.id || "")}">
+      <label><span>集装箱号</span><input data-domestic-item="containerNo" value="${escapeHtml(item.containerNo)}" placeholder="XXXX1234567" ${disabled} /></label>
+      <label><span>${$("#domestic-transport-type")?.value === "MULTIMODAL" ? "首程车牌号 *" : "车牌号 *"}</span><input data-domestic-item="truckPlateNo" value="${escapeHtml(item.truckPlateNo)}" placeholder="沪EL2033" ${disabled} /></label>
+      <label><span>挂车车牌</span><input data-domestic-item="trailerPlateNo" value="${escapeHtml(item.trailerPlateNo)}" placeholder="沪G2120挂" ${disabled} /></label>
+      <label><span>${$("#domestic-transport-type")?.value === "MULTIMODAL" ? "首程起运日期 *" : "起运日期 *"}</span><input data-domestic-item="departureDate" type="date" value="${escapeHtml(item.departureDate)}" ${disabled} /></label>
+      <label><span>${$("#domestic-transport-type")?.value === "MULTIMODAL" ? "首程起运地 *" : "起运地 *"}</span><input data-domestic-item="departurePlace" value="${escapeHtml(item.departurePlace)}" placeholder="郎溪" ${disabled} /></label>
+      <label><span>到达地 *</span><input data-domestic-item="arrivalPlace" value="${escapeHtml(item.arrivalPlace)}" placeholder="上海外港" ${disabled} /></label>
+      <label><span>运输货物名称 *</span><input data-domestic-item="cargoName" value="${escapeHtml(item.cargoName)}" placeholder="木塑地板" ${disabled} /></label>
+      <label><span>备注</span><input data-domestic-item="remark" value="${escapeHtml(item.remark)}" placeholder="可选" ${disabled} /></label>
+      ${readOnly ? "" : `
+        <div class="domestic-transport-row-actions">
+          <button class="secondary-button" data-copy-domestic-transport-item="${index}" type="button">复制上一行</button>
+          <button class="danger-button" data-delete-domestic-transport-item="${index}" type="button">删除</button>
+        </div>
+      `}
+    </article>
+  `).join("");
+}
+
 function domesticLogisticsRemarkPreview() {
   const type = $("#domestic-transport-type")?.value || "TRUCK";
   if (type === "EXPRESS") {
     const trackingNo = $("#domestic-express-no")?.value.trim() || "";
     return trackingNo ? `快递单号：${trackingNo}` : "";
   }
-  const truck = $("#domestic-truck-plate")?.value.trim() || "";
-  const trailer = $("#domestic-trailer-plate")?.value.trim() || "";
-  const date = $("#domestic-departure-date")?.value || "";
-  const place = $("#domestic-departure-place")?.value.trim() || "";
-  const destination = $("#domestic-destination-place")?.value.trim() || "";
-  const cargo = $("#domestic-cargo-description")?.value.trim() || "";
-  const plate = trailer ? `${truck}/${trailer}` : truck;
-  return [
-    plate ? `车牌号：${plate}` : "",
-    date ? `起运日：${date}` : "",
-    place ? `起运地：${place}` : "",
-    destination ? `到达地：${destination}` : "",
-    cargo ? `运输货物名称：${cargo}` : "",
-  ].filter(Boolean).join("\n");
+  return domesticTransportItemsRemark(domesticTransportItemsFromForm());
 }
 
 function isDomesticRemarkManualEdited() {
@@ -4417,9 +4503,7 @@ function updateDomesticLogisticsFormVisibility() {
     el.hidden = !isExpress;
     el.style.display = isExpress ? "" : "none";
   });
-  if ($("#domestic-truck-label")) $("#domestic-truck-label").textContent = type === "MULTIMODAL" ? "首程车牌号 *" : "车牌号 *";
-  if ($("#domestic-place-label")) $("#domestic-place-label").textContent = type === "MULTIMODAL" ? "首程起运地 *" : "起运地 *";
-  if ($("#domestic-date-label")) $("#domestic-date-label").textContent = type === "MULTIMODAL" ? "首程起运日期 *" : "起运日期 *";
+  if (!isExpress) renderDomesticTransportItems(domesticTransportItemsFromForm().length ? domesticTransportItemsFromForm() : [normalizeDomesticTransportItem()], Boolean($("#domestic-logistics-form")?.dataset.readonly === "true"));
   const preview = $("#domestic-remark-preview");
   if (preview) syncDomesticRemarkAuto();
 }
@@ -4449,25 +4533,19 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   $("#domestic-logistics-order-id").value = row.orderId || row.id || "";
   $("#domestic-logistics-info-id").value = info.id || "";
   $("#domestic-transport-type").value = info.transportType || "TRUCK";
-  $("#domestic-truck-plate").value = info.truckPlateNo || "";
-  $("#domestic-trailer-plate").value = info.trailerPlateNo || "";
-  $("#domestic-departure-place").value = info.departurePlace || "";
-  $("#domestic-destination-place").value = info.destinationPlace || "";
-  $("#domestic-departure-date").value = info.departureDate || "";
   $("#domestic-express-no").value = info.expressTrackingNo || "";
-  $("#domestic-cargo-description").value = info.cargoDescription || "";
+  if ($("#domestic-express-destination-place")) $("#domestic-express-destination-place").value = info.destinationPlace || "";
+  if ($("#domestic-express-cargo-description")) $("#domestic-express-cargo-description").value = info.cargoDescription || "";
   renderDomesticLogisticsDocuments(row);
-  updateDomesticLogisticsFormVisibility();
   const readOnly = mode === "view" || !canWriteArea("domesticLogistics");
+  if ($("#domestic-logistics-form")) $("#domestic-logistics-form").dataset.readonly = readOnly ? "true" : "false";
+  renderDomesticTransportItems(fallbackDomesticTransportItems(info), readOnly);
+  updateDomesticLogisticsFormVisibility();
   [
     "#domestic-transport-type",
-    "#domestic-truck-plate",
-    "#domestic-trailer-plate",
-    "#domestic-departure-place",
-    "#domestic-destination-place",
-    "#domestic-departure-date",
     "#domestic-express-no",
-    "#domestic-cargo-description",
+    "#domestic-express-destination-place",
+    "#domestic-express-cargo-description",
   ].forEach((selector) => {
     const el = $(selector);
     if (el) el.disabled = readOnly;
@@ -4599,31 +4677,40 @@ function renderDomesticLogisticsReviewCard(order = {}) {
 
 function domesticLogisticsPayload() {
   const transportType = $("#domestic-transport-type").value;
+  const transportItems = transportType === "EXPRESS" ? [] : domesticTransportItemsFromForm();
+  const firstItem = transportItems[0] || {};
   return {
     orderId: $("#domestic-logistics-order-id").value,
     transportType,
-    truckPlateNo: $("#domestic-truck-plate").value.trim(),
-    trailerPlateNo: $("#domestic-trailer-plate").value.trim(),
-    departurePlace: $("#domestic-departure-place").value.trim(),
-    destinationPlace: $("#domestic-destination-place").value.trim(),
-    departureDate: $("#domestic-departure-date").value,
+    transportItems,
+    truckPlateNo: firstItem.truckPlateNo || "",
+    trailerPlateNo: firstItem.trailerPlateNo || "",
+    departurePlace: firstItem.departurePlace || "",
+    destinationPlace: transportType === "EXPRESS" ? ($("#domestic-express-destination-place")?.value.trim() || "") : (firstItem.arrivalPlace || ""),
+    departureDate: firstItem.departureDate || "",
     expressTrackingNo: $("#domestic-express-no").value.trim(),
-    cargoDescription: $("#domestic-cargo-description").value.trim(),
+    cargoDescription: transportType === "EXPRESS" ? ($("#domestic-express-cargo-description")?.value.trim() || "") : (firstItem.cargoName || ""),
     remarkText: $("#domestic-remark-preview").value,
     remarkTextManualEdited: isDomesticRemarkManualEdited(),
   };
 }
 
 function validateDomesticLogisticsPayload(data) {
-  if (!data.destinationPlace) throw new Error("请填写到达地");
-  if (!data.cargoDescription) throw new Error("请填写运输货物名称");
   if (data.transportType === "EXPRESS") {
     if (!data.expressTrackingNo) throw new Error("请填写快递单号");
+    if (!data.destinationPlace) throw new Error("请填写到达地");
+    if (!data.cargoDescription) throw new Error("请填写运输货物名称");
     return;
   }
-  if (!data.truckPlateNo) throw new Error(data.transportType === "MULTIMODAL" ? "请填写首程车牌号" : "请填写车牌号");
-  if (!data.departurePlace) throw new Error(data.transportType === "MULTIMODAL" ? "请填写首程起运地" : "请填写起运地");
-  if (!data.departureDate) throw new Error(data.transportType === "MULTIMODAL" ? "请选择首程起运日期" : "请选择起运日期");
+  if (!data.transportItems?.length) throw new Error("请至少填写一条集装箱运输明细");
+  data.transportItems.forEach((item, index) => {
+    const prefix = `第 ${index + 1} 行`;
+    if (!item.truckPlateNo) throw new Error(data.transportType === "MULTIMODAL" ? `请填写${prefix}首程车牌号` : `请填写${prefix}车牌号`);
+    if (!item.departureDate) throw new Error(data.transportType === "MULTIMODAL" ? `请选择${prefix}首程起运日期` : `请选择${prefix}起运日期`);
+    if (!item.departurePlace) throw new Error(data.transportType === "MULTIMODAL" ? `请填写${prefix}首程起运地` : `请填写${prefix}起运地`);
+    if (!item.arrivalPlace) throw new Error(`请填写${prefix}到达地`);
+    if (!item.cargoName) throw new Error(`请填写${prefix}运输货物名称`);
+  });
 }
 
 async function submitDomesticLogistics(event) {
@@ -8903,6 +8990,32 @@ function bindEvents() {
     handleUploadInputChange(documentInput, { ...order, id: order.orderId || order.id }, documentInput.dataset.documentType, { relatedModule: "EXPORT" });
   });
   $("#domestic-logistics-editor")?.addEventListener("click", (event) => {
+    const addTransportItem = event.target.closest("#add-domestic-transport-item");
+    if (addTransportItem) {
+      const items = domesticTransportItemsFromForm();
+      renderDomesticTransportItems([...items, normalizeDomesticTransportItem()], false);
+      syncDomesticRemarkAuto();
+      return;
+    }
+    const copyTransportItem = event.target.closest("[data-copy-domestic-transport-item]");
+    if (copyTransportItem) {
+      const index = Number(copyTransportItem.dataset.copyDomesticTransportItem || 0);
+      const items = domesticTransportItemsFromForm();
+      const source = items[Math.max(0, index - 1)] || items[index] || normalizeDomesticTransportItem();
+      items.splice(index + 1, 0, normalizeDomesticTransportItem(source));
+      renderDomesticTransportItems(items, false);
+      syncDomesticRemarkAuto();
+      return;
+    }
+    const deleteTransportItem = event.target.closest("[data-delete-domestic-transport-item]");
+    if (deleteTransportItem) {
+      const index = Number(deleteTransportItem.dataset.deleteDomesticTransportItem || 0);
+      const items = domesticTransportItemsFromForm();
+      items.splice(index, 1);
+      renderDomesticTransportItems(items.length ? items : [normalizeDomesticTransportItem()], false);
+      syncDomesticRemarkAuto();
+      return;
+    }
     const retry = event.target.closest("[data-retry-upload]");
     if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
     const cancel = event.target.closest("[data-cancel-upload]");
@@ -8913,9 +9026,10 @@ function bindEvents() {
     if (deleteButton) return deleteDocument(deleteButton.dataset.deleteDocument);
   });
   $("#domestic-transport-type")?.addEventListener("change", updateDomesticLogisticsFormVisibility);
-  ["#domestic-truck-plate", "#domestic-trailer-plate", "#domestic-departure-place", "#domestic-destination-place", "#domestic-departure-date", "#domestic-express-no", "#domestic-cargo-description"].forEach((selector) => {
-    $(selector)?.addEventListener("input", updateDomesticLogisticsFormVisibility);
-  });
+  $("#domestic-transport-items")?.addEventListener("input", () => syncDomesticRemarkAuto());
+  $("#domestic-express-no")?.addEventListener("input", () => syncDomesticRemarkAuto());
+  $("#domestic-express-destination-place")?.addEventListener("input", () => syncDomesticRemarkAuto());
+  $("#domestic-express-cargo-description")?.addEventListener("input", () => syncDomesticRemarkAuto());
   $("#domestic-remark-preview")?.addEventListener("input", handleDomesticRemarkManualChange);
   $("#domestic-regenerate-remark")?.addEventListener("click", handleDomesticRemarkRegenerateClick);
   $("#tax-detail-drawer").addEventListener("click", (event) => {

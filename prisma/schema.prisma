@@ -320,6 +320,7 @@ model DomesticLogisticsInfo {
   order ReceivableOrder @relation(fields: [orderId], references: [id])
   submittedBy User? @relation("DomesticLogisticsSubmittedBy", fields: [submittedByUserId], references: [id])
   financeConfirmedBy User? @relation("DomesticLogisticsFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
+  transportItems DomesticLogisticsTransportItem[]
 
   @@index([orderId])
   @@index([submittedByUserId])
@@ -327,6 +328,28 @@ model DomesticLogisticsInfo {
   @@index([submittedAt])
   @@index([deletedAt])
   @@map("domestic_logistics_infos")
+}
+
+model DomesticLogisticsTransportItem {
+  id                String   @id @default(cuid())
+  logisticsInfoId   String   @map("logistics_info_id")
+  containerNo       String?  @map("container_no")
+  truckPlateNo      String?  @map("truck_plate_no")
+  trailerPlateNo    String?  @map("trailer_plate_no")
+  departureDate     DateTime? @map("departure_date") @db.Date
+  departurePlace    String?  @map("departure_place")
+  arrivalPlace      String?  @map("arrival_place")
+  cargoName         String?  @map("cargo_name")
+  remark            String?
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  logisticsInfo DomesticLogisticsInfo @relation(fields: [logisticsInfoId], references: [id], onDelete: Cascade)
+
+  @@index([logisticsInfoId])
+  @@index([sortOrder])
+  @@map("logistics_transport_items")
 }
 
 model DomesticLogisticsDocument {
