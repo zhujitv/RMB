@@ -912,6 +912,11 @@ function hasPermissionsReady() {
   return Boolean(state.me && !state.passwordChangeRequired && state.permissionsLoaded);
 }
 
+function isAdminRole(user = state.me) {
+  const role = String(user?.role || "").toUpperCase();
+  return user?.role === "管理员" || role === "ADMIN";
+}
+
 function isWorkspaceLoading() {
   return Boolean(state.workspaceLoading || (state.me && !state.passwordChangeRequired && !state.permissionsLoaded));
 }
@@ -944,8 +949,11 @@ function renderWorkspaceState() {
     loadingBox.hidden = !loading;
     const title = $("#workspace-loading-title");
     const steps = $("#workspace-loading-steps");
-    if (title) title.textContent = state.workspaceLoadingTitle || "正在加载工作台...";
-    if (steps) steps.innerHTML = (state.workspaceLoadingSteps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+    const syncingPermissions = Boolean(state.me && !state.passwordChangeRequired && !state.permissionsLoaded && !state.workspaceLoading);
+    const loadingTitle = syncingPermissions ? "正在同步权限数据..." : (state.workspaceLoadingTitle || "正在加载工作台...");
+    const loadingSteps = syncingPermissions ? ["正在同步权限数据..."] : (state.workspaceLoadingSteps || []);
+    if (title) title.textContent = loadingTitle;
+    if (steps) steps.innerHTML = loadingSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   }
   if (forbiddenBox) {
     forbiddenBox.hidden = !forbidden;
@@ -958,6 +966,7 @@ function renderWorkspaceState() {
 
 function canView(view) {
   if (!hasPermissionsReady()) return false;
+  if (isAdminRole()) return (roleMenus["管理员"] || []).includes(view);
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
@@ -989,7 +998,9 @@ function rememberCurrentView() {
 }
 
 function defaultViewForCurrentUser() {
-  const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
+  const menus = isAdminRole()
+    ? (roleMenus["管理员"] || [])
+    : (Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []));
   const rememberedView = rememberedViewForCurrentUser();
   if (rememberedView) return rememberedView;
   const roleDefaultViews = {
@@ -1014,6 +1025,7 @@ function ensureAuthorizedView() {
 
 function canWriteArea(area) {
   if (!hasPermissionsReady()) return false;
+  if (isAdminRole()) return true;
   if (state.permissions?.writes && Object.prototype.hasOwnProperty.call(state.permissions.writes, area)) {
     return Boolean(state.permissions.writes[area]);
   }
@@ -1022,6 +1034,7 @@ function canWriteArea(area) {
 
 function canReadArea(area) {
   if (!hasPermissionsReady()) return false;
+  if (isAdminRole()) return true;
   if (state.permissions?.reads && Object.prototype.hasOwnProperty.call(state.permissions.reads, area)) {
     return Boolean(state.permissions.reads[area]);
   }
@@ -1305,7 +1318,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const isLoginRequest = path.startsWith("/api/auth/login");
     if (response.status === 401 && !isLoginRequest) handleAuthExpired(data?.error || "登录已过期，请重新登录");
-    if (response.status === 403 && !isLoginRequest) handleForbidden(data?.error || "没有权限访问该模块");
+    if (response.status === 403 && !isLoginRequest && hasPermissionsReady()) handleForbidden(data?.error || "没有权限访问该模块");
     if (data?.code === "PASSWORD_CHANGE_REQUIRED" && !isLoginRequest) {
       state.passwordChangeRequired = true;
       setAuthenticatedShell(true, true);
@@ -1364,7 +1377,7 @@ async function saveCustomerRequest(path, options = {}) {
   if (!saveSucceeded) {
     if (!response.ok) {
       if (response.status === 401) handleAuthExpired(result?.error || "登录已过期，请重新登录");
-      if (response.status === 403) handleForbidden(result?.error || "没有权限访问该模块");
+      if (response.status === 403 && hasPermissionsReady()) handleForbidden(result?.error || "没有权限访问该模块");
       if (result?.code === "PASSWORD_CHANGE_REQUIRED") {
         state.passwordChangeRequired = true;
         setAuthenticatedShell(true, true);
@@ -1852,6 +1865,7 @@ async function loadData(options = {}) {
       return;
     }
     ensureAuthorizedView();
+    if (topLevelLoad) setWorkspaceLoading(true, "数据加载中...", ["数据加载中..."]);
     const params = filterParams().toString();
     const wantsOrders = ["dashboard", "orders", "payments", "profit"].includes(state.view) && canReadArea("orders");
     const wantsPayments = ["dashboard", "payments"].includes(state.view) && canReadArea("payments");
@@ -8797,6 +8811,7 @@ async function submitLogin(event) {
     if (!loginResult?.user) throw new Error("登录接口未返回用户信息，请联系管理员。");
     state.me = loginResult.user;
     state.passwordChangeRequired = Boolean(loginResult.mustChangePassword ?? loginResult.user.mustChangePassword);
+    if (!state.passwordChangeRequired) setWorkspaceLoading(true, "正在同步权限数据...", ["正在同步权限数据..."]);
     setAuthenticatedShell(true, state.passwordChangeRequired);
     if (!state.passwordChangeRequired) await loadData();
     else {
