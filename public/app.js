@@ -4239,7 +4239,7 @@ function renderTaxDetailHeader(order = {}, canSubmitTaxRefund = false, canCancel
   return `
     <section class="tax-detail-hero">
       <div class="tax-detail-hero-main">
-        <span class="eyebrow">退税资料状态总览</span>
+        <span class="eyebrow">退税资料明细</span>
         <h3>${escapeHtml(order.orderNo || "-")} · ${escapeHtml(customerFullNameOf(order) || customerShortNameOf(order) || "-")}</h3>
         <div class="tax-detail-hero-meta">
           <span>提单号：${escapeHtml(order.blNo || "待发货")}</span>
@@ -4644,7 +4644,6 @@ function renderDomesticLogisticsReviewCard(order = {}) {
           <span class="status ${complete ? "done" : "warning"}">${complete ? "已归档" : "未完成"}</span>
         </div>
         <div class="document-card-meta">${domesticLogisticsDetailMeta(info || {})}</div>
-        <pre class="tax-remark-preview">${escapeHtml(info?.remarkText || "缺少国内物流信息")}</pre>
       </div>
     </section>
   `;
@@ -5181,7 +5180,6 @@ function renderTaxRefundDetail() {
   body.innerHTML = `
     ${renderTaxDetailHeader(order, canSubmitTaxRefund, canCancelArchive)}
     ${submittedInfoHtml}
-    ${renderTaxDetailOverview(order)}
     ${renderDomesticLogisticsReviewCard(order)}
     <section class="tax-detail-section">
       <h4>报关资料</h4>
