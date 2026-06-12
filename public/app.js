@@ -2813,9 +2813,9 @@ function expandedDetailRow(scope, id, colspan, sections = [], actions = "") {
     </section>
   `).join("");
   return `
-    <tr class="expanded-row expanded-detail-row">
-      <td colSpan="${colspan}" class="expanded-detail-cell">
-        <div class="expanded-panel expanded-detail-card" data-expanded-panel="${escapeHtml(scope)}">
+    <tr class="expanded-row expanded-detail-row detail-row">
+      <td colspan="${colspan}" class="expanded-detail-cell">
+        <div class="expanded-panel expanded-detail-card detail-card" data-expanded-panel="${escapeHtml(scope)}">
           ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
           ${sectionHtml}
         </div>
@@ -2893,9 +2893,9 @@ function renderDomesticLogisticsDetailRow(row, actions = "") {
     </section>
   `).join("");
   return `
-    <tr class="expanded-row expanded-detail-row domestic-logistics-expanded-row">
-      <td colSpan="6" class="expanded-detail-cell">
-        <div class="expanded-panel expanded-detail-card domestic-logistics-detail-card" data-expanded-panel="domesticLogistics">
+    <tr class="expanded-row expanded-detail-row detail-row domestic-logistics-expanded-row">
+      <td colspan="6" class="expanded-detail-cell">
+        <div class="expanded-panel expanded-detail-card detail-card domestic-logistics-detail-card" data-expanded-panel="domesticLogistics">
           ${actions ? `<div class="expanded-actions expanded-detail-actions">${actions}</div>` : ""}
           ${sectionHtml}
         </div>
@@ -4198,9 +4198,9 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
     ${options.canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
   `;
   return `
-    <tr class="expanded-row expanded-detail-row tax-refund-expanded-row">
-      <td colSpan="6" class="expanded-detail-cell">
-        <div class="expanded-panel expanded-detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
+    <tr class="expanded-row expanded-detail-row detail-row tax-refund-expanded-row">
+      <td colspan="6" class="expanded-detail-cell">
+        <div class="expanded-panel expanded-detail-card detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
           <div class="tax-detail-toolbar">
             <div class="tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
             <div class="tax-detail-progress">

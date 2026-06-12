@@ -46,22 +46,36 @@
   max-width: 100%;
 }
 
+.detail-row td {
+  padding: 0;
+  background: #f8fafc;
+}
+
 .expanded-detail-row {
   width: 100%;
 }
 
 .expanded-panel,
-.expanded-detail-card {
+.expanded-detail-card,
+.detail-card {
   display: grid;
   gap: 16px;
   padding: 18px 20px;
-  width: 100%;
+  margin: 12px;
+  width: auto;
   max-width: 100%;
   min-width: 0;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  overflow-x: hidden;
+}
+
+.detail-card * {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .expanded-section,
