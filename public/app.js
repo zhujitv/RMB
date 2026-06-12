@@ -4200,7 +4200,7 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
       <td colspan="6" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
           <div class="tax-detail-toolbar">
-            <div class="tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
+            <div class="tax-actions tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
           </div>
           <section class="tax-refund-expanded-head">
             <div class="tax-refund-expanded-title">

@@ -2479,6 +2479,25 @@ button.small-link {
   justify-content: flex-start;
 }
 
+.tax-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  flex-wrap: nowrap !important;
+  width: auto !important;
+  max-width: 100%;
+}
+
+.tax-actions button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  flex: 0 0 auto;
+}
+
 .tax-overview-action,
 .tax-package-button {
   display: inline-flex;
@@ -5030,6 +5049,14 @@ body.modal-open {
     width: 100%;
   }
 
+  .tax-actions {
+    width: auto !important;
+  }
+
+  .tax-actions button {
+    width: auto !important;
+  }
+
   .tax-status-overview-head,
   .tax-status-item,
   .tax-status-item-side {
@@ -5169,5 +5196,11 @@ body.modal-open {
 
   .metric {
     min-height: 118px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tax-actions {
+    flex-wrap: wrap !important;
   }
 }
