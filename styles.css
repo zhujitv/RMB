@@ -3495,6 +3495,227 @@ button.small-link {
   font-size: 12px;
 }
 
+body.logistics-compact-layout .order-detail-panel {
+  padding: 10px;
+}
+
+body.logistics-compact-layout .detail-grid {
+  gap: 10px;
+}
+
+body.logistics-compact-layout .detail-block {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .compact-form {
+  padding: 10px;
+  border-radius: 8px;
+}
+
+body.logistics-compact-layout #logistics-form .form-grid {
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.logistics-compact-layout #logistics-form label,
+body.logistics-compact-layout #logistics-form .form-field {
+  gap: 4px;
+}
+
+body.logistics-compact-layout #logistics-form input,
+body.logistics-compact-layout #logistics-form select,
+body.logistics-compact-layout #logistics-form textarea {
+  min-height: 34px;
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+
+body.logistics-compact-layout #logistics-form textarea {
+  min-height: 58px;
+}
+
+body.logistics-compact-layout #logistics-form .exchange-rate-meta {
+  margin-top: 2px;
+}
+
+body.logistics-compact-layout #logistics-form .form-actions {
+  margin-top: 6px;
+}
+
+body.logistics-compact-layout #logistics-table th,
+body.logistics-compact-layout #logistics-table td {
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+
+body.logistics-compact-layout .domestic-logistics-panel {
+  width: min(1160px, 94vw);
+  padding: 14px 16px 0;
+}
+
+body.logistics-compact-layout .domestic-logistics-panel .drawer-header {
+  margin-bottom: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-scroll {
+  gap: 10px;
+  max-height: 82vh;
+  padding: 0 2px 10px;
+}
+
+body.logistics-compact-layout .domestic-logistics-card {
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+body.logistics-compact-layout .domestic-logistics-card-head {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-card-head h4 {
+  font-size: 14px;
+}
+
+body.logistics-compact-layout .domestic-logistics-card-head p {
+  margin-top: 2px;
+}
+
+body.logistics-compact-layout .domestic-logistics-summary {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+body.logistics-compact-layout .domestic-logistics-summary div {
+  gap: 2px;
+}
+
+body.logistics-compact-layout .domestic-logistics-summary span {
+  font-size: 11px;
+}
+
+body.logistics-compact-layout .domestic-logistics-summary strong {
+  font-size: 13px;
+}
+
+body.logistics-compact-layout .domestic-logistics-form {
+  gap: 10px;
+}
+
+body.logistics-compact-layout .domestic-logistics-form [hidden],
+body.logistics-compact-layout .domestic-logistics-scroll [hidden] {
+  display: none !important;
+}
+
+body.logistics-compact-layout .domestic-logistics-mode-row {
+  width: min(260px, 100%);
+}
+
+body.logistics-compact-layout .domestic-express-fields {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-form > label,
+body.logistics-compact-layout .domestic-express-fields label,
+body.logistics-compact-layout .domestic-logistics-field {
+  gap: 4px;
+}
+
+body.logistics-compact-layout #domestic-transport-type,
+body.logistics-compact-layout .domestic-express-fields input,
+body.logistics-compact-layout .domestic-transport-item-row input {
+  min-height: 34px;
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+
+body.logistics-compact-layout .domestic-transport-items {
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+body.logistics-compact-layout .domestic-transport-items-head {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-transport-items-head div {
+  gap: 1px;
+}
+
+body.logistics-compact-layout .domestic-transport-items-list {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-transport-item-row {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  grid-template-columns:
+    minmax(96px, 1.05fr)
+    minmax(96px, 1fr)
+    minmax(96px, 1fr)
+    minmax(112px, 1fr)
+    minmax(96px, 1fr)
+    minmax(96px, 1fr)
+    minmax(126px, 1.15fr)
+    minmax(96px, 1fr)
+    auto;
+}
+
+body.logistics-compact-layout .domestic-transport-item-row label {
+  gap: 4px;
+}
+
+body.logistics-compact-layout .domestic-transport-row-actions {
+  gap: 6px;
+}
+
+body.logistics-compact-layout .domestic-transport-row-actions button {
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+body.logistics-compact-layout .domestic-remark-card textarea,
+body.logistics-compact-layout #domestic-remark-preview {
+  min-height: 96px;
+  margin-top: 4px;
+  padding: 10px;
+  line-height: 1.62;
+}
+
+body.logistics-compact-layout .domestic-logistics-documents .tax-detail-doc-grid {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-documents .tax-detail-document {
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+body.logistics-compact-layout .domestic-logistics-documents .uploaded-file-card,
+body.logistics-compact-layout .domestic-logistics-documents .upload-empty-state {
+  padding: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-footer {
+  gap: 10px;
+  margin: 0 -16px;
+  padding: 10px 16px;
+}
+
+body.logistics-compact-layout .domestic-logistics-footer-actions {
+  gap: 8px;
+}
+
+body.logistics-compact-layout .domestic-logistics-footer-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .expanded-transport-items {
   display: grid;
   gap: 10px;
@@ -5757,6 +5978,7 @@ body.modal-open {
     flex-wrap: wrap !important;
   }
 }
+
 /* Logistics expense collaboration */
 .logistics-expense-panel .panel-title-actions {
   display: flex;
@@ -6011,4 +6233,134 @@ body.modal-open {
 
 .supplier-logistics-cost-types h4 {
   margin: 0 0 8px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer,
+body.logistics-compact-layout .logistics-invoice-drawer {
+  padding: 12px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer .tax-detail-panel,
+body.logistics-compact-layout .logistics-invoice-drawer .tax-detail-panel {
+  height: min(88vh, 820px);
+}
+
+body.logistics-compact-layout .logistics-expense-drawer .form-header,
+body.logistics-compact-layout .logistics-invoice-drawer .form-header {
+  padding: 16px 18px 8px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer .form-grid,
+body.logistics-compact-layout .logistics-invoice-drawer .form-grid {
+  gap: 10px;
+  padding: 0 18px 10px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer .form-grid {
+  grid-template-columns: minmax(280px, 2fr) minmax(190px, 1fr) minmax(148px, 168px);
+}
+
+body.logistics-compact-layout .logistics-expense-drawer label,
+body.logistics-compact-layout .logistics-invoice-drawer label,
+body.logistics-compact-layout .logistics-expense-drawer .form-field,
+body.logistics-compact-layout .logistics-invoice-drawer .form-field {
+  gap: 4px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer input,
+body.logistics-compact-layout .logistics-expense-drawer select,
+body.logistics-compact-layout .logistics-expense-drawer textarea,
+body.logistics-compact-layout .logistics-invoice-drawer input,
+body.logistics-compact-layout .logistics-invoice-drawer select,
+body.logistics-compact-layout .logistics-invoice-drawer textarea {
+  min-height: 34px;
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+
+body.logistics-compact-layout .logistics-expense-order-summary {
+  gap: 8px;
+  padding: 8px;
+}
+
+body.logistics-compact-layout .logistics-expense-order-summary div {
+  gap: 2px;
+}
+
+body.logistics-compact-layout .logistics-expense-items .table-wrap {
+  max-height: 260px;
+}
+
+body.logistics-compact-layout .logistics-expense-items th,
+body.logistics-compact-layout .logistics-expense-items td {
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+
+body.logistics-compact-layout #logistics-expense-total {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+body.logistics-compact-layout .logistics-expense-drawer .form-actions,
+body.logistics-compact-layout .logistics-invoice-drawer .form-actions {
+  padding: 10px 18px;
+}
+
+@media (max-width: 768px) {
+  body.logistics-compact-layout #logistics-form .form-grid,
+  body.logistics-compact-layout .domestic-transport-item-row,
+  body.logistics-compact-layout .domestic-express-fields,
+  body.logistics-compact-layout .domestic-logistics-summary,
+  body.logistics-compact-layout .domestic-logistics-documents .tax-detail-doc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.logistics-compact-layout .domestic-logistics-panel {
+    width: 100vw;
+    padding: 16px 14px 0;
+  }
+
+  body.logistics-compact-layout .domestic-logistics-scroll {
+    max-height: 78vh;
+  }
+
+  body.logistics-compact-layout .domestic-logistics-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    margin: 0 -14px;
+    padding: 10px 14px;
+  }
+
+  body.logistics-compact-layout .domestic-logistics-footer-actions,
+  body.logistics-compact-layout .domestic-logistics-footer-actions button {
+    width: 100%;
+  }
+
+  body.logistics-compact-layout .logistics-expense-drawer,
+  body.logistics-compact-layout .logistics-invoice-drawer {
+    padding: 0;
+  }
+
+  body.logistics-compact-layout .logistics-expense-drawer .tax-detail-panel,
+  body.logistics-compact-layout .logistics-invoice-drawer .tax-detail-panel {
+    height: 100vh;
+  }
+
+  body.logistics-compact-layout .logistics-expense-drawer .form-grid,
+  body.logistics-compact-layout .logistics-invoice-drawer .form-grid {
+    grid-template-columns: 1fr;
+    padding: 0 14px 10px;
+  }
+
+  body.logistics-compact-layout .logistics-expense-drawer .form-header,
+  body.logistics-compact-layout .logistics-invoice-drawer .form-header {
+    padding: 14px 14px 8px;
+  }
+
+  body.logistics-compact-layout .logistics-expense-drawer .form-actions,
+  body.logistics-compact-layout .logistics-invoice-drawer .form-actions {
+    padding: 10px 14px;
+  }
 }

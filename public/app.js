@@ -1139,6 +1139,10 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   document.body.classList.remove("auth-login", "auth-password", "auth-app");
   document.body.classList.add(!loggedIn ? "auth-login" : (showPasswordChange ? "auth-password" : "auth-app"));
   document.body.classList.toggle("is-authenticated", Boolean(loggedIn && !showPasswordChange));
+  document.body.classList.toggle(
+    "logistics-compact-layout",
+    Boolean(loggedIn && !showPasswordChange && state.me?.role === "物流资料录入员"),
+  );
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
