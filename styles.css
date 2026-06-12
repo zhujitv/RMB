@@ -255,6 +255,11 @@ body.auth-app #app-shell {
   display: block !important;
 }
 
+body.workspace-loading .view-panel,
+body.workspace-forbidden .view-panel {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -1119,6 +1124,46 @@ textarea:focus {
 
 .view-panel.is-active {
   display: block;
+}
+
+.workspace-state {
+  min-height: calc(100vh - 150px);
+  padding: 72px 24px;
+}
+
+.workspace-state-card {
+  display: grid;
+  gap: 12px;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+.workspace-state-card strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.workspace-state-card p,
+.workspace-state-card ul {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.workspace-state-card ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.workspace-state-card li::marker {
+  color: #2563eb;
 }
 
 .is-hidden {
