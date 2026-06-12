@@ -4137,6 +4137,38 @@ function taxRefundHasPackageContent(order = {}) {
   return Number(completeness.completed || 0) > 0;
 }
 
+function taxStatusBadge(status) {
+  const normalized = status || "NOT_READY";
+  const className = {
+    NOT_READY: "is-not-ready",
+    READY: "is-ready",
+    PROBLEM: "is-problem",
+    SUBMITTED: "is-submitted",
+  }[normalized] || "is-not-ready";
+  return `<span class="tax-status-badge ${className}">${escapeHtml(taxStatusLabel(normalized))}</span>`;
+}
+
+function taxProgressTone(percent = 0) {
+  if (Number(percent) >= 100) return "is-complete";
+  if (Number(percent) >= 50) return "is-warning";
+  return "is-danger";
+}
+
+function taxCompletenessMeter(progress = {}) {
+  const percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+  const tone = taxProgressTone(percent);
+  return `
+    <div class="tax-completeness-meter ${tone}">
+      <div class="tax-completeness-meter-head">
+        <span>完整度</span>
+        <strong>${percent}%</strong>
+        <small>${Number(progress.completed || 0)}/${Number(progress.total || 0)}</small>
+      </div>
+      <div class="tax-completeness-track"><i style="width:${percent}%"></i></div>
+    </div>
+  `;
+}
+
 function renderTaxRefundExpandedRow(order = {}, options = {}) {
   if (!isRowExpanded("taxRefund", order.id)) return "";
   const completeness = order.documentCompleteness || {};
@@ -4147,8 +4179,8 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
   const actions = `
     <button class="secondary-button" data-view-tax-detail="${escapeHtml(order.id)}" type="button">查看资料</button>
     ${canDownloadPackage
-      ? `<a class="secondary-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer">下载资料包</a>`
-      : `<button class="secondary-button" type="button" disabled>下载资料包</button>`}
+      ? `<a class="secondary-button tax-package-button" href="/api/tax-refunds/package?orderId=${encodeURIComponent(order.id)}" target="_blank" rel="noreferrer"><span aria-hidden="true">↓</span>下载资料包</a>`
+      : `<button class="secondary-button tax-package-button" type="button" disabled><span aria-hidden="true">↓</span>下载资料包</button>`}
     ${options.canSubmitTaxRefund ? `<button class="primary-button" data-submit-tax-refund="${escapeHtml(order.id)}" type="button">提交退税</button>` : ""}
     ${options.canCancelArchive ? `<button class="secondary-button" data-cancel-tax-archive="${escapeHtml(order.id)}" type="button">取消归档</button>` : ""}
   `;
@@ -4156,7 +4188,16 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
     <tr class="expanded-row expanded-detail-row tax-refund-expanded-row">
       <td colSpan="6" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
-          <div class="expanded-actions expanded-detail-actions">${actions}</div>
+          <div class="tax-refund-expanded-top">
+            <div class="expanded-actions expanded-detail-actions">${actions}</div>
+            <div class="tax-refund-expanded-summary">
+              ${taxCompletenessMeter(progress)}
+              <div class="tax-refund-status-summary">
+                <span>退税状态</span>
+                ${taxStatusBadge(status)}
+              </div>
+            </div>
+          </div>
           <section class="tax-refund-expanded-head">
             <div class="tax-refund-expanded-title">
               <span class="eyebrow">退税资料概览</span>
@@ -4167,15 +4208,6 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
               </div>
             </div>
             <div class="tax-refund-expanded-metrics">
-              <div>
-                <span>总体完整度</span>
-                <strong>${progress.percent}%</strong>
-                <small>${progress.completed}/${progress.total}</small>
-              </div>
-              <div>
-                <span>退税状态</span>
-                <strong class="status ${statusClass(status)}">${escapeHtml(taxStatusLabel(status))}</strong>
-              </div>
               <div>
                 <span>缺失资料</span>
                 <strong>${missingItems.length}</strong>

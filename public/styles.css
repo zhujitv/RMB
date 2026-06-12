@@ -2444,9 +2444,162 @@ button.small-link {
   gap: 16px;
 }
 
+.tax-refund-expanded-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.tax-refund-expanded-top .expanded-actions {
+  margin: 0;
+  justify-content: flex-start;
+}
+
+.tax-package-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tax-package-button:hover {
+  text-decoration: none;
+}
+
+.tax-refund-expanded-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: min(100%, 420px);
+}
+
+.tax-refund-status-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.tax-refund-status-summary > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tax-status-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tax-status-badge.is-not-ready {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.tax-status-badge.is-ready {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.tax-status-badge.is-problem {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.tax-status-badge.is-submitted {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tax-completeness-meter {
+  display: grid;
+  gap: 5px;
+  width: min(240px, 100%);
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.tax-completeness-meter-head {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: baseline;
+  justify-content: start;
+  gap: 7px;
+}
+
+.tax-completeness-meter-head span,
+.tax-completeness-meter-head small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tax-completeness-meter-head strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.tax-completeness-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.tax-completeness-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.tax-completeness-meter.is-complete .tax-completeness-track i {
+  background: #16a34a;
+}
+
+.tax-completeness-meter.is-warning .tax-completeness-track i {
+  background: #f97316;
+}
+
+.tax-completeness-meter.is-danger .tax-completeness-track i {
+  background: #ef4444;
+}
+
 .tax-refund-expanded-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   gap: 16px;
   align-items: stretch;
   padding: 16px;
@@ -2480,7 +2633,7 @@ button.small-link {
 
 .tax-refund-expanded-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -2937,23 +3090,27 @@ button.small-link {
 
 .missing-doc-button,
 .missing-doc-chip {
-  border: 1px solid #fecdca;
-  background: #fff7f5;
-  color: #b42318;
-  border-radius: 6px;
-  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+  border-radius: 999px;
+  padding: 4px 10px;
   font-size: 12px;
-  line-height: 1.4;
+  font-weight: 650;
+  line-height: 1;
 }
 
 .missing-doc-button {
   cursor: pointer;
-  font-weight: 700;
 }
 
 .missing-doc-button:hover {
-  border-color: #f97066;
-  background: #fee4e2;
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
 }
 
 .upload-target-highlight {
@@ -4595,6 +4752,21 @@ body.modal-open {
   .tax-refund-expanded-metrics,
   .tax-status-group-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tax-refund-expanded-top,
+  .tax-refund-expanded-summary {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .tax-refund-expanded-summary,
+  .tax-completeness-meter {
+    width: 100%;
+  }
+
+  .tax-refund-status-summary {
+    border-radius: 12px;
   }
 
   .tax-status-overview-head,
