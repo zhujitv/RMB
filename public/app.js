@@ -4185,8 +4185,6 @@ function taxCompletenessMeter(progress = {}) {
 function renderTaxRefundExpandedRow(order = {}, options = {}) {
   if (!isRowExpanded("taxRefund", order.id)) return "";
   const completeness = order.documentCompleteness || {};
-  const progress = taxCompletenessProgress(completeness);
-  const status = order.taxRefundStatus || (completeness.complete ? "READY" : "NOT_READY");
   const missingItems = taxDetailOverviewFlatItems(order).filter((item) => item.status !== "complete");
   const canDownloadPackage = taxRefundHasPackageContent(order);
   const actions = `
@@ -4203,9 +4201,6 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
         <div class="expanded-panel expanded-detail-card detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
           <div class="tax-detail-toolbar">
             <div class="tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
-            <div class="tax-detail-progress">
-              ${taxCompletenessMeter(progress)}
-            </div>
           </div>
           <section class="tax-refund-expanded-head">
             <div class="tax-refund-expanded-title">

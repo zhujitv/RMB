@@ -2461,13 +2461,12 @@ button.small-link {
 .tax-detail-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #ffffff;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .tax-detail-toolbar-actions,
@@ -2478,13 +2477,6 @@ button.small-link {
   gap: 8px;
   margin: 0;
   justify-content: flex-start;
-}
-
-.tax-detail-progress {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 220px;
 }
 
 .tax-overview-action,
@@ -5028,18 +5020,12 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 
-  .tax-detail-toolbar,
-  .tax-detail-progress {
+  .tax-detail-toolbar {
     align-items: flex-start;
     justify-content: flex-start;
   }
 
-  .tax-detail-toolbar {
-    flex-direction: column;
-  }
-
   .tax-detail-toolbar-actions,
-  .tax-detail-progress,
   .tax-completeness-meter {
     width: 100%;
   }
