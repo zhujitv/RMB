@@ -9,6 +9,8 @@ const app = readFileSync("app.js", "utf8");
 const publicApp = readFileSync("public/app.js", "utf8");
 const html = readFileSync("index.html", "utf8");
 const publicHtml = readFileSync("public/index.html", "utf8");
+const css = readFileSync("styles.css", "utf8");
+const publicCss = readFileSync("public/styles.css", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
   assert.match(schema, /model LogisticsExpense/);
@@ -89,6 +91,29 @@ test("logistics information page exposes expense entry list and actions", () => 
     assert.match(source, /logistics-expense-table/);
     assert.match(source, /open-logistics-expense-drawer/);
     assert.match(source, /export-logistics-statement/);
+  }
+});
+
+test("logistics expense modal uses wide desktop layout without horizontal window drag", () => {
+  for (const source of [css, publicCss]) {
+    assert.match(source, /\.logistics-expense-drawer \.tax-detail-panel[\s\S]*width: 96vw;[\s\S]*max-width: 1400px;/);
+    assert.match(source, /\.logistics-expense-drawer \.form-grid[\s\S]*overflow-x: hidden;/);
+    assert.match(source, /\.logistics-expense-drawer \.form-actions[\s\S]*position: sticky;[\s\S]*bottom: 0;[\s\S]*justify-content: flex-end;/);
+    assert.match(source, /\.logistics-invoice-drawer \.tax-detail-panel[\s\S]*width: min\(96vw, 920px\);/);
+    assert.match(source, /\.order-search-results:empty[\s\S]*display: none;/);
+  }
+  assert.match(html, /class="logistics-expense-search-field"/);
+  assert.match(publicHtml, /class="logistics-expense-search-field"/);
+});
+
+test("logistics expense item table keeps desktop columns visible and allows mobile overflow", () => {
+  for (const source of [css, publicCss]) {
+    assert.match(source, /\.logistics-expense-items table[\s\S]*min-width: 0;[\s\S]*table-layout: fixed;/);
+    assert.match(source, /\.logistics-expense-items th:nth-child\(3\),[\s\S]*\.logistics-expense-items td:nth-child\(3\)[\s\S]*width: 124px;/);
+    assert.match(source, /\.logistics-expense-items th:nth-child\(4\),[\s\S]*\.logistics-expense-items td:nth-child\(4\)[\s\S]*width: 112px;/);
+    assert.match(source, /\.logistics-expense-items th:nth-child\(5\),[\s\S]*\.logistics-expense-items td:nth-child\(5\)[\s\S]*width: 136px;/);
+    assert.match(source, /@media \(max-width: 1199px\)[\s\S]*\.logistics-expense-items \.table-wrap[\s\S]*overflow-x: auto;/);
+    assert.match(source, /#logistics-expense-total[\s\S]*justify-self: end;[\s\S]*font-size: 16px;[\s\S]*font-weight: 800;/);
   }
 });
 

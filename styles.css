@@ -5765,6 +5765,84 @@ body.modal-open {
   align-items: center;
 }
 
+.logistics-expense-drawer,
+.logistics-invoice-drawer {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.logistics-expense-drawer .tax-detail-panel,
+.logistics-invoice-drawer .tax-detail-panel {
+  height: min(92vh, 900px);
+  max-height: 95vh;
+  overflow: hidden;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  padding: 0;
+}
+
+.logistics-expense-drawer .tax-detail-panel {
+  width: 96vw;
+  max-width: 1400px;
+}
+
+.logistics-invoice-drawer .tax-detail-panel {
+  width: min(96vw, 920px);
+}
+
+.logistics-expense-drawer .entry-form,
+.logistics-invoice-drawer .entry-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.logistics-expense-drawer .form-header,
+.logistics-invoice-drawer .form-header {
+  flex: 0 0 auto;
+  padding: 22px 24px 12px;
+}
+
+.logistics-expense-drawer .form-grid,
+.logistics-invoice-drawer .form-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 24px 16px;
+}
+
+.logistics-expense-drawer .form-grid {
+  grid-template-columns: minmax(320px, 2fr) minmax(220px, 1fr) minmax(160px, 180px);
+  align-content: start;
+}
+
+.logistics-invoice-drawer .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+.logistics-expense-search-field {
+  min-width: 0;
+}
+
+.logistics-expense-drawer .form-actions,
+.logistics-invoice-drawer .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 14px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 -10px 22px rgba(15, 23, 42, 0.06);
+}
+
 .logistics-expense-order-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -5787,13 +5865,141 @@ body.modal-open {
   font-size: 12px;
 }
 
+.logistics-expense-items {
+  overflow-x: hidden;
+}
+
 .logistics-expense-items .table-wrap {
   max-height: 320px;
+  overflow-x: hidden;
+}
+
+.logistics-expense-items table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.logistics-expense-items th,
+.logistics-expense-items td {
+  white-space: normal;
+}
+
+.logistics-expense-items th:nth-child(1),
+.logistics-expense-items td:nth-child(1) {
+  width: 190px;
+}
+
+.logistics-expense-items th:nth-child(2),
+.logistics-expense-items td:nth-child(2) {
+  width: 92px;
+}
+
+.logistics-expense-items th:nth-child(3),
+.logistics-expense-items td:nth-child(3) {
+  width: 124px;
+}
+
+.logistics-expense-items th:nth-child(4),
+.logistics-expense-items td:nth-child(4) {
+  width: 112px;
+}
+
+.logistics-expense-items th:nth-child(5),
+.logistics-expense-items td:nth-child(5) {
+  width: 136px;
+}
+
+.logistics-expense-items th:nth-child(7),
+.logistics-expense-items td:nth-child(7) {
+  width: 92px;
 }
 
 .logistics-expense-items input,
 .logistics-expense-items select {
-  min-width: 110px;
+  width: 100%;
+  min-width: 0;
+}
+
+.logistics-expense-items [data-remove-logistics-expense-item] {
+  width: 100%;
+  white-space: nowrap;
+}
+
+#logistics-expense-total {
+  justify-self: end;
+  width: fit-content;
+  margin: 12px 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+@media (max-width: 1199px) {
+  .logistics-expense-drawer,
+  .logistics-invoice-drawer {
+    padding: 12px;
+  }
+
+  .logistics-expense-drawer .tax-detail-panel,
+  .logistics-invoice-drawer .tax-detail-panel {
+    width: 100%;
+    max-width: none;
+  }
+
+  .logistics-expense-drawer .form-grid,
+  .logistics-invoice-drawer .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .logistics-expense-search-field,
+  .logistics-expense-drawer .wide,
+  .logistics-invoice-drawer .wide {
+    grid-column: 1 / -1;
+  }
+
+  .logistics-expense-items .table-wrap {
+    overflow-x: auto;
+  }
+
+  .logistics-expense-items table {
+    min-width: 920px;
+  }
+}
+
+@media (max-width: 760px) {
+  .logistics-expense-drawer,
+  .logistics-invoice-drawer {
+    padding: 0;
+  }
+
+  .logistics-expense-drawer .tax-detail-panel,
+  .logistics-invoice-drawer .tax-detail-panel {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .logistics-expense-drawer .form-grid,
+  .logistics-invoice-drawer .form-grid {
+    grid-template-columns: 1fr;
+    padding: 0 16px 14px;
+  }
+
+  .logistics-expense-drawer .form-header,
+  .logistics-invoice-drawer .form-header {
+    padding: 18px 16px 10px;
+  }
+
+  .logistics-expense-drawer .form-actions,
+  .logistics-invoice-drawer .form-actions {
+    padding: 12px 16px;
+  }
 }
 
 .supplier-logistics-cost-types {
