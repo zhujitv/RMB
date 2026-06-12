@@ -4201,9 +4201,9 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
     <tr class="expanded-row expanded-detail-row tax-refund-expanded-row">
       <td colSpan="6" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
-          <div class="tax-refund-expanded-top">
-            <div class="expanded-actions expanded-detail-actions">${actions}</div>
-            <div class="tax-refund-expanded-summary">
+          <div class="tax-detail-toolbar">
+            <div class="tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
+            <div class="tax-detail-progress">
               ${taxCompletenessMeter(progress)}
             </div>
           </div>

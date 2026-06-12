@@ -2444,19 +2444,33 @@ button.small-link {
   gap: 16px;
 }
 
-.tax-refund-expanded-top {
-  display: grid;
-  gap: 12px;
-  justify-items: start;
+.tax-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
 }
 
-.tax-refund-expanded-top .expanded-actions {
+.tax-detail-toolbar-actions,
+.tax-detail-toolbar .tax-detail-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   justify-content: flex-start;
+}
+
+.tax-detail-progress {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 220px;
 }
 
 .tax-overview-action,
@@ -2546,7 +2560,7 @@ button.small-link {
 .tax-completeness-meter {
   display: grid;
   gap: 5px;
-  width: min(240px, 100%);
+  width: 240px;
   min-width: 180px;
   padding: 8px 10px;
   border: 1px solid #e2e8f0;
@@ -4867,13 +4881,18 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 
-  .tax-refund-expanded-top,
-  .tax-refund-expanded-summary {
+  .tax-detail-toolbar,
+  .tax-detail-progress {
     align-items: flex-start;
     justify-content: flex-start;
   }
 
-  .tax-refund-expanded-summary,
+  .tax-detail-toolbar {
+    flex-direction: column;
+  }
+
+  .tax-detail-toolbar-actions,
+  .tax-detail-progress,
   .tax-completeness-meter {
     width: 100%;
   }
