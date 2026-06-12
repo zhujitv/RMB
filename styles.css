@@ -2838,15 +2838,57 @@ button.small-link {
 }
 
 .domestic-logistics-panel {
-  width: min(560px, 100vw);
-  padding: 22px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1200px, 92vw);
+  max-height: 100vh;
+  padding: 22px 22px 0;
+  overflow: hidden;
+}
+
+.domestic-logistics-scroll {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 0 4px 18px;
+}
+
+.domestic-logistics-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.domestic-logistics-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.domestic-logistics-card-head h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.domestic-logistics-card-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .domestic-logistics-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 16px;
   padding: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -2874,9 +2916,14 @@ button.small-link {
 
 .domestic-logistics-form {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  grid-template-columns: 1fr;
   align-items: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .domestic-logistics-form > label {
@@ -2890,6 +2937,16 @@ button.small-link {
 .domestic-logistics-form .form-actions,
 .domestic-transport-items {
   grid-column: 1 / -1;
+}
+
+.domestic-logistics-mode-row {
+  width: min(320px, 100%);
+}
+
+.domestic-express-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .domestic-transport-items {
@@ -2931,7 +2988,16 @@ button.small-link {
 
 .domestic-transport-item-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+  grid-template-columns:
+    minmax(110px, 1.1fr)
+    minmax(110px, 1fr)
+    minmax(110px, 1fr)
+    minmax(120px, 1fr)
+    minmax(110px, 1fr)
+    minmax(110px, 1fr)
+    minmax(140px, 1.2fr)
+    minmax(110px, 1fr)
+    auto;
   gap: 10px;
   align-items: end;
   padding: 12px;
@@ -2968,6 +3034,49 @@ button.small-link {
 .domestic-transport-row-actions button {
   min-height: 34px;
   white-space: nowrap;
+}
+
+.domestic-remark-card textarea {
+  min-height: 120px;
+}
+
+.domestic-logistics-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 -22px;
+  padding: 14px 22px;
+  border-top: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.domestic-logistics-footer > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.domestic-logistics-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.domestic-logistics-footer-actions button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 700;
+}
+
+.domestic-logistics-documents .tax-detail-doc-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .domestic-logistics-supplier-hint {
@@ -4848,8 +4957,32 @@ body.modal-open {
   .cost-document-row,
   .domestic-transport-item-row,
   .expanded-transport-item,
+  .domestic-express-fields,
+  .domestic-logistics-summary,
+  .domestic-logistics-documents .tax-detail-doc-grid,
   .domestic-logistics-form {
     grid-template-columns: 1fr;
+  }
+
+  .domestic-logistics-panel {
+    width: 100vw;
+    padding: 18px 16px 0;
+  }
+
+  .domestic-logistics-scroll {
+    max-height: 78vh;
+  }
+
+  .domestic-logistics-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    margin: 0 -16px;
+    padding: 12px 16px;
+  }
+
+  .domestic-logistics-footer-actions,
+  .domestic-logistics-footer-actions button {
+    width: 100%;
   }
 
   .filters {

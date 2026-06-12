@@ -4554,7 +4554,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   if (remark) remark.disabled = readOnly;
   const regenerate = $("#domestic-regenerate-remark");
   if (regenerate) regenerate.hidden = readOnly;
-  const submitButton = $("#domestic-logistics-form button[type='submit']");
+  const submitButton = $("#domestic-logistics-submit-button");
   if (submitButton) submitButton.hidden = readOnly;
   const existingRemark = info.remarkText || "";
   if (remark) {
