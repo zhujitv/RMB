@@ -56,6 +56,7 @@ export async function POST(request) {
       documentType,
       costId: String(formData.get("costId") || ""),
       supplierId: String(formData.get("supplierId") || ""),
+      uploadSource: String(formData.get("uploadSource") || ""),
       file,
     });
     return NextResponse.json({

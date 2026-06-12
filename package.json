@@ -2,10 +2,12 @@
   "name": "foreign-trade-ledger",
   "version": "1.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && next build",
     "lint": "node --check app.js && node --check public/app.js && node --check lib/platform-db.js",
+    "test": "node --test tests/*.test.js",
     "start": "next start",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
@@ -20,6 +22,7 @@
     "bcryptjs": "3.0.3",
     "jszip": "3.10.1",
     "next": "16.2.7",
+    "pdf-parse": "1.1.1",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

@@ -3,12 +3,12 @@ import { getActor, getOrderDocumentPreview } from "../../../../../lib/platform-d
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function asciiFileName(name = "document.pdf") {
-  const cleaned = String(name || "document.pdf")
+function asciiFileName(name = "document") {
+  const cleaned = String(name || "document")
     .replace(/[\r\n"]/g, "_")
     .replace(/[^\x20-\x7E]/g, "_")
     .replace(/[\\/:*?<>|]+/g, "_");
-  return cleaned || "document.pdf";
+  return cleaned || "document";
 }
 
 function previewErrorResponse(error) {
@@ -28,13 +28,14 @@ export async function GET(request, { params }) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const { body, document } = await getOrderDocumentPreview(request, actor, id);
-    const fileName = asciiFileName(document.fileName || "document.pdf");
+    const { body, document, mimeType } = await getOrderDocumentPreview(request, actor, id);
+    const contentType = mimeType || document.mimeType || "application/pdf";
+    const fileName = asciiFileName(document.fileName || "document");
     return new Response(body, {
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type": contentType,
         "Content-Length": String(body.length),
-        "Content-Disposition": `inline; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(document.fileName || "document.pdf")}`,
+        "Content-Disposition": `inline; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(document.fileName || "document")}`,
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },

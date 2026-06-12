@@ -7,7 +7,7 @@ export async function GET(request) {
     const actor = await getActor(request);
     assertRead(actor, "auditLogs");
     const query = new URL(request.url).searchParams;
-    const page = await getAuditLogs(query, { paginated: true, defaultPageSize: 50 });
+    const page = await getAuditLogs(query, { actor, paginated: true, defaultPageSize: 50 });
     return ok({
       logs: page.rows,
       pagination: {

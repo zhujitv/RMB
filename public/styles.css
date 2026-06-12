@@ -1942,6 +1942,13 @@ button.small-link {
   font-size: 12px;
 }
 
+.file-card-main .original-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+}
+
 .file-type-label {
   width: max-content;
   color: #2563eb;
@@ -2782,7 +2789,243 @@ button.small-link {
 .customs-recognition-form .form-actions {
   margin-top: 8px;
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
+}
+
+.customs-recognition-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.customs-recognition-badge.is-success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.customs-recognition-badge.is-partial {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.customs-recognition-badge.is-failed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.customs-recognition-badge.is-manual {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.customs-recognition-badge.is-empty {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.customs-recognition-message {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  white-space: pre-line;
+}
+
+.customer-shipping-docs-settings {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.customer-shipping-docs-settings h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.document-type-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  color: #475569;
+  font-size: 13px;
+}
+
+.document-type-checks > span {
+  width: 100%;
+  color: #334155;
+  font-weight: 700;
+}
+
+.document-type-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shipping-notification-card {
+  gap: 12px;
+}
+
+.shipping-notification-history {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.shipping-docs-send-card {
+  gap: 12px;
+}
+
+.customs-recognition-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.shipping-docs-modal[hidden] {
+  display: none;
+}
+
+.shipping-docs-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.shipping-docs-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.shipping-docs-modal-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  width: min(760px, 100%);
+  max-height: min(88vh, 900px);
+  overflow: auto;
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+}
+
+.shipping-docs-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 16px 18px;
+}
+
+.shipping-docs-modal-header h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.shipping-docs-modal-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.shipping-docs-form {
+  display: grid;
+  gap: 16px;
+  padding: 0 18px 18px;
+}
+
+.shipping-docs-confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shipping-docs-confirm-grid div {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.shipping-docs-confirm-grid span,
+.shipping-docs-file-list small {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.shipping-docs-confirm-grid strong {
+  display: block;
+  margin-top: 3px;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.shipping-docs-warning {
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.shipping-docs-file-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shipping-docs-file-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(120px, 0.4fr) minmax(160px, 1fr);
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.shipping-docs-file-list li.is-ready span {
+  color: #047857;
+}
+
+.shipping-docs-file-list li.is-missing span {
+  color: #b45309;
+}
+
+.shipping-docs-form textarea {
+  resize: vertical;
 }
 
 .tax-detail-drawer .file-actions {
@@ -2851,8 +3094,10 @@ button.small-link {
 .domestic-logistics-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(1200px, 92vw);
-  max-height: 100vh;
+  width: 96vw;
+  max-width: 1800px;
+  height: 95vh;
+  max-height: 95vh;
   padding: 22px 22px 0;
   overflow: hidden;
 }
@@ -2861,7 +3106,7 @@ button.small-link {
   display: grid;
   gap: 16px;
   min-height: 0;
-  max-height: 80vh;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0 4px 18px;
 }
@@ -2956,7 +3201,7 @@ button.small-link {
 
 .domestic-express-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(280px, 1.4fr);
   gap: 12px;
 }
 
@@ -2994,26 +3239,47 @@ button.small-link {
 
 .domestic-transport-items-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
+.domestic-transport-table-head,
 .domestic-transport-item-row {
   display: grid;
   grid-template-columns:
-    minmax(110px, 1.1fr)
-    minmax(110px, 1fr)
-    minmax(110px, 1fr)
-    minmax(120px, 1fr)
-    minmax(110px, 1fr)
-    minmax(110px, 1fr)
-    minmax(140px, 1.2fr)
-    minmax(110px, 1fr)
-    auto;
-  gap: 10px;
-  align-items: end;
-  padding: 12px;
+    minmax(130px, 160px)
+    minmax(112px, 140px)
+    minmax(112px, 140px)
+    minmax(130px, 150px)
+    minmax(120px, 160px)
+    minmax(120px, 160px)
+    minmax(160px, 220px)
+    minmax(100px, 220px)
+    minmax(142px, 160px);
+  gap: 8px;
+  align-items: center;
+}
+
+.domestic-transport-table-head {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #eef2f7;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+  padding: 9px 10px;
+}
+
+.domestic-transport-table-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domestic-transport-item-row {
+  padding: 10px;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #ffffff;
 }
 
@@ -3025,30 +3291,35 @@ button.small-link {
 }
 
 .domestic-transport-item-row label span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 650;
+  display: none;
 }
 
 .domestic-transport-item-row input {
   width: 100%;
   min-width: 0;
+  height: 38px;
+  padding: 8px 9px;
 }
 
 .domestic-transport-row-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .domestic-transport-row-actions button {
   min-height: 34px;
+  padding: 0 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .domestic-remark-card textarea {
-  min-height: 120px;
+  width: 100%;
+  min-height: 160px;
 }
 
 .domestic-logistics-footer {
@@ -3087,7 +3358,96 @@ button.small-link {
 }
 
 .domestic-logistics-documents .tax-detail-doc-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 240px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+}
+
+.domestic-document-table-head,
+.domestic-document-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 180px minmax(0, 1fr) 240px;
+}
+
+.domestic-document-table-head {
+  background: #eef2f7;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.domestic-document-table-head span,
+.domestic-document-type,
+.domestic-document-status,
+.domestic-document-action {
+  min-width: 0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px;
+}
+
+.domestic-document-table-head span:not(:last-child),
+.domestic-document-type,
+.domestic-document-status {
+  border-right: 1px solid #e2e8f0;
+}
+
+.domestic-document-row:last-child .domestic-document-type,
+.domestic-document-row:last-child .domestic-document-status,
+.domestic-document-row:last-child .domestic-document-action {
+  border-bottom: 0;
+}
+
+.domestic-document-type,
+.domestic-document-status,
+.domestic-document-action {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  background: #fff;
+}
+
+.domestic-document-type > span,
+.domestic-document-status > span,
+.domestic-document-action > span {
+  display: none;
+}
+
+.domestic-document-type strong,
+.domestic-document-file strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+}
+
+.domestic-document-file {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.domestic-document-file small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.domestic-document-file .file-actions {
+  margin-top: 2px;
+}
+
+.domestic-document-action .supplier-doc-upload {
+  width: 100%;
+  min-height: 38px;
+}
+
+.domestic-document-empty {
+  grid-column: 1 / -1;
 }
 
 .domestic-logistics-supplier-hint {
@@ -3105,7 +3465,7 @@ button.small-link {
   font: 13px/1.78 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   margin: 8px 0 0;
   padding: 12px;
-  min-height: 140px;
+  min-height: 160px;
   resize: vertical;
   white-space: pre-wrap;
 }
@@ -3224,7 +3584,7 @@ button.small-link {
   z-index: 90;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 2.5vh 2.5vw;
 }
 
 .pdf-preview-backdrop {
@@ -3237,12 +3597,12 @@ button.small-link {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(1040px, 100%);
-  height: min(86vh, 920px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: 95vw;
+  height: 95vh;
   overflow: hidden;
   border: 1px solid #dbe3ef;
-  border-radius: 16px;
+  border-radius: 10px;
   background: #fff;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
 }
@@ -3285,23 +3645,112 @@ button.small-link {
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .pdf-preview-actions .modal-close {
   position: static;
 }
 
+.pdf-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 10px 16px;
+}
+
+.pdf-preview-toolbar .secondary-button.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .pdf-preview-stage {
   position: relative;
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
   min-height: 0;
-  background: #f1f5f9;
+  overflow: hidden;
+  background: #dbe3ef;
+}
+
+.pdf-preview-panel.is-thumbnails-hidden .pdf-preview-stage {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pdf-preview-panel.is-thumbnails-hidden .pdf-preview-thumbnails {
+  display: none;
+}
+
+.pdf-preview-thumbnails {
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.pdf-preview-thumb-label {
+  margin-bottom: 10px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pdf-preview-thumb {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+}
+
+.pdf-preview-thumb.is-active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+#pdf-preview-thumb-frame,
+#pdf-preview-thumb-image {
+  width: 100%;
+  height: 168px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef2f7;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.pdf-preview-canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #64748b;
 }
 
 #pdf-preview-frame {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #f1f5f9;
+  background: #64748b;
+}
+
+#image-preview-frame {
+  width: 100%;
+  height: 100%;
+  background: #1e293b;
+  object-fit: contain;
+  cursor: zoom-in;
 }
 
 .pdf-preview-error {
@@ -4831,6 +5280,83 @@ body.modal-open {
   }
 }
 
+@media (max-width: 1199px) {
+  .domestic-logistics-panel {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    padding: 18px 16px 0;
+  }
+
+  .domestic-logistics-scroll {
+    padding-right: 0;
+  }
+
+  .domestic-transport-table-head,
+  .domestic-document-table-head {
+    display: none;
+  }
+
+  .domestic-transport-item-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .domestic-transport-item-row label span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .domestic-transport-row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .domestic-logistics-documents .tax-detail-doc-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .domestic-document-row {
+    grid-template-columns: 1fr;
+    overflow: hidden;
+    border: 1px solid #dbe3ef;
+    border-radius: 12px;
+  }
+
+  .domestic-document-type,
+  .domestic-document-status,
+  .domestic-document-action {
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .domestic-document-row:last-child .domestic-document-type,
+  .domestic-document-row:last-child .domestic-document-status {
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .domestic-document-row .domestic-document-action {
+    border-bottom: 0;
+  }
+
+  .domestic-document-type > span,
+  .domestic-document-status > span,
+  .domestic-document-action > span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 650;
+  }
+}
+
 @media (max-width: 760px) {
   .app-shell {
     display: block;
@@ -4977,6 +5503,8 @@ body.modal-open {
 
   .domestic-logistics-panel {
     width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
     padding: 18px 16px 0;
   }
 
@@ -5139,18 +5667,43 @@ body.modal-open {
   }
 
   .pdf-preview-panel {
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     border: 0;
     border-radius: 0;
   }
 
   .pdf-preview-header {
     grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   .pdf-preview-meta {
     grid-column: 1 / -1;
+  }
+
+  .pdf-preview-toolbar {
+    padding: 8px 10px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .pdf-preview-toolbar .secondary-button {
+    white-space: nowrap;
+  }
+
+  .pdf-preview-stage {
+    grid-template-columns: 128px minmax(0, 1fr);
+  }
+
+  .pdf-preview-thumbnails {
+    padding: 8px;
+  }
+
+  #pdf-preview-thumb-frame,
+  #pdf-preview-thumb-image {
+    height: 96px;
   }
 
   .dashboard-section-title {
@@ -5203,4 +5756,53 @@ body.modal-open {
   .tax-actions {
     flex-wrap: wrap !important;
   }
+}
+/* Logistics expense collaboration */
+.logistics-expense-panel .panel-title-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.logistics-expense-order-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--sidebar-soft);
+  border-radius: 8px;
+}
+
+.logistics-expense-order-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.logistics-expense-order-summary span,
+.logistics-expense-items small,
+#logistics-expense-total {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.logistics-expense-items .table-wrap {
+  max-height: 320px;
+}
+
+.logistics-expense-items input,
+.logistics-expense-items select {
+  min-width: 110px;
+}
+
+.supplier-logistics-cost-types {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--sidebar-soft);
+}
+
+.supplier-logistics-cost-types h4 {
+  margin: 0 0 8px;
 }

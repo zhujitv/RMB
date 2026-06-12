@@ -317,6 +317,7 @@
               </div>
               <label><span>提前提醒天数</span><input id="order-reminder-days" type="number" min="0" step="1" value="7" /></label>
               <label><span>订单状态</span><select id="order-status"></select></label>
+              <label class="wide"><span>物流供应商</span><select id="order-logistics-suppliers" multiple size="4"></select><small class="field-note">可多选拖车、报关、海运、港杂等供应商。供应商只能查看被分配订单。</small></label>
               <label class="wide"><span>备注</span><textarea id="order-remark" rows="3"></textarea></label>
             </div>
             <div class="form-actions"><button class="primary-button" id="order-submit-button" type="submit">保存应收订单</button></div>
@@ -437,7 +438,7 @@
             </div>
             <div class="table-wrap cost-table-wrap">
               <table id="cost-details-table">
-                <thead><tr><th>订单号</th><th>客户简称</th><th>成本类型</th><th>供应商</th><th>成本金额</th><th>付款状态</th><th>发票状态</th><th>详情</th></tr></thead>
+                <thead><tr><th>订单号</th><th>客户简称</th><th>成本类型</th><th>供应商</th><th>成本金额</th><th>来源</th><th>付款状态</th><th>发票状态</th><th>详情</th></tr></thead>
                 <tbody id="costs-table"></tbody>
               </table>
               <table id="cost-orders-table" hidden>
@@ -522,7 +523,7 @@
               <button class="primary-button" type="submit">查询</button>
               <button class="secondary-button" id="tax-refund-reset" type="button">重置</button>
             </form>
-            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户简称</th><th>申报日期</th><th>总体完整度</th><th>退税状态</th><th>详情</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户简称</th><th>申报日期</th><th>总体完整度</th><th>退税状态</th></tr></thead><tbody id="tax-refund-table"></tbody></table></div>
             <div class="pagination-bar">
               <button class="secondary-button" id="tax-refund-prev" type="button">上一页</button>
               <span id="tax-refund-page-info">第 1 / 1 页</span>
@@ -555,6 +556,37 @@
                 <tbody id="domestic-logistics-table"></tbody>
               </table>
             </div>
+          </section>
+          <section class="panel logistics-expense-panel">
+            <div class="panel-title">
+              <h3>物流费用录入</h3>
+              <div class="panel-title-actions">
+                <button class="secondary-button" id="refresh-logistics-expenses" type="button">刷新</button>
+                <button class="secondary-button" id="export-logistics-statement" type="button">导出对账单</button>
+                <button class="primary-button" id="open-logistics-expense-drawer" type="button">新增物流费用</button>
+              </div>
+            </div>
+            <form class="inline-filter" id="logistics-expense-filter-form" autocomplete="off">
+              <input id="logistics-expense-keyword" type="search" placeholder="订单号 / 提单号 / 客户简称 / 供应商" />
+              <select id="logistics-expense-status">
+                <option value="all">全部状态</option>
+                <option value="draft">草稿</option>
+                <option value="pending">待审核</option>
+                <option value="approved">审核通过</option>
+                <option value="toInvoice">已审核待开票</option>
+                <option value="uploaded">已上传发票</option>
+                <option value="confirmedInvoice">已确认发票</option>
+                <option value="rejected">已驳回</option>
+              </select>
+              <button class="primary-button" type="submit">查询</button>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>订单号</th><th>提单号</th><th>客户简称</th><th>供应商</th><th>费用合计</th><th>审核状态</th><th>发票状态</th><th>付款状态</th><th>操作</th></tr></thead>
+                <tbody id="logistics-expense-table"></tbody>
+              </table>
+            </div>
+            <div class="pagination-bar"><button class="secondary-button" id="logistics-expense-prev" type="button">上一页</button><span id="logistics-expense-page-info">第 1 / 1 页</span><button class="secondary-button" id="logistics-expense-next" type="button">下一页</button></div>
           </section>
           <section class="domestic-logistics-drawer" id="domestic-logistics-editor" hidden>
             <div class="drawer-backdrop" data-close-domestic-logistics></div>
@@ -632,6 +664,51 @@
             </div>
             </div>
           </section>
+          <aside class="tax-detail-drawer settings-record-drawer logistics-expense-drawer" id="logistics-expense-drawer" hidden>
+            <div class="tax-detail-backdrop" data-close-logistics-expense></div>
+            <section class="tax-detail-panel settings-record-panel" role="dialog" aria-modal="true" aria-labelledby="logistics-expense-drawer-title">
+              <button class="modal-close" data-close-logistics-expense type="button" aria-label="关闭物流费用录入">×</button>
+              <form class="entry-form" id="logistics-expense-form" autocomplete="off">
+                <div class="form-header"><div><h3 id="logistics-expense-drawer-title">物流费用录入</h3><p>必须先选择系统中已有订单，费用提交后进入管理员审核。</p></div></div>
+                <div class="form-grid">
+                  <label class="wide"><span>搜索订单 *</span><input id="logistics-expense-order-search" type="search" placeholder="订单号 / 提单号 / 客户简称" autocomplete="off" /></label>
+                  <div class="wide order-search-results" id="logistics-expense-order-results"></div>
+                  <section class="wide logistics-expense-order-summary" id="logistics-expense-order-summary" hidden></section>
+                  <label><span>供应商 *</span><select id="logistics-expense-supplier"></select></label>
+                  <label><span>提交方式</span><select id="logistics-expense-submit-mode"><option value="submit">提交审核</option><option value="draft">保存草稿</option></select></label>
+                  <section class="wide logistics-expense-items">
+                    <div class="cost-items-title"><strong>费用明细</strong><button class="secondary-button" id="add-logistics-expense-item" type="button">添加费用</button></div>
+                    <div class="table-wrap">
+                      <table>
+                        <thead><tr><th>费用类型</th><th>币种</th><th>金额</th><th>汇率</th><th>折人民币</th><th>备注</th><th>操作</th></tr></thead>
+                        <tbody id="logistics-expense-items"></tbody>
+                      </table>
+                    </div>
+                    <p class="order-search-helper" id="logistics-expense-total">合计：CNY 0.00</p>
+                  </section>
+                </div>
+                <div class="form-actions"><button class="secondary-button" data-close-logistics-expense type="button">取消</button><button class="primary-button" type="submit">保存物流费用</button></div>
+              </form>
+            </section>
+          </aside>
+          <aside class="tax-detail-drawer settings-record-drawer logistics-invoice-drawer" id="logistics-invoice-drawer" hidden>
+            <div class="tax-detail-backdrop" data-close-logistics-invoice></div>
+            <section class="tax-detail-panel settings-record-panel" role="dialog" aria-modal="true" aria-labelledby="logistics-invoice-drawer-title">
+              <button class="modal-close" data-close-logistics-invoice type="button" aria-label="关闭发票上传">×</button>
+              <form class="entry-form" id="logistics-invoice-form" autocomplete="off">
+                <input type="hidden" id="logistics-invoice-expense-id" />
+                <div class="form-header"><div><h3 id="logistics-invoice-drawer-title">上传物流发票</h3><p id="logistics-invoice-subtitle">审核通过后上传发票。</p></div></div>
+                <div class="form-grid">
+                  <label><span>发票号码 *</span><input id="logistics-invoice-no" required /></label>
+                  <label><span>开票日期 *</span><input id="logistics-invoice-date" type="date" required /></label>
+                  <label><span>发票金额 *</span><input id="logistics-invoice-amount" type="number" min="0" step="0.01" required /></label>
+                  <label><span>发票文件 *</span><input id="logistics-invoice-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required /></label>
+                  <label class="wide"><span>备注</span><textarea id="logistics-invoice-remark" rows="2"></textarea></label>
+                </div>
+                <div class="form-actions"><button class="secondary-button" data-close-logistics-invoice type="button">取消</button><button class="primary-button" type="submit">上传发票</button></div>
+              </form>
+            </section>
+          </aside>
         </section>
 
         <section class="view-panel" id="reports-view">
@@ -659,7 +736,6 @@
               <label><span>成本类型</span><select id="report-cost-type"><option value="">全部成本类型</option></select></label>
               <label><span>退税状态</span><select id="report-tax-status"><option value="">全部退税状态</option></select></label>
               <label><span>申报月份</span><input id="report-declaration-month" type="month" /></label>
-              <label><span>出口月份</span><input id="report-export-month" type="month" /></label>
               <label><span>业务范围</span><select id="report-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select></label>
               <label><span>关键词</span><input id="report-keyword" type="search" placeholder="订单、客户、供应商、国家/地区" /></label>
               <div class="report-query-actions">
@@ -690,7 +766,7 @@
               <h3>操作说明书</h3>
               <p>外贸应收、成本、物流与退税资料协同平台使用指南</p>
               <div class="manual-meta-row">
-                <span>当前版本：v2.0</span>
+                <span>当前版本：v2.1</span>
                 <span>适用对象：业务 / 财务 / 成本 / 物流 / 管理员</span>
                 <span>更新时间：<time id="manual-updated-at">--</time></span>
               </div>
@@ -733,6 +809,8 @@
               <li>归档不是删除，所有数据和附件完整保留。</li>
               <li>已归档业务可在退税档案和报表中心随时调取。</li>
               <li>退税归档不代表收款完成，收款管理不因退税归档而隐藏。</li>
+              <li>业务员按客户负责人查看数据：客户归属谁，该客户名下订单及业务链就由谁查看。</li>
+              <li>报关资料文件内容仅管理员、财务和内部物流人员可预览或下载。</li>
             </ul>
           </section>
 
@@ -755,10 +833,10 @@
               <details class="manual-section-card" id="manual-section-positioning" data-manual-section open>
                 <summary><span>01</span><strong>系统定位</strong></summary>
                 <div class="manual-searchable">
-                  <p>本系统用于管理外贸业务从应收订单、客户回款、成本录入、国内物流资料、退税资料收集，到退税提交和资料归档的全过程。</p>
+                  <p>本系统用于管理外贸业务从应收订单、客户回款、成本录入、国内物流资料、退税资料收集、清关资料发送，到退税提交和资料归档的全过程。</p>
                   <div class="manual-section-grid">
-                    <div><h5>核心原则</h5><p>一票业务 = 一个订单。所有收款、成本、物流资料、退税资料都必须围绕订单进行管理。</p></div>
-                    <div><h5>模块入口</h5><p>从左侧菜单进入应收订单、收款管理、成本管理、国内物流信息、退税资料和报表中心。</p></div>
+                    <div><h5>核心原则</h5><p>一票业务 = 一个订单。所有收款、成本、物流资料、退税资料、清关资料邮件都必须围绕订单进行管理。</p></div>
+                    <div><h5>权限口径</h5><p>管理员查看全部；业务员按客户档案中的负责业务员查看该客户名下完整业务链；财务、成本和物流角色按模块权限查看。</p></div>
                   </div>
                 </div>
               </details>
@@ -772,7 +850,9 @@
                     <li>登记客户回款</li>
                     <li>录入成本费用</li>
                     <li>录入国内物流信息</li>
-                    <li>汇总退税资料</li>
+                    <li>上传订单资料并自动生成标准英文文件名</li>
+                    <li>汇总退税资料，识别报关单号和申报日期</li>
+                    <li>按需手动发送清关资料</li>
                     <li>检查总体完整度</li>
                     <li>提交退税</li>
                     <li>自动归档</li>
@@ -787,7 +867,7 @@
                   <p>业务员负责创建应收订单。订单是后续收款、成本、物流、退税资料的唯一业务主线。</p>
                   <div class="manual-section-grid">
                     <div><h5>主要填写</h5><ul><li>客户名称、订单号、提单号</li><li>币种、汇率、预计应收金额、最终应收金额</li><li>付款条款、预计发货日期、提单日期、到期日、订单状态</li></ul></div>
-                    <div><h5>注意事项</h5><ul><li>订单号必须唯一。</li><li>客户名称统一大写。</li><li>币种来自客户资料或手动选择。</li><li>后续收款、成本、物流、退税都会关联该订单。</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>订单号必须唯一。</li><li>客户名称统一大写。</li><li>业务员数据范围按客户档案负责人判断，不按订单创建人判断。</li><li>后续收款、成本、物流、退税都会关联该订单。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：应收订单</p>
                 </div>
@@ -811,7 +891,7 @@
                   <p>成本管理用于记录每票订单产生的全部费用，成本确认后进入利润分析和相关资料完整度计算。</p>
                   <div class="manual-section-grid">
                     <div><h5>成本包括</h5><ul><li>工厂货款、拖车费、报关费、港杂费、海运费</li><li>银行手续费、国外佣金、样品费、其他费用</li></ul></div>
-                    <div><h5>注意事项</h5><ul><li>所有成本必须关联订单。</li><li>成本确认后才进入利润分析。</li><li>发票状态会影响退税资料完整度。</li><li>默认只显示当前业务，已归档业务可通过筛选查询。</li></ul></div>
+                    <div><h5>注意事项</h5><ul><li>所有成本必须关联订单。</li><li>客户负责业务员可查看该客户订单下由管理员或其他角色录入的成本。</li><li>成本确认后才进入利润分析。</li><li>发票状态会影响退税资料完整度。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：成本管理</p>
                 </div>
@@ -820,10 +900,10 @@
               <details class="manual-section-card" id="manual-section-domestic" data-manual-section>
                 <summary><span>06</span><strong>国内物流信息</strong></summary>
                 <div class="manual-searchable">
-                  <p>物流资料录入员、业务员或管理员填写国内首程运输信息，并上传报关资料。</p>
+                  <p>业务员或管理员填写国内首程运输信息；物流供应商在物流费用录入中提交费用并上传发票。</p>
                   <div class="manual-section-grid">
                     <div><h5>主要内容</h5><ul><li>运输方式、起运地、到达地</li><li>运输货物名称、起运日期</li><li>车牌号或快递单号</li><li>出口发票备注</li></ul></div>
-                    <div><h5>上传资料</h5><ul><li>报关单</li><li>放行通知书</li><li>报关委托书</li><li>上传后自动归属订单并进入退税资料统计。</li></ul></div>
+                    <div><h5>上传资料</h5><ul><li>报关单、放行通知书、报关委托书。</li><li>上传后自动归属订单并进入退税资料统计。</li><li>上传报关单 PDF 后自动识别报关单号和申报日期。</li><li>业务员可看资料状态和完整度，但不能预览、下载或删除报关资料文件。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：国内物流信息</p>
                 </div>
@@ -832,10 +912,10 @@
               <details class="manual-section-card" id="manual-section-tax" data-manual-section>
                 <summary><span>07</span><strong>退税资料</strong></summary>
                 <div class="manual-searchable">
-                  <p>退税资料模块用于按订单汇总出口退税所需资料，列表只保留总体完整度，详细资料在查看资料中展开。</p>
+                  <p>退税资料模块用于按订单汇总出口退税所需资料，列表显示订单号、客户简称、申报日期、总体完整度和退税状态，详细资料在查看资料中展开。</p>
                   <div class="manual-section-grid">
-                    <div><h5>系统汇总</h5><ul><li>出口资料：销售合同、发票、提单、报关单、放行通知书、报关委托书</li><li>工厂资料：工厂合同、工厂发票</li><li>物流资料：报关费发票、拖车费发票、港杂费发票</li></ul></div>
-                    <div><h5>注意事项</h5><ul><li>退税资料只保留总体完整度。</li><li>缺失资料需要回到对应上传区域补齐。</li><li>总体完整度不足 100% 时不能提交退税。</li></ul></div>
+                    <div><h5>查看资料区域</h5><ul><li>国内物流信息、报关资料、出口资料。</li><li>工厂供应商资料、物流资料。</li><li>报关单信息只保留报关单号和申报日期。</li><li>页面不展示清关资料邮件发送明细。</li></ul></div>
+                    <div><h5>清关资料发送</h5><ul><li>点击手动发送清关资料打开确认窗口。</li><li>可临时修改收件邮箱、抄送邮箱、邮件语言、标题和正文。</li><li>至少存在一个商业发票、装箱单或报关单文件时可发送。</li><li>发送后只提示成功或失败，不在页面保留邮件发送明细。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：退税资料</p>
                 </div>
@@ -859,7 +939,7 @@
                   <p>报表中心用于在线查询和按需下载业务数据，日常查询默认当前业务，历史查询可选择已归档业务或全部业务。</p>
                   <div class="manual-section-grid">
                     <div><h5>支持报表</h5><ul><li>应收订单明细、收款明细、成本明细</li><li>利润分析、业务员提成、逾期催款、退税资料</li></ul></div>
-                    <div><h5>业务范围</h5><ul><li>当前业务</li><li>已归档业务</li><li>全部业务</li></ul></div>
+                    <div><h5>业务范围</h5><ul><li>当前业务、已归档业务、全部业务。</li><li>业务员只查询自己负责客户名下订单及业务链数据。</li><li>退税资料报表可按申报月份筛选。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：报表中心</p>
                 </div>
@@ -870,8 +950,8 @@
                 <div class="manual-searchable">
                   <p>管理员维护基础资料、权限和系统口径。系统设置中的变更会影响业务数据展示和权限边界。</p>
                   <div class="manual-section-grid">
-                    <div><h5>可维护内容</h5><ul><li>汇率设置、客户资料、供应商资料</li><li>用户与权限、操作日志</li></ul></div>
-                    <div><h5>注意事项</h5><ul><li>汇率影响所有外币折人民币金额。</li><li>客户资料中的业务员和提成比例会影响利润与提成统计。</li><li>用户权限决定能看到哪些模块。</li><li>操作日志用于追溯关键修改。</li></ul></div>
+                    <div><h5>可维护内容</h5><ul><li>汇率设置、客户资料、供应商资料</li><li>用户与权限、操作日志</li><li>客户清关资料自动通知设置</li></ul></div>
+                    <div><h5>客户设置</h5><ul><li>客户负责业务员决定业务员可见范围。</li><li>清关资料接收邮箱和抄送邮箱用于自动或手动发送资料。</li><li>俄罗斯客户默认俄文邮件，其他客户默认英文，可手动切换。</li><li>附件文件名统一使用英文标准命名，不使用中文文件名发给客户。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：系统设置</p>
                 </div>
@@ -883,7 +963,12 @@
                   <ol>
                     <li>订单号、客户、币种、金额、付款条款保存前必须核对。</li>
                     <li>所有收款、成本、物流、退税资料必须关联订单。</li>
+                    <li>业务员按客户负责人查看数据，不能按创建人判断业务归属。</li>
                     <li>成本未确认时，不应进入最终利润结算。</li>
+                    <li>上传订单资料后，系统显示和下载优先使用英文标准文件名。</li>
+                    <li>报关单 PDF 上传后会自动识别报关单号和申报日期，识别失败时手工填写。</li>
+                    <li>报关资料文件内容只允许管理员、财务和内部物流人员查看。</li>
+                    <li>手动发送清关资料只显示发送结果提示，不在页面展示邮件发送明细。</li>
                     <li>总体完整度不足 100%，不允许提交退税。</li>
                     <li>已提交退税后自动归档。</li>
                     <li>归档不是删除，只是放入档案室。</li>
@@ -990,7 +1075,7 @@
           <form class="entry-form" id="customer-form" autocomplete="off">
             <input type="hidden" id="customer-id" />
             <div class="form-header"><div><h3 id="customer-drawer-title">客户资料</h3><p id="customer-form-subtitle">新建客户</p></div></div>
-            <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>客户简称</span><input id="customer-short-name" /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
+            <div class="form-grid"><label><span>客户名称 *</span><input id="customer-name" required /></label><label><span>客户简称</span><input id="customer-short-name" /></label><label><span>国家 / 地区</span><input id="customer-country" /></label><label><span>默认币种</span><select id="customer-currency"></select></label><label><span>负责业务员</span><select id="customer-salesperson"></select></label><label><span>业务员提成比例（%）</span><input id="customer-commission-rate" type="number" min="0" max="100" step="0.01" /></label><label><span>提成状态</span><select id="customer-commission-status"><option value="启用">启用</option><option value="停用">停用</option></select></label><label><span>联系人</span><input id="customer-contact-person" /></label><label><span>联系邮箱</span><input id="customer-contact-email" /></label><label><span>联系电话</span><input id="customer-contact-phone" /></label><section class="wide customer-shipping-docs-settings"><h4>清关资料自动通知</h4><label class="checkbox-row"><input id="customer-auto-shipping-docs" type="checkbox" /><span>启用后，系统将在报关单确认后自动向客户发送商业发票、装箱单和报关单，同时作为发货通知。</span></label><label><span>清关资料接收邮箱</span><textarea id="customer-shipping-docs-emails" rows="2" placeholder="多个邮箱可用逗号、分号或换行分隔；为空则使用客户主邮箱"></textarea></label><label><span>抄送邮箱</span><textarea id="customer-shipping-docs-cc-emails" rows="2" placeholder="可为空，多个邮箱可用逗号、分号或换行分隔"></textarea></label><label><span>清关邮件语言</span><select id="customer-clearance-email-language"><option value="EN">English</option><option value="RU">Русский</option></select></label><div class="document-type-checks"><span>自动发送资料</span><label><input type="checkbox" id="customer-doc-commercial-invoice" />商业发票</label><label><input type="checkbox" id="customer-doc-packing-list" />装箱单</label><label><input type="checkbox" id="customer-doc-customs-declaration" />报关单</label></div></section><label class="wide"><span>备注</span><textarea id="customer-remark" rows="2"></textarea></label></div>
             <div class="form-actions"><button class="secondary-button" data-close-customer-drawer type="button">取消</button><button class="primary-button" type="submit">保存客户</button></div>
           </form>
         </section>
@@ -1008,6 +1093,8 @@
               <label><span>供应商类型</span><select id="supplier-type"></select></label>
               <label><span>状态</span><select id="supplier-status"></select></label>
               <label><span>允许录入国内物流信息</span><select id="supplier-domestic-logistics-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
+              <label><span>允许录入物流费用</span><select id="supplier-logistics-expense-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
+              <label><span>允许上传发票</span><select id="supplier-logistics-invoice-upload"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>国家 / 地区</span><input id="supplier-country" /></label>
               <label><span>联系人</span><input id="supplier-contact-person" /></label>
               <label><span>联系电话</span><input id="supplier-phone" /></label>
@@ -1016,6 +1103,7 @@
               <label><span>税号</span><input id="supplier-tax-number" /></label>
               <label><span>银行名称</span><input id="supplier-bank-name" /></label>
               <label><span>银行账号</span><input id="supplier-bank-account" /></label>
+              <section class="wide supplier-logistics-cost-types"><h4>允许录入费用类型</h4><div class="document-type-checks" id="supplier-logistics-cost-types"></div></section>
               <label class="wide"><span>地址</span><input id="supplier-address" /></label>
               <label class="wide"><span>备注</span><textarea id="supplier-remark" rows="2"></textarea></label>
             </div>
@@ -1072,7 +1160,7 @@
         <section class="pdf-preview-panel" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title">
           <header class="pdf-preview-header">
             <div>
-              <strong id="pdf-preview-title">PDF 预览</strong>
+              <strong id="pdf-preview-title">文件预览</strong>
               <span id="pdf-preview-type">-</span>
             </div>
             <div class="pdf-preview-meta">
@@ -1085,8 +1173,27 @@
               <button class="modal-close" data-close-pdf-preview type="button" aria-label="关闭 PDF 预览">×</button>
             </div>
           </header>
+          <div class="pdf-preview-toolbar" id="pdf-preview-toolbar">
+            <button class="secondary-button" data-pdf-zoom="page-width" type="button">适应宽度</button>
+            <button class="secondary-button" data-pdf-zoom="page-fit" type="button">适应页面</button>
+            <button class="secondary-button" data-pdf-zoom="100" type="button">100%</button>
+            <button class="secondary-button" data-pdf-zoom="125" type="button">125%</button>
+            <button class="secondary-button" data-pdf-zoom="150" type="button">150%</button>
+            <button class="secondary-button" id="pdf-preview-toggle-thumbs" data-toggle-pdf-thumbnails type="button">隐藏缩略图</button>
+          </div>
           <div class="pdf-preview-stage">
-            <iframe id="pdf-preview-frame" title="PDF 预览" src="about:blank"></iframe>
+            <aside class="pdf-preview-thumbnails" id="pdf-preview-thumbnails">
+              <div class="pdf-preview-thumb-label">缩略图</div>
+              <button class="pdf-preview-thumb is-active" data-pdf-page="1" type="button">
+                <iframe id="pdf-preview-thumb-frame" title="第一页缩略图" src="about:blank"></iframe>
+                <img id="pdf-preview-thumb-image" alt="文件缩略图" hidden />
+                <span>第 1 页</span>
+              </button>
+            </aside>
+            <div class="pdf-preview-canvas" id="pdf-preview-canvas">
+              <iframe id="pdf-preview-frame" title="文件预览" src="about:blank"></iframe>
+              <img id="image-preview-frame" alt="文件预览" hidden />
+            </div>
             <div class="pdf-preview-error" id="pdf-preview-error" hidden></div>
           </div>
         </section>

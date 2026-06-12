@@ -75,11 +75,23 @@ const state = {
   domesticLogisticsRows: [],
   domesticLogisticsKeyword: "",
   domesticLogisticsEditing: null,
+  logisticsExpenseRows: [],
+  logisticsExpensePagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+  logisticsExpenseStatus: "all",
+  logisticsExpenseKeyword: "",
+  logisticsExpenseOrders: [],
+  logisticsExpenseSelectedOrder: null,
+  logisticsExpenseStatementRows: [],
   isDomesticLogisticsModalOpen: false,
   selectedDomesticLogisticsOrder: null,
   pdfPreviewDocument: null,
   pdfPreviewObjectUrl: "",
   pdfPreviewError: "",
+  pdfPreviewBareUrl: "",
+  pdfPreviewKind: "pdf",
+  pdfPreviewZoom: "page-width",
+  pdfPreviewThumbnailsHidden: false,
+  pdfPreviewDoubleZoomIndex: 0,
   reportType: "receivables",
   reportRows: [],
   reportColumns: [],
@@ -90,7 +102,6 @@ const state = {
   reportQueried: false,
   expandedRows: {},
   reportDeclarationMonth: "",
-  reportExportMonth: "",
   costOrderResults: [],
   selectedCostOrder: null,
   supplierSearchTimers: {},
@@ -102,11 +113,15 @@ const state = {
   uploadBatchTotal: 0,
   uploadBatchCompleted: 0,
   uploadNoticeTimer: null,
+  manualShippingDocsOrderId: "",
+  manualShippingDocsDraft: null,
+  manualShippingDocsSubmitting: false,
   orderFormDirty: false,
   orderFormResetting: false,
   orderFormPopulating: false,
   costOrderSearchTimer: null,
   costOrderSearchRequestId: 0,
+  logisticsExpenseOrderSearchTimer: null,
   costSubmitInFlight: false,
   customerSubmitInFlight: false,
   overview: null,
@@ -127,7 +142,7 @@ const constants = {
   defaultRates: { USD: 7.2, EUR: 7.8, GBP: 9.15, CNY: 1, HKD: 0.92 },
   exchangeRateSources: ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"],
   exchangeRateTypes: ["现汇买入价", "现汇卖出价", "中间价"],
-  roles: ["管理员", "业务员", "财务", "成本录入员", "物流资料录入员", "查看者"],
+  roles: ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "查看者"],
   orderStatuses: ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"],
   paymentStatuses: ["待确认", "已到账", "已退回", "已取消"],
   paymentTypes: ["预付款", "尾款", "补差款", "其他"],
@@ -147,7 +162,7 @@ const constants = {
     订舱费: "港杂费",
   },
   nonParticipatingCostTypes: ["目的港费用"],
-  logisticsCostTypes: ["拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用"],
+  logisticsCostTypes: ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"],
   taxRefundLogisticsInvoiceRequirements: [
     { key: "CUSTOMS", label: "报关费资料", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
     { key: "TRUCKING", label: "拖车费资料", missingCostLabel: "未录入拖车费", costTypes: ["拖车费", "国内物流费", "国内拖车费"] },
@@ -289,11 +304,11 @@ constants.domesticLogisticsDocumentTypes = constants.exportDocumentTypes.filter(
 
 const roleMenus = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
-  财务: ["dashboard", "payments", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  成本录入员: ["costs", "profit", "manual"],
-  物流资料录入员: ["domesticLogistics"],
-  查看者: ["dashboard", "orders", "domesticLogistics", "profit", "reports", "manual"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "profit", "taxRefund", "reports", "manual"],
+  财务: ["payments", "costs", "profit", "taxRefund", "reports", "manual"],
+  成本录入员: ["costs", "manual"],
+  物流供应商: ["domesticLogistics", "manual"],
+  查看者: ["manual"],
 };
 
 const roleScopeTexts = {
@@ -301,7 +316,7 @@ const roleScopeTexts = {
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
   成本录入员: "仅可录入成本并查看成本相关数据",
-  物流资料录入员: "仅可录入国内物流信息",
+  物流供应商: "仅可查看分配订单、提交物流费用并上传发票",
   查看者: "只读权限",
 };
 
@@ -310,17 +325,17 @@ const roleWrites = {
   业务员: ["orders", "logistics", "domesticLogistics", "documents"],
   财务: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
   成本录入员: ["costs", "documents"],
-  物流资料录入员: ["domesticLogistics", "documents"],
+  物流供应商: ["logistics"],
   查看者: [],
 };
 
 const roleReads = {
   管理员: ["users", "customers", "suppliers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
-  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "commissions", "reports"],
-  财务: ["orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
+  业务员: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports"],
+  财务: ["orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports"],
   成本录入员: ["suppliers", "orders", "costs", "documents"],
-  物流资料录入员: ["domesticLogistics", "documents"],
-  查看者: ["orders", "payments", "costs", "domesticLogistics", "documents", "reports"],
+  物流供应商: ["domesticLogistics"],
+  查看者: [],
 };
 
 const rolePermissionTemplateCache = new Map();
@@ -342,6 +357,7 @@ function anyModalOpen() {
     "#cost-drawer",
     "#cost-document-drawer",
     "#domestic-logistics-editor",
+    "#manual-shipping-docs-modal",
   ].some((selector) => {
     const el = $(selector);
     return el && !el.hidden;
@@ -925,10 +941,10 @@ function defaultViewForCurrentUser() {
   const roleDefaultViews = {
     管理员: "orders",
     财务: "payments",
-    业务员: canView("orders") ? "orders" : "dashboard",
+    业务员: "orders",
     成本录入员: "costs",
-    物流资料录入员: "domesticLogistics",
-    查看者: "orders",
+    物流供应商: "domesticLogistics",
+    查看者: "manual",
   };
   const preferred = roleDefaultViews[state.me?.role];
   if (preferred && menus.includes(preferred)) return preferred;
@@ -965,10 +981,10 @@ function roleTemplatePermissions(role) {
   const dataScopeMap = {
     管理员: "ALL",
     财务: "ALL",
-    查看者: "ALL",
     业务员: "OWN",
     成本录入员: "OWN_COST",
-    物流资料录入员: "OWN",
+    物流供应商: "OWN",
+    查看者: "NONE",
   };
   const template = {
     mode: "ROLE",
@@ -1023,6 +1039,13 @@ function clearLocalCaches() {
   state.domesticLogisticsRows = [];
   state.domesticLogisticsKeyword = "";
   state.domesticLogisticsEditing = null;
+  state.logisticsExpenseRows = [];
+  state.logisticsExpenseOrders = [];
+  state.logisticsExpenseSelectedOrder = null;
+  state.logisticsExpenseStatementRows = [];
+  state.logisticsExpensePagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
+  state.logisticsExpenseStatus = "all";
+  state.logisticsExpenseKeyword = "";
   state.isDomesticLogisticsModalOpen = false;
   state.selectedDomesticLogisticsOrder = null;
   state.pdfPreviewDocument = null;
@@ -1123,14 +1146,32 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
 }
 
 function clearAuthStorage() {
-  ["token", "session", "currentUser", "authToken", "fta_user_id", "fta_session"].forEach((key) => {
-    try {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
-    } catch (error) {
-      console.error("清理认证缓存失败", { key, error });
+  const knownKeys = ["token", "session", "currentUser", "user", "authToken", "fta_user_id", "fta_session"];
+  try {
+    knownKeys.forEach((key) => localStorage.removeItem(key));
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key) continue;
+      const normalized = key.toLowerCase();
+      if (
+        key.startsWith(LAST_VIEW_PREFIX)
+        || normalized.includes("dashboard")
+        || normalized.includes("order-cache")
+        || normalized.includes("user-cache")
+        || normalized.includes("auth")
+        || normalized.includes("session")
+      ) {
+        localStorage.removeItem(key);
+      }
     }
-  });
+  } catch (error) {
+    console.error("清理本地认证缓存失败", error);
+  }
+  try {
+    sessionStorage.clear();
+  } catch (error) {
+    console.error("清理会话缓存失败", error);
+  }
 }
 
 function resetAuthState({ clearDrafts = false } = {}) {
@@ -1156,13 +1197,27 @@ function handleAuthExpired(message = "登录已过期，请重新登录") {
   toast(message);
 }
 
+function handleForbidden(message = "没有权限访问该模块") {
+  clearLocalCaches();
+  state.overview = null;
+  if (state.me) {
+    ensureAuthorizedView();
+    setAuthenticatedShell(true, state.passwordChangeRequired);
+  } else {
+    setAuthenticatedShell(false);
+  }
+  renderAll();
+  toast(message);
+}
+
 async function api(path, options = {}) {
   let response;
+  const isFormDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
   try {
     response = await fetch(path, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
         ...(options.headers || {}),
       },
     });
@@ -1186,6 +1241,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const isLoginRequest = path.startsWith("/api/auth/login");
     if (response.status === 401 && !isLoginRequest) handleAuthExpired(data?.error || "登录已过期，请重新登录");
+    if (response.status === 403 && !isLoginRequest) handleForbidden(data?.error || "没有权限访问该模块");
     if (data?.code === "PASSWORD_CHANGE_REQUIRED" && !isLoginRequest) {
       state.passwordChangeRequired = true;
       setAuthenticatedShell(true, true);
@@ -1244,6 +1300,7 @@ async function saveCustomerRequest(path, options = {}) {
   if (!saveSucceeded) {
     if (!response.ok) {
       if (response.status === 401) handleAuthExpired(result?.error || "登录已过期，请重新登录");
+      if (response.status === 403) handleForbidden(result?.error || "没有权限访问该模块");
       if (result?.code === "PASSWORD_CHANGE_REQUIRED") {
         state.passwordChangeRequired = true;
         setAuthenticatedShell(true, true);
@@ -1312,12 +1369,54 @@ function refreshSupplierDomesticLogisticsEntryOptions(selected = "false") {
   ], String(selected ?? "false"));
 }
 
+function renderSupplierLogisticsCostTypeChecks(selected = []) {
+  const box = $("#supplier-logistics-cost-types");
+  if (!box) return;
+  const selectedSet = new Set(Array.isArray(selected) ? selected : []);
+  box.innerHTML = constants.logisticsCostTypes.map((type) => `
+    <label><input type="checkbox" value="${escapeHtml(type)}" ${selectedSet.has(type) ? "checked" : ""} />${escapeHtml(type)}</label>
+  `).join("");
+}
+
+function selectedSupplierLogisticsCostTypes() {
+  return $$("#supplier-logistics-cost-types input:checked").map((input) => input.value);
+}
+
 function fillOrderSelect(id, selected = "") {
   const el = $(id);
   if (!el) return;
   el.innerHTML = `<option value="">请选择应收订单</option>${state.orders.map((order) => (
     `<option value="${order.id}" ${order.id === selected ? "selected" : ""}>${escapeHtml(order.orderNo)} - ${escapeHtml(customerShortNameOf(order) || customerFullNameOf(order))} - 未收 ${money(order.summary.outstandingCny)}</option>`
   )).join("")}`;
+}
+
+function isLogisticsSupplierOption(supplier = {}) {
+  return ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"].includes(supplier.supplierType);
+}
+
+async function ensureAvailableSuppliersLoaded() {
+  if (!state.me) return;
+  if (state.availableSuppliers.length) return;
+  try {
+    const data = await api("/api/suppliers/available");
+    state.availableSuppliers = mergeSupplierCache(state.availableSuppliers, data.suppliers || data.rows || []);
+  } catch (error) {
+    console.error("加载供应商选项失败", error);
+  }
+}
+
+function renderOrderLogisticsSupplierSelect(selected = []) {
+  const el = $("#order-logistics-suppliers");
+  if (!el) return;
+  const selectedSet = new Set(Array.isArray(selected) ? selected : []);
+  const suppliers = state.availableSuppliers.filter((supplier) => supplier.status !== "停用" && isLogisticsSupplierOption(supplier));
+  el.innerHTML = suppliers.length ? suppliers.map((supplier) => `
+    <option value="${escapeHtml(supplier.id)}" ${selectedSet.has(supplier.id) ? "selected" : ""}>${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}</option>
+  `).join("") : `<option value="" disabled>暂无启用物流供应商</option>`;
+}
+
+function selectedOrderLogisticsSupplierIds() {
+  return Array.from($("#order-logistics-suppliers")?.selectedOptions || []).map((option) => option.value).filter(Boolean);
 }
 
 function orderOutstandingOriginal(order) {
@@ -1854,6 +1953,7 @@ async function loadDomesticLogisticsList(options = {}) {
     const data = await api(`/api/domestic-logistics?${params.toString()}`);
     state.domesticLogisticsRows = data.rows || [];
     renderDomesticLogistics();
+    if (!options.skipExpenses) await loadLogisticsExpenses({ silent: true });
   } catch (error) {
     if (!options.silent) toast(error.message);
     if (options.rethrow) throw error;
@@ -2988,6 +3088,38 @@ function canEditCustomsRecognition() {
   return ["管理员", "财务", "业务员"].includes(state.me?.role);
 }
 
+function canSendShippingDocuments() {
+  return ["管理员", "业务员"].includes(state.me?.role);
+}
+
+function shippingDocsDraftOf(order = {}) {
+  return order.shippingDocumentManualDraft || {
+    recipientEmails: [],
+    ccEmails: [],
+    documents: [],
+    missingLabels: [],
+    attachmentCount: 0,
+  };
+}
+
+function shippingDocsDocumentListHtml(draft = {}) {
+  const documents = draft.documents || [];
+  return documents.length ? documents.map((item) => `
+    <li class="${item.exists ? "is-ready" : "is-missing"}">
+      <span>${item.exists ? "✓" : "!"}</span>
+      <strong>${escapeHtml(item.label || item.emailLabel || "-")}</strong>
+      <small>${escapeHtml(item.fileName || (item.exists ? "已上传" : "缺失"))}</small>
+    </li>
+  `).join("") : `<li class="is-missing"><span>!</span><strong>资料</strong><small>未找到可发送文件</small></li>`;
+}
+
+function updateOrderEverywhere(updatedOrder = {}) {
+  if (!updatedOrder?.id) return;
+  state.orders = state.orders.map((item) => (item.id === updatedOrder.id ? { ...item, ...updatedOrder } : item));
+  state.taxRefundOrders = state.taxRefundOrders.map((item) => (item.id === updatedOrder.id ? { ...item, ...updatedOrder } : item));
+  if (state.taxRefundDetailOrder?.id === updatedOrder.id) state.taxRefundDetailOrder = updatedOrder;
+}
+
 function humanFileSize(size) {
   const bytes = Number(size || 0);
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -3023,13 +3155,14 @@ function documentActionsHtml(document, options = {}) {
       </div>
     `;
   }
-  const preview = document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents")
+  const canOpenContent = canOpenDocumentContent(document);
+  const preview = canOpenContent && document.uploadStatus === "SUCCESS" && isPersistedDocument(document) && canReadArea("documents")
     ? `<button class="secondary-button" data-preview-document="${escapeHtml(document.id)}" type="button">预览</button>`
     : "";
-  const download = document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
+  const download = canOpenContent && document.uploadStatus === "SUCCESS" && isPersistedDocument(document)
     ? `<a class="secondary-button" href="/api/order-documents/${encodeURIComponent(document.id)}/download" target="_blank" rel="noreferrer">下载</a>`
     : "";
-  const remove = options.allowDelete !== false && document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
+  const remove = canOpenContent && options.allowDelete !== false && document.uploadStatus === "SUCCESS" && canWriteArea("documents") && isPersistedDocument(document)
     ? `<button class="danger-button" data-delete-document="${escapeHtml(document.id)}" type="button">删除</button>`
     : "";
   return preview || download || remove ? `<div class="row-actions file-actions">${preview}${download}${remove}</div>` : "";
@@ -3060,6 +3193,11 @@ function uploadedFileCard(document, options = {}) {
   const filePrefix = options.typeLabel ? `<span class="file-type-label">${escapeHtml(options.typeLabel)}</span>` : "";
   const uploader = document.uploadedByName || document.uploadedBy?.name || state.me?.name || "-";
   const timeText = formatUploadTime(document.uploadedAt || document.createdAt || (status === "UPLOADING" ? new Date().toISOString() : ""));
+  const displayFileName = document.standardFilename || document.fileName || "-";
+  const originalFilename = document.originalFilename || document.originalName || "";
+  const originalHtml = originalFilename && originalFilename !== displayFileName
+    ? `<small class="original-file-name">原文件名：${escapeHtml(originalFilename)}</small>`
+    : "";
   const bodyHtml = status === "WAITING"
     ? uploadWaitingHtml()
     : (status === "UPLOADING" || status === "PENDING"
@@ -3072,7 +3210,8 @@ function uploadedFileCard(document, options = {}) {
       <div class="file-state-icon" aria-hidden="true">${status === "SUCCESS" ? "✓" : (status === "FAILED" ? "!" : (status === "WAITING" ? "…" : ""))}</div>
       <div class="file-card-main">
         ${filePrefix}
-        <strong title="${escapeHtml(document.fileName || "-")}">${escapeHtml(document.fileName || "-")}</strong>
+        <strong title="${escapeHtml(displayFileName)}">${escapeHtml(displayFileName)}</strong>
+        ${originalHtml}
         <small>${humanFileSize(document.fileSize)}</small>
         ${bodyHtml}
       </div>
@@ -3091,6 +3230,15 @@ function documentStatusBadge(successCount = 0) {
 
 function isPersistedDocument(document) {
   return Boolean(document?.id && !String(document.id).includes(":"));
+}
+
+function isProtectedCustomsDocument(document = {}) {
+  return constants.domesticLogisticsDocumentTypes.some((item) => item.value === document.documentType);
+}
+
+function canOpenDocumentContent(document = {}) {
+  if (!isProtectedCustomsDocument(document)) return true;
+  return ["管理员", "财务", "物流供应商"].includes(state.me?.role) && !state.me?.supplierId;
 }
 
 function currentDetailOrder() {
@@ -3199,7 +3347,15 @@ function logisticsInvoiceLabel(cost = {}) {
 function renderDocumentGrid(order) {
   const completeness = order.documentCompleteness || { text: "暂无单证", completed: 0, total: constants.documentTypes.length };
   $("#document-completeness").textContent = `${completeness.completed || 0}/${completeness.total || constants.documentTypes.length} · ${displayCompletenessText(completeness.text || "-")}`;
-  $("#document-grid").innerHTML = constants.documentTypes.map((type) => {
+  const manualSendCard = canSendShippingDocuments() ? `
+    <article class="document-card shipping-docs-send-card">
+      <div class="document-card-head">
+        <strong>清关资料发送</strong>
+      </div>
+      <button class="secondary-button" data-manual-shipping-docs="${escapeHtml(order.id)}" type="button">手动发送清关资料</button>
+    </article>
+  ` : "";
+  $("#document-grid").innerHTML = manualSendCard + constants.documentTypes.map((type) => {
     const docs = documentRowsForType(order, type.value);
     const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
     const docsHtml = docs.length ? `
@@ -3366,7 +3522,7 @@ function costActionMenu(cost) {
 }
 
 function renderCostDetailsTable(rows = []) {
-  const colspan = 8;
+  const colspan = 9;
   $("#costs-table").innerHTML = rows.length ? rows.map((cost) => {
     const costId = cost.id;
     const createdByName = cost.createdBy?.name || cost.createdByName || "-";
@@ -3383,6 +3539,7 @@ function renderCostDetailsTable(rows = []) {
         <td>${escapeHtml(normalizeCostType(cost.costType) || "-")}</td>
         <td>${escapeHtml(cost.supplierName || cost.vendorName || "-")}</td>
         <td>${moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny })}</td>
+        <td><span class="status ${cost.sourceType === "LOGISTICS_EXPENSE" ? "success" : "neutral"}">${escapeHtml(cost.sourceLabel || (cost.sourceType === "LOGISTICS_EXPENSE" ? "物流费用审核生成" : "人工录入"))}</span></td>
         <td><span class="status ${statusClass(cost.paymentStatus)}">${escapeHtml(cost.paymentStatus || "-")}</span></td>
         <td><span class="status ${hasSuccessfulCostInvoice(cost) ? "success" : "warning"}">${escapeHtml(costInvoiceStatus(cost))}</span></td>
         ${rowActions(detailButton("costs", costId))}
@@ -3393,6 +3550,7 @@ function renderCostDetailsTable(rows = []) {
           optionalDetailItem("提单号", escapeHtml(cost.blNo || cost.billOfLadingNo || "")),
           ["成本类型", escapeHtml(normalizeCostType(cost.costType) || "-")],
           ["供应商", escapeHtml(cost.supplierName || cost.vendorName || "-")],
+          ["来源", escapeHtml(cost.sourceLabel || (cost.sourceType === "LOGISTICS_EXPENSE" ? "物流费用审核生成" : "人工录入"))],
         ] },
         { title: "金额状态", items: [
           ["成本金额", moneyCell({ currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny }), { strong: true }],
@@ -4197,7 +4355,7 @@ function renderTaxRefundExpandedRow(order = {}, options = {}) {
   `;
   return `
     <tr class="expanded-row expanded-detail-row detail-row tax-refund-expanded-row">
-      <td colspan="6" class="expanded-detail-cell">
+      <td colspan="5" class="expanded-detail-cell">
         <div class="expanded-panel expanded-detail-card detail-card tax-refund-expanded-panel" data-expanded-panel="taxRefund">
           <div class="tax-detail-toolbar">
             <div class="tax-actions tax-detail-actions tax-detail-toolbar-actions">${actions}</div>
@@ -4420,7 +4578,20 @@ function renderDomesticTransportItems(items = [normalizeDomesticTransportItem()]
   if (!box) return;
   const normalized = (items && items.length ? items : [normalizeDomesticTransportItem()]).map(normalizeDomesticTransportItem);
   const disabled = readOnly ? "disabled" : "";
-  box.innerHTML = normalized.map((item, index) => `
+  const header = `
+    <div class="domestic-transport-table-head" aria-hidden="true">
+      <span>集装箱号</span>
+      <span>车牌号</span>
+      <span>挂车车牌</span>
+      <span>起运日期</span>
+      <span>起运地</span>
+      <span>到达地</span>
+      <span>运输货物名称</span>
+      <span>备注</span>
+      <span>操作</span>
+    </div>
+  `;
+  const rows = normalized.map((item, index) => `
     <article class="domestic-transport-item-row" data-domestic-transport-item="true" data-item-id="${escapeHtml(item.id || "")}">
       <label><span>集装箱号</span><input data-domestic-item="containerNo" value="${escapeHtml(item.containerNo)}" placeholder="XXXX1234567" ${disabled} /></label>
       <label><span>${$("#domestic-transport-type")?.value === "MULTIMODAL" ? "首程车牌号 *" : "车牌号 *"}</span><input data-domestic-item="truckPlateNo" value="${escapeHtml(item.truckPlateNo)}" placeholder="沪EL2033" ${disabled} /></label>
@@ -4438,6 +4609,7 @@ function renderDomesticTransportItems(items = [normalizeDomesticTransportItem()]
       `}
     </article>
   `).join("");
+  box.innerHTML = `${header}${rows}`;
 }
 
 function domesticLogisticsRemarkPreview() {
@@ -4584,7 +4756,8 @@ function renderDomesticLogistics() {
   const isAdmin = state.me?.role === "管理员";
   box.innerHTML = rows.length ? rows.map((row) => {
     const rowId = row.orderId || row.id;
-    const actions = `
+	    const actions = `
+        ${["管理员", "物流供应商", "物流资料录入员"].includes(state.me?.role) ? `<button class="secondary-button" data-open-logistics-expense="${escapeHtml(rowId)}" type="button">录入费用</button>` : ""}
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">录入</button>` : ""}
         ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">编辑</button>` : ""}
         ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
@@ -4601,41 +4774,420 @@ function renderDomesticLogistics() {
     </tr>
     ${renderDomesticLogisticsDetailRow(row, actions)}
   `;
-  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+	  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+}
+
+function isLogisticsSupplierUser() {
+  return ["物流供应商", "物流资料录入员"].includes(state.me?.role);
+}
+
+function canReviewLogisticsExpense() {
+  return state.me?.role === "管理员";
+}
+
+function canConfirmLogisticsInvoice() {
+  return ["管理员", "财务"].includes(state.me?.role);
+}
+
+async function loadLogisticsExpenses(options = {}) {
+  if (!canReadArea("domesticLogistics")) return;
+  const page = Math.max(1, Number(options.page || state.logisticsExpensePagination.page || 1));
+  const pageSize = Number(state.logisticsExpensePagination.pageSize || 20);
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), status: state.logisticsExpenseStatus || "all" });
+  const keyword = String(state.logisticsExpenseKeyword || "").trim();
+  if (keyword) params.set("keyword", keyword);
+  try {
+    const data = await api(`/api/logistics-costs?${params.toString()}`);
+    state.logisticsExpenseRows = data.rows || [];
+    state.logisticsExpensePagination = {
+      page: data.page || page,
+      pageSize: data.pageSize || pageSize,
+      total: data.total || 0,
+      totalPages: data.totalPages || Math.max(1, Math.ceil((data.total || 0) / pageSize)),
+    };
+    renderLogisticsExpenses();
+  } catch (error) {
+    if (!options.silent) toast(error.message || "读取物流费用失败");
+  }
+}
+
+function logisticsExpenseStatusBadge(status = "") {
+  const cls = status === "审核通过" || status === "已确认" ? "success" : status === "已驳回" ? "danger" : status === "待审核" || status === "已上传" ? "warning" : "neutral";
+  return `<span class="status ${cls}">${escapeHtml(status || "-")}</span>`;
+}
+
+function renderLogisticsExpenses() {
+  const box = $("#logistics-expense-table");
+  if (!box) return;
+  if ($("#logistics-expense-keyword")) $("#logistics-expense-keyword").value = state.logisticsExpenseKeyword || "";
+  if ($("#logistics-expense-status")) $("#logistics-expense-status").value = state.logisticsExpenseStatus || "all";
+  const rows = state.logisticsExpenseRows || [];
+  box.innerHTML = rows.length ? rows.map((row) => {
+    const canWithdraw = isLogisticsSupplierUser() && row.auditStatus === "待审核";
+    const canUpload = row.auditStatus === "审核通过" && ["未通知", "已通知开票"].includes(row.invoiceStatus || "");
+    const canConfirm = canConfirmLogisticsInvoice() && row.invoiceStatus === "已上传";
+    const canMarkPaid = canConfirmLogisticsInvoice() && row.invoiceStatus === "已确认" && row.paymentStatus !== "已付款";
+    const actions = [
+      canReviewLogisticsExpense() && row.auditStatus === "待审核" ? `<button class="secondary-button" data-logistics-expense-action="approve" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">审核通过</button>` : "",
+      canReviewLogisticsExpense() && row.auditStatus === "待审核" ? `<button class="danger-button" data-logistics-expense-action="reject" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">驳回</button>` : "",
+      canWithdraw ? `<button class="secondary-button" data-logistics-expense-action="withdraw" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">撤回</button>` : "",
+      canUpload ? `<button class="secondary-button" data-logistics-expense-action="invoice" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">上传发票</button>` : "",
+      canConfirm ? `<button class="primary-button" data-logistics-expense-action="confirmInvoice" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">确认发票</button>` : "",
+      canMarkPaid ? `<button class="secondary-button" data-logistics-expense-action="markPaid" data-logistics-expense-id="${escapeHtml(row.id)}" type="button">标记已付款</button>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(row.orderNo || "-")}</strong></td>
+        <td>${escapeHtml(row.blNo || "-")}</td>
+        <td>${escapeHtml(row.customerShortName || row.customerName || "-")}</td>
+        <td>${escapeHtml(row.supplierName || "-")}</td>
+        <td><strong>${money(row.amountCny || 0)}</strong><small>${escapeHtml(row.costType || "")} ${escapeHtml(row.currency || "CNY")} ${Number(row.amount || 0).toFixed(2)}</small></td>
+        <td>${logisticsExpenseStatusBadge(row.auditStatus)}</td>
+        <td>${logisticsExpenseStatusBadge(row.invoiceStatus)}</td>
+        <td>${logisticsExpenseStatusBadge(row.paymentStatus)}</td>
+        ${rowActions(actions || `<span class="muted">-</span>`)}
+      </tr>
+    `;
+  }).join("") : `<tr><td colspan="9" class="empty-cell">暂无物流费用记录</td></tr>`;
+  const p = state.logisticsExpensePagination || {};
+  if ($("#logistics-expense-page-info")) $("#logistics-expense-page-info").textContent = `第 ${p.page || 1} / ${p.totalPages || 1} 页，共 ${p.total || 0} 条`;
+}
+
+function resetLogisticsExpenseDrawer() {
+  state.logisticsExpenseSelectedOrder = null;
+  state.logisticsExpenseOrders = [];
+  $("#logistics-expense-form")?.reset();
+  if ($("#logistics-expense-order-results")) $("#logistics-expense-order-results").innerHTML = "";
+  if ($("#logistics-expense-order-summary")) {
+    $("#logistics-expense-order-summary").hidden = true;
+    $("#logistics-expense-order-summary").innerHTML = "";
+  }
+  fillSelect("#logistics-expense-supplier", [], "", true, "请先选择订单");
+  renderLogisticsExpenseItems([{}]);
+}
+
+function openLogisticsExpenseDrawer(order = null) {
+  if (!["管理员", "物流供应商", "物流资料录入员"].includes(state.me?.role)) return toast("没有权限录入物流费用");
+  resetLogisticsExpenseDrawer();
+  $("#logistics-expense-drawer").hidden = false;
+  document.body.classList.add("modal-open");
+  if (order) selectLogisticsExpenseOrder(order);
+  $("#logistics-expense-order-search")?.focus();
+}
+
+function closeLogisticsExpenseDrawer() {
+  $("#logistics-expense-drawer").hidden = true;
+  syncBodyModalOpen();
+}
+
+function logisticsExpenseSupplierOptions(order = state.logisticsExpenseSelectedOrder) {
+  const suppliers = order?.logisticsSuppliers || [];
+  if (isLogisticsSupplierUser() && state.me?.supplierId) return suppliers.filter((supplier) => supplier.id === state.me.supplierId);
+  return suppliers;
+}
+
+function selectLogisticsExpenseOrder(order) {
+  state.logisticsExpenseSelectedOrder = order;
+  if ($("#logistics-expense-order-search")) $("#logistics-expense-order-search").value = order.orderNo || "";
+  const summary = $("#logistics-expense-order-summary");
+  if (summary) {
+    summary.hidden = false;
+    summary.innerHTML = `
+      <div><span>订单号</span><strong>${escapeHtml(order.orderNo || "-")}</strong></div>
+      <div><span>提单号</span><strong>${escapeHtml(order.blNo || "-")}</strong></div>
+      <div><span>客户简称</span><strong>${escapeHtml(order.customerShortName || order.customerName || "-")}</strong></div>
+      <div><span>车牌</span><strong>${escapeHtml(order.truckPlateNo || "-")}</strong></div>
+      <div><span>货物</span><strong>${escapeHtml(order.cargoName || "-")}</strong></div>
+    `;
+  }
+  const suppliers = logisticsExpenseSupplierOptions(order);
+  fillSelect("#logistics-expense-supplier", suppliers.map((supplier) => ({ value: supplier.id, label: supplier.supplierName })), suppliers[0]?.id || "", true, suppliers.length ? "请选择供应商" : "该订单未分配物流供应商");
+  if ($("#logistics-expense-order-results")) $("#logistics-expense-order-results").innerHTML = "";
+}
+
+async function searchLogisticsExpenseOrders(keyword = "") {
+  const params = new URLSearchParams();
+  if (keyword.trim()) params.set("keyword", keyword.trim());
+  try {
+    const data = await api(`/api/logistics-costs/orders?${params.toString()}`);
+    state.logisticsExpenseOrders = data.rows || [];
+    const box = $("#logistics-expense-order-results");
+    if (!box) return;
+    box.innerHTML = state.logisticsExpenseOrders.length ? state.logisticsExpenseOrders.map((order) => `
+      <button class="order-search-option" data-logistics-expense-order-id="${escapeHtml(order.orderId)}" type="button">
+        <strong>${escapeHtml(order.orderNo || "-")}</strong>
+        <span>${escapeHtml(order.blNo || "-")} · ${escapeHtml(order.customerShortName || order.customerName || "-")}</span>
+      </button>
+    `).join("") : `<div class="empty-inline">未找到对应发货订单，请先建立或完善发货订单后再录入费用。</div>`;
+  } catch (error) {
+    toast(error.message || "搜索订单失败");
+  }
+}
+
+function logisticsExpenseItemsFromForm() {
+  return $$("#logistics-expense-items tr").map((row) => ({
+    costType: row.querySelector(".logistics-expense-cost-type")?.value || "",
+    currency: row.querySelector(".logistics-expense-currency")?.value || "CNY",
+    amount: row.querySelector(".logistics-expense-amount")?.value || "",
+    exchangeRate: row.querySelector(".logistics-expense-rate")?.value || "1",
+    remark: row.querySelector(".logistics-expense-remark")?.value || "",
+  }));
+}
+
+function renderLogisticsExpenseItems(items = [{}]) {
+  const box = $("#logistics-expense-items");
+  if (!box) return;
+  const rows = items.length ? items : [{}];
+  box.innerHTML = rows.map((item, index) => {
+    const currency = item.currency || "CNY";
+    const rate = Number(item.exchangeRate || (currency === "CNY" ? 1 : 0)) || 1;
+    const amount = Number(item.amount || 0);
+    return `
+      <tr>
+        <td><select class="logistics-expense-cost-type">${constants.logisticsCostTypes.map((type) => `<option value="${escapeHtml(type)}" ${type === item.costType ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}</select></td>
+        <td><select class="logistics-expense-currency">${constants.currencies.map((cur) => `<option value="${escapeHtml(cur)}" ${cur === currency ? "selected" : ""}>${escapeHtml(cur)}</option>`).join("")}</select></td>
+        <td><input class="logistics-expense-amount" type="number" min="0" step="0.01" value="${escapeHtml(item.amount || "")}" /></td>
+        <td><input class="logistics-expense-rate" type="number" min="0" step="0.0001" value="${escapeHtml(item.exchangeRate || (currency === "CNY" ? "1" : ""))}" /></td>
+        <td><input class="logistics-expense-cny" disabled value="${money(amount * rate)}" /></td>
+        <td><input class="logistics-expense-remark" value="${escapeHtml(item.remark || "")}" /></td>
+        <td><button class="danger-button" data-remove-logistics-expense-item="${index}" type="button">删除</button></td>
+      </tr>
+    `;
+  }).join("");
+  updateLogisticsExpenseTotal();
+}
+
+function updateLogisticsExpenseTotal() {
+  let total = 0;
+  $$("#logistics-expense-items tr").forEach((row) => {
+    const amount = Number(row.querySelector(".logistics-expense-amount")?.value || 0);
+    const currency = row.querySelector(".logistics-expense-currency")?.value || "CNY";
+    const rateInput = row.querySelector(".logistics-expense-rate");
+    if (currency === "CNY" && rateInput && !Number(rateInput.value)) rateInput.value = "1";
+    const rate = Number(rateInput?.value || 0);
+    const cny = amount * (rate || 0);
+    const cnyInput = row.querySelector(".logistics-expense-cny");
+    if (cnyInput) cnyInput.value = money(cny);
+    total += Number.isFinite(cny) ? cny : 0;
+  });
+  if ($("#logistics-expense-total")) $("#logistics-expense-total").textContent = `合计：${money(total)}`;
+}
+
+async function submitLogisticsExpense(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  const order = state.logisticsExpenseSelectedOrder;
+  if (!order?.orderId) return toast("未找到对应发货订单，请先建立或完善发货订单后再录入费用。");
+  const supplierId = $("#logistics-expense-supplier")?.value || "";
+  if (!supplierId) return toast("请选择物流供应商");
+  const items = logisticsExpenseItemsFromForm().filter((item) => Number(item.amount) > 0);
+  if (!items.length) return toast("请至少录入一条物流费用");
+  setFormSubmitLoading(form, true);
+  try {
+    const submitMode = $("#logistics-expense-submit-mode")?.value || "submit";
+    const result = await api("/api/logistics-costs", {
+      method: "POST",
+      body: JSON.stringify({
+        orderId: order.orderId,
+        orderNo: order.orderNo,
+        blNo: order.blNo,
+        supplierId,
+        auditStatus: submitMode === "draft" ? "草稿" : "待审核",
+        items,
+      }),
+    });
+    assertSuccessResponse(result, "物流费用保存失败");
+    closeLogisticsExpenseDrawer();
+    toast(result.message || "物流费用已提交");
+    await loadLogisticsExpenses({ page: 1, silent: true });
+  } catch (error) {
+    toast(error.message || "物流费用保存失败");
+  } finally {
+    setFormSubmitLoading(form, false);
+  }
+}
+
+async function handleLogisticsExpenseAction(action, id) {
+  const row = state.logisticsExpenseRows.find((item) => item.id === id);
+  if (!row) return;
+  try {
+    if (action === "approve") {
+      if (!confirm("确认审核通过该物流费用？审核通过后将自动生成正式成本并通知供应商开票。")) return;
+      const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action: "approve" }) });
+      assertSuccessResponse(result, "审核失败");
+      toast(result.emailError ? "物流费用已审核，开票通知发送失败" : "物流费用已审核通过");
+    } else if (action === "reject") {
+      const reason = prompt("请输入驳回原因");
+      if (!reason) return;
+      const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action: "reject", rejectReason: reason }) });
+      assertSuccessResponse(result, "驳回失败");
+      toast("物流费用已驳回");
+    } else if (action === "withdraw") {
+      const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}`, { method: "DELETE" });
+      assertSuccessResponse(result, "撤回失败");
+      toast("物流费用已撤回");
+    } else if (action === "invoice") {
+      openLogisticsInvoiceDrawer(row);
+      return;
+    } else if (action === "confirmInvoice") {
+      const body = {};
+      if (Number(row.invoiceAmount || 0) > Number(row.amount || 0)) {
+        const reason = prompt("发票金额大于审核金额，请填写强制确认原因");
+        if (!reason) return;
+        body.forceConfirmReason = reason;
+      }
+      const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action: "confirmInvoice", ...body }) });
+      assertSuccessResponse(result, "确认发票失败");
+      toast("物流发票已确认");
+    } else if (action === "markPaid") {
+      if (!confirm("确认该物流费用已付款？")) return;
+      const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action: "markPaid", paymentStatus: "已付款" }) });
+      assertSuccessResponse(result, "更新付款状态失败");
+      toast("物流费用已标记为已付款");
+    }
+    await loadLogisticsExpenses({ silent: true });
+    if (state.view === "costs") await loadCostList({ page: state.costPagination.page || 1, silent: true });
+  } catch (error) {
+    toast(error.message || "操作失败");
+  }
+}
+
+async function exportLogisticsSupplierStatement() {
+  try {
+    const month = prompt("请输入对账月份（YYYY-MM），留空导出全部已审核费用：", today().slice(0, 7));
+    const params = new URLSearchParams();
+    if (month && /^\d{4}-\d{2}$/.test(month.trim())) params.set("month", month.trim());
+    const data = await api(`/api/logistics-costs/statement?${params.toString()}`);
+    const rows = data.rows || [];
+    const headers = ["供应商", "订单数", "审核金额", "已开票金额", "待付款金额", "已付款金额"];
+    const csvRows = [
+      headers.join(","),
+      ...rows.map((row) => [
+        row.supplierName || "",
+        row.orderCount || 0,
+        Number(row.approvedAmountCny || 0).toFixed(2),
+        Number(row.invoicedAmountCny || 0).toFixed(2),
+        Number(row.pendingPaymentAmountCny || 0).toFixed(2),
+        Number(row.paidAmountCny || 0).toFixed(2),
+      ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
+    ];
+    const blob = new Blob([`\uFEFF${csvRows.join("\n")}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `logistics-supplier-statement-${params.get("month") || "all"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast(error.message || "导出对账单失败");
+  }
+}
+
+function openLogisticsInvoiceDrawer(row) {
+  $("#logistics-invoice-form")?.reset();
+  $("#logistics-invoice-expense-id").value = row.id;
+  $("#logistics-invoice-amount").value = row.amount || "";
+  if ($("#logistics-invoice-subtitle")) $("#logistics-invoice-subtitle").textContent = `${row.orderNo || "-"} / ${row.supplierName || "-"} / ${row.costType || "-"}`;
+  $("#logistics-invoice-drawer").hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function closeLogisticsInvoiceDrawer() {
+  $("#logistics-invoice-drawer").hidden = true;
+  syncBodyModalOpen();
+}
+
+async function submitLogisticsInvoice(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (formSubmitInFlight(form)) return;
+  const id = $("#logistics-invoice-expense-id")?.value || "";
+  if (!id) return toast("缺少物流费用记录");
+  const file = $("#logistics-invoice-file")?.files?.[0];
+  if (!file) return toast("请上传发票 PDF 或图片");
+  setFormSubmitLoading(form, true);
+  try {
+    const formData = new FormData();
+    formData.set("invoiceNo", $("#logistics-invoice-no").value);
+    formData.set("invoiceDate", $("#logistics-invoice-date").value);
+    formData.set("invoiceAmount", $("#logistics-invoice-amount").value);
+    formData.set("remark", $("#logistics-invoice-remark").value);
+    formData.set("file", file);
+    const result = await api(`/api/logistics-costs/${encodeURIComponent(id)}/invoice`, { method: "POST", body: formData });
+    assertSuccessResponse(result, "上传发票失败");
+    closeLogisticsInvoiceDrawer();
+    toast("物流发票已上传");
+    await loadLogisticsExpenses({ silent: true });
+  } catch (error) {
+    toast(error.message || "上传发票失败");
+  } finally {
+    setFormSubmitLoading(form, false);
+  }
 }
 
 function renderDomesticLogisticsDocuments(order = state.selectedDomesticLogisticsOrder) {
   const box = $("#domestic-logistics-documents");
   if (!box) return;
   if (!order?.id && !order?.orderId) {
-    box.innerHTML = `<div class="empty-state">请选择订单后上传报关资料。</div>`;
+    box.innerHTML = `<div class="empty-state domestic-document-empty">请选择订单后上传报关资料。</div>`;
     return;
   }
   const normalizedOrder = { ...order, id: order.orderId || order.id, documents: order.documents || [] };
-  const canUpload = ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) && canWriteArea("documents");
-  box.innerHTML = constants.domesticLogisticsDocumentTypes.map((type) => {
+  const canUpload = ["管理员", "业务员"].includes(state.me?.role) && canWriteArea("documents");
+  const rows = constants.domesticLogisticsDocumentTypes.map((type) => {
     const docs = taxDetailDocumentRows(normalizedOrder, type.value, { relatedModule: "EXPORT" });
     const successCount = docs.filter((document) => document.uploadStatus === "SUCCESS").length;
-    const docsHtml = docs.length ? docs.map((document) => uploadedFileCard(document, { allowDelete: false })).join("") : emptyUploadState();
+    const docsHtml = docs.length ? docs.map((document) => {
+      const displayFileName = document.standardFilename || document.fileName || "-";
+      const originalFilename = document.originalFilename || document.originalName || "";
+      return `
+        <div class="domestic-document-file ${document.uploadStatus === "SUCCESS" ? "is-success" : (document.uploadStatus === "FAILED" ? "is-error" : "is-pending")}">
+          <div>
+            <strong>${escapeHtml(displayFileName)}</strong>
+            ${originalFilename && originalFilename !== displayFileName ? `<small>原文件名：${escapeHtml(originalFilename)}</small>` : ""}
+            <small>${humanFileSize(document.fileSize)} · ${escapeHtml(formatUploadTime(document.uploadedAt || document.createdAt))}</small>
+          </div>
+          ${documentActionsHtml(document, { allowDelete: false })}
+        </div>
+      `;
+    }).join("") : `<div class="domestic-document-file is-missing"><strong>暂未上传</strong><small>请选择 PDF 文件上传</small></div>`;
     const exportScope = { relatedModule: "EXPORT" };
     const busyStatus = uploadScopeStatus(normalizedOrder.id, type.value, exportScope);
     const uploadText = busyStatus ? "上传中..." : (successCount ? "替换/上传新版PDF" : "选择PDF文件");
     return `
-      <article class="tax-detail-document" data-document-upload-card="true" data-order-id="${escapeHtml(normalizedOrder.id)}" data-document-type="${escapeHtml(type.value)}">
-        <div class="document-card-head">
+      <div class="domestic-document-row" data-document-upload-card="true" data-order-id="${escapeHtml(normalizedOrder.id)}" data-document-type="${escapeHtml(type.value)}">
+        <div class="domestic-document-type">
+          <span>资料类型</span>
           <strong>${escapeHtml(type.label)}</strong>
           ${documentStatusBadge(successCount)}
         </div>
-        <div class="document-file-list">${docsHtml}</div>
+        <div class="domestic-document-status">
+          <span>状态与文件名</span>
+          ${docsHtml}
+        </div>
+        <div class="domestic-document-action">
+          <span>操作</span>
         ${canUpload ? `
           <label class="supplier-doc-upload ${busyStatus ? "is-busy" : ""}" title="${busyStatus ? "当前资料正在上传，请等待完成或取消后重新上传。" : "选择 PDF 文件后会自动加入上传队列"}">
             <span>${escapeHtml(uploadText)}</span>
             <input type="file" accept="application/pdf,.pdf" data-document-type="${escapeHtml(type.value)}" data-related-module="EXPORT" ${uploadInputAttributes(normalizedOrder.id, type.value, exportScope)} />
           </label>
         ` : ""}
-      </article>
+        </div>
+      </div>
     `;
   }).join("");
+  box.innerHTML = `
+    <div class="domestic-document-table-head" aria-hidden="true">
+      <span>资料类型</span>
+      <span>状态与文件名</span>
+      <span>操作</span>
+    </div>
+    ${rows}
+  `;
 }
 
 function domesticLogisticsExportInvoiceRemark(info = {}) {
@@ -4762,11 +5314,10 @@ function renderTaxRefund() {
         <td><span class="muted-cell">申报日期</span><br>${escapeHtml(customsDateRangeText(order))}</td>
         <td>${taxOverallPercentBadge(completeness)}</td>
         <td>${statusControl}</td>
-        ${rowActions(detailButton("taxRefund", order.id))}
       </tr>
       ${renderTaxRefundExpandedRow(order, { canSubmitTaxRefund, canCancelArchive })}
     `;
-  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty-cell">未找到匹配的退税资料订单</td></tr>`;
 }
 
 function reportEndpoint(type = state.reportType) {
@@ -4810,7 +5361,6 @@ function reportFilters() {
     costType: $("#report-cost-type")?.value || "",
     taxRefundStatus: $("#report-tax-status")?.value || "",
     declarationMonth: $("#report-declaration-month")?.value || "",
-    exportMonth: $("#report-export-month")?.value || "",
     archiveScope: $("#report-archive-scope")?.value || state.reportArchiveScope || "current",
     keyword: $("#report-keyword")?.value.trim() || "",
   };
@@ -4818,7 +5368,6 @@ function reportFilters() {
 
 function syncReportFilterInputs() {
   if ($("#report-declaration-month")) $("#report-declaration-month").value = state.reportDeclarationMonth || "";
-  if ($("#report-export-month")) $("#report-export-month").value = state.reportExportMonth || "";
 }
 
 function reportQueryParams(page = 1) {
@@ -4867,9 +5416,7 @@ function renderReports() {
   const allChecked = state.reportRows.length > 0 && state.reportRows.every((row) => state.reportSelectedIds.has(row.id));
   const showTaxRefundReportFilters = state.reportType === "tax-refunds";
   const declarationMonthLabel = $("#report-declaration-month")?.closest("label");
-  const exportMonthLabel = $("#report-export-month")?.closest("label");
   if (declarationMonthLabel) declarationMonthLabel.hidden = !showTaxRefundReportFilters;
-  if (exportMonthLabel) exportMonthLabel.hidden = !showTaxRefundReportFilters;
   syncReportFilterInputs();
   head.innerHTML = `
     <tr>
@@ -4906,15 +5453,12 @@ function resetReportForm() {
   state.reportSelectedIds = new Set();
   state.reportQueried = false;
   state.reportDeclarationMonth = "";
-  state.reportExportMonth = "";
   if ($("#report-declaration-month")) $("#report-declaration-month").value = "";
-  if ($("#report-export-month")) $("#report-export-month").value = "";
   renderReports();
 }
 
 function syncReportFilterState() {
   state.reportDeclarationMonth = $("#report-declaration-month")?.value || "";
-  state.reportExportMonth = $("#report-export-month")?.value || "";
 }
 
 function openReportDetail(rowId) {
@@ -5009,8 +5553,8 @@ function renderTaxDocumentItem(order, type, scope = {}) {
   const customsUpload = constants.domesticLogisticsDocumentTypes.some((item) => item.value === type.value);
   const exportOrSalesUpload = ["EXPORT", "SALES"].includes(scope.relatedModule || documentRelatedModule(type.value));
   const canUpload = !archived && canWriteArea("documents")
-    && (!customsUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role))
-    && (!exportOrSalesUpload || ["管理员", "业务员", "物流资料录入员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
+    && (!customsUpload || ["管理员", "业务员"].includes(state.me?.role))
+    && (!exportOrSalesUpload || ["管理员", "业务员"].includes(state.me?.role) || type.value === "EXPORT_INVOICE")
     && (type.value !== "EXPORT_INVOICE" || ["管理员", "财务"].includes(state.me?.role));
   return `
     <article class="tax-detail-document ${type.value === "CUSTOMS_ENTRY_FORM" ? "is-customs-entry" : ""}"
@@ -5037,23 +5581,55 @@ function renderTaxDocumentItem(order, type, scope = {}) {
 
 function renderCustomsRecognitionPanel(order = {}) {
   const editable = canEditCustomsRecognition() && state.taxRefundMode !== "archive" && order.taxRefundStatus !== "SUBMITTED";
+  const status = order.customsDeclarationParseStatus || order.customsParseStatus || "";
+  const source = order.customsDeclarationParseSource || order.customsParseSource || "";
+  const statusLabel = customsRecognitionStatusLabel(status, source);
+  const statusClass = customsRecognitionStatusClass(status, source);
+  const message = order.customsDeclarationParseMessage || order.customsParseMessage || customsRecognitionDefaultMessage(status);
   return `
     <div class="document-card customs-recognition-card">
       <div class="document-card-head">
         <strong>报关单信息</strong>
+        <div class="customs-recognition-actions">
+          <span class="customs-recognition-badge ${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
+          ${canSendShippingDocuments() ? `<button class="secondary-button" data-manual-shipping-docs="${escapeHtml(order.id)}" type="button">手动发送清关资料</button>` : ""}
+        </div>
       </div>
-      <p class="muted-cell">请手工填写报关单关键信息。</p>
+      <p class="customs-recognition-message">${escapeHtml(message)}</p>
       <form class="compact-form customs-recognition-form" data-customs-form="${escapeHtml(order.id)}">
         <div class="form-grid">
           <label><span>报关单号</span><input name="customsDeclarationNo" value="${escapeHtml(order.customsDeclarationNo || "")}" ${editable ? "" : "disabled"} /></label>
           <label><span>申报日期</span><input name="customsDeclarationDate" type="date" value="${escapeHtml(order.customsDeclarationDate || "")}" ${editable ? "" : "disabled"} /></label>
-          <label><span>出口日期</span><input name="customsExportDate" type="date" value="${escapeHtml(order.customsExportDate || "")}" ${editable ? "" : "disabled"} /></label>
-          <label><span>申报口岸</span><input name="customsPort" value="${escapeHtml(order.customsPort || "")}" ${editable ? "" : "disabled"} /></label>
         </div>
-        ${editable ? `<div class="form-actions"><button class="primary-button" type="submit">保存报关单信息</button></div>` : ""}
+        ${editable ? `<div class="form-actions"><button class="secondary-button" data-reparse-customs="${escapeHtml(order.id)}" type="button">重新识别</button><button class="primary-button" type="submit">保存报关单信息</button></div>` : ""}
       </form>
     </div>
   `;
+}
+
+function customsRecognitionStatusLabel(status = "", source = "") {
+  if (source === "MANUAL") return "手工填写";
+  return {
+    SUCCESS: "识别成功",
+    PARTIAL: "部分识别",
+    FAILED: "识别失败",
+    MANUAL: "手工填写",
+  }[status] || "未识别";
+}
+
+function customsRecognitionStatusClass(status = "", source = "") {
+  if (source === "MANUAL" || status === "MANUAL") return "is-manual";
+  if (status === "SUCCESS") return "is-success";
+  if (status === "PARTIAL") return "is-partial";
+  if (status === "FAILED") return "is-failed";
+  return "is-empty";
+}
+
+function customsRecognitionDefaultMessage(status = "") {
+  if (status === "SUCCESS") return "已识别：\n✓ 报关单号\n✓ 申报日期";
+  if (status === "PARTIAL") return "文件已上传，已自动识别部分信息，缺失字段请手工填写。";
+  if (status === "FAILED") return "文件已上传，但未自动识别到申报日期/海关编号，请手工填写。";
+  return "上传报关单 PDF 后自动识别报关单号和申报日期，也可手工填写。";
 }
 
 function factorySupplierCosts(order = {}) {
@@ -5257,16 +5833,118 @@ function findDocumentById(id) {
   return pools.find((document) => document.id === id) || null;
 }
 
+function previewMimeType(document = {}, fallback = "") {
+  const explicit = String(document.mimeType || document.fileType || fallback || "").toLowerCase();
+  if (explicit) return explicit;
+  const name = String(document.originalFilename || document.originalName || document.fileName || "").toLowerCase();
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".webp")) return "image/webp";
+  return "application/pdf";
+}
+
+function previewKindFromMime(mimeType = "") {
+  if (mimeType === "application/pdf") return "pdf";
+  if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) return "image";
+  return "";
+}
+
+function pdfPreviewSource(url = "", zoom = "page-width") {
+  if (!url) return "about:blank";
+  const normalizedZoom = zoom === "page-fit" || zoom === "page-width" ? zoom : `${Number(zoom) || 100}`;
+  return `${url}#page=1&zoom=${encodeURIComponent(normalizedZoom)}`;
+}
+
+function pdfThumbnailSource(url = "") {
+  return url ? `${url}#page=1&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0` : "about:blank";
+}
+
+function setPreviewZoomButtonState(zoom) {
+  $$("[data-pdf-zoom]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.pdfZoom === String(zoom));
+  });
+}
+
+function updatePreviewThumbnailState() {
+  const panel = $("#pdf-preview-modal .pdf-preview-panel");
+  const button = $("#pdf-preview-toggle-thumbs");
+  if (panel) panel.classList.toggle("is-thumbnails-hidden", Boolean(state.pdfPreviewThumbnailsHidden));
+  if (button) button.textContent = state.pdfPreviewThumbnailsHidden ? "显示缩略图" : "隐藏缩略图";
+}
+
+function applyImagePreviewZoom(zoom = "page-width") {
+  const image = $("#image-preview-frame");
+  const canvas = $("#pdf-preview-canvas");
+  if (!image || state.pdfPreviewKind !== "image") return;
+  image.style.maxWidth = "none";
+  image.style.maxHeight = "none";
+  image.style.transform = "";
+  image.style.margin = "0 auto";
+  image.style.display = "block";
+  if (zoom === "page-fit") {
+    image.style.width = "100%";
+    image.style.height = "100%";
+    image.style.objectFit = "contain";
+  } else {
+    const percent = zoom === "page-width" ? 100 : Math.max(25, Number(zoom) || 100);
+    image.style.width = `${percent}%`;
+    image.style.height = "auto";
+    image.style.objectFit = "contain";
+    if (canvas) canvas.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+  }
+}
+
+function applyPreviewZoom(zoom = "page-width") {
+  state.pdfPreviewZoom = zoom;
+  setPreviewZoomButtonState(zoom);
+  if (state.pdfPreviewKind === "pdf") {
+    const frame = $("#pdf-preview-frame");
+    if (frame && state.pdfPreviewBareUrl) frame.src = pdfPreviewSource(state.pdfPreviewBareUrl, zoom);
+  } else {
+    applyImagePreviewZoom(zoom);
+  }
+}
+
+function setPreviewMode(kind = "pdf") {
+  const frame = $("#pdf-preview-frame");
+  const image = $("#image-preview-frame");
+  const thumbFrame = $("#pdf-preview-thumb-frame");
+  const thumbImage = $("#pdf-preview-thumb-image");
+  const toolbar = $("#pdf-preview-toolbar");
+  state.pdfPreviewKind = kind;
+  if (frame) frame.hidden = kind !== "pdf";
+  if (image) image.hidden = kind !== "image";
+  if (thumbFrame) thumbFrame.hidden = kind !== "pdf";
+  if (thumbImage) thumbImage.hidden = kind !== "image";
+  if (toolbar) toolbar.dataset.previewKind = kind;
+}
+
 function closePdfPreview() {
   const modal = $("#pdf-preview-modal");
   const frame = $("#pdf-preview-frame");
+  const image = $("#image-preview-frame");
+  const thumbFrame = $("#pdf-preview-thumb-frame");
+  const thumbImage = $("#pdf-preview-thumb-image");
   const errorBox = $("#pdf-preview-error");
   if (frame) frame.src = "about:blank";
+  if (image) {
+    image.src = "";
+    image.hidden = true;
+  }
+  if (thumbFrame) thumbFrame.src = "about:blank";
+  if (thumbImage) {
+    thumbImage.src = "";
+    thumbImage.hidden = true;
+  }
   if (state.pdfPreviewObjectUrl) URL.revokeObjectURL(state.pdfPreviewObjectUrl);
   if (modal) modal.hidden = true;
   state.pdfPreviewDocument = null;
   state.pdfPreviewObjectUrl = "";
+  state.pdfPreviewBareUrl = "";
   state.pdfPreviewError = "";
+  state.pdfPreviewKind = "pdf";
+  state.pdfPreviewZoom = "page-width";
+  state.pdfPreviewDoubleZoomIndex = 0;
   if (errorBox) errorBox.hidden = true;
   syncBodyModalOpen();
 }
@@ -5274,34 +5952,50 @@ function closePdfPreview() {
 async function openPdfPreview(documentId) {
   if (!canReadArea("documents")) return toast("没有权限预览资料");
   const doc = findDocumentById(documentId);
-  if (!doc || doc.uploadStatus !== "SUCCESS") return toast("未找到可预览的 PDF 文件");
+  if (!doc || doc.uploadStatus !== "SUCCESS") return toast("未找到可预览的文件");
   state.pdfPreviewDocument = doc;
   const modal = $("#pdf-preview-modal");
   const frame = $("#pdf-preview-frame");
+  const image = $("#image-preview-frame");
+  const thumbFrame = $("#pdf-preview-thumb-frame");
+  const thumbImage = $("#pdf-preview-thumb-image");
   const errorBox = $("#pdf-preview-error");
   if (!modal || !frame) return;
+  $("#pdf-preview-title").textContent = "文件预览";
   $("#pdf-preview-type").textContent = doc.documentTypeLabel || documentTypeLabel(doc.documentType);
-  $("#pdf-preview-name").textContent = doc.fileName || "-";
+  $("#pdf-preview-name").textContent = doc.standardFilename || doc.fileName || "-";
   $("#pdf-preview-order").textContent = doc.orderNo || state.taxRefundDetailOrder?.orderNo || "-";
   $("#pdf-preview-supplier").textContent = doc.supplierName || "无供应商";
   $("#pdf-preview-download").href = `/api/order-documents/${encodeURIComponent(doc.id)}/download`;
   frame.src = "about:blank";
+  if (image) image.src = "";
+  if (thumbFrame) thumbFrame.src = "about:blank";
+  if (thumbImage) thumbImage.src = "";
   if (state.pdfPreviewObjectUrl) URL.revokeObjectURL(state.pdfPreviewObjectUrl);
   state.pdfPreviewObjectUrl = "";
+  state.pdfPreviewBareUrl = "";
   state.pdfPreviewError = "";
+  state.pdfPreviewZoom = "page-width";
+  state.pdfPreviewThumbnailsHidden = false;
+  state.pdfPreviewDoubleZoomIndex = 0;
+  setPreviewMode("pdf");
+  updatePreviewThumbnailState();
+  setPreviewZoomButtonState("page-width");
   if (errorBox) {
     errorBox.hidden = false;
-    errorBox.innerHTML = `<strong>正在加载 PDF 预览...</strong><small>请稍候</small>`;
+    errorBox.innerHTML = `<strong>正在加载文件预览...</strong><small>请稍候</small>`;
   }
   modal.hidden = false;
   document.body?.classList?.add?.("modal-open");
   try {
     const response = await fetch(`/api/order-documents/${encodeURIComponent(doc.id)}/preview`, {
-      headers: { Accept: "application/pdf" },
+      headers: { Accept: "application/pdf,image/jpeg,image/png,image/webp" },
     });
     const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !contentType.includes("application/pdf")) {
-      let message = "PDF 预览失败，请下载原文件查看";
+    const mimeType = previewMimeType(doc, contentType.split(";")[0]);
+    const kind = previewKindFromMime(mimeType);
+    if (!response.ok || !kind) {
+      let message = "文件预览失败，请下载原文件查看";
       let code = response.headers.get("x-preview-error-code") || "";
       try {
         const data = await response.json();
@@ -5314,19 +6008,31 @@ async function openPdfPreview(documentId) {
       throw new Error(code ? `${message}（${code}）` : message);
     }
     const blob = await response.blob();
-    if (blob.type && blob.type !== "application/pdf") throw new Error("INVALID_FILE_TYPE");
+    const blobMimeType = previewMimeType(doc, blob.type || mimeType);
+    const blobKind = previewKindFromMime(blobMimeType);
+    if (!blobKind) throw new Error("INVALID_FILE_TYPE");
     const url = URL.createObjectURL(blob);
     state.pdfPreviewObjectUrl = url;
-    frame.src = url;
+    state.pdfPreviewBareUrl = url;
+    setPreviewMode(blobKind);
+    if (blobKind === "pdf") {
+      frame.src = pdfPreviewSource(url, "page-width");
+      if (thumbFrame) thumbFrame.src = pdfThumbnailSource(url);
+    } else {
+      if (image) image.src = url;
+      if (thumbImage) thumbImage.src = url;
+      applyImagePreviewZoom("page-width");
+    }
     if (errorBox) errorBox.hidden = true;
   } catch (error) {
-    console.error("PDF 预览失败", error);
-    state.pdfPreviewError = error.message || "PDF 预览失败，请下载原文件查看";
+    console.error("文件预览失败", error);
+    state.pdfPreviewError = error.message || "文件预览失败，请下载原文件查看";
     if (frame) frame.src = "about:blank";
+    if (image) image.src = "";
     if (errorBox) {
       errorBox.hidden = false;
       errorBox.innerHTML = `
-        <strong>PDF 预览失败，请下载原文件查看</strong>
+        <strong>文件预览失败，请下载原文件查看</strong>
         <small>${escapeHtml(state.pdfPreviewError)}</small>
       `;
     }
@@ -5418,6 +6124,11 @@ function renderCustomerSettings() {
             optionalDetailItem("联系人", escapeHtml(customer.contactPerson || "")),
             optionalDetailItem("联系邮箱", escapeHtml(customer.contactEmail || "")),
             optionalDetailItem("联系电话", escapeHtml(customer.contactPhone || "")),
+            ["清关资料自动通知", customer.enableAutoShippingDocsNotification ? "已启用" : "未启用"],
+            optionalDetailItem("清关资料接收邮箱", escapeHtml(emailListText(customer.shippingDocsEmails) || "默认使用客户主邮箱"), { pre: true }),
+            optionalDetailItem("抄送邮箱", escapeHtml(emailListText(customer.shippingDocsCcEmails)), { pre: true }),
+            ["清关邮件语言", escapeHtml(customer.clearanceEmailLanguageLabel || (customer.clearanceEmailLanguage === "RU" ? "Русский" : "English"))],
+            ["自动发送资料", escapeHtml((customer.autoSendDocumentTypes || []).map((type) => ({ commercialInvoice: "商业发票", packingList: "装箱单", customsDeclaration: "报关单" }[type] || type)).join("、") || "商业发票、装箱单、报关单")],
             optionalDetailItem("备注", escapeHtml(customer.remark || ""), { wide: true, pre: true }),
           ] },
         ], canWriteArea("customers") ? `<button data-edit-customer="${escapeHtml(customer.id)}">编辑</button><button data-delete-customer="${escapeHtml(customer.id)}">删除</button>` : "")}
@@ -5632,7 +6343,8 @@ const supplierFields = [
   ["id", "#supplier-id"], ["supplierName", "#supplier-name"], ["supplierType", "#supplier-type"], ["country", "#supplier-country"],
   ["contactPerson", "#supplier-contact-person"], ["phone", "#supplier-phone"], ["email", "#supplier-email"], ["address", "#supplier-address"],
   ["invoiceTitle", "#supplier-invoice-title"], ["taxNumber", "#supplier-tax-number"], ["bankName", "#supplier-bank-name"],
-  ["bankAccount", "#supplier-bank-account"], ["status", "#supplier-status"], ["allowDomesticLogisticsEntry", "#supplier-domestic-logistics-entry"], ["remark", "#supplier-remark"],
+  ["bankAccount", "#supplier-bank-account"], ["status", "#supplier-status"], ["allowDomesticLogisticsEntry", "#supplier-domestic-logistics-entry"],
+  ["allowLogisticsExpenseEntry", "#supplier-logistics-expense-entry"], ["allowLogisticsInvoiceUpload", "#supplier-logistics-invoice-upload"], ["remark", "#supplier-remark"],
 ];
 
 const costFields = [
@@ -6376,6 +7088,7 @@ async function submitOrder(event) {
       data.manualRateConfirmed = true;
     }
     const id = data.id;
+    data.logisticsSupplierIds = selectedOrderLogisticsSupplierIds();
     delete data.id;
     delete data.country;
     if (!canWriteArea("commissions")) delete data.salespersonCommissionRate;
@@ -6639,6 +7352,7 @@ function syncUploadTaskToDocument(task) {
     costId: task.costId || "",
     supplierId: task.supplierId || "",
     relatedModule: task.relatedModule || documentRelatedModule(task.documentType),
+    uploadSource: task.uploadSource || uploadSourceForCurrentView(task.relatedModule),
     documentType: task.documentType,
     fileName: task.fileName,
     fileSize: task.fileSize,
@@ -6650,6 +7364,13 @@ function syncUploadTaskToDocument(task) {
     uploadedAt: task.uploadedAt || new Date().toISOString(),
     file: task.file,
   };
+}
+
+function uploadSourceForCurrentView(relatedModule = "") {
+  if (state.view === "taxRefund") return "TAX_REFUND_DETAIL";
+  if (state.view === "domesticLogistics") return "DOMESTIC_LOGISTICS";
+  if (relatedModule === "SUPPLIER") return "LOGISTICS_SUPPLIER_PORTAL";
+  return "ORDER_DOCUMENTS";
 }
 
 function finishUploadTask(task) {
@@ -6684,6 +7405,7 @@ function enqueueUploadTask(order, documentType, file, scope = {}) {
     state.uploadBatchCompleted = 0;
   }
   const normalizedScope = normalizedUploadScope(scope, documentType);
+  const uploadSource = normalizedScope.uploadSource || scope.uploadSource || uploadSourceForCurrentView(normalizedScope.relatedModule);
   setUploadScopeBusy(order.id, documentType, normalizedScope, true);
   clearFailedTransientUploads(order.id, documentType, scope);
   const key = documentUploadKey(order.id, documentType, normalizedScope);
@@ -6693,6 +7415,7 @@ function enqueueUploadTask(order, documentType, file, scope = {}) {
     costId: normalizedScope.costId,
     supplierId: normalizedScope.supplierId,
     relatedModule: normalizedScope.relatedModule,
+    uploadSource,
     documentType,
     fileName: file.name,
     fileSize: file.size,
@@ -6742,6 +7465,7 @@ function startQueuedUpload(task) {
   formData.append("documentType", task.documentType);
   if (task.costId) formData.append("costId", task.costId);
   if (task.supplierId) formData.append("supplierId", task.supplierId);
+  if (task.uploadSource) formData.append("uploadSource", task.uploadSource);
   const xhr = new XMLHttpRequest();
   task.xhr = xhr;
   xhr.open("POST", "/api/order-documents");
@@ -6842,6 +7566,7 @@ function retryQueuedUpload(id) {
     costId: source.costId || "",
     supplierId: source.supplierId || "",
     relatedModule: source.relatedModule || documentRelatedModule(source.documentType),
+    uploadSource: source.uploadSource || uploadSourceForCurrentView(source.relatedModule || documentRelatedModule(source.documentType)),
     documentType: source.documentType,
     fileName: source.fileName,
     fileSize: source.fileSize,
@@ -7041,6 +7766,211 @@ async function saveCustomsRecognition(form) {
     toast(result.message || "报关单信息已保存");
   } catch (error) {
     toast(error.message);
+  }
+}
+
+async function reparseCustomsRecognition(orderId = "") {
+  const order = state.taxRefundDetailOrder;
+  if (!order || order.id !== orderId) return toast("请先打开退税资料详情");
+  if (!canEditCustomsRecognition()) return toast("没有权限重新识别报关单信息");
+  const isManual = (order.customsDeclarationParseSource || order.customsParseSource || "") === "MANUAL"
+    || (order.customsDeclarationParseStatus || order.customsParseStatus || "") === "MANUAL";
+  if (isManual && !window.confirm("当前报关单信息为手工填写，重新识别会覆盖手工保存值，是否继续？")) return;
+  try {
+    const result = await api(`/api/tax-refunds/${encodeURIComponent(order.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "reparseCustomsRecognition", confirmManualOverride: isManual }),
+    });
+    assertSuccessResponse(result, "报关单信息重新识别失败");
+    state.taxRefundDetailOrder = result.order;
+    state.taxRefundOrders = state.taxRefundOrders.map((item) => (item.id === result.order.id ? { ...item, ...result.order } : item));
+    renderTaxRefund();
+    renderTaxRefundDetail();
+    toast(result.message || "报关单信息已重新识别");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function ensureManualShippingDocsModal() {
+  let modal = $("#manual-shipping-docs-modal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "manual-shipping-docs-modal";
+  modal.className = "shipping-docs-modal";
+  modal.hidden = true;
+  modal.innerHTML = `
+    <div class="shipping-docs-modal-backdrop" data-close-manual-shipping-docs></div>
+    <section class="shipping-docs-modal-panel" role="dialog" aria-modal="true" aria-labelledby="manual-shipping-docs-title">
+      <div class="shipping-docs-modal-header">
+        <div>
+          <h3 id="manual-shipping-docs-title">手动发送清关资料</h3>
+          <p id="manual-shipping-docs-summary">-</p>
+        </div>
+        <button class="modal-close" data-close-manual-shipping-docs type="button">×</button>
+      </div>
+      <form id="manual-shipping-docs-form" class="shipping-docs-form">
+        <div class="shipping-docs-confirm-grid" id="manual-shipping-docs-meta"></div>
+        <div class="shipping-docs-warning" id="manual-shipping-docs-warning" hidden></div>
+        <div>
+          <strong>将发送的资料清单</strong>
+          <ul class="shipping-docs-file-list" id="manual-shipping-docs-files"></ul>
+        </div>
+        <div class="form-grid">
+          <label class="wide"><span>收件邮箱</span><textarea name="recipientEmails" rows="2" required></textarea></label>
+          <label class="wide"><span>抄送邮箱</span><textarea name="ccEmails" rows="2"></textarea></label>
+          <label><span>邮件语言</span><select name="emailLanguage"><option value="EN">English</option><option value="RU">Русский</option></select></label>
+          <label class="wide"><span>邮件标题</span><input name="emailSubject" required /></label>
+          <label class="wide"><span>邮件正文</span><textarea name="emailBody" rows="9" required></textarea></label>
+        </div>
+        <div class="form-actions">
+          <button class="secondary-button" data-close-manual-shipping-docs type="button">取消</button>
+          <button class="primary-button" id="manual-shipping-docs-submit" type="submit">发送清关资料</button>
+        </div>
+      </form>
+    </section>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-manual-shipping-docs]")) closeManualShippingDocsModal();
+  });
+  modal.querySelector("#manual-shipping-docs-form")?.addEventListener("submit", sendManualShippingDocumentsFromModal);
+  modal.querySelector("[name='emailLanguage']")?.addEventListener("change", updateManualShippingDocsLanguageTemplate);
+  return modal;
+}
+
+function closeManualShippingDocsModal() {
+  const modal = $("#manual-shipping-docs-modal");
+  if (modal) modal.hidden = true;
+  state.manualShippingDocsOrderId = "";
+  state.manualShippingDocsDraft = null;
+  state.manualShippingDocsSubmitting = false;
+  document.body.classList.toggle("modal-open", anyModalOpen());
+}
+
+function fillManualShippingDocsModal(orderId = "", draft = {}) {
+  const modal = ensureManualShippingDocsModal();
+  state.manualShippingDocsOrderId = orderId;
+  state.manualShippingDocsDraft = draft;
+  $("#manual-shipping-docs-summary").textContent = `${draft.customerShortName || "-"} · ${draft.orderNo || "-"}`;
+  $("#manual-shipping-docs-meta").innerHTML = [
+    ["客户简称", draft.customerShortName || "-"],
+    ["订单号", draft.orderNo || "-"],
+    ["收件邮箱", (draft.recipientEmails || []).join(", ") || "-"],
+    ["抄送邮箱", (draft.ccEmails || []).join(", ") || "-"],
+    ["邮件语言", "英文 / 俄文"],
+  ].map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+  $("#manual-shipping-docs-files").innerHTML = shippingDocsDocumentListHtml(draft);
+  const warning = $("#manual-shipping-docs-warning");
+  if (warning) {
+    warning.hidden = !(draft.missingLabels || []).length;
+    warning.textContent = (draft.missingLabels || []).length ? `当前资料不完整，缺少${(draft.missingLabels || []).join("、")}。发送前将再次确认。` : "";
+  }
+  modal.querySelector("[name='recipientEmails']").value = (draft.recipientEmails || []).join("\n");
+  modal.querySelector("[name='ccEmails']").value = (draft.ccEmails || []).join("\n");
+  modal.querySelector("[name='emailLanguage']").value = String(draft.language || "EN").toUpperCase();
+  modal.querySelector("[name='emailSubject']").value = draft.subject || "";
+  modal.querySelector("[name='emailBody']").value = draft.body || "";
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function updateManualShippingDocsLanguageTemplate() {
+  const draft = state.manualShippingDocsDraft;
+  const modal = $("#manual-shipping-docs-modal");
+  if (!draft || !modal) return;
+  const language = String(modal.querySelector("[name='emailLanguage']")?.value || "EN").toUpperCase();
+  const orderNo = draft.orderNo || "-";
+  const billOfLadingNo = draft.billOfLadingNo || draft.blNo || "-";
+  const customsDeclarationDate = draft.customsDeclarationDate || "-";
+  const labels = (draft.documents || []).filter((item) => item.exists).map((item) => item.emailLabel || item.label);
+  if (language === "RU") {
+    modal.querySelector("[name='emailSubject']").value = `Отгрузочные документы по заказу ${orderNo} / коносамент ${billOfLadingNo}`;
+    modal.querySelector("[name='emailBody']").value = [
+      "Здравствуйте!",
+      "",
+      `Во вложении направляем отгрузочные документы по заказу ${orderNo}.`,
+      "",
+      "Документы во вложении:",
+      ...(labels.length ? labels : ["Commercial Invoice", "Packing List", "Customs Declaration"]).map((label) => `- ${label}`),
+      "",
+      `Номер коносамента: ${billOfLadingNo}`,
+      `Дата декларации: ${customsDeclarationDate}`,
+      "",
+      "Пожалуйста, проверьте документы и сообщите нам, если потребуется дополнительная информация.",
+      "",
+      "С уважением,",
+      "Zhejiang Lainuo Building Materials Co., Ltd.",
+    ].join("\n");
+    return;
+  }
+  modal.querySelector("[name='emailSubject']").value = `Shipping Documents for Order ${orderNo} / B/L ${billOfLadingNo}`;
+  modal.querySelector("[name='emailBody']").value = [
+    "Dear Customer,",
+    "",
+    "Please find attached the shipping documents for your customs clearance:",
+    "",
+    ...labels.map((label) => `- ${label}`),
+    "",
+    "This email also serves as the shipment notification.",
+    "",
+    "Best regards,",
+    "NEXTWOOD",
+  ].join("\n");
+}
+
+async function openManualShippingDocuments(orderId = "") {
+  if (!canSendShippingDocuments()) return toast("没有权限手动发送清关资料");
+  if (!orderId) return toast("缺少订单信息，不能发送");
+  try {
+    const result = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "prepareManualShippingDocuments" }),
+    });
+    assertSuccessResponse(result, "读取清关资料发送信息失败");
+    fillManualShippingDocsModal(orderId, result.data || {});
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function sendManualShippingDocumentsFromModal(event) {
+  event.preventDefault();
+  if (state.manualShippingDocsSubmitting) return;
+  const modal = $("#manual-shipping-docs-modal");
+  const draft = state.manualShippingDocsDraft || {};
+  const orderId = state.manualShippingDocsOrderId;
+  if (!modal || !orderId) return toast("缺少订单信息，不能发送");
+  if ((draft.missingLabels || []).length && !window.confirm("当前资料不完整，是否仍然发送？")) return;
+  state.manualShippingDocsSubmitting = true;
+  const submit = $("#manual-shipping-docs-submit");
+  if (submit) submit.disabled = true;
+  try {
+    const result = await api(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "sendManualShippingDocuments",
+        recipientEmails: modal.querySelector("[name='recipientEmails']")?.value || "",
+        ccEmails: modal.querySelector("[name='ccEmails']")?.value || "",
+        emailLanguage: modal.querySelector("[name='emailLanguage']")?.value || "EN",
+        emailSubject: modal.querySelector("[name='emailSubject']")?.value || "",
+        emailBody: modal.querySelector("[name='emailBody']")?.value || "",
+        confirmIncomplete: Boolean((draft.missingLabels || []).length),
+      }),
+    });
+    assertSuccessResponse(result, "手动发送清关资料失败");
+    updateOrderEverywhere(result.order);
+    renderOrders();
+    renderOrderDetails();
+    renderTaxRefund();
+    renderTaxRefundDetail();
+    closeManualShippingDocsModal();
+    toast("✓ 清关资料发送成功");
+  } catch (error) {
+    toast("✗ 清关资料发送失败");
+  } finally {
+    state.manualShippingDocsSubmitting = false;
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -7364,6 +8294,36 @@ function refreshCustomerUiAfterSave() {
   updateOrderCustomerCountry();
 }
 
+function emailListText(value) {
+  return Array.isArray(value) ? value.join("\n") : String(value || "");
+}
+
+function customerShippingDocTypesFromForm() {
+  const types = [];
+  if ($("#customer-doc-commercial-invoice")?.checked) types.push("commercialInvoice");
+  if ($("#customer-doc-packing-list")?.checked) types.push("packingList");
+  if ($("#customer-doc-customs-declaration")?.checked) types.push("customsDeclaration");
+  return types;
+}
+
+function defaultClearanceEmailLanguage(country = "") {
+  return /俄罗斯|russia|рф/i.test(String(country || "")) ? "RU" : "EN";
+}
+
+function syncCustomerClearanceLanguageDefault() {
+  const id = $("#customer-id")?.value || "";
+  const select = $("#customer-clearance-email-language");
+  if (!select || id || select.dataset.manuallyChanged === "true") return;
+  select.value = defaultClearanceEmailLanguage($("#customer-country")?.value || "");
+}
+
+function setCustomerShippingDocTypeChecks(types = ["commercialInvoice", "packingList", "customsDeclaration"]) {
+  const selected = new Set(Array.isArray(types) && types.length ? types : ["commercialInvoice", "packingList", "customsDeclaration"]);
+  if ($("#customer-doc-commercial-invoice")) $("#customer-doc-commercial-invoice").checked = selected.has("commercialInvoice");
+  if ($("#customer-doc-packing-list")) $("#customer-doc-packing-list").checked = selected.has("packingList");
+  if ($("#customer-doc-customs-declaration")) $("#customer-doc-customs-declaration").checked = selected.has("customsDeclaration");
+}
+
 function upsertSupplier(rows, supplier) {
   if (!supplier?.id) return Array.isArray(rows) ? rows : [];
   const next = Array.isArray(rows) ? [...rows] : [];
@@ -7432,6 +8392,11 @@ async function submitCustomer(event) {
       contactPerson: $("#customer-contact-person").value,
       contactEmail: $("#customer-contact-email").value,
       contactPhone: $("#customer-contact-phone").value,
+      enableAutoShippingDocsNotification: $("#customer-auto-shipping-docs")?.checked || false,
+      shippingDocsEmails: $("#customer-shipping-docs-emails")?.value || "",
+      shippingDocsCcEmails: $("#customer-shipping-docs-cc-emails")?.value || "",
+      autoSendDocumentTypes: customerShippingDocTypesFromForm(),
+      clearanceEmailLanguage: $("#customer-clearance-email-language")?.value || defaultClearanceEmailLanguage($("#customer-country").value),
       salespersonUserId: $("#customer-salesperson").value,
       commissionRate: $("#customer-commission-rate").value,
       commissionStatus: $("#customer-commission-status").value,
@@ -7466,6 +8431,7 @@ async function submitSupplier(event) {
   setFormSubmitLoading(form, true);
   try {
     const data = readForm("supplier", supplierFields);
+    data.allowedLogisticsCostTypes = selectedSupplierLogisticsCostTypes();
     const id = data.id;
     delete data.id;
     const result = await api(id ? `/api/suppliers/${id}` : "/api/suppliers", { method: id ? "PATCH" : "POST", body: JSON.stringify(data) });
@@ -7919,6 +8885,8 @@ function resetOrderForm({ clearStoredDraft = true } = {}) {
   $("#order-due-date").value = "";
   $("#order-reminder-days").value = "7";
   $("#order-status").value = "草稿";
+  renderOrderLogisticsSupplierSelect([]);
+  ensureAvailableSuppliersLoaded().then(() => renderOrderLogisticsSupplierSelect([]));
   $("#order-remark").value = "";
   clearInstallments();
   updateOrderCustomerCountry();
@@ -7964,6 +8932,14 @@ function resetForm(name) {
     fillSalespersonSelect("#customer-salesperson");
     $("#customer-commission-rate").value = "";
     $("#customer-commission-status").value = "启用";
+    if ($("#customer-auto-shipping-docs")) $("#customer-auto-shipping-docs").checked = false;
+    if ($("#customer-shipping-docs-emails")) $("#customer-shipping-docs-emails").value = "";
+    if ($("#customer-shipping-docs-cc-emails")) $("#customer-shipping-docs-cc-emails").value = "";
+    if ($("#customer-clearance-email-language")) {
+      $("#customer-clearance-email-language").value = "EN";
+      $("#customer-clearance-email-language").dataset.manuallyChanged = "false";
+    }
+    setCustomerShippingDocTypeChecks();
   }
   if (name === "supplier") {
     $("#supplier-form").reset();
@@ -7971,6 +8947,9 @@ function resetForm(name) {
     $("#supplier-status").value = "启用";
     $("#supplier-type").value = "其他供应商";
     refreshSupplierDomesticLogisticsEntryOptions("false");
+    if ($("#supplier-logistics-expense-entry")) $("#supplier-logistics-expense-entry").value = "false";
+    if ($("#supplier-logistics-invoice-upload")) $("#supplier-logistics-invoice-upload").value = "false";
+    renderSupplierLogisticsCostTypeChecks([]);
   }
   if (name === "user") {
     $("#user-form").reset();
@@ -7997,6 +8976,14 @@ function fillCustomerForm(customer) {
   $("#customer-contact-person").value = customer.contactPerson || "";
   $("#customer-contact-email").value = customer.contactEmail || "";
   $("#customer-contact-phone").value = customer.contactPhone || "";
+  if ($("#customer-auto-shipping-docs")) $("#customer-auto-shipping-docs").checked = Boolean(customer.enableAutoShippingDocsNotification);
+  if ($("#customer-shipping-docs-emails")) $("#customer-shipping-docs-emails").value = emailListText(customer.shippingDocsEmails);
+  if ($("#customer-shipping-docs-cc-emails")) $("#customer-shipping-docs-cc-emails").value = emailListText(customer.shippingDocsCcEmails);
+  if ($("#customer-clearance-email-language")) {
+    $("#customer-clearance-email-language").value = customer.clearanceEmailLanguage || defaultClearanceEmailLanguage(customer.country || "");
+    $("#customer-clearance-email-language").dataset.manuallyChanged = "false";
+  }
+  setCustomerShippingDocTypeChecks(customer.autoSendDocumentTypes);
   $("#customer-remark").value = customer.remark || "";
 }
 
@@ -8026,6 +9013,7 @@ function openSupplierDrawer(supplier = null) {
   if (supplier?.id) {
     setForm(supplierFields, supplier);
     $("#supplier-id").value = supplier.id;
+    renderSupplierLogisticsCostTypeChecks(supplier.allowedLogisticsCostTypes || []);
   }
   if ($("#supplier-drawer-title")) $("#supplier-drawer-title").textContent = supplier?.id ? "编辑供应商资料" : "新建供应商";
   if ($("#supplier-form-subtitle")) $("#supplier-form-subtitle").textContent = supplier?.id ? `正在编辑：${supplier.supplierName || "-"}` : "新建供应商";
@@ -8050,6 +9038,8 @@ function editOrder(id) {
   clearDraft("order");
   switchView("orders", { preserveOrderForm: true, skipOrderConfirm: true });
   setForm(orderFields, order);
+  renderOrderLogisticsSupplierSelect(order.logisticsSupplierIds || []);
+  ensureAvailableSuppliersLoaded().then(() => renderOrderLogisticsSupplierSelect(order.logisticsSupplierIds || []));
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
   $("#order-commission-rate").value = Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2);
@@ -8539,6 +9529,7 @@ async function logoutCurrentUser() {
   state.passwordChangeRequired = false;
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "";
+  clearAuthStorage();
   clearLocalCaches();
   closeAccountMenu();
   closeLoginModal();
@@ -8680,6 +9671,11 @@ function bindEvents() {
   $("#cost-form").addEventListener("submit", submitCost);
   $("#logistics-form").addEventListener("submit", submitLogistics);
   $("#customer-form").addEventListener("submit", submitCustomer);
+  $("#customer-country")?.addEventListener("input", syncCustomerClearanceLanguageDefault);
+  $("#customer-clearance-email-language")?.addEventListener("change", () => {
+    const select = $("#customer-clearance-email-language");
+    if (select) select.dataset.manuallyChanged = "true";
+  });
   $("#supplier-form").addEventListener("submit", submitSupplier);
   $("#customer-search-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -8814,6 +9810,8 @@ function bindEvents() {
     handleUploadInputChange(input, order, input.dataset.documentType);
   });
   $("#document-grid").addEventListener("click", (event) => {
+    const manualShippingDocsButton = event.target.closest("[data-manual-shipping-docs]");
+    if (manualShippingDocsButton) return openManualShippingDocuments(manualShippingDocsButton.dataset.manualShippingDocs);
     const retry = event.target.closest("[data-retry-upload]");
     if (retry) return retryQueuedUpload(retry.dataset.retryUpload);
     const cancel = event.target.closest("[data-cancel-upload]");
@@ -8967,6 +9965,21 @@ function bindEvents() {
     if (handleExpandableRowClick(event)) return;
     const deleteButton = event.target.closest("[data-delete-domestic-logistics]");
     if (deleteButton) return deleteDomesticLogistics(deleteButton.dataset.deleteDomesticLogistics);
+    const expenseButton = event.target.closest("[data-open-logistics-expense]");
+    if (expenseButton) {
+      const row = state.domesticLogisticsRows.find((item) => item.orderId === expenseButton.dataset.openLogisticsExpense || item.id === expenseButton.dataset.openLogisticsExpense);
+      if (row) openLogisticsExpenseDrawer({
+        orderId: row.orderId || row.id,
+        orderNo: row.orderNo,
+        blNo: row.blNo,
+        customerShortName: row.customerShortName,
+        customerName: row.customerName,
+        truckPlateNo: row.domesticLogisticsInfo?.truckPlateNo || "",
+        cargoName: row.domesticLogisticsInfo?.cargoDescription || "",
+        logisticsSuppliers: row.logisticsSuppliers || [],
+      });
+      return;
+    }
     const button = event.target.closest("[data-domestic-logistics-action]");
     if (!button) return;
     const row = state.domesticLogisticsRows.find((item) => item.orderId === button.dataset.domesticLogisticsId || item.id === button.dataset.domesticLogisticsId);
@@ -8974,6 +9987,47 @@ function bindEvents() {
   });
   $$("[data-close-domestic-logistics]").forEach((button) => button.addEventListener("click", closeDomesticLogisticsEditor));
   $("#domestic-logistics-form")?.addEventListener("submit", submitDomesticLogistics);
+  $("#refresh-logistics-expenses")?.addEventListener("click", () => loadLogisticsExpenses());
+  $("#export-logistics-statement")?.addEventListener("click", exportLogisticsSupplierStatement);
+  $("#open-logistics-expense-drawer")?.addEventListener("click", () => openLogisticsExpenseDrawer());
+  $("#logistics-expense-filter-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.logisticsExpenseKeyword = $("#logistics-expense-keyword")?.value || "";
+    state.logisticsExpenseStatus = $("#logistics-expense-status")?.value || "all";
+    loadLogisticsExpenses({ page: 1 });
+  });
+  $("#logistics-expense-prev")?.addEventListener("click", () => loadLogisticsExpenses({ page: Math.max(1, (state.logisticsExpensePagination.page || 1) - 1) }));
+  $("#logistics-expense-next")?.addEventListener("click", () => loadLogisticsExpenses({ page: Math.min(state.logisticsExpensePagination.totalPages || 1, (state.logisticsExpensePagination.page || 1) + 1) }));
+  $("#logistics-expense-table")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-logistics-expense-action]");
+    if (!button) return;
+    handleLogisticsExpenseAction(button.dataset.logisticsExpenseAction, button.dataset.logisticsExpenseId);
+  });
+  $$("[data-close-logistics-expense]").forEach((button) => button.addEventListener("click", closeLogisticsExpenseDrawer));
+  $("#logistics-expense-form")?.addEventListener("submit", submitLogisticsExpense);
+  $("#logistics-expense-order-search")?.addEventListener("input", (event) => {
+    clearTimeout(state.logisticsExpenseOrderSearchTimer);
+    state.logisticsExpenseOrderSearchTimer = setTimeout(() => searchLogisticsExpenseOrders(event.target.value || ""), 250);
+  });
+  $("#logistics-expense-order-results")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-logistics-expense-order-id]");
+    if (!button) return;
+    const order = state.logisticsExpenseOrders.find((item) => item.orderId === button.dataset.logisticsExpenseOrderId);
+    if (order) selectLogisticsExpenseOrder(order);
+  });
+  $("#add-logistics-expense-item")?.addEventListener("click", () => renderLogisticsExpenseItems([...logisticsExpenseItemsFromForm(), {}]));
+  $("#logistics-expense-items")?.addEventListener("input", updateLogisticsExpenseTotal);
+  $("#logistics-expense-items")?.addEventListener("change", updateLogisticsExpenseTotal);
+  $("#logistics-expense-items")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-logistics-expense-item]");
+    if (!button) return;
+    const index = Number(button.dataset.removeLogisticsExpenseItem || 0);
+    const rows = logisticsExpenseItemsFromForm();
+    rows.splice(index, 1);
+    renderLogisticsExpenseItems(rows.length ? rows : [{}]);
+  });
+  $$("[data-close-logistics-invoice]").forEach((button) => button.addEventListener("click", closeLogisticsInvoiceDrawer));
+  $("#logistics-invoice-form")?.addEventListener("submit", submitLogisticsInvoice);
   $("#domestic-logistics-editor")?.addEventListener("change", (event) => {
     const documentInput = event.target.closest("[data-document-type]");
     if (!documentInput) return;
@@ -9039,6 +10093,10 @@ function bindEvents() {
     if (submitButton) return submitTaxRefund(submitButton.dataset.submitTaxRefund);
     const cancelArchiveButton = event.target.closest("[data-cancel-tax-archive]");
     if (cancelArchiveButton) return cancelTaxArchive(cancelArchiveButton.dataset.cancelTaxArchive);
+    const reparseButton = event.target.closest("[data-reparse-customs]");
+    if (reparseButton) return reparseCustomsRecognition(reparseButton.dataset.reparseCustoms);
+    const manualShippingDocsButton = event.target.closest("[data-manual-shipping-docs]");
+    if (manualShippingDocsButton) return openManualShippingDocuments(manualShippingDocsButton.dataset.manualShippingDocs);
     const preview = event.target.closest("[data-preview-document]");
     if (preview) return openPdfPreview(preview.dataset.previewDocument);
     const deleteButton = event.target.closest("[data-delete-document]");
@@ -9084,7 +10142,25 @@ function bindEvents() {
     });
   });
   $("#pdf-preview-modal").addEventListener("click", (event) => {
-    if (event.target.closest("[data-close-pdf-preview]")) closePdfPreview();
+    if (event.target.closest("[data-close-pdf-preview]")) return closePdfPreview();
+    const zoomButton = event.target.closest("[data-pdf-zoom]");
+    if (zoomButton) {
+      applyPreviewZoom(zoomButton.dataset.pdfZoom || "page-width");
+      return;
+    }
+    if (event.target.closest("[data-toggle-pdf-thumbnails]")) {
+      state.pdfPreviewThumbnailsHidden = !state.pdfPreviewThumbnailsHidden;
+      updatePreviewThumbnailState();
+      return;
+    }
+    const pageButton = event.target.closest("[data-pdf-page]");
+    if (pageButton && state.pdfPreviewKind === "pdf") applyPreviewZoom(state.pdfPreviewZoom || "page-width");
+  });
+  $("#pdf-preview-canvas")?.addEventListener("dblclick", () => {
+    const zoomCycle = ["100", "150", "200"];
+    const zoom = zoomCycle[state.pdfPreviewDoubleZoomIndex % zoomCycle.length];
+    state.pdfPreviewDoubleZoomIndex += 1;
+    applyPreviewZoom(zoom);
   });
   $("#cost-payment-date").addEventListener("change", () => {
     $$("#cost-items .cost-item-row").forEach((row) => applyCostItemRate(row).catch(() => {}));

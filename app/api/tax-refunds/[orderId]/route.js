@@ -1,4 +1,4 @@
-import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, previewCustomsRecognition, reparseCustomsRecognition, requireText, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
+import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, prepareManualShippingDocumentsNotification, previewCustomsRecognition, reparseCustomsRecognition, requireText, resendShippingDocumentsNotification, sendManualShippingDocumentsNotification, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,18 @@ export async function PATCH(request, { params }) {
     if (body.action === "reparseCustomsRecognition") {
       const order = await reparseCustomsRecognition(request, actor, orderId, body);
       return ok({ success: true, order, message: "报关单信息已重新识别" });
+    }
+    if (body.action === "resendShippingDocuments") {
+      const order = await resendShippingDocumentsNotification(request, actor, orderId);
+      return ok({ success: true, order, message: "清关资料通知已处理" });
+    }
+    if (body.action === "prepareManualShippingDocuments") {
+      const data = await prepareManualShippingDocumentsNotification(actor, orderId);
+      return ok({ success: true, data, message: "清关资料发送信息已生成" });
+    }
+    if (body.action === "sendManualShippingDocuments") {
+      const order = await sendManualShippingDocumentsNotification(request, actor, orderId, body);
+      return ok({ success: true, order, message: "清关资料已发送" });
     }
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);

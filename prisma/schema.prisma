@@ -84,6 +84,13 @@ model User {
   submittedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsSubmittedBy")
   confirmedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsFinanceConfirmedBy")
   uploadedDomesticLogisticsDocuments DomesticLogisticsDocument[]
+  sentShippingDocumentNotifications ShippingDocumentNotification[] @relation("ShippingDocumentNotificationSentBy")
+  createdLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseCreatedBy")
+  updatedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseUpdatedBy")
+  reviewedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseReviewedBy")
+  invoiceUploadedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceUploadedBy")
+  invoiceConfirmedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceConfirmedBy")
+  assignedOrderLogisticsSuppliers OrderLogisticsSupplier[] @relation("OrderLogisticsSupplierAssignedBy")
 
   @@index([supplierId])
   @@index([approvalStatus])
@@ -138,6 +145,11 @@ model Customer {
   contactPerson   String?   @map("contact_person")
   contactEmail    String?   @map("contact_email")
   contactPhone    String?   @map("contact_phone")
+  enableAutoShippingDocsNotification Boolean @default(false) @map("enable_auto_shipping_docs_notification")
+  shippingDocsEmails Json? @map("shipping_docs_emails")
+  shippingDocsCcEmails Json? @map("shipping_docs_cc_emails")
+  autoSendDocumentTypes Json? @map("auto_send_document_types")
+  clearanceEmailLanguage String @default("EN") @map("clearance_email_language")
   remark          String?
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -145,6 +157,7 @@ model Customer {
 
   salesperson User? @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
   orders ReceivableOrder[]
+  shippingDocumentNotifications ShippingDocumentNotification[]
 
   @@index([name])
   @@index([shortName])
@@ -170,6 +183,9 @@ model Supplier {
   remark        String?
   status        String    @default("启用")
   allowDomesticLogisticsEntry Boolean @default(false) @map("allow_domestic_logistics_entry")
+  allowLogisticsExpenseEntry Boolean @default(false) @map("allow_logistics_expense_entry")
+  allowLogisticsInvoiceUpload Boolean @default(false) @map("allow_logistics_invoice_upload")
+  allowedLogisticsCostTypes Json? @map("allowed_logistics_cost_types")
   createdById   String?   @map("created_by")
   updatedById   String?   @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -181,11 +197,15 @@ model Supplier {
   costs     OrderCost[]
   documents OrderDocument[]
   operatorUsers User[] @relation("SupplierOperators")
+  logisticsExpenses LogisticsExpense[]
+  assignedOrders OrderLogisticsSupplier[]
 
   @@index([supplierName])
   @@index([supplierType])
   @@index([status])
   @@index([allowDomesticLogisticsEntry])
+  @@index([allowLogisticsExpenseEntry])
+  @@index([allowLogisticsInvoiceUpload])
   @@index([deletedAt])
   @@map("suppliers")
 }
@@ -236,11 +256,10 @@ model ReceivableOrder {
   taxSubmittedAt       DateTime? @map("tax_submitted_at")
   customsDeclarationNo String?   @map("customs_declaration_no")
   customsDeclarationDate DateTime? @map("customs_declaration_date") @db.Date
-  customsExportDate    DateTime? @map("customs_export_date") @db.Date
-  customsPort          String?   @map("customs_port")
   customsParsedAt      DateTime? @map("customs_parsed_at")
   customsParseStatus   String?   @map("customs_parse_status")
   customsParseMessage  String?   @map("customs_parse_message")
+  customsDeclarationParseSource String? @map("customs_declaration_parse_source")
   creditDays          Int?      @map("credit_days")
   dueDate             DateTime? @map("due_date") @db.Date
   reminderDays        Int       @default(7) @map("reminder_days")
@@ -265,6 +284,9 @@ model ReceivableOrder {
   domesticLogisticsInfos DomesticLogisticsInfo[]
   domesticLogisticsDocuments DomesticLogisticsDocument[]
   commissionSettlementRecords CommissionSettlement[]
+  shippingDocumentNotifications ShippingDocumentNotification[]
+  logisticsExpenses LogisticsExpense[]
+  logisticsSuppliers OrderLogisticsSupplier[]
 
   @@index([orderNo])
   @@index([blNo])
@@ -282,7 +304,6 @@ model ReceivableOrder {
   @@index([taxSubmittedAt])
   @@index([taxSubmittedById])
   @@index([customsDeclarationDate])
-  @@index([customsExportDate])
   @@index([customsParseStatus])
   @@index([dueDate])
   @@index([deletedAt])
@@ -411,6 +432,8 @@ model OrderDocument {
   documentType   OrderDocumentType @map("document_type")
   fileName       String            @map("file_name")
   originalName   String?           @map("original_name")
+  originalFilename String?         @map("original_filename")
+  standardFilename String?         @map("standard_filename")
   fileSize       Int               @map("file_size")
   mimeType       String            @map("mime_type")
   r2Bucket       String            @map("r2_bucket")
@@ -428,6 +451,7 @@ model OrderDocument {
   cost       OrderCost?      @relation(fields: [costId], references: [id])
   supplier   Supplier?       @relation(fields: [supplierId], references: [id])
   uploadedBy User?           @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
+  logisticsExpenseInvoice LogisticsExpense? @relation("LogisticsExpenseInvoiceDocument")
 
   @@index([orderId])
   @@index([costId])
@@ -438,6 +462,40 @@ model OrderDocument {
   @@index([uploadedById])
   @@index([deletedAt])
   @@map("order_documents")
+}
+
+model ShippingDocumentNotification {
+  id                String    @id @default(cuid())
+  orderId           String    @map("order_id")
+  customerId        String    @map("customer_id")
+  invoiceId         String?   @map("invoice_id")
+  sentById          String?   @map("sent_by_id")
+  recipientEmails   Json      @map("recipient_emails")
+  ccEmails          Json?     @map("cc_emails")
+  documentTypes     Json      @map("document_types")
+  attachmentFileIds Json      @map("attachment_file_ids")
+  sendStatus        String    @default("pending") @map("send_status")
+  sendMode          String    @default("auto") @map("send_mode")
+  emailLanguage     String?   @map("email_language")
+  emailSubject      String?   @map("email_subject")
+  emailBody         String?   @map("email_body")
+  errorMessage      String?   @map("error_message")
+  sentAt            DateTime? @map("sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  order    ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer        @relation(fields: [customerId], references: [id])
+  sentBy   User?           @relation("ShippingDocumentNotificationSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([invoiceId])
+  @@index([sentById])
+  @@index([sendStatus])
+  @@index([sendMode])
+  @@index([sentAt])
+  @@map("shipping_document_notifications")
 }
 
 model Payment {
@@ -491,6 +549,8 @@ model OrderCost {
   costConfirmedAt DateTime? @map("cost_confirmed_at")
   paymentDate   DateTime? @map("payment_date") @db.Date
   invoiceStatus String    @default("未收到") @map("invoice_status")
+  sourceType    String    @default("MANUAL") @map("source_type")
+  sourceId      String?   @map("source_id")
   remark        String?
   createdById   String?   @map("created_by")
   updatedById   String?   @map("updated_by")
@@ -503,15 +563,100 @@ model OrderCost {
   createdBy User?           @relation("CostsCreated", fields: [createdById], references: [id])
   updatedBy User?           @relation("CostsUpdated", fields: [updatedById], references: [id])
   documents OrderDocument[]
+  generatedLogisticsExpense LogisticsExpense? @relation("LogisticsExpenseGeneratedCost")
 
   @@index([orderId])
   @@index([supplierId])
   @@index([costType])
   @@index([paymentStatus])
   @@index([costConfirmed])
+  @@index([sourceType])
+  @@index([sourceId])
   @@index([orderId, supplierId, costType, amount, createdById, createdAt], map: "order_costs_duplicate_lookup_idx")
   @@index([deletedAt])
+  @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@map("order_costs")
+}
+
+model LogisticsExpense {
+  id            String    @id @default(cuid())
+  orderId       String    @map("order_id")
+  supplierId    String    @map("supplier_id")
+  costId        String?   @unique @map("cost_id")
+  supplierNameSnapshot String @default("") @map("supplier_name_snapshot")
+  costType      String    @map("cost_type")
+  currency      String    @default("CNY")
+  exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource String?   @map("exchange_rate_source")
+  exchangeRateType   String?   @map("exchange_rate_type")
+  amount        Decimal   @db.Decimal(18, 2)
+  amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  remark        String?
+  auditStatus   String    @default("草稿") @map("audit_status")
+  invoiceStatus String    @default("未通知") @map("invoice_status")
+  paymentStatus String    @default("待开票") @map("payment_status")
+  submittedAt   DateTime? @map("submitted_at")
+  reviewedById  String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewRemark  String?   @map("review_remark")
+  rejectReason  String?   @map("reject_reason")
+  invoiceNo     String?   @map("invoice_no")
+  invoiceDate   DateTime? @map("invoice_date") @db.Date
+  invoiceAmount Decimal?  @map("invoice_amount") @db.Decimal(18, 2)
+  invoiceRemark String?   @map("invoice_remark")
+  invoiceDocumentId String? @unique @map("invoice_document_id")
+  invoiceUploadedById String? @map("invoice_uploaded_by")
+  invoiceUploadedAt DateTime? @map("invoice_uploaded_at")
+  invoiceConfirmedById String? @map("invoice_confirmed_by")
+  invoiceConfirmedAt DateTime? @map("invoice_confirmed_at")
+  forceConfirmReason String? @map("force_confirm_reason")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  order     ReceivableOrder @relation(fields: [orderId], references: [id])
+  supplier  Supplier        @relation(fields: [supplierId], references: [id])
+  cost      OrderCost?      @relation("LogisticsExpenseGeneratedCost", fields: [costId], references: [id])
+  createdBy User?           @relation("LogisticsExpenseCreatedBy", fields: [createdById], references: [id])
+  updatedBy User?           @relation("LogisticsExpenseUpdatedBy", fields: [updatedById], references: [id])
+  reviewedBy User?          @relation("LogisticsExpenseReviewedBy", fields: [reviewedById], references: [id])
+  invoiceDocument OrderDocument? @relation("LogisticsExpenseInvoiceDocument", fields: [invoiceDocumentId], references: [id])
+  invoiceUploadedBy User?   @relation("LogisticsExpenseInvoiceUploadedBy", fields: [invoiceUploadedById], references: [id])
+  invoiceConfirmedBy User?  @relation("LogisticsExpenseInvoiceConfirmedBy", fields: [invoiceConfirmedById], references: [id])
+
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([costId])
+  @@index([costType])
+  @@index([auditStatus])
+  @@index([invoiceStatus])
+  @@index([paymentStatus])
+  @@index([createdById])
+  @@index([reviewedById])
+  @@index([deletedAt])
+  @@map("logistics_expenses")
+}
+
+model OrderLogisticsSupplier {
+  id           String   @id @default(cuid())
+  orderId      String   @map("order_id")
+  supplierId   String   @map("supplier_id")
+  assignedById String?  @map("assigned_by")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  order      ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplier   Supplier        @relation(fields: [supplierId], references: [id])
+  assignedBy User?           @relation("OrderLogisticsSupplierAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([orderId, supplierId])
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([assignedById])
+  @@map("order_logistics_suppliers")
 }
 
 model ExchangeRate {
