@@ -161,11 +161,6 @@ type ManualShippingForm = {
 };
 
 type TaxRefundMode = "current" | "archive";
-type MissingTarget = {
-  key: string;
-  label: string;
-  title?: string;
-};
 
 const PAGE_SIZE = 20;
 const TAX_EXPORT_UPLOAD_TYPES = [
@@ -194,6 +189,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [totalPages, setTotalPages] = useState(1);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [expandedRowId, setExpandedRowId] = useState("");
   const [detailOrderId, setDetailOrderId] = useState("");
   const [detailRow, setDetailRow] = useState<TaxRefundRow | null>(null);
   const [detail, setDetail] = useState<TaxRefundDetail | null>(null);
@@ -244,6 +240,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
 
   function switchMode(nextMode: TaxRefundMode) {
     setMode(nextMode);
+    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -255,6 +252,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
+    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -264,6 +262,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
+    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -271,6 +270,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   }
 
   function gotoPage(nextPage: number) {
+    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -590,7 +590,11 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
               <TaxRefundTableRow
                 key={row.id}
                 row={row}
+                expanded={expandedRowId === row.id}
+                packageDownloading={packageDownloadingId === row.id}
+                onToggle={() => setExpandedRowId((current) => (current === row.id ? "" : row.id))}
                 onViewDetail={() => void loadDetail(row)}
+                onDownloadPackage={() => void downloadPackage(row)}
               />
             )) : (
               <tr>
@@ -648,37 +652,89 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
 
 function TaxRefundTableRow({
   row,
+  expanded,
+  packageDownloading,
+  onToggle,
   onViewDetail,
+  onDownloadPackage,
 }: {
   row: TaxRefundRow;
+  expanded: boolean;
+  packageDownloading: boolean;
+  onToggle: () => void;
   onViewDetail: () => void;
+  onDownloadPackage: () => void;
 }) {
   const completeness = row.documentCompleteness || {};
   const completed = Number(completeness.completed || 0);
   const total = Number(completeness.total || 0);
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
+  const missingLabels = normalizedMissingLabels(completeness);
 
   return (
-    <tr className={styles.clickableRow} onClick={onViewDetail}>
-      <td><strong>{row.orderNo || "-"}</strong></td>
-      <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
-      <td>{declarationDate}</td>
-      <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
-      <td><span className={`${styles.statusPill} ${statusClass(row.taxRefundStatus)}`}>{row.taxRefundStatusLabel || row.taxRefundStatus || "-"}</span></td>
-      <td>
-        <button
-          className={styles.rowDetailButton}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onViewDetail();
-          }}
-        >
-          查看资料
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr className={styles.clickableRow} onClick={onToggle}>
+        <td><strong>{row.orderNo || "-"}</strong></td>
+        <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
+        <td>{declarationDate}</td>
+        <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
+        <td><span className={`${styles.statusPill} ${statusClass(row.taxRefundStatus)}`}>{row.taxRefundStatusLabel || row.taxRefundStatus || "-"}</span></td>
+        <td>
+          <button
+            className={styles.rowDetailButton}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggle();
+            }}
+          >
+            {expanded ? "收起" : "详情"}
+          </button>
+        </td>
+      </tr>
+      {expanded ? (
+        <tr className={styles.detailRow}>
+          <td colSpan={6}>
+            <div className={`${styles.detailCard} ${styles.taxDropdownMenu}`}>
+              <div className={styles.taxDropdownActions}>
+                <button className={styles.primaryButtonCompact} type="button" onClick={onViewDetail}>
+                  查看资料
+                </button>
+                <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
+                  {packageDownloading ? "下载中..." : "下载资料包"}
+                </button>
+              </div>
+              <div className={styles.taxDropdownGrid}>
+                <div>
+                  <strong>退税资料菜单</strong>
+                  <div className={styles.taxDropdownMeta}>
+                    <span>订单号：{row.orderNo || "-"}</span>
+                    <span>提单号：{row.blNo || "-"}</span>
+                    <span>申报日期：{declarationDate}</span>
+                  </div>
+                </div>
+                <div className={styles.taxDropdownSummary}>
+                  <span className={`${styles.statusPill} ${missingLabels.length ? styles.statusWarning : styles.statusSuccess}`}>
+                    {missingLabels.length ? `${missingLabels.length} 项待处理` : "资料已完整"}
+                  </span>
+                </div>
+              </div>
+              {missingLabels.length ? (
+                <div className={styles.taxDropdownMissing}>
+                  <span>缺失资料</span>
+                  <div className={styles.missingChipList}>
+                    {missingLabels.map((label) => (
+                      <span key={label}>{label}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 
@@ -723,15 +779,9 @@ function TaxRefundDetailDrawer({
   onDelete: (orderId: string, document: TaxDocument) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
 }) {
-  const completeness = detail?.documentCompleteness || row.documentCompleteness || {};
-  const completed = Number(completeness.completed || 0);
-  const total = Number(completeness.total || 0);
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const missingLabels = normalizedMissingLabels(completeness);
   const displayCustomer = row.customerShortName && row.customerFullName
     ? `${row.customerShortName} / ${row.customerFullName}`
     : (row.customerFullName || row.customerName || row.customerShortName || "-");
-  const missingBadgeText = missingLabels.length ? `缺失资料：${missingLabels.length}项待处理` : "资料完整";
 
   return (
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="退税资料详情">
@@ -740,10 +790,9 @@ function TaxRefundDetailDrawer({
           <div className={styles.taxRefundDrawerTitle}>
             <span>退税资料详情</span>
             <strong>{row.orderNo || "-"} · {displayCustomer}</strong>
-            <small>提单号：{row.blNo || "-"} ｜ 完整度：{percent}%（{completed}/{total || 0}）</small>
+            <small>提单号：{row.blNo || "-"}</small>
           </div>
           <div className={styles.taxRefundDrawerActions}>
-            <span className={`${styles.taxMissingBadge} ${missingLabels.length ? "" : styles.taxMissingBadgeComplete}`}>{missingBadgeText}</span>
             <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
               {packageDownloading ? "下载中..." : "下载资料包"}
             </button>
@@ -811,11 +860,9 @@ function TaxRefundDetailPanel({
   if (error) return <div className={styles.inlineError}>{error}</div>;
   if (!detail) return <div className={styles.emptyState}>点击查看资料后加载详情</div>;
 
-  const completeness = detail.documentCompleteness || fallback.documentCompleteness || {};
   const groups = groupDocuments(detail.documents || []);
   const domesticRemark = detail.domesticLogisticsInfo?.exportInvoiceRemark || detail.domesticLogisticsInfo?.remarkText || "";
   const factoryCosts = factorySupplierCosts(detail.costs || []);
-  const missingTargets = taxMissingTargets(detail, fallback);
 
   return (
     <div className={styles.taxDetailPanel} id={taxTargetDomId("tax-detail-top")}>
@@ -828,7 +875,6 @@ function TaxRefundDetailPanel({
             <DetailField label="提单号" value={detail.blNo || fallback.blNo || "-"} />
             <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
             <DetailField label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
-            <DetailField label="资料完整度" value={`${Number(completeness.completed || 0)}/${Number(completeness.total || 0)}`} />
             <DetailField label="国内物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemark ? "已提交" : "未提交")} />
           </div>
         </div>
@@ -837,26 +883,6 @@ function TaxRefundDetailPanel({
           <div className={styles.exportInvoiceRemarkText}>
             {domesticRemark || "暂无出口发票备注，请前往国内物流信息维护。"}
           </div>
-        </div>
-        <div className={styles.documentGroupCard}>
-          <strong>缺失资料汇总</strong>
-          {missingTargets.length ? (
-            <div className={styles.missingChipList}>
-              {missingTargets.map((target) => (
-                <button
-                  className={styles.missingChipButton}
-                  key={target.key}
-                  title={target.title || target.label}
-                  type="button"
-                  onClick={() => scrollToTaxTarget(target.key)}
-                >
-                  {target.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <span className={styles.statusPill + " " + styles.statusSuccess}>资料已完整</span>
-          )}
         </div>
         {canSendShippingDocuments ? (
           <div className={styles.documentGroupCard}>
@@ -1323,91 +1349,6 @@ function normalizedMissingLabels(completeness: DocumentCompleteness) {
   return labels.map((label) => String(label || "").trim()).filter(Boolean);
 }
 
-function taxMissingTargets(detail: TaxRefundDetail, fallback: TaxRefundRow): MissingTarget[] {
-  const completeness = detail.documentCompleteness || fallback.documentCompleteness || {};
-  const costs = detail.costs || [];
-  const targets: MissingTarget[] = [];
-
-  (completeness.export?.missingTypes || []).forEach((type) => {
-    targets.push({
-      key: taxDocumentTargetKey(type),
-      label: documentTypeLabel(type),
-      title: documentTypeLabel(type),
-    });
-  });
-  (completeness.customs?.missingTypes || []).forEach((type) => {
-    targets.push({
-      key: taxDocumentTargetKey(type),
-      label: documentTypeLabel(type),
-      title: documentTypeLabel(type),
-    });
-  });
-  (completeness.domesticLogistics?.missing || []).forEach(() => {
-    targets.push({
-      key: "domestic-logistics",
-      label: "国内物流信息",
-      title: "国内物流信息",
-    });
-  });
-  (completeness.supplier?.missing || []).forEach((item) => {
-    if (item.missingFactoryCost) {
-      targets.push({ key: "factory-section", label: "缺少工厂供应商成本记录", title: "请先在成本管理中录入工厂供应商成本" });
-      return;
-    }
-    if (!item.documentType) return;
-    const cost = costs.find((row) => row.id && row.supplierId === item.supplierId) || factorySupplierCosts(costs)[0];
-    targets.push({
-      key: cost?.id ? factoryDocumentTargetKey(cost.id, item.documentType) : "factory-section",
-      label: missingSupplierDocumentLabel(item.documentType),
-      title: item.supplierName ? `${item.supplierName}${missingSupplierDocumentLabel(item.documentType)}` : missingSupplierDocumentLabel(item.documentType),
-    });
-  });
-  (completeness.logistics?.missing || []).forEach((item) => {
-    if (item.missingCost) {
-      targets.push({
-        key: logisticsCostTypeTargetKey(costs, item.costType || item.label || ""),
-        label: item.label || "未录入对应费用",
-        title: item.label || "未录入对应费用",
-      });
-      return;
-    }
-    targets.push({
-      key: item.costId ? logisticsDocumentTargetKey(item.costId) : logisticsCostTypeTargetKey(costs, item.costType || item.invoiceLabel || ""),
-      label: item.invoiceLabel || item.label || "物流资料",
-      title: `${item.costType || "物流资料"} / ${item.supplierName || "-"} / ${item.invoiceLabel || item.label || "物流资料"}`,
-    });
-  });
-
-  normalizedMissingLabels(completeness).forEach((label) => {
-    if (!targets.some((target) => target.label === label)) {
-      targets.push({ key: missingLabelTargetKey(label, detail), label, title: label });
-    }
-  });
-
-  const seen = new Set<string>();
-  return targets.filter((target) => {
-    const key = `${target.key}:${target.label}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function documentTypeLabel(type: string) {
-  const match = [...TAX_EXPORT_UPLOAD_TYPES, ...TAX_CUSTOMS_UPLOAD_TYPES, ...TAX_FACTORY_UPLOAD_TYPES].find((item) => item.value === type);
-  if (match) return match.label;
-  if (type === "CUSTOMS_DECLARATION") return "报关单";
-  if (type === "CUSTOMS_FEE_INVOICE") return "报关费发票";
-  if (type === "TRUCKING_FEE_INVOICE") return "拖车费发票";
-  return type || "资料";
-}
-
-function missingSupplierDocumentLabel(type: string) {
-  if (type === "SUPPLIER_PURCHASE_CONTRACT") return "工厂合同";
-  if (type === "SUPPLIER_INVOICE") return "工厂发票";
-  return documentTypeLabel(type);
-}
-
 function taxDocumentTargetKey(documentType: string) {
   return `tax-document-${documentType}`;
 }
@@ -1420,63 +1361,8 @@ function logisticsDocumentTargetKey(costId: string) {
   return `tax-logistics-${costId}-SUPPLIER_INVOICE`;
 }
 
-function logisticsCostTypeTargetKey(costs: TaxCost[], text: string) {
-  const normalizedText = String(text || "");
-  const cost = logisticsInvoiceCosts(costs).find((item) => {
-    const costType = item.costType || "";
-    if (normalizedText.includes("拖车") || normalizedText.includes("国内物流")) return ["拖车费", "国内物流费", "国内拖车费"].includes(costType);
-    if (normalizedText.includes("报关")) return costType === "报关费";
-    if (normalizedText.includes("港杂")) return costType === "港杂费";
-    if (normalizedText.includes("海运")) return costType === "海运费";
-    return costType && normalizedText.includes(costType);
-  });
-  return cost?.id ? logisticsDocumentTargetKey(cost.id) : "logistics-section";
-}
-
-function missingLabelTargetKey(label: string, detail: TaxRefundDetail) {
-  const text = String(label || "");
-  const documentMap: Array<[string, string]> = [
-    ["提单", "BILL_OF_LADING"],
-    ["商业发票", "COMMERCIAL_INVOICE"],
-    ["装箱单", "PACKING_LIST"],
-    ["箱单", "PACKING_LIST"],
-    ["出口发票", "EXPORT_INVOICE"],
-    ["销售合同", "SALES_CONTRACT"],
-    ["货物报关单", "CUSTOMS_ENTRY_FORM"],
-    ["报关单", "CUSTOMS_ENTRY_FORM"],
-    ["放行通知书", "RELEASE_NOTICE"],
-    ["报关委托书", "CUSTOMS_POWER_OF_ATTORNEY"],
-  ];
-  const documentMatch = documentMap.find(([keyword]) => text.includes(keyword));
-  if (documentMatch) return taxDocumentTargetKey(documentMatch[1]);
-  if (text.includes("国内物流") || text.includes("物流信息")) return "domestic-logistics";
-  if (text.includes("工厂合同") || text.includes("采购合同")) {
-    const cost = factorySupplierCosts(detail.costs || [])[0];
-    return cost?.id ? factoryDocumentTargetKey(cost.id, "SUPPLIER_PURCHASE_CONTRACT") : "factory-section";
-  }
-  if (text.includes("工厂发票") || text.includes("增值税发票") || text.includes("进项发票")) {
-    const cost = factorySupplierCosts(detail.costs || [])[0];
-    return cost?.id ? factoryDocumentTargetKey(cost.id, "SUPPLIER_INVOICE") : "factory-section";
-  }
-  if (text.includes("报关费") || text.includes("拖车") || text.includes("港杂") || text.includes("海运")) {
-    return logisticsCostTypeTargetKey(detail.costs || [], text);
-  }
-  return "tax-detail-top";
-}
-
 function taxTargetDomId(key: string) {
   return `tax-target-${String(key || "unknown").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-}
-
-function scrollToTaxTarget(key: string) {
-  const target = document.getElementById(taxTargetDomId(key));
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
-  target.classList.remove(styles.taxTargetHighlight);
-  window.setTimeout(() => {
-    target.classList.add(styles.taxTargetHighlight);
-    window.setTimeout(() => target.classList.remove(styles.taxTargetHighlight), 1500);
-  }, 80);
 }
 
 function factorySupplierCosts(costs: TaxCost[]) {
