@@ -636,37 +636,13 @@ button:disabled {
   color: #fff;
 }
 
-.user-box {
-  margin-top: auto;
-  padding: 14px;
-  border: 1px solid var(--sidebar-line);
-  border-radius: 12px;
-  background: #f8fafc;
-  color: #0f172a;
-}
-
 .label,
-.user-box small,
 .metric small,
 td small {
   display: block;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
-}
-
-.user-box .label,
-.user-box small {
-  color: #64748b;
-}
-
-.user-box strong {
-  display: block;
-  margin: 6px 0 2px;
-  color: #0f172a;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
 }
 
 .main {

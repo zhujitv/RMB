@@ -1800,8 +1800,8 @@ async function loadMe() {
   state.userLoading = false;
   state.permissionLoading = false;
   state.userLoadError = "";
-  $("#current-user").textContent = state.me?.name || "未登录";
-  $("#current-role").textContent = state.me?.role || "未登录";
+  if ($("#current-user")) $("#current-user").textContent = state.me?.name || "未登录";
+  if ($("#current-role")) $("#current-role").textContent = state.me?.role || "未登录";
   $("#top-user-name").textContent = state.me?.name || "登录";
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
@@ -8894,7 +8894,7 @@ async function submitProfile(event) {
     assertSuccessResponse(result, "个人信息保存失败");
     state.me = result.user || state.me;
     renderProfileModal();
-    $("#current-user").textContent = state.me?.name || "未登录";
+    if ($("#current-user")) $("#current-user").textContent = state.me?.name || "未登录";
     $("#top-user-name").textContent = state.me?.name || "登录";
     toast(result.message || "个人信息已保存");
   } catch (error) {
