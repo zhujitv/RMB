@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
+import { DetailField, PaginationBar } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
+import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 
 type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "auditLogs";
@@ -991,6 +992,15 @@ function CustomerEditPanel({
     onChange({ ...form, [key]: value });
   }
 
+  const selectedSalesperson = salespeople.find((user) => user.id === form.salespersonUserId) || null;
+
+  async function searchSalespeople(keyword: string) {
+    return salespeople.filter((user) => fuzzyIncludes([
+      user.name,
+      user.role,
+    ], keyword)).slice(0, 10);
+  }
+
   function toggleShippingDocumentType(value: string) {
     const current = new Set(form.autoSendDocumentTypes);
     if (current.has(value)) {
@@ -1033,10 +1043,23 @@ function CustomerEditPanel({
         </label>
         <label>
           负责业务员
-          <select value={form.salespersonUserId} onChange={(event) => setField("salespersonUserId", event.target.value)}>
-            <option value="">不指定</option>
-            {salespeople.map((user) => <option key={user.id} value={user.id}>{user.name || "-"}{user.role ? ` / ${user.role}` : ""}</option>)}
-          </select>
+          <SearchAutocomplete
+            value={selectedSalesperson}
+            cacheKey="settings-customer-salespeople"
+            emptyLabel="未找到匹配业务员"
+            placeholder="搜索业务员姓名 / 角色"
+            getLabel={salespersonOptionLabel}
+            getDescription={(user) => user.role || ""}
+            search={searchSalespeople}
+            onSelect={(user) => setField("salespersonUserId", user.id)}
+          />
+          {selectedSalesperson ? (
+            <button className={styles.secondaryButton} type="button" onClick={() => setField("salespersonUserId", "")}>
+              清除负责业务员
+            </button>
+          ) : (
+            <span className={styles.mutedText}>未选择时表示不指定负责业务员。</span>
+          )}
         </label>
         <label>
           提成比例 %
@@ -1356,21 +1379,24 @@ function UserEditPanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 }) {
-  const [supplierSearch, setSupplierSearch] = useState("");
-
   function setField<K extends keyof UserForm>(key: K, value: UserForm[K]) {
     onChange({ ...form, [key]: value });
   }
 
   const logisticsSuppliers = suppliers.filter((supplier) => LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
-  const filteredLogisticsSuppliers = logisticsSuppliers.filter((supplier) => fuzzyIncludes([
-    supplier.supplierName,
-    supplier.supplierType,
-    supplier.contactPerson,
-    supplier.invoiceTitle,
-    supplier.taxNumber,
-  ], supplierSearch));
+  const selectedSupplier = logisticsSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
+
+  async function searchLogisticsSuppliers(keyword: string) {
+    const filtered = logisticsSuppliers.filter((supplier) => fuzzyIncludes([
+      supplier.supplierName,
+      supplier.supplierType,
+      supplier.contactPerson,
+      supplier.invoiceTitle,
+      supplier.taxNumber,
+    ], keyword));
+    return filtered.slice(0, 10);
+  }
 
   function setRole(role: string) {
     const nextDefaults = permissionDefaultsForRole(permissionConfig, role);
@@ -1438,27 +1464,17 @@ function UserEditPanel({
         {form.role === "物流供应商" ? (
           <label>
             绑定供应商
-            <input
-              value={supplierSearch}
-              onChange={(event) => setSupplierSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: filteredLogisticsSuppliers,
-                  selectedId: form.supplierId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => setField("supplierId", id),
-                })) return;
-              }}
+            <SearchAutocomplete
+              value={selectedSupplier}
+              cacheKey="settings-user-logistics-suppliers"
+              emptyLabel="未找到匹配供应商"
               placeholder="搜索供应商 / 类型 / 联系人 / 税号"
+              getLabel={supplierOptionLabel}
+              getDescription={(supplier) => [supplier.contactPerson, supplier.invoiceTitle, supplier.taxNumber].filter(Boolean).join(" / ")}
+              search={searchLogisticsSuppliers}
+              onSelect={(supplier) => setField("supplierId", supplier.id)}
             />
-            <select value={form.supplierId} onChange={(event) => setField("supplierId", event.target.value)} required>
-              <option value="">请选择供应商</option>
-              {filteredLogisticsSuppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>{supplier.supplierName || "-"} / {supplier.supplierType || "-"}</option>
-              ))}
-            </select>
-            {!filteredLogisticsSuppliers.length ? <small className={styles.mutedText}>未找到匹配供应商</small> : null}
+            {!logisticsSuppliers.length ? <small className={styles.mutedText}>请先在供应商资料中启用物流相关供应商</small> : null}
           </label>
         ) : null}
         <label>
@@ -1674,6 +1690,15 @@ function supplierDisplayName(user: UserRow) {
   const type = user.supplierType || "";
   if (name && type) return `${name} / ${type}`;
   return name || type || "";
+}
+
+function supplierOptionLabel(supplier: SupplierRow) {
+  const name = supplier.supplierName || "未命名供应商";
+  return supplier.supplierType ? `${name} / ${supplier.supplierType}` : name;
+}
+
+function salespersonOptionLabel(user: SalespersonOption) {
+  return user.role ? `${user.name || "未命名用户"} / ${user.role}` : (user.name || "未命名用户");
 }
 
 function fuzzyIncludes(values: unknown[], keyword: string) {
