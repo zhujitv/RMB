@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDateTime } from "../formatters";
-import { LogisticsExpenseForm } from "./LogisticsFeesModule";
+import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 
@@ -128,10 +128,11 @@ export function DomesticLogisticsModule({
   const [error, setError] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
+  const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const canDeleteDomesticLogistics = currentUser.role === "管理员";
-  const canCreateLogisticsExpense = ["管理员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
+  const canCreateLogisticsExpense = ["管理员", "物流供应商"].includes(currentUser.role);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -251,6 +252,7 @@ export function DomesticLogisticsModule({
   }
 
   return (
+    <>
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
@@ -326,6 +328,8 @@ export function DomesticLogisticsModule({
                 onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 onSaved={() => {
                   setEditingOrderId("");
+                  setFeeEntryOrderId("");
+                  setExpenseRefreshToken((current) => current + 1);
                   void loadRows(submittedKeyword, businessScope);
                 }}
                 onCancelEdit={() => setEditingOrderId("")}
@@ -347,6 +351,8 @@ export function DomesticLogisticsModule({
 
       <PaginationBar total={rows.length} page={page} totalPages={totalPages} onPage={setPage} />
     </section>
+    <LogisticsFeesModule embedded refreshToken={expenseRefreshToken} currentUserRole={currentUser.role} />
+    </>
   );
 }
 

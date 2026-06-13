@@ -142,7 +142,15 @@ const emptyExpenseForm: ExpenseForm = {
   items: [emptyExpenseItem()],
 };
 
-export function LogisticsFeesModule() {
+export function LogisticsFeesModule({
+  embedded = false,
+  refreshToken = 0,
+  currentUserRole = "",
+}: {
+  embedded?: boolean;
+  refreshToken?: number;
+  currentUserRole?: string;
+}) {
   const [rows, setRows] = useState<LogisticsExpense[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -158,6 +166,10 @@ export function LogisticsFeesModule() {
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
+  const canCreateExpense = ["管理员", "物流供应商"].includes(currentUserRole);
+  const canReviewExpense = currentUserRole === "管理员";
+  const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
+  const isLogisticsSupplier = currentUserRole === "物流供应商";
 
   async function loadExpenses(nextPage = page, nextKeyword = submittedKeyword, nextStatus = status, nextCostType = costType) {
     setLoading(true);
@@ -185,6 +197,12 @@ export function LogisticsFeesModule() {
     void loadExpenses(1, "", "", "");
     void loadStatement(statementMonth);
   }, []);
+
+  useEffect(() => {
+    if (!refreshToken) return;
+    void loadExpenses(1, submittedKeyword, status, costType);
+    void loadStatement(statementMonth);
+  }, [refreshToken]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -284,16 +302,18 @@ export function LogisticsFeesModule() {
   }, { approved: 0, invoiced: 0, pending: 0, paid: 0 });
 
   return (
-    <section className={styles.moduleCard}>
+    <section className={embedded ? styles.subModuleCard : styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
-          <h2>物流费用登记</h2>
+          {embedded ? null : <span className={styles.kicker}>React 迁移模块</span>}
+          <h2>物流费用录入</h2>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.primaryButtonCompact} type="button" onClick={() => setCreateOpen((open) => !open)}>
-            {createOpen ? "收起登记" : "新增物流费用"}
-          </button>
+          {canCreateExpense ? (
+            <button className={styles.primaryButtonCompact} type="button" onClick={() => setCreateOpen((open) => !open)}>
+              {createOpen ? "收起登记" : "新增物流费用"}
+            </button>
+          ) : null}
           <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadExpenses(page)}>
             {loading ? "刷新中..." : "刷新"}
           </button>
@@ -327,7 +347,7 @@ export function LogisticsFeesModule() {
               {statementLoading ? "汇总中..." : "查询月结"}
             </button>
             <button className={styles.secondaryButton} type="button" disabled={!statementRows.length} onClick={exportStatementCsv}>
-              导出CSV
+              导出对账单
             </button>
           </div>
         </div>
@@ -380,15 +400,15 @@ export function LogisticsFeesModule() {
         <table className={styles.dataTable}>
           <thead>
             <tr>
-              <th>供应商</th>
               <th>订单号</th>
+              <th>提单号</th>
               <th>客户简称</th>
-              <th>费用类型</th>
-              <th>金额</th>
-              <th>发票状态</th>
+              <th>供应商</th>
+              <th>费用合计</th>
               <th>审核状态</th>
+              <th>发票状态</th>
               <th>付款状态</th>
-              <th>详情</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -401,6 +421,9 @@ export function LogisticsFeesModule() {
                 expanded={expandedId === expense.id}
                 busy={busyId === expense.id}
                 onToggle={() => setExpandedId((current) => current === expense.id ? "" : expense.id)}
+                canReview={canReviewExpense}
+                canConfirmInvoice={canConfirmInvoice}
+                canWithdraw={isLogisticsSupplier}
                 onApprove={() => void patchExpense(expense, { action: "approve" }, "审核物流费用失败")}
                 onReject={() => {
                   const reason = window.prompt("请输入驳回原因");
@@ -445,11 +468,17 @@ function LogisticsExpenseRows({
   onMarkPaid,
   onConfirmInvoice,
   onInvoiceUploaded,
+  canReview,
+  canConfirmInvoice,
+  canWithdraw,
 }: {
   expense: LogisticsExpense;
   expanded: boolean;
   busy: boolean;
   onToggle: () => void;
+  canReview: boolean;
+  canConfirmInvoice: boolean;
+  canWithdraw: boolean;
   onApprove: () => void;
   onReject: () => void;
   onWithdraw: () => void;
@@ -463,13 +492,16 @@ function LogisticsExpenseRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
-        <td>{expense.supplierName || "-"}</td>
         <td><strong>{expense.orderNo || "-"}</strong></td>
+        <td>{expense.blNo || expense.billOfLadingNo || "-"}</td>
         <td title={expense.customerName || ""}>{expense.customerShortName || expense.customerName || "-"}</td>
-        <td>{expense.costType || "-"}</td>
-        <td>{moneyText(expense.currency, expense.amount, expense.amountCny)}</td>
-        <td><StatusPill value={invoiceStatus} /></td>
+        <td>{expense.supplierName || "-"}</td>
+        <td>
+          <strong>{formatCny(expense.amountCny || 0)}</strong>
+          <small className={styles.mutedText}>{expense.costType || "-"} {expense.currency || "CNY"} {Number(expense.amount || 0).toFixed(2)}</small>
+        </td>
         <td><StatusPill value={auditStatus} /></td>
+        <td><StatusPill value={invoiceStatus} /></td>
         <td><StatusPill value={paymentStatus} /></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
@@ -478,21 +510,25 @@ function LogisticsExpenseRows({
           <td colSpan={9}>
             <div className={styles.detailCard} onClick={(event) => event.stopPropagation()}>
               <div className={styles.detailActions}>
-                {auditStatus === "待审核" ? (
+                {auditStatus === "待审核" && canReview ? (
                   <>
                     <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={onApprove}>{busy ? "处理中..." : "审核通过"}</button>
                     <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onReject}>驳回</button>
+                  </>
+                ) : null}
+                {auditStatus === "待审核" && canWithdraw ? (
+                  <>
                     <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回草稿</button>
                   </>
                 ) : null}
                 {auditStatus === "审核通过" ? (
                   <>
-                    {invoiceStatus === "已上传" ? (
+                    {invoiceStatus === "已上传" && canConfirmInvoice ? (
                       <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onConfirmInvoice}>
                         {busy ? "处理中..." : "确认发票"}
                       </button>
                     ) : null}
-                    {invoiceStatus === "已确认" ? (
+                    {invoiceStatus === "已确认" && canConfirmInvoice ? (
                       <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
                       {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
                       </button>

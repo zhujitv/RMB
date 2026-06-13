@@ -426,14 +426,25 @@
   box-shadow: 0 14px 36px rgba(15, 23, 42, 0.05);
 }
 
+.subModuleCard {
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
 .welcomeCard h2,
-.moduleCard h2 {
+.moduleCard h2,
+.subModuleCard h2 {
   margin: 8px 0 10px;
   font-size: 28px;
 }
 
 .welcomeCard p,
-.moduleCard p {
+.moduleCard p,
+.subModuleCard p {
   color: #475569;
   line-height: 1.65;
 }
