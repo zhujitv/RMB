@@ -1157,7 +1157,7 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
   document.body.classList.toggle("is-authenticated", Boolean(loggedIn && !showPasswordChange));
   document.body.classList.toggle(
     "logistics-compact-layout",
-    Boolean(loggedIn && !showPasswordChange && state.me?.role === "物流资料录入员"),
+    Boolean(loggedIn && !showPasswordChange && state.me?.role === "物流供应商"),
   );
   if (!loggedIn) {
     closeAccountMenu();
@@ -4881,7 +4881,7 @@ function renderDomesticLogistics() {
   box.innerHTML = rows.length ? rows.map((row) => {
     const rowId = row.orderId || row.id;
 	    const actions = `
-        ${["管理员", "物流供应商", "物流资料录入员"].includes(state.me?.role) ? `<button class="secondary-button" data-open-logistics-expense="${escapeHtml(rowId)}" type="button">录入费用</button>` : ""}
+        ${["管理员", "物流供应商"].includes(state.me?.role) ? `<button class="secondary-button" data-open-logistics-expense="${escapeHtml(rowId)}" type="button">录入费用</button>` : ""}
         ${canEditDomestic && !row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="create" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">录入</button>` : ""}
         ${canEditDomestic && row.domesticLogisticsInfo?.id ? `<button class="secondary-button" data-domestic-logistics-action="edit" data-domestic-logistics-id="${escapeHtml(rowId)}" type="button">编辑</button>` : ""}
         ${isAdmin && row.domesticLogisticsInfo?.id ? `<button class="danger-button" data-delete-domestic-logistics="${escapeHtml(row.domesticLogisticsInfo.id)}" type="button">删除</button>` : ""}
@@ -4902,7 +4902,7 @@ function renderDomesticLogistics() {
 }
 
 function isLogisticsSupplierUser() {
-  return ["物流供应商", "物流资料录入员"].includes(state.me?.role);
+  return state.me?.role === "物流供应商";
 }
 
 function canReviewLogisticsExpense() {
@@ -4991,7 +4991,7 @@ function resetLogisticsExpenseDrawer() {
 }
 
 function openLogisticsExpenseDrawer(order = null) {
-  if (!["管理员", "物流供应商", "物流资料录入员"].includes(state.me?.role)) return toast("没有权限录入物流费用");
+  if (!["管理员", "物流供应商"].includes(state.me?.role)) return toast("没有权限录入物流费用");
   resetLogisticsExpenseDrawer();
   $("#logistics-expense-drawer").hidden = false;
   document.body.classList.add("modal-open");
