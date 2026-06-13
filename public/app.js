@@ -261,6 +261,7 @@ const constants = {
 };
 
 const viewTitles = {
+  welcome: "工作台首页",
   dashboard: "经营总览",
   orders: "应收订单",
   payments: "收款管理",
@@ -274,6 +275,7 @@ const viewTitles = {
 };
 
 const refreshViewLabels = {
+  welcome: "刷新工作台",
   dashboard: "刷新总览",
   orders: "刷新订单",
   payments: "刷新收款",
@@ -904,6 +906,7 @@ function installFrontendErrorBoundary() {
 }
 
 function canView(view) {
+  if (view === "welcome") return Boolean(state.me && !state.passwordChangeRequired);
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
@@ -917,7 +920,7 @@ function rememberedViewForCurrentUser() {
   if (!key) return "";
   try {
     const view = localStorage.getItem(key) || "";
-    return view && canView(view) ? view : "";
+    return view === "welcome" ? "welcome" : "";
   } catch (error) {
     console.error("读取上次打开模块失败", error);
     return "";
@@ -935,20 +938,7 @@ function rememberCurrentView() {
 }
 
 function defaultViewForCurrentUser() {
-  const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
-  const rememberedView = rememberedViewForCurrentUser();
-  if (rememberedView) return rememberedView;
-  const roleDefaultViews = {
-    管理员: "orders",
-    财务: "payments",
-    业务员: "orders",
-    成本录入员: "costs",
-    物流供应商: "domesticLogistics",
-    查看者: "manual",
-  };
-  const preferred = roleDefaultViews[state.me?.role];
-  if (preferred && menus.includes(preferred)) return preferred;
-  return menus[0] || "";
+  return "welcome";
 }
 
 function ensureAuthorizedView() {
@@ -1754,6 +1744,8 @@ async function loadMe() {
   $("#top-user-role").textContent = state.me ? state.me.role : "账户";
   $("#modal-current-user").textContent = state.me?.name || "未登录";
   $("#modal-current-role").textContent = state.me ? state.me.role : "-";
+  if ($("#welcome-user-name")) $("#welcome-user-name").textContent = state.me?.name || "-";
+  if ($("#welcome-user-role")) $("#welcome-user-role").textContent = state.me?.role || "-";
   renderProfileModal();
   $$("#app-version, [data-app-version]").forEach((el) => {
     el.textContent = `当前版本：${APP_VERSION}`;
@@ -1782,6 +1774,10 @@ async function loadData(options = {}) {
       return;
     }
     ensureAuthorizedView();
+    if (state.view === "welcome") {
+      renderAll();
+      return;
+    }
     const params = filterParams().toString();
     const wantsOrders = ["dashboard", "orders", "payments", "profit"].includes(state.view) && canReadArea("orders");
     const wantsPayments = ["dashboard", "payments"].includes(state.view) && canReadArea("payments");
@@ -2126,6 +2122,12 @@ async function reloadManualView() {
 
 async function refreshCurrentView() {
   if (!state.me) throw new Error("请先登录");
+  if (state.view === "welcome") {
+    await loadMe();
+    renderAll();
+    toast("工作台已刷新");
+    return;
+  }
   if (state.view === "manual") {
     await reloadManualView();
     toast("操作说明书已重新加载");
@@ -2320,6 +2322,7 @@ async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword)
 function renderAll() {
   applyAccessControl();
   updateCurrentView();
+  renderWelcome();
   renderFilterSummary();
   renderDashboard();
   renderOrderSelects();
@@ -2334,6 +2337,11 @@ function renderAll() {
   renderSettings();
   applyRateEditability();
   applyAccessControl();
+}
+
+function renderWelcome() {
+  if ($("#welcome-user-name")) $("#welcome-user-name").textContent = state.me?.name || "-";
+  if ($("#welcome-user-role")) $("#welcome-user-role").textContent = state.me?.role || "-";
 }
 
 function updateCurrentView() {
@@ -9232,6 +9240,7 @@ function switchView(view, options = {}) {
   if (!options.skipRemember) rememberCurrentView();
   updateCurrentView();
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
+  if (view === "welcome") renderAll();
   if (["dashboard", "orders", "payments", "profit"].includes(view)) loadData();
   if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
   if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });

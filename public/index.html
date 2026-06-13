@@ -64,7 +64,11 @@
         </div>
 
         <nav class="nav-tabs" aria-label="主要视图">
-          <button class="nav-tab is-active" data-view="dashboard" type="button">
+          <button class="nav-tab is-active" data-view="welcome" type="button">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>
+            <span>工作台首页</span>
+          </button>
+          <button class="nav-tab" data-view="dashboard" type="button">
             <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
             <span>经营总览</span>
           </button>
@@ -190,7 +194,22 @@
           </section>
         </div>
 
-        <section class="view-panel is-active" id="dashboard-view">
+        <section class="view-panel is-active" id="welcome-view">
+          <section class="welcome-panel">
+            <div class="welcome-card">
+              <p class="eyebrow">TRD Platform</p>
+              <h2>欢迎使用外贸应收与单证协同平台</h2>
+              <div class="welcome-user">
+                <span>当前用户</span>
+                <strong id="welcome-user-name">-</strong>
+                <small id="welcome-user-role">-</small>
+              </div>
+              <p>请选择左侧功能模块开始操作。</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" id="dashboard-view">
           <form class="filters dashboard-filter-bar dashboard-only" id="overview-filter-form" aria-label="总览筛选条件">
             <div class="filter-main-row">
               <label class="filter-month"><span>月份</span><input id="filter-month" type="month" /></label>
