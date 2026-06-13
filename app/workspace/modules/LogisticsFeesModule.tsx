@@ -105,6 +105,8 @@ type ExpenseOrderOption = {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  truckPlateNo?: string;
+  cargoName?: string;
   logisticsSuppliers?: SupplierOption[];
 };
 
@@ -494,6 +496,7 @@ function LogisticsExpenseRows({
   const auditStatus = expense.auditStatus || "草稿";
   const invoiceStatus = expense.invoiceStatus || "未通知";
   const paymentStatus = expense.paymentStatus || "待开票";
+  const canUploadInvoice = ["未通知", "已通知开票"].includes(invoiceStatus);
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
@@ -538,7 +541,7 @@ function LogisticsExpenseRows({
                       {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
                       </button>
                     ) : null}
-                    <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} />
+                    {canUploadInvoice ? <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} /> : null}
                   </>
                 ) : null}
                 {auditStatus === "草稿" || auditStatus === "已驳回" ? (
@@ -752,7 +755,10 @@ export function LogisticsExpenseForm({
 
   const selectedOrder = orders.find((order) => order.id === form.orderId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId)
-    || (isLockedSupplier ? { id: currentUserSupplierId, supplierName: "当前物流供应商", supplierType: "物流供应商" } : null);
+    || null;
+  const supplierSummaryText = selectedSupplier
+    ? supplierLabel(selectedSupplier)
+    : (isLockedSupplier ? "加载供应商信息中..." : "未选择");
   const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
 
   return (
@@ -805,6 +811,15 @@ export function LogisticsExpenseForm({
           />
         </label>
       </div>
+      {selectedOrder ? (
+        <div className={styles.detailGrid}>
+          <DetailField label="订单号" value={selectedOrder.orderNo || "-"} />
+          <DetailField label="提单号" value={selectedOrder.blNo || selectedOrder.billOfLadingNo || "-"} />
+          <DetailField label="客户简称" value={selectedOrder.customerShortName || selectedOrder.customerName || "-"} />
+          <DetailField label="车牌" value={selectedOrder.truckPlateNo || "-"} />
+          <DetailField label="货物" value={selectedOrder.cargoName || "-"} wide />
+        </div>
+      ) : null}
       <div className={styles.logisticsItemsPanel}>
         <div className={styles.logisticsItemsHeader}>
           <div>
@@ -845,8 +860,7 @@ export function LogisticsExpenseForm({
         <div className={styles.logisticsItemsTotal}>合计：{formatCny(totalAmountCny)}</div>
       </div>
       <div className={styles.quickCreateMeta}>
-        <span>订单：{selectedOrder ? orderLabel(selectedOrder) : "-"}</span>
-        <span>供应商：{selectedSupplier ? supplierLabel(selectedSupplier) : "按当前账号或后端权限判定"}</span>
+        <span>供应商：{supplierSummaryText}</span>
       </div>
       <div className={styles.detailActions}>
         <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => void submitExpense("草稿")}>

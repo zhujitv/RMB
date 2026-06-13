@@ -203,6 +203,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [detailOrderId, setDetailOrderId] = useState("");
   const [detailRow, setDetailRow] = useState<TaxRefundRow | null>(null);
   const [detail, setDetail] = useState<TaxRefundDetail | null>(null);
+  const [pendingDetailTarget, setPendingDetailTarget] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [packageDownloadingId, setPackageDownloadingId] = useState("");
@@ -259,6 +260,23 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   useEffect(() => {
     void loadRows(1, "");
   }, []);
+
+  useEffect(() => {
+    if (!detail || !pendingDetailTarget || detailLoading) return;
+    const targetId = taxTargetDomId(pendingDetailTarget);
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(targetId);
+      if (!target) {
+        setPendingDetailTarget("");
+        return;
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add(styles.taxTargetHighlight);
+      window.setTimeout(() => target.classList.remove(styles.taxTargetHighlight), 1500);
+      setPendingDetailTarget("");
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [detail, detailLoading, pendingDetailTarget]);
 
   function switchMode(nextMode: TaxRefundMode) {
     setMode(nextMode);
@@ -323,6 +341,11 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailOrderId(row.id);
     setDetail(null);
     await fetchDetail(row.id);
+  }
+
+  async function openMissingTarget(row: TaxRefundRow, label: string) {
+    setPendingDetailTarget(taxTargetKeyFromMissingLabel(label));
+    await loadDetail(row);
   }
 
   function closeDetailDrawer() {
@@ -395,6 +418,26 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       setError(submitError instanceof Error ? submitError.message : "提交退税失败");
     } finally {
       setSubmittingTaxId("");
+    }
+  }
+
+  async function updateTaxRefundStatus(row: TaxRefundRow, status: string) {
+    if (status === "SUBMITTED") {
+      await submitTaxRefund(row);
+      return;
+    }
+    setError("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      if (result.success !== true) throw new Error(result.message || "退税状态更新失败");
+      await loadRows(page, submittedKeyword, mode);
+      if (detailOrderId === row.id) await fetchDetail(row.id);
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : "退税状态更新失败");
+      await loadRows(page, submittedKeyword, mode);
     }
   }
 
@@ -631,23 +674,29 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
               <tr>
                 <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
-            ) : rows.length ? rows.map((row) => (
-              <TaxRefundTableRow
-                key={row.id}
-                row={row}
-                expanded={expandedRowId === row.id}
-                packageDownloading={packageDownloadingId === row.id}
-                onToggle={() => setExpandedRowId((current) => (current === row.id ? "" : row.id))}
-                onViewDetail={() => void loadDetail(row)}
-                onDownloadPackage={() => void downloadPackage(row)}
-                onSubmitTaxRefund={() => void submitTaxRefund(row)}
-                onCancelArchive={() => void cancelTaxRefundArchive(row)}
-                canSubmitTaxRefund={canManageTaxRefund && mode === "current" && !row.taxArchived && row.taxRefundStatus === "READY"}
-                canCancelArchive={canCancelArchive && (mode === "archive" || row.taxArchived || row.taxRefundStatus === "SUBMITTED")}
-                submittingTax={submittingTaxId === row.id}
-                cancelingArchive={cancelingArchiveId === row.id}
-              />
-            )) : (
+            ) : rows.length ? rows.map((row) => {
+              const rowStatus = taxRowStatus(row);
+              return (
+                <TaxRefundTableRow
+                  key={row.id}
+                  row={row}
+                  expanded={expandedRowId === row.id}
+                  packageDownloading={packageDownloadingId === row.id}
+                  onToggle={() => setExpandedRowId((current) => (current === row.id ? "" : row.id))}
+                  onViewDetail={() => void loadDetail(row)}
+                  onDownloadPackage={() => void downloadPackage(row)}
+                  onSubmitTaxRefund={() => void submitTaxRefund(row)}
+                  onCancelArchive={() => void cancelTaxRefundArchive(row)}
+                  onUpdateStatus={(status) => void updateTaxRefundStatus(row, status)}
+                  onOpenMissingTarget={(label) => void openMissingTarget(row, label)}
+                  canSubmitTaxRefund={canManageTaxRefund && mode === "current" && !row.taxArchived && rowStatus === "READY"}
+                  canCancelArchive={canCancelArchive && (mode === "archive" || row.taxArchived || rowStatus === "SUBMITTED")}
+                  canUpdateStatus={canManageTaxRefund && mode === "current" && !row.taxArchived && rowStatus !== "SUBMITTED"}
+                  submittingTax={submittingTaxId === row.id}
+                  cancelingArchive={cancelingArchiveId === row.id}
+                />
+              );
+            }) : (
               <tr>
                 <td colSpan={6}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
               </tr>
@@ -710,8 +759,11 @@ function TaxRefundTableRow({
   onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
+  onUpdateStatus,
+  onOpenMissingTarget,
   canSubmitTaxRefund,
   canCancelArchive,
+  canUpdateStatus,
   submittingTax,
   cancelingArchive,
 }: {
@@ -723,8 +775,11 @@ function TaxRefundTableRow({
   onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
+  onUpdateStatus: (status: string) => void;
+  onOpenMissingTarget: (label: string) => void;
   canSubmitTaxRefund: boolean;
   canCancelArchive: boolean;
+  canUpdateStatus: boolean;
   submittingTax: boolean;
   cancelingArchive: boolean;
 }) {
@@ -734,6 +789,7 @@ function TaxRefundTableRow({
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
   const missingLabels = normalizedMissingLabels(completeness);
+  const currentStatus = taxRowStatus(row);
 
   return (
     <>
@@ -742,7 +798,21 @@ function TaxRefundTableRow({
         <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
         <td>{declarationDate}</td>
         <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
-        <td><span className={`${styles.statusPill} ${statusClass(row.taxRefundStatus)}`}>{row.taxRefundStatusLabel || row.taxRefundStatus || "-"}</span></td>
+        <td onClick={(event) => event.stopPropagation()}>
+          {canUpdateStatus ? (
+            <select
+              value={currentStatus}
+              onChange={(event) => onUpdateStatus(event.target.value)}
+              disabled={submittingTax}
+            >
+              {TAX_REFUND_STATUS_OPTIONS.filter((option) => option.value).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          ) : (
+            <span className={`${styles.statusPill} ${statusClass(currentStatus)}`}>{row.taxRefundStatusLabel || taxStatusLabel(currentStatus)}</span>
+          )}
+        </td>
         <td>
           <button
             className={styles.rowDetailButton}
@@ -798,7 +868,17 @@ function TaxRefundTableRow({
                   <span>缺失资料</span>
                   <div className={styles.missingChipList}>
                     {missingLabels.map((label) => (
-                      <span key={label}>{label}</span>
+                      <button
+                        key={label}
+                        className={styles.missingChipButton}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenMissingTarget(label);
+                        }}
+                      >
+                        {label}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1422,8 +1502,48 @@ function normalizedMissingLabels(completeness: DocumentCompleteness) {
   return labels.map((label) => String(label || "").trim()).filter(Boolean);
 }
 
+function taxRowStatus(row: TaxRefundRow) {
+  if (row.taxRefundStatus) return row.taxRefundStatus;
+  const completeness = row.documentCompleteness || {};
+  const completed = Number(completeness.completed || 0);
+  const total = Number(completeness.total || 0);
+  return total > 0 && completed >= total ? "READY" : "NOT_READY";
+}
+
 function taxDocumentTargetKey(documentType: string) {
   return `tax-document-${documentType}`;
+}
+
+function taxTargetKeyFromMissingLabel(label: string) {
+  const text = String(label || "").trim();
+  const documentLabelMap: Array<[string, string]> = [
+    ["提单", "BILL_OF_LADING"],
+    ["商业发票", "COMMERCIAL_INVOICE"],
+    ["装箱单", "PACKING_LIST"],
+    ["箱单", "PACKING_LIST"],
+    ["出口发票", "EXPORT_INVOICE"],
+    ["销售合同", "SALES_CONTRACT"],
+    ["报关单", "CUSTOMS_ENTRY_FORM"],
+    ["货物报关单", "CUSTOMS_ENTRY_FORM"],
+    ["放行通知书", "RELEASE_NOTICE"],
+    ["报关委托书", "CUSTOMS_POWER_OF_ATTORNEY"],
+  ];
+  const matchedDocument = documentLabelMap.find(([keyword]) => text.includes(keyword));
+  if (matchedDocument) return taxDocumentTargetKey(matchedDocument[1]);
+  if (text.includes("国内物流")) return "domestic-logistics";
+  if (text.includes("工厂") || text.includes("采购合同") || text.includes("增值税") || text.includes("进项发票")) {
+    return "factory-section";
+  }
+  if (
+    text.includes("报关费")
+    || text.includes("拖车费")
+    || text.includes("港杂费")
+    || text.includes("海运费")
+    || text.includes("物流")
+  ) {
+    return "logistics-section";
+  }
+  return "tax-detail-top";
 }
 
 function factoryDocumentTargetKey(costId: string, documentType: string) {
@@ -1562,6 +1682,10 @@ function completenessClass(percent: number) {
   if (percent >= 100) return styles.statusSuccess;
   if (percent >= 50) return styles.statusWarning;
   return styles.statusDanger;
+}
+
+function taxStatusLabel(status = "") {
+  return TAX_REFUND_STATUS_OPTIONS.find((option) => option.value === status)?.label || status || "-";
 }
 
 function statusClass(status = "") {

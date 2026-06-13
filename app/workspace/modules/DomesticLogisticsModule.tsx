@@ -132,6 +132,9 @@ export function DomesticLogisticsModule({
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const canDeleteDomesticLogistics = currentUser.role === "管理员";
+  const canEditDomesticLogistics = ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
+  const canUploadCustomsDocuments = ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
+  const canDeleteCustomsDocuments = currentUser.role === "管理员";
   const canCreateLogisticsExpense = ["管理员", "物流供应商"].includes(currentUser.role);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
@@ -314,6 +317,9 @@ export function DomesticLogisticsModule({
                 })}
                 editing={editingOrderId === row.id}
                 feeEntryOpen={feeEntryOrderId === row.id}
+                canEditDomesticLogistics={canEditDomesticLogistics}
+                canUploadCustomsDocuments={canUploadCustomsDocuments}
+                canDeleteCustomsDocuments={canDeleteCustomsDocuments}
                 onEdit={() => {
                   setExpandedId(row.id);
                   setFeeEntryOrderId("");
@@ -368,6 +374,9 @@ function DomesticLogisticsRows({
   expanded,
   editing,
   feeEntryOpen,
+  canEditDomesticLogistics,
+  canUploadCustomsDocuments,
+  canDeleteCustomsDocuments,
   onToggle,
   onEdit,
   canCreateLogisticsExpense,
@@ -388,6 +397,9 @@ function DomesticLogisticsRows({
   expanded: boolean;
   editing: boolean;
   feeEntryOpen: boolean;
+  canEditDomesticLogistics: boolean;
+  canUploadCustomsDocuments: boolean;
+  canDeleteCustomsDocuments: boolean;
   onToggle: () => void;
   onEdit: () => void;
   canCreateLogisticsExpense: boolean;
@@ -425,9 +437,11 @@ function DomesticLogisticsRows({
                     录入费用
                   </button>
                 ) : null}
-                <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
-                  {info ? "编辑物流信息" : "录入物流信息"}
-                </button>
+                {canEditDomesticLogistics ? (
+                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
+                    {info ? "编辑物流信息" : "录入物流信息"}
+                  </button>
+                ) : null}
                 {canDeleteDomesticLogistics && info?.id ? (
                   <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteDomesticLogistics(); }}>
                     删除
@@ -476,6 +490,8 @@ function DomesticLogisticsRows({
                 documents={row.documents || []}
                 uploadingKey={uploadingKey}
                 deletingDocumentId={deletingDocumentId}
+                canUpload={canUploadCustomsDocuments}
+                canDelete={canDeleteCustomsDocuments}
                 onUpload={onUploadDocument}
                 onDelete={onDeleteDocument}
               />
@@ -669,6 +685,8 @@ function CustomsDocumentPanel({
   documents,
   uploadingKey,
   deletingDocumentId,
+  canUpload,
+  canDelete,
   onUpload,
   onDelete,
 }: {
@@ -676,6 +694,8 @@ function CustomsDocumentPanel({
   documents: DomesticLogisticsDocument[];
   uploadingKey: string;
   deletingDocumentId: string;
+  canUpload: boolean;
+  canDelete: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null) => void;
   onDelete: (document: DomesticLogisticsDocument) => void;
 }) {
@@ -699,31 +719,35 @@ function CustomsDocumentPanel({
               ))}
             </div>
             <div>
-              <label className={styles.secondaryButton}>
-                {uploading ? "上传中..." : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  disabled={uploading}
-                  hidden
-                  onChange={(event) => {
-                    onUpload(orderId, documentType.value, event.target.files?.[0] || null);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </label>
+              {canUpload ? (
+                <label className={styles.secondaryButton}>
+                  {uploading ? "上传中..." : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    disabled={uploading}
+                    hidden
+                    onChange={(event) => {
+                      onUpload(orderId, documentType.value, event.target.files?.[0] || null);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              ) : null}
               {matchedDocuments.map((document) => (
                 <span key={document.id} className={styles.fileListItemActions}>
                   <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
                   <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-                  <button
-                    className={styles.secondaryButton}
-                    type="button"
-                    disabled={deletingDocumentId === document.id}
-                    onClick={() => onDelete(document)}
-                  >
-                    {deletingDocumentId === document.id ? "删除中..." : "删除"}
-                  </button>
+                  {canDelete ? (
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={deletingDocumentId === document.id}
+                      onClick={() => onDelete(document)}
+                    >
+                      {deletingDocumentId === document.id ? "删除中..." : "删除"}
+                    </button>
+                  ) : null}
                 </span>
               ))}
             </div>
