@@ -41,6 +41,12 @@ type CustomerRow = {
   contactPerson?: string;
   contactEmail?: string;
   contactPhone?: string;
+  enableAutoShippingDocsNotification?: boolean;
+  shippingDocsEmails?: string[];
+  shippingDocsCcEmails?: string[];
+  autoSendDocumentTypes?: string[];
+  clearanceEmailLanguage?: string;
+  clearanceEmailLanguageLabel?: string;
   remark?: string;
 };
 
@@ -145,6 +151,11 @@ type CustomerForm = {
   contactPerson: string;
   contactEmail: string;
   contactPhone: string;
+  enableAutoShippingDocsNotification: boolean;
+  shippingDocsEmails: string;
+  shippingDocsCcEmails: string;
+  autoSendDocumentTypes: string[];
+  clearanceEmailLanguage: string;
   remark: string;
 };
 
@@ -188,6 +199,11 @@ type UserForm = {
 const PAGE_SIZE = 20;
 const AUDIT_PAGE_SIZE = 50;
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
+const SHIPPING_DOCUMENT_TYPE_OPTIONS = [
+  { value: "commercialInvoice", label: "商业发票" },
+  { value: "packingList", label: "装箱单" },
+  { value: "customsDeclaration", label: "报关单" },
+];
 const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
@@ -461,6 +477,11 @@ export function SettingsModule() {
             contactPerson: customerForm.contactPerson,
             contactEmail: customerForm.contactEmail,
             contactPhone: customerForm.contactPhone,
+            enableAutoShippingDocsNotification: customerForm.enableAutoShippingDocsNotification,
+            shippingDocsEmails: customerForm.shippingDocsEmails,
+            shippingDocsCcEmails: customerForm.shippingDocsCcEmails,
+            autoSendDocumentTypes: customerForm.autoSendDocumentTypes,
+            clearanceEmailLanguage: customerForm.clearanceEmailLanguage,
             remark: customerForm.remark,
           }),
         },
@@ -970,6 +991,16 @@ function CustomerEditPanel({
     onChange({ ...form, [key]: value });
   }
 
+  function toggleShippingDocumentType(value: string) {
+    const current = new Set(form.autoSendDocumentTypes);
+    if (current.has(value)) {
+      current.delete(value);
+    } else {
+      current.add(value);
+    }
+    setField("autoSendDocumentTypes", Array.from(current));
+  }
+
   return (
     <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
@@ -1034,6 +1065,63 @@ function CustomerEditPanel({
           <input value={form.remark} onChange={(event) => setField("remark", event.target.value)} />
         </label>
       </div>
+
+      <section className={styles.customerShippingPanel}>
+        <div className={styles.customerShippingHeader}>
+          <strong>清关资料自动通知</strong>
+          <span>用于自动或手动向客户发送商业发票、装箱单和报关单。</span>
+        </div>
+        <label className={styles.inlineCheckbox}>
+          <input
+            type="checkbox"
+            checked={form.enableAutoShippingDocsNotification}
+            onChange={(event) => setField("enableAutoShippingDocsNotification", event.target.checked)}
+          />
+          <span>启用报关单确认后的自动发送</span>
+        </label>
+        <div className={styles.reportFilterGrid}>
+          <label>
+            清关资料接收邮箱
+            <textarea
+              value={form.shippingDocsEmails}
+              onChange={(event) => setField("shippingDocsEmails", event.target.value)}
+              rows={3}
+              placeholder="多个邮箱可用逗号、分号或换行分隔；为空则使用客户主邮箱"
+            />
+          </label>
+          <label>
+            抄送邮箱
+            <textarea
+              value={form.shippingDocsCcEmails}
+              onChange={(event) => setField("shippingDocsCcEmails", event.target.value)}
+              rows={3}
+              placeholder="可为空，多个邮箱可用逗号、分号或换行分隔"
+            />
+          </label>
+          <label>
+            清关邮件语言
+            <select value={form.clearanceEmailLanguage} onChange={(event) => setField("clearanceEmailLanguage", event.target.value)}>
+              <option value="EN">English</option>
+              <option value="RU">Русский</option>
+            </select>
+          </label>
+        </div>
+        <div className={styles.checkboxPanel}>
+          <strong>自动发送资料</strong>
+          <div>
+            {SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => (
+              <label key={option.value}>
+                <input
+                  type="checkbox"
+                  checked={form.autoSendDocumentTypes.includes(option.value)}
+                  onChange={() => toggleShippingDocumentType(option.value)}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存客户"}</button>
@@ -1461,6 +1549,11 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "负责业务员", value: customer.salespersonName || "-" },
       { label: "提成比例", value: `${Number(customer.commissionRate || 0).toFixed(2)}%` },
       { label: "联系人", value: customer.contactPerson || "-" },
+      { label: "清关资料自动通知", value: yesNo(customer.enableAutoShippingDocsNotification) },
+      { label: "清关资料接收邮箱", value: emailListText(customer.shippingDocsEmails) || "默认使用客户主邮箱", wide: true },
+      { label: "抄送邮箱", value: emailListText(customer.shippingDocsCcEmails), wide: true },
+      { label: "清关邮件语言", value: customer.clearanceEmailLanguageLabel || (customer.clearanceEmailLanguage === "RU" ? "Русский" : "English") },
+      { label: "自动发送资料", value: shippingDocumentTypeLabels(customer.autoSendDocumentTypes), wide: true },
       { label: "备注", value: customer.remark || "-", wide: true },
     ];
   }
@@ -1572,6 +1665,11 @@ function emptyCustomerForm(): CustomerForm {
     contactPerson: "",
     contactEmail: "",
     contactPhone: "",
+    enableAutoShippingDocsNotification: false,
+    shippingDocsEmails: "",
+    shippingDocsCcEmails: "",
+    autoSendDocumentTypes: SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => option.value),
+    clearanceEmailLanguage: "EN",
     remark: "",
   };
 }
@@ -1589,8 +1687,27 @@ function customerFormFromRow(customer: CustomerRow): CustomerForm {
     contactPerson: customer.contactPerson || "",
     contactEmail: customer.contactEmail || "",
     contactPhone: customer.contactPhone || "",
+    enableAutoShippingDocsNotification: Boolean(customer.enableAutoShippingDocsNotification),
+    shippingDocsEmails: emailListText(customer.shippingDocsEmails),
+    shippingDocsCcEmails: emailListText(customer.shippingDocsCcEmails),
+    autoSendDocumentTypes: customer.autoSendDocumentTypes?.length
+      ? customer.autoSendDocumentTypes
+      : SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => option.value),
+    clearanceEmailLanguage: customer.clearanceEmailLanguage || "EN",
     remark: customer.remark || "",
   };
+}
+
+function emailListText(value?: string[] | string) {
+  if (Array.isArray(value)) return value.join("\n");
+  return value || "";
+}
+
+function shippingDocumentTypeLabels(value?: string[]) {
+  const selected = value?.length ? value : SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => option.value);
+  return selected
+    .map((item) => SHIPPING_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === item)?.label || item)
+    .join("、");
 }
 
 function emptySupplierForm(): SupplierForm {

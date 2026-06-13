@@ -660,9 +660,10 @@
 }
 
 .reportFilterGrid input,
-.reportFilterGrid select {
+.reportFilterGrid select,
+.reportFilterGrid textarea {
   width: 100%;
-  height: 38px;
+  min-height: 38px;
   border: 1px solid #dbe1ea;
   border-radius: 11px;
   background: #fff;
@@ -672,10 +673,22 @@
 }
 
 .reportFilterGrid input:focus,
-.reportFilterGrid select:focus {
+.reportFilterGrid select:focus,
+.reportFilterGrid textarea:focus {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.reportFilterGrid input,
+.reportFilterGrid select {
+  height: 38px;
+}
+
+.reportFilterGrid textarea {
+  padding-top: 9px;
+  line-height: 1.5;
+  resize: vertical;
 }
 
 .reportDownloadBar {
@@ -1625,6 +1638,263 @@
   color: #0f172a;
 }
 
+.customerShippingPanel {
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.customerShippingHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.customerShippingHeader strong {
+  color: #0f172a;
+}
+
+.customerShippingHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inlineCheckbox {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inlineCheckbox input {
+  accent-color: #2563eb;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.36);
+  padding: 24px;
+}
+
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.taxRefundDrawer {
+  width: min(1040px, 90vw);
+  height: 100vh;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.taxRefundDrawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+}
+
+.taxRefundDrawerTitle {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.taxRefundDrawerTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.taxRefundDrawerTitle strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.taxRefundDrawerTitle small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.taxRefundDrawerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.taxRefundDrawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 22px;
+}
+
+.missingChipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.missingChipList span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shippingDocsDialog {
+  width: min(860px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modalHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.modalHeader strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.modalHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.shippingDocsForm {
+  display: grid;
+  gap: 12px;
+}
+
+.shippingDocsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shippingDocReady,
+.shippingDocMissing {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shippingDocReady {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.shippingDocMissing {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.shippingDocsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shippingDocsFormGrid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select,
+.shippingDocsFormGrid textarea {
+  width: 100%;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 11px;
+  font: inherit;
+}
+
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select {
+  height: 40px;
+}
+
+.shippingDocsFormGrid textarea {
+  min-height: 78px;
+  padding-top: 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.shippingDocsFormGrid input:focus,
+.shippingDocsFormGrid select:focus,
+.shippingDocsFormGrid textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.shippingDocsWideField {
+  grid-column: 1 / -1;
+}
+
 .customsFormCard {
   grid-column: 1 / -1;
   border: 1px solid #dbeafe;
@@ -1747,6 +2017,19 @@
     grid-template-columns: 1fr;
   }
 
+  .taxRefundDrawer {
+    width: min(100vw, 900px);
+  }
+
+  .taxRefundDrawerHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .taxRefundDrawerActions {
+    justify-content: flex-start;
+  }
+
   .subListItem {
     grid-template-columns: 1fr;
   }
@@ -1800,6 +2083,27 @@
   }
 
   .reportFilterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .drawerOverlay {
+    padding: 0;
+  }
+
+  .taxRefundDrawer {
+    width: 100vw;
+  }
+
+  .taxRefundDrawerBody {
+    padding: 12px;
+  }
+
+  .taxRefundDrawerActions {
+    gap: 6px;
+  }
+
+  .shippingDocsFormGrid,
+  .fileListItem {
     grid-template-columns: 1fr;
   }
 

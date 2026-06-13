@@ -254,7 +254,7 @@ export function WorkspaceShell() {
       ) : activeMenu === "profit" ? (
         <ProfitModule />
       ) : activeMenu === "taxRefund" ? (
-        <TaxRefundModule />
+        <TaxRefundModule currentUser={payload.user} />
       ) : activeMenu === "reports" ? (
         <ReportsModule />
       ) : activeMenu === "settings" ? (
