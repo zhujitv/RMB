@@ -9,11 +9,6 @@ const state = {
   me: null,
   session: null,
   passwordChangeRequired: false,
-  permissionsLoaded: false,
-  workspaceLoading: false,
-  workspaceLoadingTitle: "正在加载工作台...",
-  workspaceLoadingSteps: ["正在同步权限数据...", "正在加载业务数据..."],
-  forbiddenMessage: "",
   roles: [],
   permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
   users: [],
@@ -908,56 +903,7 @@ function installFrontendErrorBoundary() {
   });
 }
 
-function hasPermissionsReady() {
-  return Boolean(state.me && !state.passwordChangeRequired && state.permissionsLoaded);
-}
-
-function isWorkspaceLoading() {
-  return Boolean(state.workspaceLoading || (state.me && !state.passwordChangeRequired && !state.permissionsLoaded));
-}
-
-function setWorkspaceLoading(loading, title = "正在加载工作台...", steps = ["正在同步权限数据...", "正在加载业务数据..."]) {
-  state.workspaceLoading = Boolean(loading);
-  state.workspaceLoadingTitle = title;
-  state.workspaceLoadingSteps = Array.isArray(steps) && steps.length ? steps : [title];
-  if (loading) state.forbiddenMessage = "";
-  renderWorkspaceState();
-}
-
-function setWorkspaceForbidden(message = "当前账号没有权限访问该模块。") {
-  state.workspaceLoading = false;
-  state.forbiddenMessage = message || "当前账号没有权限访问该模块。";
-  renderWorkspaceState();
-}
-
-function clearWorkspaceForbidden() {
-  state.forbiddenMessage = "";
-  renderWorkspaceState();
-}
-
-function renderWorkspaceState() {
-  const loading = isWorkspaceLoading();
-  const forbidden = Boolean(!loading && state.me && state.forbiddenMessage);
-  const loadingBox = $("#workspace-loading");
-  const forbiddenBox = $("#workspace-forbidden");
-  if (loadingBox) {
-    loadingBox.hidden = !loading;
-    const title = $("#workspace-loading-title");
-    const steps = $("#workspace-loading-steps");
-    if (title) title.textContent = state.workspaceLoadingTitle || "正在加载工作台...";
-    if (steps) steps.innerHTML = (state.workspaceLoadingSteps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("");
-  }
-  if (forbiddenBox) {
-    forbiddenBox.hidden = !forbidden;
-    const message = $("#workspace-forbidden-message");
-    if (message) message.textContent = state.forbiddenMessage || "当前账号没有权限访问该模块。";
-  }
-  document.body.classList.toggle("workspace-loading", loading);
-  document.body.classList.toggle("workspace-forbidden", forbidden);
-}
-
 function canView(view) {
-  if (!hasPermissionsReady()) return false;
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
@@ -1013,7 +959,6 @@ function ensureAuthorizedView() {
 }
 
 function canWriteArea(area) {
-  if (!hasPermissionsReady()) return false;
   if (state.permissions?.writes && Object.prototype.hasOwnProperty.call(state.permissions.writes, area)) {
     return Boolean(state.permissions.writes[area]);
   }
@@ -1021,7 +966,6 @@ function canWriteArea(area) {
 }
 
 function canReadArea(area) {
-  if (!hasPermissionsReady()) return false;
   if (state.permissions?.reads && Object.prototype.hasOwnProperty.call(state.permissions.reads, area)) {
     return Boolean(state.permissions.reads[area]);
   }
@@ -1199,7 +1143,6 @@ function setAuthenticatedShell(loggedIn, passwordChangeRequired = false) {
     "logistics-compact-layout",
     Boolean(loggedIn && !showPasswordChange && state.me?.role === "物流资料录入员"),
   );
-  renderWorkspaceState();
   if (!loggedIn) {
     closeAccountMenu();
     closeLoginModal();
@@ -1239,9 +1182,6 @@ function resetAuthState({ clearDrafts = false } = {}) {
   state.me = null;
   state.session = null;
   state.passwordChangeRequired = false;
-  state.permissionsLoaded = false;
-  state.workspaceLoading = false;
-  state.forbiddenMessage = "";
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "";
   clearAuthStorage();
@@ -1265,8 +1205,8 @@ function handleForbidden(message = "没有权限访问该模块") {
   clearLocalCaches();
   state.overview = null;
   if (state.me) {
+    ensureAuthorizedView();
     setAuthenticatedShell(true, state.passwordChangeRequired);
-    setWorkspaceForbidden(message);
   } else {
     setAuthenticatedShell(false);
   }
@@ -1808,8 +1748,6 @@ async function loadMe() {
   state.session = data.session || null;
   state.roles = data.roles || constants.roles;
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
-  state.permissionsLoaded = Boolean(state.me && !state.me?.mustChangePassword);
-  clearWorkspaceForbidden();
   $("#current-user").textContent = state.me?.name || "未登录";
   $("#current-role").textContent = state.me?.role || "未登录";
   $("#top-user-name").textContent = state.me?.name || "登录";
@@ -1833,14 +1771,6 @@ async function loadMe() {
 }
 
 async function loadData(options = {}) {
-  const topLevelLoad = !options.background;
-  if (topLevelLoad) {
-    setWorkspaceLoading(true, options.loadingTitle || "正在加载工作台...", options.loadingSteps || [
-      "正在加载工作台...",
-      "正在同步权限数据...",
-      "正在加载业务数据...",
-    ]);
-  }
   try {
     const loggedIn = await loadMe();
     if (!loggedIn) {
@@ -1898,8 +1828,6 @@ async function loadData(options = {}) {
   } catch (error) {
     toast(error.message);
     if (options.rethrow) throw error;
-  } finally {
-    if (topLevelLoad) setWorkspaceLoading(false);
   }
 }
 
@@ -2390,7 +2318,6 @@ async function loadSupplierSettingsList(keyword = state.supplierSettingsKeyword)
 }
 
 function renderAll() {
-  renderWorkspaceState();
   applyAccessControl();
   updateCurrentView();
   renderFilterSummary();
@@ -2410,23 +2337,8 @@ function renderAll() {
 }
 
 function updateCurrentView() {
-  renderWorkspaceState();
-  if (isWorkspaceLoading()) {
-    $("#view-title").textContent = state.workspaceLoadingTitle || "正在加载工作台...";
-    $$(".nav-tab").forEach((button) => button.classList.remove("is-active"));
-    $$(".view-panel").forEach((panel) => panel.classList.remove("is-active"));
-    updateGlobalRefreshButton();
-    return;
-  }
-  if (state.me && state.forbiddenMessage) {
-    $("#view-title").textContent = "无权限访问";
-    $$(".nav-tab").forEach((button) => button.classList.remove("is-active"));
-    $$(".view-panel").forEach((panel) => panel.classList.remove("is-active"));
-    updateGlobalRefreshButton();
-    return;
-  }
-  if (hasPermissionsReady()) ensureAuthorizedView();
-  const title = viewTitles[state.view] || (state.me ? "无权限访问" : "");
+  if (state.me) ensureAuthorizedView();
+  const title = viewTitles[state.view] || "无权限";
   $("#view-title").textContent = title;
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
@@ -9306,10 +9218,6 @@ function switchView(view, options = {}) {
     $("#screen-login-email")?.focus();
     return false;
   }
-  if (!hasPermissionsReady()) {
-    setWorkspaceLoading(true, "正在加载工作台...", ["正在同步权限数据...", "正在加载业务数据..."]);
-    return false;
-  }
   if (!canView(view)) {
     toast("没有权限进入该模块");
     ensureAuthorizedView();
@@ -9321,27 +9229,14 @@ function switchView(view, options = {}) {
     resetOrderForm();
   }
   state.view = view;
-  clearWorkspaceForbidden();
   if (!options.skipRemember) rememberCurrentView();
-  setWorkspaceLoading(true, "数据加载中...", ["数据加载中..."]);
   updateCurrentView();
   if (view === "orders" && !options.preserveOrderForm) resetOrderForm();
-  const stopLoading = () => setWorkspaceLoading(false);
-  if (["dashboard", "orders", "payments", "profit"].includes(view)) {
-    loadData({ loadingTitle: "数据加载中...", loadingSteps: ["数据加载中..."] });
-  } else if (view === "costs") {
-    loadCostList({ page: state.costPagination.page || 1 }).finally(stopLoading);
-  } else if (view === "taxRefund") {
-    loadTaxRefundList({ page: 1, silent: true }).finally(stopLoading);
-  } else if (view === "domesticLogistics") {
-    loadDomesticLogisticsList({ silent: true }).finally(stopLoading);
-  } else if (view === "settings") {
-    loadSettingsTab(state.settingsActiveTab).finally(stopLoading);
-  } else if (view === "reports") {
-    stopLoading();
-  } else {
-    stopLoading();
-  }
+  if (["dashboard", "orders", "payments", "profit"].includes(view)) loadData();
+  if (view === "costs") loadCostList({ page: state.costPagination.page || 1 });
+  if (view === "taxRefund") loadTaxRefundList({ page: 1, silent: true });
+  if (view === "domesticLogistics") loadDomesticLogisticsList({ silent: true });
+  if (view === "settings") loadSettingsTab(state.settingsActiveTab);
   return true;
 }
 
