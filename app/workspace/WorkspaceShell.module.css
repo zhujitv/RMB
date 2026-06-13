@@ -1692,113 +1692,6 @@
   color: #0f172a;
 }
 
-.shippingSendCard {
-  grid-template-columns: minmax(0, 7fr) minmax(220px, 3fr);
-  align-items: stretch;
-}
-
-.shippingSendMain {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-}
-
-.shippingSendMain > strong {
-  color: #0f172a;
-}
-
-.shippingSendMain button {
-  width: fit-content;
-}
-
-.shippingRecordPanel {
-  border-left: 1px solid #e2e8f0;
-  padding-left: 12px;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-height: 100%;
-}
-
-.shippingRecordHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.shippingRecordHeader strong {
-  color: #0f172a;
-  font-size: 13px;
-}
-
-.shippingRecordHeader button {
-  border: 0;
-  background: transparent;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.shippingRecordList {
-  display: grid;
-  gap: 8px;
-}
-
-.shippingRecordItem {
-  width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  padding: 9px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 8px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.shippingRecordItem:hover {
-  border-color: #bfdbfe;
-  background: #f8fbff;
-}
-
-.shippingRecordItem span,
-.shippingRecordItem b {
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.35;
-  font-style: normal;
-}
-
-.shippingRecordItem b {
-  color: #0f172a;
-  font-weight: 800;
-}
-
-.shippingStatusBadge {
-  justify-self: start;
-  min-height: 22px;
-  border-radius: 999px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.shippingRecordDialog {
-  width: min(520px, 100%);
-  border-radius: 18px;
-  background: #fff;
-  padding: 18px;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
-  display: grid;
-  gap: 16px;
-}
-
 .customerShippingPanel {
   border: 1px solid #dbeafe;
   border-radius: 16px;
@@ -2235,17 +2128,6 @@
 
   .documentGroupGrid {
     grid-template-columns: 1fr;
-  }
-
-  .shippingSendCard {
-    grid-template-columns: 1fr;
-  }
-
-  .shippingRecordPanel {
-    border-left: 0;
-    border-top: 1px solid #e2e8f0;
-    padding-left: 0;
-    padding-top: 12px;
   }
 
   .taxRefundDrawer {

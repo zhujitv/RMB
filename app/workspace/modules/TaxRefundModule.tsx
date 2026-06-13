@@ -103,26 +103,10 @@ type DomesticLogisticsInfo = {
   submittedAt?: string;
 };
 
-type ShippingDocumentNotification = {
-  id?: string;
-  sendMode?: string;
-  sendStatus?: string;
-  sendStatusLabel?: string;
-  status?: string;
-  sentByName?: string;
-  emailLanguage?: string;
-  emailLanguageLabel?: string;
-  errorMessage?: string;
-  sentAt?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-};
-
 type TaxRefundDetail = TaxRefundRow & {
   documents?: TaxDocument[];
   costs?: TaxCost[];
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
-  shippingDocumentNotifications?: ShippingDocumentNotification[];
 };
 
 type TaxRefundResponse = {
@@ -872,8 +856,6 @@ function TaxRefundDetailPanel({
   canSendShippingDocuments: boolean;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
 }) {
-  const [activeShippingRecord, setActiveShippingRecord] = useState<ShippingDocumentNotification | null>(null);
-
   if (loading) return <div className={styles.emptyState}>资料详情加载中...</div>;
   if (error) return <div className={styles.inlineError}>{error}</div>;
   if (!detail) return <div className={styles.emptyState}>点击查看资料后加载详情</div>;
@@ -881,7 +863,6 @@ function TaxRefundDetailPanel({
   const groups = groupDocuments(detail.documents || []);
   const domesticRemark = detail.domesticLogisticsInfo?.exportInvoiceRemark || detail.domesticLogisticsInfo?.remarkText || "";
   const factoryCosts = factorySupplierCosts(detail.costs || []);
-  const shippingRecords = (detail.shippingDocumentNotifications || []).slice(0, 5);
 
   return (
     <div className={styles.taxDetailPanel} id={taxTargetDomId("tax-detail-top")}>
@@ -904,40 +885,12 @@ function TaxRefundDetailPanel({
           </div>
         </div>
         {canSendShippingDocuments ? (
-          <div className={`${styles.documentGroupCard} ${styles.shippingSendCard}`}>
-            <div className={styles.shippingSendMain}>
-              <strong>清关资料发送</strong>
-              <span className={styles.mutedText}>向客户发送商业发票、装箱单和报关单。发送前可临时调整收件邮箱、抄送、语言、标题和正文。</span>
-              <button className={styles.secondaryButton} type="button" onClick={() => onOpenManualShippingDocuments(detail)}>
-                手动发送清关资料
-              </button>
-            </div>
-            <div className={styles.shippingRecordPanel}>
-              <div className={styles.shippingRecordHeader}>
-                <strong>最近发送记录</strong>
-                {(detail.shippingDocumentNotifications || []).length > 5 ? <button type="button">查看全部</button> : null}
-              </div>
-              {shippingRecords.length ? (
-                <div className={styles.shippingRecordList}>
-                  {shippingRecords.map((record, index) => (
-                    <button
-                      className={styles.shippingRecordItem}
-                      key={record.id || `${record.createdAt || record.sentAt || "record"}-${index}`}
-                      type="button"
-                      onClick={() => setActiveShippingRecord(record)}
-                    >
-                      <span>{formatDate(record.sentAt || record.createdAt || record.updatedAt)}</span>
-                      <b>{shippingSendModeLabel(record.sendMode)}</b>
-                      <span>{record.sentByName || "-"}</span>
-                      <span>{record.emailLanguageLabel || shippingLanguageLabel(record.emailLanguage)}</span>
-                      <i className={`${styles.shippingStatusBadge} ${shippingStatusClass(record)}`}>{shippingStatusLabel(record)}</i>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <span className={styles.mutedText}>暂无发送记录</span>
-              )}
-            </div>
+          <div className={styles.documentGroupCard}>
+            <strong>清关资料发送</strong>
+            <span className={styles.mutedText}>向客户发送商业发票、装箱单和报关单。发送前可临时调整收件邮箱、抄送、语言、标题和正文。</span>
+            <button className={styles.secondaryButton} type="button" onClick={() => onOpenManualShippingDocuments(detail)}>
+              手动发送清关资料
+            </button>
           </div>
         ) : null}
         <CustomsRecognitionForm detail={detail} readOnly={readOnly} onSaved={onCustomsSaved} />
@@ -1026,31 +979,6 @@ function TaxRefundDetailPanel({
             )) : <span className={styles.mutedText}>暂未上传</span>}
           </div>
         ))}
-      </div>
-      {activeShippingRecord ? (
-        <ShippingRecordDialog record={activeShippingRecord} onClose={() => setActiveShippingRecord(null)} />
-      ) : null}
-    </div>
-  );
-}
-
-function ShippingRecordDialog({ record, onClose }: { record: ShippingDocumentNotification; onClose: () => void }) {
-  return (
-    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="清关资料发送记录">
-      <div className={styles.shippingRecordDialog}>
-        <div className={styles.modalHeader}>
-          <div>
-            <strong>发送记录</strong>
-            <span>{shippingSendModeLabel(record.sendMode)} · {shippingStatusLabel(record)}</span>
-          </div>
-          <button className={styles.ghostButton} type="button" onClick={onClose}>关闭</button>
-        </div>
-        <div className={styles.detailGrid}>
-          <DetailField label="发送时间" value={formatDate(record.sentAt || record.createdAt || record.updatedAt)} />
-          <DetailField label="发送人" value={record.sentByName || "-"} />
-          <DetailField label="语言" value={record.emailLanguageLabel || shippingLanguageLabel(record.emailLanguage)} />
-          <DetailField label="发送结果" value={record.errorMessage || shippingStatusLabel(record)} wide />
-        </div>
       </div>
     </div>
   );
@@ -1567,33 +1495,5 @@ function statusClass(status = "") {
   if (status === "READY") return styles.statusSuccess;
   if (status === "PROBLEM") return styles.statusDanger;
   if (status === "SUBMITTED") return "";
-  return styles.statusWarning;
-}
-
-function shippingSendModeLabel(mode = "") {
-  if (mode === "manual") return "手动发送";
-  if (mode === "auto") return "自动发送";
-  return mode || "-";
-}
-
-function shippingLanguageLabel(language = "") {
-  const value = String(language || "").toUpperCase();
-  if (value === "RU") return "俄文";
-  if (value === "EN") return "英文";
-  return language || "-";
-}
-
-function shippingStatusLabel(record: ShippingDocumentNotification) {
-  const status = String(record.sendStatus || record.status || "").toLowerCase();
-  if (status.includes("failed")) return "发送失败";
-  if (status.includes("pending") || status.includes("waiting")) return "等待发送";
-  if (status.includes("sent") || status.includes("success") || record.sentAt) return "已发送";
-  return record.sendStatusLabel || record.status || "-";
-}
-
-function shippingStatusClass(record: ShippingDocumentNotification) {
-  const label = shippingStatusLabel(record);
-  if (label === "已发送") return styles.statusSuccess;
-  if (label === "发送失败") return styles.statusDanger;
   return styles.statusWarning;
 }
