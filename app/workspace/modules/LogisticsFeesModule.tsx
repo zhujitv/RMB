@@ -10,6 +10,7 @@ import styles from "../WorkspaceShell.module.css";
 const PAGE_SIZE = 20;
 const COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
+const LOGISTICS_FEE_SUPPLIER_TYPES = ["物流供应商", "海运供应商", "LOGISTICS_SUPPLIER", "FREIGHT_FORWARDER", "SHIPPING_SUPPLIER"];
 const AUDIT_FILTERS = [
   { label: "全部审核状态", value: "" },
   { label: "草稿", value: "草稿" },
@@ -559,7 +560,7 @@ export function LogisticsExpenseForm({
   useEffect(() => {
     if (initialOrder) {
       const orderId = initialOrder.orderId || initialOrder.id || "";
-      const orderSuppliers = initialOrder.logisticsSuppliers || [];
+      const orderSuppliers = filterLogisticsFeeSuppliers(initialOrder.logisticsSuppliers || []);
       setOrders([initialOrder]);
       setSuppliers(orderSuppliers);
       setForm((current) => ({
@@ -570,6 +571,7 @@ export function LogisticsExpenseForm({
       return;
     }
     void searchOrders("");
+    void searchSuppliers("");
   }, [initialOrder]);
 
   async function searchOrders(nextKeyword = orderKeyword) {
@@ -579,7 +581,11 @@ export function LogisticsExpenseForm({
       const params = new URLSearchParams();
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<{ rows: ExpenseOrderOption[] }>(`/api/logistics-costs/orders${params.size ? `?${params}` : ""}`);
-      setOrders(Array.isArray(result.rows) ? result.rows : []);
+      const rows = Array.isArray(result.rows) ? result.rows : [];
+      setOrders(rows.map((order) => ({
+        ...order,
+        logisticsSuppliers: filterLogisticsFeeSuppliers(order.logisticsSuppliers || []),
+      })));
     } catch (orderError) {
       setMessage(orderError instanceof Error ? orderError.message : "读取可录入订单失败");
     } finally {
@@ -591,10 +597,10 @@ export function LogisticsExpenseForm({
     setLoadingSuppliers(true);
     setMessage("");
     try {
-      const params = new URLSearchParams({ status: "active" });
+      const params = new URLSearchParams({ status: "active", type: "logisticsFee" });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<{ suppliers: SupplierOption[] }>(`/api/suppliers/search?${params}`);
-      setSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []);
+      setSuppliers(filterLogisticsFeeSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []));
     } catch (supplierError) {
       setMessage(supplierError instanceof Error ? supplierError.message : "读取供应商失败");
     } finally {
@@ -646,18 +652,21 @@ export function LogisticsExpenseForm({
 
   function handleOrderSelect(orderId: string) {
     const order = orders.find((item) => (item.orderId || item.id) === orderId);
-    const orderSuppliers = order?.logisticsSuppliers || [];
+    const orderSuppliers = filterLogisticsFeeSuppliers(order?.logisticsSuppliers || []);
     setSuppliers((current) => {
-      const merged = [...current];
+      const merged = filterLogisticsFeeSuppliers(current);
       for (const supplier of orderSuppliers) {
         if (supplier.id && !merged.some((item) => item.id === supplier.id)) merged.push(supplier);
       }
       return merged;
     });
+    const availableSupplierIds = new Set([...filterLogisticsFeeSuppliers(suppliers), ...orderSuppliers].map((supplier) => supplier.id));
     setForm((current) => ({
       ...current,
       orderId,
-      supplierId: orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId,
+      supplierId: orderSuppliers.length === 1
+        ? orderSuppliers[0].id
+        : (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
     }));
   }
 
@@ -774,7 +783,7 @@ export function LogisticsExpenseForm({
                   void searchSuppliers(supplierKeyword);
                 }
               }}
-              placeholder="管理员选择物流供应商"
+              placeholder="只搜索物流供应商 / 海运供应商"
             />
             <button className={styles.secondaryButton} type="button" onClick={() => searchSuppliers(supplierKeyword)} disabled={loadingSuppliers}>
               {loadingSuppliers ? "搜索中..." : "搜索"}
@@ -927,6 +936,10 @@ function orderLabel(order: ExpenseOrderOption) {
 function supplierLabel(supplier: SupplierOption) {
   const name = supplier.supplierName || supplier.name || "未命名供应商";
   return supplier.supplierType ? `${name} / ${supplier.supplierType}` : name;
+}
+
+function filterLogisticsFeeSuppliers(suppliers: SupplierOption[]) {
+  return suppliers.filter((supplier) => LOGISTICS_FEE_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
 }
 
 function csvCell(value: string) {

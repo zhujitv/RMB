@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
+import { DetailField, PaginationBar } from "../components";
 import { formatCny, moneyText } from "../formatters";
+import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
@@ -322,51 +323,45 @@ function QuickCreateCostPanel({
   const [form, setForm] = useState<QuickCostForm>(() => costFormFromRow(initialCost));
   const [orders, setOrders] = useState<CostOrderOption[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
-  const [orderKeyword, setOrderKeyword] = useState("");
-  const [supplierKeyword, setSupplierKeyword] = useState("");
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    void loadOrders("");
-    void loadSuppliers("");
-  }, []);
-
-  async function loadOrders(nextKeyword = orderKeyword) {
-    setLoadingOrders(true);
-    setMessage("");
+  async function searchOrders(keyword: string) {
     try {
-      const params = new URLSearchParams();
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<OrdersResponse>(`/api/orders${params.size ? `?${params}` : ""}`);
-      setOrders(Array.isArray(result.orders) ? result.orders : []);
+      const params = new URLSearchParams({ q: keyword.trim() });
+      const result = await apiJson<OrdersResponse>(`/api/receivables/search?${params}`);
+      return Array.isArray(result.orders) ? result.orders : [];
     } catch (orderError) {
       setMessage(orderError instanceof Error ? orderError.message : "读取订单列表失败");
-    } finally {
-      setLoadingOrders(false);
+      return [];
     }
   }
 
-  async function loadSuppliers(nextKeyword = supplierKeyword) {
-    setLoadingSuppliers(true);
-    setMessage("");
+  async function searchSuppliers(keyword: string) {
     try {
       const params = new URLSearchParams({ status: "active" });
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      if (keyword.trim()) params.set("keyword", keyword.trim());
       const result = await apiJson<SuppliersResponse>(`/api/suppliers/search?${params}`);
-      setSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []);
+      return Array.isArray(result.suppliers) ? result.suppliers : [];
     } catch (supplierError) {
       setMessage(supplierError instanceof Error ? supplierError.message : "读取供应商列表失败");
-    } finally {
-      setLoadingSuppliers(false);
+      return [];
     }
   }
 
   function setFormValue<K extends keyof QuickCostForm>(key: K, value: QuickCostForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleOrderSelect(order: CostOrderOption) {
+    setOrders((current) => current.some((item) => item.id === order.id) ? current : [order, ...current]);
+    setFormValue("orderId", order.id);
+  }
+
+  function handleSupplierSelect(supplier: SupplierOption) {
+    setSuppliers((current) => current.some((item) => item.id === supplier.id) ? current : [supplier, ...current]);
+    setFormValue("supplierId", supplier.id);
   }
 
   async function resolveExchangeRate(currency: string, paymentDate = form.paymentDate) {
@@ -478,6 +473,9 @@ function QuickCreateCostPanel({
   const initialSupplier = initialCost?.supplierId ? {
     id: initialCost.supplierId,
     supplierName: initialCost.supplierName || initialCost.supplierNameSnapshot || initialCost.vendorName,
+    name: initialCost.supplierName || initialCost.supplierNameSnapshot || initialCost.vendorName,
+    supplierType: "",
+    invoiceTitle: "",
   } : null;
   const orderOptions = initialOrder && !orders.some((order) => order.id === initialOrder.id) ? [initialOrder, ...orders] : orders;
   const supplierOptions = initialSupplier && !suppliers.some((supplier) => supplier.id === initialSupplier.id) ? [initialSupplier, ...suppliers] : suppliers;
@@ -498,70 +496,30 @@ function QuickCreateCostPanel({
 
       <div className={styles.reportFilterGrid}>
         <label>
-          订单搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={orderKeyword}
-              onChange={(event) => setOrderKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: orderOptions,
-                  selectedId: form.orderId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => setFormValue("orderId", id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void loadOrders(orderKeyword);
-                }
-              }}
-              placeholder="搜索订单号 / 提单号 / 客户简称"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => loadOrders(orderKeyword)} disabled={loadingOrders}>
-              {loadingOrders ? "搜索中..." : "搜索"}
-            </button>
-          </div>
-        </label>
-        <label>
           关联订单
-          <select value={form.orderId} onChange={(event) => setFormValue("orderId", event.target.value)}>
-            <option value="">请选择订单</option>
-            {orderOptions.map((order) => <option key={order.id} value={order.id}>{orderLabel(order)}</option>)}
-          </select>
-        </label>
-        <label>
-          供应商搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={supplierKeyword}
-              onChange={(event) => setSupplierKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: supplierOptions,
-                  selectedId: form.supplierId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => setFormValue("supplierId", id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void loadSuppliers(supplierKeyword);
-                }
-              }}
-              placeholder="搜索供应商 / 类型 / 税号"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => loadSuppliers(supplierKeyword)} disabled={loadingSuppliers}>
-              {loadingSuppliers ? "搜索中..." : "搜索"}
-            </button>
-          </div>
+          <SearchAutocomplete
+            value={selectedOrder || null}
+            cacheKey="cost-orders"
+            emptyLabel="未找到订单"
+            placeholder="输入订单号 / 提单号 / 客户简称"
+            getLabel={orderLabel}
+            getDescription={(order) => order.customerFullName || order.customerName || "-"}
+            search={searchOrders}
+            onSelect={handleOrderSelect}
+          />
         </label>
         <label>
           供应商
-          <select value={form.supplierId} onChange={(event) => setFormValue("supplierId", event.target.value)}>
-            <option value="">请选择供应商</option>
-            {supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplierLabel(supplier)}</option>)}
-          </select>
+          <SearchAutocomplete
+            value={selectedSupplier || null}
+            cacheKey="cost-suppliers"
+            emptyLabel="未找到匹配供应商，可先到系统设置新增供应商"
+            placeholder="输入供应商 / 类型 / 开票名称 / 税号"
+            getLabel={supplierLabel}
+            getDescription={(supplier) => supplier.invoiceTitle || supplier.supplierType || ""}
+            search={searchSuppliers}
+            onSelect={handleSupplierSelect}
+          />
         </label>
         <label>
           成本类型

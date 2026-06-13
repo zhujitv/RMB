@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
+import { DetailField, PaginationBar } from "../components";
 import { formatCny, moneyText } from "../formatters";
+import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
@@ -281,28 +282,18 @@ function QuickCreatePaymentPanel({
 }) {
   const [form, setForm] = useState<QuickPaymentForm>(() => paymentFormFromRow(initialPayment));
   const [orders, setOrders] = useState<PaymentOrderOption[]>([]);
-  const [orderKeyword, setOrderKeyword] = useState("");
-  const [ordersLoading, setOrdersLoading] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    void loadOrders("");
-  }, []);
-
-  async function loadOrders(nextKeyword = orderKeyword) {
-    setOrdersLoading(true);
-    setMessage("");
+  async function searchOrders(keyword: string) {
     try {
-      const params = new URLSearchParams();
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<OrdersResponse>(`/api/orders${params.size ? `?${params}` : ""}`);
-      setOrders(Array.isArray(result.orders) ? result.orders : []);
+      const params = new URLSearchParams({ q: keyword.trim() });
+      const result = await apiJson<OrdersResponse>(`/api/receivables/search?${params}`);
+      return Array.isArray(result.orders) ? result.orders : [];
     } catch (orderError) {
       setMessage(orderError instanceof Error ? orderError.message : "读取订单列表失败");
-    } finally {
-      setOrdersLoading(false);
+      return [];
     }
   }
 
@@ -339,11 +330,11 @@ function QuickCreatePaymentPanel({
     }
   }
 
-  async function handleOrderChange(orderId: string) {
-    const order = orders.find((item) => item.id === orderId);
+  async function handleOrderSelect(order: PaymentOrderOption) {
+    setOrders((current) => current.some((item) => item.id === order.id) ? current : [order, ...current]);
     setForm((current) => ({
       ...current,
-      orderId,
+      orderId: order.id,
       currency: order?.currency || "",
       exchangeRate: "",
     }));
@@ -437,39 +428,17 @@ function QuickCreatePaymentPanel({
 
       <div className={styles.reportFilterGrid}>
         <label>
-          订单搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={orderKeyword}
-              onChange={(event) => setOrderKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: orderOptions,
-                  selectedId: form.orderId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => void handleOrderChange(id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void loadOrders(orderKeyword);
-                }
-              }}
-              placeholder="搜索订单号 / 提单号 / 客户简称"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => loadOrders(orderKeyword)} disabled={ordersLoading}>
-              {ordersLoading ? "搜索中..." : "搜索"}
-            </button>
-          </div>
-        </label>
-        <label>
           关联订单
-          <select value={form.orderId} onChange={(event) => void handleOrderChange(event.target.value)}>
-            <option value="">请选择订单</option>
-            {orderOptions.map((order) => (
-              <option key={order.id} value={order.id}>{orderLabel(order)}</option>
-            ))}
-          </select>
+          <SearchAutocomplete
+            value={selectedOrder || null}
+            cacheKey="payment-orders"
+            emptyLabel="未找到订单"
+            placeholder="输入订单号 / 提单号 / 客户简称"
+            getLabel={orderLabel}
+            getDescription={(order) => `${order.customerFullName || order.customerName || "-"}${order.currency ? ` · ${order.currency}` : ""}`}
+            search={searchOrders}
+            onSelect={(order) => void handleOrderSelect(order)}
+          />
         </label>
         <label>
           收款日期
