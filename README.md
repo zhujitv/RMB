@@ -11,7 +11,28 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 - PostgreSQL
 - Prisma
 - Cloudflare R2
-- 原生 HTML/CSS/JavaScript 前端
+- 旧版主前端：原生 HTML/CSS/JavaScript（`index.html` + `app.js`）
+- 新版迁移入口：React + TypeScript（`/workspace`）
+
+## 前端迁移路线
+
+当前系统保留现有 API、Prisma 和数据库结构。新版 React + TypeScript 前端从 `/workspace` 独立入口开始迁移，第一阶段只包含：
+
+- 登录页
+- 权限初始化
+- 左侧导航
+- 基础布局
+- 不加载业务数据的工作台首页
+
+迁移原则：
+
+- 旧版 `/index.html` + `/app.js` 继续保留，确保现有业务功能不丢失。
+- 旧版前端只做必要 bug 修复，不再继续承载复杂新功能。
+- 新功能和模块迁移优先进入 React + TypeScript 骨架。
+- 每迁移一个模块，必须完成权限、数据、上传、导出和回归验证。
+- 业务模块迁移顺序：应收订单、收款管理、成本管理、国内物流信息、退税资料、报表中心、系统设置。
+
+详细迁移检查清单见：[app/workspace/MIGRATION_PLAN.md](app/workspace/MIGRATION_PLAN.md)。
 
 ## 功能模块
 

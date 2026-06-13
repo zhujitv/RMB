@@ -1,0 +1,653 @@
+"use client";
+
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiJson } from "../api";
+import { DetailField, PaginationBar } from "../components";
+import { formatDateTime } from "../formatters";
+import styles from "../WorkspaceShell.module.css";
+
+type TransportItem = {
+  id?: string;
+  containerNo?: string;
+  truckPlateNo?: string;
+  trailerPlateNo?: string;
+  departureDate?: string;
+  departurePlace?: string;
+  arrivalPlace?: string;
+  cargoName?: string;
+  remark?: string;
+};
+
+type DomesticLogisticsInfo = {
+  id?: string;
+  transportType?: string;
+  transportTypeLabel?: string;
+  truckPlateNo?: string;
+  trailerPlateNo?: string;
+  departurePlace?: string;
+  destinationPlace?: string;
+  departureDate?: string;
+  expressTrackingNo?: string;
+  cargoDescription?: string;
+  transportItems?: TransportItem[];
+  remarkTextManualEdited?: boolean;
+  remarkText?: string;
+  exportInvoiceRemark?: string;
+  submittedByName?: string;
+  submittedAt?: string;
+  submitterRole?: string;
+  archiveStatusLabel?: string;
+};
+
+type DomesticLogisticsDocument = {
+  id: string;
+  documentType?: string;
+  documentTypeLabel?: string;
+  fileName?: string;
+  uploadedByName?: string;
+  uploadedAt?: string;
+  uploadStatus?: string;
+};
+
+type DomesticLogisticsRow = {
+  id: string;
+  orderNo?: string;
+  blNo?: string;
+  billOfLadingNo?: string;
+  customerName?: string;
+  customerFullName?: string;
+  customerShortName?: string;
+  logisticsStatus?: string;
+  submittedAt?: string | null;
+  domesticLogisticsInfo?: DomesticLogisticsInfo | null;
+  documents?: DomesticLogisticsDocument[];
+};
+
+type DomesticLogisticsResponse = {
+  rows: DomesticLogisticsRow[];
+};
+
+type DomesticLogisticsForm = {
+  orderId: string;
+  transportType: string;
+  expressTrackingNo: string;
+  destinationPlace: string;
+  cargoDescription: string;
+  remarkText: string;
+  remarkTextManualEdited: boolean;
+  transportItems: TransportItem[];
+};
+
+const PAGE_SIZE = 20;
+const TRANSPORT_TYPES = [
+  { value: "TRUCK", label: "车辆运输" },
+  { value: "EXPRESS", label: "快递运输" },
+  { value: "MULTIMODAL", label: "多式联运" },
+];
+const CUSTOMS_DOCUMENT_TYPES = [
+  { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
+  { value: "RELEASE_NOTICE", label: "放行通知书" },
+  { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
+];
+
+function emptyTransportItem(): TransportItem {
+  return {
+    containerNo: "",
+    truckPlateNo: "",
+    trailerPlateNo: "",
+    departureDate: "",
+    departurePlace: "",
+    arrivalPlace: "",
+    cargoName: "",
+    remark: "",
+  };
+}
+
+export function DomesticLogisticsModule() {
+  const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
+  const [keyword, setKeyword] = useState("");
+  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [editingOrderId, setEditingOrderId] = useState("");
+  const [uploadingKey, setUploadingKey] = useState("");
+  const [deletingDocumentId, setDeletingDocumentId] = useState("");
+
+  async function loadRows(nextKeyword = submittedKeyword) {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ businessScope: "current" });
+      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
+      setRows(Array.isArray(result.rows) ? result.rows : []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "读取国内物流信息失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadRows("");
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return rows.slice(start, start + PAGE_SIZE);
+  }, [rows, page]);
+
+  function submitSearch() {
+    const value = keyword.trim();
+    setSubmittedKeyword(value);
+    setPage(1);
+    setExpandedId("");
+    setEditingOrderId("");
+    void loadRows(value);
+  }
+
+  function resetSearch() {
+    setKeyword("");
+    setSubmittedKeyword("");
+    setPage(1);
+    setExpandedId("");
+    setEditingOrderId("");
+    void loadRows("");
+  }
+
+  async function uploadDocument(orderId: string, documentType: string, file: File | null) {
+    if (!file) return;
+    setUploadingKey(`${orderId}:${documentType}`);
+    setError("");
+    try {
+      if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+        throw new Error("只能上传 PDF 文件");
+      }
+      const formData = new FormData();
+      formData.append("orderId", orderId);
+      formData.append("documentType", documentType);
+      formData.append("uploadSource", "REACT_DOMESTIC_LOGISTICS");
+      formData.append("file", file);
+      const response = await fetch("/api/order-documents", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success !== true) {
+        throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
+      }
+      await loadRows(submittedKeyword);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
+    } finally {
+      setUploadingKey("");
+    }
+  }
+
+  async function deleteDocument(document: DomesticLogisticsDocument) {
+    if (!window.confirm(`确认删除文件？\n\n${document.fileName || document.documentTypeLabel || "-"}`)) return;
+    setDeletingDocumentId(document.id);
+    setError("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
+        method: "DELETE",
+      });
+      if (result.success !== true) throw new Error(result.message || "删除文件失败");
+      await loadRows(submittedKeyword);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
+    } finally {
+      setDeletingDocumentId("");
+    }
+  }
+
+  return (
+    <section className={styles.moduleCard}>
+      <div className={styles.moduleHeader}>
+        <div>
+          <span className={styles.kicker}>React 迁移模块</span>
+          <h2>国内物流信息</h2>
+        </div>
+        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadRows()}>
+          {loading ? "刷新中..." : "刷新"}
+        </button>
+      </div>
+
+      <div className={styles.listToolbar}>
+        <input
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitSearch();
+          }}
+          placeholder="搜索订单号 / 提单号"
+        />
+        <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
+        <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
+      </div>
+
+      {error ? <div className={styles.inlineError}>{error}</div> : null}
+
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>客户简称</th>
+              <th>到达地</th>
+              <th>运输货物名称</th>
+              <th>物流状态</th>
+              <th>详情</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
+              </tr>
+            ) : pageRows.length ? pageRows.map((row) => (
+              <DomesticLogisticsRows
+                key={row.id}
+                row={row}
+                expanded={expandedId === row.id}
+                onToggle={() => setExpandedId((current) => current === row.id ? "" : row.id)}
+                editing={editingOrderId === row.id}
+                onEdit={() => {
+                  setExpandedId(row.id);
+                  setEditingOrderId((current) => current === row.id ? "" : row.id);
+                }}
+                onSaved={() => {
+                  setEditingOrderId("");
+                  void loadRows(submittedKeyword);
+                }}
+                onCancelEdit={() => setEditingOrderId("")}
+                uploadingKey={uploadingKey}
+                deletingDocumentId={deletingDocumentId}
+                onUploadDocument={uploadDocument}
+                onDeleteDocument={deleteDocument}
+              />
+            )) : (
+              <tr>
+                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的国内物流订单</div></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <PaginationBar total={rows.length} page={page} totalPages={totalPages} onPage={setPage} />
+    </section>
+  );
+}
+
+function DomesticLogisticsRows({
+  row,
+  expanded,
+  editing,
+  onToggle,
+  onEdit,
+  onSaved,
+  onCancelEdit,
+  uploadingKey,
+  deletingDocumentId,
+  onUploadDocument,
+  onDeleteDocument,
+}: {
+  row: DomesticLogisticsRow;
+  expanded: boolean;
+  editing: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onSaved: () => void;
+  onCancelEdit: () => void;
+  uploadingKey: string;
+  deletingDocumentId: string;
+  onUploadDocument: (orderId: string, documentType: string, file: File | null) => void;
+  onDeleteDocument: (document: DomesticLogisticsDocument) => void;
+}) {
+  const info = row.domesticLogisticsInfo;
+  return (
+    <>
+      <tr className={styles.clickableRow} onClick={onToggle}>
+        <td><strong>{row.orderNo || "-"}</strong></td>
+        <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
+        <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
+        <td>{info?.cargoDescription || firstItemValue(info, "cargoName") || "-"}</td>
+        <td><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+      </tr>
+      {expanded ? (
+        <tr className={styles.detailRow}>
+          <td colSpan={6}>
+            <div className={styles.detailCard}>
+              <div className={styles.detailActions}>
+                <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
+                  {info ? "编辑物流信息" : "录入物流信息"}
+                </button>
+              </div>
+              {editing ? (
+                <DomesticLogisticsEditPanel row={row} onSaved={onSaved} onCancel={onCancelEdit} />
+              ) : null}
+              <div className={styles.detailGrid}>
+                <DetailField label="客户全称" value={row.customerFullName || row.customerName || "-"} wide />
+                <DetailField label="提单号" value={row.blNo || row.billOfLadingNo || "-"} />
+                <DetailField label="运输方式" value={info?.transportTypeLabel || "-"} />
+                <DetailField label="起运地" value={info?.departurePlace || firstItemValue(info, "departurePlace") || "-"} />
+                <DetailField label="到达地" value={info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"} />
+                <DetailField label="起运日期" value={info?.departureDate || firstItemValue(info, "departureDate") || "-"} />
+                <DetailField label="车牌号 / 快递单号" value={info?.expressTrackingNo || info?.truckPlateNo || firstItemValue(info, "truckPlateNo") || "-"} />
+                <DetailField label="运输货物名称" value={info?.cargoDescription || firstItemValue(info, "cargoName") || "-"} />
+                <DetailField label="录入人" value={info?.submittedByName || "-"} />
+                <DetailField label="录入时间" value={formatDateTime(info?.submittedAt || row.submittedAt)} />
+                <DetailField label="出口发票备注" value={info?.exportInvoiceRemark || info?.remarkText || "暂无出口发票备注"} wide />
+              </div>
+              {info?.transportItems?.length ? (
+                <div className={styles.subList}>
+                  <strong>集装箱运输明细</strong>
+                  {info.transportItems.map((item, index) => (
+                    <div className={styles.subListItem} key={`${item.containerNo || item.truckPlateNo || index}-${index}`}>
+                      <span>{index + 1}. {item.containerNo || "无集装箱号"}</span>
+                      <span>{item.truckPlateNo || "-"} / {item.trailerPlateNo || "-"}</span>
+                      <span>{item.departurePlace || "-"} → {item.arrivalPlace || "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <CustomsDocumentPanel
+                orderId={row.id}
+                documents={row.documents || []}
+                uploadingKey={uploadingKey}
+                deletingDocumentId={deletingDocumentId}
+                onUpload={onUploadDocument}
+                onDelete={onDeleteDocument}
+              />
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticLogisticsRow; onSaved: () => void; onCancel: () => void }) {
+  const [form, setForm] = useState<DomesticLogisticsForm>(() => formFromRow(row));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  function setFormValue<K extends keyof DomesticLogisticsForm>(key: K, value: DomesticLogisticsForm[K]) {
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key !== "remarkText" && next.remarkTextManualEdited !== true) {
+        next.remarkText = generateRemark(next);
+      }
+      return next;
+    });
+  }
+
+  function updateItem(index: number, key: keyof TransportItem, value: string) {
+    setForm((current) => {
+      const transportItems = current.transportItems.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, [key]: value } : item
+      ));
+      const next = { ...current, transportItems };
+      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      return next;
+    });
+  }
+
+  function addItem(copyPrevious = false) {
+    setForm((current) => {
+      const previous = current.transportItems[current.transportItems.length - 1] || emptyTransportItem();
+      const transportItems = [...current.transportItems, copyPrevious ? { ...previous, containerNo: "" } : emptyTransportItem()];
+      const next = { ...current, transportItems };
+      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      return next;
+    });
+  }
+
+  function removeItem(index: number) {
+    setForm((current) => {
+      const transportItems = current.transportItems.filter((_, itemIndex) => itemIndex !== index);
+      const next = { ...current, transportItems: transportItems.length ? transportItems : [emptyTransportItem()] };
+      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      return next;
+    });
+  }
+
+  function regenerateRemark() {
+    setForm((current) => ({ ...current, remarkText: generateRemark(current), remarkTextManualEdited: false }));
+  }
+
+  async function submitForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      const infoId = row.domesticLogisticsInfo?.id;
+      const path = infoId ? `/api/domestic-logistics/${infoId}` : "/api/domestic-logistics";
+      const result = await apiJson<{ success?: boolean; message?: string }>(path, {
+        method: infoId ? "PATCH" : "POST",
+        body: JSON.stringify({
+          orderId: row.id,
+          transportType: form.transportType,
+          expressTrackingNo: form.transportType === "EXPRESS" ? form.expressTrackingNo.trim() : undefined,
+          destinationPlace: form.transportType === "EXPRESS" ? form.destinationPlace.trim() : undefined,
+          cargoDescription: form.transportType === "EXPRESS" ? form.cargoDescription.trim() : undefined,
+          transportItems: form.transportType === "EXPRESS" ? [] : form.transportItems,
+          remarkText: form.remarkText,
+          remarkTextManualEdited: form.remarkTextManualEdited,
+        }),
+      });
+      if (result.success !== true) throw new Error(result.message || "国内物流信息保存失败");
+      onSaved();
+    } catch (saveError) {
+      setMessage(saveError instanceof Error ? saveError.message : "国内物流信息保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const isExpress = form.transportType === "EXPRESS";
+
+  return (
+    <form className={styles.inlineEditPanel} onSubmit={submitForm} onClick={(event) => event.stopPropagation()}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>录入国内物流信息 - {row.orderNo || "-"}</strong>
+          <span>提单号：{row.blNo || row.billOfLadingNo || "-"} ｜ 客户全称：{row.customerFullName || row.customerName || "-"}</span>
+        </div>
+      </div>
+
+      {message ? <div className={styles.inlineError}>{message}</div> : null}
+
+      <div className={styles.reportFilterGrid}>
+        <label>
+          运输方式
+          <select value={form.transportType} onChange={(event) => setFormValue("transportType", event.target.value)}>
+            {TRANSPORT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+          </select>
+        </label>
+        {isExpress ? (
+          <>
+            <label>
+              快递单号
+              <input value={form.expressTrackingNo} onChange={(event) => setFormValue("expressTrackingNo", event.target.value)} required />
+            </label>
+            <label>
+              到达地
+              <input value={form.destinationPlace} onChange={(event) => setFormValue("destinationPlace", event.target.value)} required />
+            </label>
+            <label>
+              运输货物名称
+              <input value={form.cargoDescription} onChange={(event) => setFormValue("cargoDescription", event.target.value)} required />
+            </label>
+          </>
+        ) : null}
+      </div>
+
+      {!isExpress ? (
+        <div className={styles.transportItemsPanel}>
+          <div className={styles.transportItemsHeader}>
+            <strong>集装箱运输明细</strong>
+            <div>
+              <button className={styles.secondaryButton} type="button" onClick={() => addItem(false)}>添加集装箱/车辆</button>
+              <button className={styles.secondaryButton} type="button" onClick={() => addItem(true)}>复制上一行</button>
+            </div>
+          </div>
+          <div className={styles.transportItemsGrid}>
+            {form.transportItems.map((item, index) => (
+              <div className={styles.transportItemCard} key={`transport-item-${index}`}>
+                <strong>第 {index + 1} 行</strong>
+                <label>集装箱号<input value={item.containerNo || ""} onChange={(event) => updateItem(index, "containerNo", event.target.value)} /></label>
+                <label>{form.transportType === "MULTIMODAL" ? "首程车牌号" : "车牌号"}<input value={item.truckPlateNo || ""} onChange={(event) => updateItem(index, "truckPlateNo", event.target.value)} required /></label>
+                <label>挂车车牌<input value={item.trailerPlateNo || ""} onChange={(event) => updateItem(index, "trailerPlateNo", event.target.value)} /></label>
+                <label>起运日期<input type="date" value={item.departureDate || ""} onChange={(event) => updateItem(index, "departureDate", event.target.value)} required /></label>
+                <label>{form.transportType === "MULTIMODAL" ? "首程起运地" : "起运地"}<input value={item.departurePlace || ""} onChange={(event) => updateItem(index, "departurePlace", event.target.value)} required /></label>
+                <label>到达地<input value={item.arrivalPlace || ""} onChange={(event) => updateItem(index, "arrivalPlace", event.target.value)} required /></label>
+                <label>运输货物名称<input value={item.cargoName || ""} onChange={(event) => updateItem(index, "cargoName", event.target.value)} required /></label>
+                <label>备注<input value={item.remark || ""} onChange={(event) => updateItem(index, "remark", event.target.value)} /></label>
+                <button className={styles.secondaryButton} type="button" onClick={() => removeItem(index)}>删除本行</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <label className={styles.remarkCard}>
+        <span>出口发票备注</span>
+        <textarea
+          value={form.remarkText}
+          onChange={(event) => setForm((current) => ({ ...current, remarkText: event.target.value, remarkTextManualEdited: true }))}
+          rows={7}
+        />
+        <button className={styles.secondaryButton} type="button" onClick={regenerateRemark}>重新生成备注</button>
+      </label>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "提交中..." : "提交国内物流信息"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
+      </div>
+    </form>
+  );
+}
+
+function CustomsDocumentPanel({
+  orderId,
+  documents,
+  uploadingKey,
+  deletingDocumentId,
+  onUpload,
+  onDelete,
+}: {
+  orderId: string;
+  documents: DomesticLogisticsDocument[];
+  uploadingKey: string;
+  deletingDocumentId: string;
+  onUpload: (orderId: string, documentType: string, file: File | null) => void;
+  onDelete: (document: DomesticLogisticsDocument) => void;
+}) {
+  return (
+    <div className={styles.documentGroupCard}>
+      <strong>报关资料上传</strong>
+      {CUSTOMS_DOCUMENT_TYPES.map((documentType) => {
+        const matchedDocuments = documents.filter((document) => (
+          document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
+        ));
+        const uploading = uploadingKey === `${orderId}:${documentType.value}`;
+        return (
+          <div className={styles.fileListItem} key={documentType.value}>
+            <div>
+              <span>{documentType.label}</span>
+              <small>{matchedDocuments.length ? `已上传 ${matchedDocuments.length} 个文件` : "暂未上传"}</small>
+              {matchedDocuments.map((document) => (
+                <small key={document.id}>
+                  {document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDateTime(document.uploadedAt)}
+                </small>
+              ))}
+            </div>
+            <div>
+              <label className={styles.secondaryButton}>
+                {uploading ? "上传中..." : "选择PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  disabled={uploading}
+                  hidden
+                  onChange={(event) => {
+                    onUpload(orderId, documentType.value, event.target.files?.[0] || null);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              {matchedDocuments.map((document) => (
+                <span key={document.id} className={styles.fileListItemActions}>
+                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    disabled={deletingDocumentId === document.id}
+                    onClick={() => onDelete(document)}
+                  >
+                    {deletingDocumentId === document.id ? "删除中..." : "删除"}
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function firstItemValue(info: DomesticLogisticsInfo | null | undefined, key: keyof TransportItem) {
+  return info?.transportItems?.find((item) => item[key])?.[key] || "";
+}
+
+function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
+  const info = row.domesticLogisticsInfo;
+  const transportType = info?.transportType || "TRUCK";
+  const transportItems = info?.transportItems?.length
+    ? info.transportItems.map((item) => ({ ...emptyTransportItem(), ...item }))
+    : [{
+      ...emptyTransportItem(),
+      truckPlateNo: info?.truckPlateNo || "",
+      trailerPlateNo: info?.trailerPlateNo || "",
+      departurePlace: info?.departurePlace || "",
+      arrivalPlace: info?.destinationPlace || "",
+      departureDate: info?.departureDate || "",
+      cargoName: info?.cargoDescription || "",
+    }];
+  const form = {
+    orderId: row.id,
+    transportType,
+    expressTrackingNo: info?.expressTrackingNo || "",
+    destinationPlace: info?.destinationPlace || "",
+    cargoDescription: info?.cargoDescription || "",
+    remarkText: info?.exportInvoiceRemark || info?.remarkText || "",
+    remarkTextManualEdited: Boolean(info?.remarkTextManualEdited),
+    transportItems,
+  };
+  return { ...form, remarkText: form.remarkText || generateRemark(form) };
+}
+
+function generateRemark(form: DomesticLogisticsForm) {
+  if (form.transportType === "EXPRESS") {
+    return form.expressTrackingNo ? `快递单号：${form.expressTrackingNo}` : "";
+  }
+  return form.transportItems.map((item) => [
+    item.containerNo ? `集装箱号：${item.containerNo}` : "",
+    item.truckPlateNo ? `车牌号：${item.truckPlateNo}` : "",
+    item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
+    item.departureDate ? `起运日：${item.departureDate}` : "",
+    item.departurePlace ? `起运地：${item.departurePlace}` : "",
+    item.arrivalPlace ? `到达地：${item.arrivalPlace}` : "",
+    item.cargoName ? `运输货物名称：${item.cargoName}` : "",
+  ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
+}

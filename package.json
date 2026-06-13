@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && next build",
     "lint": "node --check app.js && node --check public/app.js && node --check lib/platform-db.js",
+    "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.js",
     "start": "next start",
     "postinstall": "prisma generate",
@@ -27,6 +28,10 @@
     "react-dom": "19.2.7"
   },
   "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.7.3",
     "prisma": "6.19.3"
   }
 }
