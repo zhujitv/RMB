@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
+import { DetailField, PaginationBar } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
+import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 
 const PAGE_SIZE = 20;
@@ -97,8 +98,8 @@ type LogisticsStatementRow = {
 };
 
 type ExpenseOrderOption = {
+  id: string;
   orderId?: string;
-  id?: string;
   orderNo?: string;
   blNo?: string;
   billOfLadingNo?: string;
@@ -574,73 +575,63 @@ export function LogisticsExpenseForm({
 }: {
   onCancel: () => void;
   onSaved: () => void;
-  initialOrder?: ExpenseOrderOption | null;
+  initialOrder?: Partial<ExpenseOrderOption> | null;
 }) {
-  const initialOrderId = initialOrder?.orderId || initialOrder?.id || "";
-  const initialSuppliers = initialOrder?.logisticsSuppliers || [];
+  const normalizedInitialOrder = initialOrder ? normalizeExpenseOrder(initialOrder) : null;
+  const initialOrderId = normalizedInitialOrder?.id || "";
+  const initialSuppliers = normalizedInitialOrder?.logisticsSuppliers || [];
   const [form, setForm] = useState<ExpenseForm>(() => ({
     ...emptyExpenseForm,
     orderId: initialOrderId,
     supplierId: initialSuppliers.length === 1 ? initialSuppliers[0].id : "",
     items: [emptyExpenseItem()],
   }));
-  const [orders, setOrders] = useState<ExpenseOrderOption[]>(() => initialOrder ? [initialOrder] : []);
+  const [orders, setOrders] = useState<ExpenseOrderOption[]>(() => normalizedInitialOrder ? [normalizedInitialOrder] : []);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>(() => initialSuppliers);
-  const [orderKeyword, setOrderKeyword] = useState("");
-  const [supplierKeyword, setSupplierKeyword] = useState("");
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (initialOrder) {
-      const orderId = initialOrder.orderId || initialOrder.id || "";
-      const orderSuppliers = filterLogisticsFeeSuppliers(initialOrder.logisticsSuppliers || []);
-      setOrders([initialOrder]);
+      const order = normalizeExpenseOrder(initialOrder);
+      const orderSuppliers = order.logisticsSuppliers || [];
+      setOrders([order]);
       setSuppliers(orderSuppliers);
       setForm((current) => ({
         ...current,
-        orderId,
+        orderId: order.id,
         supplierId: orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId,
       }));
-      return;
     }
-    void searchOrders("");
-    void searchSuppliers("");
   }, [initialOrder]);
 
-  async function searchOrders(nextKeyword = orderKeyword) {
-    setLoadingOrders(true);
+  async function searchOrders(nextKeyword: string) {
     setMessage("");
     try {
       const params = new URLSearchParams();
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<{ rows: ExpenseOrderOption[] }>(`/api/logistics-costs/orders${params.size ? `?${params}` : ""}`);
-      const rows = Array.isArray(result.rows) ? result.rows : [];
-      setOrders(rows.map((order) => ({
-        ...order,
-        logisticsSuppliers: filterLogisticsFeeSuppliers(order.logisticsSuppliers || []),
-      })));
+      const rows = (Array.isArray(result.rows) ? result.rows : []).map((order) => normalizeExpenseOrder(order));
+      setOrders((current) => mergeOrders(current, rows));
+      return rows;
     } catch (orderError) {
       setMessage(orderError instanceof Error ? orderError.message : "读取可录入订单失败");
-    } finally {
-      setLoadingOrders(false);
+      return [];
     }
   }
 
-  async function searchSuppliers(nextKeyword = supplierKeyword) {
-    setLoadingSuppliers(true);
+  async function searchSuppliers(nextKeyword: string) {
     setMessage("");
     try {
       const params = new URLSearchParams({ status: "active", type: "logisticsFee" });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<{ suppliers: SupplierOption[] }>(`/api/suppliers/search?${params}`);
-      setSuppliers(filterLogisticsFeeSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []));
+      const rows = filterLogisticsFeeSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []);
+      setSuppliers((current) => mergeSuppliers(current, rows));
+      return rows;
     } catch (supplierError) {
       setMessage(supplierError instanceof Error ? supplierError.message : "读取供应商失败");
-    } finally {
-      setLoadingSuppliers(false);
+      return [];
     }
   }
 
@@ -686,20 +677,15 @@ export function LogisticsExpenseForm({
     }));
   }
 
-  function handleOrderSelect(orderId: string) {
-    const order = orders.find((item) => (item.orderId || item.id) === orderId);
-    const orderSuppliers = filterLogisticsFeeSuppliers(order?.logisticsSuppliers || []);
-    setSuppliers((current) => {
-      const merged = filterLogisticsFeeSuppliers(current);
-      for (const supplier of orderSuppliers) {
-        if (supplier.id && !merged.some((item) => item.id === supplier.id)) merged.push(supplier);
-      }
-      return merged;
-    });
+  function handleOrderSelect(order: ExpenseOrderOption) {
+    const normalizedOrder = normalizeExpenseOrder(order);
+    const orderSuppliers = normalizedOrder.logisticsSuppliers || [];
+    setOrders((current) => mergeOrders(current, [normalizedOrder]));
+    setSuppliers((current) => mergeSuppliers(current, orderSuppliers));
     const availableSupplierIds = new Set([...filterLogisticsFeeSuppliers(suppliers), ...orderSuppliers].map((supplier) => supplier.id));
     setForm((current) => ({
       ...current,
-      orderId,
+      orderId: normalizedOrder.id,
       supplierId: orderSuppliers.length === 1
         ? orderSuppliers[0].id
         : (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
@@ -747,7 +733,7 @@ export function LogisticsExpenseForm({
     }
   }
 
-  const selectedOrder = orders.find((order) => (order.orderId || order.id) === form.orderId);
+  const selectedOrder = orders.find((order) => order.id === form.orderId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId);
   const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
 
@@ -768,70 +754,37 @@ export function LogisticsExpenseForm({
       {message ? <div className={styles.inlineError}>{message}</div> : null}
       <div className={styles.reportFilterGrid}>
         <label>
-          订单搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={orderKeyword}
-              onChange={(event) => setOrderKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: orders,
-                  selectedId: form.orderId,
-                  getId: (item) => item.orderId || item.id || "",
-                  onSelect: (id) => handleOrderSelect(id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void searchOrders(orderKeyword);
-                }
-              }}
-              placeholder="搜索订单号 / 提单号 / 客户"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => searchOrders(orderKeyword)} disabled={loadingOrders}>
-              {loadingOrders ? "搜索中..." : "搜索"}
-            </button>
-          </div>
-        </label>
-        <label>
           关联订单
-          <select value={form.orderId} onChange={(event) => handleOrderSelect(event.target.value)}>
-            <option value="">请选择订单</option>
-            {orders.map((order) => <option key={order.orderId || order.id} value={order.orderId || order.id}>{orderLabel(order)}</option>)}
-          </select>
-        </label>
-        <label>
-          供应商搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={supplierKeyword}
-              onChange={(event) => setSupplierKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: suppliers,
-                  selectedId: form.supplierId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => setField("supplierId", id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void searchSuppliers(supplierKeyword);
-                }
-              }}
-              placeholder="只搜索物流供应商 / 海运供应商"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => searchSuppliers(supplierKeyword)} disabled={loadingSuppliers}>
-              {loadingSuppliers ? "搜索中..." : "搜索"}
-            </button>
-          </div>
+          <SearchAutocomplete
+            value={selectedOrder || null}
+            cacheKey="logistics-fee-orders"
+            emptyLabel="未找到可录入订单"
+            placeholder="输入订单号 / 提单号 / 客户简称"
+            getLabel={orderLabel}
+            getDescription={(order) => {
+              const supplierCount = filterLogisticsFeeSuppliers(order.logisticsSuppliers || []).length;
+              return `${order.customerName || "客户未设置"}${supplierCount ? ` · 已绑定 ${supplierCount} 家物流供应商` : ""}`;
+            }}
+            search={searchOrders}
+            onSelect={handleOrderSelect}
+          />
         </label>
         <label>
           供应商
-          <select value={form.supplierId} onChange={(event) => setField("supplierId", event.target.value)}>
-            <option value="">物流供应商账号可留空</option>
-            {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplierLabel(supplier)}</option>)}
-          </select>
+          <SearchAutocomplete
+            value={selectedSupplier || null}
+            cacheKey="logistics-fee-suppliers"
+            emptyLabel="未找到物流供应商或海运供应商"
+            placeholder="输入物流供应商 / 海运供应商"
+            getLabel={supplierLabel}
+            getDescription={(supplier) => supplier.supplierType || "物流费用供应商"}
+            search={searchSuppliers}
+            onSelect={(supplier) => {
+              setSuppliers((current) => mergeSuppliers(current, [supplier]));
+              setField("supplierId", supplier.id);
+            }}
+          />
+          <span className={styles.mutedText}>物流供应商账号录入时可留空，由后端按当前账号判定。</span>
         </label>
       </div>
       <div className={styles.logisticsItemsPanel}>
@@ -961,6 +914,32 @@ function StatusPill({ value }: { value: string }) {
   if (["待审核", "未通知", "已通知开票", "待付款", "草稿"].includes(value)) tone = styles.statusWarning;
   if (["已驳回", "已退回", "已取消"].includes(value)) tone = styles.statusDanger;
   return <span className={`${styles.statusPill} ${tone}`}>{value || "-"}</span>;
+}
+
+function normalizeExpenseOrder(order: Partial<ExpenseOrderOption>): ExpenseOrderOption {
+  const id = order.orderId || order.id || "";
+  return {
+    ...order,
+    id,
+    orderId: id,
+    logisticsSuppliers: filterLogisticsFeeSuppliers(order.logisticsSuppliers || []),
+  };
+}
+
+function mergeOrders(current: ExpenseOrderOption[], next: ExpenseOrderOption[]) {
+  const merged = [...current];
+  for (const order of next.map((item) => normalizeExpenseOrder(item))) {
+    if (order.id && !merged.some((item) => item.id === order.id)) merged.push(order);
+  }
+  return merged;
+}
+
+function mergeSuppliers(current: SupplierOption[], next: SupplierOption[]) {
+  const merged = filterLogisticsFeeSuppliers(current);
+  for (const supplier of filterLogisticsFeeSuppliers(next)) {
+    if (supplier.id && !merged.some((item) => item.id === supplier.id)) merged.push(supplier);
+  }
+  return merged;
 }
 
 function orderLabel(order: ExpenseOrderOption) {
