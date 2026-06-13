@@ -78,6 +78,8 @@ type UserRow = {
   email?: string;
   role?: string;
   supplierId?: string;
+  supplierName?: string;
+  supplierType?: string;
   phone?: string;
   approvalStatus?: string;
   isActive?: boolean;
@@ -233,6 +235,7 @@ const USER_COLUMNS: TableColumn<UserRow>[] = [
   { key: "name", label: "姓名" },
   { key: "email", label: "邮箱" },
   { key: "role", label: "角色" },
+  { key: "supplierName", label: "所属供应商", render: (row) => row.role === "物流供应商" ? (supplierDisplayName(row) || "-") : "-" },
   { key: "approvalStatus", label: "账号状态", render: (row) => userStatus(row) },
   { key: "permissionMode", label: "权限模式", render: (row) => row.permissionMode === "CUSTOM" ? "自定义" : "角色默认" },
 ];
@@ -1489,7 +1492,7 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "菜单权限", value: user.customPermissions?.menus?.length ? `${user.customPermissions.menus.length} 项自定义` : "-" },
       { label: "查看权限", value: user.customPermissions?.reads?.length ? `${user.customPermissions.reads.length} 项自定义` : "-" },
       { label: "操作权限", value: user.customPermissions?.writes?.length ? `${user.customPermissions.writes.length} 项自定义` : "-" },
-      { label: "绑定供应商", value: user.supplierId || "-", wide: user.role === "物流供应商" },
+      { label: "绑定供应商", value: user.role === "物流供应商" ? (supplierDisplayName(user) || "-") : "-", wide: user.role === "物流供应商" },
       { label: "首次改密", value: yesNo(user.mustChangePassword) },
     ];
   }
@@ -1547,6 +1550,13 @@ function userStatus(user: UserRow) {
   if (user.approvalStatus === "REJECTED") return "已拒绝";
   if (user.approvalStatus === "DISABLED" || user.isActive === false) return "已停用";
   return user.approvalStatus || "-";
+}
+
+function supplierDisplayName(user: UserRow) {
+  const name = user.supplierName || "";
+  const type = user.supplierType || "";
+  if (name && type) return `${name} / ${type}`;
+  return name || type || "";
 }
 
 function emptyCustomerForm(): CustomerForm {
