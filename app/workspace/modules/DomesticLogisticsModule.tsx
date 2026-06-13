@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDateTime } from "../formatters";
-import { LogisticsExpenseForm } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 
@@ -127,11 +126,9 @@ export function DomesticLogisticsModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
-  const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const canDeleteDomesticLogistics = currentUser.role === "管理员";
-  const canCreateLogisticsExpense = ["管理员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -306,24 +303,14 @@ export function DomesticLogisticsModule({
                   const next = current === row.id ? "" : row.id;
                   if (!next) {
                     setEditingOrderId("");
-                    setFeeEntryOrderId("");
                   }
                   return next;
                 })}
                 editing={editingOrderId === row.id}
-                feeEntryOpen={feeEntryOrderId === row.id}
                 onEdit={() => {
                   setExpandedId(row.id);
-                  setFeeEntryOrderId("");
                   setEditingOrderId((current) => current === row.id ? "" : row.id);
                 }}
-                canCreateLogisticsExpense={canCreateLogisticsExpense}
-                onOpenFeeEntry={() => {
-                  setExpandedId(row.id);
-                  setEditingOrderId("");
-                  setFeeEntryOrderId((current) => current === row.id ? "" : row.id);
-                }}
-                onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 onSaved={() => {
                   setEditingOrderId("");
                   void loadRows(submittedKeyword, businessScope);
@@ -354,12 +341,8 @@ function DomesticLogisticsRows({
   row,
   expanded,
   editing,
-  feeEntryOpen,
   onToggle,
   onEdit,
-  canCreateLogisticsExpense,
-  onOpenFeeEntry,
-  onCloseFeeEntry,
   onSaved,
   onCancelEdit,
   canDeleteDomesticLogistics,
@@ -372,12 +355,8 @@ function DomesticLogisticsRows({
   row: DomesticLogisticsRow;
   expanded: boolean;
   editing: boolean;
-  feeEntryOpen: boolean;
   onToggle: () => void;
   onEdit: () => void;
-  canCreateLogisticsExpense: boolean;
-  onOpenFeeEntry: () => void;
-  onCloseFeeEntry: () => void;
   onSaved: () => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
@@ -403,11 +382,6 @@ function DomesticLogisticsRows({
           <td colSpan={6}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
-                {canCreateLogisticsExpense ? (
-                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenFeeEntry(); }}>
-                    录入费用
-                  </button>
-                ) : null}
                 <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
                   {info ? "编辑物流信息" : "录入物流信息"}
                 </button>
@@ -419,13 +393,6 @@ function DomesticLogisticsRows({
               </div>
               {editing ? (
                 <DomesticLogisticsEditPanel row={row} onSaved={onSaved} onCancel={onCancelEdit} />
-              ) : null}
-              {feeEntryOpen ? (
-                <LogisticsExpenseForm
-                  initialOrder={expenseOrderFromDomesticRow(row)}
-                  onCancel={onCloseFeeEntry}
-                  onSaved={onCloseFeeEntry}
-                />
               ) : null}
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={row.customerFullName || row.customerName || "-"} wide />
