@@ -740,8 +740,8 @@ function TaxRefundDetailPanel({
                   <small>{document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDate(document.uploadedAt)}</small>
                 </div>
                 <div>
-                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
                 </div>
               </div>
             )) : <span className={styles.mutedText}>暂未上传</span>}
@@ -804,8 +804,8 @@ function TaxUploadItem({
         )}
         {documents.map((document) => (
           <span key={document.id} className={styles.fileListItemActions}>
-            <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-            <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
             {readOnly ? null : (
               <button
                 className={styles.secondaryButton}

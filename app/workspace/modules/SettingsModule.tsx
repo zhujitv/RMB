@@ -193,7 +193,7 @@ const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运�
 const LOGISTICS_COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
 const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
 const EXCHANGE_RATE_TYPES = ["现汇买入价", "现汇卖出价", "中间价"];
-const USER_ROLES = ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "查看者"];
+const USER_ROLES = ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "物流资料录入员", "查看者"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
   { label: "已启用", value: "APPROVED" },

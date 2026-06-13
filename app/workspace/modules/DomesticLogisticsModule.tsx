@@ -586,8 +586,8 @@ function CustomsDocumentPanel({
               </label>
               {matchedDocuments.map((document) => (
                 <span key={document.id} className={styles.fileListItemActions}>
-                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-                  <a className={styles.legacyLinkSmall} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
                   <button
                     className={styles.secondaryButton}
                     type="button"
