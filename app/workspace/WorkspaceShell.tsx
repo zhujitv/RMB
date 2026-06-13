@@ -11,7 +11,6 @@ import { ModulePlaceholder } from "./ModulePlaceholder";
 import { CostsModule } from "./modules/CostsModule";
 import { DashboardModule } from "./modules/DashboardModule";
 import { DomesticLogisticsModule } from "./modules/DomesticLogisticsModule";
-import { LogisticsFeesModule } from "./modules/LogisticsFeesModule";
 import { ManualModule } from "./modules/ManualModule";
 import { OrdersModule } from "./modules/OrdersModule";
 import { PaymentsModule } from "./modules/PaymentsModule";
@@ -250,10 +249,8 @@ export function WorkspaceShell() {
         <PaymentsModule />
       ) : activeMenu === "costs" ? (
         <CostsModule />
-      ) : activeMenu === "logisticsFees" ? (
-        <LogisticsFeesModule />
       ) : activeMenu === "domesticLogistics" ? (
-        <DomesticLogisticsModule />
+        <DomesticLogisticsModule currentUser={payload.user} />
       ) : activeMenu === "profit" ? (
         <ProfitModule />
       ) : activeMenu === "taxRefund" ? (

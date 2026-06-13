@@ -106,6 +106,7 @@
 .primaryButton,
 .primaryButtonCompact,
 .secondaryButton,
+.dangerButton,
 .ghostButton,
 .legacyLink {
   min-height: 42px;
@@ -141,13 +142,20 @@
   border-color: #dbe1ea;
 }
 
+.dangerButton {
+  color: #b91c1c;
+  background: #fff;
+  border-color: #fecaca;
+}
+
 .ghostButton {
   color: #475569;
   background: transparent;
 }
 
 .primaryButton:disabled,
-.secondaryButton:disabled {
+.secondaryButton:disabled,
+.dangerButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

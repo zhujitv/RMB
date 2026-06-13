@@ -490,7 +490,7 @@ function QuickCreateCostPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialCost?.id ? "编辑成本" : "快速登记成本"}</strong>
-          <span>用于普通成本登记。拖车费、报关费、港杂费、海运费等物流费用请走物流费用登记审核流程。</span>
+          <span>用于登记工厂、物流、报关、港杂、海运等订单成本。</span>
         </div>
       </div>
 
@@ -670,7 +670,7 @@ function CostTableRows({
                     </button>
                   </>
                 ) : (
-                  <span className={styles.mutedText}>物流费用审核生成的成本请在物流费用登记中处理。</span>
+                  <span className={styles.mutedText}>系统生成的成本记录不可在此直接编辑。</span>
                 )}
               </div>
               <div className={styles.detailGrid}>

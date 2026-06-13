@@ -37,13 +37,6 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     stage: "partial",
     migrationNotes: ["分页列表、普通成本登记、编辑和删除已迁移", "物流费用继续走月结审核流程", "资料维护组件复用退税文件组件"],
   },
-  logisticsFees: {
-    key: "logisticsFees",
-    label: "物流费用登记",
-    description: "物流供应商费用录入、审核和付款跟进。",
-    stage: "partial",
-    migrationNotes: ["分页列表、费用提交、审核、撤回和付款状态已迁移", "发票上传沿用后端 R2/单证体系", "月结汇总、供应商合计和 CSV 导出已迁移"],
-  },
   profit: {
     key: "profit",
     label: "利润分析",

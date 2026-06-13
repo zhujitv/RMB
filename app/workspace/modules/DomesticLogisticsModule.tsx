@@ -6,6 +6,7 @@ import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
+import type { User } from "../types";
 
 type TransportItem = {
   id?: string;
@@ -52,6 +53,7 @@ type DomesticLogisticsDocument = {
 
 type DomesticLogisticsRow = {
   id: string;
+  orderId?: string;
   orderNo?: string;
   blNo?: string;
   billOfLadingNo?: string;
@@ -62,6 +64,7 @@ type DomesticLogisticsRow = {
   submittedAt?: string | null;
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   documents?: DomesticLogisticsDocument[];
+  logisticsSuppliers?: Array<{ id: string; supplierName?: string; name?: string; supplierType?: string }>;
 };
 
 type DomesticLogisticsResponse = {
@@ -90,6 +93,11 @@ const CUSTOMS_DOCUMENT_TYPES = [
   { value: "RELEASE_NOTICE", label: "放行通知书" },
   { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
 ];
+const ARCHIVE_SCOPE_OPTIONS = [
+  { value: "current", label: "当前业务" },
+  { value: "archive", label: "已归档业务" },
+  { value: "all", label: "全部业务" },
+];
 
 function emptyTransportItem(): TransportItem {
   return {
@@ -104,10 +112,15 @@ function emptyTransportItem(): TransportItem {
   };
 }
 
-export function DomesticLogisticsModule() {
+export function DomesticLogisticsModule({
+  currentUser,
+}: {
+  currentUser: User;
+}) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [businessScope, setBusinessScope] = useState("current");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -115,12 +128,13 @@ export function DomesticLogisticsModule() {
   const [editingOrderId, setEditingOrderId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
+  const canDeleteDomesticLogistics = currentUser.role === "管理员";
 
-  async function loadRows(nextKeyword = submittedKeyword) {
+  async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ businessScope: "current" });
+      const params = new URLSearchParams({ businessScope: nextBusinessScope });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
       setRows(Array.isArray(result.rows) ? result.rows : []);
@@ -147,16 +161,25 @@ export function DomesticLogisticsModule() {
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    void loadRows(value);
+    void loadRows(value, businessScope);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
+    setBusinessScope("current");
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    void loadRows("");
+    void loadRows("", "current");
+  }
+
+  function changeBusinessScope(nextBusinessScope: string) {
+    setBusinessScope(nextBusinessScope);
+    setPage(1);
+    setExpandedId("");
+    setEditingOrderId("");
+    void loadRows(submittedKeyword, nextBusinessScope);
   }
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null) {
@@ -181,7 +204,7 @@ export function DomesticLogisticsModule() {
       if (!response.ok || data?.success !== true) {
         throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
       }
-      await loadRows(submittedKeyword);
+      await loadRows(submittedKeyword, businessScope);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -198,11 +221,29 @@ export function DomesticLogisticsModule() {
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除文件失败");
-      await loadRows(submittedKeyword);
+      await loadRows(submittedKeyword, businessScope);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
     } finally {
       setDeletingDocumentId("");
+    }
+  }
+
+  async function deleteDomesticLogistics(row: DomesticLogisticsRow) {
+    const id = row.domesticLogisticsInfo?.id;
+    if (!id) return;
+    if (!window.confirm(`确认删除该国内物流信息？\n\n订单：${row.orderNo || "-"}`)) return;
+    setError("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/domestic-logistics/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (result.success !== true) throw new Error(result.message || "删除国内物流信息失败");
+      setExpandedId("");
+      setEditingOrderId("");
+      await loadRows(submittedKeyword, businessScope);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除国内物流信息失败");
     }
   }
 
@@ -227,6 +268,9 @@ export function DomesticLogisticsModule() {
           }}
           placeholder="搜索订单号 / 提单号"
         />
+        <select value={businessScope} onChange={(event) => changeBusinessScope(event.target.value)} disabled={loading}>
+          {ARCHIVE_SCOPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -263,9 +307,11 @@ export function DomesticLogisticsModule() {
                 }}
                 onSaved={() => {
                   setEditingOrderId("");
-                  void loadRows(submittedKeyword);
+                  void loadRows(submittedKeyword, businessScope);
                 }}
                 onCancelEdit={() => setEditingOrderId("")}
+                canDeleteDomesticLogistics={canDeleteDomesticLogistics}
+                onDeleteDomesticLogistics={() => void deleteDomesticLogistics(row)}
                 uploadingKey={uploadingKey}
                 deletingDocumentId={deletingDocumentId}
                 onUploadDocument={uploadDocument}
@@ -293,6 +339,8 @@ function DomesticLogisticsRows({
   onEdit,
   onSaved,
   onCancelEdit,
+  canDeleteDomesticLogistics,
+  onDeleteDomesticLogistics,
   uploadingKey,
   deletingDocumentId,
   onUploadDocument,
@@ -305,6 +353,8 @@ function DomesticLogisticsRows({
   onEdit: () => void;
   onSaved: () => void;
   onCancelEdit: () => void;
+  canDeleteDomesticLogistics: boolean;
+  onDeleteDomesticLogistics: () => void;
   uploadingKey: string;
   deletingDocumentId: string;
   onUploadDocument: (orderId: string, documentType: string, file: File | null) => void;
@@ -329,6 +379,11 @@ function DomesticLogisticsRows({
                 <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
                   {info ? "编辑物流信息" : "录入物流信息"}
                 </button>
+                {canDeleteDomesticLogistics && info?.id ? (
+                  <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteDomesticLogistics(); }}>
+                    删除
+                  </button>
+                ) : null}
               </div>
               {editing ? (
                 <DomesticLogisticsEditPanel row={row} onSaved={onSaved} onCancel={onCancelEdit} />

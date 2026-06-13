@@ -3,6 +3,7 @@ export type User = {
   name: string;
   email: string;
   role: string;
+  supplierId?: string;
   phone?: string;
   avatarInitials?: string;
   defaultLanguage?: string;
