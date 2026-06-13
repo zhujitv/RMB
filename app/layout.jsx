@@ -1,8 +1,8 @@
 import "../styles.css";
 
 export const metadata = {
-  title: "外贸应收款协同管理平台",
-  description: "应收订单、收款登记、成本录入、利润分析和逾期提醒",
+  title: "NEXTWOOD 供应链协同平台",
+  description: "供应链业务、单证、物流与退税资料协同管理",
 };
 
 export default function RootLayout({ children }) {
