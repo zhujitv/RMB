@@ -21,3 +21,9 @@ Migration order:
 3. Sidebar navigation
 4. Base layout and welcome workspace
 5. Business modules one by one
+
+Domestic logistics parity note:
+
+- The React `物流信息` module keeps the legacy per-order `录入费用` entry inside an order detail row.
+- This is for single-order logistics fees such as trucking, customs, port charges, sea freight, and insurance.
+- It is not a standalone left-sidebar `物流费用登记` module.
