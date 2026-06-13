@@ -9,6 +9,11 @@ const state = {
   me: null,
   session: null,
   passwordChangeRequired: false,
+  userLoading: false,
+  userLoaded: false,
+  permissionLoading: false,
+  permissionLoaded: false,
+  userLoadError: "",
   roles: [],
   permissions: { menus: [], reads: {}, writes: {}, scopeText: "" },
   users: [],
@@ -905,8 +910,23 @@ function installFrontendErrorBoundary() {
   });
 }
 
+function isAdminUser(user = state.me) {
+  const role = String(user?.role || "").trim().toUpperCase();
+  return role === "ADMIN" || user?.role === "管理员";
+}
+
+function isAuthLoading() {
+  return Boolean(state.userLoading || state.permissionLoading);
+}
+
+function isAuthReady() {
+  return Boolean(state.me && !state.passwordChangeRequired && state.userLoaded && state.permissionLoaded && !state.userLoadError);
+}
+
 function canView(view) {
-  if (view === "welcome") return Boolean(state.me && !state.passwordChangeRequired);
+  if (view === "welcome") return Boolean(state.me && !state.passwordChangeRequired && !state.userLoadError);
+  if (!isAuthReady()) return false;
+  if (isAdminUser()) return (roleMenus["管理员"] || []).includes(view);
   const menus = Array.isArray(state.permissions?.menus) ? state.permissions.menus : (roleMenus[state.me?.role] || []);
   return menus.includes(view);
 }
@@ -949,6 +969,8 @@ function ensureAuthorizedView() {
 }
 
 function canWriteArea(area) {
+  if (!isAuthReady()) return false;
+  if (isAdminUser()) return true;
   if (state.permissions?.writes && Object.prototype.hasOwnProperty.call(state.permissions.writes, area)) {
     return Boolean(state.permissions.writes[area]);
   }
@@ -956,6 +978,8 @@ function canWriteArea(area) {
 }
 
 function canReadArea(area) {
+  if (!isAuthReady()) return false;
+  if (isAdminUser()) return true;
   if (state.permissions?.reads && Object.prototype.hasOwnProperty.call(state.permissions.reads, area)) {
     return Boolean(state.permissions.reads[area]);
   }
@@ -1172,6 +1196,11 @@ function resetAuthState({ clearDrafts = false } = {}) {
   state.me = null;
   state.session = null;
   state.passwordChangeRequired = false;
+  state.userLoading = false;
+  state.userLoaded = false;
+  state.permissionLoading = false;
+  state.permissionLoaded = false;
+  state.userLoadError = "";
   state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
   state.view = "";
   clearAuthStorage();
@@ -1192,6 +1221,10 @@ function handleAuthExpired(message = "登录已过期，请重新登录") {
 }
 
 function handleForbidden(message = "没有权限访问该模块") {
+  if (!isAuthReady()) {
+    toast(isAuthLoading() ? "正在同步权限数据..." : message);
+    return;
+  }
   clearLocalCaches();
   state.overview = null;
   if (state.me) {
@@ -1235,7 +1268,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const isLoginRequest = path.startsWith("/api/auth/login");
     if (response.status === 401 && !isLoginRequest) handleAuthExpired(data?.error || "登录已过期，请重新登录");
-    if (response.status === 403 && !isLoginRequest) handleForbidden(data?.error || "没有权限访问该模块");
+    if (response.status === 403 && !isLoginRequest && isAuthReady()) handleForbidden(data?.error || "没有权限访问该模块");
     if (data?.code === "PASSWORD_CHANGE_REQUIRED" && !isLoginRequest) {
       state.passwordChangeRequired = true;
       setAuthenticatedShell(true, true);
@@ -1294,7 +1327,7 @@ async function saveCustomerRequest(path, options = {}) {
   if (!saveSucceeded) {
     if (!response.ok) {
       if (response.status === 401) handleAuthExpired(result?.error || "登录已过期，请重新登录");
-      if (response.status === 403) handleForbidden(result?.error || "没有权限访问该模块");
+      if (response.status === 403 && isAuthReady()) handleForbidden(result?.error || "没有权限访问该模块");
       if (result?.code === "PASSWORD_CHANGE_REQUIRED") {
         state.passwordChangeRequired = true;
         setAuthenticatedShell(true, true);
@@ -1723,7 +1756,22 @@ function renderFilterSummary() {
 }
 
 async function loadMe() {
-  const response = await fetch("/api/auth/me");
+  state.userLoading = true;
+  state.permissionLoading = true;
+  state.userLoadError = "";
+  const response = await fetch("/api/auth/me").catch((error) => {
+    console.error("用户信息请求失败", error);
+    state.me = null;
+    state.session = null;
+    state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+    state.view = "";
+    state.userLoading = false;
+    state.permissionLoading = false;
+    state.userLoaded = false;
+    state.permissionLoaded = false;
+    state.userLoadError = "用户信息加载失败";
+    throw new Error("用户信息加载失败");
+  });
   if (response.status === 401) {
     state.roles = constants.roles;
     resetAuthState();
@@ -1731,13 +1779,27 @@ async function loadMe() {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    resetAuthState();
-    throw new Error(data.error || data.message || "校验登录状态失败");
+    state.me = null;
+    state.session = null;
+    state.permissions = { menus: [], reads: {}, writes: {}, scopeText: "" };
+    state.view = "";
+    state.userLoading = false;
+    state.permissionLoading = false;
+    state.userLoaded = false;
+    state.permissionLoaded = false;
+    state.userLoadError = "用户信息加载失败";
+    setAuthenticatedShell(false);
+    throw new Error(data.error || data.message || "用户信息加载失败");
   }
   state.me = data.user;
   state.session = data.session || null;
   state.roles = data.roles || constants.roles;
   state.permissions = data.permissions || { menus: [], reads: {}, writes: {}, scopeText: data.scopeText || "" };
+  state.userLoaded = true;
+  state.permissionLoaded = true;
+  state.userLoading = false;
+  state.permissionLoading = false;
+  state.userLoadError = "";
   $("#current-user").textContent = state.me?.name || "未登录";
   $("#current-role").textContent = state.me?.role || "未登录";
   $("#top-user-name").textContent = state.me?.name || "登录";
@@ -2345,8 +2407,17 @@ function renderWelcome() {
 }
 
 function updateCurrentView() {
-  if (state.me) ensureAuthorizedView();
-  const title = viewTitles[state.view] || "无权限";
+  let title = "";
+  if (state.userLoadError) {
+    title = "用户信息加载失败";
+  } else if (state.userLoading) {
+    title = "正在加载工作台...";
+  } else if (state.permissionLoading || (state.me && !state.passwordChangeRequired && !state.permissionLoaded)) {
+    title = "正在同步权限数据...";
+  } else {
+    if (state.me) ensureAuthorizedView();
+    title = viewTitles[state.view] || (state.me ? "无权限访问" : "");
+  }
   $("#view-title").textContent = title;
   $$(".nav-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
   $$(".view-panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `${state.view}-view`));
@@ -8717,7 +8788,13 @@ async function submitLogin(event) {
     if (!loginResult?.user) throw new Error("登录接口未返回用户信息，请联系管理员。");
     state.me = loginResult.user;
     state.passwordChangeRequired = Boolean(loginResult.mustChangePassword ?? loginResult.user.mustChangePassword);
+    state.userLoading = !state.passwordChangeRequired;
+    state.userLoaded = false;
+    state.permissionLoading = !state.passwordChangeRequired;
+    state.permissionLoaded = false;
+    state.userLoadError = "";
     setAuthenticatedShell(true, state.passwordChangeRequired);
+    updateCurrentView();
     if (!state.passwordChangeRequired) await loadData();
     else {
       renderProfileModal();
@@ -9224,6 +9301,11 @@ function switchView(view, options = {}) {
   if (!state.me) {
     setAuthenticatedShell(false);
     $("#screen-login-email")?.focus();
+    return false;
+  }
+  if (!isAuthReady()) {
+    toast(state.userLoadError || (state.userLoading ? "正在加载工作台..." : "正在同步权限数据..."));
+    updateCurrentView();
     return false;
   }
   if (!canView(view)) {
