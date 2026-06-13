@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDateTime } from "../formatters";
+import { LogisticsExpenseForm } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 
@@ -126,9 +127,11 @@ export function DomesticLogisticsModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
+  const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const canDeleteDomesticLogistics = currentUser.role === "管理员";
+  const canCreateLogisticsExpense = ["管理员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -252,7 +255,7 @@ export function DomesticLogisticsModule({
       <div className={styles.moduleHeader}>
         <div>
           <span className={styles.kicker}>React 迁移模块</span>
-          <h2>国内物流信息</h2>
+          <h2>物流信息</h2>
         </div>
         <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadRows()}>
           {loading ? "刷新中..." : "刷新"}
@@ -299,12 +302,28 @@ export function DomesticLogisticsModule({
                 key={row.id}
                 row={row}
                 expanded={expandedId === row.id}
-                onToggle={() => setExpandedId((current) => current === row.id ? "" : row.id)}
+                onToggle={() => setExpandedId((current) => {
+                  const next = current === row.id ? "" : row.id;
+                  if (!next) {
+                    setEditingOrderId("");
+                    setFeeEntryOrderId("");
+                  }
+                  return next;
+                })}
                 editing={editingOrderId === row.id}
+                feeEntryOpen={feeEntryOrderId === row.id}
                 onEdit={() => {
                   setExpandedId(row.id);
+                  setFeeEntryOrderId("");
                   setEditingOrderId((current) => current === row.id ? "" : row.id);
                 }}
+                canCreateLogisticsExpense={canCreateLogisticsExpense}
+                onOpenFeeEntry={() => {
+                  setExpandedId(row.id);
+                  setEditingOrderId("");
+                  setFeeEntryOrderId((current) => current === row.id ? "" : row.id);
+                }}
+                onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 onSaved={() => {
                   setEditingOrderId("");
                   void loadRows(submittedKeyword, businessScope);
@@ -335,8 +354,12 @@ function DomesticLogisticsRows({
   row,
   expanded,
   editing,
+  feeEntryOpen,
   onToggle,
   onEdit,
+  canCreateLogisticsExpense,
+  onOpenFeeEntry,
+  onCloseFeeEntry,
   onSaved,
   onCancelEdit,
   canDeleteDomesticLogistics,
@@ -349,8 +372,12 @@ function DomesticLogisticsRows({
   row: DomesticLogisticsRow;
   expanded: boolean;
   editing: boolean;
+  feeEntryOpen: boolean;
   onToggle: () => void;
   onEdit: () => void;
+  canCreateLogisticsExpense: boolean;
+  onOpenFeeEntry: () => void;
+  onCloseFeeEntry: () => void;
   onSaved: () => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
@@ -376,6 +403,11 @@ function DomesticLogisticsRows({
           <td colSpan={6}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
+                {canCreateLogisticsExpense ? (
+                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenFeeEntry(); }}>
+                    录入费用
+                  </button>
+                ) : null}
                 <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
                   {info ? "编辑物流信息" : "录入物流信息"}
                 </button>
@@ -387,6 +419,13 @@ function DomesticLogisticsRows({
               </div>
               {editing ? (
                 <DomesticLogisticsEditPanel row={row} onSaved={onSaved} onCancel={onCancelEdit} />
+              ) : null}
+              {feeEntryOpen ? (
+                <LogisticsExpenseForm
+                  initialOrder={expenseOrderFromDomesticRow(row)}
+                  onCancel={onCloseFeeEntry}
+                  onSaved={onCloseFeeEntry}
+                />
               ) : null}
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={row.customerFullName || row.customerName || "-"} wide />
@@ -475,26 +514,40 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
   }
 
   function regenerateRemark() {
+    if (form.remarkTextManualEdited && !window.confirm("该备注已手动修改，重新生成将覆盖当前内容，是否确认？")) return;
     setForm((current) => ({ ...current, remarkText: generateRemark(current), remarkTextManualEdited: false }));
   }
 
   async function submitForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validationError = validateDomesticLogisticsForm(form);
+    if (validationError) {
+      setMessage(validationError);
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
       const infoId = row.domesticLogisticsInfo?.id;
       const path = infoId ? `/api/domestic-logistics/${infoId}` : "/api/domestic-logistics";
+      const isExpressPayload = form.transportType === "EXPRESS";
+      const transportItems = isExpressPayload ? [] : normalizeFormTransportItems(form.transportItems);
+      const firstItem = transportItems[0] || {};
+      const remarkText = form.remarkTextManualEdited ? form.remarkText.trim() : generateRemark({ ...form, transportItems });
       const result = await apiJson<{ success?: boolean; message?: string }>(path, {
         method: infoId ? "PATCH" : "POST",
         body: JSON.stringify({
           orderId: row.id,
           transportType: form.transportType,
-          expressTrackingNo: form.transportType === "EXPRESS" ? form.expressTrackingNo.trim() : undefined,
-          destinationPlace: form.transportType === "EXPRESS" ? form.destinationPlace.trim() : undefined,
-          cargoDescription: form.transportType === "EXPRESS" ? form.cargoDescription.trim() : undefined,
-          transportItems: form.transportType === "EXPRESS" ? [] : form.transportItems,
-          remarkText: form.remarkText,
+          truckPlateNo: firstItem.truckPlateNo || "",
+          trailerPlateNo: firstItem.trailerPlateNo || "",
+          departurePlace: firstItem.departurePlace || "",
+          departureDate: firstItem.departureDate || "",
+          expressTrackingNo: isExpressPayload ? form.expressTrackingNo.trim() : "",
+          destinationPlace: isExpressPayload ? form.destinationPlace.trim() : (firstItem.arrivalPlace || ""),
+          cargoDescription: isExpressPayload ? form.cargoDescription.trim() : (firstItem.cargoName || ""),
+          transportItems,
+          remarkText,
           remarkTextManualEdited: form.remarkTextManualEdited,
         }),
       });
@@ -580,6 +633,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
           onChange={(event) => setForm((current) => ({ ...current, remarkText: event.target.value, remarkTextManualEdited: true }))}
           rows={7}
         />
+        <small className={styles.mutedText}>{form.remarkTextManualEdited ? "已手工修改，不再自动覆盖。" : "字段变更后将自动更新备注。"}</small>
         <button className={styles.secondaryButton} type="button" onClick={regenerateRemark}>重新生成备注</button>
       </label>
 
@@ -627,7 +681,7 @@ function CustomsDocumentPanel({
             </div>
             <div>
               <label className={styles.secondaryButton}>
-                {uploading ? "上传中..." : "选择PDF"}
+                {uploading ? "上传中..." : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
                 <input
                   type="file"
                   accept="application/pdf,.pdf"
@@ -663,6 +717,22 @@ function CustomsDocumentPanel({
 
 function firstItemValue(info: DomesticLogisticsInfo | null | undefined, key: keyof TransportItem) {
   return info?.transportItems?.find((item) => item[key])?.[key] || "";
+}
+
+function expenseOrderFromDomesticRow(row: DomesticLogisticsRow) {
+  const info = row.domesticLogisticsInfo;
+  return {
+    id: row.orderId || row.id,
+    orderId: row.orderId || row.id,
+    orderNo: row.orderNo || "",
+    blNo: row.blNo || row.billOfLadingNo || "",
+    billOfLadingNo: row.billOfLadingNo || row.blNo || "",
+    customerName: row.customerFullName || row.customerName || "",
+    customerShortName: row.customerShortName || row.customerName || "",
+    logisticsSuppliers: row.logisticsSuppliers || [],
+    truckPlateNo: info?.truckPlateNo || firstItemValue(info, "truckPlateNo"),
+    cargoName: info?.cargoDescription || firstItemValue(info, "cargoName"),
+  };
 }
 
 function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
@@ -705,4 +775,38 @@ function generateRemark(form: DomesticLogisticsForm) {
     item.arrivalPlace ? `到达地：${item.arrivalPlace}` : "",
     item.cargoName ? `运输货物名称：${item.cargoName}` : "",
   ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
+}
+
+function normalizeFormTransportItems(items: TransportItem[]) {
+  return items.map((item) => ({
+    containerNo: (item.containerNo || "").trim(),
+    truckPlateNo: (item.truckPlateNo || "").trim(),
+    trailerPlateNo: (item.trailerPlateNo || "").trim(),
+    departureDate: (item.departureDate || "").trim(),
+    departurePlace: (item.departurePlace || "").trim(),
+    arrivalPlace: (item.arrivalPlace || "").trim(),
+    cargoName: (item.cargoName || "").trim(),
+    remark: (item.remark || "").trim(),
+  }));
+}
+
+function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {
+  if (form.transportType === "EXPRESS") {
+    if (!form.expressTrackingNo.trim()) return "请填写快递单号。";
+    if (!form.destinationPlace.trim()) return "请填写到达地。";
+    if (!form.cargoDescription.trim()) return "请填写运输货物名称。";
+    return "";
+  }
+
+  const items = normalizeFormTransportItems(form.transportItems);
+  if (!items.length) return "请至少录入一条集装箱运输明细。";
+  for (const [index, item] of items.entries()) {
+    const rowNo = `第 ${index + 1} 行`;
+    if (!item.truckPlateNo) return `请填写${rowNo}${form.transportType === "MULTIMODAL" ? "首程车牌号" : "车牌号"}。`;
+    if (!item.departureDate) return `请填写${rowNo}起运日期。`;
+    if (!item.departurePlace) return `请填写${rowNo}${form.transportType === "MULTIMODAL" ? "首程起运地" : "起运地"}。`;
+    if (!item.arrivalPlace) return `请填写${rowNo}到达地。`;
+    if (!item.cargoName) return `请填写${rowNo}运输货物名称。`;
+  }
+  return "";
 }

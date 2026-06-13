@@ -46,7 +46,7 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
   },
   domesticLogistics: {
     key: "domesticLogistics",
-    label: "国内物流信息",
+    label: "物流信息",
     description: "录入国内运输信息和报关资料。",
     stage: "partial",
     migrationNotes: ["列表和多集装箱运输明细编辑已迁移", "出口发票备注可自动生成或手工调整", "报关资料上传、预览、下载和删除已迁移"],

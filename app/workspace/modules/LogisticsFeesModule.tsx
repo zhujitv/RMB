@@ -530,10 +530,25 @@ function LogisticsExpenseRows({
   );
 }
 
-function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<ExpenseForm>(() => ({ ...emptyExpenseForm, items: [emptyExpenseItem()] }));
-  const [orders, setOrders] = useState<ExpenseOrderOption[]>([]);
-  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+export function LogisticsExpenseForm({
+  onCancel,
+  onSaved,
+  initialOrder,
+}: {
+  onCancel: () => void;
+  onSaved: () => void;
+  initialOrder?: ExpenseOrderOption | null;
+}) {
+  const initialOrderId = initialOrder?.orderId || initialOrder?.id || "";
+  const initialSuppliers = initialOrder?.logisticsSuppliers || [];
+  const [form, setForm] = useState<ExpenseForm>(() => ({
+    ...emptyExpenseForm,
+    orderId: initialOrderId,
+    supplierId: initialSuppliers.length === 1 ? initialSuppliers[0].id : "",
+    items: [emptyExpenseItem()],
+  }));
+  const [orders, setOrders] = useState<ExpenseOrderOption[]>(() => initialOrder ? [initialOrder] : []);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>(() => initialSuppliers);
   const [orderKeyword, setOrderKeyword] = useState("");
   const [supplierKeyword, setSupplierKeyword] = useState("");
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -542,8 +557,20 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (initialOrder) {
+      const orderId = initialOrder.orderId || initialOrder.id || "";
+      const orderSuppliers = initialOrder.logisticsSuppliers || [];
+      setOrders([initialOrder]);
+      setSuppliers(orderSuppliers);
+      setForm((current) => ({
+        ...current,
+        orderId,
+        supplierId: orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId,
+      }));
+      return;
+    }
     void searchOrders("");
-  }, []);
+  }, [initialOrder]);
 
   async function searchOrders(nextKeyword = orderKeyword) {
     setLoadingOrders(true);

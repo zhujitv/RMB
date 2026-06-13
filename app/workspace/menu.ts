@@ -6,7 +6,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "payments", label: "收款管理", description: "登记客户回款并确认到账状态。" },
   { key: "costs", label: "成本管理", description: "维护工厂、物流、港杂等成本资料。" },
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
-  { key: "domesticLogistics", label: "国内物流信息", description: "录入国内运输信息和报关资料。" },
+  { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
   { key: "manual", label: "操作说明书", description: "查看平台业务流程和操作规范。" },
