@@ -1,5 +1,6 @@
 "use client";
 
+import type { KeyboardEvent } from "react";
 import styles from "./WorkspaceShell.module.css";
 
 export function DetailField({
@@ -44,4 +45,30 @@ export function PaginationBar({
       </div>
     </div>
   );
+}
+
+export function handleSearchOptionKey<T>({
+  event,
+  options,
+  selectedId,
+  getId,
+  onSelect,
+}: {
+  event: KeyboardEvent<HTMLInputElement>;
+  options: T[];
+  selectedId: string;
+  getId: (option: T) => string;
+  onSelect: (id: string, option: T) => void;
+}) {
+  if (!["ArrowDown", "ArrowUp"].includes(event.key) || !options.length) return false;
+  event.preventDefault();
+  const currentIndex = options.findIndex((option) => getId(option) === selectedId);
+  const nextIndex = currentIndex < 0
+    ? (event.key === "ArrowDown" ? 0 : options.length - 1)
+    : event.key === "ArrowDown"
+      ? (currentIndex + 1) % options.length
+      : (currentIndex - 1 + options.length) % options.length;
+  const nextOption = options[nextIndex];
+  onSelect(getId(nextOption), nextOption);
+  return true;
 }

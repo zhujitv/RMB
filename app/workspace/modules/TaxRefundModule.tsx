@@ -180,6 +180,13 @@ const TAX_FACTORY_UPLOAD_TYPES = [
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票" },
 ];
 const TAX_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
+const TAX_REFUND_STATUS_OPTIONS = [
+  { value: "", label: "全部退税状态" },
+  { value: "NOT_READY", label: "资料不完整" },
+  { value: "READY", label: "资料完整待提交" },
+  { value: "PROBLEM", label: "资料异常" },
+  { value: "SUBMITTED", label: "已提交退税" },
+];
 
 export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [mode, setMode] = useState<TaxRefundMode>("current");
@@ -189,6 +196,9 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [totalPages, setTotalPages] = useState(1);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [declarationStartMonth, setDeclarationStartMonth] = useState("");
+  const [declarationEndMonth, setDeclarationEndMonth] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [expandedRowId, setExpandedRowId] = useState("");
   const [detailOrderId, setDetailOrderId] = useState("");
   const [detailRow, setDetailRow] = useState<TaxRefundRow | null>(null);
@@ -210,8 +220,17 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [error, setError] = useState("");
 
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
+  const canManageTaxRefund = ["管理员", "财务"].includes(currentUser.role);
+  const canCancelArchive = currentUser.role === "管理员";
 
-  async function loadRows(nextPage = page, nextKeyword = submittedKeyword, nextMode = mode) {
+  async function loadRows(
+    nextPage = page,
+    nextKeyword = submittedKeyword,
+    nextMode = mode,
+    nextStartMonth = declarationStartMonth,
+    nextEndMonth = declarationEndMonth,
+    nextStatus = statusFilter,
+  ) {
     setLoading(true);
     setError("");
     try {
@@ -221,6 +240,9 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
         pageSize: String(PAGE_SIZE),
       });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      if (nextStartMonth) params.set("declarationStartMonth", nextStartMonth);
+      if (nextEndMonth) params.set("declarationEndMonth", nextEndMonth);
+      if (nextStatus) params.set("status", nextStatus);
       const result = await apiJson<TaxRefundResponse>(`/api/tax-refunds?${params}`);
       const pagination = result.pagination || {};
       setRows(Array.isArray(result.orders) ? result.orders : []);
@@ -246,7 +268,10 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetail(null);
     setKeyword("");
     setSubmittedKeyword("");
-    void loadRows(1, "", nextMode);
+    setDeclarationStartMonth("");
+    setDeclarationEndMonth("");
+    setStatusFilter("");
+    void loadRows(1, "", nextMode, "", "", "");
   }
 
   function submitSearch() {
@@ -256,17 +281,20 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
-    void loadRows(1, value, mode);
+    void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
+    setDeclarationStartMonth("");
+    setDeclarationEndMonth("");
+    setStatusFilter("");
     setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
-    void loadRows(1, "", mode);
+    void loadRows(1, "", mode, "", "", "");
   }
 
   function gotoPage(nextPage: number) {
@@ -274,7 +302,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
-    void loadRows(nextPage, submittedKeyword, mode);
+    void loadRows(nextPage, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
   async function fetchDetail(orderId: string) {
@@ -563,6 +591,23 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
           }}
           placeholder="搜索订单号 / 提单号 / 客户 / 供应商"
         />
+        <input
+          type="month"
+          value={declarationStartMonth}
+          onChange={(event) => setDeclarationStartMonth(event.target.value)}
+          title="申报开始月份"
+        />
+        <input
+          type="month"
+          value={declarationEndMonth}
+          onChange={(event) => setDeclarationEndMonth(event.target.value)}
+          title="申报结束月份"
+        />
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          {TAX_REFUND_STATUS_OPTIONS.map((option) => (
+            <option key={option.value || "all"} value={option.value}>{option.label}</option>
+          ))}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -595,6 +640,12 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
                 onToggle={() => setExpandedRowId((current) => (current === row.id ? "" : row.id))}
                 onViewDetail={() => void loadDetail(row)}
                 onDownloadPackage={() => void downloadPackage(row)}
+                onSubmitTaxRefund={() => void submitTaxRefund(row)}
+                onCancelArchive={() => void cancelTaxRefundArchive(row)}
+                canSubmitTaxRefund={canManageTaxRefund && mode === "current" && !row.taxArchived && row.taxRefundStatus === "READY"}
+                canCancelArchive={canCancelArchive && (mode === "archive" || row.taxArchived || row.taxRefundStatus === "SUBMITTED")}
+                submittingTax={submittingTaxId === row.id}
+                cancelingArchive={cancelingArchiveId === row.id}
               />
             )) : (
               <tr>
@@ -657,6 +708,12 @@ function TaxRefundTableRow({
   onToggle,
   onViewDetail,
   onDownloadPackage,
+  onSubmitTaxRefund,
+  onCancelArchive,
+  canSubmitTaxRefund,
+  canCancelArchive,
+  submittingTax,
+  cancelingArchive,
 }: {
   row: TaxRefundRow;
   expanded: boolean;
@@ -664,6 +721,12 @@ function TaxRefundTableRow({
   onToggle: () => void;
   onViewDetail: () => void;
   onDownloadPackage: () => void;
+  onSubmitTaxRefund: () => void;
+  onCancelArchive: () => void;
+  canSubmitTaxRefund: boolean;
+  canCancelArchive: boolean;
+  submittingTax: boolean;
+  cancelingArchive: boolean;
 }) {
   const completeness = row.documentCompleteness || {};
   const completed = Number(completeness.completed || 0);
@@ -704,6 +767,16 @@ function TaxRefundTableRow({
                 <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
                   {packageDownloading ? "下载中..." : "下载资料包"}
                 </button>
+                {canSubmitTaxRefund ? (
+                  <button className={styles.primaryButtonCompact} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
+                    {submittingTax ? "提交中..." : "提交退税"}
+                  </button>
+                ) : null}
+                {canCancelArchive ? (
+                  <button className={styles.secondaryButton} type="button" disabled={cancelingArchive} onClick={onCancelArchive}>
+                    {cancelingArchive ? "处理中..." : "取消归档"}
+                  </button>
+                ) : null}
               </div>
               <div className={styles.taxDropdownGrid}>
                 <div>

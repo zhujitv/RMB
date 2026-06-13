@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -729,6 +729,13 @@ export function LogisticsExpenseForm({
               value={orderKeyword}
               onChange={(event) => setOrderKeyword(event.target.value)}
               onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: orders,
+                  selectedId: form.orderId,
+                  getId: (item) => item.orderId || item.id || "",
+                  onSelect: (id) => handleOrderSelect(id),
+                })) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void searchOrders(orderKeyword);
@@ -755,6 +762,13 @@ export function LogisticsExpenseForm({
               value={supplierKeyword}
               onChange={(event) => setSupplierKeyword(event.target.value)}
               onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: suppliers,
+                  selectedId: form.supplierId,
+                  getId: (item) => item.id,
+                  onSelect: (id) => setField("supplierId", id),
+                })) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void searchSuppliers(supplierKeyword);

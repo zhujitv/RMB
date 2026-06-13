@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -504,6 +504,13 @@ function QuickCreateCostPanel({
               value={orderKeyword}
               onChange={(event) => setOrderKeyword(event.target.value)}
               onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: orderOptions,
+                  selectedId: form.orderId,
+                  getId: (item) => item.id,
+                  onSelect: (id) => setFormValue("orderId", id),
+                })) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void loadOrders(orderKeyword);
@@ -530,6 +537,13 @@ function QuickCreateCostPanel({
               value={supplierKeyword}
               onChange={(event) => setSupplierKeyword(event.target.value)}
               onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: supplierOptions,
+                  selectedId: form.supplierId,
+                  getId: (item) => item.id,
+                  onSelect: (id) => setFormValue("supplierId", id),
+                })) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void loadSuppliers(supplierKeyword);

@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -529,6 +529,13 @@ function QuickCreateOrderPanel({
               value={customerKeyword}
               onChange={(event) => setCustomerKeyword(event.target.value)}
               onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: customerOptions,
+                  selectedId: form.customerId,
+                  getId: (item) => item.id,
+                  onSelect: (id) => void handleCustomerChange(id),
+                })) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void loadCustomers(customerKeyword);
