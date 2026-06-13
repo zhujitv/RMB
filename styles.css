@@ -375,18 +375,22 @@ button:disabled {
 }
 
 .login-screen .login-screen-form {
-  gap: 12px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 12px;
 }
 
 .login-screen .login-screen-form label {
-  display: grid;
-  gap: 6px;
+  display: contents;
 }
 
 .login-screen .login-screen-form label span {
+  align-self: center;
   color: #6b7280;
   font-size: 13px;
   font-weight: 500;
+  line-height: 1.2;
+  text-align: right;
 }
 
 .login-screen .login-screen-form input {
@@ -426,6 +430,7 @@ button:disabled {
 }
 
 .login-screen .login-screen-form .primary-button {
+  grid-column: 2;
   height: 48px;
   min-height: 48px;
   margin-top: 6px;
@@ -443,9 +448,14 @@ button:disabled {
 }
 
 .login-screen .login-screen-form .secondary-button {
+  grid-column: 2;
   height: 44px;
   min-height: 44px;
   border-radius: 13px;
+}
+
+.login-screen .login-screen-form .form-error {
+  grid-column: 2;
 }
 
 .register-box {
@@ -480,6 +490,7 @@ button:disabled {
 }
 
 .register-box small {
+  grid-column: 2;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
@@ -507,6 +518,28 @@ button:disabled {
 
   .login-screen .login-card h1 {
     font-size: 30px;
+  }
+
+  .login-screen .login-screen-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .login-screen .login-screen-form label {
+    display: grid;
+    gap: 6px;
+  }
+
+  .login-screen .login-screen-form label span {
+    text-align: left;
+  }
+
+  .login-screen .login-screen-form .primary-button,
+  .login-screen .login-screen-form .secondary-button,
+  .login-screen .login-screen-form .form-error,
+  .register-box small {
+    grid-column: 1;
   }
 }
 
