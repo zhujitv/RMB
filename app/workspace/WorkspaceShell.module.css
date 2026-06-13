@@ -1758,13 +1758,35 @@
   padding: 16px 18px 22px;
 }
 
+.taxMissingBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.taxMissingBadgeComplete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
 .missingChipList {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.missingChipList span {
+.missingChipList span,
+.missingChipButton {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -1773,8 +1795,45 @@
   color: #c2410c;
   border: 1px solid #fed7aa;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1;
+}
+
+.missingChipButton {
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.missingChipButton:hover {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+  transform: translateY(-1px);
+}
+
+.exportInvoiceRemarkText {
+  min-height: 72px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.taxTargetHighlight {
+  position: relative;
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.14);
+  scroll-margin-top: 96px;
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .shippingDocsDialog {
