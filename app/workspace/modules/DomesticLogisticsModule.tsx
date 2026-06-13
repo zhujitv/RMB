@@ -320,6 +320,8 @@ export function DomesticLogisticsModule({
                   setEditingOrderId((current) => current === row.id ? "" : row.id);
                 }}
                 canCreateLogisticsExpense={canCreateLogisticsExpense}
+                currentUserRole={currentUser.role}
+                currentUserSupplierId={currentUser.supplierId || ""}
                 onOpenFeeEntry={() => {
                   setExpandedId(row.id);
                   setEditingOrderId("");
@@ -351,7 +353,12 @@ export function DomesticLogisticsModule({
 
       <PaginationBar total={rows.length} page={page} totalPages={totalPages} onPage={setPage} />
     </section>
-    <LogisticsFeesModule embedded refreshToken={expenseRefreshToken} currentUserRole={currentUser.role} />
+    <LogisticsFeesModule
+      embedded
+      refreshToken={expenseRefreshToken}
+      currentUserRole={currentUser.role}
+      currentUserSupplierId={currentUser.supplierId || ""}
+    />
     </>
   );
 }
@@ -364,6 +371,8 @@ function DomesticLogisticsRows({
   onToggle,
   onEdit,
   canCreateLogisticsExpense,
+  currentUserRole,
+  currentUserSupplierId,
   onOpenFeeEntry,
   onCloseFeeEntry,
   onSaved,
@@ -382,6 +391,8 @@ function DomesticLogisticsRows({
   onToggle: () => void;
   onEdit: () => void;
   canCreateLogisticsExpense: boolean;
+  currentUserRole: string;
+  currentUserSupplierId: string;
   onOpenFeeEntry: () => void;
   onCloseFeeEntry: () => void;
   onSaved: () => void;
@@ -429,6 +440,8 @@ function DomesticLogisticsRows({
               {feeEntryOpen ? (
                 <LogisticsExpenseForm
                   initialOrder={expenseOrderFromDomesticRow(row)}
+                  currentUserRole={currentUserRole}
+                  currentUserSupplierId={currentUserSupplierId}
                   onCancel={onCloseFeeEntry}
                   onSaved={onCloseFeeEntry}
                 />

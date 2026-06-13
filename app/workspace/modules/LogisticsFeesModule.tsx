@@ -147,10 +147,12 @@ export function LogisticsFeesModule({
   embedded = false,
   refreshToken = 0,
   currentUserRole = "",
+  currentUserSupplierId = "",
 }: {
   embedded?: boolean;
   refreshToken?: number;
   currentUserRole?: string;
+  currentUserSupplierId?: string;
 }) {
   const [rows, setRows] = useState<LogisticsExpense[]>([]);
   const [total, setTotal] = useState(0);
@@ -323,6 +325,8 @@ export function LogisticsFeesModule({
 
       {createOpen ? (
         <LogisticsExpenseForm
+          currentUserRole={currentUserRole}
+          currentUserSupplierId={currentUserSupplierId}
           onCancel={() => setCreateOpen(false)}
           onSaved={() => {
             setCreateOpen(false);
@@ -572,18 +576,23 @@ export function LogisticsExpenseForm({
   onCancel,
   onSaved,
   initialOrder,
+  currentUserRole = "",
+  currentUserSupplierId = "",
 }: {
   onCancel: () => void;
   onSaved: () => void;
   initialOrder?: Partial<ExpenseOrderOption> | null;
+  currentUserRole?: string;
+  currentUserSupplierId?: string;
 }) {
   const normalizedInitialOrder = initialOrder ? normalizeExpenseOrder(initialOrder) : null;
   const initialOrderId = normalizedInitialOrder?.id || "";
   const initialSuppliers = normalizedInitialOrder?.logisticsSuppliers || [];
+  const isLockedSupplier = currentUserRole === "物流供应商" && Boolean(currentUserSupplierId);
   const [form, setForm] = useState<ExpenseForm>(() => ({
     ...emptyExpenseForm,
     orderId: initialOrderId,
-    supplierId: initialSuppliers.length === 1 ? initialSuppliers[0].id : "",
+    supplierId: isLockedSupplier ? currentUserSupplierId : (initialSuppliers.length === 1 ? initialSuppliers[0].id : ""),
     items: [emptyExpenseItem()],
   }));
   const [orders, setOrders] = useState<ExpenseOrderOption[]>(() => normalizedInitialOrder ? [normalizedInitialOrder] : []);
@@ -600,10 +609,16 @@ export function LogisticsExpenseForm({
       setForm((current) => ({
         ...current,
         orderId: order.id,
-        supplierId: orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId,
+        supplierId: isLockedSupplier ? currentUserSupplierId : (orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId),
       }));
     }
-  }, [initialOrder]);
+  }, [initialOrder, isLockedSupplier, currentUserSupplierId]);
+
+  useEffect(() => {
+    if (!isLockedSupplier) return;
+    setForm((current) => ({ ...current, supplierId: currentUserSupplierId }));
+    void searchSuppliers("");
+  }, [isLockedSupplier, currentUserSupplierId]);
 
   async function searchOrders(nextKeyword: string) {
     setMessage("");
@@ -686,7 +701,9 @@ export function LogisticsExpenseForm({
     setForm((current) => ({
       ...current,
       orderId: normalizedOrder.id,
-      supplierId: orderSuppliers.length === 1
+      supplierId: isLockedSupplier
+        ? currentUserSupplierId
+        : orderSuppliers.length === 1
         ? orderSuppliers[0].id
         : (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
     }));
@@ -734,7 +751,8 @@ export function LogisticsExpenseForm({
   }
 
   const selectedOrder = orders.find((order) => order.id === form.orderId);
-  const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId);
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId)
+    || (isLockedSupplier ? { id: currentUserSupplierId, supplierName: "当前物流供应商", supplierType: "物流供应商" } : null);
   const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
 
   return (
@@ -776,6 +794,7 @@ export function LogisticsExpenseForm({
             cacheKey="logistics-fee-suppliers"
             emptyLabel="未找到物流供应商或海运供应商"
             placeholder="输入物流供应商 / 海运供应商"
+            disabled={isLockedSupplier}
             getLabel={supplierLabel}
             getDescription={(supplier) => supplier.supplierType || "物流费用供应商"}
             search={searchSuppliers}
@@ -784,7 +803,6 @@ export function LogisticsExpenseForm({
               setField("supplierId", supplier.id);
             }}
           />
-          <span className={styles.mutedText}>物流供应商账号录入时可留空，由后端按当前账号判定。</span>
         </label>
       </div>
       <div className={styles.logisticsItemsPanel}>
