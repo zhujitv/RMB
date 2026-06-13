@@ -3,7 +3,8 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
+import { DetailField, PaginationBar } from "../components";
+import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -67,11 +68,9 @@ type CustomerOption = {
   shortName?: string;
   displayName?: string;
   defaultCurrency?: string;
+  defaultPaymentTermType?: string;
+  defaultTradeTerm?: string;
   country?: string;
-};
-
-type CustomersResponse = {
-  customers: CustomerOption[];
 };
 
 type ExchangeRateResponse = {
@@ -317,15 +316,9 @@ function QuickCreateOrderPanel({
 }) {
   const [form, setForm] = useState<QuickOrderForm>(() => orderFormFromRow(initialOrder));
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [customerKeyword, setCustomerKeyword] = useState("");
-  const [customersLoading, setCustomersLoading] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    void loadCustomers("");
-  }, []);
 
   useEffect(() => {
     setForm(orderFormFromRow(initialOrder));
@@ -344,21 +337,6 @@ function QuickCreateOrderPanel({
     }
     setMessage("");
   }, [initialOrder?.id]);
-
-  async function loadCustomers(nextKeyword = customerKeyword) {
-    setCustomersLoading(true);
-    setMessage("");
-    try {
-      const params = new URLSearchParams();
-      if (nextKeyword.trim()) params.set("q", nextKeyword.trim());
-      const result = await apiJson<CustomersResponse>(`/api/customers/available${params.size ? `?${params}` : ""}`);
-      setCustomers(Array.isArray(result.customers) ? result.customers : []);
-    } catch (customerError) {
-      setMessage(customerError instanceof Error ? customerError.message : "读取客户列表失败");
-    } finally {
-      setCustomersLoading(false);
-    }
-  }
 
   async function resolveExchangeRate(currency: string) {
     const normalized = currency.trim().toUpperCase();
@@ -420,15 +398,17 @@ function QuickCreateOrderPanel({
     return customerOptions.find((customer) => customer.id === form.customerId);
   }
 
-  async function handleCustomerChange(customerId: string) {
-    const customer = customerOptions.find((item) => item.id === customerId);
+  async function handleCustomerSelect(customer: CustomerAutocompleteOption) {
+    setCustomers((current) => current.some((item) => item.id === customer.id) ? current : [customer, ...current]);
     setForm((current) => ({
       ...current,
-      customerId,
-      currency: customer?.defaultCurrency || "",
+      customerId: customer.id,
+      currency: customer.defaultCurrency || "",
       exchangeRate: "",
+      paymentTermType: customer.defaultPaymentTermType || current.paymentTermType,
+      tradeTerm: customer.defaultTradeTerm || current.tradeTerm,
     }));
-    await resolveExchangeRate(customer?.defaultCurrency || "");
+    await resolveExchangeRate(customer.defaultCurrency || "");
   }
 
   async function handleCurrencyChange(currency: string) {
@@ -522,42 +502,13 @@ function QuickCreateOrderPanel({
       {message ? <div className={styles.inlineError}>{message}</div> : null}
 
       <div className={styles.reportFilterGrid}>
-        <label>
+        <label className={styles.autocompleteField}>
           客户搜索
-          <div className={styles.inlineInputGroup}>
-            <input
-              value={customerKeyword}
-              onChange={(event) => setCustomerKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (handleSearchOptionKey({
-                  event,
-                  options: customerOptions,
-                  selectedId: form.customerId,
-                  getId: (item) => item.id,
-                  onSelect: (id) => void handleCustomerChange(id),
-                })) return;
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void loadCustomers(customerKeyword);
-                }
-              }}
-              placeholder="搜索客户全称 / 简称"
-            />
-            <button className={styles.secondaryButton} type="button" onClick={() => loadCustomers(customerKeyword)} disabled={customersLoading}>
-              {customersLoading ? "搜索中..." : "搜索"}
-            </button>
-          </div>
-        </label>
-        <label>
-          客户
-          <select value={form.customerId} onChange={(event) => void handleCustomerChange(event.target.value)}>
-            <option value="">请选择客户</option>
-            {customerOptions.map((item) => (
-              <option key={item.id} value={item.id}>
-                {customerLabel(item)}
-              </option>
-            ))}
-          </select>
+          <CustomerAutocomplete
+            value={customer || null}
+            onSelect={(selected) => void handleCustomerSelect(selected)}
+            onCreateRequested={(name) => setMessage(`请先到系统设置 > 客户资料中新建客户：${name}`)}
+          />
         </label>
         <label>
           订单号
@@ -723,12 +674,6 @@ function OrderTableRows({
 
 function moneyCell(currency = "CNY", amount: unknown, amountCny: unknown) {
   return <span className={styles.moneyCell}>{moneyText(currency, amount, amountCny)}</span>;
-}
-
-function customerLabel(customer: CustomerOption) {
-  const displayName = customer.displayName || customer.shortName || customer.name || customer.fullName || "未命名客户";
-  const fullName = customer.name || customer.fullName;
-  return fullName && fullName !== displayName ? `${displayName} / ${fullName}` : displayName;
 }
 
 function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {

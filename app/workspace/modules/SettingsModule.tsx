@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, handleSearchOptionKey } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -1356,11 +1356,20 @@ function UserEditPanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 }) {
+  const [supplierSearch, setSupplierSearch] = useState("");
+
   function setField<K extends keyof UserForm>(key: K, value: UserForm[K]) {
     onChange({ ...form, [key]: value });
   }
 
   const logisticsSuppliers = suppliers.filter((supplier) => LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
+  const filteredLogisticsSuppliers = logisticsSuppliers.filter((supplier) => fuzzyIncludes([
+    supplier.supplierName,
+    supplier.supplierType,
+    supplier.contactPerson,
+    supplier.invoiceTitle,
+    supplier.taxNumber,
+  ], supplierSearch));
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
 
   function setRole(role: string) {
@@ -1429,12 +1438,27 @@ function UserEditPanel({
         {form.role === "物流供应商" ? (
           <label>
             绑定供应商
+            <input
+              value={supplierSearch}
+              onChange={(event) => setSupplierSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (handleSearchOptionKey({
+                  event,
+                  options: filteredLogisticsSuppliers,
+                  selectedId: form.supplierId,
+                  getId: (item) => item.id,
+                  onSelect: (id) => setField("supplierId", id),
+                })) return;
+              }}
+              placeholder="搜索供应商 / 类型 / 联系人 / 税号"
+            />
             <select value={form.supplierId} onChange={(event) => setField("supplierId", event.target.value)} required>
               <option value="">请选择供应商</option>
-              {logisticsSuppliers.map((supplier) => (
+              {filteredLogisticsSuppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>{supplier.supplierName || "-"} / {supplier.supplierType || "-"}</option>
               ))}
             </select>
+            {!filteredLogisticsSuppliers.length ? <small className={styles.mutedText}>未找到匹配供应商</small> : null}
           </label>
         ) : null}
         <label>
@@ -1650,6 +1674,12 @@ function supplierDisplayName(user: UserRow) {
   const type = user.supplierType || "";
   if (name && type) return `${name} / ${type}`;
   return name || type || "";
+}
+
+function fuzzyIncludes(values: unknown[], keyword: string) {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) return true;
+  return values.some((value) => String(value || "").toLowerCase().includes(normalized));
 }
 
 function emptyCustomerForm(): CustomerForm {
