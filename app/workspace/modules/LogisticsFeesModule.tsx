@@ -116,6 +116,10 @@ type SupplierOption = {
 type ExpenseForm = {
   orderId: string;
   supplierId: string;
+  items: ExpenseItemForm[];
+};
+
+type ExpenseItemForm = {
   costType: string;
   amount: string;
   currency: string;
@@ -123,14 +127,18 @@ type ExpenseForm = {
   remark: string;
 };
 
-const emptyExpenseForm: ExpenseForm = {
-  orderId: "",
-  supplierId: "",
+const emptyExpenseItem = (): ExpenseItemForm => ({
   costType: "拖车费",
   amount: "",
   currency: "CNY",
   exchangeRate: "1",
   remark: "",
+});
+
+const emptyExpenseForm: ExpenseForm = {
+  orderId: "",
+  supplierId: "",
+  items: [emptyExpenseItem()],
 };
 
 export function LogisticsFeesModule() {
@@ -399,6 +407,15 @@ export function LogisticsFeesModule() {
                 }}
                 onWithdraw={() => void withdrawExpense(expense)}
                 onMarkPaid={() => void patchExpense(expense, { action: "paymentStatus", paymentStatus: "已付款" }, "更新付款状态失败")}
+                onConfirmInvoice={() => {
+                  const body: Record<string, unknown> = { action: "confirmInvoice" };
+                  if (Number(expense.invoiceAmount || 0) > Number(expense.amount || 0)) {
+                    const reason = window.prompt("发票金额大于审核通过金额，请填写强制确认原因");
+                    if (!reason?.trim()) return;
+                    body.forceConfirmReason = reason.trim();
+                  }
+                  void patchExpense(expense, body, "确认物流发票失败");
+                }}
                 onInvoiceUploaded={() => void loadExpenses(page, submittedKeyword, status, costType)}
               />
             )) : (
@@ -425,6 +442,7 @@ function LogisticsExpenseRows({
   onReject,
   onWithdraw,
   onMarkPaid,
+  onConfirmInvoice,
   onInvoiceUploaded,
 }: {
   expense: LogisticsExpense;
@@ -435,6 +453,7 @@ function LogisticsExpenseRows({
   onReject: () => void;
   onWithdraw: () => void;
   onMarkPaid: () => void;
+  onConfirmInvoice: () => void;
   onInvoiceUploaded: () => void;
 }) {
   const auditStatus = expense.auditStatus || "草稿";
@@ -467,9 +486,16 @@ function LogisticsExpenseRows({
                 ) : null}
                 {auditStatus === "审核通过" ? (
                   <>
-                    <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
+                    {invoiceStatus === "已上传" ? (
+                      <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onConfirmInvoice}>
+                        {busy ? "处理中..." : "确认发票"}
+                      </button>
+                    ) : null}
+                    {invoiceStatus === "已确认" ? (
+                      <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
                       {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
-                    </button>
+                      </button>
+                    ) : null}
                     <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} />
                   </>
                 ) : null}
@@ -505,7 +531,7 @@ function LogisticsExpenseRows({
 }
 
 function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<ExpenseForm>({ ...emptyExpenseForm });
+  const [form, setForm] = useState<ExpenseForm>(() => ({ ...emptyExpenseForm, items: [emptyExpenseItem()] }));
   const [orders, setOrders] = useState<ExpenseOrderOption[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [orderKeyword, setOrderKeyword] = useState("");
@@ -553,7 +579,41 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(key === "currency" && value === "CNY" ? { exchangeRate: "1" } : {}),
+    }));
+  }
+
+  function setItemField<K extends keyof ExpenseItemForm>(index: number, key: K, value: ExpenseItemForm[K]) {
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (
+        itemIndex === index
+          ? {
+              ...item,
+              [key]: value,
+              ...(key === "currency" && value === "CNY" ? { exchangeRate: "1" } : {}),
+            }
+          : item
+      )),
+    }));
+  }
+
+  function addExpenseItem(copyLast = false) {
+    setForm((current) => {
+      const lastItem = current.items[current.items.length - 1];
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          copyLast && lastItem ? { ...lastItem, amount: "", remark: "" } : emptyExpenseItem(),
+        ],
+      };
+    });
+  }
+
+  function removeExpenseItem(index: number) {
+    setForm((current) => ({
+      ...current,
+      items: current.items.length > 1 ? current.items.filter((_, itemIndex) => itemIndex !== index) : current.items,
     }));
   }
 
@@ -579,20 +639,18 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
       setMessage("请选择关联订单");
       return;
     }
-    if (!form.costType) {
-      setMessage("请选择费用类型");
-      return;
-    }
-    if (!form.amount || Number(form.amount) <= 0) {
-      setMessage("请填写物流费用金额");
-      return;
-    }
-    if (!form.currency) {
-      setMessage("请选择币种");
-      return;
-    }
-    if (!Number(form.exchangeRate)) {
-      setMessage("请填写汇率；CNY 汇率应自动为 1");
+    const normalizedItems = form.items.map((item) => ({
+      costType: item.costType,
+      amount: Number(item.amount),
+      currency: item.currency,
+      exchangeRate: Number(item.exchangeRate),
+      remark: item.remark.trim(),
+    }));
+    const invalidIndex = normalizedItems.findIndex((item) => (
+      !item.costType || !item.amount || item.amount <= 0 || !item.currency || !item.exchangeRate || item.exchangeRate <= 0
+    ));
+    if (invalidIndex >= 0) {
+      setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、金额、币种和汇率`);
       return;
     }
     setSaving(true);
@@ -603,16 +661,12 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
         body: JSON.stringify({
           orderId: form.orderId,
           supplierId: form.supplierId || undefined,
-          costType: form.costType,
-          amount: Number(form.amount),
-          currency: form.currency,
-          exchangeRate: Number(form.exchangeRate),
-          remark: form.remark.trim(),
+          items: normalizedItems,
           auditStatus,
         }),
       });
       if (result.success !== true) throw new Error(result.message || "保存物流费用失败");
-      setForm({ ...emptyExpenseForm });
+      setForm({ ...emptyExpenseForm, items: [emptyExpenseItem()] });
       onSaved();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "保存物流费用失败");
@@ -623,6 +677,7 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
 
   const selectedOrder = orders.find((order) => (order.orderId || order.id) === form.orderId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId);
+  const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
 
   return (
     <form
@@ -692,30 +747,45 @@ function LogisticsExpenseForm({ onCancel, onSaved }: { onCancel: () => void; onS
             {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplierLabel(supplier)}</option>)}
           </select>
         </label>
-        <label>
-          费用类型
-          <select value={form.costType} onChange={(event) => setField("costType", event.target.value)}>
-            {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </label>
-        <label>
-          费用金额
-          <input value={form.amount} onChange={(event) => setField("amount", event.target.value)} inputMode="decimal" required />
-        </label>
-        <label>
-          币种
-          <select value={form.currency} onChange={(event) => setField("currency", event.target.value)}>
-            {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-          </select>
-        </label>
-        <label>
-          汇率
-          <input value={form.exchangeRate} onChange={(event) => setField("exchangeRate", event.target.value)} readOnly={form.currency === "CNY"} inputMode="decimal" required />
-        </label>
-        <label>
-          备注
-          <input value={form.remark} onChange={(event) => setField("remark", event.target.value)} placeholder="可选" />
-        </label>
+      </div>
+      <div className={styles.logisticsItemsPanel}>
+        <div className={styles.logisticsItemsHeader}>
+          <div>
+            <strong>费用明细</strong>
+            <span>可一次登记多条拖车费、报关费、港杂费等费用。</span>
+          </div>
+          <div className={styles.headerActions}>
+            <button className={styles.secondaryButton} type="button" onClick={() => addExpenseItem(false)}>添加费用</button>
+            <button className={styles.secondaryButton} type="button" onClick={() => addExpenseItem(true)}>复制上一行</button>
+          </div>
+        </div>
+        <div className={styles.logisticsItemsTable}>
+          <div className={styles.logisticsItemsHead}>
+            <span>费用类型</span>
+            <span>金额</span>
+            <span>币种</span>
+            <span>汇率</span>
+            <span>折人民币</span>
+            <span>备注</span>
+            <span>操作</span>
+          </div>
+          {form.items.map((item, index) => (
+            <div className={styles.logisticsItemsRow} key={`${index}-${item.costType}`}>
+              <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
+                {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
+              <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
+                {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+              </select>
+              <input value={item.exchangeRate} onChange={(event) => setItemField(index, "exchangeRate", event.target.value)} readOnly={item.currency === "CNY"} inputMode="decimal" required />
+              <strong>{formatCny(Number(item.amount || 0) * Number(item.exchangeRate || 0))}</strong>
+              <input value={item.remark} onChange={(event) => setItemField(index, "remark", event.target.value)} placeholder="可选" />
+              <button className={styles.secondaryButton} type="button" disabled={form.items.length <= 1} onClick={() => removeExpenseItem(index)}>删除</button>
+            </div>
+          ))}
+        </div>
+        <div className={styles.logisticsItemsTotal}>合计：{formatCny(totalAmountCny)}</div>
       </div>
       <div className={styles.quickCreateMeta}>
         <span>订单：{selectedOrder ? orderLabel(selectedOrder) : "-"}</span>
@@ -738,6 +808,7 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
   const [invoiceNo, setInvoiceNo] = useState(expense.invoiceNo || "");
   const [invoiceDate, setInvoiceDate] = useState(expense.invoiceDate || new Date().toISOString().slice(0, 10));
   const [invoiceAmount, setInvoiceAmount] = useState(expense.invoiceAmount ? String(expense.invoiceAmount) : String(expense.amount || ""));
+  const [remark, setRemark] = useState(expense.invoiceRemark || "");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -767,6 +838,7 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
       body.set("invoiceNo", invoiceNo.trim());
       body.set("invoiceDate", invoiceDate);
       body.set("invoiceAmount", invoiceAmount);
+      body.set("remark", remark.trim());
       body.set("file", file);
       const response = await fetch(`/api/logistics-costs/${encodeURIComponent(expense.id)}/invoice`, {
         method: "POST",
@@ -789,6 +861,7 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
       <input value={invoiceNo} onChange={(event) => setInvoiceNo(event.target.value)} placeholder="发票号码" />
       <input value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} type="date" />
       <input value={invoiceAmount} onChange={(event) => setInvoiceAmount(event.target.value)} inputMode="decimal" placeholder="发票金额" />
+      <input value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="发票备注" />
       <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] || null)} />
       <button className={styles.secondaryButton} type="submit" disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
       {message ? <span className={styles.inlineFormMessage}>{message}</span> : null}
