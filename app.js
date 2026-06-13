@@ -132,12 +132,14 @@ const state = {
   overview: null,
   auditLogs: [],
   globalRefreshLoading: false,
+  exchangeRateSettingsLoaded: false,
   exchangeRateSettings: {
     source: "中国银行",
     rateType: "现汇买入价",
     autoUpdate: true,
     allowManualEdit: true,
     allowAdminIncompleteTaxSubmit: false,
+    allowMultipleOrderLogisticsSuppliers: false,
   },
 };
 
@@ -1421,6 +1423,12 @@ function isLogisticsSupplierOption(supplier = {}) {
   return ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"].includes(supplier.supplierType);
 }
 
+function defaultLogisticsSupplier() {
+  return state.availableSuppliers.find((supplier) => (
+    supplier.status !== "停用" && supplier.isDefaultLogisticsSupplier && isLogisticsSupplierOption(supplier)
+  )) || null;
+}
+
 async function ensureAvailableSuppliersLoaded(options = {}) {
   if (!state.me) return;
   if (state.availableSuppliers.length && !options.force) return;
@@ -1432,17 +1440,45 @@ async function ensureAvailableSuppliersLoaded(options = {}) {
   }
 }
 
+async function ensureExchangeRateSettingsLoaded(options = {}) {
+  if (state.exchangeRateSettingsLoaded && !options.force) return;
+  try {
+    const data = await api("/api/exchange-rates/settings");
+    state.exchangeRateSettings = data.settings || state.exchangeRateSettings;
+    state.exchangeRateSettingsLoaded = true;
+  } catch (error) {
+    console.error("加载系统设置失败", error);
+  }
+}
+
 function renderOrderLogisticsSupplierSelect(selected = []) {
   const el = $("#order-logistics-suppliers");
   if (!el) return;
+  const allowMultiple = state.exchangeRateSettings.allowMultipleOrderLogisticsSuppliers === true;
+  const defaultSupplier = defaultLogisticsSupplier();
   const selectedSet = new Set(Array.isArray(selected) ? selected : []);
-  const suppliers = state.availableSuppliers.filter((supplier) => supplier.status !== "停用" && isLogisticsSupplierOption(supplier));
+  const suppliers = allowMultiple
+    ? state.availableSuppliers.filter((supplier) => supplier.status !== "停用" && isLogisticsSupplierOption(supplier))
+    : (defaultSupplier ? [defaultSupplier] : []);
+  el.multiple = allowMultiple;
+  el.size = allowMultiple ? 4 : 1;
+  el.disabled = !allowMultiple;
   el.innerHTML = suppliers.length ? suppliers.map((supplier) => `
-    <option value="${escapeHtml(supplier.id)}" ${selectedSet.has(supplier.id) ? "selected" : ""}>${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}</option>
-  `).join("") : `<option value="" disabled>暂无启用物流供应商</option>`;
+    <option value="${escapeHtml(supplier.id)}" ${allowMultiple ? (selectedSet.has(supplier.id) ? "selected" : "") : "selected"}>${escapeHtml(supplier.supplierName)} · ${escapeHtml(supplier.supplierType || "")}${supplier.isDefaultLogisticsSupplier ? " · 默认" : ""}</option>
+  `).join("") : `<option value="" disabled selected>${allowMultiple ? "暂无启用物流供应商" : "请先设置默认物流供应商"}</option>`;
+  const note = el.closest("label")?.querySelector(".field-note");
+  if (note) {
+    note.textContent = allowMultiple
+      ? "可多选拖车、报关、海运、港杂等供应商。供应商只能查看被分配订单。"
+      : (defaultSupplier ? "当前系统使用默认物流供应商，暂不允许手动切换。" : "请先在系统设置 > 供应商资料中设置默认物流供应商。");
+  }
 }
 
 function selectedOrderLogisticsSupplierIds() {
+  if (state.exchangeRateSettings.allowMultipleOrderLogisticsSuppliers !== true) {
+    const supplier = defaultLogisticsSupplier();
+    return supplier ? [supplier.id] : [];
+  }
   return Array.from($("#order-logistics-suppliers")?.selectedOptions || []).map((option) => option.value).filter(Boolean);
 }
 
@@ -1878,6 +1914,11 @@ async function loadData(options = {}) {
       shortName: customerDisplayName(customer.shortName || ""),
       displayName: customerDisplayName(customer.displayName || customer.shortName || customer.name || ""),
     }));
+    if (state.view === "orders") {
+      await ensureExchangeRateSettingsLoaded();
+      await ensureAvailableSuppliersLoaded();
+      renderOrderLogisticsSupplierSelect(selectedOrderLogisticsSupplierIds());
+    }
     renderAll();
     if (state.view === "settings" && canView("settings")) await loadSettingsTab(state.settingsActiveTab);
     if (state.view === "taxRefund" && canReadArea("taxRefund")) await loadTaxRefundList({ silent: true });
@@ -6169,6 +6210,9 @@ function renderExchangeRateSettings() {
   if ($("#tax-allow-admin-incomplete-submit")) {
     $("#tax-allow-admin-incomplete-submit").value = String(state.exchangeRateSettings.allowAdminIncompleteTaxSubmit === true);
   }
+  if ($("#order-allow-multiple-logistics-suppliers")) {
+    $("#order-allow-multiple-logistics-suppliers").value = String(state.exchangeRateSettings.allowMultipleOrderLogisticsSuppliers === true);
+  }
   const status = $("#exchange-settings-status");
   if (status) {
     status.textContent = state.settingsLoading.exchangeRates
@@ -6245,6 +6289,7 @@ function renderSupplierSettings() {
             ["供应商", escapeHtml(supplier.supplierName || "-"), { strong: true }],
             ["类型", escapeHtml(supplier.supplierType || "-")],
             ["状态", `<span class="status ${statusClass(supplier.status)}">${escapeHtml(supplier.status || "-")}</span>`],
+            ["默认物流供应商", supplier.isDefaultLogisticsSupplier ? "是" : "否"],
             optionalDetailItem("联系人", escapeHtml(supplier.contactPerson || "")),
             optionalDetailItem("电话", escapeHtml(supplier.phone || "")),
             optionalDetailItem("邮箱", escapeHtml(supplier.email || "")),
@@ -6429,7 +6474,8 @@ const supplierFields = [
   ["contactPerson", "#supplier-contact-person"], ["phone", "#supplier-phone"], ["email", "#supplier-email"], ["address", "#supplier-address"],
   ["invoiceTitle", "#supplier-invoice-title"], ["taxNumber", "#supplier-tax-number"], ["bankName", "#supplier-bank-name"],
   ["bankAccount", "#supplier-bank-account"], ["status", "#supplier-status"], ["allowDomesticLogisticsEntry", "#supplier-domestic-logistics-entry"],
-  ["allowLogisticsExpenseEntry", "#supplier-logistics-expense-entry"], ["allowLogisticsInvoiceUpload", "#supplier-logistics-invoice-upload"], ["remark", "#supplier-remark"],
+  ["allowLogisticsExpenseEntry", "#supplier-logistics-expense-entry"], ["allowLogisticsInvoiceUpload", "#supplier-logistics-invoice-upload"],
+  ["isDefaultLogisticsSupplier", "#supplier-default-logistics"], ["remark", "#supplier-remark"],
 ];
 
 const costFields = [
@@ -7174,6 +7220,9 @@ async function submitOrder(event) {
     }
     const id = data.id;
     data.logisticsSupplierIds = selectedOrderLogisticsSupplierIds();
+    if (state.exchangeRateSettings.allowMultipleOrderLogisticsSuppliers !== true && !data.logisticsSupplierIds.length) {
+      throw new Error("请先在供应商资料中设置默认物流供应商。");
+    }
     delete data.id;
     delete data.country;
     if (!canWriteArea("commissions")) delete data.salespersonCommissionRate;
@@ -8420,6 +8469,14 @@ function upsertSupplier(rows, supplier) {
 
 function syncSavedSupplier(supplier) {
   if (!supplier?.id) return;
+  if (supplier.isDefaultLogisticsSupplier) {
+    state.suppliers = state.suppliers.map((item) => (
+      item.id === supplier.id ? item : { ...item, isDefaultLogisticsSupplier: false }
+    ));
+    state.availableSuppliers = state.availableSuppliers.map((item) => (
+      item.id === supplier.id ? item : { ...item, isDefaultLogisticsSupplier: false }
+    ));
+  }
   const existsInPage = state.suppliers.some((item) => item.id === supplier.id);
   state.suppliers = upsertSupplier(state.suppliers, supplier);
   if (!existsInPage) {
@@ -8546,6 +8603,7 @@ async function submitExchangeRateSettings(event) {
       autoUpdate: $("#exchange-auto-update").value === "true",
       allowManualEdit: $("#exchange-allow-manual").value === "true",
       allowAdminIncompleteTaxSubmit: $("#tax-allow-admin-incomplete-submit")?.value === "true",
+      allowMultipleOrderLogisticsSuppliers: $("#order-allow-multiple-logistics-suppliers")?.value === "true",
     };
     const result = await api("/api/exchange-rates/settings", {
       method: "PATCH",
@@ -8553,7 +8611,9 @@ async function submitExchangeRateSettings(event) {
     });
     assertSuccessResponse(result, "汇率设置保存失败");
     state.exchangeRateSettings = result.settings || state.exchangeRateSettings;
+    state.exchangeRateSettingsLoaded = true;
     renderSettings();
+    renderOrderLogisticsSupplierSelect(selectedOrderLogisticsSupplierIds());
     applyRateEditability();
     toast(result.message || "汇率设置已保存");
   } catch (error) {
@@ -9001,7 +9061,8 @@ function resetOrderForm({ clearStoredDraft = true } = {}) {
   $("#order-reminder-days").value = "7";
   $("#order-status").value = "草稿";
   renderOrderLogisticsSupplierSelect([]);
-  ensureAvailableSuppliersLoaded().then(() => renderOrderLogisticsSupplierSelect([]));
+  Promise.all([ensureExchangeRateSettingsLoaded(), ensureAvailableSuppliersLoaded()])
+    .then(() => renderOrderLogisticsSupplierSelect([]));
   $("#order-remark").value = "";
   clearInstallments();
   updateOrderCustomerCountry();
@@ -9154,7 +9215,8 @@ function editOrder(id) {
   switchView("orders", { preserveOrderForm: true, skipOrderConfirm: true });
   setForm(orderFields, order);
   renderOrderLogisticsSupplierSelect(order.logisticsSupplierIds || []);
-  ensureAvailableSuppliersLoaded().then(() => renderOrderLogisticsSupplierSelect(order.logisticsSupplierIds || []));
+  Promise.all([ensureExchangeRateSettingsLoaded(), ensureAvailableSuppliersLoaded()])
+    .then(() => renderOrderLogisticsSupplierSelect(order.logisticsSupplierIds || []));
   $("#order-id").value = order.id;
   $("#order-salesperson").value = order.salespersonName;
   $("#order-commission-rate").value = Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2);

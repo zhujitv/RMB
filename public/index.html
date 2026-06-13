@@ -1019,6 +1019,7 @@
                   <label><span>自动更新</span><select id="exchange-auto-update"><option value="true">开启</option><option value="false">关闭</option></select></label>
                   <label><span>允许手动修改</span><select id="exchange-allow-manual"><option value="true">是</option><option value="false">否</option></select></label>
                   <label><span>管理员忽略退税完整度</span><select id="tax-allow-admin-incomplete-submit"><option value="false">关闭</option><option value="true">开启</option></select></label>
+                  <label><span>订单多物流供应商</span><select id="order-allow-multiple-logistics-suppliers"><option value="false">关闭</option><option value="true">开启</option></select><small class="field-note">关闭时订单自动使用默认物流供应商，不允许手动切换。</small></label>
                 </div>
                 <div class="form-actions"><button class="secondary-button" data-settings-refresh="exchangeRates" type="button">刷新</button><button class="primary-button" type="submit">保存汇率设置</button></div>
               </form>
@@ -1111,6 +1112,7 @@
               <label><span>允许录入国内物流信息</span><select id="supplier-domestic-logistics-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>允许录入物流费用</span><select id="supplier-logistics-expense-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>允许上传发票</span><select id="supplier-logistics-invoice-upload"><option value="false">关闭</option><option value="true">开启</option></select></label>
+              <label><span>默认物流供应商</span><select id="supplier-default-logistics"><option value="false">否</option><option value="true">是</option></select><small class="field-note">同一时间只能有一家默认物流供应商。</small></label>
               <label><span>国家 / 地区</span><input id="supplier-country" /></label>
               <label><span>联系人</span><input id="supplier-contact-person" /></label>
               <label><span>联系电话</span><input id="supplier-phone" /></label>

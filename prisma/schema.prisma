@@ -185,6 +185,7 @@ model Supplier {
   allowDomesticLogisticsEntry Boolean @default(false) @map("allow_domestic_logistics_entry")
   allowLogisticsExpenseEntry Boolean @default(false) @map("allow_logistics_expense_entry")
   allowLogisticsInvoiceUpload Boolean @default(false) @map("allow_logistics_invoice_upload")
+  isDefaultLogisticsSupplier Boolean @default(false) @map("is_default_logistics_supplier")
   allowedLogisticsCostTypes Json? @map("allowed_logistics_cost_types")
   createdById   String?   @map("created_by")
   updatedById   String?   @map("updated_by")
@@ -206,6 +207,7 @@ model Supplier {
   @@index([allowDomesticLogisticsEntry])
   @@index([allowLogisticsExpenseEntry])
   @@index([allowLogisticsInvoiceUpload])
+  @@index([isDefaultLogisticsSupplier])
   @@index([deletedAt])
   @@map("suppliers")
 }
