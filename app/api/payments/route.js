@@ -5,7 +5,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request) {
   try {
     const actor = await getActor(request);
-    return ok({ payments: await listPayments(new URL(request.url).searchParams, actor) });
+    const query = new URL(request.url).searchParams;
+    const paginated = query.get("workspace") === "1" || query.has("page") || query.has("pageSize");
+    const result = await listPayments(query, actor, { paginated });
+    return paginated
+      ? ok({ success: true, data: result, payments: result.rows || [] })
+      : ok({ payments: result });
   } catch (error) {
     return apiError(error, "读取收款失败");
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatCny, moneyText } from "../formatters";
@@ -43,6 +43,13 @@ type PaymentRow = {
 
 type PaymentsResponse = {
   payments: PaymentRow[];
+  data?: {
+    rows?: PaymentRow[];
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    totalPages?: number;
+  };
 };
 
 type PaymentOrderOption = {
@@ -102,6 +109,8 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -112,14 +121,22 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   const [confirmingId, setConfirmingId] = useState("");
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
 
-  async function loadPayments(nextKeyword = submittedKeyword) {
+  async function loadPayments(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        workspace: "1",
+        page: String(nextPage),
+        pageSize: String(PAGE_SIZE),
+      });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<PaymentsResponse>(`/api/payments${params.size ? `?${params}` : ""}`);
-      setPayments(Array.isArray(result.payments) ? result.payments : []);
+      const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
+      const data = result.data || {};
+      setPayments(Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : []);
+      setTotal(Number(data.total ?? result.payments?.length ?? 0));
+      setPage(Number(data.page || nextPage));
+      setTotalPages(Math.max(1, Number(data.totalPages || 1)));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取收款明细失败");
     } finally {
@@ -128,30 +145,29 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   }
 
   useEffect(() => {
-    void loadPayments("");
+    void loadPayments(1, "");
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(payments.length / PAGE_SIZE));
-  const pageRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return payments.slice(start, start + PAGE_SIZE);
-  }, [payments, page]);
-
   function submitSearch() {
-    setPage(1);
     setExpandedId("");
     setNotice("");
-    setSubmittedKeyword(keyword.trim());
-    void loadPayments(keyword.trim());
+    const value = keyword.trim();
+    setSubmittedKeyword(value);
+    void loadPayments(1, value);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
-    setPage(1);
     setExpandedId("");
     setNotice("");
-    void loadPayments("");
+    void loadPayments(1, "");
+  }
+
+  function gotoPage(nextPage: number) {
+    setExpandedId("");
+    setNotice("");
+    void loadPayments(nextPage, submittedKeyword);
   }
 
   return (
@@ -180,7 +196,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadPayments();
+              void loadPayments(page, submittedKeyword);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -199,16 +215,15 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
           onSaved={() => {
             setCreateOpen(false);
             setEditPayment(null);
-            setPage(1);
             setExpandedId("");
             setNotice(editPayment ? "收款已更新" : "收款已保存");
-            void loadPayments(submittedKeyword);
+            void loadPayments(1, submittedKeyword);
           }}
         />
       ) : null}
 
       <div className={styles.infoStrip}>
-        收款凭证上传将接入新的 R2 文件体系；旧附件地址和停用的 `/api/attachments` 不会在业务工作台中恢复使用。
+        正式回款统计仅以已到账状态为准，待确认收款不计入经营数据。
       </div>
 
       <div className={styles.listToolbar}>
@@ -244,7 +259,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
               <tr>
                 <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
-            ) : pageRows.length ? pageRows.map((payment) => (
+            ) : payments.length ? payments.map((payment) => (
               <PaymentTableRows
                 key={payment.id}
                 payment={payment}
@@ -270,7 +285,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
         </table>
       </div>
 
-      <PaginationBar total={payments.length} page={page} totalPages={totalPages} onPage={setPage} />
+      <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
     </section>
   );
 
@@ -285,7 +300,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       });
       if (result.success !== true) throw new Error(result.message || "删除收款失败");
       setExpandedId("");
-      await loadPayments(submittedKeyword);
+      await loadPayments(page, submittedKeyword);
       setNotice(result.message || "收款已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除收款失败");
@@ -325,7 +340,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       });
       if (result.success !== true) throw new Error(result.message || "确认到账失败");
       setExpandedId("");
-      await loadPayments(submittedKeyword);
+      await loadPayments(page, submittedKeyword);
       setNotice(result.message || "收款已确认到账");
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "确认到账失败");

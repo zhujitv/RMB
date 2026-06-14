@@ -28,7 +28,7 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     label: "收款管理",
     description: "登记客户回款并确认到账状态。",
     stage: "partial",
-    migrationNotes: ["支持列表、登记、编辑和删除", "收款状态保存继续由后端权限校验", "收款凭证等待新的 R2 文件表/接口接入，旧附件接口不恢复"],
+    migrationNotes: ["支持后端分页列表、登记、编辑和删除", "收款状态保存继续由后端权限校验", "正式回款统计仅计入已到账收款"],
   },
   costs: {
     key: "costs",

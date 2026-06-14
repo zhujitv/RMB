@@ -12,7 +12,7 @@ The new workspace keeps the legacy UI intact while modules move one by one.
 - Account settings and password change screens
 - Welcome page with no business data preload
 - React receivable orders list with quick-create, basic edit, and soft-delete actions, loaded only after opening 应收订单
-- React payments list with create, edit, and delete actions, loaded only after opening 收款管理
+- React server-paged payments list with create, edit, confirm-arrival, and delete actions, loaded only after opening 收款管理
 - React paged costs list with create, manual-cost edit, and delete actions, loaded only after opening 成本管理
 - React domestic logistics list, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 国内物流信息
 - React paged profit analysis list and commission settlement action, loaded only after opening 利润分析
