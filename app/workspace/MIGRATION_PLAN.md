@@ -11,7 +11,7 @@ The new workspace keeps the legacy UI intact while modules move one by one.
 - Permission fallback that redirects unavailable modules back to the workspace home
 - Account settings and password change screens
 - Welcome page with no business data preload
-- React receivable orders list with quick-create, basic edit, and soft-delete actions, loaded only after opening 应收订单
+- React server-paged receivable orders list with customer autocomplete, full order create/edit, payment terms, installment nodes, default logistics supplier rules, detail view, and soft-delete actions, loaded only after opening 应收订单
 - React server-paged payments list with create, edit, confirm-arrival, and delete actions, loaded only after opening 收款管理
 - React paged costs list with create, manual-cost edit, and delete actions, loaded only after opening 成本管理
 - React domestic logistics list, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 国内物流信息
@@ -39,7 +39,7 @@ Each migrated module must keep the legacy behavior before the old view is retire
 
 ## Migration Order
 
-1. 应收订单
+1. 应收订单 - ready
 2. 收款管理
 3. 成本管理
 4. 国内物流信息

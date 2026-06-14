@@ -2619,6 +2619,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .installmentRow {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .installmentRow button {
+    justify-self: flex-start;
+  }
+
   .metricGrid,
   .overviewPanels,
   .dashboardTwoColumns {
@@ -2665,6 +2673,10 @@
   }
 
   .reportFilterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .installmentRow {
     grid-template-columns: 1fr;
   }
 
@@ -2819,6 +2831,23 @@
   background: #fff;
   border: 1px solid #e2e8f0;
   padding: 6px 10px;
+}
+
+.installmentPanel {
+  grid-column: 1 / -1;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.installmentRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
 }
 
 .checkboxPanel {

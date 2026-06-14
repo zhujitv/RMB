@@ -10,19 +10,41 @@ import styles from "../WorkspaceShell.module.css";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
 const TRADE_TERMS = ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"];
+const ORDER_STATUSES = ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
 const PAYMENT_TERMS = [
   { value: "COPY_BL", label: "见提单复印件付款" },
   { value: "OA", label: "OA账期" },
   { value: "AFTER_ARRIVAL", label: "到港后付款" },
-  { value: "INSTALLMENT", label: "分期付款" },
+  { value: "INSTALLMENT", label: "分批付款" },
 ];
+const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
 
 type OrderSummary = {
   arrivedPaymentsCny?: number;
   arrivedOutstandingCny?: number;
   confirmedPaymentsCny?: number;
   outstandingCny?: number;
+  outstandingAmount?: number;
   overpaidCny?: number;
+  overpaidAmount?: number;
+  requiredDepositAmount?: number;
+  receivedDepositCny?: number;
+  depositGapCny?: number;
+  reminderStatus?: string;
+};
+
+type SupplierOption = {
+  id: string;
+  supplierName?: string;
+  name?: string;
+  supplierType?: string;
+  status?: string;
+  isDefaultLogisticsSupplier?: boolean;
+};
+
+type PaymentInstallment = {
+  ratio: string;
+  condition: string;
 };
 
 type OrderRow = {
@@ -36,6 +58,9 @@ type OrderRow = {
   customerShortName?: string;
   currency?: string;
   exchangeRate?: number;
+  exchangeRateDate?: string;
+  exchangeRateSource?: string;
+  exchangeRateType?: string;
   finalReceivableAmount?: number;
   finalReceivableAmountCny?: number;
   estimatedReceivableAmount?: number;
@@ -45,32 +70,48 @@ type OrderRow = {
   tradeTerm?: string;
   paymentTerm?: string;
   paymentTermType?: string;
+  paymentTermDisplay?: string;
+  paymentInstallments?: Array<{ ratio?: number; condition?: string; amount?: number; amountCny?: number }>;
+  paymentInstallmentText?: string;
   dueDate?: string;
   creditDays?: number | string;
   blDate?: string;
   expectedShipmentDate?: string;
   expectedArrivalDate?: string;
   expectedPaymentDate?: string;
+  depositRatio?: number | string;
+  reminderDays?: number | string;
   salespersonName?: string;
   status?: string;
   remark?: string;
+  logisticsSupplierIds?: string[];
+  logisticsSuppliers?: SupplierOption[];
   summary?: OrderSummary;
 };
 
 type OrdersResponse = {
   orders: OrderRow[];
+  data?: {
+    rows?: OrderRow[];
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    totalPages?: number;
+  };
 };
 
-type CustomerOption = {
-  id: string;
-  name?: string;
-  fullName?: string;
-  shortName?: string;
-  displayName?: string;
-  defaultCurrency?: string;
-  defaultPaymentTermType?: string;
-  defaultTradeTerm?: string;
-  country?: string;
+type CustomersResponse = {
+  customers?: CustomerAutocompleteOption[];
+};
+
+type SuppliersResponse = {
+  suppliers?: SupplierOption[];
+};
+
+type SettingsResponse = {
+  settings?: {
+    allowMultipleOrderLogisticsSuppliers?: boolean;
+  };
 };
 
 type ExchangeRateResponse = {
@@ -92,15 +133,19 @@ type QuickOrderForm = {
   exchangeRate: string;
   estimatedReceivableAmount: string;
   finalReceivableAmount: string;
+  actualShipmentAmount: string;
   tradeTerm: string;
   paymentTermType: string;
-  actualShipmentAmount: string;
   expectedShipmentDate: string;
   blDate: string;
   expectedArrivalDate: string;
   expectedPaymentDate: string;
   dueDate: string;
   creditDays: string;
+  reminderDays: string;
+  status: string;
+  logisticsSupplierIds: string[];
+  paymentInstallments: PaymentInstallment[];
   remark: string;
 };
 
@@ -114,15 +159,19 @@ const emptyQuickOrderForm: QuickOrderForm = {
   exchangeRate: "",
   estimatedReceivableAmount: "",
   finalReceivableAmount: "",
+  actualShipmentAmount: "",
   tradeTerm: "FOB",
   paymentTermType: "COPY_BL",
-  actualShipmentAmount: "",
   expectedShipmentDate: "",
   blDate: "",
   expectedArrivalDate: "",
   expectedPaymentDate: "",
   dueDate: "",
   creditDays: "30",
+  reminderDays: "7",
+  status: "已确认",
+  logisticsSupplierIds: [],
+  paymentInstallments: [{ ratio: "100", condition: "按约定付款" }],
   remark: "",
 };
 
@@ -131,6 +180,8 @@ export function OrdersModule() {
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -139,14 +190,22 @@ export function OrdersModule() {
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
 
-  async function loadOrders(nextKeyword = submittedKeyword) {
+  async function loadOrders(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({
+        workspace: "1",
+        page: String(nextPage),
+        pageSize: String(PAGE_SIZE),
+      });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<OrdersResponse>(`/api/orders${params.size ? `?${params}` : ""}`);
-      setOrders(Array.isArray(result.orders) ? result.orders : []);
+      const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
+      const data = result.data || {};
+      setOrders(Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : []);
+      setTotal(Number(data.total ?? result.orders?.length ?? 0));
+      setPage(Number(data.page || nextPage));
+      setTotalPages(Math.max(1, Number(data.totalPages || 1)));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取应收订单失败");
     } finally {
@@ -155,30 +214,29 @@ export function OrdersModule() {
   }
 
   useEffect(() => {
-    void loadOrders("");
+    void loadOrders(1, "");
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
-  const pageRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return orders.slice(start, start + PAGE_SIZE);
-  }, [orders, page]);
-
   function submitSearch() {
-    setPage(1);
+    const value = keyword.trim();
+    setSubmittedKeyword(value);
     setExpandedId("");
     setNotice("");
-    setSubmittedKeyword(keyword.trim());
-    void loadOrders(keyword.trim());
+    void loadOrders(1, value);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
-    setPage(1);
     setExpandedId("");
     setNotice("");
-    void loadOrders("");
+    void loadOrders(1, "");
+  }
+
+  function gotoPage(nextPage: number) {
+    setExpandedId("");
+    setNotice("");
+    void loadOrders(nextPage, submittedKeyword);
   }
 
   async function deleteOrder(order: OrderRow) {
@@ -192,13 +250,11 @@ export function OrdersModule() {
         `/api/orders/${encodeURIComponent(order.id)}`,
         { method: "DELETE" },
       );
-      if (result.success === false) {
-        throw new Error(result.message || "删除应收订单失败");
-      }
+      if (result.success === false) throw new Error(result.message || "删除应收订单失败");
       setExpandedId("");
       setEditOrder(null);
       setCreateOpen(false);
-      await loadOrders(submittedKeyword);
+      await loadOrders(page, submittedKeyword);
       setNotice(result.message || "订单已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除应收订单失败");
@@ -231,7 +287,7 @@ export function OrdersModule() {
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadOrders();
+              void loadOrders(page, submittedKeyword);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -250,9 +306,8 @@ export function OrdersModule() {
             setNotice(editOrder ? "订单已更新" : "订单已保存");
             setCreateOpen(false);
             setEditOrder(null);
-            setPage(1);
             setExpandedId("");
-            void loadOrders(submittedKeyword);
+            void loadOrders(1, submittedKeyword);
           }}
         />
       ) : null}
@@ -264,18 +319,14 @@ export function OrdersModule() {
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户简称"
+          placeholder="搜索订单号 / 提单号 / 客户简称 / 供应商"
         />
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
 
-      {error ? (
-        <div className={styles.inlineError}>{error}</div>
-      ) : null}
-      {notice ? (
-        <div className={styles.infoStrip}>{notice}</div>
-      ) : null}
+      {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -294,11 +345,9 @@ export function OrdersModule() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8}>
-                  <div className={styles.emptyState}>数据加载中...</div>
-                </td>
+                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
-            ) : pageRows.length ? pageRows.map((order) => (
+            ) : orders.length ? orders.map((order) => (
               <OrderTableRows
                 key={order.id}
                 order={order}
@@ -314,16 +363,14 @@ export function OrdersModule() {
               />
             )) : (
               <tr>
-                <td colSpan={8}>
-                  <div className={styles.emptyState}>未找到匹配的应收订单</div>
-                </td>
+                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的应收订单</div></td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <PaginationBar total={orders.length} page={page} totalPages={totalPages} onPage={setPage} />
+      <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
     </section>
   );
 }
@@ -338,28 +385,65 @@ function QuickCreateOrderPanel({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<QuickOrderForm>(() => orderFormFromRow(initialOrder));
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerAutocompleteOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [allowMultipleLogisticsSuppliers, setAllowMultipleLogisticsSuppliers] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  const logisticsSuppliers = useMemo(() => (
+    suppliers.filter((supplier) => supplier.status !== "停用" && LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""))
+  ), [suppliers]);
+  const defaultLogisticsSupplier = useMemo(() => (
+    logisticsSuppliers.find((supplier) => supplier.isDefaultLogisticsSupplier) || null
+  ), [logisticsSuppliers]);
+
   useEffect(() => {
     setForm(orderFormFromRow(initialOrder));
+    setMessage("");
     if (initialOrder?.currency) {
-      if (initialOrder.currency === "CNY") {
-        setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      } else {
-        setExchangeMeta(
-          initialOrder.exchangeRate
-            ? `当前订单汇率：${Number(initialOrder.exchangeRate).toFixed(4)}`
-            : "汇率来源：待获取，请手工填写",
-        );
-      }
+      setExchangeMeta(initialOrder.currency === "CNY"
+        ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000"
+        : initialOrder.exchangeRate
+          ? `当前订单汇率：${Number(initialOrder.exchangeRate).toFixed(4)}`
+          : "汇率来源：待获取，请手工填写");
     } else {
       setExchangeMeta("");
     }
-    setMessage("");
   }, [initialOrder?.id]);
+
+  useEffect(() => {
+    void loadFormOptions();
+  }, []);
+
+  useEffect(() => {
+    if (allowMultipleLogisticsSuppliers) return;
+    if (!defaultLogisticsSupplier) return;
+    setForm((current) => ({
+      ...current,
+      logisticsSupplierIds: [defaultLogisticsSupplier.id],
+    }));
+  }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id]);
+
+  useEffect(() => {
+    if (form.paymentTermType === "INSTALLMENT") return;
+    const nextDueDate = derivedDueDate(form);
+    if (nextDueDate !== form.dueDate) setFormValue("dueDate", nextDueDate);
+  }, [form.paymentTermType, form.expectedShipmentDate, form.blDate, form.expectedArrivalDate, form.creditDays]);
+
+  async function loadFormOptions() {
+    try {
+      const [settingsResult, suppliersResult] = await Promise.all([
+        apiJson<SettingsResponse>("/api/exchange-rates/settings").catch(() => null),
+        apiJson<SuppliersResponse>("/api/suppliers/available").catch(() => null),
+      ]);
+      setAllowMultipleLogisticsSuppliers(Boolean(settingsResult?.settings?.allowMultipleOrderLogisticsSuppliers));
+      setSuppliers(Array.isArray(suppliersResult?.suppliers) ? suppliersResult.suppliers : []);
+    } catch (optionError) {
+      setMessage(optionError instanceof Error ? optionError.message : "读取订单配置失败");
+    }
+  }
 
   async function resolveExchangeRate(currency: string) {
     const normalized = currency.trim().toUpperCase();
@@ -401,7 +485,7 @@ function QuickCreateOrderPanel({
       shortName: initialOrder.customerShortName,
       displayName: initialOrder.customerShortName || initialOrder.customerName || initialOrder.customerFullName,
       defaultCurrency: initialOrder.currency,
-    } satisfies CustomerOption;
+    } satisfies CustomerAutocompleteOption;
   }, [
     initialOrder?.currency,
     initialOrder?.customerFullName,
@@ -416,22 +500,19 @@ function QuickCreateOrderPanel({
       ? customers
       : [initialCustomer, ...customers];
   }, [customers, initialCustomer]);
+  const customer = customerOptions.find((option) => option.id === form.customerId);
 
-  function selectedCustomer() {
-    return customerOptions.find((customer) => customer.id === form.customerId);
-  }
-
-  async function handleCustomerSelect(customer: CustomerAutocompleteOption) {
-    setCustomers((current) => current.some((item) => item.id === customer.id) ? current : [customer, ...current]);
+  async function handleCustomerSelect(customerOption: CustomerAutocompleteOption) {
+    setCustomers((current) => current.some((item) => item.id === customerOption.id) ? current : [customerOption, ...current]);
     setForm((current) => ({
       ...current,
-      customerId: customer.id,
-      currency: customer.defaultCurrency || "",
-      exchangeRate: "",
-      paymentTermType: customer.defaultPaymentTermType || current.paymentTermType,
-      tradeTerm: customer.defaultTradeTerm || current.tradeTerm,
+      customerId: customerOption.id,
+      currency: customerOption.defaultCurrency || current.currency,
+      exchangeRate: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRate,
+      paymentTermType: customerOption.defaultPaymentTermType || current.paymentTermType,
+      tradeTerm: customerOption.defaultTradeTerm || current.tradeTerm,
     }));
-    await resolveExchangeRate(customer.defaultCurrency || "");
+    if (customerOption.defaultCurrency) await resolveExchangeRate(customerOption.defaultCurrency);
   }
 
   async function handleCurrencyChange(currency: string) {
@@ -440,32 +521,47 @@ function QuickCreateOrderPanel({
     await resolveExchangeRate(normalized);
   }
 
+  function setInstallment(index: number, key: keyof PaymentInstallment, value: string) {
+    setForm((current) => ({
+      ...current,
+      paymentInstallments: current.paymentInstallments.map((row, rowIndex) => (
+        rowIndex === index ? { ...row, [key]: value } : row
+      )),
+    }));
+  }
+
+  function addInstallment() {
+    setForm((current) => ({
+      ...current,
+      paymentInstallments: [...current.paymentInstallments, { ratio: "", condition: "" }],
+    }));
+  }
+
+  function removeInstallment(index: number) {
+    setForm((current) => ({
+      ...current,
+      paymentInstallments: current.paymentInstallments.filter((_, rowIndex) => rowIndex !== index).length
+        ? current.paymentInstallments.filter((_, rowIndex) => rowIndex !== index)
+        : [{ ratio: "100", condition: "按约定付款" }],
+    }));
+  }
+
+  function selectedLogisticsSupplierIds() {
+    if (!allowMultipleLogisticsSuppliers) return defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : [];
+    return form.logisticsSupplierIds;
+  }
+
   async function submitQuickOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.customerId) {
-      setMessage("请选择客户");
-      return;
-    }
-    if (!form.currency) {
-      setMessage("请选择币种");
-      return;
-    }
-    if (!Number(form.exchangeRate)) {
-      setMessage("请填写汇率；CNY 订单汇率应自动为 1");
-      return;
-    }
-    if (!form.estimatedReceivableAmount || Number(form.estimatedReceivableAmount) <= 0) {
-      setMessage("请填写预计应收金额");
-      return;
-    }
-    if (form.paymentTermType === "COPY_BL" && !form.dueDate) {
-      setMessage("见提单复印件付款请填写到期日");
-      return;
-    }
-    if (form.paymentTermType === "OA" && Number(form.creditDays) < 0) {
-      setMessage("请填写有效 OA 账期天数");
-      return;
-    }
+    if (!form.customerId) return setMessage("请选择客户");
+    if (!form.orderNo.trim()) return setMessage("请填写订单号");
+    if (!form.currency) return setMessage("请选择币种");
+    if (!Number(form.exchangeRate)) return setMessage("请填写汇率；CNY 订单汇率应自动为 1");
+    if (!form.estimatedReceivableAmount || Number(form.estimatedReceivableAmount) <= 0) return setMessage("请填写预计应收金额");
+    if (form.paymentTermType === "AFTER_ARRIVAL" && !form.expectedArrivalDate) return setMessage("到港后付款请填写预计到港日期");
+    if (["OA", "AFTER_ARRIVAL"].includes(form.paymentTermType) && Number(form.creditDays) < 0) return setMessage("请填写有效账期天数");
+    if (form.paymentTermType === "INSTALLMENT" && installmentTotal(form.paymentInstallments) !== 100) return setMessage("分批付款比例合计必须等于 100%");
+    if (!allowMultipleLogisticsSuppliers && !defaultLogisticsSupplier) return setMessage("请先在供应商资料中设置默认物流供应商");
 
     setSaving(true);
     setMessage("");
@@ -485,9 +581,14 @@ function QuickCreateOrderPanel({
         blDate: form.blDate || undefined,
         expectedArrivalDate: form.expectedArrivalDate || undefined,
         expectedPaymentDate: form.expectedPaymentDate || undefined,
-        dueDate: ["COPY_BL", "INSTALLMENT"].includes(form.paymentTermType) ? form.dueDate : undefined,
+        dueDate: form.dueDate || undefined,
         creditDays: ["OA", "AFTER_ARRIVAL"].includes(form.paymentTermType) ? Number(form.creditDays || 0) : undefined,
-        ...(initialOrder?.id ? {} : { status: "已确认" }),
+        paymentInstallments: form.paymentTermType === "INSTALLMENT"
+          ? form.paymentInstallments.map((row) => ({ ratio: Number(row.ratio), condition: row.condition.trim() }))
+          : undefined,
+        reminderDays: Number(form.reminderDays || 7),
+        status: form.status,
+        logisticsSupplierIds: selectedLogisticsSupplierIds(),
         remark: form.remark.trim(),
       };
       const isEdit = Boolean(initialOrder?.id);
@@ -498,10 +599,8 @@ function QuickCreateOrderPanel({
           body: JSON.stringify(payload),
         },
       );
-      if (result.success !== true) {
-        throw new Error(result.message || "订单保存失败");
-      }
-      setForm(emptyQuickOrderForm);
+      if (result.success !== true) throw new Error(result.message || "订单保存失败");
+      setForm({ ...emptyQuickOrderForm });
       setExchangeMeta("");
       onSaved();
     } catch (saveError) {
@@ -511,14 +610,12 @@ function QuickCreateOrderPanel({
     }
   }
 
-  const customer = selectedCustomer();
-
   return (
     <form className={styles.quickCreatePanel} onSubmit={submitQuickOrder}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{initialOrder?.id ? "编辑应收订单" : "快速新建应收订单"}</strong>
-          <span>基础订单信息在本页维护；收款、成本、国内物流和退税资料请在对应模块处理。</span>
+          <strong>{initialOrder?.id ? "编辑应收订单" : "新建应收订单"}</strong>
+          <span>基础订单信息在本页维护；收款、成本、物流和退税资料在对应模块处理。</span>
         </div>
       </div>
 
@@ -542,6 +639,12 @@ function QuickCreateOrderPanel({
           <input value={form.blNo} onChange={(event) => setFormValue("blNo", event.target.value)} placeholder="可稍后补充" />
         </label>
         <label>
+          订单状态
+          <select value={form.status} onChange={(event) => setFormValue("status", event.target.value)}>
+            {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label>
           币种
           <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)}>
             <option value="">请选择币种</option>
@@ -550,14 +653,7 @@ function QuickCreateOrderPanel({
         </label>
         <label>
           汇率
-          <input
-            value={form.exchangeRate}
-            onChange={(event) => setFormValue("exchangeRate", event.target.value)}
-            readOnly={form.currency === "CNY"}
-            placeholder="自动获取或手工填写"
-            inputMode="decimal"
-            required
-          />
+          <input value={form.exchangeRate} onChange={(event) => setFormValue("exchangeRate", event.target.value)} readOnly={form.currency === "CNY"} placeholder="自动获取或手工填写" inputMode="decimal" required />
         </label>
         <label>
           预计应收金额
@@ -565,7 +661,7 @@ function QuickCreateOrderPanel({
         </label>
         <label>
           最终应收金额
-          <input value={form.finalReceivableAmount} onChange={(event) => setFormValue("finalReceivableAmount", event.target.value)} inputMode="decimal" placeholder="为空则等于预计应收" />
+          <input value={form.finalReceivableAmount} onChange={(event) => setFormValue("finalReceivableAmount", event.target.value)} inputMode="decimal" placeholder="为空则等于实际/预计应收" />
         </label>
         <label>
           实际发货金额
@@ -583,22 +679,12 @@ function QuickCreateOrderPanel({
             {PAYMENT_TERMS.map((term) => <option key={term.value} value={term.value}>{term.label}</option>)}
           </select>
         </label>
-        {form.paymentTermType === "COPY_BL" ? (
+        {["OA", "AFTER_ARRIVAL"].includes(form.paymentTermType) ? (
           <label>
-            到期日
-            <input value={form.dueDate} onChange={(event) => setFormValue("dueDate", event.target.value)} type="date" required />
-          </label>
-        ) : form.paymentTermType === "INSTALLMENT" ? (
-          <label>
-            分期最终到期日
-            <input value={form.dueDate} onChange={(event) => setFormValue("dueDate", event.target.value)} type="date" />
-          </label>
-        ) : (
-          <label>
-            OA账期天数
+            账期天数
             <input value={form.creditDays} onChange={(event) => setFormValue("creditDays", event.target.value)} inputMode="numeric" required />
           </label>
-        )}
+        ) : null}
         <label>
           预计发货日期
           <input value={form.expectedShipmentDate} onChange={(event) => setFormValue("expectedShipmentDate", event.target.value)} type="date" />
@@ -609,13 +695,62 @@ function QuickCreateOrderPanel({
         </label>
         <label>
           预计到港日期
-          <input value={form.expectedArrivalDate} onChange={(event) => setFormValue("expectedArrivalDate", event.target.value)} type="date" />
+          <input value={form.expectedArrivalDate} onChange={(event) => setFormValue("expectedArrivalDate", event.target.value)} type="date" required={form.paymentTermType === "AFTER_ARRIVAL"} />
         </label>
         <label>
           预计收款日期
           <input value={form.expectedPaymentDate} onChange={(event) => setFormValue("expectedPaymentDate", event.target.value)} type="date" />
         </label>
         <label>
+          到期日
+          <input value={form.dueDate} onChange={(event) => setFormValue("dueDate", event.target.value)} type="date" readOnly={form.paymentTermType !== "INSTALLMENT"} />
+        </label>
+        <label>
+          提醒天数
+          <input value={form.reminderDays} onChange={(event) => setFormValue("reminderDays", event.target.value)} inputMode="numeric" />
+        </label>
+        <label className={styles.autocompleteField}>
+          物流供应商
+          <select
+            multiple={allowMultipleLogisticsSuppliers}
+            size={allowMultipleLogisticsSuppliers ? 4 : 1}
+            value={allowMultipleLogisticsSuppliers ? form.logisticsSupplierIds : (selectedLogisticsSupplierIds()[0] || "")}
+            disabled={!allowMultipleLogisticsSuppliers}
+            onChange={(event) => setFormValue("logisticsSupplierIds", Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
+          >
+            {logisticsSuppliers.length ? logisticsSuppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplierName(supplier)} · {supplier.supplierType || "-"}{supplier.isDefaultLogisticsSupplier ? " · 默认" : ""}
+              </option>
+            )) : <option value="">请先设置默认物流供应商</option>}
+          </select>
+          <small className={styles.mutedText}>
+            {allowMultipleLogisticsSuppliers ? "可多选物流、报关、海运或港杂费用供应商。" : defaultLogisticsSupplier ? "当前使用默认物流供应商，暂不允许手动切换。" : "请先在系统设置中设置默认物流供应商。"}
+          </small>
+        </label>
+        {form.paymentTermType === "INSTALLMENT" ? (
+          <div className={`${styles.installmentPanel} ${styles.autocompleteField}`}>
+            <div className={styles.panelHead}>
+              <h3>分批付款节点</h3>
+              <button className={styles.secondaryButton} type="button" onClick={addInstallment}>添加节点</button>
+            </div>
+            {form.paymentInstallments.map((row, index) => (
+              <div key={`${index}-${row.condition}`} className={styles.installmentRow}>
+                <label>
+                  比例%
+                  <input value={row.ratio} onChange={(event) => setInstallment(index, "ratio", event.target.value)} inputMode="decimal" />
+                </label>
+                <label>
+                  付款条件
+                  <input value={row.condition} onChange={(event) => setInstallment(index, "condition", event.target.value)} placeholder="例如 发货前 / 见提单" />
+                </label>
+                <button className={styles.secondaryButton} type="button" onClick={() => removeInstallment(index)}>删除</button>
+              </div>
+            ))}
+            <small className={styles.mutedText}>当前合计：{installmentTotal(form.paymentInstallments)}%</small>
+          </div>
+        ) : null}
+        <label className={styles.autocompleteField}>
           备注
           <input value={form.remark} onChange={(event) => setFormValue("remark", event.target.value)} placeholder="可选" />
         </label>
@@ -649,8 +784,11 @@ function OrderTableRows({
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const receivedCny = Number(order.summary?.arrivedPaymentsCny || 0);
+  const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
   const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
+  const outstanding = Number(order.summary?.overpaidCny || 0) > 0
+    ? `多收 ${formatCny(order.summary?.overpaidCny)}`
+    : formatCny(outstandingCny);
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
@@ -659,8 +797,8 @@ function OrderTableRows({
         <td>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td>{moneyCell(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)}</td>
         <td>{formatCny(receivedCny)}</td>
-        <td>{formatCny(outstandingCny)}</td>
-        <td><span className={styles.statusPill}>{order.status || "-"}</span></td>
+        <td>{outstanding}</td>
+        <td><span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
@@ -678,13 +816,23 @@ function OrderTableRows({
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={order.customerFullName || order.customerName || "-"} wide />
                 <DetailField label="业务员" value={order.salespersonName || "-"} />
-                <DetailField label="付款条款" value={order.paymentTerm || "-"} />
-                <DetailField label="到期日" value={order.dueDate || "-"} />
+                <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
+                <DetailField label="付款条款" value={paymentTermText(order)} />
+                <DetailField label="到期日" value={`${order.dueDate || "-"} ${order.summary?.reminderStatus ? `· ${order.summary.reminderStatus}` : ""}`} />
+                <DetailField label="提醒天数" value={`${order.reminderDays ?? "-"} 天`} />
                 <DetailField label="提单日期" value={order.blDate || "-"} />
                 <DetailField label="预计发货" value={order.expectedShipmentDate || "-"} />
+                <DetailField label="预计到港" value={order.expectedArrivalDate || "-"} />
+                <DetailField label="预计收款" value={order.expectedPaymentDate || "-"} />
                 <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
                 <DetailField label="实际发货金额" value={moneyText(order.currency, order.actualShipmentAmount, order.actualShipmentAmountCny)} />
+                <DetailField label="最终应收" value={moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)} />
+                <DetailField label="预付款要求" value={formatCny(order.summary?.requiredDepositAmount)} />
+                <DetailField label="已收预付款" value={formatCny(order.summary?.receivedDepositCny)} />
+                <DetailField label="预付款差额" value={formatCny(order.summary?.depositGapCny)} />
                 <DetailField label="币种 / 汇率" value={`${order.currency || "-"} / ${Number(order.exchangeRate || 0).toFixed(4)}`} />
+                <DetailField label="汇率来源" value={rateMeta(order)} />
+                <DetailField label="物流供应商" value={logisticsSupplierText(order.logisticsSuppliers)} wide />
                 <DetailField label="备注" value={order.remark || "-"} wide hidden={!order.remark} />
               </div>
             </div>
@@ -700,9 +848,7 @@ function moneyCell(currency = "CNY", amount: unknown, amountCny: unknown) {
 }
 
 function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
-  if (!order) {
-    return { ...emptyQuickOrderForm };
-  }
+  if (!order) return { ...emptyQuickOrderForm };
   const paymentTermType = order.paymentTermType || (String(order.paymentTerm || "").toUpperCase().includes("OA") ? "OA" : "COPY_BL");
   return {
     customerId: order.customerId || "",
@@ -712,15 +858,67 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     exchangeRate: order.exchangeRate == null ? "" : String(order.exchangeRate),
     estimatedReceivableAmount: order.estimatedReceivableAmount == null ? "" : String(order.estimatedReceivableAmount),
     finalReceivableAmount: order.finalReceivableAmount == null ? "" : String(order.finalReceivableAmount),
+    actualShipmentAmount: order.actualShipmentAmount == null || order.actualShipmentAmount === "" ? "" : String(order.actualShipmentAmount),
     tradeTerm: order.tradeTerm || "FOB",
     paymentTermType,
-    actualShipmentAmount: order.actualShipmentAmount == null || order.actualShipmentAmount === "" ? "" : String(order.actualShipmentAmount),
     expectedShipmentDate: order.expectedShipmentDate || "",
     blDate: order.blDate || "",
     expectedArrivalDate: order.expectedArrivalDate || "",
-    expectedPaymentDate: "",
+    expectedPaymentDate: order.expectedPaymentDate || "",
     dueDate: order.dueDate || "",
     creditDays: order.creditDays == null || order.creditDays === "" ? "30" : String(order.creditDays),
+    reminderDays: order.reminderDays == null || order.reminderDays === "" ? "7" : String(order.reminderDays),
+    status: order.status || "已确认",
+    logisticsSupplierIds: order.logisticsSupplierIds || [],
+    paymentInstallments: order.paymentInstallments?.length
+      ? order.paymentInstallments.map((row) => ({ ratio: String(row.ratio || ""), condition: row.condition || "" }))
+      : [{ ratio: "100", condition: "按约定付款" }],
     remark: order.remark || "",
   };
+}
+
+function derivedDueDate(form: QuickOrderForm) {
+  if (form.paymentTermType === "COPY_BL") return form.blDate || form.expectedShipmentDate || "";
+  if (form.paymentTermType === "AFTER_ARRIVAL") return addDaysText(form.expectedArrivalDate, Number(form.creditDays || 0));
+  if (form.paymentTermType === "OA") return addDaysText(new Date().toISOString().slice(0, 10), Number(form.creditDays || 0));
+  return form.dueDate;
+}
+
+function addDaysText(dateText: string, days: number) {
+  if (!dateText || !Number.isFinite(days)) return "";
+  const date = new Date(`${dateText}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + Math.round(days));
+  return date.toISOString().slice(0, 10);
+}
+
+function installmentTotal(rows: PaymentInstallment[]) {
+  return Math.round(rows.reduce((sum, row) => sum + Number(row.ratio || 0), 0) * 100) / 100;
+}
+
+function supplierName(supplier?: SupplierOption) {
+  return supplier?.supplierName || supplier?.name || "-";
+}
+
+function logisticsSupplierText(suppliers: SupplierOption[] = []) {
+  return suppliers.length ? suppliers.map((supplier) => `${supplierName(supplier)}${supplier.supplierType ? `（${supplier.supplierType}）` : ""}`).join("；") : "-";
+}
+
+function paymentTermText(order: OrderRow) {
+  const base = order.paymentTermDisplay || order.paymentTerm || "-";
+  return order.paymentInstallmentText ? `${base}：${order.paymentInstallmentText}` : base;
+}
+
+function rateMeta(order: OrderRow) {
+  const source = order.exchangeRateSource || "待获取";
+  const type = order.exchangeRateType || "-";
+  return `来源：${source} / 类型：${type}${order.exchangeRateDate ? ` / 日期：${order.exchangeRateDate}` : ""}`;
+}
+
+function orderStatusClass(status = "") {
+  if (["已收齐", "多收款"].includes(status)) return styles.statusSuccess;
+  if (["部分收款", "生产中", "已发货"].includes(status)) return styles.statusWarning;
+  if (["已取消"].includes(status)) return styles.statusMuted;
+  if (["已关闭"].includes(status)) return styles.statusDanger;
+  return "";
 }

@@ -6,7 +6,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request) {
   try {
     const actor = await getActor(request);
-    return ok({ orders: await listOrders(new URL(request.url).searchParams, actor) });
+    const query = new URL(request.url).searchParams;
+    const paginated = query.get("workspace") === "1" || query.has("page") || query.has("pageSize");
+    const result = await listOrders(query, actor, { paginated });
+    return paginated
+      ? ok({ success: true, data: result, orders: result.rows || [] })
+      : ok({ orders: result });
   } catch (error) {
     return apiError(error, "读取应收订单失败");
   }

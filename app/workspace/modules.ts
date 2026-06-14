@@ -20,8 +20,8 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     key: "orders",
     label: "应收订单",
     description: "创建、编辑和跟进订单应收信息。",
-    stage: "partial",
-    migrationNotes: ["支持列表、基础新建、基础编辑和软删除", "收款、成本、国内物流和退税资料在对应业务模块维护", "复杂历史字段继续按模块逐步补齐"],
+    stage: "ready",
+    migrationNotes: ["支持后端分页列表、新建、编辑、软删除和详情查看", "支持客户自动补全、订单复杂字段、付款条款、分批付款节点、汇率信息和默认物流供应商规则", "收款、成本、物流信息和退税资料继续在对应业务模块维护"],
   },
   payments: {
     key: "payments",
