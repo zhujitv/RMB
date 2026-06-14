@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
-import { formatDate } from "../formatters";
+import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission } from "../utils";
@@ -58,6 +58,7 @@ type TaxRefundRow = {
   taxArchived?: boolean;
   taxRefundArchivedByName?: string;
   taxRefundArchivedAt?: string | null;
+  taxRefundArchiveRemark?: string;
   taxSubmittedByName?: string;
   taxSubmittedAt?: string | null;
   documentCompleteness?: DocumentCompleteness;
@@ -397,14 +398,29 @@ export function TaxRefundModule({ currentUser, permissions }: { currentUser: Use
     const total = Number(completeness.total || 0);
     const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
     const missingLabels = normalizedMissingLabels(completeness);
+    let submitPayload: Record<string, unknown> = { status: "SUBMITTED" };
 
     if (total <= 0 || percent < 100) {
       const missingText = missingLabels.length ? `\n\n缺失资料：${missingLabels.join(" / ")}` : "";
-      window.alert(`资料尚未完整，无法提交退税。\n\n当前完整度：${completed}/${total || 0}（${percent}%）${missingText}\n\n请先补齐缺失资料后再提交。`);
-      return;
-    }
-
-    if (!window.confirm(`确认提交退税并归档该订单吗？\n\n订单：${row.orderNo || "-"}\n提单号：${row.blNo || "-"}\n\n归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`)) {
+      let allowForceSubmit = false;
+      if (currentUser.role === "管理员") {
+        const settingsResult = await apiJson<{ settings?: { allowAdminIncompleteTaxSubmit?: boolean } }>("/api/exchange-rates/settings").catch(() => null);
+        allowForceSubmit = settingsResult?.settings?.allowAdminIncompleteTaxSubmit === true;
+      }
+      if (!allowForceSubmit) {
+        window.alert(`资料尚未完整，无法提交退税。\n\n当前完整度：${completed}/${total || 0}（${percent}%）${missingText}\n\n请先补齐缺失资料后再提交。`);
+        return;
+      }
+      const forceReason = window.prompt(`资料尚未完整。\n\n当前完整度：${completed}/${total || 0}（${percent}%）${missingText}\n\n管理员强制提交必须填写原因：`, "");
+      if (!forceReason?.trim()) {
+        setError("强制提交退税必须填写原因");
+        return;
+      }
+      if (!window.confirm(`确认强制提交退税并归档该订单吗？\n\n订单：${row.orderNo || "-"}\n提单号：${row.blNo || "-"}\n\n归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`)) {
+        return;
+      }
+      submitPayload = { status: "SUBMITTED", forceSubmit: true, forceReason: forceReason.trim() };
+    } else if (!window.confirm(`确认提交退税并归档该订单吗？\n\n订单：${row.orderNo || "-"}\n提单号：${row.blNo || "-"}\n\n归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`)) {
       return;
     }
 
@@ -414,7 +430,7 @@ export function TaxRefundModule({ currentUser, permissions }: { currentUser: Use
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: "SUBMITTED" }),
+        body: JSON.stringify(submitPayload),
       });
       if (result.success !== true) throw new Error(result.message || "提交退税失败");
       if (detailOrderId === row.id) {
@@ -1055,10 +1071,30 @@ function TaxRefundDetailPanel({
   const groups = groupDocuments(detail.documents || []);
   const domesticRemark = detail.domesticLogisticsInfo?.exportInvoiceRemark || detail.domesticLogisticsInfo?.remarkText || "";
   const factoryCosts = factorySupplierCosts(detail.costs || []);
+  const showTaxArchiveRecord = Boolean(
+    detail.taxRefundStatus === "SUBMITTED"
+    || fallback.taxRefundStatus === "SUBMITTED"
+    || detail.taxArchived
+    || fallback.taxArchived,
+  );
 
   return (
     <div className={styles.taxDetailPanel} id={taxTargetDomId("tax-detail-top")}>
       <div className={styles.documentGroupGrid}>
+        {showTaxArchiveRecord ? (
+          <div className={styles.documentGroupCard}>
+            <strong>提交记录</strong>
+            <div className={styles.detailGrid}>
+              <DetailField label="提交人" value={detail.taxSubmittedByName || fallback.taxSubmittedByName || "-"} />
+              <DetailField label="提交时间" value={formatDateTime(detail.taxSubmittedAt || fallback.taxSubmittedAt)} />
+              <DetailField label="归档人" value={detail.taxRefundArchivedByName || fallback.taxRefundArchivedByName || "-"} />
+              <DetailField label="归档时间" value={formatDateTime(detail.taxRefundArchivedAt || fallback.taxRefundArchivedAt)} />
+              {(detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark) ? (
+                <DetailField label="备注" value={detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark || "-"} wide />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className={styles.documentGroupCard}>
           <strong>基础信息</strong>
           <div className={styles.detailGrid}>
@@ -1416,10 +1452,10 @@ function CustomsRecognitionForm({
     <div className={styles.customsFormCard}>
       <div className={styles.customsFormHeader}>
         <div>
-          <strong>报关单手工填写</strong>
+          <strong>报关单信息</strong>
           <span>请手工填写报关单关键信息。</span>
         </div>
-        <span className={styles.statusPill}>{detail.customsParseSourceLabel || detail.customsParseStatusLabel || "手工维护"}</span>
+        <span className={styles.statusPill}>手工维护</span>
       </div>
       <div className={styles.customsFormGrid}>
         <label>
