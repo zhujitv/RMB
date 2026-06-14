@@ -13,8 +13,8 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     key: "dashboard",
     label: "经营总览",
     description: "经营分析工具，按需进入后加载统计。",
-    stage: "partial",
-    migrationNotes: ["支持筛选区、核心指标卡、月份趋势和风险预警", "进入模块后才加载统计", "后续补充更丰富的图表交互"],
+    stage: "ready",
+    migrationNotes: ["支持筛选区、核心指标卡、12个月趋势、风险预警、利润分析和业务员绩效", "进入模块后才加载统计", "总览数据由后端统一聚合返回"],
   },
   orders: {
     key: "orders",

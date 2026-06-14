@@ -20,7 +20,7 @@ The new workspace keeps the legacy UI intact while modules move one by one.
 - React report query shell with full business filters, tabs, pagination, row selection, detail rows, and Excel/CSV on-demand export scopes
 - React settings shell with customer, supplier, user, custom-permission matrix, and exchange-rate edit, plus audit-log tabs loaded on demand
 - React operation manual page with search, table of contents, process cards, and expandable sections
-- React dashboard shell with month/search filters, core business metric cards, monthly trend, and risk reminders loaded on demand
+- React dashboard with month/search filters, core metric cards, 12-month trend, risk alerts, profit analysis, cost structure, and salesperson performance loaded on demand
 - Shared detail field, pagination, legacy action, and finance/date formatter helpers
 - Shared API client, menu registry, utility functions, and migration descriptors
 
