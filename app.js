@@ -8900,6 +8900,7 @@ async function submitRegister(event) {
     });
     assertSuccessResponse(result, "注册申请失败");
     $("#register-form")?.reset();
+    closeRegisterModal();
     toast(result.message || "注册申请已提交，请等待管理员审核");
   } catch (error) {
     reportFrontendError(error, "注册申请失败", form);
@@ -9685,6 +9686,22 @@ function closeLoginModal() {
   syncBodyModalOpen();
 }
 
+function openRegisterModal() {
+  const modal = $("#register-modal");
+  if (!modal) return;
+  setFormError($("#register-form"), "");
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#register-name")?.focus();
+}
+
+function closeRegisterModal() {
+  const modal = $("#register-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  syncBodyModalOpen();
+}
+
 function setMobileNav(open) {
   document.body.classList.toggle("nav-open", open);
   const toggle = $("#mobile-nav-toggle");
@@ -9729,6 +9746,7 @@ function bindAuthEvents() {
   bindOptional("#password-change-form", "submit", submitPasswordChange);
   bindOptional("#password-change-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   bindOptional("#show-login", "click", toggleAccountMenu);
+  bindOptional("#show-register", "click", openRegisterModal);
   bindOptional("#account-menu-logout", "click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $("#logout-button")?.addEventListener("click", () => logoutCurrentUser().catch((error) => reportFrontendError(error, "退出登录失败")));
   $$("[data-profile-open]").forEach((button) => {
@@ -9737,6 +9755,7 @@ function bindAuthEvents() {
     });
   });
   $$("[data-close-login]").forEach((el) => el.addEventListener("click", closeLoginModal));
+  $$("[data-close-register]").forEach((el) => el.addEventListener("click", closeRegisterModal));
   document.addEventListener("click", (event) => {
     if (!event.target.closest?.(".account-menu-wrap")) closeAccountMenu();
   });
@@ -9760,6 +9779,7 @@ function bindEvents() {
     if (event.key === "Escape" && !$("#customer-drawer")?.hidden) closeCustomerDrawer();
     if (event.key === "Escape" && !$("#supplier-drawer")?.hidden) closeSupplierDrawer();
     if (event.key === "Escape" && !$("#login-modal")?.hidden) closeLoginModal();
+    if (event.key === "Escape" && !$("#register-modal")?.hidden) closeRegisterModal();
     if (event.key === "Escape") closeAccountMenu();
     if (event.key === "Escape") closeMobileNav();
   });

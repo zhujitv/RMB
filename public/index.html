@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex,notranslate" />
     <title>NEXTWOOD 供应链协同平台</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260614-login-compact" />
   </head>
   <body>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -22,18 +22,25 @@
           <div class="form-error" id="login-screen-error" hidden></div>
           <button class="primary-button" type="submit">登录</button>
         </form>
-        <details class="register-box">
-          <summary>还没有账号？申请加入平台</summary>
-          <form class="login-screen-form" id="register-form" autocomplete="off" novalidate data-error-target="register-error">
+        <div class="register-box">
+          <button class="register-link" id="show-register" type="button">还没有账号？申请加入平台</button>
+        </div>
+      </div>
+      <div class="register-modal" id="register-modal" hidden>
+        <div class="register-backdrop" data-close-register></div>
+        <div class="register-dialog" role="dialog" aria-modal="true" aria-labelledby="register-title">
+          <button class="modal-close" data-close-register type="button" aria-label="关闭申请加入平台">×</button>
+          <h2 id="register-title">申请加入平台</h2>
+          <p>提交后需管理员审核通过方可登录。</p>
+          <form class="login-screen-form register-form" id="register-form" autocomplete="off" novalidate data-error-target="register-error">
             <label><span>姓名</span><input id="register-name" required /></label>
             <label><span>邮箱</span><input id="register-email" type="text" inputmode="email" autocomplete="email" required /></label>
             <label><span>密码</span><input id="register-password" type="password" autocomplete="new-password" minlength="8" required /></label>
             <label><span>确认密码</span><input id="register-confirm-password" type="password" autocomplete="new-password" minlength="8" required /></label>
             <div class="form-error" id="register-error" hidden></div>
             <button class="secondary-button" type="submit">提交审核</button>
-            <small>提交后需管理员审核通过方可登录。</small>
           </form>
-        </details>
+        </div>
       </div>
       <footer class="login-footer">© 浙江莱诺建材有限公司</footer>
     </section>
@@ -1219,6 +1226,6 @@
       </aside>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260614-login-compact"></script>
   </body>
 </html>
