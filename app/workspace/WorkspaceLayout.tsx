@@ -84,8 +84,8 @@ export function WorkspaceLayout({
       <div className={styles.mainColumn}>
         <header className={styles.topbar}>
           <div>
-            <span className={styles.kicker}>React + TypeScript Migration</span>
-            <h1>{activeMenu === "welcome" ? "工作台首页" : active?.label || "模块迁移"}</h1>
+            <span className={styles.kicker}>业务工作台</span>
+            <h1>{activeMenu === "welcome" ? "工作台首页" : active?.label || "功能模块"}</h1>
           </div>
           <div className={styles.accountArea}>
             <button className={styles.accountButton} type="button" onClick={() => setMenuOpen((open) => !open)}>

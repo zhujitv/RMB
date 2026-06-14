@@ -110,7 +110,7 @@ export function DashboardModule() {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
+          <span className={styles.kicker}>业务模块</span>
           <h2>经营总览</h2>
           <p>经营总览只在进入本模块后加载统计数据，不作为登录首页预加载。</p>
         </div>

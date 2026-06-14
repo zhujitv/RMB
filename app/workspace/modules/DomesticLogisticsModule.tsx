@@ -277,7 +277,7 @@ export function DomesticLogisticsModule({
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
+          <span className={styles.kicker}>业务模块</span>
           <h2>物流信息</h2>
         </div>
         <button

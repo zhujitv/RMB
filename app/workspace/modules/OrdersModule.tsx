@@ -211,7 +211,7 @@ export function OrdersModule() {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
+          <span className={styles.kicker}>业务模块</span>
           <h2>应收订单</h2>
         </div>
         <div className={styles.headerActions}>
@@ -518,7 +518,7 @@ function QuickCreateOrderPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialOrder?.id ? "编辑应收订单" : "快速新建应收订单"}</strong>
-          <span>基础订单信息已迁移；收款、成本、国内物流和退税资料请在对应模块维护。</span>
+          <span>基础订单信息在本页维护；收款、成本、国内物流和退税资料请在对应模块处理。</span>
         </div>
       </div>
 

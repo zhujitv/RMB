@@ -158,7 +158,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
+          <span className={styles.kicker}>业务模块</span>
           <h2>收款管理</h2>
         </div>
         <div className={styles.headerActions}>
@@ -208,7 +208,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       ) : null}
 
       <div className={styles.infoStrip}>
-        收款凭证上传将接入新的 R2 文件体系；旧附件地址和停用的 `/api/attachments` 不会在 React 工作台中恢复使用。
+        收款凭证上传将接入新的 R2 文件体系；旧附件地址和停用的 `/api/attachments` 不会在业务工作台中恢复使用。
       </div>
 
       <div className={styles.listToolbar}>

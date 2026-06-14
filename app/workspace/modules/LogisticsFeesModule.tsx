@@ -321,7 +321,7 @@ export function LogisticsFeesModule({
     <section className={embedded ? styles.subModuleCard : styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          {embedded ? null : <span className={styles.kicker}>React 迁移模块</span>}
+          {embedded ? null : <span className={styles.kicker}>业务模块</span>}
           <h2>物流费用录入</h2>
         </div>
         <div className={styles.headerActions}>

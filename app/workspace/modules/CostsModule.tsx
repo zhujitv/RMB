@@ -198,7 +198,7 @@ export function CostsModule() {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>React 迁移模块</span>
+          <span className={styles.kicker}>业务模块</span>
           <h2>成本管理</h2>
         </div>
         <div className={styles.headerActions}>
