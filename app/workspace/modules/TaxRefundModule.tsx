@@ -6,7 +6,8 @@ import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDate } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
-import type { User } from "../types";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 
 type DocumentCompleteness = {
   completed?: number;
@@ -188,7 +189,7 @@ const TAX_REFUND_STATUS_OPTIONS = [
   { value: "SUBMITTED", label: "已提交退税" },
 ];
 
-export function TaxRefundModule({ currentUser }: { currentUser: User }) {
+export function TaxRefundModule({ currentUser, permissions }: { currentUser: User; permissions?: PermissionSnapshot }) {
   const [mode, setMode] = useState<TaxRefundMode>("current");
   const [rows, setRows] = useState<TaxRefundRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -221,8 +222,9 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务", "成本录入员"]);
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
-  const canManageTaxRefund = ["管理员", "财务"].includes(currentUser.role);
+  const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
 
   async function loadRows(
@@ -755,6 +757,8 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
           onUpload={uploadDocument}
           onDelete={deleteDocument}
           onOpenManualShippingDocuments={openManualShippingDocuments}
+          currentUserRole={currentUser.role}
+          canWriteDocuments={canWriteDocuments}
         />
       ) : null}
       {manualShippingOrder ? (
@@ -936,6 +940,8 @@ function TaxRefundDetailDrawer({
   onUpload,
   onDelete,
   onOpenManualShippingDocuments,
+  currentUserRole,
+  canWriteDocuments,
 }: {
   row: TaxRefundRow;
   detail: TaxRefundDetail | null;
@@ -956,6 +962,8 @@ function TaxRefundDetailDrawer({
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
+  currentUserRole: string;
+  canWriteDocuments: boolean;
 }) {
   const displayCustomer = row.customerShortName && row.customerFullName
     ? `${row.customerShortName} / ${row.customerFullName}`
@@ -1000,6 +1008,8 @@ function TaxRefundDetailDrawer({
             onDelete={onDelete}
             canSendShippingDocuments={canSendShippingDocuments}
             onOpenManualShippingDocuments={onOpenManualShippingDocuments}
+            currentUserRole={currentUserRole}
+            canWriteDocuments={canWriteDocuments}
           />
         </div>
       </aside>
@@ -1020,6 +1030,8 @@ function TaxRefundDetailPanel({
   onDelete,
   canSendShippingDocuments,
   onOpenManualShippingDocuments,
+  currentUserRole,
+  canWriteDocuments,
 }: {
   detail: TaxRefundDetail | null;
   loading: boolean;
@@ -1033,6 +1045,8 @@ function TaxRefundDetailPanel({
   onDelete: (orderId: string, document: TaxDocument) => void;
   canSendShippingDocuments: boolean;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
+  currentUserRole: string;
+  canWriteDocuments: boolean;
 }) {
   if (loading) return <div className={styles.emptyState}>资料详情加载中...</div>;
   if (error) return <div className={styles.inlineError}>{error}</div>;
@@ -1084,7 +1098,8 @@ function TaxRefundDetailPanel({
               documents={(detail.documents || []).filter((document) => document.documentType === documentType.value && document.uploadStatus === "SUCCESS")}
               uploading={uploadingKey === `${detail.id}:${documentType.value}`}
               deletingDocumentId={deletingDocumentId}
-              readOnly={readOnly}
+              canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
+              canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
               onUpload={onUpload}
               onDelete={onDelete}
             />
@@ -1102,7 +1117,8 @@ function TaxRefundDetailPanel({
               documents={(detail.documents || []).filter((document) => document.documentType === documentType.value && document.uploadStatus === "SUCCESS")}
               uploading={uploadingKey === `${detail.id}:${documentType.value}`}
               deletingDocumentId={deletingDocumentId}
-              readOnly={readOnly}
+              canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
+              canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
               onUpload={onUpload}
               onDelete={onDelete}
             />
@@ -1118,6 +1134,8 @@ function TaxRefundDetailPanel({
               documents={detail.documents || []}
               uploadingKey={uploadingKey}
               deletingDocumentId={deletingDocumentId}
+              currentUserRole={currentUserRole}
+              canWriteDocuments={canWriteDocuments}
               readOnly={readOnly}
               onUpload={onUpload}
               onDelete={onDelete}
@@ -1134,6 +1152,8 @@ function TaxRefundDetailPanel({
               documents={detail.documents || []}
               uploadingKey={uploadingKey}
               deletingDocumentId={deletingDocumentId}
+              currentUserRole={currentUserRole}
+              canWriteDocuments={canWriteDocuments}
               readOnly={readOnly}
               onUpload={onUpload}
               onDelete={onDelete}
@@ -1280,7 +1300,8 @@ function TaxUploadItem({
   uploading,
   deletingDocumentId,
   scope,
-  readOnly,
+  canUpload,
+  canDelete,
   onUpload,
   onDelete,
 }: {
@@ -1292,7 +1313,8 @@ function TaxUploadItem({
   uploading: boolean;
   deletingDocumentId: string;
   scope?: UploadScope;
-  readOnly?: boolean;
+  canUpload: boolean;
+  canDelete: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
@@ -1308,11 +1330,7 @@ function TaxUploadItem({
         ))}
       </div>
       <div>
-        {readOnly ? (
-          <button className={styles.secondaryButton} type="button" disabled title="无权限操作">
-            无权限操作
-          </button>
-        ) : (
+        {canUpload ? (
           <label className={styles.secondaryButton}>
             {uploading ? "上传中..." : "选择PDF"}
             <input
@@ -1326,12 +1344,16 @@ function TaxUploadItem({
               }}
             />
           </label>
+        ) : (
+          <button className={styles.secondaryButton} type="button" disabled title="无权限操作">
+            无权限操作
+          </button>
         )}
         {documents.map((document) => (
           <span key={document.id} className={styles.fileListItemActions}>
             <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
             <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-            {readOnly ? null : (
+            {canDelete ? (
               <button
                 className={styles.secondaryButton}
                 type="button"
@@ -1340,7 +1362,7 @@ function TaxUploadItem({
               >
                 {deletingDocumentId === document.id ? "删除中..." : "删除"}
               </button>
-            )}
+            ) : null}
           </span>
         ))}
       </div>
@@ -1437,6 +1459,8 @@ function FactoryCostUploadGroup({
   documents,
   uploadingKey,
   deletingDocumentId,
+  currentUserRole,
+  canWriteDocuments,
   readOnly,
   onUpload,
   onDelete,
@@ -1446,6 +1470,8 @@ function FactoryCostUploadGroup({
   documents: TaxDocument[];
   uploadingKey: string;
   deletingDocumentId: string;
+  currentUserRole: string;
+  canWriteDocuments: boolean;
   readOnly: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
@@ -1471,7 +1497,8 @@ function FactoryCostUploadGroup({
           uploading={uploadingKey === uploadScopeKey(orderId, documentType.value, scope)}
           deletingDocumentId={deletingDocumentId}
           scope={scope}
-          readOnly={readOnly}
+          canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
+          canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
           onUpload={onUpload}
           onDelete={onDelete}
         />
@@ -1486,6 +1513,8 @@ function LogisticsInvoiceUploadItem({
   documents,
   uploadingKey,
   deletingDocumentId,
+  currentUserRole,
+  canWriteDocuments,
   readOnly,
   onUpload,
   onDelete,
@@ -1495,6 +1524,8 @@ function LogisticsInvoiceUploadItem({
   documents: TaxDocument[];
   uploadingKey: string;
   deletingDocumentId: string;
+  currentUserRole: string;
+  canWriteDocuments: boolean;
   readOnly: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
@@ -1515,7 +1546,8 @@ function LogisticsInvoiceUploadItem({
       uploading={uploadingKey === uploadScopeKey(orderId, "SUPPLIER_INVOICE", scope)}
       deletingDocumentId={deletingDocumentId}
       scope={scope}
-      readOnly={readOnly}
+      canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, "SUPPLIER_INVOICE", readOnly)}
+      canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
       onUpload={onUpload}
       onDelete={onDelete}
     />
@@ -1609,6 +1641,20 @@ function logisticsInvoiceLabel(cost: TaxCost) {
   if (cost.costType === "港杂费") return "港杂费发票";
   if (cost.costType === "海运费") return "海运费发票";
   return "物流发票";
+}
+
+function canUploadTaxDocument(role: string, canWriteDocuments: boolean, documentType: string, readOnly?: boolean) {
+  if (readOnly || !canWriteDocuments) return false;
+  if (documentType === "EXPORT_INVOICE") return ["管理员", "财务"].includes(role);
+  if (TAX_CUSTOMS_UPLOAD_TYPES.some((type) => type.value === documentType)) {
+    return ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(role);
+  }
+  if (TAX_EXPORT_UPLOAD_TYPES.some((type) => type.value === documentType)) return ["管理员", "业务员"].includes(role);
+  return true;
+}
+
+function canDeleteTaxDocument(canWriteDocuments: boolean, readOnly?: boolean) {
+  return !readOnly && canWriteDocuments;
 }
 
 function uploadScopeKey(orderId: string, documentType: string, scope: UploadScope = {}) {

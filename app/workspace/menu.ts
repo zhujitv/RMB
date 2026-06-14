@@ -24,6 +24,9 @@ export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
 };
 
 export function availableMenus(user: User, permissions?: PermissionSnapshot) {
+  if (user.role === "管理员") {
+    return MENU_ITEMS.filter((item) => ROLE_MENU_FALLBACK["管理员"].includes(item.key));
+  }
   const allowed = permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[user.role] || ["manual"];
   return MENU_ITEMS.filter((item) => allowed.includes(item.key));
 }

@@ -7,7 +7,8 @@ import { DetailField, PaginationBar } from "../components";
 import { formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
-import type { User } from "../types";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 
 type TransportItem = {
   id?: string;
@@ -115,8 +116,10 @@ function emptyTransportItem(): TransportItem {
 
 export function DomesticLogisticsModule({
   currentUser,
+  permissions,
 }: {
   currentUser: User;
+  permissions?: PermissionSnapshot;
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -132,11 +135,12 @@ export function DomesticLogisticsModule({
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
-  const canDeleteDomesticLogistics = currentUser.role === "管理员";
-  const canEditDomesticLogistics = ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
-  const canUploadCustomsDocuments = ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(currentUser.role);
-  const canDeleteCustomsDocuments = currentUser.role === "管理员";
-  const canCreateLogisticsExpense = ["管理员", "物流供应商"].includes(currentUser.role);
+  const canDeleteDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
+  const canEditDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
+  const canUploadCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员"])
+    && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
+  const canDeleteCustomsDocuments = false;
+  const canCreateLogisticsExpense = canWritePermission(currentUser, permissions, "logistics", ["管理员", "物流供应商"]);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -388,6 +392,7 @@ export function DomesticLogisticsModule({
       refreshToken={expenseRefreshToken}
       currentUserRole={currentUser.role}
       currentUserSupplierId={currentUser.supplierId || ""}
+      canCreateExpense={canCreateLogisticsExpense}
     />
     </>
   );

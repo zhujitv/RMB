@@ -150,11 +150,13 @@ export function LogisticsFeesModule({
   refreshToken = 0,
   currentUserRole = "",
   currentUserSupplierId = "",
+  canCreateExpense: canCreateExpenseProp,
 }: {
   embedded?: boolean;
   refreshToken?: number;
   currentUserRole?: string;
   currentUserSupplierId?: string;
+  canCreateExpense?: boolean;
 }) {
   const [rows, setRows] = useState<LogisticsExpense[]>([]);
   const [total, setTotal] = useState(0);
@@ -172,7 +174,7 @@ export function LogisticsFeesModule({
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
-  const canCreateExpense = ["管理员", "物流供应商"].includes(currentUserRole);
+  const canCreateExpense = canCreateExpenseProp ?? ["管理员", "物流供应商"].includes(currentUserRole);
   const canReviewExpense = currentUserRole === "管理员";
   const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
   const isLogisticsSupplier = currentUserRole === "物流供应商";

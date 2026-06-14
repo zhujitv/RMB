@@ -250,11 +250,11 @@ export function WorkspaceShell() {
       ) : activeMenu === "costs" ? (
         <CostsModule />
       ) : activeMenu === "domesticLogistics" ? (
-        <DomesticLogisticsModule currentUser={payload.user} />
+        <DomesticLogisticsModule currentUser={payload.user} permissions={payload.permissions} />
       ) : activeMenu === "profit" ? (
         <ProfitModule />
       ) : activeMenu === "taxRefund" ? (
-        <TaxRefundModule currentUser={payload.user} />
+        <TaxRefundModule currentUser={payload.user} permissions={payload.permissions} />
       ) : activeMenu === "reports" ? (
         <ReportsModule />
       ) : activeMenu === "settings" ? (

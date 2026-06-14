@@ -12,6 +12,10 @@ export type User = {
 
 export type PermissionSnapshot = {
   menus?: string[];
+  writeKeys?: string[];
+  writes?: Record<string, boolean>;
+  readKeys?: string[];
+  reads?: Record<string, boolean>;
   scopeText?: string;
   mode?: string;
 };
