@@ -169,6 +169,7 @@ export function LogisticsFeesModule({
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
   const canCreateExpense = ["管理员", "物流供应商"].includes(currentUserRole);
@@ -215,6 +216,7 @@ export function LogisticsFeesModule({
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setExpandedId("");
+    setNotice("");
     void loadExpenses(1, value, status, costType);
   }
 
@@ -224,12 +226,14 @@ export function LogisticsFeesModule({
     setStatus("");
     setCostType("");
     setExpandedId("");
+    setNotice("");
     void loadExpenses(1, "", "", "");
   }
 
   async function patchExpense(expense: LogisticsExpense, body: Record<string, unknown>, fallback: string) {
     setBusyId(expense.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
         method: "PATCH",
@@ -237,6 +241,7 @@ export function LogisticsFeesModule({
       });
       if (result.success !== true) throw new Error(result.message || fallback);
       await loadExpenses(page, submittedKeyword, status, costType);
+      setNotice(result.message || logisticsActionSuccessMessage(body.action));
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : fallback);
     } finally {
@@ -248,6 +253,7 @@ export function LogisticsFeesModule({
     if (!window.confirm(`确认撤回该物流费用？\n\n订单：${expense.orderNo || "-"}\n费用：${expense.costType || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`)) return;
     setBusyId(expense.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
         method: "DELETE",
@@ -255,6 +261,7 @@ export function LogisticsFeesModule({
       if (result.success !== true) throw new Error(result.message || "撤回物流费用失败");
       setExpandedId("");
       await loadExpenses(page, submittedKeyword, status, costType);
+      setNotice(result.message || "物流费用已撤回");
     } catch (withdrawError) {
       setError(withdrawError instanceof Error ? withdrawError.message : "撤回物流费用失败");
     } finally {
@@ -265,6 +272,7 @@ export function LogisticsFeesModule({
   async function loadStatement(month = statementMonth) {
     setStatementLoading(true);
     setError("");
+    setNotice("");
     try {
       const params = new URLSearchParams();
       if (month) params.set("month", month);
@@ -296,6 +304,7 @@ export function LogisticsFeesModule({
     link.download = `物流费用月结_${statementMonth || "全部"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    setNotice("物流费用月结对账单已开始导出");
   }
 
   const statementTotals = statementRows.reduce((acc, row) => {
@@ -315,11 +324,26 @@ export function LogisticsFeesModule({
         </div>
         <div className={styles.headerActions}>
           {canCreateExpense ? (
-            <button className={styles.primaryButtonCompact} type="button" onClick={() => setCreateOpen((open) => !open)}>
+            <button
+              className={styles.primaryButtonCompact}
+              type="button"
+              onClick={() => {
+                setNotice("");
+                setCreateOpen((open) => !open);
+              }}
+            >
               {createOpen ? "收起登记" : "新增物流费用"}
             </button>
           ) : null}
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadExpenses(page)}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setNotice("");
+              void loadExpenses(page);
+            }}
+          >
             {loading ? "刷新中..." : "刷新"}
           </button>
         </div>
@@ -330,9 +354,10 @@ export function LogisticsFeesModule({
           currentUserRole={currentUserRole}
           currentUserSupplierId={currentUserSupplierId}
           onCancel={() => setCreateOpen(false)}
-          onSaved={() => {
+          onSaved={(message) => {
             setCreateOpen(false);
             setExpandedId("");
+            setNotice(message || "物流费用已保存");
             void loadExpenses(1, submittedKeyword, status, costType);
           }}
         />
@@ -390,10 +415,10 @@ export function LogisticsFeesModule({
           }}
           placeholder="搜索订单号 / 提单号 / 客户 / 供应商"
         />
-        <select value={status} onChange={(event) => { setStatus(event.target.value); void loadExpenses(1, submittedKeyword, event.target.value, costType); }}>
+        <select value={status} onChange={(event) => { setStatus(event.target.value); setNotice(""); void loadExpenses(1, submittedKeyword, event.target.value, costType); }}>
           {AUDIT_FILTERS.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
         </select>
-        <select value={costType} onChange={(event) => { setCostType(event.target.value); void loadExpenses(1, submittedKeyword, status, event.target.value); }}>
+        <select value={costType} onChange={(event) => { setCostType(event.target.value); setNotice(""); void loadExpenses(1, submittedKeyword, status, event.target.value); }}>
           <option value="">全部费用类型</option>
           {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
         </select>
@@ -402,6 +427,7 @@ export function LogisticsFeesModule({
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -447,7 +473,10 @@ export function LogisticsFeesModule({
                   }
                   void patchExpense(expense, body, "确认物流发票失败");
                 }}
-                onInvoiceUploaded={() => void loadExpenses(page, submittedKeyword, status, costType)}
+                onInvoiceUploaded={() => {
+                  setNotice("物流发票已上传");
+                  void loadExpenses(page, submittedKeyword, status, costType);
+                }}
               />
             )) : (
               <tr><td colSpan={9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
@@ -458,6 +487,7 @@ export function LogisticsFeesModule({
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={(nextPage) => {
         setExpandedId("");
+        setNotice("");
         void loadExpenses(nextPage, submittedKeyword, status, costType);
       }} />
     </section>
@@ -583,7 +613,7 @@ export function LogisticsExpenseForm({
   currentUserSupplierId = "",
 }: {
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (message?: string) => void;
   initialOrder?: Partial<ExpenseOrderOption> | null;
   currentUserRole?: string;
   currentUserSupplierId?: string;
@@ -745,7 +775,7 @@ export function LogisticsExpenseForm({
       });
       if (result.success !== true) throw new Error(result.message || "保存物流费用失败");
       setForm({ ...emptyExpenseForm, items: [emptyExpenseItem()] });
-      onSaved();
+      onSaved(result.message || (auditStatus === "草稿" ? "物流费用草稿已保存" : "物流费用已提交审核"));
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "保存物流费用失败");
     } finally {
@@ -987,6 +1017,14 @@ function supplierLabel(supplier: SupplierOption) {
 
 function filterLogisticsFeeSuppliers(suppliers: SupplierOption[]) {
   return suppliers.filter((supplier) => LOGISTICS_FEE_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
+}
+
+function logisticsActionSuccessMessage(action: unknown) {
+  if (action === "approve") return "物流费用已审核通过";
+  if (action === "reject") return "物流费用已驳回";
+  if (action === "paymentStatus") return "物流费用付款状态已更新";
+  if (action === "confirmInvoice") return "物流发票已确认";
+  return "物流费用已更新";
 }
 
 function csvCell(value: string) {

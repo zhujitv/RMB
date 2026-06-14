@@ -246,7 +246,7 @@ export function WorkspaceShell() {
       ) : activeMenu === "dashboard" ? (
         <DashboardModule />
       ) : activeMenu === "payments" ? (
-        <PaymentsModule />
+        <PaymentsModule currentUser={payload.user} />
       ) : activeMenu === "costs" ? (
         <CostsModule />
       ) : activeMenu === "domesticLogistics" ? (

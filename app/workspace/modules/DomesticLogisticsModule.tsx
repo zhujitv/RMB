@@ -126,6 +126,7 @@ export function DomesticLogisticsModule({
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
@@ -168,6 +169,8 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
+    setFeeEntryOrderId("");
+    setNotice("");
     void loadRows(value, businessScope);
   }
 
@@ -178,6 +181,8 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
+    setFeeEntryOrderId("");
+    setNotice("");
     void loadRows("", "current");
   }
 
@@ -186,6 +191,8 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
+    setFeeEntryOrderId("");
+    setNotice("");
     void loadRows(submittedKeyword, nextBusinessScope);
   }
 
@@ -193,6 +200,7 @@ export function DomesticLogisticsModule({
     if (!file) return;
     setUploadingKey(`${orderId}:${documentType}`);
     setError("");
+    setNotice("");
     try {
       if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
         throw new Error("只能上传 PDF 文件");
@@ -212,6 +220,7 @@ export function DomesticLogisticsModule({
         throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
       }
       await loadRows(submittedKeyword, businessScope);
+      setNotice("报关资料已上传");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -223,12 +232,14 @@ export function DomesticLogisticsModule({
     if (!window.confirm(`确认删除文件？\n\n${document.fileName || document.documentTypeLabel || "-"}`)) return;
     setDeletingDocumentId(document.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除文件失败");
       await loadRows(submittedKeyword, businessScope);
+      setNotice(result.message || "报关资料已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
     } finally {
@@ -241,6 +252,7 @@ export function DomesticLogisticsModule({
     if (!id) return;
     if (!window.confirm(`确认删除该国内物流信息？\n\n订单：${row.orderNo || "-"}`)) return;
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/domestic-logistics/${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -248,7 +260,9 @@ export function DomesticLogisticsModule({
       if (result.success !== true) throw new Error(result.message || "删除国内物流信息失败");
       setExpandedId("");
       setEditingOrderId("");
+      setFeeEntryOrderId("");
       await loadRows(submittedKeyword, businessScope);
+      setNotice(result.message || "国内物流信息已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除国内物流信息失败");
     }
@@ -262,7 +276,15 @@ export function DomesticLogisticsModule({
           <span className={styles.kicker}>React 迁移模块</span>
           <h2>物流信息</h2>
         </div>
-        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadRows()}>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setNotice("");
+            void loadRows();
+          }}
+        >
           {loading ? "刷新中..." : "刷新"}
         </button>
       </div>
@@ -284,6 +306,7 @@ export function DomesticLogisticsModule({
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -335,6 +358,7 @@ export function DomesticLogisticsModule({
                 }}
                 onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 onSaved={() => {
+                  setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "国内物流信息已保存");
                   setEditingOrderId("");
                   setFeeEntryOrderId("");
                   setExpenseRefreshToken((current) => current + 1);
@@ -457,7 +481,7 @@ function DomesticLogisticsRows({
                   currentUserRole={currentUserRole}
                   currentUserSupplierId={currentUserSupplierId}
                   onCancel={onCloseFeeEntry}
-                  onSaved={onCloseFeeEntry}
+                  onSaved={onSaved}
                 />
               ) : null}
               <div className={styles.detailGrid}>

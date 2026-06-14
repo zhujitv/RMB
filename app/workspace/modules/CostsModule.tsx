@@ -140,6 +140,7 @@ export function CostsModule() {
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editCost, setEditCost] = useState<CostRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
@@ -176,6 +177,7 @@ export function CostsModule() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setExpandedId("");
+    setNotice("");
     void loadCosts(1, value);
   }
 
@@ -183,6 +185,7 @@ export function CostsModule() {
     setKeyword("");
     setSubmittedKeyword("");
     setExpandedId("");
+    setNotice("");
     void loadCosts(1, "");
   }
 
@@ -209,7 +212,15 @@ export function CostsModule() {
           >
             {createOpen ? "收起登记" : "登记成本"}
           </button>
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadCosts(page)}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setNotice("");
+              void loadCosts(page);
+            }}
+          >
             {loading ? "刷新中..." : "刷新"}
           </button>
         </div>
@@ -226,6 +237,7 @@ export function CostsModule() {
             setCreateOpen(false);
             setEditCost(null);
             setExpandedId("");
+            setNotice(editCost ? "成本已更新" : "成本已保存");
             void loadCosts(1, submittedKeyword);
           }}
         />
@@ -245,6 +257,7 @@ export function CostsModule() {
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -296,6 +309,7 @@ export function CostsModule() {
     if (!window.confirm(`确认删除这条成本？\n\n订单：${cost.orderNo || "-"}\n成本：${cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`)) return;
     setDeletingId(cost.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; ok?: boolean; message?: string }>(`/api/costs/${encodeURIComponent(cost.id)}`, {
         method: "DELETE",
@@ -303,6 +317,7 @@ export function CostsModule() {
       if (result.success !== true && result.ok !== true) throw new Error(result.message || "删除成本失败");
       setExpandedId("");
       await loadCosts(page, submittedKeyword);
+      setNotice(result.message || "成本已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除成本失败");
     } finally {

@@ -219,6 +219,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   const [manualShippingMessage, setManualShippingMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = ["管理员", "财务"].includes(currentUser.role);
@@ -289,6 +290,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDeclarationStartMonth("");
     setDeclarationEndMonth("");
     setStatusFilter("");
+    setNotice("");
     void loadRows(1, "", nextMode, "", "", "");
   }
 
@@ -299,6 +301,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
+    setNotice("");
     void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
@@ -312,6 +315,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
+    setNotice("");
     void loadRows(1, "", mode, "", "", "");
   }
 
@@ -320,6 +324,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
+    setNotice("");
     void loadRows(nextPage, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
@@ -358,6 +363,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
   async function downloadPackage(row: TaxRefundRow) {
     setPackageDownloadingId(row.id);
     setError("");
+    setNotice("");
     try {
       const response = await fetch(`/api/tax-refunds/package?orderId=${encodeURIComponent(row.id)}`, {
         credentials: "include",
@@ -375,6 +381,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      setNotice("退税资料包已开始下载");
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载退税资料包失败");
     } finally {
@@ -401,19 +408,20 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
 
     setSubmittingTaxId(row.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "SUBMITTED" }),
       });
       if (result.success !== true) throw new Error(result.message || "提交退税失败");
-      window.alert(result.message || "退税资料已提交并归档");
       if (detailOrderId === row.id) {
         setDetailOrderId("");
         setDetailRow(null);
         setDetail(null);
       }
       await loadRows(page, submittedKeyword, mode);
+      setNotice(result.message || "退税资料已提交并归档");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "提交退税失败");
     } finally {
@@ -427,6 +435,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       return;
     }
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
@@ -435,6 +444,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       if (result.success !== true) throw new Error(result.message || "退税状态更新失败");
       await loadRows(page, submittedKeyword, mode);
       if (detailOrderId === row.id) await fetchDetail(row.id);
+      setNotice(result.message || "退税状态已更新");
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : "退税状态更新失败");
       await loadRows(page, submittedKeyword, mode);
@@ -447,19 +457,20 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     }
     setCancelingArchiveId(row.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         body: JSON.stringify({ cancelArchive: true, status: "NOT_READY" }),
       });
       if (result.success !== true) throw new Error(result.message || "取消归档失败");
-      window.alert(result.message || "退税资料已取消归档");
       if (detailOrderId === row.id) {
         setDetailOrderId("");
         setDetailRow(null);
         setDetail(null);
       }
       await loadRows(page, submittedKeyword, mode);
+      setNotice(result.message || "退税资料已取消归档");
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : "取消归档失败");
     } finally {
@@ -473,6 +484,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setUploadingKey(uploadKey);
     setDetailError("");
     setError("");
+    setNotice("");
     try {
       if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
         throw new Error("只能上传 PDF 文件");
@@ -495,6 +507,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       }
       await fetchDetail(orderId);
       await loadRows(page, submittedKeyword, mode);
+      setNotice("资料文件已上传");
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -507,6 +520,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
     setDeletingDocumentId(document.id);
     setDetailError("");
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
         method: "DELETE",
@@ -514,6 +528,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       if (result.success !== true) throw new Error(result.message || "删除文件失败");
       await fetchDetail(orderId);
       await loadRows(page, submittedKeyword, mode);
+      setNotice(result.message || "资料文件已删除");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
     } finally {
@@ -586,10 +601,10 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
         }),
       });
       if (result.success !== true) throw new Error(result.message || "手动发送清关资料失败");
-      window.alert(result.message || "清关资料发送成功");
       await fetchDetail(manualShippingOrder.id);
       await loadRows(page, submittedKeyword, mode);
       closeManualShippingDocuments();
+      setNotice(result.message || "清关资料发送成功");
     } catch (sendError) {
       setManualShippingMessage(sendError instanceof Error ? sendError.message : "手动发送清关资料失败");
     } finally {
@@ -604,7 +619,15 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
           <span className={styles.kicker}>React 迁移模块</span>
           <h2>退税资料</h2>
         </div>
-        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadRows(page)}>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setNotice("");
+            void loadRows(page);
+          }}
+        >
           {loading ? "刷新中..." : "刷新"}
         </button>
       </div>
@@ -656,6 +679,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -726,6 +750,7 @@ export function TaxRefundModule({ currentUser }: { currentUser: User }) {
           onCustomsSaved={async (orderId) => {
             await fetchDetail(orderId);
             await loadRows(page, submittedKeyword, mode);
+            setNotice("报关单信息已保存");
           }}
           onUpload={uploadDocument}
           onDelete={deleteDocument}

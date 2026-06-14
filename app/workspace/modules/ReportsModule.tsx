@@ -105,6 +105,7 @@ export function ReportsModule() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const visibleColumns = useMemo(() => columns.slice(0, 5), [columns]);
   const allPageSelected = rows.length > 0 && rows.every((row) => row.id && selectedIds.has(String(row.id)));
@@ -120,6 +121,7 @@ export function ReportsModule() {
   async function queryRows(nextPage = 1, nextFilters = submittedFilters) {
     setLoading(true);
     setError("");
+    setNotice("");
     try {
       const params = new URLSearchParams({ page: String(nextPage), pageSize: String(PAGE_SIZE) });
       Object.entries(nextFilters).forEach(([key, value]) => {
@@ -133,6 +135,7 @@ export function ReportsModule() {
       setTotalPages(Math.max(1, Number(result.pagination?.totalPages || 1)));
       setQueried(true);
       setExpandedId("");
+      setNotice(`报表查询完成，共 ${Number(result.pagination?.total || 0)} 条`);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "查询报表失败");
     } finally {
@@ -162,6 +165,7 @@ export function ReportsModule() {
     setSelectedIds(new Set());
     setExpandedId("");
     setError("");
+    setNotice("");
   }
 
   function togglePageSelection() {
@@ -198,6 +202,7 @@ export function ReportsModule() {
     }
     setDownloading(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/reports/export", {
         method: "POST",
@@ -226,6 +231,7 @@ export function ReportsModule() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      setNotice("报表已开始下载");
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载报表失败");
     } finally {
@@ -322,6 +328,7 @@ export function ReportsModule() {
       ) : null}
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>

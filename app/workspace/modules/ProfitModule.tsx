@@ -60,6 +60,7 @@ export function ProfitModule() {
   const [settlingId, setSettlingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -91,6 +92,7 @@ export function ProfitModule() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setExpandedId("");
+    setNotice("");
     void loadRows(1, value);
   }
 
@@ -98,11 +100,13 @@ export function ProfitModule() {
     setKeyword("");
     setSubmittedKeyword("");
     setExpandedId("");
+    setNotice("");
     void loadRows(1, "");
   }
 
   function gotoPage(nextPage: number) {
     setExpandedId("");
+    setNotice("");
     void loadRows(nextPage, submittedKeyword);
   }
 
@@ -121,6 +125,7 @@ export function ProfitModule() {
     if (!window.confirm(message)) return;
     setSettlingId(row.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(
         `/api/commissions/${encodeURIComponent(row.id)}/settle`,
@@ -132,6 +137,7 @@ export function ProfitModule() {
       if (result.success !== true) throw new Error(result.message || "结算业务员提成失败");
       await loadRows(page, submittedKeyword);
       setExpandedId(row.id);
+      setNotice(result.message || "业务员提成已结算");
     } catch (settleError) {
       setError(settleError instanceof Error ? settleError.message : "结算业务员提成失败");
     } finally {
@@ -146,7 +152,15 @@ export function ProfitModule() {
           <span className={styles.kicker}>React 迁移模块</span>
           <h2>利润分析</h2>
         </div>
-        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadRows(page)}>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setNotice("");
+            void loadRows(page);
+          }}
+        >
           {loading ? "刷新中..." : "刷新"}
         </button>
       </div>
@@ -165,6 +179,7 @@ export function ProfitModule() {
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>

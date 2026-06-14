@@ -7,6 +7,7 @@ import { DetailField, PaginationBar } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
+import type { User } from "../types";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
 const PAYMENT_TYPES = ["预付款", "尾款", "补差款", "其他"];
@@ -96,7 +97,7 @@ const emptyQuickPaymentForm: QuickPaymentForm = {
   remark: "",
 };
 
-export function PaymentsModule() {
+export function PaymentsModule({ currentUser }: { currentUser: User }) {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
@@ -104,9 +105,12 @@ export function PaymentsModule() {
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editPayment, setEditPayment] = useState<PaymentRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
+  const [confirmingId, setConfirmingId] = useState("");
+  const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
 
   async function loadPayments(nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -136,6 +140,7 @@ export function PaymentsModule() {
   function submitSearch() {
     setPage(1);
     setExpandedId("");
+    setNotice("");
     setSubmittedKeyword(keyword.trim());
     void loadPayments(keyword.trim());
   }
@@ -145,6 +150,7 @@ export function PaymentsModule() {
     setSubmittedKeyword("");
     setPage(1);
     setExpandedId("");
+    setNotice("");
     void loadPayments("");
   }
 
@@ -156,25 +162,36 @@ export function PaymentsModule() {
           <h2>收款管理</h2>
         </div>
         <div className={styles.headerActions}>
+          {canManagePayments ? (
+            <button
+              className={styles.primaryButtonCompact}
+              type="button"
+              onClick={() => {
+                setEditPayment(null);
+                setCreateOpen((current) => !current);
+              }}
+            >
+              {createOpen ? "收起登记" : "登记收款"}
+            </button>
+          ) : null}
           <button
-            className={styles.primaryButtonCompact}
+            className={styles.secondaryButton}
             type="button"
+            disabled={loading}
             onClick={() => {
-              setEditPayment(null);
-              setCreateOpen((current) => !current);
+              setNotice("");
+              void loadPayments();
             }}
           >
-            {createOpen ? "收起登记" : "登记收款"}
-          </button>
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadPayments()}>
             {loading ? "刷新中..." : "刷新"}
           </button>
         </div>
       </div>
 
-      {createOpen || editPayment ? (
+      {canManagePayments && (createOpen || editPayment) ? (
         <QuickCreatePaymentPanel
           initialPayment={editPayment}
+          canConfirmArrived={canManagePayments}
           onCancel={() => {
             setCreateOpen(false);
             setEditPayment(null);
@@ -184,6 +201,7 @@ export function PaymentsModule() {
             setEditPayment(null);
             setPage(1);
             setExpandedId("");
+            setNotice(editPayment ? "收款已更新" : "收款已保存");
             void loadPayments(submittedKeyword);
           }}
         />
@@ -207,6 +225,7 @@ export function PaymentsModule() {
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -238,6 +257,9 @@ export function PaymentsModule() {
                   setExpandedId(payment.id);
                 }}
                 onDelete={() => void deletePayment(payment)}
+                onConfirmArrived={() => void confirmPaymentArrived(payment)}
+                canManage={canManagePayments}
+                confirming={confirmingId === payment.id}
               />
             )) : (
               <tr>
@@ -256,6 +278,7 @@ export function PaymentsModule() {
     if (!window.confirm(`确认删除这笔收款？\n\n订单：${payment.orderNo || "-"}\n金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`)) return;
     setDeletingId(payment.id);
     setError("");
+    setNotice("");
     try {
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/payments/${encodeURIComponent(payment.id)}`, {
         method: "DELETE",
@@ -263,20 +286,63 @@ export function PaymentsModule() {
       if (result.success !== true) throw new Error(result.message || "删除收款失败");
       setExpandedId("");
       await loadPayments(submittedKeyword);
+      setNotice(result.message || "收款已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除收款失败");
     } finally {
       setDeletingId("");
     }
   }
+
+  async function confirmPaymentArrived(payment: PaymentRow) {
+    const confirmed = window.confirm(
+      [
+        "确认该笔收款已经到账？",
+        "",
+        `订单：${payment.orderNo || "-"}`,
+        `客户：${payment.customerShortName || payment.customerName || "-"}`,
+        `金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`,
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+    setConfirmingId(payment.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/payments/${encodeURIComponent(payment.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          orderId: payment.orderId,
+          paymentDate: payment.paymentDate,
+          paymentType: payment.paymentType,
+          amount: Number(payment.amount || 0),
+          currency: payment.currency,
+          exchangeRate: Number(payment.exchangeRate || 0),
+          status: "已到账",
+          bankReference: payment.bankReference || "",
+          remark: payment.remark || "",
+        }),
+      });
+      if (result.success !== true) throw new Error(result.message || "确认到账失败");
+      setExpandedId("");
+      await loadPayments(submittedKeyword);
+      setNotice(result.message || "收款已确认到账");
+    } catch (confirmError) {
+      setError(confirmError instanceof Error ? confirmError.message : "确认到账失败");
+    } finally {
+      setConfirmingId("");
+    }
+  }
 }
 
 function QuickCreatePaymentPanel({
   initialPayment,
+  canConfirmArrived,
   onCancel,
   onSaved,
 }: {
   initialPayment?: PaymentRow | null;
+  canConfirmArrived: boolean;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -474,7 +540,7 @@ function QuickCreatePaymentPanel({
         <label>
           收款状态
           <select value={form.status} onChange={(event) => setFormValue("status", event.target.value)}>
-            {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            {paymentStatusOptions(canConfirmArrived).map((status) => <option key={status} value={status}>{status}</option>)}
           </select>
         </label>
         <label>
@@ -507,6 +573,9 @@ function PaymentTableRows({
   onToggle,
   onEdit,
   onDelete,
+  onConfirmArrived,
+  canManage,
+  confirming,
 }: {
   payment: PaymentRow;
   expanded: boolean;
@@ -514,6 +583,9 @@ function PaymentTableRows({
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onConfirmArrived: () => void;
+  canManage: boolean;
+  confirming: boolean;
 }) {
   return (
     <>
@@ -530,27 +602,44 @@ function PaymentTableRows({
           <td colSpan={6}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
-                <button
-                  className={styles.primaryButtonCompact}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onEdit();
-                  }}
-                >
-                  编辑收款
-                </button>
-                <button
-                  className={styles.secondaryButton}
-                  type="button"
-                  disabled={deleting}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDelete();
-                  }}
-                >
-                  {deleting ? "删除中..." : "删除收款"}
-                </button>
+                {canManage ? (
+                  <>
+                    {payment.status === "待确认" ? (
+                      <button
+                        className={styles.primaryButtonCompact}
+                        type="button"
+                        disabled={confirming}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onConfirmArrived();
+                        }}
+                      >
+                        {confirming ? "确认中..." : "确认到账"}
+                      </button>
+                    ) : null}
+                    <button
+                      className={styles.primaryButtonCompact}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEdit();
+                      }}
+                    >
+                      编辑收款
+                    </button>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={deleting}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete();
+                      }}
+                    >
+                      {deleting ? "删除中..." : "删除收款"}
+                    </button>
+                  </>
+                ) : <span className={styles.mutedText}>只读查看</span>}
               </div>
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={payment.customerFullName || payment.customerName || "-"} wide />
@@ -592,6 +681,10 @@ function paymentStatusClass(status = "") {
   if (status === "已退回") return styles.statusDanger;
   if (status === "已取消") return styles.statusMuted;
   return "";
+}
+
+function paymentStatusOptions(canConfirmArrived: boolean) {
+  return canConfirmArrived ? PAYMENT_STATUSES : PAYMENT_STATUSES.filter((status) => status !== "已到账");
 }
 
 function rateMeta(payment: PaymentRow) {

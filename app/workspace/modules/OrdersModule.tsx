@@ -134,6 +134,7 @@ export function OrdersModule() {
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
@@ -166,6 +167,7 @@ export function OrdersModule() {
   function submitSearch() {
     setPage(1);
     setExpandedId("");
+    setNotice("");
     setSubmittedKeyword(keyword.trim());
     void loadOrders(keyword.trim());
   }
@@ -175,6 +177,7 @@ export function OrdersModule() {
     setSubmittedKeyword("");
     setPage(1);
     setExpandedId("");
+    setNotice("");
     void loadOrders("");
   }
 
@@ -183,12 +186,20 @@ export function OrdersModule() {
     if (!confirmed) return;
     setDeletingId(order.id);
     setError("");
+    setNotice("");
     try {
-      await apiJson(`/api/orders/${encodeURIComponent(order.id)}`, { method: "DELETE" });
+      const result = await apiJson<{ success?: boolean; message?: string }>(
+        `/api/orders/${encodeURIComponent(order.id)}`,
+        { method: "DELETE" },
+      );
+      if (result.success === false) {
+        throw new Error(result.message || "删除应收订单失败");
+      }
       setExpandedId("");
       setEditOrder(null);
       setCreateOpen(false);
       await loadOrders(submittedKeyword);
+      setNotice(result.message || "订单已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除应收订单失败");
     } finally {
@@ -214,7 +225,15 @@ export function OrdersModule() {
           >
             {createOpen ? "收起新建" : "新建订单"}
           </button>
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadOrders()}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setNotice("");
+              void loadOrders();
+            }}
+          >
             {loading ? "刷新中..." : "刷新"}
           </button>
         </div>
@@ -228,6 +247,7 @@ export function OrdersModule() {
             setEditOrder(null);
           }}
           onSaved={() => {
+            setNotice(editOrder ? "订单已更新" : "订单已保存");
             setCreateOpen(false);
             setEditOrder(null);
             setPage(1);
@@ -252,6 +272,9 @@ export function OrdersModule() {
 
       {error ? (
         <div className={styles.inlineError}>{error}</div>
+      ) : null}
+      {notice ? (
+        <div className={styles.infoStrip}>{notice}</div>
       ) : null}
 
       <div className={styles.tableWrap}>
