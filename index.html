@@ -557,7 +557,7 @@
 
         <section class="view-panel" id="domesticLogistics-view">
           <section class="panel">
-            <div class="panel-title"><h3>国内物流信息</h3><span id="domestic-logistics-count">0 个订单</span></div>
+            <div class="panel-title"><h3>物流信息</h3><span id="domestic-logistics-count">0 个订单</span></div>
             <form class="inline-filter" id="domestic-logistics-filter-form" autocomplete="off">
               <input id="domestic-logistics-search" type="search" placeholder="订单号 / 提单号" />
               <select id="domestic-logistics-archive-scope"><option value="current">当前业务</option><option value="archive">已归档业务</option><option value="all">全部业务</option></select>
@@ -616,8 +616,8 @@
             <div class="drawer-panel domestic-logistics-panel" role="dialog" aria-modal="true" aria-labelledby="domestic-logistics-editor-title">
             <div class="drawer-header">
               <div>
-                <p class="eyebrow">国内物流信息</p>
-                <h3 id="domestic-logistics-editor-title">录入国内物流信息</h3>
+                <p class="eyebrow">物流信息</p>
+                <h3 id="domestic-logistics-editor-title">录入物流信息</h3>
               </div>
               <button class="icon-button" data-close-domestic-logistics type="button" aria-label="关闭">×</button>
             </div>
@@ -682,7 +682,7 @@
               <span id="domestic-logistics-footer-status">报关资料可稍后补充上传。</span>
               <div class="domestic-logistics-footer-actions">
                 <button class="secondary-button" data-close-domestic-logistics type="button">取消</button>
-                <button class="primary-button" id="domestic-logistics-submit-button" form="domestic-logistics-form" type="submit">提交国内物流信息</button>
+                <button class="primary-button" id="domestic-logistics-submit-button" form="domestic-logistics-form" type="submit">提交物流信息</button>
               </div>
             </div>
             </div>
@@ -815,7 +815,7 @@
             <article><strong>应收订单</strong><small>建立一票业务主索引</small></article>
             <article><strong>收款管理</strong><small>登记客户实际回款</small></article>
             <article><strong>成本管理</strong><small>录入并确认各类费用</small></article>
-            <article><strong>国内物流信息</strong><small>填写首程运输资料</small></article>
+            <article><strong>物流信息</strong><small>填写首程运输资料</small></article>
             <article><strong>退税资料</strong><small>汇总单证与发票</small></article>
             <article><strong>提交退税</strong><small>完整度 100% 后提交</small></article>
             <article><strong>自动归档</strong><small>移入退税档案</small></article>
@@ -844,7 +844,7 @@
               <button data-manual-target="manual-section-orders" type="button">应收订单</button>
               <button data-manual-target="manual-section-payments" type="button">收款管理</button>
               <button data-manual-target="manual-section-costs" type="button">成本管理</button>
-              <button data-manual-target="manual-section-domestic" type="button">国内物流信息</button>
+              <button data-manual-target="manual-section-domestic" type="button">物流信息</button>
               <button data-manual-target="manual-section-tax" type="button">退税资料</button>
               <button data-manual-target="manual-section-archive" type="button">提交退税与归档</button>
               <button data-manual-target="manual-section-reports" type="button">报表中心</button>
@@ -856,7 +856,7 @@
               <details class="manual-section-card" id="manual-section-positioning" data-manual-section open>
                 <summary><span>01</span><strong>系统定位</strong></summary>
                 <div class="manual-searchable">
-                  <p>本系统用于管理外贸业务从应收订单、客户回款、成本录入、国内物流资料、退税资料收集、清关资料发送，到退税提交和资料归档的全过程。</p>
+                  <p>本系统用于管理外贸业务从应收订单、客户回款、成本录入、物流资料、退税资料收集、清关资料发送，到退税提交和资料归档的全过程。</p>
                   <div class="manual-section-grid">
                     <div><h5>核心原则</h5><p>一票业务 = 一个订单。所有收款、成本、物流资料、退税资料、清关资料邮件都必须围绕订单进行管理。</p></div>
                     <div><h5>权限口径</h5><p>管理员查看全部；业务员按客户档案中的负责业务员查看该客户名下完整业务链；财务、成本和物流角色按模块权限查看。</p></div>
@@ -872,7 +872,7 @@
                     <li>建立应收订单</li>
                     <li>登记客户回款</li>
                     <li>录入成本费用</li>
-                    <li>录入国内物流信息</li>
+                    <li>录入物流信息</li>
                     <li>上传订单资料并自动生成标准英文文件名</li>
                     <li>汇总退税资料，识别报关单号和申报日期</li>
                     <li>按需手动发送清关资料</li>
@@ -921,14 +921,14 @@
               </details>
 
               <details class="manual-section-card" id="manual-section-domestic" data-manual-section>
-                <summary><span>06</span><strong>国内物流信息</strong></summary>
+                <summary><span>06</span><strong>物流信息</strong></summary>
                 <div class="manual-searchable">
                   <p>业务员或管理员填写国内首程运输信息；物流供应商在物流费用录入中提交费用并上传发票。</p>
                   <div class="manual-section-grid">
                     <div><h5>主要内容</h5><ul><li>运输方式、起运地、到达地</li><li>运输货物名称、起运日期</li><li>车牌号或快递单号</li><li>出口发票备注</li></ul></div>
                     <div><h5>上传资料</h5><ul><li>报关单、放行通知书、报关委托书。</li><li>上传后自动归属订单并进入退税资料统计。</li><li>上传报关单 PDF 后自动识别报关单号和申报日期。</li><li>业务员可看资料状态和完整度，但不能预览、下载或删除报关资料文件。</li></ul></div>
                   </div>
-                  <p class="manual-entry-tip">相关入口：国内物流信息</p>
+                  <p class="manual-entry-tip">相关入口：物流信息</p>
                 </div>
               </details>
 
@@ -937,7 +937,7 @@
                 <div class="manual-searchable">
                   <p>退税资料模块用于按订单汇总出口退税所需资料，列表显示订单号、客户简称、申报日期、总体完整度和退税状态，详细资料在查看资料中展开。</p>
                   <div class="manual-section-grid">
-                    <div><h5>查看资料区域</h5><ul><li>国内物流信息、报关资料、出口资料。</li><li>工厂供应商资料、物流资料。</li><li>报关单信息只保留报关单号和申报日期。</li><li>页面不展示清关资料邮件发送明细。</li></ul></div>
+                    <div><h5>查看资料区域</h5><ul><li>物流信息、报关资料、出口资料。</li><li>工厂供应商资料、物流资料。</li><li>报关单信息只保留报关单号和申报日期。</li><li>页面不展示清关资料邮件发送明细。</li></ul></div>
                     <div><h5>清关资料发送</h5><ul><li>点击手动发送清关资料打开确认窗口。</li><li>可临时修改收件邮箱、抄送邮箱、邮件语言、标题和正文。</li><li>至少存在一个商业发票、装箱单或报关单文件时可发送。</li><li>发送后只提示成功或失败，不在页面保留邮件发送明细。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：退税资料</p>
@@ -949,7 +949,7 @@
                 <div class="manual-searchable">
                   <p>提交退税必须满足总体完整度 = 100%。如果资料不足，系统会阻止提交并提示缺失资料。</p>
                   <div class="manual-section-grid">
-                    <div><h5>提交后系统自动执行</h5><ul><li>状态变为已提交退税。</li><li>订单自动归档。</li><li>从退税资料当前列表、成本管理当前业务、国内物流当前业务和经营总览待处理提醒中隐藏。</li></ul></div>
+                    <div><h5>提交后系统自动执行</h5><ul><li>状态变为已提交退税。</li><li>订单自动归档。</li><li>从退税资料当前列表、成本管理当前业务、物流信息当前业务和经营总览待处理提醒中隐藏。</li></ul></div>
                     <div><h5>归档说明</h5><ul><li>归档不是删除。</li><li>归档后的订单可在退税档案、报表中心、已归档业务筛选中查询和调取。</li><li>退税归档只代表资料链完成，不代表货款已经收齐。</li><li>收款管理不受退税归档影响。</li></ul></div>
                   </div>
                   <p class="manual-entry-tip">相关入口：退税资料 → 查看资料 / 提交退税 / 退税档案</p>
@@ -1116,7 +1116,7 @@
               <label><span>供应商名称 *</span><input id="supplier-name" required /></label>
               <label><span>供应商类型</span><select id="supplier-type"></select></label>
               <label><span>状态</span><select id="supplier-status"></select></label>
-              <label><span>允许录入国内物流信息</span><select id="supplier-domestic-logistics-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
+              <label><span>允许录入物流信息</span><select id="supplier-domestic-logistics-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>允许录入物流费用</span><select id="supplier-logistics-expense-entry"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>允许上传发票</span><select id="supplier-logistics-invoice-upload"><option value="false">关闭</option><option value="true">开启</option></select></label>
               <label><span>默认物流供应商</span><select id="supplier-default-logistics"><option value="false">否</option><option value="true">是</option></select><small class="field-note">同一时间只能有一家默认物流供应商。</small></label>

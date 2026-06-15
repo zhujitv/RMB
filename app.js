@@ -207,7 +207,7 @@ const constants = {
     { value: "payments", label: "收款管理" },
     { value: "costs", label: "成本管理" },
     { value: "profit", label: "利润分析" },
-    { value: "domesticLogistics", label: "国内物流信息" },
+    { value: "domesticLogistics", label: "物流信息" },
     { value: "taxRefund", label: "退税资料" },
     { value: "reports", label: "报表中心" },
     { value: "manual", label: "操作说明书" },
@@ -220,7 +220,7 @@ const constants = {
     { value: "orders", label: "应收订单查看" },
     { value: "payments", label: "收款查看" },
     { value: "costs", label: "成本查看" },
-    { value: "domesticLogistics", label: "国内物流查看" },
+    { value: "domesticLogistics", label: "物流信息查看" },
     { value: "documents", label: "单证查看" },
     { value: "taxRefund", label: "退税查看" },
     { value: "commissions", label: "提成查看" },
@@ -235,7 +235,7 @@ const constants = {
     { value: "payments", label: "收款登记" },
     { value: "costs", label: "成本录入" },
     { value: "logistics", label: "物流费用" },
-    { value: "domesticLogistics", label: "国内物流录入" },
+    { value: "domesticLogistics", label: "物流信息录入" },
     { value: "documents", label: "单证上传/删除" },
     { value: "taxRefund", label: "退税状态" },
     { value: "commissions", label: "提成结算" },
@@ -274,7 +274,7 @@ const viewTitles = {
   payments: "收款管理",
   costs: "成本管理",
   profit: "利润分析",
-  domesticLogistics: "国内物流信息",
+  domesticLogistics: "物流信息",
   taxRefund: "退税资料",
   reports: "报表中心",
   manual: "操作说明书",
@@ -2253,7 +2253,7 @@ async function refreshCurrentView() {
   }
   if (state.view === "domesticLogistics") {
     await loadDomesticLogisticsList({ rethrow: true });
-    toast("国内物流信息已刷新");
+    toast("物流信息已刷新");
     return;
   }
   if (state.view === "reports") {
@@ -4011,8 +4011,8 @@ function missingDocumentTargets(order = {}) {
   const domesticTargets = (completeness.domesticLogistics?.missing || []).map(() => ({
     module: "domesticLogistics",
     documentType: "DOMESTIC_LOGISTICS_INFO",
-    label: "国内物流信息",
-    title: "国内物流信息",
+    label: "物流信息",
+    title: "物流信息",
   }));
   const supplierTargets = [];
   const seenSupplierTypes = new Set();
@@ -4163,14 +4163,14 @@ function taxDetailDomesticOverviewItem(order = {}) {
   const complete = Boolean(order.documentCompleteness?.domesticLogistics?.complete);
   const hasInfo = Boolean(info?.id || info?.transportType || info?.remarkText);
   return {
-    label: "国内物流信息",
+    label: "物流信息",
     status: complete ? "complete" : (hasInfo ? "missing" : "unrecorded"),
     count: complete ? 1 : 0,
     target: {
       module: "domesticLogistics",
       documentType: "DOMESTIC_LOGISTICS_INFO",
-      label: "国内物流信息",
-      title: "国内物流信息",
+      label: "物流信息",
+      title: "物流信息",
       actionText: hasInfo ? "去完善" : "去补录",
     },
     actionText: hasInfo ? "去完善" : "去补录",
@@ -4355,7 +4355,7 @@ function taxDetailOverviewGroups(order = {}) {
   return [
     { key: "export", title: "出口资料", items: exportItems },
     { key: "customs", title: "报关资料", items: customsItems },
-    { key: "domestic", title: "国内物流信息", items: [taxDetailDomesticOverviewItem(order)] },
+    { key: "domestic", title: "物流信息", items: [taxDetailDomesticOverviewItem(order)] },
     { key: "factory", title: "工厂资料", items: taxDetailFactoryOverviewItems(order) },
     { key: "logistics", title: "物流费用资料", items: taxDetailLogisticsOverviewItems(order) },
   ];
@@ -4815,7 +4815,7 @@ async function openDomesticLogisticsEditor(row, mode = "edit") {
   state.isDomesticLogisticsModalOpen = true;
   const info = row.domesticLogisticsInfo || {};
   $("#domestic-logistics-editor").hidden = false;
-  $("#domestic-logistics-editor-title").textContent = `${mode === "view" ? "查看" : (info.id ? "编辑" : "录入")}国内物流信息 - ${row.orderNo || "-"}`;
+  $("#domestic-logistics-editor-title").textContent = `${mode === "view" ? "查看" : (info.id ? "编辑" : "录入")}物流信息 - ${row.orderNo || "-"}`;
   $("#domestic-logistics-order-summary").innerHTML = `
     <div><span>订单号</span><strong>${escapeHtml(row.orderNo || "-")}</strong></div>
     <div><span>提单号</span><strong>${escapeHtml(row.blNo || row.billOfLadingNo || "待发货")}</strong></div>
@@ -4898,7 +4898,7 @@ function renderDomesticLogistics() {
     </tr>
     ${renderDomesticLogisticsDetailRow(row, actions)}
   `;
-	  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的国内物流订单</td></tr>`;
+	  }).join("") : `<tr><td colspan="6" class="empty-cell">未找到可录入的物流订单</td></tr>`;
 }
 
 function isLogisticsSupplierUser() {
@@ -5326,7 +5326,7 @@ function renderDomesticLogisticsReviewCard(order = {}) {
   const remark = domesticLogisticsExportInvoiceRemark(info || {});
   return `
     <section class="tax-detail-section domestic-logistics-review">
-      <h4>国内物流信息</h4>
+      <h4>物流信息</h4>
       <div class="document-card ${complete ? "uploaded" : "missing"}">
         <div class="document-card-head">
           <strong>出口发票备注</strong>
@@ -5334,13 +5334,13 @@ function renderDomesticLogisticsReviewCard(order = {}) {
         </div>
         ${remark
           ? `<pre class="tax-remark-preview">${escapeHtml(remark)}</pre>`
-          : `<div class="empty-inline">暂无出口发票备注，请前往国内物流信息维护。</div>`}
+          : `<div class="empty-inline">暂无出口发票备注，请前往物流信息维护。</div>`}
         <div class="row-actions file-actions">
           <button class="secondary-button" type="button"
             data-missing-document="true"
             data-missing-module="domesticLogistics"
             data-missing-order-id="${escapeHtml(order.id)}"
-            data-missing-document-type="DOMESTIC_LOGISTICS_INFO">去维护国内物流信息</button>
+            data-missing-document-type="DOMESTIC_LOGISTICS_INFO">去维护物流信息</button>
         </div>
       </div>
     </section>
@@ -5387,7 +5387,7 @@ function validateDomesticLogisticsPayload(data) {
 
 async function submitDomesticLogistics(event) {
   event.preventDefault();
-  if (!canWriteArea("domesticLogistics")) return toast("没有权限录入国内物流信息");
+  if (!canWriteArea("domesticLogistics")) return toast("没有权限录入物流信息");
   const id = $("#domestic-logistics-info-id").value;
   try {
     const payload = domesticLogisticsPayload();
@@ -5400,12 +5400,12 @@ async function submitDomesticLogistics(event) {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
-    assertSuccessResponse(result, "保存国内物流信息失败");
-    toast(result.message || "国内物流信息已提交");
+    assertSuccessResponse(result, "保存物流信息失败");
+    toast(result.message || "物流信息已提交");
     closeDomesticLogisticsEditor();
     await loadDomesticLogisticsList({ silent: true });
   } catch (error) {
-    reportFrontendError(error, "保存国内物流信息失败");
+    reportFrontendError(error, "保存物流信息失败");
   }
 }
 
@@ -8152,7 +8152,7 @@ async function submitTaxRefund(orderId) {
       const confirmForceMessage = [
         "确认强制提交退税并归档该订单吗？",
         "",
-        "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+        "归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
       ].join("\n");
       if (!window.confirm(confirmForceMessage)) return;
       await updateTaxStatus(orderId, "SUBMITTED", { forceSubmit: true, forceReason: reason.trim(), rethrow: true });
@@ -8164,7 +8164,7 @@ async function submitTaxRefund(orderId) {
   const confirmMessage = [
     "确认提交退税并归档该订单吗？",
     "",
-    "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+    "归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
   ].join("\n");
   if (!window.confirm(confirmMessage)) return;
   try {
@@ -8203,15 +8203,15 @@ async function cancelTaxArchive(orderId) {
 }
 
 async function deleteDomesticLogistics(id) {
-  if (state.me?.role !== "管理员") return toast("只有管理员可以删除国内物流信息");
-  if (!window.confirm("确认删除该国内物流信息？删除后不会物理清除历史记录。")) return;
+  if (state.me?.role !== "管理员") return toast("只有管理员可以删除物流信息");
+  if (!window.confirm("确认删除该物流信息？删除后不会物理清除历史记录。")) return;
   try {
     const result = await api(`/api/domestic-logistics/${encodeURIComponent(id)}`, { method: "DELETE" });
-    assertSuccessResponse(result, "删除国内物流信息失败");
-    toast("国内物流信息已删除");
+    assertSuccessResponse(result, "删除物流信息失败");
+    toast("物流信息已删除");
     await loadDomesticLogisticsList({ silent: true });
   } catch (error) {
-    reportFrontendError(error, "删除国内物流信息失败");
+    reportFrontendError(error, "删除物流信息失败");
   }
 }
 
@@ -9559,7 +9559,7 @@ function focusMissingDocumentTarget(dataset = {}) {
   if (dataset.missingModule === "domesticLogistics") {
     const order = state.taxRefundDetailOrder?.id === orderId ? state.taxRefundDetailOrder : orderById(orderId);
     if (!canView("domesticLogistics")) {
-      toast("没有权限进入国内物流信息模块");
+      toast("没有权限进入物流信息模块");
       return;
     }
     if (!switchView("domesticLogistics", { skipOrderConfirm: true })) return;

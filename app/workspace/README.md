@@ -17,7 +17,7 @@ Available modules:
 - 应收订单
 - 收款管理
 - 成本管理
-- 国内物流信息
+- 物流信息
 - 利润分析
 - 退税资料
 - 报表中心
@@ -34,7 +34,7 @@ Production guardrails:
 
 - Keep API, Prisma, session, permissions, and database structure unchanged.
 - Compare high-frequency details against the legacy production UI before retiring old views.
-- Keep 国内物流信息, 每票物流费用录入, 退税资料, 成本, 收款, and complex order fields aligned.
+- Keep 物流信息, 每票物流费用录入, 退税资料, 成本, 收款, and complex order fields aligned.
 
 Domestic logistics parity note:
 

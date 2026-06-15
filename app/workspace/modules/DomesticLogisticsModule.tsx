@@ -164,7 +164,7 @@ export function DomesticLogisticsModule({
       setRows(nextRows);
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取国内物流信息失败");
+      setError(loadError instanceof Error ? loadError.message : "读取物流信息失败");
       return [];
     } finally {
       setLoading(false);
@@ -303,7 +303,7 @@ export function DomesticLogisticsModule({
     const id = row.domesticLogisticsInfo?.id;
     if (!id) return;
     const confirmationResult = await requestConfirmation({
-      title: "确认删除该国内物流信息？",
+      title: "确认删除该物流信息？",
       message: "删除后该订单将恢复为未提交物流信息状态。",
       details: [`订单：${row.orderNo || "-"}`],
       confirmLabel: "删除物流信息",
@@ -317,14 +317,14 @@ export function DomesticLogisticsModule({
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/domestic-logistics/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
-      if (result.success !== true) throw new Error(result.message || "删除国内物流信息失败");
+      if (result.success !== true) throw new Error(result.message || "删除物流信息失败");
       setExpandedId("");
       setEditingOrderId("");
       setFeeEntryOrderId("");
       await loadRows(submittedKeyword, businessScope);
-      setNotice(result.message || "国内物流信息已删除");
+      setNotice(result.message || "物流信息已删除");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除国内物流信息失败");
+      setError(deleteError instanceof Error ? deleteError.message : "删除物流信息失败");
     }
   }
 
@@ -418,7 +418,7 @@ export function DomesticLogisticsModule({
                 }}
                 onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 onSaved={() => {
-                  setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "国内物流信息已保存");
+                  setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "物流信息已保存");
                   setEditingOrderId("");
                   setFeeEntryOrderId("");
                   setExpenseRefreshToken((current) => current + 1);
@@ -434,7 +434,7 @@ export function DomesticLogisticsModule({
               />
             )) : (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的国内物流订单</div></td>
+                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的物流信息订单</div></td>
               </tr>
             )}
           </tbody>
@@ -700,10 +700,10 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
           remarkTextManualEdited: form.remarkTextManualEdited,
         }),
       });
-      if (result.success !== true) throw new Error(result.message || "国内物流信息保存失败");
+      if (result.success !== true) throw new Error(result.message || "物流信息保存失败");
       onSaved();
     } catch (saveError) {
-      setMessage(saveError instanceof Error ? saveError.message : "国内物流信息保存失败");
+      setMessage(saveError instanceof Error ? saveError.message : "物流信息保存失败");
     } finally {
       setSaving(false);
     }
@@ -716,7 +716,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
     <form className={styles.inlineEditPanel} onSubmit={submitForm} onClick={(event) => event.stopPropagation()}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>录入国内物流信息 - {row.orderNo || "-"}</strong>
+          <strong>录入物流信息 - {row.orderNo || "-"}</strong>
           <span>提单号：{row.blNo || row.billOfLadingNo || "-"} ｜ 客户全称：{customerLegalName(row)}</span>
         </div>
       </div>
@@ -788,7 +788,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
       </label>
 
       <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "提交中..." : "提交国内物流信息"}</button>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "提交中..." : "提交物流信息"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>

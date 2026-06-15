@@ -14,7 +14,7 @@ The `/workspace` route is the production React + TypeScript workspace. It keeps 
 - React server-paged receivable orders list with customer autocomplete, full order create/edit, payment terms, installment nodes, default logistics supplier rules, detail view, and soft-delete actions, loaded only after opening 应收订单
 - React server-paged payments list with create, edit, confirm-arrival, and delete actions, loaded only after opening 收款管理
 - React paged costs list with current/archive/all business scope, create, manual-cost edit, and delete actions, loaded only after opening 成本管理
-- React domestic logistics list, expanded keyword search, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 国内物流信息
+- React domestic logistics list, expanded keyword search, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 物流信息
 - React paged profit analysis list and commission settlement action, loaded only after opening 利润分析
 - React paged tax refund current/archive lists, compact task menu, missing-document jump chips, on-demand detail drawer, tax status update, customs declaration manual fields, export/customs/factory/logistics document upload/delete, package download, submit-to-archive, and cancel-archive actions, loaded only after opening 退税资料
 - React report query shell with full business filters, tabs, pagination, row selection, detail rows, and Excel/CSV on-demand export scopes
@@ -42,14 +42,14 @@ Each migrated module must keep the legacy behavior before the old view is retire
 1. 应收订单 - ready
 2. 收款管理 - ready
 3. 成本管理 - ready
-4. 国内物流信息 - ready
+4. 物流信息 - ready
 5. 退税资料 - ready
 6. 报表中心 - ready
 7. 系统设置 - ready
 
 ## Current Parity Guardrails
 
-- 国内物流信息: keep legacy per-order fee entry, logistics supplier lock, customs documents, and multi-container transport details aligned with the online legacy UI.
+- 物流信息: keep legacy per-order fee entry, logistics supplier lock, customs documents, and multi-container transport details aligned with the online legacy UI.
 - 退税资料: keep the list compact, use the detail drawer for full file management, preserve tax status updates, submit-to-archive validation, missing-document jump chips, and manual shipping-document sending.
 - Legacy frontend remains the reference for final parity checks before disabling old views.
 

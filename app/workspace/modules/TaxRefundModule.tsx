@@ -431,7 +431,7 @@ export function TaxRefundModule({
       }
       const forceResult = await requestConfirmation({
         title: "确认强制提交退税并归档？",
-        message: `当前完整度：${completed}/${total || 0}（${percent}%）。归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`,
+        message: `当前完整度：${completed}/${total || 0}（${percent}%）。归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`,
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,
@@ -452,7 +452,7 @@ export function TaxRefundModule({
     } else {
       const submitResult = await requestConfirmation({
         title: "确认提交退税并归档？",
-        message: "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+        message: "归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,
@@ -1184,17 +1184,17 @@ function TaxRefundDetailPanel({
             <DetailField label="提单号" value={detail.blNo || fallback.blNo || "-"} />
             <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
             <DetailField label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
-            <DetailField label="国内物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemark ? "已提交" : "未提交")} />
+            <DetailField label="物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemark ? "已提交" : "未提交")} />
           </div>
         </div>
         <div className={styles.documentGroupCard} id={taxTargetDomId("domestic-logistics")}>
           <strong>出口发票备注</strong>
           <div className={styles.exportInvoiceRemarkText}>
-            {domesticRemark || "暂无出口发票备注，请前往国内物流信息维护。"}
+            {domesticRemark || "暂无出口发票备注，请前往物流信息维护。"}
           </div>
           {onOpenDomesticLogistics ? (
             <button className={styles.secondaryButton} type="button" onClick={onOpenDomesticLogistics}>
-              去维护国内物流信息
+              去维护物流信息
             </button>
           ) : null}
         </div>
@@ -1698,7 +1698,7 @@ function taxMissingTargets(completeness: DocumentCompleteness) {
     pushTarget(taxDocumentTypeLabel(documentType), taxDocumentTargetKey(documentType));
   });
   (completeness.domesticLogistics?.missing || []).forEach(() => {
-    pushTarget("国内物流信息", "domestic-logistics");
+    pushTarget("物流信息", "domestic-logistics");
   });
   (completeness.supplier?.missing || []).forEach((item) => {
     if (item.missingFactoryCost) {

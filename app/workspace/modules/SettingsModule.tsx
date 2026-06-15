@@ -1260,7 +1260,7 @@ function SupplierEditPanel({
           <input value={form.bankAccount} onChange={(event) => setField("bankAccount", event.target.value)} />
         </label>
         <BooleanSelect
-          label="允许录入国内物流信息"
+          label="允许录入物流信息"
           value={logisticsCapable && form.allowDomesticLogisticsEntry}
           disabled={!logisticsCapable}
           onChange={(value) => setField("allowDomesticLogisticsEntry", value)}
@@ -1608,7 +1608,7 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "邮箱", value: supplier.email || "-" },
       { label: "开票名称", value: supplier.invoiceTitle || "-", wide: true },
       { label: "税号", value: supplier.taxNumber || "-" },
-      { label: "允许国内物流录入", value: yesNo(supplier.allowDomesticLogisticsEntry) },
+      { label: "允许物流信息录入", value: yesNo(supplier.allowDomesticLogisticsEntry) },
       { label: "默认物流供应商", value: yesNo(supplier.isDefaultLogisticsSupplier) },
       { label: "备注", value: supplier.remark || "-", wide: true },
     ];
