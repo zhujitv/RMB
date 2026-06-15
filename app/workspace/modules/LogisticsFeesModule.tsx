@@ -6,7 +6,7 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
-import { downloadBlob, isPdfFile } from "../utils";
+import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const PAGE_SIZE = 20;
@@ -597,7 +597,7 @@ function LogisticsExpenseRows({
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{expense.orderNo || "-"}</strong></td>
         <td>{expense.blNo || expense.billOfLadingNo || "-"}</td>
-        <td title={expense.customerName || ""}>{expense.customerShortName || expense.customerName || "-"}</td>
+        <td title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
         <td>{expense.supplierName || "-"}</td>
         <td>
           <strong>{formatCny(expense.amountCny || 0)}</strong>
@@ -644,7 +644,7 @@ function LogisticsExpenseRows({
                 ) : null}
               </div>
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={expense.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(expense)} wide />
                 <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
                 <DetailField label="供应商" value={expense.supplierName || "-"} />
                 <DetailField label="费用类型" value={expense.costType || "-"} />
@@ -903,7 +903,7 @@ export function LogisticsExpenseForm({
             getLabel={orderLabel}
             getDescription={(order) => {
               const supplierCount = filterLogisticsFeeSuppliers(order.logisticsSuppliers || []).length;
-              return `${order.customerName || "客户未设置"}${supplierCount ? ` · 已绑定 ${supplierCount} 家物流供应商` : ""}`;
+              return `${customerLegalName(order)}${supplierCount ? ` · 已绑定 ${supplierCount} 家物流供应商` : ""}`;
             }}
             search={searchOrders}
             onSelect={handleOrderSelect}
@@ -942,7 +942,7 @@ export function LogisticsExpenseForm({
         <div className={styles.detailGrid}>
           <DetailField label="订单号" value={selectedOrder.orderNo || "-"} />
           <DetailField label="提单号" value={selectedOrder.blNo || selectedOrder.billOfLadingNo || "-"} />
-          <DetailField label="客户简称" value={selectedOrder.customerShortName || selectedOrder.customerName || "-"} />
+          <DetailField label="客户简称" value={customerDisplayName(selectedOrder)} />
           <DetailField label="车牌" value={selectedOrder.truckPlateNo || "-"} />
           <DetailField label="货物" value={selectedOrder.cargoName || "-"} wide />
         </div>
@@ -1107,7 +1107,7 @@ function mergeSuppliers(current: SupplierOption[], next: SupplierOption[]) {
 }
 
 function orderLabel(order: ExpenseOrderOption) {
-  const customer = order.customerShortName || order.customerName || "-";
+  const customer = customerDisplayName(order);
   const blNo = order.blNo || order.billOfLadingNo;
   return `${order.orderNo || "未编号"} / ${customer}${blNo ? ` / ${blNo}` : ""}`;
 }

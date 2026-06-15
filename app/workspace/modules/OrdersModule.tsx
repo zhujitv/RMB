@@ -6,6 +6,7 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
+import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
@@ -505,7 +506,7 @@ function QuickCreateOrderPanel({
       name: initialOrder.customerFullName || initialOrder.customerName,
       fullName: initialOrder.customerFullName || initialOrder.customerName,
       shortName: initialOrder.customerShortName,
-      displayName: initialOrder.customerShortName || initialOrder.customerName || initialOrder.customerFullName,
+      displayName: customerDisplayName(initialOrder),
       defaultCurrency: initialOrder.currency,
     } satisfies CustomerAutocompleteOption;
   }, [
@@ -815,7 +816,7 @@ function OrderTableRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{order.orderNo || "-"}</strong></td>
-        <td title={order.customerFullName || order.customerName || ""}>{order.customerShortName || order.customerName || "-"}</td>
+        <td title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td>{moneyCell(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)}</td>
         <td>{formatCny(receivedCny)}</td>
@@ -836,7 +837,7 @@ function OrderTableRows({
                 </button>
               </div>
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={order.customerFullName || order.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(order)} wide />
                 <DetailField label="业务员" value={order.salespersonName || "-"} />
                 <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
                 <DetailField label="付款条款" value={paymentTermText(order)} />

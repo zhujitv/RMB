@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
-import { downloadBlob } from "../utils";
+import { customerDisplayName, customerLegalName, downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 type ReportType = {
@@ -418,7 +418,7 @@ function ReportRows({
                       key={column.key}
                       label={column.label === "客户简称" ? "客户全称" : column.label}
                       value={column.label === "客户简称"
-                        ? String(row.customerFullName || row.customerName || row.customerShortName || "-")
+                        ? customerLegalName(row)
                         : String(row[column.key] ?? "-")}
                       wide={String(row[column.key] ?? "").length > 36}
                     />
@@ -434,7 +434,7 @@ function ReportRows({
 
 function displayValue(row: ReportRow, column: ReportColumn) {
   const value = column.label === "客户简称"
-    ? (row.customerShortName || row.customerName || "-")
+    ? customerDisplayName(row)
     : row[column.key];
   return String(value ?? "-");
 }

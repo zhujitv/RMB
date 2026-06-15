@@ -1,5 +1,14 @@
 import type { PermissionSnapshot, User } from "./types";
 
+type CustomerNameLike = {
+  customerShortName?: string | null;
+  customerName?: string | null;
+  customerFullName?: string | null;
+  shortName?: string | null;
+  name?: string | null;
+  fullName?: string | null;
+};
+
 export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -40,4 +49,24 @@ export function downloadBlob(blob: Blob, fileName: string) {
 
 export function isPdfFile(file: File) {
   return file.name.toLowerCase().endsWith(".pdf") && file.type === "application/pdf";
+}
+
+export function customerDisplayName(record?: CustomerNameLike | null) {
+  return record?.customerShortName
+    || record?.shortName
+    || record?.customerName
+    || record?.name
+    || record?.customerFullName
+    || record?.fullName
+    || "-";
+}
+
+export function customerLegalName(record?: CustomerNameLike | null) {
+  return record?.customerFullName
+    || record?.fullName
+    || record?.customerName
+    || record?.name
+    || record?.customerShortName
+    || record?.shortName
+    || "-";
 }

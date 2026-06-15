@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog }
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
@@ -730,7 +730,7 @@ function QuickCreateCostPanel({
             emptyLabel="未找到订单"
             placeholder="输入订单号 / 提单号 / 客户简称"
             getLabel={orderLabel}
-            getDescription={(order) => order.customerFullName || order.customerName || "-"}
+            getDescription={customerLegalName}
             search={searchOrders}
             onSelect={handleOrderSelect}
           />
@@ -833,7 +833,7 @@ function CostTableRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{cost.orderNo || "-"}</strong></td>
-        <td title={cost.customerFullName || cost.customerName || ""}>{cost.customerShortName || cost.customerName || "-"}</td>
+        <td title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
         <td>{cost.costType || "-"}</td>
         <td>{supplierName}</td>
         <td>{moneyText(cost.currency, cost.amount, cost.amountCny)}</td>
@@ -885,7 +885,7 @@ function CostTableRows({
                 )}
               </div>
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={cost.customerFullName || cost.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(cost)} wide />
                 <DetailField label="提单号" value={cost.blNo || cost.billOfLadingNo || "-"} />
                 <DetailField label="供应商" value={supplierName} />
                 <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
@@ -1108,7 +1108,7 @@ function costFormFromRow(cost?: CostRow | null): QuickCostForm {
 }
 
 function orderLabel(order: CostOrderOption) {
-  const customer = order.customerShortName || order.customerName || order.customerFullName || "-";
+  const customer = customerDisplayName(order);
   const blNo = order.blNo || order.billOfLadingNo;
   return `${order.orderNo || "未编号"} / ${customer}${blNo ? ` / ${blNo}` : ""}`;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { formatCny, formatDate, formatPercent } from "../formatters";
+import { customerDisplayName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 type OverviewTotals = {
@@ -425,7 +426,7 @@ function monthLabel(value?: string) {
 }
 
 function displayCustomer(row: RiskOrder) {
-  return row.customerShortName || row.customerName || row.customerFullName || "-";
+  return customerDisplayName(row);
 }
 
 function sumBy<T>(rows: T[], getter: (row: T) => number) {

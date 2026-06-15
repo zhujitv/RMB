@@ -6,6 +6,7 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
+import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 
@@ -341,7 +342,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       message: "确认后该笔收款将计入正式回款统计、利润分析和提成结算判断。",
       details: [
         `订单：${payment.orderNo || "-"}`,
-        `客户：${payment.customerShortName || payment.customerName || "-"}`,
+        `客户：${customerDisplayName(payment)}`,
         `金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`,
       ],
       confirmLabel: "确认到账",
@@ -545,7 +546,7 @@ function QuickCreatePaymentPanel({
             emptyLabel="未找到订单"
             placeholder="输入订单号 / 提单号 / 客户简称"
             getLabel={orderLabel}
-            getDescription={(order) => `${order.customerFullName || order.customerName || "-"}${order.currency ? ` · ${order.currency}` : ""}`}
+            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}`}
             search={searchOrders}
             onSelect={(order) => void handleOrderSelect(order)}
           />
@@ -635,7 +636,7 @@ function PaymentTableRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{payment.orderNo || "-"}</strong></td>
-        <td title={payment.customerFullName || payment.customerName || ""}>{payment.customerShortName || payment.customerName || "-"}</td>
+        <td title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
         <td>{payment.paymentDate || "-"}</td>
         <td>{moneyText(payment.currency, payment.amount, payment.amountCny)}</td>
         <td><span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span></td>
@@ -686,7 +687,7 @@ function PaymentTableRows({
                 ) : <span className={styles.mutedText}>只读查看</span>}
               </div>
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={payment.customerFullName || payment.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(payment)} wide />
                 <DetailField label="收款类型" value={payment.paymentType || "-"} />
                 <DetailField label="币种 / 汇率" value={`${payment.currency || "-"} / ${Number(payment.exchangeRate || 0).toFixed(4)}`} />
                 <DetailField label="折人民币" value={formatCny(Number(payment.amountCny || 0))} />
@@ -738,7 +739,7 @@ function rateMeta(payment: PaymentRow) {
 }
 
 function orderLabel(order: PaymentOrderOption) {
-  const customer = order.customerShortName || order.customerName || order.customerFullName || "-";
+  const customer = customerDisplayName(order);
   const blNo = order.blNo || order.billOfLadingNo;
   return `${order.orderNo || "未编号"} / ${customer}${blNo ? ` / ${blNo}` : ""}`;
 }

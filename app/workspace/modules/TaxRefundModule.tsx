@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog }
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, downloadBlob, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 
 type DocumentCompleteness = {
   completed?: number;
@@ -918,7 +918,7 @@ function TaxRefundTableRow({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
+        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{declarationDate}</td>
         <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
         <td onClick={(event) => event.stopPropagation()}>
@@ -1061,7 +1061,7 @@ function TaxRefundDetailDrawer({
   currentUserRole: string;
   canWriteDocuments: boolean;
 }) {
-  const displayCustomer = row.customerFullName || row.customerName || row.customerShortName || "-";
+  const displayCustomer = customerLegalName(row);
 
   return (
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="退税资料详情">
@@ -1179,7 +1179,7 @@ function TaxRefundDetailPanel({
         <div className={styles.documentGroupCard}>
           <strong>基础信息</strong>
           <div className={styles.detailGrid}>
-            <DetailField label="客户全称" value={detail.customerFullName || detail.customerName || fallback.customerFullName || fallback.customerName || "-"} wide />
+            <DetailField label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
             <DetailField label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
             <DetailField label="提单号" value={detail.blNo || fallback.blNo || "-"} />
             <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
@@ -1338,7 +1338,7 @@ function ManualShippingDocumentsDialog({
         <div className={styles.modalHeader}>
           <div>
             <strong>手动发送清关资料</strong>
-            <span>{order.orderNo || "-"} · {order.customerFullName || order.customerName || "-"}</span>
+            <span>{order.orderNo || "-"} · {customerLegalName(order)}</span>
           </div>
           <button className={styles.ghostButton} type="button" onClick={onClose} disabled={sending}>关闭</button>
         </div>

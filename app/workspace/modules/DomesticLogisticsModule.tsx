@@ -8,7 +8,7 @@ import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
 
 type TransportItem = {
   id?: string;
@@ -514,7 +514,7 @@ function DomesticLogisticsRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
+        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
         <td>{info?.cargoDescription || firstItemValue(info, "cargoName") || "-"}</td>
         <td><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
@@ -554,7 +554,7 @@ function DomesticLogisticsRows({
                 />
               ) : null}
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={row.customerFullName || row.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(row)} wide />
                 <DetailField label="提单号" value={row.blNo || row.billOfLadingNo || "-"} />
                 <DetailField label="运输方式" value={info?.transportTypeLabel || "-"} />
                 <DetailField label="起运地" value={info?.departurePlace || firstItemValue(info, "departurePlace") || "-"} />
@@ -717,7 +717,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>录入国内物流信息 - {row.orderNo || "-"}</strong>
-          <span>提单号：{row.blNo || row.billOfLadingNo || "-"} ｜ 客户全称：{row.customerFullName || row.customerName || "-"}</span>
+          <span>提单号：{row.blNo || row.billOfLadingNo || "-"} ｜ 客户全称：{customerLegalName(row)}</span>
         </div>
       </div>
 

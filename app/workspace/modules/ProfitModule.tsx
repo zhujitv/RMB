@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
+import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 type ProfitSummary = {
@@ -261,7 +262,7 @@ function ProfitRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={row.customerFullName || row.customerName || ""}>{row.customerShortName || row.customerName || "-"}</td>
+        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{formatCny(summary.receivableCny)}</td>
         <td>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</td>
         <td><strong>{formatCny(summary.expectedGrossProfit)}</strong></td>
@@ -288,7 +289,7 @@ function ProfitRows({
                 ) : null}
               </div>
               <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={row.customerFullName || row.customerName || "-"} wide />
+                <DetailField label="客户全称" value={customerLegalName(row)} wide />
                 <DetailField label="订单号" value={row.orderNo || "-"} />
                 <DetailField label="提单号" value={row.blNo || "-"} />
                 <DetailField label="业务员" value={row.salespersonName || "-"} />
