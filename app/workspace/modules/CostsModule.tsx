@@ -514,6 +514,7 @@ function QuickCreateCostPanel({
     try {
       const params = new URLSearchParams({ status: "active" });
       if (keyword.trim()) params.set("keyword", keyword.trim());
+      if (FACTORY_COST_TYPES.includes(form.costType)) params.set("type", "factory");
       const result = await apiJson<SuppliersResponse>(`/api/suppliers/search?${params}`);
       return Array.isArray(result.suppliers) ? result.suppliers : [];
     } catch (supplierError) {
@@ -567,7 +568,13 @@ function QuickCreateCostPanel({
       costType,
       currency,
       exchangeRate: currency === "CNY" ? "1" : "",
+      supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商"
+        ? ""
+        : current.supplierId,
     }));
+    if (FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商") {
+      setMessage("当前成本类型需要选择工厂供应商，请重新选择供应商。");
+    }
     await resolveExchangeRate(currency);
   }
 
@@ -684,9 +691,9 @@ function QuickCreateCostPanel({
           供应商
           <SearchAutocomplete
             value={selectedSupplier || null}
-            cacheKey="cost-suppliers"
+            cacheKey={`cost-suppliers:${FACTORY_COST_TYPES.includes(form.costType) ? "factory" : "all"}`}
             emptyLabel="未找到匹配供应商，可先到系统设置新增供应商"
-            placeholder="输入供应商 / 类型 / 开票名称 / 税号"
+            placeholder={FACTORY_COST_TYPES.includes(form.costType) ? "输入工厂供应商 / 开票名称 / 税号" : "输入供应商 / 类型 / 开票名称 / 税号"}
             getLabel={supplierLabel}
             getDescription={(supplier) => supplier.invoiceTitle || supplier.supplierType || ""}
             search={searchSuppliers}
