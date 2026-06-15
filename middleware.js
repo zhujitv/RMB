@@ -49,6 +49,12 @@ export function middleware(request) {
     });
   }
 
+  if (request.nextUrl.pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/workspace";
+    return NextResponse.redirect(url);
+  }
+
   const response = NextResponse.next();
   response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate");
   return response;
