@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
@@ -163,6 +163,29 @@ type ManualShippingForm = {
   emailBody: string;
 };
 
+type ConfirmationResult = {
+  confirmed: boolean;
+  inputValue?: string;
+};
+
+type ConfirmationOptions = {
+  title: string;
+  message?: string;
+  details?: string[];
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "default" | "warning" | "danger";
+  requireInput?: boolean;
+  inputLabel?: string;
+  inputPlaceholder?: string;
+  inputRequiredMessage?: string;
+};
+
+type ConfirmationState = ConfirmationOptions & {
+  inputValue: string;
+  inputError: string;
+};
+
 type TaxRefundMode = "current" | "archive";
 
 const PAGE_SIZE = 20;
@@ -228,6 +251,8 @@ export function TaxRefundModule({
   const [manualShippingLoading, setManualShippingLoading] = useState(false);
   const [manualShippingSending, setManualShippingSending] = useState(false);
   const [manualShippingMessage, setManualShippingMessage] = useState("");
+  const confirmResolverRef = useRef<((result: ConfirmationResult) => void) | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -236,6 +261,37 @@ export function TaxRefundModule({
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
+
+  function requestConfirmation(options: ConfirmationOptions) {
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current({ confirmed: false });
+      confirmResolverRef.current = null;
+    }
+    setConfirmation({ ...options, inputValue: "", inputError: "" });
+    return new Promise<ConfirmationResult>((resolve) => {
+      confirmResolverRef.current = resolve;
+    });
+  }
+
+  function resolveConfirmation(confirmed: boolean) {
+    if (!confirmation) return;
+    if (confirmed && confirmation.requireInput && !confirmation.inputValue.trim()) {
+      setConfirmation({
+        ...confirmation,
+        inputError: confirmation.inputRequiredMessage || "请填写原因后继续。",
+      });
+      return;
+    }
+    const resolver = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmation(null);
+    resolver?.({ confirmed, inputValue: confirmation.inputValue.trim() });
+  }
+
+  function updateConfirmationInput(value: string) {
+    if (!confirmation) return;
+    setConfirmation({ ...confirmation, inputValue: value, inputError: "" });
+  }
 
   async function loadRows(
     nextPage = page,
@@ -410,27 +466,58 @@ export function TaxRefundModule({
     let submitPayload: Record<string, unknown> = { status: "SUBMITTED" };
 
     if (total <= 0 || percent < 100) {
-      const missingText = missingLabels.length ? `\n\n缺失资料：${missingLabels.join(" / ")}` : "";
       let allowForceSubmit = false;
       if (currentUser.role === "管理员") {
         const settingsResult = await apiJson<{ settings?: { allowAdminIncompleteTaxSubmit?: boolean } }>("/api/exchange-rates/settings").catch(() => null);
         allowForceSubmit = settingsResult?.settings?.allowAdminIncompleteTaxSubmit === true;
       }
       if (!allowForceSubmit) {
-        window.alert(`资料尚未完整，无法提交退税。\n\n当前完整度：${completed}/${total || 0}（${percent}%）${missingText}\n\n请先补齐缺失资料后再提交。`);
+        const result = await requestConfirmation({
+          title: "资料尚未完整，无法提交退税",
+          message: `当前完整度：${completed}/${total || 0}（${percent}%）。请先补齐缺失资料后再提交。`,
+          details: missingLabels,
+          confirmLabel: "查看缺失资料",
+          cancelLabel: "关闭",
+          variant: "warning",
+        });
+        if (result.confirmed) {
+          await openMissingTarget(row, taxTargetKeyFromMissingLabel(missingLabels[0] || ""));
+        }
         return;
       }
-      const forceReason = window.prompt(`资料尚未完整。\n\n当前完整度：${completed}/${total || 0}（${percent}%）${missingText}\n\n管理员强制提交必须填写原因：`, "");
-      if (!forceReason?.trim()) {
-        setError("强制提交退税必须填写原因");
+      const forceResult = await requestConfirmation({
+        title: "确认强制提交退税并归档？",
+        message: `当前完整度：${completed}/${total || 0}（${percent}%）。归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`,
+        details: [
+          `订单：${row.orderNo || "-"}`,
+          `提单号：${row.blNo || "-"}`,
+          ...(missingLabels.length ? [`缺失资料：${missingLabels.join(" / ")}`] : []),
+        ],
+        requireInput: true,
+        inputLabel: "强制提交原因",
+        inputPlaceholder: "例如：税务局要求先申报，发票后补",
+        inputRequiredMessage: "强制提交退税必须填写原因。",
+        confirmLabel: "确认强制提交并归档",
+        cancelLabel: "取消",
+        variant: "warning",
+      });
+      if (!forceResult.confirmed) {
         return;
       }
-      if (!window.confirm(`确认强制提交退税并归档该订单吗？\n\n订单：${row.orderNo || "-"}\n提单号：${row.blNo || "-"}\n\n归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`)) {
-        return;
-      }
-      submitPayload = { status: "SUBMITTED", forceSubmit: true, forceReason: forceReason.trim() };
-    } else if (!window.confirm(`确认提交退税并归档该订单吗？\n\n订单：${row.orderNo || "-"}\n提单号：${row.blNo || "-"}\n\n归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`)) {
-      return;
+      submitPayload = { status: "SUBMITTED", forceSubmit: true, forceReason: forceResult.inputValue?.trim() };
+    } else {
+      const submitResult = await requestConfirmation({
+        title: "确认提交退税并归档？",
+        message: "归档后，该订单将从当前退税资料、成本管理、国内物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+        details: [
+          `订单：${row.orderNo || "-"}`,
+          `提单号：${row.blNo || "-"}`,
+        ],
+        confirmLabel: "确认提交并归档",
+        cancelLabel: "取消",
+        variant: "default",
+      });
+      if (!submitResult.confirmed) return;
     }
 
     setSubmittingTaxId(row.id);
@@ -479,9 +566,15 @@ export function TaxRefundModule({
   }
 
   async function cancelTaxRefundArchive(row: TaxRefundRow) {
-    if (!window.confirm(`确认取消归档该订单吗？\n\n订单：${row.orderNo || "-"}\n\n取消归档后，该订单将重新回到当前退税资料列表。`)) {
-      return;
-    }
+    const result = await requestConfirmation({
+      title: "确认取消归档？",
+      message: "取消归档后，该订单将重新回到当前退税资料列表。",
+      details: [`订单：${row.orderNo || "-"}`],
+      confirmLabel: "确认取消归档",
+      cancelLabel: "返回",
+      variant: "warning",
+    });
+    if (!result.confirmed) return;
     setCancelingArchiveId(row.id);
     setError("");
     setNotice("");
@@ -543,7 +636,15 @@ export function TaxRefundModule({
   }
 
   async function deleteDocument(orderId: string, document: TaxDocument) {
-    if (!window.confirm(`确认删除文件？\n\n${document.fileName || document.documentTypeLabel || "-"}`)) return;
+    const result = await requestConfirmation({
+      title: "确认删除文件？",
+      message: "删除后该文件不会参与退税资料完整度统计。",
+      details: [document.fileName || document.documentTypeLabel || "-"],
+      confirmLabel: "删除文件",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!result.confirmed) return;
     setDeletingDocumentId(document.id);
     setDetailError("");
     setError("");
@@ -611,7 +712,17 @@ export function TaxRefundModule({
   async function sendManualShippingDocuments(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!manualShippingOrder || !manualShippingDraft || !manualShippingForm) return;
-    if ((manualShippingDraft.missingLabels || []).length && !window.confirm("当前资料不完整，是否仍然发送？")) return;
+    if ((manualShippingDraft.missingLabels || []).length) {
+      const result = await requestConfirmation({
+        title: "当前资料不完整，是否仍然发送？",
+        message: "清关资料缺失时仍可手动发送，但建议先确认客户是否接受。",
+        details: manualShippingDraft.missingLabels || [],
+        confirmLabel: "仍然发送",
+        cancelLabel: "返回补充资料",
+        variant: "warning",
+      });
+      if (!result.confirmed) return;
+    }
     setManualShippingSending(true);
     setManualShippingMessage("");
     try {
@@ -802,6 +913,14 @@ export function TaxRefundModule({
           onSubmit={sendManualShippingDocuments}
           onChange={setManualShippingForm}
           onLanguageChange={updateManualShippingLanguage}
+        />
+      ) : null}
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={() => resolveConfirmation(false)}
+          onConfirm={() => resolveConfirmation(true)}
+          onInputChange={updateConfirmationInput}
         />
       ) : null}
     </section>
@@ -1345,6 +1464,66 @@ function ManualShippingDocumentsDialog({
         ) : (
           <div className={styles.inlineError}>{message || "清关资料发送信息生成失败"}</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ConfirmationDialog({
+  state,
+  onCancel,
+  onConfirm,
+  onInputChange,
+}: {
+  state: ConfirmationState;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onInputChange: (value: string) => void;
+}) {
+  const variantClass = state.variant === "danger"
+    ? styles.confirmDialogDanger
+    : state.variant === "warning"
+      ? styles.confirmDialogWarning
+      : "";
+
+  return (
+    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label={state.title}>
+      <div className={`${styles.confirmDialog} ${variantClass}`}>
+        <div className={styles.confirmDialogHeader}>
+          <strong>{state.title}</strong>
+          {state.message ? <span>{state.message}</span> : null}
+        </div>
+
+        {state.details?.length ? (
+          <div className={styles.confirmDialogDetails}>
+            {state.details.map((detail) => (
+              <span key={detail}>{detail}</span>
+            ))}
+          </div>
+        ) : null}
+
+        {state.requireInput ? (
+          <label className={styles.confirmDialogInput}>
+            {state.inputLabel || "原因"}
+            <textarea
+              value={state.inputValue}
+              onChange={(event) => onInputChange(event.target.value)}
+              placeholder={state.inputPlaceholder}
+              rows={3}
+              autoFocus
+            />
+            {state.inputError ? <small>{state.inputError}</small> : null}
+          </label>
+        ) : null}
+
+        <div className={styles.confirmDialogActions}>
+          <button className={styles.secondaryButton} type="button" onClick={onCancel}>
+            {state.cancelLabel || "取消"}
+          </button>
+          <button className={state.variant === "danger" ? styles.dangerButton : styles.primaryButtonCompact} type="button" onClick={onConfirm}>
+            {state.confirmLabel || "确认"}
+          </button>
+        </div>
       </div>
     </div>
   );
