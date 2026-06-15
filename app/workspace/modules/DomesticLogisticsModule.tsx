@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
-import { formatDateTime } from "../formatters";
+import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -540,9 +540,14 @@ function DomesticLogisticsRows({
                   <strong>集装箱运输明细</strong>
                   {info.transportItems.map((item, index) => (
                     <div className={styles.subListItem} key={`${item.containerNo || item.truckPlateNo || index}-${index}`}>
-                      <span>{index + 1}. {item.containerNo || "无集装箱号"}</span>
-                      <span>{item.truckPlateNo || "-"} / {item.trailerPlateNo || "-"}</span>
-                      <span>{item.departurePlace || "-"} → {item.arrivalPlace || "-"}</span>
+                      <strong>明细 {index + 1}{item.containerNo ? ` · ${item.containerNo}` : ""}</strong>
+                      <span>车牌号：{item.truckPlateNo || "-"}</span>
+                      <span>挂车车牌：{item.trailerPlateNo || "-"}</span>
+                      <span>起运日期：{formatDate(item.departureDate)}</span>
+                      <span>起运地：{item.departurePlace || "-"}</span>
+                      <span>到达地：{item.arrivalPlace || "-"}</span>
+                      <span>运输货物名称：{item.cargoName || "-"}</span>
+                      {item.remark ? <span>备注：{item.remark}</span> : null}
                     </div>
                   ))}
                 </div>

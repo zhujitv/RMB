@@ -5231,7 +5231,8 @@ async function submitLogisticsInvoice(event) {
   const id = $("#logistics-invoice-expense-id")?.value || "";
   if (!id) return toast("缺少物流费用记录");
   const file = $("#logistics-invoice-file")?.files?.[0];
-  if (!file) return toast("请上传发票 PDF 或图片");
+  if (!file) return toast("请上传发票 PDF");
+  if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) return toast("只能上传 PDF 文件");
   setFormSubmitLoading(form, true);
   try {
     const formData = new FormData();

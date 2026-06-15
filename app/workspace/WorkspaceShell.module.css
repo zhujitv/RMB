@@ -2124,13 +2124,17 @@
 
 .subListItem {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1.2fr;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
   background: #f8fafc;
   color: #334155;
   font-size: 13px;
+}
+
+.subListItem strong {
+  color: #0f172a;
 }
 
 .taxDetailPanel {

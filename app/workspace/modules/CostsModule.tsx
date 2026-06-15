@@ -4,8 +4,10 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
-import { formatCny, moneyText } from "../formatters";
+import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
@@ -16,6 +18,12 @@ const COST_CONFIRMATION_OPTIONS = [
 ];
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const FOREIGN_CURRENCY_COST_TYPES = ["国外佣金", "国外代理费", "佣金"];
+const FACTORY_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
+const LOGISTICS_INVOICE_COST_TYPES = ["拖车费", "国内物流费", "国内拖车费", "报关费", "港杂费", "海运费"];
+const FACTORY_DOCUMENT_TYPES = [
+  { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", required: true },
+  { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", required: true },
+];
 
 type UserLite = {
   name?: string;
@@ -50,6 +58,20 @@ type CostRow = {
   updatedBy?: UserLite;
   createdAt?: string;
   updatedAt?: string;
+  supplierType?: string;
+  documents?: CostDocument[];
+};
+
+type CostDocument = {
+  id: string;
+  documentType?: string;
+  fileName?: string;
+  fileSize?: number;
+  uploadStatus?: string;
+  uploadedByName?: string;
+  uploadedAt?: string;
+  costId?: string;
+  supplierId?: string;
 };
 
 type CostsPage = {
@@ -64,6 +86,15 @@ type CostsResponse = {
   success: boolean;
   data: CostsPage;
   costs?: CostRow[];
+};
+
+type CostDetailResponse = {
+  success?: boolean;
+  cost?: CostRow;
+  data?: {
+    cost?: CostRow;
+  };
+  message?: string;
 };
 
 type CostOrderOption = {
@@ -131,7 +162,13 @@ const emptyQuickCostForm: QuickCostForm = {
   remark: "",
 };
 
-export function CostsModule() {
+export function CostsModule({
+  currentUser,
+  permissions,
+}: {
+  currentUser: User;
+  permissions?: PermissionSnapshot;
+}) {
   const [rows, setRows] = useState<CostRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -143,7 +180,13 @@ export function CostsModule() {
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editCost, setEditCost] = useState<CostRow | null>(null);
+  const [documentCost, setDocumentCost] = useState<CostRow | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState("");
+  const [uploadingKey, setUploadingKey] = useState("");
+  const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "成本录入员", "业务员"]);
 
   async function loadCosts(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -291,6 +334,7 @@ export function CostsModule() {
                   setExpandedId(cost.id);
                 }}
                 onDelete={() => void deleteCost(cost)}
+                onOpenDocuments={() => void openCostDocuments(cost.id)}
               />
             )) : (
               <tr>
@@ -302,8 +346,121 @@ export function CostsModule() {
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={gotoPage} />
+
+      {documentCost ? (
+        <CostDocumentsDrawer
+          cost={documentCost}
+          loading={documentLoading}
+          error={documentError}
+          uploadingKey={uploadingKey}
+          deletingDocumentId={deletingDocumentId}
+          canWriteDocuments={canWriteDocuments}
+          onClose={() => {
+            setDocumentCost(null);
+            setDocumentError("");
+            setUploadingKey("");
+            setDeletingDocumentId("");
+          }}
+          onUpload={(cost, documentType, file) => void uploadCostDocument(cost, documentType, file)}
+          onDelete={(cost, document) => void deleteCostDocument(cost, document)}
+        />
+      ) : null}
     </section>
   );
+
+  async function fetchCostDetail(id: string) {
+    const result = await apiJson<CostDetailResponse>(`/api/costs/${encodeURIComponent(id)}`);
+    const cost = result.cost || result.data?.cost;
+    if (!cost) throw new Error(result.message || "未找到成本详情");
+    setRows((current) => current.map((item) => item.id === cost.id ? { ...item, ...cost } : item));
+    return cost;
+  }
+
+  async function openCostDocuments(id: string) {
+    const cached = rows.find((cost) => cost.id === id) || null;
+    setDocumentCost(cached);
+    setDocumentLoading(true);
+    setDocumentError("");
+    try {
+      const cost = await fetchCostDetail(id);
+      setDocumentCost(cost);
+    } catch (detailError) {
+      setDocumentError(detailError instanceof Error ? detailError.message : "读取成本资料失败");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }
+
+  async function refreshDocumentCost(costId: string) {
+    try {
+      const freshCost = await fetchCostDetail(costId);
+      setDocumentCost(freshCost);
+    } catch (detailError) {
+      setDocumentError(detailError instanceof Error ? detailError.message : "刷新成本资料失败");
+    }
+  }
+
+  async function uploadCostDocument(cost: CostRow, documentType: string, file: File | null) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+      setDocumentError("只能上传 PDF 文件");
+      return;
+    }
+    if (!cost.orderId) {
+      setDocumentError("该成本未关联订单，不能上传资料。");
+      return;
+    }
+    if (!cost.supplierId) {
+      setDocumentError("该成本未关联供应商，不能上传供应商资料。");
+      return;
+    }
+    const key = costUploadKey(cost, documentType);
+    setUploadingKey(key);
+    setDocumentError("");
+    try {
+      const formData = new FormData();
+      formData.append("orderId", cost.orderId);
+      formData.append("documentType", documentType);
+      formData.append("costId", cost.id);
+      formData.append("supplierId", cost.supplierId);
+      formData.append("relatedModule", "SUPPLIER");
+      formData.append("uploadSource", "REACT_COSTS");
+      formData.append("file", file);
+      const response = await fetch("/api/order-documents", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.message || "资料上传失败");
+      }
+      await refreshDocumentCost(cost.id);
+      setNotice("资料已上传");
+    } catch (uploadError) {
+      setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
+    } finally {
+      setUploadingKey("");
+    }
+  }
+
+  async function deleteCostDocument(cost: CostRow, document: CostDocument) {
+    if (!window.confirm(`确认删除该资料？\n\n文件：${document.fileName || "-"}`)) return;
+    setDeletingDocumentId(document.id);
+    setDocumentError("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
+        method: "DELETE",
+      });
+      if (result.success === false) throw new Error(result.message || "删除资料失败");
+      await refreshDocumentCost(cost.id);
+      setNotice("资料已删除");
+    } catch (deleteError) {
+      setDocumentError(deleteError instanceof Error ? deleteError.message : "删除资料失败");
+    } finally {
+      setDeletingDocumentId("");
+    }
+  }
 
   async function deleteCost(cost: CostRow) {
     if (!window.confirm(`确认删除这条成本？\n\n订单：${cost.orderNo || "-"}\n成本：${cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`)) return;
@@ -605,6 +762,7 @@ function CostTableRows({
   onToggle,
   onEdit,
   onDelete,
+  onOpenDocuments,
 }: {
   cost: CostRow;
   expanded: boolean;
@@ -612,6 +770,7 @@ function CostTableRows({
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onOpenDocuments: () => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
@@ -632,10 +791,20 @@ function CostTableRows({
           <td colSpan={8}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
+                <button
+                  className={styles.primaryButtonCompact}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenDocuments();
+                  }}
+                >
+                  资料维护
+                </button>
                 {manualCost ? (
                   <>
                     <button
-                      className={styles.primaryButtonCompact}
+                      className={styles.secondaryButton}
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
@@ -678,6 +847,193 @@ function CostTableRows({
       ) : null}
     </>
   );
+}
+
+function CostDocumentsDrawer({
+  cost,
+  loading,
+  error,
+  uploadingKey,
+  deletingDocumentId,
+  canWriteDocuments,
+  onClose,
+  onUpload,
+  onDelete,
+}: {
+  cost: CostRow;
+  loading: boolean;
+  error: string;
+  uploadingKey: string;
+  deletingDocumentId: string;
+  canWriteDocuments: boolean;
+  onClose: () => void;
+  onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
+  onDelete: (cost: CostRow, document: CostDocument) => void;
+}) {
+  const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
+  const documentTypes = costDocumentTypesForDrawer(cost);
+
+  return (
+    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="成本资料维护">
+      <aside className={styles.taxRefundDrawer}>
+        <header className={styles.taxRefundDrawerHeader}>
+          <div className={styles.taxRefundDrawerTitle}>
+            <span>供应商资料 / 发票资料</span>
+            <strong>{cost.orderNo || "-"} · {supplierName}</strong>
+            <small>{cost.costType || "-"} · 提单号：{cost.blNo || cost.billOfLadingNo || "-"}</small>
+          </div>
+          <div className={styles.taxRefundDrawerActions}>
+            <button className={styles.ghostButton} type="button" onClick={onClose}>关闭</button>
+          </div>
+        </header>
+        <div className={styles.taxRefundDrawerBody}>
+          {loading ? <div className={styles.emptyState}>资料加载中...</div> : null}
+          {error ? <div className={styles.inlineError}>{error}</div> : null}
+          <div className={styles.documentGroupGrid}>
+            <div className={styles.documentGroupCard}>
+              <strong>成本信息</strong>
+              <div className={styles.detailGrid}>
+                <DetailField label="订单号" value={cost.orderNo || "-"} />
+                <DetailField label="供应商" value={supplierName} />
+                <DetailField label="成本类型" value={cost.costType || "-"} />
+                <DetailField label="成本金额" value={moneyText(cost.currency, cost.amount, cost.amountCny)} />
+                <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
+                <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
+              </div>
+            </div>
+            <div className={styles.documentGroupCard}>
+              <strong>资料要求</strong>
+              <span className={styles.mutedText}>
+                {isFactoryCost(cost) ? "工厂供应商需维护采购合同和增值税发票。" : isLogisticsInvoiceCost(cost) ? "物流类费用需维护对应物流发票。" : "当前成本可维护一份发票资料。"}
+              </span>
+            </div>
+          </div>
+          <div className={styles.documentGroupCard}>
+            <strong>资料维护</strong>
+            {documentTypes.map((documentType) => (
+              <CostDocumentUploadItem
+                key={`${cost.id}-${documentType.value}`}
+                cost={cost}
+                documentType={documentType}
+                documents={documentsForType(cost, documentType.value)}
+                uploading={uploadingKey === costUploadKey(cost, documentType.value)}
+                deletingDocumentId={deletingDocumentId}
+                canWriteDocuments={canWriteDocuments}
+                onUpload={onUpload}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function CostDocumentUploadItem({
+  cost,
+  documentType,
+  documents,
+  uploading,
+  deletingDocumentId,
+  canWriteDocuments,
+  onUpload,
+  onDelete,
+}: {
+  cost: CostRow;
+  documentType: { value: string; label: string; required?: boolean };
+  documents: CostDocument[];
+  uploading: boolean;
+  deletingDocumentId: string;
+  canWriteDocuments: boolean;
+  onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
+  onDelete: (cost: CostRow, document: CostDocument) => void;
+}) {
+  const completed = documents.some((document) => document.uploadStatus === "SUCCESS");
+  return (
+    <div className={styles.fileListItem}>
+      <div>
+        <span>{documentType.label}</span>
+        <small>{completed ? `已上传 ${documents.length} 个文件` : documentType.required ? "缺失" : "暂未上传"}</small>
+        {documents.map((document) => (
+          <small key={document.id}>
+            {document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDate(document.uploadedAt)}
+          </small>
+        ))}
+      </div>
+      <div>
+        {canWriteDocuments ? (
+          <label className={styles.secondaryButton}>
+            {uploading ? "上传中..." : completed ? "替换/上传PDF" : "选择PDF"}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={uploading}
+              hidden
+              onChange={(event) => {
+                onUpload(cost, documentType.value, event.target.files?.[0] || null);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+        ) : (
+          <button className={styles.secondaryButton} type="button" disabled title="无权限操作">无权限操作</button>
+        )}
+        {documents.map((document) => (
+          <span key={document.id} className={styles.fileListItemActions}>
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+            {canWriteDocuments ? (
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                disabled={deletingDocumentId === document.id}
+                onClick={() => onDelete(cost, document)}
+              >
+                {deletingDocumentId === document.id ? "删除中..." : "删除"}
+              </button>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function costDocumentTypesForDrawer(cost: CostRow) {
+  if (isFactoryCost(cost)) return FACTORY_DOCUMENT_TYPES;
+  if (isLogisticsInvoiceCost(cost)) {
+    return [{ value: "SUPPLIER_INVOICE", label: logisticsInvoiceLabel(cost), required: true }];
+  }
+  return [{ value: "SUPPLIER_INVOICE", label: "发票资料", required: false }];
+}
+
+function documentsForType(cost: CostRow, documentType: string) {
+  return (cost.documents || []).filter((document) => (
+    document.documentType === documentType
+    && document.uploadStatus === "SUCCESS"
+    && (!document.costId || document.costId === cost.id)
+  ));
+}
+
+function isFactoryCost(cost: CostRow) {
+  return cost.supplierType === "工厂供应商" || FACTORY_COST_TYPES.includes(cost.costType || "");
+}
+
+function isLogisticsInvoiceCost(cost: CostRow) {
+  return LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType || "");
+}
+
+function logisticsInvoiceLabel(cost: Pick<CostRow, "costType">) {
+  if (["拖车费", "国内物流费", "国内拖车费"].includes(cost.costType || "")) return "拖车费发票";
+  if (cost.costType === "报关费") return "报关费发票";
+  if (cost.costType === "港杂费") return "港杂费发票";
+  if (cost.costType === "海运费") return "海运费发票";
+  return "物流发票";
+}
+
+function costUploadKey(cost: CostRow, documentType: string) {
+  return [cost.orderId || "", cost.id, cost.supplierId || "", documentType].join(":");
 }
 
 function costFormFromRow(cost?: CostRow | null): QuickCostForm {

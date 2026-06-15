@@ -35,7 +35,7 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     label: "成本管理",
     description: "维护工厂、物流、港杂等成本资料。",
     stage: "partial",
-    migrationNotes: ["支持分页列表、普通成本登记、编辑和删除", "物流信息内保留按票录入物流费用入口", "资料维护组件复用退税文件组件"],
+    migrationNotes: ["支持分页列表、普通成本登记、编辑、删除和资料维护", "物流信息内保留按票录入物流费用入口", "成本资料维护支持工厂合同、工厂发票和物流发票上传/预览/下载/删除"],
   },
   profit: {
     key: "profit",

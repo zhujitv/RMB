@@ -750,7 +750,7 @@ export function LogisticsExpenseForm({
 
   function handleOrderSelect(order: ExpenseOrderOption) {
     const normalizedOrder = normalizeExpenseOrder(order);
-    const orderSuppliers = normalizedOrder.logisticsSuppliers || [];
+    const orderSuppliers = filterLogisticsFeeSuppliers(normalizedOrder.logisticsSuppliers || []);
     const nextSupplierId = isLockedSupplier
       ? currentUserSupplierId
       : orderSuppliers.length === 1
@@ -983,6 +983,10 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
       setMessage("请选择发票文件");
       return;
     }
+    if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+      setMessage("只能上传 PDF 文件");
+      return;
+    }
     setUploading(true);
     setMessage("");
     try {
@@ -1014,7 +1018,7 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
       <input value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} type="date" />
       <input value={invoiceAmount} onChange={(event) => setInvoiceAmount(event.target.value)} inputMode="decimal" placeholder="发票金额" />
       <input value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="发票备注" />
-      <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+      <input type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} />
       <button className={styles.secondaryButton} type="submit" disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
       {message ? <span className={styles.inlineFormMessage}>{message}</span> : null}
     </form>
