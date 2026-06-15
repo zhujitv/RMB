@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { apiJson } from "./api";
+import { ApiRequestError, apiJson } from "./api";
 import { AccountSettings } from "./AccountSettings";
 import { availableMenus } from "./menu";
 import { LoadingPanel } from "./LoadingPanel";
@@ -27,6 +27,21 @@ import { WorkspaceLayout } from "./WorkspaceLayout";
 
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 
+function clearClientAuthState() {
+  if (typeof window === "undefined") return;
+  ["token", "session", "currentUser", "user", "authToken", "fta_user_id", "fta_session"].forEach((key) => {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  });
+}
+
+function validateAuthPayload(payload: AuthPayload) {
+  if (!payload?.user?.id) throw new Error("账户信息缺少用户ID。");
+  if (!payload.user.name) throw new Error("账户信息缺少姓名。");
+  if (!payload.user.email) throw new Error("账户信息缺少邮箱。");
+  if (!payload.user.role) throw new Error("账户信息缺少角色。");
+}
+
 export function WorkspaceShell() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading", message: "正在加载工作台..." });
   const [activeMenu, setActiveMenu] = useState("welcome");
@@ -40,6 +55,7 @@ export function WorkspaceShell() {
     setAuth({ status: "loading", message: "正在加载工作台..." });
     try {
       const payload = await apiJson<AuthPayload>("/api/auth/me");
+      validateAuthPayload(payload);
       if (payload.user.mustChangePassword) {
         setAuth({ status: "password-change", user: payload.user, message: "请先修改初始密码。" });
         return;
@@ -47,11 +63,13 @@ export function WorkspaceShell() {
       setAuth({ status: "ready", payload });
       setActiveMenu("welcome");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "用户信息加载失败";
-      if (/请先登录|未登录|登录/i.test(message)) {
-        setAuth({ status: "guest" });
+      if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
+        clearClientAuthState();
+        setAuth({ status: "guest", message: error.code === "PASSWORD_CHANGE_REQUIRED" ? error.message : "登录已过期，请重新登录。" });
+      } else if (error instanceof ApiRequestError && error.status >= 500) {
+        setAuth({ status: "error", message: "系统暂时无法读取账户信息，请联系管理员。" });
       } else {
-        setAuth({ status: "error", message: "用户信息加载失败" });
+        setAuth({ status: "error", message: error instanceof Error ? error.message : "用户信息加载失败" });
       }
     }
   }

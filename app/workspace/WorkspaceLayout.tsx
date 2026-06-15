@@ -50,6 +50,7 @@ export function WorkspaceLayout({
 }: WorkspaceLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const active = MENU_ITEMS.find((item) => item.key === activeMenu);
+  const avatarText = payload.user.avatarInitials?.trim() || initials(payload.user.name);
 
   return (
     <div className={styles.appShell}>
@@ -89,7 +90,7 @@ export function WorkspaceLayout({
           </div>
           <div className={styles.accountArea}>
             <button className={styles.accountButton} type="button" onClick={() => setMenuOpen((open) => !open)}>
-              <span className={styles.avatar}>{initials(payload.user.name)}</span>
+              <span className={styles.avatar}>{avatarText}</span>
               <span>{payload.user.name}</span>
             </button>
             {menuOpen ? (

@@ -16,8 +16,7 @@ export function normalizeEmail(value: string) {
 export function initials(name = "") {
   const trimmed = name.trim();
   if (!trimmed) return "NW";
-  const ascii = trimmed.match(/[A-Za-z0-9]/g)?.slice(0, 2).join("");
-  return (ascii || trimmed.slice(0, 2)).toUpperCase();
+  return trimmed.slice(0, 1).toUpperCase();
 }
 
 export function canWritePermission(

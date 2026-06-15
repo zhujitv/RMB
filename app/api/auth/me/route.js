@@ -13,6 +13,14 @@ export async function GET(request) {
       session: await currentSessionInfo(request),
     });
   } catch (error) {
+    if (!error?.status || error.status >= 500) {
+      console.error("auth me failed: account info load error", {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      return apiError(error, "系统暂时无法读取账户信息，请联系管理员。");
+    }
     return apiError(error, "请先登录");
   }
 }

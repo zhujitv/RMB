@@ -9597,14 +9597,10 @@ function exportReport(type) {
 
 function profileInitials(user = state.me) {
   const manual = String(user?.avatarInitials || "").trim();
-  if (manual) return manual.slice(0, 8).toUpperCase();
-  const emailLocal = String(user?.email || "").split("@")[0].replace(/[^A-Za-z0-9]/g, "");
-  if (emailLocal.length >= 2) return `${emailLocal[0]}${emailLocal[emailLocal.length - 1]}`.toUpperCase();
+  if (manual) return manual.slice(0, 3).toUpperCase();
   const name = String(user?.name || "").trim();
   if (!name) return "--";
-  const asciiParts = name.match(/[A-Za-z0-9]+/g);
-  if (asciiParts?.length) return asciiParts.map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-  return name.slice(-2);
+  return name.slice(0, 1).toUpperCase();
 }
 
 function approvalStatusText(user = state.me) {

@@ -125,8 +125,9 @@ export function AccountSettings({ user, onProfileSaved, onPasswordChanged }: Acc
             <input name="phone" type="tel" defaultValue={user.phone || ""} />
           </label>
           <label>
-            <span>头像缩写</span>
-            <input name="avatarInitials" type="text" defaultValue={user.avatarInitials || ""} maxLength={8} />
+            <span>头像简称</span>
+            <input name="avatarInitials" type="text" defaultValue={user.avatarInitials || ""} maxLength={3} />
+            <small className={styles.mutedText}>留空时自动使用姓名首字。</small>
           </label>
           <label>
             <span>默认语言</span>
