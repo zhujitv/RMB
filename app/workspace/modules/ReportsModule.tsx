@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
+import { downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 type ReportType = {
@@ -223,14 +224,7 @@ export function ReportsModule() {
         throw new Error(typeof data.message === "string" ? data.message : "下载报表失败");
       }
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = reportFileName(reportType, format);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, reportFileName(reportType, format));
       setNotice("报表已开始下载");
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载报表失败");

@@ -6,6 +6,7 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
+import { downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const PAGE_SIZE = 20;
@@ -368,12 +369,7 @@ export function LogisticsFeesModule({
     ]);
     const csv = [header, ...body].map((line) => line.map(csvCell).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `物流费用月结_${statementMonth || "全部"}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `物流费用月结_${statementMonth || "全部"}.csv`);
     setNotice("物流费用月结对账单已开始导出");
   }
 

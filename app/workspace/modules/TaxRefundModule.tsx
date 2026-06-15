@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog }
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission } from "../utils";
+import { canWritePermission, downloadBlob } from "../utils";
 
 type DocumentCompleteness = {
   completed?: number;
@@ -392,14 +392,7 @@ export function TaxRefundModule({
         throw new Error(data && typeof data.message === "string" ? data.message : "下载退税资料包失败");
       }
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = zipFileNameFromResponse(response, row);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, zipFileNameFromResponse(response, row));
       setNotice("退税资料包已开始下载");
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载退税资料包失败");
