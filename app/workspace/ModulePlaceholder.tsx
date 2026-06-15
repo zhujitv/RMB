@@ -42,7 +42,7 @@ export function ModulePlaceholder({ moduleKey }: ModulePlaceholderProps) {
 
 function stageLabel(stage: string) {
   if (stage === "ready") return "已开放";
-  if (stage === "partial") return "持续完善";
+  if (stage === "partial") return "已开放";
   if (stage === "legacy") return "待开放";
   return "待开放";
 }

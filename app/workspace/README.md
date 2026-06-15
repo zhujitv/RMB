@@ -1,15 +1,15 @@
-# React + TypeScript Migration Workspace
+# NEXTWOOD React Workspace
 
-This route is the React + TypeScript migration workspace for NEXTWOOD.
+This route is the React + TypeScript business workspace for NEXTWOOD.
 
 - URL: `/workspace`
-- Keeps the legacy `/index.html` + `/app.js` UI intact.
+- Keeps the legacy `/index.html` + `/app.js` UI intact during the final parity window.
 - Reuses existing Next.js API routes, Prisma, sessions, and permissions.
 - Loads only authentication and menu permission data on entry.
 - Shows a lightweight welcome page after login.
 - Business data is loaded only after the user opens a module.
 
-Migrated modules:
+Available modules:
 
 - 登录页 / 首次改密 / 账户设置
 - 左侧导航和权限初始化
@@ -30,11 +30,11 @@ Verification for migrated modules:
 - `npm run lint`
 - `npm run build`
 
-Current migration focus:
+Production guardrails:
 
 - Keep API, Prisma, session, permissions, and database structure unchanged.
-- Compare each React module against the legacy production UI before retiring old views.
-- Continue aligning high-frequency details in 国内物流信息, 每票物流费用录入, 退税资料, 成本, 收款, and complex order fields.
+- Compare high-frequency details against the legacy production UI before retiring old views.
+- Keep 国内物流信息, 每票物流费用录入, 退税资料, 成本, 收款, and complex order fields aligned.
 
 Domestic logistics parity note:
 

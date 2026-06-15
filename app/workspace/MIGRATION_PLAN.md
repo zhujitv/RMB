@@ -1,6 +1,6 @@
-# React + TypeScript Module Migration Plan
+# React + TypeScript Workspace Status
 
-The new workspace keeps the legacy UI intact while modules move one by one.
+The `/workspace` route is the production React + TypeScript workspace. It keeps the legacy UI available during the final parity window, but daily business work should use the React modules.
 
 ## Current Foundation
 
@@ -40,14 +40,14 @@ Each migrated module must keep the legacy behavior before the old view is retire
 ## Migration Order
 
 1. 应收订单 - ready
-2. 收款管理
-3. 成本管理
-4. 国内物流信息
-5. 退税资料
-6. 报表中心
-7. 系统设置
+2. 收款管理 - ready
+3. 成本管理 - ready
+4. 国内物流信息 - ready
+5. 退税资料 - ready
+6. 报表中心 - ready
+7. 系统设置 - ready
 
-## Current Parity Focus
+## Current Parity Guardrails
 
 - 国内物流信息: keep legacy per-order fee entry, logistics supplier lock, customs documents, and multi-container transport details aligned with the online legacy UI.
 - 退税资料: keep the list compact, use the detail drawer for full file management, preserve tax status updates, submit-to-archive validation, missing-document jump chips, and manual shipping-document sending.
