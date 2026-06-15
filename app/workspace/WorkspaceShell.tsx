@@ -242,7 +242,7 @@ export function WorkspaceShell() {
           onAction={() => setActiveMenu("welcome")}
         />
       ) : activeMenu === "orders" ? (
-        <OrdersModule />
+        <OrdersModule currentUser={payload.user} permissions={payload.permissions} />
       ) : activeMenu === "dashboard" ? (
         <DashboardModule />
       ) : activeMenu === "payments" ? (

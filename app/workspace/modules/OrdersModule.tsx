@@ -6,7 +6,8 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
-import { customerDisplayName, customerLegalName } from "../utils";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission, customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
@@ -170,16 +171,24 @@ const emptyQuickOrderForm: QuickOrderForm = {
   dueDate: "",
   creditDays: "30",
   reminderDays: "7",
-  status: "已确认",
+  status: "草稿",
   logisticsSupplierIds: [],
   paymentInstallments: [{ ratio: "100", condition: "按约定付款" }],
   remark: "",
 };
 
-export function OrdersModule() {
+export function OrdersModule({
+  currentUser,
+  permissions,
+}: {
+  currentUser: User;
+  permissions?: PermissionSnapshot;
+}) {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [orderStatus, setOrderStatus] = useState("");
+  const [submittedOrderStatus, setSubmittedOrderStatus] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -197,8 +206,9 @@ export function OrdersModule() {
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
+  const canWriteOrders = canWritePermission(currentUser, permissions, "orders", ["管理员", "业务员"]);
 
-  async function loadOrders(nextPage = page, nextKeyword = submittedKeyword) {
+  async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus) {
     setLoading(true);
     setError("");
     try {
@@ -208,6 +218,7 @@ export function OrdersModule() {
         pageSize: String(PAGE_SIZE),
       });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      if (nextOrderStatus) params.set("orderStatus", nextOrderStatus);
       const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
       const data = result.data || {};
       setOrders(Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : []);
@@ -228,26 +239,33 @@ export function OrdersModule() {
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
+    setSubmittedOrderStatus(orderStatus);
     setExpandedId("");
     setNotice("");
-    void loadOrders(1, value);
+    void loadOrders(1, value, orderStatus);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
+    setOrderStatus("");
+    setSubmittedOrderStatus("");
     setExpandedId("");
     setNotice("");
-    void loadOrders(1, "");
+    void loadOrders(1, "", "");
   }
 
   function gotoPage(nextPage: number) {
     setExpandedId("");
     setNotice("");
-    void loadOrders(nextPage, submittedKeyword);
+    void loadOrders(nextPage, submittedKeyword, submittedOrderStatus);
   }
 
   async function deleteOrder(order: OrderRow) {
+    if (!canWriteOrders) {
+      setError("当前账号没有权限删除应收订单");
+      return;
+    }
     const confirmationResult = await requestConfirmation({
       title: "确认删除该订单？",
       message: "删除后不会物理清除数据，但会从当前业务列表隐藏。",
@@ -290,9 +308,12 @@ export function OrdersModule() {
             className={styles.primaryButtonCompact}
             type="button"
             onClick={() => {
-              setEditOrder(null);
-              setCreateOpen((current) => !current);
+              if (canWriteOrders) {
+                setEditOrder(null);
+                setCreateOpen((current) => !current);
+              }
             }}
+            disabled={!canWriteOrders}
           >
             {createOpen ? "收起新建" : "新建订单"}
           </button>
@@ -302,7 +323,7 @@ export function OrdersModule() {
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadOrders(page, submittedKeyword);
+              void loadOrders(page, submittedKeyword, submittedOrderStatus);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -310,7 +331,7 @@ export function OrdersModule() {
         </div>
       </div>
 
-      {createOpen || editOrder ? (
+      {canWriteOrders && (createOpen || editOrder) ? (
         <QuickCreateOrderPanel
           initialOrder={editOrder}
           onCancel={() => {
@@ -322,7 +343,7 @@ export function OrdersModule() {
             setCreateOpen(false);
             setEditOrder(null);
             setExpandedId("");
-            void loadOrders(1, submittedKeyword);
+            void loadOrders(1, submittedKeyword, submittedOrderStatus);
           }}
         />
       ) : null}
@@ -336,6 +357,10 @@ export function OrdersModule() {
           }}
           placeholder="搜索订单号 / 提单号 / 客户简称 / 供应商"
         />
+        <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} disabled={loading}>
+          <option value="">全部订单状态</option>
+          {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -369,12 +394,14 @@ export function OrdersModule() {
                 expanded={expandedId === order.id}
                 onToggle={() => setExpandedId((current) => current === order.id ? "" : order.id)}
                 onEdit={() => {
+                  if (!canWriteOrders) return;
                   setCreateOpen(false);
                   setEditOrder(order);
                   setExpandedId(order.id);
                 }}
                 onDelete={() => void deleteOrder(order)}
                 deleting={deletingId === order.id}
+                canWrite={canWriteOrders}
               />
             )) : (
               <tr>
@@ -799,6 +826,7 @@ function OrderTableRows({
   onEdit,
   onDelete,
   deleting,
+  canWrite,
 }: {
   order: OrderRow;
   expanded: boolean;
@@ -806,6 +834,7 @@ function OrderTableRows({
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
+  canWrite: boolean;
 }) {
   const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
   const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
@@ -828,14 +857,16 @@ function OrderTableRows({
         <tr className={styles.detailRow}>
           <td colSpan={8}>
             <div className={styles.detailCard}>
-              <div className={styles.detailActions}>
-                <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
-                  编辑订单
-                </button>
-                <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
-                  {deleting ? "删除中..." : "删除订单"}
-                </button>
-              </div>
+              {canWrite ? (
+                <div className={styles.detailActions}>
+                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
+                    编辑订单
+                  </button>
+                  <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
+                    {deleting ? "删除中..." : "删除订单"}
+                  </button>
+                </div>
+              ) : null}
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={customerLegalName(order)} wide />
                 <DetailField label="业务员" value={order.salespersonName || "-"} />
@@ -891,7 +922,7 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     dueDate: order.dueDate || "",
     creditDays: order.creditDays == null || order.creditDays === "" ? "30" : String(order.creditDays),
     reminderDays: order.reminderDays == null || order.reminderDays === "" ? "7" : String(order.reminderDays),
-    status: order.status || "已确认",
+    status: order.status || "草稿",
     logisticsSupplierIds: order.logisticsSupplierIds || [],
     paymentInstallments: order.paymentInstallments?.length
       ? order.paymentInstallments.map((row) => ({ ratio: String(row.ratio || ""), condition: row.condition || "" }))
