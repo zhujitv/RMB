@@ -1,9 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -163,29 +163,6 @@ type ManualShippingForm = {
   emailBody: string;
 };
 
-type ConfirmationResult = {
-  confirmed: boolean;
-  inputValue?: string;
-};
-
-type ConfirmationOptions = {
-  title: string;
-  message?: string;
-  details?: string[];
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: "default" | "warning" | "danger";
-  requireInput?: boolean;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputRequiredMessage?: string;
-};
-
-type ConfirmationState = ConfirmationOptions & {
-  inputValue: string;
-  inputError: string;
-};
-
 type TaxRefundMode = "current" | "archive";
 
 const PAGE_SIZE = 20;
@@ -251,8 +228,13 @@ export function TaxRefundModule({
   const [manualShippingLoading, setManualShippingLoading] = useState(false);
   const [manualShippingSending, setManualShippingSending] = useState(false);
   const [manualShippingMessage, setManualShippingMessage] = useState("");
-  const confirmResolverRef = useRef<((result: ConfirmationResult) => void) | null>(null);
-  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -261,37 +243,6 @@ export function TaxRefundModule({
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
-
-  function requestConfirmation(options: ConfirmationOptions) {
-    if (confirmResolverRef.current) {
-      confirmResolverRef.current({ confirmed: false });
-      confirmResolverRef.current = null;
-    }
-    setConfirmation({ ...options, inputValue: "", inputError: "" });
-    return new Promise<ConfirmationResult>((resolve) => {
-      confirmResolverRef.current = resolve;
-    });
-  }
-
-  function resolveConfirmation(confirmed: boolean) {
-    if (!confirmation) return;
-    if (confirmed && confirmation.requireInput && !confirmation.inputValue.trim()) {
-      setConfirmation({
-        ...confirmation,
-        inputError: confirmation.inputRequiredMessage || "请填写原因后继续。",
-      });
-      return;
-    }
-    const resolver = confirmResolverRef.current;
-    confirmResolverRef.current = null;
-    setConfirmation(null);
-    resolver?.({ confirmed, inputValue: confirmation.inputValue.trim() });
-  }
-
-  function updateConfirmationInput(value: string) {
-    if (!confirmation) return;
-    setConfirmation({ ...confirmation, inputValue: value, inputError: "" });
-  }
 
   async function loadRows(
     nextPage = page,
@@ -918,8 +869,8 @@ export function TaxRefundModule({
       {confirmation ? (
         <ConfirmationDialog
           state={confirmation}
-          onCancel={() => resolveConfirmation(false)}
-          onConfirm={() => resolveConfirmation(true)}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
           onInputChange={updateConfirmationInput}
         />
       ) : null}
@@ -1464,66 +1415,6 @@ function ManualShippingDocumentsDialog({
         ) : (
           <div className={styles.inlineError}>{message || "清关资料发送信息生成失败"}</div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function ConfirmationDialog({
-  state,
-  onCancel,
-  onConfirm,
-  onInputChange,
-}: {
-  state: ConfirmationState;
-  onCancel: () => void;
-  onConfirm: () => void;
-  onInputChange: (value: string) => void;
-}) {
-  const variantClass = state.variant === "danger"
-    ? styles.confirmDialogDanger
-    : state.variant === "warning"
-      ? styles.confirmDialogWarning
-      : "";
-
-  return (
-    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label={state.title}>
-      <div className={`${styles.confirmDialog} ${variantClass}`}>
-        <div className={styles.confirmDialogHeader}>
-          <strong>{state.title}</strong>
-          {state.message ? <span>{state.message}</span> : null}
-        </div>
-
-        {state.details?.length ? (
-          <div className={styles.confirmDialogDetails}>
-            {state.details.map((detail) => (
-              <span key={detail}>{detail}</span>
-            ))}
-          </div>
-        ) : null}
-
-        {state.requireInput ? (
-          <label className={styles.confirmDialogInput}>
-            {state.inputLabel || "原因"}
-            <textarea
-              value={state.inputValue}
-              onChange={(event) => onInputChange(event.target.value)}
-              placeholder={state.inputPlaceholder}
-              rows={3}
-              autoFocus
-            />
-            {state.inputError ? <small>{state.inputError}</small> : null}
-          </label>
-        ) : null}
-
-        <div className={styles.confirmDialogActions}>
-          <button className={styles.secondaryButton} type="button" onClick={onCancel}>
-            {state.cancelLabel || "取消"}
-          </button>
-          <button className={state.variant === "danger" ? styles.dangerButton : styles.primaryButtonCompact} type="button" onClick={onConfirm}>
-            {state.confirmLabel || "确认"}
-          </button>
-        </div>
       </div>
     </div>
   );
