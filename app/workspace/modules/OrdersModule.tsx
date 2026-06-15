@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -189,6 +189,13 @@ export function OrdersModule() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
 
   async function loadOrders(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -240,8 +247,15 @@ export function OrdersModule() {
   }
 
   async function deleteOrder(order: OrderRow) {
-    const confirmed = window.confirm(`确认删除订单 ${order.orderNo || "-"} 吗？\n删除后不会物理清除数据，但会从当前业务列表隐藏。`);
-    if (!confirmed) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认删除该订单？",
+      message: "删除后不会物理清除数据，但会从当前业务列表隐藏。",
+      details: [`订单：${order.orderNo || "-"}`],
+      confirmLabel: "删除订单",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setDeletingId(order.id);
     setError("");
     setNotice("");
@@ -371,6 +385,14 @@ export function OrdersModule() {
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 }

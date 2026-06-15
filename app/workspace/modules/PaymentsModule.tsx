@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
@@ -119,6 +119,13 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   const [editPayment, setEditPayment] = useState<PaymentRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
   const [confirmingId, setConfirmingId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
 
   async function loadPayments(nextPage = page, nextKeyword = submittedKeyword) {
@@ -286,11 +293,30 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 
   async function deletePayment(payment: PaymentRow) {
-    if (!window.confirm(`确认删除这笔收款？\n\n订单：${payment.orderNo || "-"}\n金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`)) return;
+    const result = await requestConfirmation({
+      title: "确认删除这笔收款？",
+      message: "删除后将重新计算订单已收金额、未收金额和回款率。",
+      details: [
+        `订单：${payment.orderNo || "-"}`,
+        `金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`,
+      ],
+      confirmLabel: "删除收款",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!result.confirmed) return;
     setDeletingId(payment.id);
     setError("");
     setNotice("");
@@ -310,16 +336,19 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   }
 
   async function confirmPaymentArrived(payment: PaymentRow) {
-    const confirmed = window.confirm(
-      [
-        "确认该笔收款已经到账？",
-        "",
+    const result = await requestConfirmation({
+      title: "确认该笔收款已经到账？",
+      message: "确认后该笔收款将计入正式回款统计、利润分析和提成结算判断。",
+      details: [
         `订单：${payment.orderNo || "-"}`,
         `客户：${payment.customerShortName || payment.customerName || "-"}`,
         `金额：${moneyText(payment.currency, payment.amount, payment.amountCny)}`,
-      ].join("\n"),
-    );
-    if (!confirmed) return;
+      ],
+      confirmLabel: "确认到账",
+      cancelLabel: "取消",
+      variant: "default",
+    });
+    if (!result.confirmed) return;
     setConfirmingId(payment.id);
     setError("");
     setNotice("");

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 
@@ -61,6 +61,13 @@ export function ProfitModule() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -112,17 +119,22 @@ export function ProfitModule() {
 
   async function settleCommission(row: ProfitRow) {
     const summary = row.summary || {};
-    const message = [
-      "确认结算该订单业务员提成？",
-      "",
+    const confirmationResult = await requestConfirmation({
+      title: "确认结算该订单业务员提成？",
+      message: "结算后将写入提成结算记录，并刷新利润分析列表。",
+      details: [
       `订单号：${row.orderNo || "-"}`,
       `已到账：${formatCny(summary.arrivedPaymentsCny)}`,
       `已确认总成本：${formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}`,
       `预计毛利：${formatCny(summary.expectedGrossProfit)}`,
       `提成比例：${Number(summary.commissionRate || 0).toFixed(2)}%`,
       `应结算提成：${formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)}`,
-    ].join("\n");
-    if (!window.confirm(message)) return;
+      ],
+      confirmLabel: "确认结算",
+      cancelLabel: "取消",
+      variant: "warning",
+    });
+    if (!confirmationResult.confirmed) return;
     setSettlingId(row.id);
     setError("");
     setNotice("");
@@ -218,6 +230,14 @@ export function ProfitModule() {
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={gotoPage} />
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 }

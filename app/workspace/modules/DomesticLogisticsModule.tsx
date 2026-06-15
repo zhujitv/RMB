@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
@@ -139,6 +139,13 @@ export function DomesticLogisticsModule({
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
   const canDeleteDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
   const canEditDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
   const canUploadCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "物流供应商", "物流资料录入员"])
@@ -266,7 +273,15 @@ export function DomesticLogisticsModule({
   }
 
   async function deleteDocument(document: DomesticLogisticsDocument) {
-    if (!window.confirm(`确认删除文件？\n\n${document.fileName || document.documentTypeLabel || "-"}`)) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认删除文件？",
+      message: "删除后该文件不会继续显示在报关资料中。",
+      details: [`文件：${document.fileName || document.documentTypeLabel || "-"}`],
+      confirmLabel: "删除文件",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setDeletingDocumentId(document.id);
     setError("");
     setNotice("");
@@ -287,7 +302,15 @@ export function DomesticLogisticsModule({
   async function deleteDomesticLogistics(row: DomesticLogisticsRow) {
     const id = row.domesticLogisticsInfo?.id;
     if (!id) return;
-    if (!window.confirm(`确认删除该国内物流信息？\n\n订单：${row.orderNo || "-"}`)) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认删除该国内物流信息？",
+      message: "删除后该订单将恢复为未提交物流信息状态。",
+      details: [`订单：${row.orderNo || "-"}`],
+      confirmLabel: "删除物流信息",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setError("");
     setNotice("");
     try {
@@ -427,6 +450,14 @@ export function DomesticLogisticsModule({
       currentUserSupplierId={currentUser.supplierId || ""}
       canCreateExpense={canCreateLogisticsExpense}
     />
+    {confirmation ? (
+      <ConfirmationDialog
+        state={confirmation}
+        onCancel={cancelConfirmation}
+        onConfirm={confirmConfirmation}
+        onInputChange={updateConfirmationInput}
+      />
+    ) : null}
     </>
   );
 }
@@ -574,6 +605,13 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
   const [form, setForm] = useState<DomesticLogisticsForm>(() => formFromRow(row));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
 
   function setFormValue<K extends keyof DomesticLogisticsForm>(key: K, value: DomesticLogisticsForm[K]) {
     setForm((current) => {
@@ -615,8 +653,17 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
     });
   }
 
-  function regenerateRemark() {
-    if (form.remarkTextManualEdited && !window.confirm("该备注已手动修改，重新生成将覆盖当前内容，是否确认？")) return;
+  async function regenerateRemark() {
+    if (form.remarkTextManualEdited) {
+      const confirmationResult = await requestConfirmation({
+        title: "重新生成出口发票备注？",
+        message: "当前备注已手工修改，重新生成将覆盖现有内容。",
+        confirmLabel: "重新生成",
+        cancelLabel: "取消",
+        variant: "warning",
+      });
+      if (!confirmationResult.confirmed) return;
+    }
     setForm((current) => ({ ...current, remarkText: generateRemark(current), remarkTextManualEdited: false }));
   }
 
@@ -665,6 +712,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
   const isExpress = form.transportType === "EXPRESS";
 
   return (
+    <>
     <form className={styles.inlineEditPanel} onSubmit={submitForm} onClick={(event) => event.stopPropagation()}>
       <div className={styles.quickCreateHeader}>
         <div>
@@ -736,7 +784,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
           rows={7}
         />
         <small className={styles.mutedText}>{form.remarkTextManualEdited ? "已手工修改，不再自动覆盖。" : "字段变更后将自动更新备注。"}</small>
-        <button className={styles.secondaryButton} type="button" onClick={regenerateRemark}>重新生成备注</button>
+        <button className={styles.secondaryButton} type="button" onClick={() => void regenerateRemark()}>重新生成备注</button>
       </label>
 
       <div className={styles.detailActions}>
@@ -744,6 +792,15 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>
+    {confirmation ? (
+      <ConfirmationDialog
+        state={confirmation}
+        onCancel={cancelConfirmation}
+        onConfirm={confirmConfirmation}
+        onInputChange={updateConfirmationInput}
+      />
+    ) : null}
+    </>
   );
 }
 

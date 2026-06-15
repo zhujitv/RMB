@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
@@ -186,6 +186,13 @@ export function LogisticsFeesModule({
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
   const canCreateExpense = canCreateExpenseProp ?? ["管理员", "物流供应商"].includes(currentUserRole);
   const canReviewExpense = currentUserRole === "管理员";
   const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
@@ -265,7 +272,18 @@ export function LogisticsFeesModule({
   }
 
   async function withdrawExpense(expense: LogisticsExpense) {
-    if (!window.confirm(`确认撤回该物流费用？\n\n订单：${expense.orderNo || "-"}\n费用：${expense.costType || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`)) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认撤回该物流费用？",
+      message: "撤回后该费用不会进入成本管理和月结统计。",
+      details: [
+        `订单：${expense.orderNo || "-"}`,
+        `费用：${expense.costType || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`,
+      ],
+      confirmLabel: "撤回费用",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setBusyId(expense.id);
     setError("");
     setNotice("");
@@ -283,6 +301,42 @@ export function LogisticsFeesModule({
     } finally {
       setBusyId("");
     }
+  }
+
+  async function rejectExpense(expense: LogisticsExpense) {
+    const confirmationResult = await requestConfirmation({
+      title: "驳回物流费用",
+      message: "请填写驳回原因，供应商将看到该原因并补充修改。",
+      requireInput: true,
+      inputLabel: "驳回原因",
+      inputPlaceholder: "请输入驳回原因",
+      inputRequiredMessage: "请填写驳回原因。",
+      confirmLabel: "确认驳回",
+      cancelLabel: "取消",
+      variant: "warning",
+    });
+    if (!confirmationResult.confirmed) return;
+    await patchExpense(expense, { action: "reject", rejectReason: confirmationResult.inputValue || "" }, "驳回物流费用失败");
+  }
+
+  async function confirmExpenseInvoice(expense: LogisticsExpense) {
+    const body: Record<string, unknown> = { action: "confirmInvoice" };
+    if (Number(expense.invoiceAmount || 0) > Number(expense.amount || 0)) {
+      const confirmationResult = await requestConfirmation({
+        title: "确认物流发票",
+        message: "发票金额大于审核通过金额，请填写强制确认原因。",
+        requireInput: true,
+        inputLabel: "强制确认原因",
+        inputPlaceholder: "请说明仍需确认该发票的原因",
+        inputRequiredMessage: "请填写强制确认原因。",
+        confirmLabel: "确认发票",
+        cancelLabel: "取消",
+        variant: "warning",
+      });
+      if (!confirmationResult.confirmed) return;
+      body.forceConfirmReason = confirmationResult.inputValue || "";
+    }
+    await patchExpense(expense, body, "确认物流发票失败");
   }
 
   async function loadStatement(month = statementMonth) {
@@ -475,21 +529,10 @@ export function LogisticsFeesModule({
                 canConfirmInvoice={canConfirmInvoice}
                 canWithdraw={isLogisticsSupplier}
                 onApprove={() => void patchExpense(expense, { action: "approve" }, "审核物流费用失败")}
-                onReject={() => {
-                  const reason = window.prompt("请输入驳回原因");
-                  if (reason?.trim()) void patchExpense(expense, { action: "reject", rejectReason: reason.trim() }, "驳回物流费用失败");
-                }}
+                onReject={() => void rejectExpense(expense)}
                 onWithdraw={() => void withdrawExpense(expense)}
                 onMarkPaid={() => void patchExpense(expense, { action: "paymentStatus", paymentStatus: "已付款" }, "更新付款状态失败")}
-                onConfirmInvoice={() => {
-                  const body: Record<string, unknown> = { action: "confirmInvoice" };
-                  if (Number(expense.invoiceAmount || 0) > Number(expense.amount || 0)) {
-                    const reason = window.prompt("发票金额大于审核通过金额，请填写强制确认原因");
-                    if (!reason?.trim()) return;
-                    body.forceConfirmReason = reason.trim();
-                  }
-                  void patchExpense(expense, body, "确认物流发票失败");
-                }}
+                onConfirmInvoice={() => void confirmExpenseInvoice(expense)}
                 onInvoiceUploaded={() => {
                   setNotice("物流发票已上传");
                   void loadExpenses(page, submittedKeyword, status, costType);
@@ -508,6 +551,14 @@ export function LogisticsFeesModule({
         setNotice("");
         void loadExpenses(nextPage, submittedKeyword, status, costType);
       }} />
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 }

@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
@@ -187,6 +187,13 @@ export function CostsModule({
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "成本录入员", "业务员"]);
 
   async function loadCosts(nextPage = page, nextKeyword = submittedKeyword, nextArchiveScope = archiveScope) {
@@ -379,6 +386,14 @@ export function CostsModule({
           onDelete={(cost, document) => void deleteCostDocument(cost, document)}
         />
       ) : null}
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 
@@ -459,7 +474,15 @@ export function CostsModule({
   }
 
   async function deleteCostDocument(cost: CostRow, document: CostDocument) {
-    if (!window.confirm(`确认删除该资料？\n\n文件：${document.fileName || "-"}`)) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认删除该资料？",
+      message: "删除后该文件不会继续参与资料完整度统计。",
+      details: [`文件：${document.fileName || "-"}`],
+      confirmLabel: "删除资料",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setDeletingDocumentId(document.id);
     setDocumentError("");
     try {
@@ -477,7 +500,18 @@ export function CostsModule({
   }
 
   async function deleteCost(cost: CostRow) {
-    if (!window.confirm(`确认删除这条成本？\n\n订单：${cost.orderNo || "-"}\n成本：${cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`)) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认删除这条成本？",
+      message: "删除后将重新计算利润和退税资料完整度。",
+      details: [
+        `订单：${cost.orderNo || "-"}`,
+        `成本：${cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`,
+      ],
+      confirmLabel: "删除成本",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
     setDeletingId(cost.id);
     setError("");
     setNotice("");
