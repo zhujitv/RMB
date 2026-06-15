@@ -22,7 +22,7 @@ The `/workspace` route is the production React + TypeScript workspace. It keeps 
 - React operation manual page with search, table of contents, process cards, and expandable sections
 - React dashboard with month/search filters, core metric cards, 12-month trend, risk alerts, profit analysis, cost structure, and salesperson performance loaded on demand
 - Shared detail field, pagination, legacy action, and finance/date formatter helpers
-- Shared API client, menu registry, utility functions, and migration descriptors
+- Shared API client, menu registry, utility functions, and production workspace helpers
 
 ## Module Acceptance Checklist
 
