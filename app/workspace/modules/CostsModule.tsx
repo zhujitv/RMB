@@ -12,6 +12,7 @@ import styles from "../WorkspaceShell.module.css";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
 const COST_PAYMENT_STATUSES = ["待支付", "部分支付", "已支付", "已取消"];
+const COST_INVOICE_STATUSES = ["未收到", "已收到"];
 const COST_CONFIRMATION_OPTIONS = [
   { label: "未确认", value: "false" },
   { label: "已确认", value: "true" },
@@ -75,7 +76,7 @@ type CostDocument = {
 };
 
 type CostsPage = {
-  rows: CostRow[];
+  rows: CostRow[] | CostOrderSummary[];
   total: number;
   page: number;
   pageSize: number;
@@ -134,8 +135,55 @@ type ExchangeRateResponse = {
   };
 };
 
+type CostOrderSummary = {
+  id: string;
+  orderId?: string;
+  orderNo?: string;
+  blNo?: string;
+  billOfLadingNo?: string;
+  customerName?: string;
+  customerFullName?: string;
+  customerShortName?: string;
+  receivableAmountCny?: number;
+  totalCostCny?: number;
+  factoryCostCny?: number;
+  logisticsCostCny?: number;
+  portCostCny?: number;
+  otherCostCny?: number;
+  costCount?: number;
+  costConfirmProgress?: {
+    completed?: number;
+    total?: number;
+    text?: string;
+  };
+  documentProgress?: {
+    completed?: number;
+    total?: number;
+    text?: string;
+  };
+};
+
+type CostFilters = {
+  keyword: string;
+  orderNo: string;
+  blNo: string;
+  customerName: string;
+  supplierName: string;
+  costType: string;
+  paymentStatus: string;
+  costConfirmed: string;
+  invoiceStatus: string;
+  dateFrom: string;
+  dateTo: string;
+};
+
 type QuickCostForm = {
   orderId: string;
+  paymentDate: string;
+};
+
+type CostItemForm = {
+  localId: string;
   supplierId: string;
   costType: string;
   amount: string;
@@ -143,7 +191,6 @@ type QuickCostForm = {
   exchangeRate: string;
   paymentStatus: string;
   costConfirmed: string;
-  paymentDate: string;
   remark: string;
 };
 
@@ -151,15 +198,35 @@ const PAGE_SIZE = 20;
 
 const emptyQuickCostForm: QuickCostForm = {
   orderId: "",
-  supplierId: "",
-  costType: "工厂货款",
-  amount: "",
-  currency: "CNY",
-  exchangeRate: "1",
-  paymentStatus: "待支付",
-  costConfirmed: "false",
   paymentDate: "",
-  remark: "",
+};
+
+function emptyCostItemForm(): CostItemForm {
+  return {
+    localId: `cost-item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    supplierId: "",
+    costType: "工厂货款",
+    amount: "",
+    currency: "CNY",
+    exchangeRate: "1",
+    paymentStatus: "待支付",
+    costConfirmed: "false",
+    remark: "",
+  };
+}
+
+const emptyCostFilters: CostFilters = {
+  keyword: "",
+  orderNo: "",
+  blNo: "",
+  customerName: "",
+  supplierName: "",
+  costType: "",
+  paymentStatus: "",
+  costConfirmed: "",
+  invoiceStatus: "",
+  dateFrom: "",
+  dateTo: "",
 };
 
 export function CostsModule({
@@ -170,10 +237,12 @@ export function CostsModule({
   permissions?: PermissionSnapshot;
 }) {
   const [rows, setRows] = useState<CostRow[]>([]);
+  const [orderRows, setOrderRows] = useState<CostOrderSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [keyword, setKeyword] = useState("");
-  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
+  const [submittedFilters, setSubmittedFilters] = useState<CostFilters>({ ...emptyCostFilters });
+  const [costView, setCostView] = useState<"details" | "orders">("details");
   const [archiveScope, setArchiveScope] = useState("current");
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -196,7 +265,12 @@ export function CostsModule({
   } = useConfirmationDialog();
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "成本录入员", "业务员"]);
 
-  async function loadCosts(nextPage = page, nextKeyword = submittedKeyword, nextArchiveScope = archiveScope) {
+  async function loadCosts(
+    nextPage = page,
+    nextFilters = submittedFilters,
+    nextArchiveScope = archiveScope,
+    nextView = costView,
+  ) {
     setLoading(true);
     setError("");
     try {
@@ -204,53 +278,77 @@ export function CostsModule({
         page: String(nextPage),
         pageSize: String(PAGE_SIZE),
         archiveScope: nextArchiveScope,
+        view: nextView,
       });
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      Object.entries(nextFilters).forEach(([key, value]) => {
+        const text = String(value || "").trim();
+        if (text) params.set(key, text);
+      });
       const result = await apiJson<CostsResponse>(`/api/costs?${params}`);
       const data = result.data || { rows: result.costs || [], total: result.costs?.length || 0, page: nextPage, pageSize: PAGE_SIZE };
-      setRows(Array.isArray(data.rows) ? data.rows : []);
+      if (nextView === "orders") {
+        setOrderRows(Array.isArray(data.rows) ? (data.rows as CostOrderSummary[]) : []);
+        setRows([]);
+      } else {
+        setRows(Array.isArray(data.rows) ? (data.rows as CostRow[]) : []);
+        setOrderRows([]);
+      }
       setTotal(Number(data.total || 0));
       setPage(Number(data.page || nextPage));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取成本明细失败");
+      setError(loadError instanceof Error ? loadError.message : "读取成本数据失败");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadCosts(1, "");
+    void loadCosts(1, { ...emptyCostFilters });
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const activeRows = costView === "orders" ? orderRows : rows;
+
+  function setFilter<K extends keyof CostFilters>(key: K, value: CostFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   function submitSearch() {
-    const value = keyword.trim();
-    setSubmittedKeyword(value);
+    const nextFilters = Object.fromEntries(
+      Object.entries(filters).map(([key, value]) => [key, String(value || "").trim()]),
+    ) as CostFilters;
+    setSubmittedFilters(nextFilters);
     setExpandedId("");
     setNotice("");
-    void loadCosts(1, value, archiveScope);
+    void loadCosts(1, nextFilters, archiveScope, costView);
   }
 
   function resetSearch() {
-    setKeyword("");
-    setSubmittedKeyword("");
+    setFilters({ ...emptyCostFilters });
+    setSubmittedFilters({ ...emptyCostFilters });
     setArchiveScope("current");
     setExpandedId("");
     setNotice("");
-    void loadCosts(1, "", "current");
+    void loadCosts(1, { ...emptyCostFilters }, "current", costView);
   }
 
   function gotoPage(nextPage: number) {
     setExpandedId("");
-    void loadCosts(nextPage, submittedKeyword, archiveScope);
+    void loadCosts(nextPage, submittedFilters, archiveScope, costView);
   }
 
   function changeArchiveScope(nextArchiveScope: string) {
     setArchiveScope(nextArchiveScope);
     setExpandedId("");
     setNotice("");
-    void loadCosts(1, submittedKeyword, nextArchiveScope);
+    void loadCosts(1, submittedFilters, nextArchiveScope, costView);
+  }
+
+  function changeCostView(nextView: "details" | "orders") {
+    setCostView(nextView);
+    setExpandedId("");
+    setNotice("");
+    void loadCosts(1, submittedFilters, archiveScope, nextView);
   }
 
   return (
@@ -277,7 +375,7 @@ export function CostsModule({
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadCosts(page, submittedKeyword, archiveScope);
+              void loadCosts(page, submittedFilters, archiveScope, costView);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -297,15 +395,34 @@ export function CostsModule({
             setEditCost(null);
             setExpandedId("");
             setNotice(editCost ? "成本已更新" : "成本已保存");
-            void loadCosts(1, submittedKeyword, archiveScope);
+            void loadCosts(1, submittedFilters, archiveScope, costView);
           }}
         />
       ) : null}
 
       <div className={styles.listToolbar}>
+        <button
+          className={costView === "details" ? styles.primaryButtonCompact : styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => changeCostView("details")}
+        >
+          成本明细
+        </button>
+        <button
+          className={costView === "orders" ? styles.primaryButtonCompact : styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => changeCostView("orders")}
+        >
+          按订单汇总
+        </button>
+      </div>
+
+      <div className={styles.listToolbar}>
         <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
+          value={filters.keyword}
+          onChange={(event) => setFilter("keyword", event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
@@ -320,46 +437,110 @@ export function CostsModule({
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
 
+      <div className={styles.reportFilterGrid}>
+        <label>
+          订单号
+          <input value={filters.orderNo} onChange={(event) => setFilter("orderNo", event.target.value)} placeholder="订单号" />
+        </label>
+        <label>
+          提单号
+          <input value={filters.blNo} onChange={(event) => setFilter("blNo", event.target.value)} placeholder="提单号" />
+        </label>
+        <label>
+          客户
+          <input value={filters.customerName} onChange={(event) => setFilter("customerName", event.target.value)} placeholder="客户简称 / 全称" />
+        </label>
+        <label>
+          供应商
+          <input value={filters.supplierName} onChange={(event) => setFilter("supplierName", event.target.value)} placeholder="供应商名称" />
+        </label>
+        <label>
+          成本类型
+          <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>
+            <option value="">全部成本类型</option>
+            {[...QUICK_COST_TYPES, "拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用"].map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          付款状态
+          <select value={filters.paymentStatus} onChange={(event) => setFilter("paymentStatus", event.target.value)}>
+            <option value="">全部付款状态</option>
+            {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label>
+          成本确认
+          <select value={filters.costConfirmed} onChange={(event) => setFilter("costConfirmed", event.target.value)}>
+            <option value="">全部确认状态</option>
+            {COST_CONFIRMATION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label>
+          发票状态
+          <select value={filters.invoiceStatus} onChange={(event) => setFilter("invoiceStatus", event.target.value)}>
+            <option value="">全部发票状态</option>
+            {COST_INVOICE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label>
+          开始日期
+          <input type="date" value={filters.dateFrom} onChange={(event) => setFilter("dateFrom", event.target.value)} />
+        </label>
+        <label>
+          结束日期
+          <input type="date" value={filters.dateTo} onChange={(event) => setFilter("dateTo", event.target.value)} />
+        </label>
+      </div>
+
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
-              <th>成本类型</th>
-              <th>供应商</th>
-              <th>成本金额</th>
-              <th>付款状态</th>
-              <th>发票状态</th>
-              <th>详情</th>
-            </tr>
-          </thead>
+          {costView === "orders" ? <CostOrderTableHead /> : <CostDetailTableHead />}
           <tbody>
             {loading ? (
               <tr>
                 <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
-            ) : rows.length ? rows.map((cost) => (
-              <CostTableRows
-                key={cost.id}
-                cost={cost}
-                expanded={expandedId === cost.id}
-                onToggle={() => setExpandedId((current) => current === cost.id ? "" : cost.id)}
-                deleting={deletingId === cost.id}
-                onEdit={() => {
-                  setCreateOpen(false);
-                  setEditCost(cost);
-                  setExpandedId(cost.id);
-                }}
-                onDelete={() => void deleteCost(cost)}
-                onOpenDocuments={() => void openCostDocuments(cost.id)}
-              />
-            )) : (
+            ) : activeRows.length ? (costView === "orders"
+              ? orderRows.map((order) => (
+                <CostOrderSummaryRows
+                  key={order.id}
+                  order={order}
+                  expanded={expandedId === order.id}
+                  onToggle={() => setExpandedId((current) => current === order.id ? "" : order.id)}
+                  onViewDetails={() => {
+                    const nextFilters = { ...emptyCostFilters, orderNo: order.orderNo || "" };
+                    setCostView("details");
+                    setFilters(nextFilters);
+                    setSubmittedFilters(nextFilters);
+                    setExpandedId("");
+                    void loadCosts(1, nextFilters, archiveScope, "details");
+                  }}
+                />
+              ))
+              : rows.map((cost) => (
+                <CostTableRows
+                  key={cost.id}
+                  cost={cost}
+                  expanded={expandedId === cost.id}
+                  onToggle={() => setExpandedId((current) => current === cost.id ? "" : cost.id)}
+                  deleting={deletingId === cost.id}
+                  onEdit={() => {
+                    setCreateOpen(false);
+                    setEditCost(cost);
+                    setExpandedId(cost.id);
+                  }}
+                  onDelete={() => void deleteCost(cost)}
+                  onOpenDocuments={() => void openCostDocuments(cost.id)}
+                />
+              ))
+            ) : (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的成本明细</div></td>
+                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的{costView === "orders" ? "订单成本汇总" : "成本明细"}</div></td>
               </tr>
             )}
           </tbody>
@@ -521,7 +702,7 @@ export function CostsModule({
       });
       if (result.success !== true && result.ok !== true) throw new Error(result.message || "删除成本失败");
       setExpandedId("");
-      await loadCosts(page, submittedKeyword, archiveScope);
+      await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice(result.message || "成本已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除成本失败");
@@ -541,11 +722,35 @@ function QuickCreateCostPanel({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<QuickCostForm>(() => costFormFromRow(initialCost));
+  const [items, setItems] = useState<CostItemForm[]>(() => [costItemFromRow(initialCost)]);
   const [orders, setOrders] = useState<CostOrderOption[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
-  const [exchangeMeta, setExchangeMeta] = useState("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
+  const [exchangeMetaByItem, setExchangeMetaByItem] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const editMode = Boolean(initialCost?.id);
+
+  useEffect(() => {
+    const nextItem = costItemFromRow(initialCost);
+    setForm(costFormFromRow(initialCost));
+    setItems([nextItem]);
+    setExchangeMetaByItem({ [nextItem.localId]: exchangeRateMeta(nextItem.currency) });
+    setMessage("");
+  }, [initialCost?.id]);
+
+  useEffect(() => {
+    setExchangeMetaByItem((current) => {
+      let changed = false;
+      const next = { ...current };
+      items.forEach((item) => {
+        if (!next[item.localId]) {
+          next[item.localId] = exchangeRateMeta(item.currency);
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [items]);
 
   async function searchOrders(keyword: string) {
     try {
@@ -558,11 +763,11 @@ function QuickCreateCostPanel({
     }
   }
 
-  async function searchSuppliers(keyword: string) {
+  async function searchSuppliers(keyword: string, costType: string) {
     try {
       const params = new URLSearchParams({ status: "active" });
       if (keyword.trim()) params.set("keyword", keyword.trim());
-      if (FACTORY_COST_TYPES.includes(form.costType)) params.set("type", "factory");
+      if (FACTORY_COST_TYPES.includes(costType)) params.set("type", "factory");
       const result = await apiJson<SuppliersResponse>(`/api/suppliers/search?${params}`);
       return Array.isArray(result.suppliers) ? result.suppliers : [];
     } catch (supplierError) {
@@ -575,61 +780,92 @@ function QuickCreateCostPanel({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function setItemValue<K extends keyof CostItemForm>(localId: string, key: K, value: CostItemForm[K]) {
+    setItems((current) => current.map((item) => item.localId === localId ? { ...item, [key]: value } : item));
+  }
+
+  function mergeSupplier(supplier: SupplierOption) {
+    setSuppliers((current) => current.some((item) => item.id === supplier.id) ? current : [supplier, ...current]);
+  }
+
   function handleOrderSelect(order: CostOrderOption) {
     setOrders((current) => current.some((item) => item.id === order.id) ? current : [order, ...current]);
     setFormValue("orderId", order.id);
   }
 
-  function handleSupplierSelect(supplier: SupplierOption) {
-    setSuppliers((current) => current.some((item) => item.id === supplier.id) ? current : [supplier, ...current]);
-    setFormValue("supplierId", supplier.id);
+  function handleSupplierSelect(localId: string, supplier: SupplierOption) {
+    mergeSupplier(supplier);
+    setItemValue(localId, "supplierId", supplier.id);
   }
 
-  async function resolveExchangeRate(currency: string, paymentDate = form.paymentDate) {
+  async function resolveExchangeRate(localId: string, currency: string, paymentDate = form.paymentDate) {
     const normalized = currency.trim().toUpperCase();
     if (normalized === "CNY") {
-      setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      setFormValue("exchangeRate", "1");
+      setExchangeMetaByItem((current) => ({ ...current, [localId]: "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" }));
+      setItemValue(localId, "exchangeRate", "1");
       return;
     }
-    setExchangeMeta("正在获取汇率...");
+    setExchangeMetaByItem((current) => ({ ...current, [localId]: "正在获取汇率..." }));
     try {
       const params = new URLSearchParams({ currency: normalized });
       if (paymentDate) params.set("date", paymentDate);
       const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?${params}`);
       const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
       if (rate > 0) {
-        setFormValue("exchangeRate", String(rate));
-        setExchangeMeta(`来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`);
+        setItemValue(localId, "exchangeRate", String(rate));
+        setExchangeMetaByItem((current) => ({
+          ...current,
+          [localId]: `来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`,
+        }));
       } else {
-        setExchangeMeta("汇率来源：待获取，请手工填写");
+        setExchangeMetaByItem((current) => ({ ...current, [localId]: "汇率来源：待获取，请手工填写" }));
       }
     } catch (rateError) {
-      setExchangeMeta(rateError instanceof Error ? rateError.message : "汇率获取失败，请手工填写");
+      setExchangeMetaByItem((current) => ({ ...current, [localId]: rateError instanceof Error ? rateError.message : "汇率获取失败，请手工填写" }));
     }
   }
 
-  async function handleCostTypeChange(costType: string) {
-    const currency = FOREIGN_CURRENCY_COST_TYPES.includes(costType) ? form.currency : "CNY";
-    setForm((current) => ({
-      ...current,
+  async function handleCostTypeChange(localId: string, costType: string) {
+    const item = items.find((row) => row.localId === localId);
+    const selectedSupplier = suppliers.find((supplier) => supplier.id === item?.supplierId);
+    const currency = FOREIGN_CURRENCY_COST_TYPES.includes(costType) ? (item?.currency || "CNY") : "CNY";
+    setItems((current) => current.map((row) => row.localId === localId ? {
+      ...row,
       costType,
       currency,
       exchangeRate: currency === "CNY" ? "1" : "",
-      supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商"
-        ? ""
-        : current.supplierId,
-    }));
+      supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商" ? "" : row.supplierId,
+    } : row));
     if (FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商") {
       setMessage("当前成本类型需要选择工厂供应商，请重新选择供应商。");
     }
-    await resolveExchangeRate(currency);
+    await resolveExchangeRate(localId, currency);
   }
 
-  async function handleCurrencyChange(currency: string) {
+  async function handleCurrencyChange(localId: string, currency: string) {
     const normalized = currency.toUpperCase();
-    setForm((current) => ({ ...current, currency: normalized, exchangeRate: normalized === "CNY" ? "1" : "" }));
-    await resolveExchangeRate(normalized);
+    setItems((current) => current.map((item) => item.localId === localId ? { ...item, currency: normalized, exchangeRate: normalized === "CNY" ? "1" : "" } : item));
+    await resolveExchangeRate(localId, normalized);
+  }
+
+  function addCostItem(copyPrevious = false) {
+    setItems((current) => {
+      const previous = current[current.length - 1] || emptyCostItemForm();
+      const next = copyPrevious
+        ? { ...previous, localId: emptyCostItemForm().localId, supplierId: previous.supplierId, amount: "", remark: "" }
+        : emptyCostItemForm();
+      setExchangeMetaByItem((meta) => ({ ...meta, [next.localId]: next.currency === "CNY" ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" : "汇率来源：待获取" }));
+      return [...current, next];
+    });
+  }
+
+  function removeCostItem(localId: string) {
+    setItems((current) => current.length <= 1 ? current : current.filter((item) => item.localId !== localId));
+    setExchangeMetaByItem((current) => {
+      const next = { ...current };
+      delete next[localId];
+      return next;
+    });
   }
 
   async function submitQuickCost(event: FormEvent<HTMLFormElement>) {
@@ -638,48 +874,54 @@ function QuickCreateCostPanel({
       setMessage("请选择关联订单");
       return;
     }
-    if (!form.supplierId) {
-      setMessage("请选择供应商");
-      return;
-    }
-    if (!form.amount || Number(form.amount) <= 0) {
-      setMessage("请填写供应商成本金额");
-      return;
-    }
-    if (!form.currency) {
-      setMessage("请选择成本币种");
-      return;
-    }
-    if (!Number(form.exchangeRate)) {
-      setMessage("请填写汇率；CNY 成本汇率应自动为 1");
-      return;
+    for (const [index, item] of items.entries()) {
+      if (!item.supplierId) {
+        setMessage(`第 ${index + 1} 条成本请选择供应商`);
+        return;
+      }
+      if (!item.amount || Number(item.amount) <= 0) {
+        setMessage(`第 ${index + 1} 条成本请填写供应商成本金额`);
+        return;
+      }
+      if (!item.currency) {
+        setMessage(`第 ${index + 1} 条成本请选择币种`);
+        return;
+      }
+      if (!Number(item.exchangeRate)) {
+        setMessage(`第 ${index + 1} 条成本请填写汇率；CNY 成本汇率应自动为 1`);
+        return;
+      }
     }
 
     setSaving(true);
     setMessage("");
     try {
-      const isEdit = Boolean(initialCost?.id);
+      const isEdit = editMode;
+      const payloadItems = items.map((item) => ({
+        supplierId: item.supplierId,
+        costType: item.costType,
+        amount: Number(item.amount),
+        currency: item.currency,
+        exchangeRate: Number(item.exchangeRate),
+        paymentStatus: item.paymentStatus,
+        costConfirmed: item.costConfirmed === "true",
+        paymentDate: form.paymentDate || undefined,
+        remark: item.remark.trim(),
+      }));
       const result = await apiJson<{ success?: boolean; message?: string }>(
         isEdit ? `/api/costs/${encodeURIComponent(initialCost?.id || "")}` : "/api/costs",
         {
           method: isEdit ? "PATCH" : "POST",
-          body: JSON.stringify({
-            orderId: form.orderId,
-            supplierId: form.supplierId,
-            costType: form.costType,
-            amount: Number(form.amount),
-            currency: form.currency,
-            exchangeRate: Number(form.exchangeRate),
-            paymentStatus: form.paymentStatus,
-            costConfirmed: form.costConfirmed === "true",
-            paymentDate: form.paymentDate || undefined,
-            remark: form.remark.trim(),
-          }),
+          body: JSON.stringify(isEdit
+            ? { orderId: form.orderId, ...payloadItems[0] }
+            : { orderId: form.orderId, paymentDate: form.paymentDate || undefined, items: payloadItems }),
         },
       );
       if (result.success !== true) throw new Error(result.message || "成本保存失败");
       setForm(costFormFromRow(null));
-      setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
+      const freshItem = emptyCostItemForm();
+      setItems([freshItem]);
+      setExchangeMetaByItem({ [freshItem.localId]: "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" });
       onSaved();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "成本保存失败");
@@ -697,26 +939,24 @@ function QuickCreateCostPanel({
     customerFullName: initialCost.customerFullName,
     customerShortName: initialCost.customerShortName,
   } : null;
-  const initialSupplier = initialCost?.supplierId ? {
-    id: initialCost.supplierId,
-    supplierName: initialCost.supplierName || initialCost.supplierNameSnapshot || initialCost.vendorName,
-    name: initialCost.supplierName || initialCost.supplierNameSnapshot || initialCost.vendorName,
-    supplierType: "",
-    invoiceTitle: "",
-  } : null;
+  const initialSupplier = initialSupplierFromCost(initialCost);
   const orderOptions = initialOrder && !orders.some((order) => order.id === initialOrder.id) ? [initialOrder, ...orders] : orders;
   const supplierOptions = initialSupplier && !suppliers.some((supplier) => supplier.id === initialSupplier.id) ? [initialSupplier, ...suppliers] : suppliers;
   const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
-  const selectedSupplier = supplierOptions.find((supplier) => supplier.id === form.supplierId);
-  const forceCny = !FOREIGN_CURRENCY_COST_TYPES.includes(form.costType);
 
   return (
     <form className={styles.quickCreatePanel} onSubmit={submitQuickCost}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{initialCost?.id ? "编辑成本" : "快速登记成本"}</strong>
-          <span>用于登记工厂、物流、报关、港杂、海运等订单成本。</span>
+          <strong>{editMode ? "编辑成本" : "批量登记成本"}</strong>
+          <span>{editMode ? "编辑单条人工成本记录。" : "可在同一订单下一次录入多条供应商成本。"}</span>
         </div>
+        {!editMode ? (
+          <div className={styles.detailActions}>
+            <button className={styles.secondaryButton} type="button" onClick={() => addCostItem(false)}>添加一条</button>
+            <button className={styles.secondaryButton} type="button" onClick={() => addCostItem(true)}>复制上一条</button>
+          </div>
+        ) : null}
       </div>
 
       {message ? <div className={styles.inlineError}>{message}</div> : null}
@@ -726,6 +966,7 @@ function QuickCreateCostPanel({
           关联订单
           <SearchAutocomplete
             value={selectedOrder || null}
+            disabled={editMode}
             cacheKey="cost-orders"
             emptyLabel="未找到订单"
             placeholder="输入订单号 / 提单号 / 客户简称"
@@ -736,74 +977,100 @@ function QuickCreateCostPanel({
           />
         </label>
         <label>
-          供应商
-          <SearchAutocomplete
-            value={selectedSupplier || null}
-            cacheKey={`cost-suppliers:${FACTORY_COST_TYPES.includes(form.costType) ? "factory" : "all"}`}
-            emptyLabel="未找到匹配供应商，可先到系统设置新增供应商"
-            placeholder={FACTORY_COST_TYPES.includes(form.costType) ? "输入工厂供应商 / 开票名称 / 税号" : "输入供应商 / 类型 / 开票名称 / 税号"}
-            getLabel={supplierLabel}
-            getDescription={(supplier) => supplier.invoiceTitle || supplier.supplierType || ""}
-            search={searchSuppliers}
-            onSelect={handleSupplierSelect}
-          />
-        </label>
-        <label>
-          成本类型
-          <select value={form.costType} onChange={(event) => void handleCostTypeChange(event.target.value)}>
-            {QUICK_COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </label>
-        <label>
-          成本金额
-          <input value={form.amount} onChange={(event) => setFormValue("amount", event.target.value)} inputMode="decimal" required />
-        </label>
-        <label>
-          币种
-          <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)} disabled={forceCny}>
-            {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-          </select>
-        </label>
-        <label>
-          汇率
-          <input
-            value={form.exchangeRate}
-            onChange={(event) => setFormValue("exchangeRate", event.target.value)}
-            readOnly={form.currency === "CNY"}
-            inputMode="decimal"
-            required
-          />
-        </label>
-        <label>
-          付款状态
-          <select value={form.paymentStatus} onChange={(event) => setFormValue("paymentStatus", event.target.value)}>
-            {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </label>
-        <label>
-          成本确认
-          <select value={form.costConfirmed} onChange={(event) => setFormValue("costConfirmed", event.target.value)}>
-            {COST_CONFIRMATION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        <label>
           付款日期
           <input value={form.paymentDate} onChange={(event) => setFormValue("paymentDate", event.target.value)} type="date" />
         </label>
-        <label>
-          备注
-          <input value={form.remark} onChange={(event) => setFormValue("remark", event.target.value)} placeholder="可选" />
-        </label>
+      </div>
+
+      <div className={styles.documentGroupCard}>
+        <strong>成本明细</strong>
+        {items.map((item, index) => {
+          const selectedSupplier = supplierOptions.find((supplier) => supplier.id === item.supplierId) || null;
+          const forceCny = !FOREIGN_CURRENCY_COST_TYPES.includes(item.costType);
+          return (
+            <div className={styles.documentGroupCard} key={item.localId}>
+              <div className={styles.quickCreateHeader}>
+                <div>
+                  <strong>第 {index + 1} 条成本</strong>
+                  <span>{selectedSupplier ? supplierLabel(selectedSupplier) : "请选择供应商"}</span>
+                </div>
+                {!editMode && items.length > 1 ? (
+                  <button className={styles.secondaryButton} type="button" onClick={() => removeCostItem(item.localId)}>删除此条</button>
+                ) : null}
+              </div>
+              <div className={styles.reportFilterGrid}>
+                <label>
+                  供应商
+                  <SearchAutocomplete
+                    value={selectedSupplier}
+                    cacheKey={`cost-suppliers:${FACTORY_COST_TYPES.includes(item.costType) ? "factory" : "all"}:${item.localId}`}
+                    emptyLabel="未找到匹配供应商，可先到系统设置新增供应商"
+                    placeholder={FACTORY_COST_TYPES.includes(item.costType) ? "输入工厂供应商 / 开票名称 / 税号" : "输入供应商 / 类型 / 开票名称 / 税号"}
+                    getLabel={supplierLabel}
+                    getDescription={(supplier) => supplier.invoiceTitle || supplier.supplierType || ""}
+                    search={(keyword) => searchSuppliers(keyword, item.costType)}
+                    onSelect={(supplier) => handleSupplierSelect(item.localId, supplier)}
+                  />
+                </label>
+                <label>
+                  成本类型
+                  <select value={item.costType} onChange={(event) => void handleCostTypeChange(item.localId, event.target.value)}>
+                    {QUICK_COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+                <label>
+                  成本金额
+                  <input value={item.amount} onChange={(event) => setItemValue(item.localId, "amount", event.target.value)} inputMode="decimal" required />
+                </label>
+                <label>
+                  币种
+                  <select value={item.currency} onChange={(event) => void handleCurrencyChange(item.localId, event.target.value)} disabled={forceCny}>
+                    {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                  </select>
+                </label>
+                <label>
+                  汇率
+                  <input
+                    value={item.exchangeRate}
+                    onChange={(event) => setItemValue(item.localId, "exchangeRate", event.target.value)}
+                    readOnly={item.currency === "CNY"}
+                    inputMode="decimal"
+                    required
+                  />
+                </label>
+                <label>
+                  付款状态
+                  <select value={item.paymentStatus} onChange={(event) => setItemValue(item.localId, "paymentStatus", event.target.value)}>
+                    {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </label>
+                <label>
+                  成本确认
+                  <select value={item.costConfirmed} onChange={(event) => setItemValue(item.localId, "costConfirmed", event.target.value)}>
+                    {COST_CONFIRMATION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  备注
+                  <input value={item.remark} onChange={(event) => setItemValue(item.localId, "remark", event.target.value)} placeholder="可选" />
+                </label>
+              </div>
+              <div className={styles.quickCreateMeta}>
+                <span>供应商：{selectedSupplier ? supplierLabel(selectedSupplier) : "-"}</span>
+                <span>{exchangeMetaByItem[item.localId] || "汇率来源：待获取"}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className={styles.quickCreateMeta}>
         <span>订单：{selectedOrder ? orderLabel(selectedOrder) : "-"}</span>
-        <span>供应商：{selectedSupplier ? supplierLabel(selectedSupplier) : "-"}</span>
-        <span>{exchangeMeta}</span>
+        <span>成本条数：{items.length}</span>
       </div>
 
       <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : initialCost?.id ? "更新成本" : "保存成本"}</button>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : editMode ? "更新成本" : `保存 ${items.length} 条成本`}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>
@@ -895,6 +1162,103 @@ function CostTableRows({
                 <DetailField label="创建人" value={cost.createdBy?.name || "-"} />
                 <DetailField label="修改人" value={cost.updatedBy?.name || "-"} />
                 <DetailField label="备注" value={cost.remark || "-"} wide hidden={!cost.remark} />
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function CostDetailTableHead() {
+  return (
+    <thead>
+      <tr>
+        <th>订单号</th>
+        <th>客户简称</th>
+        <th>成本类型</th>
+        <th>供应商</th>
+        <th>成本金额</th>
+        <th>付款状态</th>
+        <th>发票状态</th>
+        <th>详情</th>
+      </tr>
+    </thead>
+  );
+}
+
+function CostOrderTableHead() {
+  return (
+    <thead>
+      <tr>
+        <th>订单号</th>
+        <th>客户简称</th>
+        <th>提单号</th>
+        <th>总成本</th>
+        <th>成本确认</th>
+        <th>资料状态</th>
+        <th>成本条数</th>
+        <th>详情</th>
+      </tr>
+    </thead>
+  );
+}
+
+function CostOrderSummaryRows({
+  order,
+  expanded,
+  onToggle,
+  onViewDetails,
+}: {
+  order: CostOrderSummary;
+  expanded: boolean;
+  onToggle: () => void;
+  onViewDetails: () => void;
+}) {
+  const confirmProgress = order.costConfirmProgress?.text || "无成本";
+  const documentProgress = order.documentProgress?.text || "无需资料";
+  return (
+    <>
+      <tr className={styles.clickableRow} onClick={onToggle}>
+        <td><strong>{order.orderNo || "-"}</strong></td>
+        <td title={customerLegalName(order)}>{customerDisplayName(order)}</td>
+        <td>{order.blNo || order.billOfLadingNo || "-"}</td>
+        <td>{formatCny(Number(order.totalCostCny || 0))}</td>
+        <td><span className={styles.statusPill}>{confirmProgress}</span></td>
+        <td><span className={styles.statusPill}>{documentProgress}</span></td>
+        <td>{Number(order.costCount || 0)}</td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+      </tr>
+      {expanded ? (
+        <tr className={styles.detailRow}>
+          <td colSpan={8}>
+            <div className={styles.detailCard}>
+              <div className={styles.detailActions}>
+                <button
+                  className={styles.primaryButtonCompact}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onViewDetails();
+                  }}
+                >
+                  查看成本明细
+                </button>
+              </div>
+              <div className={styles.detailGrid}>
+                <DetailField label="客户全称" value={customerLegalName(order)} wide />
+                <DetailField label="订单号" value={order.orderNo || "-"} />
+                <DetailField label="提单号" value={order.blNo || order.billOfLadingNo || "-"} />
+                <DetailField label="最终应收" value={formatCny(Number(order.receivableAmountCny || 0))} />
+                <DetailField label="总成本" value={formatCny(Number(order.totalCostCny || 0))} />
+                <DetailField label="工厂成本" value={formatCny(Number(order.factoryCostCny || 0))} />
+                <DetailField label="物流成本" value={formatCny(Number(order.logisticsCostCny || 0))} />
+                <DetailField label="港杂成本" value={formatCny(Number(order.portCostCny || 0))} />
+                <DetailField label="其他成本" value={formatCny(Number(order.otherCostCny || 0))} />
+                <DetailField label="成本确认" value={confirmProgress} />
+                <DetailField label="资料状态" value={documentProgress} />
+                <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
               </div>
             </div>
           </td>
@@ -1095,6 +1459,14 @@ function costFormFromRow(cost?: CostRow | null): QuickCostForm {
   if (!cost) return { ...emptyQuickCostForm };
   return {
     orderId: cost.orderId || "",
+    paymentDate: cost.paymentDate || "",
+  };
+}
+
+function costItemFromRow(cost?: CostRow | null): CostItemForm {
+  if (!cost) return emptyCostItemForm();
+  return {
+    ...emptyCostItemForm(),
     supplierId: cost.supplierId || "",
     costType: cost.costType || "工厂货款",
     amount: cost.amount == null ? "" : String(cost.amount),
@@ -1102,9 +1474,22 @@ function costFormFromRow(cost?: CostRow | null): QuickCostForm {
     exchangeRate: cost.exchangeRate == null ? "1" : String(cost.exchangeRate),
     paymentStatus: cost.paymentStatus || "待支付",
     costConfirmed: cost.costConfirmed ? "true" : "false",
-    paymentDate: cost.paymentDate || "",
     remark: cost.remark || "",
   };
+}
+
+function initialSupplierFromCost(cost?: CostRow | null): SupplierOption | null {
+  if (!cost?.supplierId) return null;
+  return {
+    id: cost.supplierId,
+    supplierName: cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "未命名供应商",
+    name: cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "未命名供应商",
+    supplierType: cost.supplierType || "",
+  };
+}
+
+function exchangeRateMeta(currency?: string) {
+  return (currency || "CNY").toUpperCase() === "CNY" ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" : "汇率来源：待获取";
 }
 
 function orderLabel(order: CostOrderOption) {
