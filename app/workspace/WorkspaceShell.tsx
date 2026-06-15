@@ -257,7 +257,7 @@ export function WorkspaceShell() {
           initialOpenToken={domesticLogisticsFocus.token}
         />
       ) : activeMenu === "profit" ? (
-        <ProfitModule />
+        <ProfitModule currentUser={payload.user} />
       ) : activeMenu === "taxRefund" ? (
         <TaxRefundModule
           currentUser={payload.user}

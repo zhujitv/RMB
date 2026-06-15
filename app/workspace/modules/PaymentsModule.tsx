@@ -91,6 +91,13 @@ type QuickPaymentForm = {
   remark: string;
 };
 
+type PaymentFilters = {
+  keyword: string;
+  month: string;
+  currency: string;
+  paymentStatus: string;
+};
+
 const PAGE_SIZE = 20;
 
 const emptyQuickPaymentForm: QuickPaymentForm = {
@@ -105,10 +112,17 @@ const emptyQuickPaymentForm: QuickPaymentForm = {
   remark: "",
 };
 
+const emptyPaymentFilters: PaymentFilters = {
+  keyword: "",
+  month: "",
+  currency: "",
+  paymentStatus: "",
+};
+
 export function PaymentsModule({ currentUser }: { currentUser: User }) {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [keyword, setKeyword] = useState("");
-  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [filters, setFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
+  const [submittedFilters, setSubmittedFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -129,7 +143,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
 
-  async function loadPayments(nextPage = page, nextKeyword = submittedKeyword) {
+  async function loadPayments(nextPage = page, nextFilters = submittedFilters) {
     setLoading(true);
     setError("");
     try {
@@ -138,7 +152,10 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
         page: String(nextPage),
         pageSize: String(PAGE_SIZE),
       });
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      Object.entries(nextFilters).forEach(([key, value]) => {
+        const text = String(value || "").trim();
+        if (text) params.set(key, text);
+      });
       const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
       const data = result.data || {};
       setPayments(Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : []);
@@ -153,29 +170,35 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   }
 
   useEffect(() => {
-    void loadPayments(1, "");
+    void loadPayments(1, { ...emptyPaymentFilters });
   }, []);
+
+  function setFilter<K extends keyof PaymentFilters>(key: K, value: PaymentFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   function submitSearch() {
     setExpandedId("");
     setNotice("");
-    const value = keyword.trim();
-    setSubmittedKeyword(value);
-    void loadPayments(1, value);
+    const nextFilters = Object.fromEntries(
+      Object.entries(filters).map(([key, value]) => [key, String(value || "").trim()]),
+    ) as PaymentFilters;
+    setSubmittedFilters(nextFilters);
+    void loadPayments(1, nextFilters);
   }
 
   function resetSearch() {
-    setKeyword("");
-    setSubmittedKeyword("");
+    setFilters({ ...emptyPaymentFilters });
+    setSubmittedFilters({ ...emptyPaymentFilters });
     setExpandedId("");
     setNotice("");
-    void loadPayments(1, "");
+    void loadPayments(1, { ...emptyPaymentFilters });
   }
 
   function gotoPage(nextPage: number) {
     setExpandedId("");
     setNotice("");
-    void loadPayments(nextPage, submittedKeyword);
+    void loadPayments(nextPage, submittedFilters);
   }
 
   return (
@@ -204,7 +227,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadPayments(page, submittedKeyword);
+              void loadPayments(page, submittedFilters);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -225,7 +248,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
             setEditPayment(null);
             setExpandedId("");
             setNotice(editPayment ? "收款已更新" : "收款已保存");
-            void loadPayments(1, submittedKeyword);
+            void loadPayments(1, submittedFilters);
           }}
         />
       ) : null}
@@ -236,13 +259,22 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
 
       <div className={styles.listToolbar}>
         <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
+          value={filters.keyword}
+          onChange={(event) => setFilter("keyword", event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
           placeholder="搜索订单号 / 客户简称 / 银行流水"
         />
+        <input value={filters.month} onChange={(event) => setFilter("month", event.target.value)} type="month" />
+        <select value={filters.currency} onChange={(event) => setFilter("currency", event.target.value)} disabled={loading}>
+          <option value="">全部币种</option>
+          {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+        </select>
+        <select value={filters.paymentStatus} onChange={(event) => setFilter("paymentStatus", event.target.value)} disabled={loading}>
+          <option value="">全部收款状态</option>
+          {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -327,7 +359,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       });
       if (result.success !== true) throw new Error(result.message || "删除收款失败");
       setExpandedId("");
-      await loadPayments(page, submittedKeyword);
+      await loadPayments(page, submittedFilters);
       setNotice(result.message || "收款已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除收款失败");
@@ -370,7 +402,7 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
       });
       if (result.success !== true) throw new Error(result.message || "确认到账失败");
       setExpandedId("");
-      await loadPayments(page, submittedKeyword);
+      await loadPayments(page, submittedFilters);
       setNotice(result.message || "收款已确认到账");
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "确认到账失败");

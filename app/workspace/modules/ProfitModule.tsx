@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
+import type { User } from "../types";
 import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
@@ -50,7 +51,7 @@ type ProfitResponse = {
 
 const PAGE_SIZE = 20;
 
-export function ProfitModule() {
+export function ProfitModule({ currentUser }: { currentUser: User }) {
   const [rows, setRows] = useState<ProfitRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -69,6 +70,7 @@ export function ProfitModule() {
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
+  const canSettleCommission = ["管理员", "财务"].includes(currentUser.role);
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
     setLoading(true);
@@ -219,6 +221,7 @@ export function ProfitModule() {
                 expanded={expandedId === row.id}
                 onToggle={() => setExpandedId((current) => current === row.id ? "" : row.id)}
                 settling={settlingId === row.id}
+                canSettleCommission={canSettleCommission}
                 onSettle={() => void settleCommission(row)}
               />
             )) : (
@@ -247,17 +250,19 @@ function ProfitRows({
   row,
   expanded,
   settling,
+  canSettleCommission,
   onToggle,
   onSettle,
 }: {
   row: ProfitRow;
   expanded: boolean;
   settling: boolean;
+  canSettleCommission: boolean;
   onToggle: () => void;
   onSettle: () => void;
 }) {
   const summary = row.summary || {};
-  const commissionCanSettle = Boolean(summary.commissionCanSettle);
+  const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
