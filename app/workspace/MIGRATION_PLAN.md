@@ -13,8 +13,8 @@ The new workspace keeps the legacy UI intact while modules move one by one.
 - Welcome page with no business data preload
 - React server-paged receivable orders list with customer autocomplete, full order create/edit, payment terms, installment nodes, default logistics supplier rules, detail view, and soft-delete actions, loaded only after opening 应收订单
 - React server-paged payments list with create, edit, confirm-arrival, and delete actions, loaded only after opening 收款管理
-- React paged costs list with create, manual-cost edit, and delete actions, loaded only after opening 成本管理
-- React domestic logistics list, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 国内物流信息
+- React paged costs list with current/archive/all business scope, create, manual-cost edit, and delete actions, loaded only after opening 成本管理
+- React domestic logistics list, expanded keyword search, inline edit form, multi-container transport items, customs document upload/delete panel, and per-order logistics fee entry, loaded only after opening 国内物流信息
 - React paged profit analysis list and commission settlement action, loaded only after opening 利润分析
 - React paged tax refund current/archive lists, compact task menu, missing-document jump chips, on-demand detail drawer, tax status update, customs declaration manual fields, export/customs/factory/logistics document upload/delete, package download, submit-to-archive, and cancel-archive actions, loaded only after opening 退税资料
 - React report query shell with full business filters, tabs, pagination, row selection, detail rows, and Excel/CSV on-demand export scopes

@@ -174,6 +174,7 @@ export function CostsModule({
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [archiveScope, setArchiveScope] = useState("current");
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -188,14 +189,14 @@ export function CostsModule({
   const [deletingId, setDeletingId] = useState("");
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "成本录入员", "业务员"]);
 
-  async function loadCosts(nextPage = page, nextKeyword = submittedKeyword) {
+  async function loadCosts(nextPage = page, nextKeyword = submittedKeyword, nextArchiveScope = archiveScope) {
     setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(PAGE_SIZE),
-        archiveScope: "current",
+        archiveScope: nextArchiveScope,
       });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<CostsResponse>(`/api/costs?${params}`);
@@ -221,20 +222,28 @@ export function CostsModule({
     setSubmittedKeyword(value);
     setExpandedId("");
     setNotice("");
-    void loadCosts(1, value);
+    void loadCosts(1, value, archiveScope);
   }
 
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
+    setArchiveScope("current");
     setExpandedId("");
     setNotice("");
-    void loadCosts(1, "");
+    void loadCosts(1, "", "current");
   }
 
   function gotoPage(nextPage: number) {
     setExpandedId("");
-    void loadCosts(nextPage, submittedKeyword);
+    void loadCosts(nextPage, submittedKeyword, archiveScope);
+  }
+
+  function changeArchiveScope(nextArchiveScope: string) {
+    setArchiveScope(nextArchiveScope);
+    setExpandedId("");
+    setNotice("");
+    void loadCosts(1, submittedKeyword, nextArchiveScope);
   }
 
   return (
@@ -261,7 +270,7 @@ export function CostsModule({
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadCosts(page);
+              void loadCosts(page, submittedKeyword, archiveScope);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -281,7 +290,7 @@ export function CostsModule({
             setEditCost(null);
             setExpandedId("");
             setNotice(editCost ? "成本已更新" : "成本已保存");
-            void loadCosts(1, submittedKeyword);
+            void loadCosts(1, submittedKeyword, archiveScope);
           }}
         />
       ) : null}
@@ -295,6 +304,11 @@ export function CostsModule({
           }}
           placeholder="搜索订单号 / 客户简称 / 供应商 / 成本类型"
         />
+        <select value={archiveScope} onChange={(event) => changeArchiveScope(event.target.value)} disabled={loading}>
+          <option value="current">当前业务</option>
+          <option value="archive">已归档业务</option>
+          <option value="all">全部业务</option>
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -473,7 +487,7 @@ export function CostsModule({
       });
       if (result.success !== true && result.ok !== true) throw new Error(result.message || "删除成本失败");
       setExpandedId("");
-      await loadCosts(page, submittedKeyword);
+      await loadCosts(page, submittedKeyword, archiveScope);
       setNotice(result.message || "成本已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除成本失败");

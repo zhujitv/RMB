@@ -333,7 +333,7 @@ export function DomesticLogisticsModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号"
+          placeholder="搜索订单号 / 提单号 / 客户 / 到达地 / 货物"
         />
         <select value={businessScope} onChange={(event) => changeBusinessScope(event.target.value)} disabled={loading}>
           {ARCHIVE_SCOPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
