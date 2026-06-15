@@ -11,7 +11,17 @@ import styles from "../WorkspaceShell.module.css";
 const PAGE_SIZE = 20;
 const COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
-const LOGISTICS_FEE_SUPPLIER_TYPES = ["物流供应商", "海运供应商", "LOGISTICS_SUPPLIER", "FREIGHT_FORWARDER", "SHIPPING_SUPPLIER"];
+const LOGISTICS_FEE_SUPPLIER_TYPES = [
+  "物流供应商",
+  "报关供应商",
+  "海运供应商",
+  "港杂费用供应商",
+  "LOGISTICS_SUPPLIER",
+  "CUSTOMS_SUPPLIER",
+  "FREIGHT_FORWARDER",
+  "SHIPPING_SUPPLIER",
+  "PORT_CHARGES_SUPPLIER",
+];
 const AUDIT_FILTERS = [
   { label: "全部审核状态", value: "" },
   { label: "草稿", value: "草稿" },
@@ -115,6 +125,8 @@ type SupplierOption = {
   supplierName?: string;
   name?: string;
   supplierType?: string;
+  allowLogisticsExpenseEntry?: boolean;
+  allowedLogisticsCostTypes?: string[];
 };
 
 type ExpenseForm = {
@@ -243,6 +255,7 @@ export function LogisticsFeesModule({
       });
       if (result.success !== true) throw new Error(result.message || fallback);
       await loadExpenses(page, submittedKeyword, status, costType);
+      await loadStatement(statementMonth);
       setNotice(result.message || logisticsActionSuccessMessage(body.action));
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : fallback);
@@ -263,6 +276,7 @@ export function LogisticsFeesModule({
       if (result.success !== true) throw new Error(result.message || "撤回物流费用失败");
       setExpandedId("");
       await loadExpenses(page, submittedKeyword, status, costType);
+      await loadStatement(statementMonth);
       setNotice(result.message || "物流费用已撤回");
     } catch (withdrawError) {
       setError(withdrawError instanceof Error ? withdrawError.message : "撤回物流费用失败");
@@ -361,6 +375,7 @@ export function LogisticsFeesModule({
             setExpandedId("");
             setNotice(message || "物流费用已保存");
             void loadExpenses(1, submittedKeyword, status, costType);
+            void loadStatement(statementMonth);
           }}
         />
       ) : null}
@@ -478,6 +493,7 @@ export function LogisticsFeesModule({
                 onInvoiceUploaded={() => {
                   setNotice("物流发票已上传");
                   void loadExpenses(page, submittedKeyword, status, costType);
+                  void loadStatement(statementMonth);
                 }}
               />
             )) : (
@@ -558,7 +574,7 @@ function LogisticsExpenseRows({
                 ) : null}
                 {auditStatus === "待审核" && canWithdraw ? (
                   <>
-                    <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回草稿</button>
+                    <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回</button>
                   </>
                 ) : null}
                 {auditStatus === "审核通过" ? (
@@ -644,7 +660,9 @@ export function LogisticsExpenseForm({
       setForm((current) => ({
         ...current,
         orderId: order.id,
-        supplierId: isLockedSupplier ? currentUserSupplierId : (orderSuppliers.length === 1 ? orderSuppliers[0].id : current.supplierId),
+        supplierId: isLockedSupplier
+          ? currentUserSupplierId
+          : (orderSuppliers.length === 1 ? orderSuppliers[0].id : (orderSuppliers.some((supplier) => supplier.id === current.supplierId) ? current.supplierId : "")),
       }));
     }
   }, [initialOrder, isLockedSupplier, currentUserSupplierId]);
@@ -672,17 +690,20 @@ export function LogisticsExpenseForm({
 
   async function searchSuppliers(nextKeyword: string) {
     setMessage("");
-    try {
-      const params = new URLSearchParams({ status: "active", type: "logisticsFee" });
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<{ suppliers: SupplierOption[] }>(`/api/suppliers/search?${params}`);
-      const rows = filterLogisticsFeeSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []);
-      setSuppliers((current) => mergeSuppliers(current, rows));
-      return rows;
-    } catch (supplierError) {
-      setMessage(supplierError instanceof Error ? supplierError.message : "读取供应商失败");
+    const selected = orders.find((order) => order.id === form.orderId);
+    const orderSuppliers = filterLogisticsFeeSuppliers(selected?.logisticsSuppliers || []);
+    if (!selected) {
+      setMessage("请先选择关联订单");
       return [];
     }
+    setSuppliers((current) => mergeSuppliers(current, orderSuppliers));
+    const keyword = nextKeyword.trim().toLowerCase();
+    if (!keyword) return orderSuppliers;
+    return orderSuppliers.filter((supplier) => [
+      supplier.supplierName,
+      supplier.name,
+      supplier.supplierType,
+    ].some((value) => String(value || "").toLowerCase().includes(keyword)));
   }
 
   function setField<K extends keyof ExpenseForm>(key: K, value: ExpenseForm[K]) {
@@ -730,17 +751,21 @@ export function LogisticsExpenseForm({
   function handleOrderSelect(order: ExpenseOrderOption) {
     const normalizedOrder = normalizeExpenseOrder(order);
     const orderSuppliers = normalizedOrder.logisticsSuppliers || [];
+    const nextSupplierId = isLockedSupplier
+      ? currentUserSupplierId
+      : orderSuppliers.length === 1
+      ? orderSuppliers[0].id
+      : "";
+    const nextSupplier = orderSuppliers.find((supplier) => supplier.id === nextSupplierId) || null;
+    const nextCostTypes = allowedCostTypeOptions(nextSupplier, isLockedSupplier);
     setOrders((current) => mergeOrders(current, [normalizedOrder]));
     setSuppliers((current) => mergeSuppliers(current, orderSuppliers));
-    const availableSupplierIds = new Set([...filterLogisticsFeeSuppliers(suppliers), ...orderSuppliers].map((supplier) => supplier.id));
+    const availableSupplierIds = new Set(orderSuppliers.map((supplier) => supplier.id));
     setForm((current) => ({
       ...current,
       orderId: normalizedOrder.id,
-      supplierId: isLockedSupplier
-        ? currentUserSupplierId
-        : orderSuppliers.length === 1
-        ? orderSuppliers[0].id
-        : (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
+      supplierId: nextSupplierId || (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
+      items: current.items.map((item) => normalizeExpenseItemCostType(item, nextCostTypes)),
     }));
   }
 
@@ -788,9 +813,21 @@ export function LogisticsExpenseForm({
   const selectedOrder = orders.find((order) => order.id === form.orderId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId)
     || null;
+  useEffect(() => {
+    const nextCostTypes = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
+    setForm((current) => {
+      const items = current.items.map((item) => normalizeExpenseItemCostType(item, nextCostTypes));
+      if (items.every((item, index) => item.costType === current.items[index]?.costType)) return current;
+      return { ...current, items };
+    });
+  }, [selectedSupplier?.id, isLockedSupplier]);
   const supplierSummaryText = selectedSupplier
     ? supplierLabel(selectedSupplier)
-    : (isLockedSupplier ? "加载供应商信息中..." : "未选择");
+    : (isLockedSupplier ? "加载供应商信息中..." : (selectedOrder ? "未选择" : "请先选择订单"));
+  const supplierAllowedCostTypes = selectedSupplier?.allowedLogisticsCostTypes?.length
+    ? selectedSupplier.allowedLogisticsCostTypes.join(" / ")
+    : "";
+  const costTypeOptions = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
   const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
 
   return (
@@ -829,16 +866,27 @@ export function LogisticsExpenseForm({
           供应商
           <SearchAutocomplete
             value={selectedSupplier || null}
-            cacheKey="logistics-fee-suppliers"
-            emptyLabel="未找到物流供应商或海运供应商"
-            placeholder="输入物流供应商 / 海运供应商"
-            disabled={isLockedSupplier}
+            cacheKey={`logistics-fee-suppliers:${form.orderId || "none"}`}
+            emptyLabel={selectedOrder ? "该订单未分配物流相关供应商" : "请先选择订单"}
+            placeholder={selectedOrder ? "选择该订单绑定物流相关供应商" : "请先选择订单"}
+            disabled={isLockedSupplier || !selectedOrder}
+            searchOnFocus
             getLabel={supplierLabel}
-            getDescription={(supplier) => supplier.supplierType || "物流费用供应商"}
+            getDescription={(supplier) => {
+              const allowedTypes = supplier.allowedLogisticsCostTypes?.length
+                ? ` · 允许：${supplier.allowedLogisticsCostTypes.join(" / ")}`
+                : "";
+              return `${supplier.supplierType || "物流费用供应商"}${allowedTypes}`;
+            }}
             search={searchSuppliers}
             onSelect={(supplier) => {
               setSuppliers((current) => mergeSuppliers(current, [supplier]));
-              setField("supplierId", supplier.id);
+              const nextCostTypes = allowedCostTypeOptions(supplier, isLockedSupplier);
+              setForm((current) => ({
+                ...current,
+                supplierId: supplier.id,
+                items: current.items.map((item) => normalizeExpenseItemCostType(item, nextCostTypes)),
+              }));
             }}
           />
         </label>
@@ -876,7 +924,7 @@ export function LogisticsExpenseForm({
           {form.items.map((item, index) => (
             <div className={styles.logisticsItemsRow} key={`${index}-${item.costType}`}>
               <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
-                {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
               <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
               <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
@@ -893,6 +941,7 @@ export function LogisticsExpenseForm({
       </div>
       <div className={styles.quickCreateMeta}>
         <span>供应商：{supplierSummaryText}</span>
+        {supplierAllowedCostTypes ? <span>允许费用：{supplierAllowedCostTypes}</span> : null}
       </div>
       <div className={styles.detailActions}>
         <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => void submitExpense("草稿")}>
@@ -1019,6 +1068,17 @@ function supplierLabel(supplier: SupplierOption) {
 
 function filterLogisticsFeeSuppliers(suppliers: SupplierOption[]) {
   return suppliers.filter((supplier) => LOGISTICS_FEE_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
+}
+
+function allowedCostTypeOptions(supplier: SupplierOption | null, shouldRestrict: boolean) {
+  if (!shouldRestrict) return COST_TYPES;
+  const allowed = supplier?.allowedLogisticsCostTypes?.filter((type) => COST_TYPES.includes(type)) || [];
+  return allowed.length ? allowed : COST_TYPES;
+}
+
+function normalizeExpenseItemCostType(item: ExpenseItemForm, options: string[]) {
+  if (!options.length || options.includes(item.costType)) return item;
+  return { ...item, costType: options[0] || item.costType };
 }
 
 function logisticsActionSuccessMessage(action: unknown) {

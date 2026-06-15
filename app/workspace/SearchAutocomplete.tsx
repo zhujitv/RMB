@@ -10,6 +10,7 @@ type SearchAutocompleteProps<T extends { id: string }> = {
   cacheKey: string;
   emptyLabel: string;
   loadingLabel?: string;
+  searchOnFocus?: boolean;
   getLabel: (item: T) => string;
   getDescription?: (item: T) => string;
   search: (keyword: string) => Promise<T[]>;
@@ -26,6 +27,7 @@ export function SearchAutocomplete<T extends { id: string }>({
   cacheKey,
   emptyLabel,
   loadingLabel = "搜索中...",
+  searchOnFocus = false,
   getLabel,
   getDescription,
   search,
@@ -118,6 +120,10 @@ export function SearchAutocomplete<T extends { id: string }>({
             setOpen(true);
           }}
           onFocus={() => {
+            if (searchOnFocus && !disabled && !value) {
+              void runSearch(keyword.trim());
+              return;
+            }
             if (visibleOptions.length || message) setOpen(true);
           }}
           onKeyDown={(event) => {
