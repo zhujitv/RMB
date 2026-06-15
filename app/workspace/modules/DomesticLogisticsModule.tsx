@@ -8,7 +8,7 @@ import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission } from "../utils";
+import { canWritePermission, isPdfFile } from "../utils";
 
 type TransportItem = {
   id?: string;
@@ -246,7 +246,7 @@ export function DomesticLogisticsModule({
     setError("");
     setNotice("");
     try {
-      if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+      if (!isPdfFile(file)) {
         throw new Error("只能上传 PDF 文件");
       }
       const formData = new FormData();

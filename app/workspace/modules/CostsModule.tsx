@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog }
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission } from "../utils";
+import { canWritePermission, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
@@ -431,7 +431,7 @@ export function CostsModule({
 
   async function uploadCostDocument(cost: CostRow, documentType: string, file: File | null) {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+    if (!isPdfFile(file)) {
       setDocumentError("只能上传 PDF 文件");
       return;
     }

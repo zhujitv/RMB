@@ -37,3 +37,7 @@ export function downloadBlob(blob: Blob, fileName: string) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+export function isPdfFile(file: File) {
+  return file.name.toLowerCase().endsWith(".pdf") && file.type === "application/pdf";
+}

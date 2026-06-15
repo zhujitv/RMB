@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog }
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, downloadBlob } from "../utils";
+import { canWritePermission, downloadBlob, isPdfFile } from "../utils";
 
 type DocumentCompleteness = {
   completed?: number;
@@ -550,7 +550,7 @@ export function TaxRefundModule({
     setError("");
     setNotice("");
     try {
-      if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+      if (!isPdfFile(file)) {
         throw new Error("只能上传 PDF 文件");
       }
       const formData = new FormData();

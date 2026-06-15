@@ -6,7 +6,7 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
-import { downloadBlob } from "../utils";
+import { downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 
 const PAGE_SIZE = 20;
@@ -1030,7 +1030,7 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
       setMessage("请选择发票文件");
       return;
     }
-    if (!file.name.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
+    if (!isPdfFile(file)) {
       setMessage("只能上传 PDF 文件");
       return;
     }
