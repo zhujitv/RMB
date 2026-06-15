@@ -998,9 +998,7 @@ function TaxRefundDetailDrawer({
   currentUserRole: string;
   canWriteDocuments: boolean;
 }) {
-  const displayCustomer = row.customerShortName && row.customerFullName
-    ? `${row.customerShortName} / ${row.customerFullName}`
-    : (row.customerFullName || row.customerName || row.customerShortName || "-");
+  const displayCustomer = row.customerFullName || row.customerName || row.customerShortName || "-";
 
   return (
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="退税资料详情">

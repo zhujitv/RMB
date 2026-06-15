@@ -874,7 +874,11 @@ function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
 
 function generateRemark(form: DomesticLogisticsForm) {
   if (form.transportType === "EXPRESS") {
-    return form.expressTrackingNo ? `快递单号：${form.expressTrackingNo}` : "";
+    return [
+      form.expressTrackingNo ? `快递单号：${form.expressTrackingNo}` : "",
+      form.destinationPlace ? `到达地：${form.destinationPlace}` : "",
+      form.cargoDescription ? `运输货物名称：${form.cargoDescription}` : "",
+    ].filter(Boolean).join("\n");
   }
   return form.transportItems.map((item) => [
     item.containerNo ? `集装箱号：${item.containerNo}` : "",
