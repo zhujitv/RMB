@@ -117,9 +117,13 @@ function emptyTransportItem(): TransportItem {
 export function DomesticLogisticsModule({
   currentUser,
   permissions,
+  initialKeyword = "",
+  initialOpenToken = 0,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
+  initialKeyword?: string;
+  initialOpenToken?: number;
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -149,17 +153,46 @@ export function DomesticLogisticsModule({
       const params = new URLSearchParams({ businessScope: nextBusinessScope });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
-      setRows(Array.isArray(result.rows) ? result.rows : []);
+      const nextRows = Array.isArray(result.rows) ? result.rows : [];
+      setRows(nextRows);
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取国内物流信息失败");
+      return [];
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    const value = initialKeyword.trim();
+    if (value) return;
     void loadRows("");
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    setKeyword(value);
+    setSubmittedKeyword(value);
+    setPage(1);
+    setExpandedId("");
+    setEditingOrderId("");
+    setFeeEntryOrderId("");
+    setNotice("");
+    void loadRows(value, businessScope).then((nextRows) => {
+      const matched = nextRows.find((row) => (
+        row.orderNo === value
+        || row.blNo === value
+        || row.billOfLadingNo === value
+        || row.id === value
+        || row.orderId === value
+      )) || nextRows[0];
+      if (!matched) return;
+      setExpandedId(matched.id);
+      if (canEditDomesticLogistics) setEditingOrderId(matched.id);
+    });
+  }, [initialOpenToken]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageRows = useMemo(() => {

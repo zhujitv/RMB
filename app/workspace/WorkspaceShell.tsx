@@ -31,6 +31,7 @@ const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 export function WorkspaceShell() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading", message: "正在加载工作台..." });
   const [activeMenu, setActiveMenu] = useState("welcome");
+  const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
@@ -250,11 +251,23 @@ export function WorkspaceShell() {
       ) : activeMenu === "costs" ? (
         <CostsModule />
       ) : activeMenu === "domesticLogistics" ? (
-        <DomesticLogisticsModule currentUser={payload.user} permissions={payload.permissions} />
+        <DomesticLogisticsModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          initialKeyword={domesticLogisticsFocus.keyword}
+          initialOpenToken={domesticLogisticsFocus.token}
+        />
       ) : activeMenu === "profit" ? (
         <ProfitModule />
       ) : activeMenu === "taxRefund" ? (
-        <TaxRefundModule currentUser={payload.user} permissions={payload.permissions} />
+        <TaxRefundModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          onOpenDomesticLogistics={(keyword) => {
+            setDomesticLogisticsFocus({ keyword, token: Date.now() });
+            setActiveMenu("domesticLogistics");
+          }}
+        />
       ) : activeMenu === "reports" ? (
         <ReportsModule />
       ) : activeMenu === "settings" ? (
