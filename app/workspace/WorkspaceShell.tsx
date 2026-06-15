@@ -7,7 +7,6 @@ import { AccountSettings } from "./AccountSettings";
 import { availableMenus } from "./menu";
 import { LoadingPanel } from "./LoadingPanel";
 import { LoginPanel } from "./LoginPanel";
-import { ModulePlaceholder } from "./ModulePlaceholder";
 import { CostsModule } from "./modules/CostsModule";
 import { DashboardModule } from "./modules/DashboardModule";
 import { DomesticLogisticsModule } from "./modules/DomesticLogisticsModule";
@@ -275,7 +274,12 @@ export function WorkspaceShell() {
       ) : activeMenu === "manual" ? (
         <ManualModule />
       ) : (
-        <ModulePlaceholder moduleKey={activeMenu} />
+        <StatusPanel
+          title="功能暂不可用"
+          message="该功能入口暂未开放，请从左侧选择可用的业务模块。"
+          actionLabel="返回工作台首页"
+          onAction={() => setActiveMenu("welcome")}
+        />
       )}
     </WorkspaceLayout>
   );

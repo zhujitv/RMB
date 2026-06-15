@@ -107,8 +107,7 @@
 .primaryButtonCompact,
 .secondaryButton,
 .dangerButton,
-.ghostButton,
-.legacyLink {
+.ghostButton {
   min-height: 42px;
   border-radius: 13px;
   border: 1px solid transparent;
@@ -135,8 +134,7 @@
   width: fit-content;
 }
 
-.secondaryButton,
-.legacyLink {
+.secondaryButton {
   color: #111827;
   background: #fff;
   border-color: #dbe1ea;
@@ -3130,38 +3128,6 @@
 .transportItemCard button,
 .remarkCard button {
   width: fit-content;
-}
-
-.stageBadge {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  border-radius: 999px;
-  padding: 0 12px;
-  color: #1d4ed8;
-  background: #eff6ff;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.migrationPanel {
-  margin: 20px 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: #f8fafc;
-  padding: 16px;
-}
-
-.migrationPanel strong {
-  display: block;
-  margin-bottom: 10px;
-}
-
-.migrationPanel ul {
-  margin: 0;
-  padding-left: 18px;
-  color: #475569;
-  line-height: 1.7;
 }
 
 @keyframes pulse {
