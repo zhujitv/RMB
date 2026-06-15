@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { apiJson } from "./api";
 import styles from "./WorkspaceShell.module.css";
 
@@ -47,6 +47,8 @@ export function CustomerAutocomplete({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const reactId = useId();
+  const listboxId = `${reactId}-customer-autocomplete-listbox`;
 
   useEffect(() => {
     setKeyword(customerDisplayName(value));
@@ -151,21 +153,32 @@ export function CustomerAutocomplete({
             if (event.key === "Enter" && open) {
               event.preventDefault();
               const selected = visibleOptions[activeIndex];
-              if (selected) selectCustomer(selected);
+              if (selected) {
+                selectCustomer(selected);
+                return;
+              }
+              const nextKeyword = keyword.trim();
+              if (nextKeyword && onCreateRequested && !loading) onCreateRequested(nextKeyword);
             }
           }}
           placeholder={placeholder}
           role="combobox"
           aria-expanded={open}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={open && visibleOptions[activeIndex] ? `${listboxId}-option-${visibleOptions[activeIndex].id}` : undefined}
         />
       </div>
       {open ? (
-        <div className={styles.autocompletePanel}>
+        <div className={styles.autocompletePanel} id={listboxId} role="listbox">
           {loading ? <div className={styles.autocompleteEmpty}>搜索中...</div> : null}
           {!loading && visibleOptions.length ? visibleOptions.map((customer, index) => (
             <button
               className={`${styles.autocompleteOption} ${index === activeIndex ? styles.autocompleteOptionActive : ""}`}
               key={customer.id}
+              id={`${listboxId}-option-${customer.id}`}
+              role="option"
+              aria-selected={index === activeIndex}
               type="button"
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => selectCustomer(customer)}
