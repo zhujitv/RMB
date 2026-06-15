@@ -49,7 +49,7 @@ export const MODULE_DESCRIPTORS: Record<string, ModuleDescriptor> = {
     label: "物流信息",
     description: "录入国内运输信息和报关资料。",
     stage: "partial",
-    migrationNotes: ["支持列表和多集装箱运输明细编辑", "出口发票备注可自动生成或手工调整", "支持报关资料上传、预览、下载和删除"],
+    migrationNotes: ["支持列表和多集装箱运输明细编辑", "出口发票备注可自动生成或手工调整", "支持报关资料上传、预览、下载和删除", "页面下方嵌入旧版一致的每票物流费用录入、费用列表、月结汇总和对账单导出"],
   },
   taxRefund: {
     key: "taxRefund",
