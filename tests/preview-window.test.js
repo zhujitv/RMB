@@ -2,42 +2,37 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const app = readFileSync("app.js", "utf8");
-const html = readFileSync("index.html", "utf8");
-const css = readFileSync("styles.css", "utf8");
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.js", "utf8");
-const backend = readFileSync("lib/platform-db.js", "utf8");
+const taxRefundModule = readFileSync("app/workspace/modules/TaxRefundModule.tsx", "utf8");
+const domesticLogisticsModule = readFileSync("app/workspace/modules/DomesticLogisticsModule.tsx", "utf8");
+const costsModule = readFileSync("app/workspace/modules/CostsModule.tsx", "utf8");
+const styles = readFileSync("app/workspace/WorkspaceShell.module.css", "utf8");
 
-test("preview window is near full screen on desktop and full screen on mobile", () => {
-  assert.match(css, /\.pdf-preview-panel[\s\S]*width: 95vw;[\s\S]*height: 95vh;/);
-  assert.match(css, /@media[\s\S]*\.pdf-preview-panel[\s\S]*width: 100vw;[\s\S]*height: 100vh;/);
+test("preview route returns inline file streams with cache and nosniff headers", () => {
+  assert.match(previewRoute, /"Content-Disposition": `inline; filename="/);
+  assert.match(previewRoute, /"Cache-Control": "private, max-age=300"/);
+  assert.match(previewRoute, /"X-Content-Type-Options": "nosniff"/);
+  assert.match(previewRoute, /const contentType = mimeType \|\| document\.mimeType \|\| "application\/pdf"/);
 });
 
-test("preview toolbar exposes fit and zoom controls", () => {
-  for (const control of ["page-width", "page-fit", "100", "125", "150"]) {
-    assert.match(html, new RegExp(`data-pdf-zoom="${control}"`));
-  }
-  assert.match(html, /data-toggle-pdf-thumbnails/);
-  assert.match(html, /pdf-preview-thumbnails/);
+test("preview route returns structured JSON errors when stream fails", () => {
+  assert.match(previewRoute, /function previewErrorResponse\(error\)/);
+  assert.match(previewRoute, /Response\.json\(\{ error: message, code \}/);
+  assert.match(previewRoute, /X-Preview-Error-Code/);
+  assert.match(previewRoute, /PDF 预览失败，请下载原文件查看/);
 });
 
-test("PDF preview defaults to first page and fit width, not 65 percent", () => {
-  assert.match(app, /pdfPreviewZoom: "page-width"/);
-  assert.match(app, /#page=1&zoom=/);
-  assert.match(app, /pdfPreviewSource\(url, "page-width"\)/);
-  assert(!app.includes('pdfPreviewZoom: "65"'));
-  assert(!app.includes("zoom=65"));
+test("workspace modules use preview links instead of legacy preview windows", () => {
+  const previewHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/preview`\}/;
+  assert.match(taxRefundModule, previewHref);
+  assert.match(domesticLogisticsModule, previewHref);
+  assert.match(costsModule, previewHref);
 });
 
-test("preview supports PDF and common image content types", () => {
-  for (const mimeType of ["application/pdf", "image/jpeg", "image/png", "image/webp"]) {
-    assert.match(app, new RegExp(mimeType.replace("/", "\\/")));
-    assert.match(backend, new RegExp(mimeType.replace("/", "\\/")));
-  }
-  assert.match(previewRoute, /"Content-Type": contentType/);
-});
-
-test("double click zoom cycles through readable zoom levels", () => {
-  assert.match(app, /addEventListener\("dblclick"/);
-  assert.match(app, /const zoomCycle = \["100", "150", "200"\]/);
+test("detail drawers and cards now own file management layout", () => {
+  assert.match(styles, /\.taxRefundDrawer \{/);
+  assert.match(styles, /\.taxRefundDrawerHeader \{/);
+  assert.match(styles, /\.taxRefundDrawerBody \{/);
+  assert.match(styles, /\.detailCard \{/);
+  assert.match(styles, /\.detailCard \* \{/);
 });

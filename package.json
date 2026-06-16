@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma migrate deploy && prisma generate && next build",
-    "lint": "node --check app.js && node --check public/app.js && node --check lib/platform-db.js",
+    "lint": "node --check middleware.js && node --check next.config.mjs && node --check lib/platform-db.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.js",
     "start": "next start",

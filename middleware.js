@@ -49,7 +49,7 @@ export function middleware(request) {
     });
   }
 
-  if (request.nextUrl.pathname === "/") {
+  if (request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/index.html") {
     const url = request.nextUrl.clone();
     url.pathname = "/workspace";
     return NextResponse.redirect(url);

@@ -1,4 +1,4 @@
-import "../styles.css";
+import "./globals.css";
 
 export const metadata = {
   title: "NEXTWOOD 供应链协同平台",

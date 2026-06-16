@@ -1,6 +1,6 @@
 # React + TypeScript Workspace Status
 
-The `/workspace` route is the production React + TypeScript workspace. It keeps the legacy UI available during the final parity window, but daily business work should use the React modules.
+The `/workspace` route is the production React + TypeScript workspace. The legacy UI has been reduced to a redirect shell, and daily business work must use the React modules.
 
 ## Current Foundation
 
@@ -51,11 +51,11 @@ Each migrated module must keep the legacy behavior before the old view is retire
 
 - 物流信息: keep legacy per-order fee entry, logistics supplier lock, customs documents, and multi-container transport details aligned with the online legacy UI.
 - 退税资料: keep the list compact, use the detail drawer for full file management, preserve tax status updates, submit-to-archive validation, missing-document jump chips, and manual shipping-document sending.
-- Legacy frontend remains the reference for final parity checks before disabling old views.
+- Legacy production behavior remains the parity reference, but not the runtime entry.
 
 ## Legacy Frontend Policy
 
-- `index.html` and `app.js` remain available during migration.
-- Only bug fixes should be made in the legacy frontend.
-- New complex workflows should be built in React + TypeScript.
-- A legacy module can be retired only after parity is verified in production-like data.
+- `index.html` is retained only as a redirect shell into `/workspace`.
+- Legacy business UI code is being retired and must not receive feature work.
+- New workflows and all ongoing business fixes belong in React + TypeScript.
+- Old frontend files can be physically deleted once the final compatibility window closes.

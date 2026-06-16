@@ -3,7 +3,7 @@
 This route is the React + TypeScript business workspace for NEXTWOOD.
 
 - URL: `/workspace`
-- Keeps the legacy `/index.html` + `/app.js` UI intact during the final parity window.
+- Legacy `/index.html` is now only a redirect shell into this workspace.
 - Reuses existing Next.js API routes, Prisma, sessions, and permissions.
 - Loads only authentication and menu permission data on entry.
 - Shows a lightweight welcome page after login.
