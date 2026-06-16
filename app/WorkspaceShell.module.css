@@ -3799,6 +3799,11 @@
   font-weight: var(--font-weight-body);
 }
 
+.dataTable .rowDetailButton {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-button);
+}
+
 .reportFilterGrid label,
 .shippingDocsFormGrid label,
 .customsFormGrid label,
