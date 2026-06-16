@@ -64,7 +64,7 @@ jobs:
           echo "Preview deployment: $url" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment preview URL
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         with:
