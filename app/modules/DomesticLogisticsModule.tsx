@@ -330,7 +330,7 @@ export function DomesticLogisticsModule({
 
   return (
     <>
-    <section className={styles.moduleCard}>
+    <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
           <span className={styles.kicker}>业务模块</span>

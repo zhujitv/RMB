@@ -382,7 +382,7 @@ export function LogisticsFeesModule({
   }, { approved: 0, invoiced: 0, pending: 0, paid: 0 });
 
   return (
-    <section className={embedded ? styles.subModuleCard : styles.moduleCard}>
+    <section className={`${embedded ? styles.subModuleCard : styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
           {embedded ? null : <span className={styles.kicker}>业务模块</span>}

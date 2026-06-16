@@ -3818,3 +3818,125 @@
   color: var(--text-heading);
   font-weight: var(--font-weight-subtitle);
 }
+
+/* Logistics modules keep a denser type scale than the default workspace card layout. */
+
+.logisticsTypographyScope {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.logisticsTypographyScope .moduleHeader h2 {
+  color: var(--text-heading);
+  font-size: 16px;
+  font-weight: var(--font-weight-title);
+}
+
+.logisticsTypographyScope .moduleHeader .kicker,
+.logisticsTypographyScope .statementMetrics span,
+.logisticsTypographyScope .statementHeader span,
+.logisticsTypographyScope .logisticsItemsHeader span,
+.logisticsTypographyScope .quickCreateHeader span,
+.logisticsTypographyScope .quickCreateMeta,
+.logisticsTypographyScope .quickCreateMeta span,
+.logisticsTypographyScope .mutedText,
+.logisticsTypographyScope .detailField span,
+.logisticsTypographyScope .fileListItem small,
+.logisticsTypographyScope .emptyState,
+.logisticsTypographyScope .filterHint {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.logisticsTypographyScope .quickCreateHeader strong,
+.logisticsTypographyScope .statementHeader strong,
+.logisticsTypographyScope .logisticsItemsHeader strong,
+.logisticsTypographyScope .transportItemsHeader strong,
+.logisticsTypographyScope .documentGroupCard > strong,
+.logisticsTypographyScope .customsFormHeader strong,
+.logisticsTypographyScope .subList > strong,
+.logisticsTypographyScope .transportItemCard > strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .dataTable th {
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .dataTable td,
+.logisticsTypographyScope .dataTable td strong,
+.logisticsTypographyScope .statementRow,
+.logisticsTypographyScope .statementRow strong,
+.logisticsTypographyScope .statementRow span,
+.logisticsTypographyScope .logisticsItemsRow strong,
+.logisticsTypographyScope .subListItem,
+.logisticsTypographyScope .subListItem strong,
+.logisticsTypographyScope .detailField strong,
+.logisticsTypographyScope .statusPill {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .primaryButton,
+.logisticsTypographyScope .primaryButtonCompact,
+.logisticsTypographyScope .secondaryButton,
+.logisticsTypographyScope .dangerButton,
+.logisticsTypographyScope .ghostButton,
+.logisticsTypographyScope .rowDetailButton,
+.logisticsTypographyScope .fileActionButton,
+.logisticsTypographyScope .logisticsActionBtn,
+.logisticsTypographyScope .tableSortButton {
+  font-size: 13px;
+  font-weight: var(--font-weight-button);
+}
+
+.logisticsTypographyScope .listToolbar input,
+.logisticsTypographyScope .listToolbar select,
+.logisticsTypographyScope .reportFilterGrid input,
+.logisticsTypographyScope .reportFilterGrid select,
+.logisticsTypographyScope .reportFilterGrid textarea,
+.logisticsTypographyScope .statementActions input,
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select,
+.logisticsTypographyScope .transportItemCard input,
+.logisticsTypographyScope .remarkCard textarea,
+.logisticsTypographyScope .inlineInvoiceForm input,
+.logisticsTypographyScope .customsFormGrid input,
+.logisticsTypographyScope .dataTable input,
+.logisticsTypographyScope .dataTable select,
+.logisticsTypographyScope .dataTable textarea {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .reportFilterGrid label,
+.logisticsTypographyScope .transportItemCard label,
+.logisticsTypographyScope .remarkCard,
+.logisticsTypographyScope .customsFormGrid label,
+.logisticsTypographyScope .confirmDialogInput {
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .statementMetrics strong,
+.logisticsTypographyScope .logisticsItemsTotal {
+  color: var(--text-heading);
+  font-size: 16px;
+  font-weight: var(--font-weight-title);
+}
+
+.logisticsTypographyScope .paginationBar,
+.logisticsTypographyScope .paginationBar > span,
+.logisticsTypographyScope .paginationBar div {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
