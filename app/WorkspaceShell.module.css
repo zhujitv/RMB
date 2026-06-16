@@ -3663,3 +3663,153 @@
     padding: 18px;
   }
 }
+
+/* Typography normalization: keep module text weight/color consistent. */
+
+.appShell {
+  color: var(--text);
+}
+
+.topbar h1,
+.moduleHeader h2,
+.welcomeCard h2,
+.moduleCard h2,
+.subModuleCard h2,
+.manualHero h2,
+.accountSettingsHeader h2,
+.statusPanel h2,
+:global(.text-title) {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-title);
+}
+
+.brandBlock strong,
+.dashboardSectionTitle h3,
+.overviewPanel h3,
+.panelHead h3,
+.sideDrawerTitle strong,
+.taxRefundDrawerTitle strong,
+.confirmDialogHeader strong,
+.modalHeader strong,
+.quickCreateHeader strong,
+.statementHeader strong,
+.documentGroupCard > strong,
+.customerShippingHeader strong,
+.customsFormHeader strong,
+.transportItemCard > strong,
+.manualSectionCard > button strong,
+.fileListItem span,
+.shippingDocReady,
+.shippingDocMissing,
+.statusPill,
+.taxMissingBadge,
+.missingChipList span,
+.missingChipButton,
+.primaryButton,
+.primaryButtonCompact,
+.secondaryButton,
+.dangerButton,
+.ghostButton,
+.accountButton,
+.settingsTabs button,
+.reportTabs button,
+.manualToc button,
+.autocompleteEmpty button,
+.rowDetailButton,
+.fileActionButton,
+.tableSortButton,
+:global(.text-subtitle),
+:global(.text-button) {
+  font-weight: var(--font-weight-subtitle);
+}
+
+.autocompleteOption strong,
+.manualHeroBadge strong,
+.manualFlowCard strong,
+.manualRuleCard strong,
+.mobileMetricItem strong,
+.logisticsItemsHeader strong,
+.logisticsItemsRow strong,
+.statementMetrics strong,
+.metricCard strong,
+.overviewRankRow strong,
+.trendRow strong,
+.reminderRow strong,
+.rankMain strong,
+.rankValue strong,
+.donutRing strong,
+.costLegendRow strong,
+.dashboardEmpty strong,
+.checkboxPanel strong,
+.permissionGroup strong {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-title);
+}
+
+.dataTable th,
+.dataTable td strong,
+.dataTable td,
+.moneyCell,
+.detailField strong,
+.statementRow span,
+.subListItem,
+.subListItem strong,
+.exportInvoiceRemarkText,
+:global(.text-table) {
+  color: var(--text);
+}
+
+.dataTable th,
+.tableSortButton {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-subtitle);
+}
+
+.dataTable td,
+.dataTable td strong,
+.moneyCell,
+.detailField strong,
+.statementRow span,
+.subListItem,
+.subListItem strong,
+:global(.text-body),
+:global(.text-table) {
+  font-weight: var(--font-weight-table);
+}
+
+.authForm input,
+.settingsForm input,
+.settingsForm select,
+.listToolbar input,
+.listToolbar select,
+.reportFilterGrid input,
+.reportFilterGrid select,
+.reportFilterGrid textarea,
+.statementActions input,
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select,
+.shippingDocsFormGrid textarea,
+.customsFormGrid input,
+.transportItemCard input,
+.remarkCard textarea,
+.dataTable input,
+.dataTable select,
+.dataTable textarea {
+  color: var(--text);
+  font-weight: var(--font-weight-body);
+}
+
+.reportFilterGrid label,
+.shippingDocsFormGrid label,
+.customsFormGrid label,
+.confirmDialogInput,
+.transportItemCard label,
+.checkboxPanel label,
+.permissionGroup label,
+.detailField span,
+.sideDrawerTitle span,
+.taxRefundDrawerTitle span,
+.reportDownloadBar span {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-subtitle);
+}
