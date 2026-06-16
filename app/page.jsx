@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { WorkspaceShell } from "./WorkspaceShell";
 
 export default function HomePage() {
-  redirect("/workspace");
+  return <WorkspaceShell />;
 }

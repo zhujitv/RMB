@@ -9,7 +9,7 @@ This document defines the safe retirement path for the legacy frontend:
 
 The target state is:
 
-- `/workspace` becomes the only business UI entry.
+- homepage `/` becomes the only business UI entry.
 - Legacy HTML/JS no longer receives business feature changes.
 - Legacy assets are removed only after traffic, routing, tests, and recovery paths are confirmed.
 
@@ -18,25 +18,24 @@ The target state is:
 As of this plan:
 
 - React + TypeScript business modules have completed migration and acceptance.
-- Production business work should use `/workspace`.
+- Production business work should use `/`.
 - Legacy frontend files still exist in the repo as a fallback and historical reference.
-- Root routing has already been normalized to `/workspace`.
+- Root routing has already been normalized to homepage `/`.
 - Legacy-coupled tests have already been replaced with workspace-based checks.
 - Build verification no longer depends on legacy `app.js`.
 - The main remaining coupling is the shared root stylesheet import in `app/layout.jsx` and the legacy files themselves.
 
 ## Key Findings Before Retirement
 
-1. `middleware.js` now redirects both `/` and `/index.html` to `/workspace`.
-2. `app/page.jsx` now redirects `/` to `/workspace`.
+1. `middleware.js` now redirects both `/workspace` and `/index.html` to `/`.
+2. `app/page.jsx` now renders the production workspace directly at `/`.
 3. `package.json` lint no longer checks legacy `app.js` files.
 4. Tests have been rewritten to validate workspace React/API sources instead of legacy HTML/JS.
 5. README and migration docs already describe React as the formal main entry.
 6. Remaining repo references to legacy frontend are now primarily:
    - `README.md`
-   - `app/workspace/README.md`
-   - `app/workspace/MIGRATION_PLAN.md`
-   - `app/layout.jsx` importing `../styles.css`
+   - `app/WORKSPACE_README.md`
+   - `app/WORKSPACE_MIGRATION_PLAN.md`
    - legacy file bodies in root and `public/`
 
 This means the migration is functionally done and structurally much closer to retirement, but the repository is not yet ready to delete the legacy frontend files in one step.
@@ -55,21 +54,21 @@ Status: Done
 
 Goal:
 
-- Make `/workspace` the only intended business entry.
+- Make homepage `/` the only intended business entry.
 - Remove ambiguous root-entry behavior.
 
 Tasks:
 
-1. Change `app/page.jsx` to redirect to `/workspace` instead of `/index.html`.
+1. Change `app/page.jsx` to render the production workspace directly at `/`.
 2. Keep `middleware.js` root redirect aligned with the same behavior.
 3. Decide whether `/index.html` should:
-   - temporarily redirect to `/workspace`, or
+   - temporarily redirect to `/`, or
    - remain accessible only behind an explicit fallback path.
 
 Recommended:
 
-- `/` -> `/workspace`
-- `/index.html` -> `/workspace`
+- `/workspace` -> `/`
+- `/index.html` -> `/`
 
 Acceptance:
 
@@ -152,7 +151,7 @@ Acceptance:
 
 ## Phase 5: Delete Legacy Files
 
-Status: Not started
+Status: In progress
 
 Goal:
 
@@ -165,6 +164,11 @@ Delete candidates:
 - `/public/index.html`
 - `/public/app.js`
 
+Current execution note:
+
+- Root stylesheet coupling has already been removed.
+- Legacy shell files are now ready for physical deletion from the repository.
+
 Optional cleanup after deletion:
 
 - remove duplicated legacy CSS blocks if no longer referenced
@@ -174,7 +178,7 @@ Optional cleanup after deletion:
 Acceptance:
 
 - Repository no longer contains legacy business UI implementation.
-- `/workspace` remains fully functional in production.
+- homepage `/` remains fully functional in production.
 
 ## Phase 6: Post-Retirement Verification
 
@@ -200,12 +204,10 @@ Must verify after deletion:
 
 ## Recommended Execution Order
 
-1. Split shared stylesheet usage away from root `styles.css`
-2. Remove legacy docs language that still implies active fallback usage
-3. Replace legacy file bodies with minimal redirect shells if a short rollback window is desired
-4. Delete legacy files
-5. Deploy
-6. Full manual acceptance
+1. Remove legacy docs language that still implies active fallback usage
+2. Delete legacy files
+3. Deploy
+4. Full manual acceptance
 
 ## Rollback Strategy
 
@@ -213,14 +215,14 @@ If a severe regression appears after retirement:
 
 1. Revert the retirement commit
 2. Redeploy production
-3. Keep `/workspace` as primary entry
+3. Keep `/` as primary entry
 4. Reopen only the specific compatibility path needed for diagnosis
 
 ## Completion Definition
 
 Legacy retirement is complete only when all of the following are true:
 
-- `/workspace` is the sole business UI
+- `/` is the sole business UI
 - root routing is unified
 - no tests depend on legacy HTML/JS
 - no build scripts depend on legacy HTML/JS

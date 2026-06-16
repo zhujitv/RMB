@@ -1,10 +1,10 @@
 # React + TypeScript Workspace Status
 
-The `/workspace` route is the production React + TypeScript workspace. The legacy UI has been reduced to a redirect shell, and daily business work must use the React modules.
+The homepage `/` is the production React + TypeScript workspace. The legacy UI business entry has been retired, and daily business work must use the React modules.
 
 ## Current Foundation
 
-- `/workspace` route
+- homepage `/`
 - Authentication screens
 - First-login password change
 - Permission-aware sidebar
@@ -55,7 +55,7 @@ Each migrated module must keep the legacy behavior before the old view is retire
 
 ## Legacy Frontend Policy
 
-- `index.html` is retained only as a redirect shell into `/workspace`.
-- Legacy business UI code is being retired and must not receive feature work.
+- Legacy HTML business entry has been retired from active use.
+- Legacy business UI code must not receive feature work.
 - New workflows and all ongoing business fixes belong in React + TypeScript.
 - Old frontend files can be physically deleted once the final compatibility window closes.

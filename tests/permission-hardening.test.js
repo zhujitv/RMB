@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const backend = readFileSync("lib/platform-db.js", "utf8");
-const workspaceShell = readFileSync("app/workspace/WorkspaceShell.tsx", "utf8");
-const menuFile = readFileSync("app/workspace/menu.ts", "utf8");
+const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const menuFile = readFileSync("app/menu.ts", "utf8");
 const ledgerRoute = readFileSync("app/api/ledger/route.js", "utf8");
 const overviewRoute = readFileSync("app/api/overview/route.js", "utf8");
 

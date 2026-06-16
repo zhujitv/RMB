@@ -1,9 +1,9 @@
 # NEXTWOOD React Workspace
 
-This route is the React + TypeScript business workspace for NEXTWOOD.
+This directory contains the React + TypeScript business workspace implementation for NEXTWOOD.
 
-- URL: `/workspace`
-- Legacy `/index.html` is now only a redirect shell into this workspace.
+- Runtime URL: `/`
+- Legacy business entry has been retired from the repository and production flow.
 - Reuses existing Next.js API routes, Prisma, sessions, and permissions.
 - Loads only authentication and menu permission data on entry.
 - Shows a lightweight welcome page after login.

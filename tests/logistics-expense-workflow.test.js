@@ -5,10 +5,10 @@ import test from "node:test";
 const backend = readFileSync("lib/platform-db.js", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
-const logisticsModule = readFileSync("app/workspace/modules/LogisticsFeesModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync("app/workspace/modules/DomesticLogisticsModule.tsx", "utf8");
-const settingsModule = readFileSync("app/workspace/modules/SettingsModule.tsx", "utf8");
-const costsModule = readFileSync("app/workspace/modules/CostsModule.tsx", "utf8");
+const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
+const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
   assert.match(schema, /model LogisticsExpense/);

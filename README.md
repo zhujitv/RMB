@@ -11,12 +11,12 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 - PostgreSQL
 - Prisma
 - Cloudflare R2
-- 正式主入口：React + TypeScript（`/workspace`）
-- 旧版 `index.html` 仅保留为跳转壳，不再承载业务功能
+- 正式主入口：React + TypeScript（`/`）
+- 旧版原生 HTML/CSS/JavaScript 业务入口已退役
 
 ## 前端迁移路线
 
-当前系统保留现有 API、Prisma 和数据库结构。新版 React + TypeScript 前端从 `/workspace` 独立入口逐步迁移，目前已完成基础框架和主要业务模块迁移：
+当前系统保留现有 API、Prisma 和数据库结构。新版 React + TypeScript 前端已切换到首页 `/` 作为正式入口，目前已完成基础框架和主要业务模块迁移：
 
 - 登录页
 - 权限初始化
@@ -35,9 +35,9 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 
 迁移原则：
 
-- 默认访问根路径 `/` 和 `/index.html` 都会进入 React 工作台 `/workspace`。
-- 旧版前端已进入退役收口阶段，只保留最小跳转壳，不再承载业务功能。
-- 旧版前端不再继续承载新功能或业务修复。
+- 默认访问根路径 `/` 会直接进入 React 工作台首页。
+- 旧版前端业务入口已退役，不再承载任何业务功能。
+- 业务修复和新功能统一进入 React + TypeScript 工作台。
 - 新功能和模块迁移优先进入 React + TypeScript 骨架。
 - 每迁移一个模块，必须完成权限、数据、上传、导出和回归验证。
 - 业务模块迁移顺序：应收订单、收款管理、成本管理、物流信息、退税资料、报表中心、系统设置。
@@ -53,7 +53,7 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 - 报表中心：已完成，已验收
 - 系统设置：已完成，已验收
 
-详细迁移检查清单见：[app/workspace/MIGRATION_PLAN.md](app/workspace/MIGRATION_PLAN.md)。
+详细迁移检查清单见：`app/WORKSPACE_MIGRATION_PLAN.md`。
 
 ## 功能模块
 
@@ -638,7 +638,7 @@ R2_ENDPOINT=https://your-s3-endpoint
 
 ## 本地开发
 
-本系统必须通过 Next.js 服务运行，不能只用静态文件服务打开 `index.html`。如果使用 Python `http.server`、VS Code Live Server 或普通静态服务器，页面可以显示，但 `/api/auth/login` 等接口不可用，登录会提示：
+本系统必须通过 Next.js 服务运行，不能只用静态文件服务打开前端文件。如果使用 Python `http.server`、VS Code Live Server 或普通静态服务器，页面即使能显示，`/api/auth/login` 等接口也不可用，登录会提示：
 
 ```text
 登录接口不可用（501），当前页面可能由静态文件服务打开，请使用 Next.js 或 Vercel 地址访问系统。

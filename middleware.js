@@ -49,9 +49,9 @@ export function middleware(request) {
     });
   }
 
-  if (request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/index.html") {
+  if (request.nextUrl.pathname === "/workspace" || request.nextUrl.pathname === "/index.html") {
     const url = request.nextUrl.clone();
-    url.pathname = "/workspace";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

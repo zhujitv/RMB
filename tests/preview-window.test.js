@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.js", "utf8");
-const taxRefundModule = readFileSync("app/workspace/modules/TaxRefundModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync("app/workspace/modules/DomesticLogisticsModule.tsx", "utf8");
-const costsModule = readFileSync("app/workspace/modules/CostsModule.tsx", "utf8");
-const styles = readFileSync("app/workspace/WorkspaceShell.module.css", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
   assert.match(previewRoute, /"Content-Disposition": `inline; filename="/);

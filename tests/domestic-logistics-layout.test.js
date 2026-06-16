@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const moduleSource = readFileSync("app/workspace/modules/DomesticLogisticsModule.tsx", "utf8");
-const css = readFileSync("app/workspace/WorkspaceShell.module.css", "utf8");
+const moduleSource = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const css = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
   for (const label of ["订单号", "客户简称", "到达地", "运输货物名称", "物流状态", "详情"]) {
