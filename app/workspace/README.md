@@ -24,6 +24,16 @@ Available modules:
 - 系统设置
 - 操作说明书
 
+Current module acceptance:
+
+- 应收订单: ready / accepted
+- 收款管理: ready / accepted
+- 成本管理: ready / accepted
+- 物流信息: ready / accepted
+- 退税资料: ready / accepted
+- 报表中心: ready / accepted
+- 系统设置: ready / accepted
+
 Verification for migrated modules:
 
 - `npm run typecheck`
@@ -51,3 +61,13 @@ Tax refund parity note:
 - Missing document chips open the detail drawer and jump to the corresponding upload or maintenance area.
 - Finance/admin users can update tax refund status from the current list.
 - Selecting `SUBMITTED / 已提交退税` uses the submit-and-archive confirmation flow and backend completeness validation.
+
+Report center parity note:
+
+- The React `报表中心` module has completed parity acceptance.
+- It keeps the legacy query-first workflow and supports permission-scoped tabs, server-side pagination, server-side sorting, selected/current/all-filtered export scopes, and detail jump-back into business modules.
+
+Settings parity note:
+
+- The React `系统设置` module has completed the parity-gap backfill round and passed manual final acceptance.
+- It now keeps the legacy-visible refresh/filter/delete interactions for 汇率设置、供应商资料、用户与权限、操作日志.

@@ -847,6 +847,23 @@
   flex-wrap: wrap;
 }
 
+.tableSortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tableSortButton:hover {
+  color: #2563eb;
+}
+
 .manualPage {
   display: grid;
   gap: 18px;

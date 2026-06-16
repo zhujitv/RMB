@@ -45,6 +45,10 @@ function validateAuthPayload(payload: AuthPayload) {
 export function WorkspaceShell() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading", message: "正在加载工作台..." });
   const [activeMenu, setActiveMenu] = useState("welcome");
+  const [ordersFocus, setOrdersFocus] = useState({ keyword: "", token: 0 });
+  const [paymentsFocus, setPaymentsFocus] = useState({ keyword: "", token: 0 });
+  const [costsFocus, setCostsFocus] = useState({ keyword: "", token: 0 });
+  const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -260,13 +264,27 @@ export function WorkspaceShell() {
           onAction={() => setActiveMenu("welcome")}
         />
       ) : activeMenu === "orders" ? (
-        <OrdersModule currentUser={payload.user} permissions={payload.permissions} />
+        <OrdersModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          initialKeyword={ordersFocus.keyword}
+          initialOpenToken={ordersFocus.token}
+        />
       ) : activeMenu === "dashboard" ? (
         <DashboardModule />
       ) : activeMenu === "payments" ? (
-        <PaymentsModule currentUser={payload.user} />
+        <PaymentsModule
+          currentUser={payload.user}
+          initialKeyword={paymentsFocus.keyword}
+          initialOpenToken={paymentsFocus.token}
+        />
       ) : activeMenu === "costs" ? (
-        <CostsModule currentUser={payload.user} permissions={payload.permissions} />
+        <CostsModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          initialKeyword={costsFocus.keyword}
+          initialOpenToken={costsFocus.token}
+        />
       ) : activeMenu === "domesticLogistics" ? (
         <DomesticLogisticsModule
           currentUser={payload.user}
@@ -280,13 +298,31 @@ export function WorkspaceShell() {
         <TaxRefundModule
           currentUser={payload.user}
           permissions={payload.permissions}
+          initialKeyword={taxRefundFocus.keyword}
+          initialOpenToken={taxRefundFocus.token}
           onOpenDomesticLogistics={(keyword) => {
             setDomesticLogisticsFocus({ keyword, token: Date.now() });
             setActiveMenu("domesticLogistics");
           }}
         />
       ) : activeMenu === "reports" ? (
-        <ReportsModule />
+        <ReportsModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          onOpenRecord={(targetMenu, keyword) => {
+            const value = keyword.trim();
+            if (targetMenu === "orders") {
+              setOrdersFocus({ keyword: value, token: Date.now() });
+            } else if (targetMenu === "payments") {
+              setPaymentsFocus({ keyword: value, token: Date.now() });
+            } else if (targetMenu === "costs") {
+              setCostsFocus({ keyword: value, token: Date.now() });
+            } else if (targetMenu === "taxRefund") {
+              setTaxRefundFocus({ keyword: value, token: Date.now() });
+            }
+            setActiveMenu(targetMenu);
+          }}
+        />
       ) : activeMenu === "settings" ? (
         <SettingsModule />
       ) : activeMenu === "manual" ? (

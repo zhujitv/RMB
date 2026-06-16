@@ -39,13 +39,13 @@ Each migrated module must keep the legacy behavior before the old view is retire
 
 ## Migration Order
 
-1. 应收订单 - ready
-2. 收款管理 - ready
-3. 成本管理 - ready
-4. 物流信息 - ready
-5. 退税资料 - ready
-6. 报表中心 - ready
-7. 系统设置 - ready
+1. 应收订单 - ready / accepted
+2. 收款管理 - ready / accepted
+3. 成本管理 - ready / accepted
+4. 物流信息 - ready / accepted
+5. 退税资料 - ready / accepted
+6. 报表中心 - ready / accepted
+7. 系统设置 - ready / accepted
 
 ## Current Parity Guardrails
 

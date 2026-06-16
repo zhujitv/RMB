@@ -194,10 +194,14 @@ const TAX_REFUND_STATUS_OPTIONS = [
 export function TaxRefundModule({
   currentUser,
   permissions,
+  initialKeyword = "",
+  initialOpenToken = 0,
   onOpenDomesticLogistics,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
+  initialKeyword?: string;
+  initialOpenToken?: number;
   onOpenDomesticLogistics?: (keyword: string) => void;
 }) {
   const [mode, setMode] = useState<TaxRefundMode>("current");
@@ -280,6 +284,16 @@ export function TaxRefundModule({
   useEffect(() => {
     void loadRows(1, "");
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    setKeyword(value);
+    setSubmittedKeyword(value);
+    setExpandedRowId("");
+    setNotice("");
+    void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
+  }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
     if (!detail || !pendingDetailTarget || detailLoading) return;

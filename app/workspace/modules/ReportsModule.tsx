@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar } from "../components";
-import { customerDisplayName, customerLegalName, downloadBlob } from "../utils";
+import { canReadPermission, customerDisplayName, customerLegalName, downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
+import type { PermissionSnapshot, User } from "../types";
 
 type ReportType = {
   key: string;
   label: string;
+  area: string;
 };
 
 type ReportColumn = {
@@ -18,9 +20,12 @@ type ReportColumn = {
 
 type ReportRow = Record<string, unknown> & {
   id?: string;
+  orderId?: string;
   customerFullName?: string;
   customerName?: string;
   customerShortName?: string;
+  orderNo?: string;
+  taxRefundStatus?: string;
 };
 
 type ReportResponse = {
@@ -38,6 +43,8 @@ type ReportResponse = {
 
 type ExportScope = "currentPage" | "selected" | "allFiltered";
 type ExportFormat = "xlsx" | "csv";
+type SortDirection = "asc" | "desc";
+type OpenMenuTarget = "orders" | "payments" | "costs" | "taxRefund";
 
 const PAGE_SIZE = 20;
 const DEFAULT_REPORT_FILTERS = {
@@ -61,14 +68,22 @@ const DEFAULT_REPORT_FILTERS = {
 type ReportFilters = typeof DEFAULT_REPORT_FILTERS;
 
 const REPORT_TYPES: ReportType[] = [
-  { key: "receivables", label: "应收订单明细" },
-  { key: "payments", label: "收款明细" },
-  { key: "costs", label: "成本明细" },
-  { key: "profits", label: "利润分析" },
-  { key: "commissions", label: "业务员提成" },
-  { key: "overdue", label: "逾期催款" },
-  { key: "tax-refunds", label: "退税资料" },
+  { key: "receivables", label: "应收订单明细", area: "orders" },
+  { key: "payments", label: "收款明细", area: "payments" },
+  { key: "costs", label: "成本明细", area: "costs" },
+  { key: "profits", label: "利润分析", area: "orders" },
+  { key: "commissions", label: "业务员提成", area: "commissions" },
+  { key: "overdue", label: "逾期催款", area: "orders" },
+  { key: "tax-refunds", label: "退税资料", area: "taxRefund" },
 ];
+
+const REPORT_READ_ROLES: Record<string, string[]> = {
+  orders: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
+  payments: ["管理员", "业务员", "财务", "查看者"],
+  costs: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
+  commissions: ["管理员", "业务员", "财务"],
+  taxRefund: ["管理员", "业务员", "财务"],
+};
 
 const ORDER_STATUSES = ["", "草稿", "已确认", "部分收款", "已收齐", "多收款", "已逾期", "已关闭", "已取消"];
 const PAYMENT_STATUSES = ["", "待确认", "已到账", "已退回", "已取消"];
@@ -91,8 +106,22 @@ const EXPORT_ACTIONS: { scope: ExportScope; format: ExportFormat; label: string 
   { scope: "allFiltered", format: "csv", label: "查询结果 CSV" },
 ];
 
-export function ReportsModule() {
-  const [reportType, setReportType] = useState("receivables");
+export function ReportsModule({
+  currentUser,
+  permissions,
+  onOpenRecord,
+}: {
+  currentUser: User;
+  permissions?: PermissionSnapshot;
+  onOpenRecord?: (targetMenu: OpenMenuTarget, keyword: string) => void;
+}) {
+  const visibleReportTypes = useMemo(
+    () => REPORT_TYPES.filter((type) => canReadPermission(currentUser, permissions, type.area, REPORT_READ_ROLES[type.area] || [])),
+    [currentUser, permissions],
+  );
+  const defaultReportType = visibleReportTypes[0]?.key || "receivables";
+
+  const [reportType, setReportType] = useState(defaultReportType);
   const [filters, setFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
   const [submittedFilters, setSubmittedFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
   const [columns, setColumns] = useState<ReportColumn[]>([]);
@@ -103,6 +132,8 @@ export function ReportsModule() {
   const [queried, setQueried] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState("");
+  const [sortBy, setSortBy] = useState("");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
@@ -110,16 +141,31 @@ export function ReportsModule() {
 
   const visibleColumns = useMemo(() => columns.slice(0, 5), [columns]);
   const allPageSelected = rows.length > 0 && rows.every((row) => row.id && selectedIds.has(String(row.id)));
+  const showDeclarationMonth = reportType === "tax-refunds";
+
+  useEffect(() => {
+    if (!visibleReportTypes.length) return;
+    if (!visibleReportTypes.some((type) => type.key === reportType)) {
+      setReportType(visibleReportTypes[0].key);
+    }
+  }, [reportType, visibleReportTypes]);
 
   useEffect(() => {
     clearResults();
+    setSortBy("");
+    setSortDir("asc");
   }, [reportType]);
 
   function updateFilter(name: keyof ReportFilters, value: string) {
     setFilters((current) => ({ ...current, [name]: value }));
   }
 
-  async function queryRows(nextPage = 1, nextFilters = submittedFilters) {
+  async function queryRows(
+    nextPage = 1,
+    nextFilters = submittedFilters,
+    nextSortBy = sortBy,
+    nextSortDir = sortDir,
+  ) {
     setLoading(true);
     setError("");
     setNotice("");
@@ -128,6 +174,8 @@ export function ReportsModule() {
       Object.entries(nextFilters).forEach(([key, value]) => {
         if (value) params.set(key, value);
       });
+      if (nextSortBy) params.set("sortBy", nextSortBy);
+      if (nextSortDir) params.set("sortDir", nextSortDir);
       const result = await apiJson<ReportResponse>(`/api/reports/${encodeURIComponent(reportType)}?${params}`);
       setColumns(Array.isArray(result.columns) ? result.columns : []);
       setRows(Array.isArray(result.rows) ? result.rows : []);
@@ -145,15 +193,18 @@ export function ReportsModule() {
   }
 
   function submitSearch() {
-    setSubmittedFilters(filters);
+    const nextFilters = { ...filters };
+    setSubmittedFilters(nextFilters);
     setSelectedIds(new Set());
-    void queryRows(1, filters);
+    void queryRows(1, nextFilters, sortBy, sortDir);
   }
 
   function resetSearch() {
     setFilters(DEFAULT_REPORT_FILTERS);
     setSubmittedFilters(DEFAULT_REPORT_FILTERS);
     clearResults();
+    setSortBy("");
+    setSortDir("asc");
   }
 
   function clearResults() {
@@ -192,6 +243,15 @@ export function ReportsModule() {
     });
   }
 
+  function toggleSort(columnKey: string) {
+    const nextDir: SortDirection = sortBy === columnKey && sortDir === "asc" ? "desc" : "asc";
+    setSortBy(columnKey);
+    setSortDir(nextDir);
+    if (queried) {
+      void queryRows(1, submittedFilters, columnKey, nextDir);
+    }
+  }
+
   async function exportRows(scope: ExportScope, format: ExportFormat) {
     if (!queried) {
       setError("请先查询报表。");
@@ -217,6 +277,8 @@ export function ReportsModule() {
           format,
           page,
           pageSize: PAGE_SIZE,
+          sortBy,
+          sortDir,
         }),
       });
       if (!response.ok) {
@@ -233,6 +295,24 @@ export function ReportsModule() {
     }
   }
 
+  function openRecord(row: ReportRow) {
+    const keyword = String(row.orderNo || row.customerShortName || row.customerName || row.id || "").trim();
+    if (!keyword || !onOpenRecord) return;
+    if (reportType === "payments") {
+      onOpenRecord("payments", keyword);
+      return;
+    }
+    if (reportType === "costs") {
+      onOpenRecord("costs", keyword);
+      return;
+    }
+    if (reportType === "tax-refunds") {
+      onOpenRecord("taxRefund", keyword);
+      return;
+    }
+    onOpenRecord("orders", keyword);
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -243,7 +323,7 @@ export function ReportsModule() {
       </div>
 
       <div className={styles.reportTabs}>
-        {REPORT_TYPES.map((type) => (
+        {visibleReportTypes.map((type) => (
           <button
             key={type.key}
             className={type.key === reportType ? styles.reportTabActive : ""}
@@ -285,7 +365,9 @@ export function ReportsModule() {
             {TAX_REFUND_STATUSES.map((status) => <option key={status || "all"} value={status}>{status ? TAX_REFUND_STATUS_LABELS[status] || status : "全部"}</option>)}
           </select>
         </label>
-        <label>申报月份<input value={filters.declarationMonth} type="month" onChange={(event) => updateFilter("declarationMonth", event.target.value)} /></label>
+        {showDeclarationMonth ? (
+          <label>申报月份<input value={filters.declarationMonth} type="month" onChange={(event) => updateFilter("declarationMonth", event.target.value)} /></label>
+        ) : null}
         <label>业务范围
           <select value={filters.archiveScope} onChange={(event) => updateFilter("archiveScope", event.target.value)}>
             <option value="current">当前业务</option>
@@ -331,7 +413,14 @@ export function ReportsModule() {
               <th>
                 <input aria-label="全选当前页" type="checkbox" checked={allPageSelected} disabled={!rows.length} onChange={togglePageSelection} />
               </th>
-              {visibleColumns.map((column) => <th key={column.key}>{column.label}</th>)}
+              {visibleColumns.map((column) => (
+                <th key={column.key}>
+                  <button className={styles.tableSortButton} type="button" onClick={() => toggleSort(column.key)}>
+                    {column.label}
+                    {sortBy === column.key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+                  </button>
+                </th>
+              ))}
               <th>详情</th>
             </tr>
           </thead>
@@ -351,6 +440,7 @@ export function ReportsModule() {
                   expanded={expandedId === String(row.id)}
                   onToggle={() => setExpandedId((current) => current === String(row.id) ? "" : String(row.id))}
                   onSelect={() => toggleRowSelection(row)}
+                  onOpenRecord={() => openRecord(row)}
                 />
               )) : (
                 <tr>
@@ -367,7 +457,13 @@ export function ReportsModule() {
       </div>
 
       {queried ? (
-        <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={(nextPage) => queryRows(nextPage, submittedFilters)} />
+        <PaginationBar
+          total={total}
+          page={page}
+          totalPages={totalPages}
+          loading={loading}
+          onPage={(nextPage) => queryRows(nextPage, submittedFilters, sortBy, sortDir)}
+        />
       ) : null}
     </section>
   );
@@ -381,6 +477,7 @@ function ReportRows({
   expanded,
   onToggle,
   onSelect,
+  onOpenRecord,
 }: {
   row: ReportRow;
   columns: ReportColumn[];
@@ -389,6 +486,7 @@ function ReportRows({
   expanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
+  onOpenRecord: () => void;
 }) {
   const colSpan = visibleColumns.length + 2;
   return (
@@ -410,6 +508,11 @@ function ReportRows({
         <tr className={styles.detailRow}>
           <td colSpan={colSpan}>
             <div className={styles.detailCard}>
+              <div className={styles.detailActions}>
+                <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenRecord(); }}>
+                  查看详情
+                </button>
+              </div>
               <div className={styles.detailGrid}>
                 {columns
                   .filter((column) => !HIDDEN_DETAIL_KEYS.has(column.key))

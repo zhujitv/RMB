@@ -119,7 +119,15 @@ const emptyPaymentFilters: PaymentFilters = {
   paymentStatus: "",
 };
 
-export function PaymentsModule({ currentUser }: { currentUser: User }) {
+export function PaymentsModule({
+  currentUser,
+  initialKeyword = "",
+  initialOpenToken = 0,
+}: {
+  currentUser: User;
+  initialKeyword?: string;
+  initialOpenToken?: number;
+}) {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [filters, setFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
   const [submittedFilters, setSubmittedFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
@@ -172,6 +180,17 @@ export function PaymentsModule({ currentUser }: { currentUser: User }) {
   useEffect(() => {
     void loadPayments(1, { ...emptyPaymentFilters });
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    const nextFilters = { ...emptyPaymentFilters, keyword: value };
+    setFilters(nextFilters);
+    setSubmittedFilters(nextFilters);
+    setExpandedId("");
+    setNotice("");
+    void loadPayments(1, nextFilters);
+  }, [initialKeyword, initialOpenToken]);
 
   function setFilter<K extends keyof PaymentFilters>(key: K, value: PaymentFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));

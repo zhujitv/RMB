@@ -10,6 +10,33 @@ import styles from "../WorkspaceShell.module.css";
 
 type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "auditLogs";
 
+type SettingsFilters = {
+  customers: {
+    keyword: string;
+  };
+  suppliers: {
+    keyword: string;
+    type: string;
+    status: string;
+  };
+  users: {
+    keyword: string;
+    role: string;
+    status: string;
+  };
+  auditLogs: {
+    keyword: string;
+    action: string;
+  };
+};
+
+type FiltersFor<T extends SettingsTabKey> =
+  T extends "customers" ? SettingsFilters["customers"]
+    : T extends "suppliers" ? SettingsFilters["suppliers"]
+      : T extends "users" ? SettingsFilters["users"]
+        : T extends "auditLogs" ? SettingsFilters["auditLogs"]
+          : never;
+
 type TableColumn<T> = {
   key: keyof T | string;
   label: string;
@@ -267,7 +294,12 @@ const AUDIT_COLUMNS: TableColumn<AuditLogRow>[] = [
 
 export function SettingsModule() {
   const [activeTab, setActiveTab] = useState<SettingsTabKey>("customers");
-  const [keyword, setKeyword] = useState("");
+  const [filters, setFilters] = useState<SettingsFilters>({
+    customers: { keyword: "" },
+    suppliers: { keyword: "", type: "", status: "" },
+    users: { keyword: "", role: "", status: "" },
+    auditLogs: { keyword: "", action: "" },
+  });
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
@@ -297,6 +329,7 @@ export function SettingsModule() {
   const [userSaving, setUserSaving] = useState(false);
   const [userMessage, setUserMessage] = useState("");
   const [exchangeSaving, setExchangeSaving] = useState(false);
+  const [exchangeRefreshing, setExchangeRefreshing] = useState(false);
   const [exchangeMessage, setExchangeMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -306,14 +339,21 @@ export function SettingsModule() {
   const activePagination = pagination[activeTab] || emptyPagination(PAGE_SIZE);
   const listColumns = useMemo(() => columnsFor(activeTab), [activeTab]);
   const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs }), [activeTab, customers, suppliers, users, logs]);
+  const activeFilter = activeTab === "customers"
+    ? filters.customers
+    : activeTab === "suppliers"
+      ? filters.suppliers
+      : activeTab === "users"
+        ? filters.users
+        : filters.auditLogs;
 
   useEffect(() => {
     if (!loadedTabs.has(activeTab)) {
-      void loadTab(activeTab, 1, "");
+      void loadTab(activeTab, 1, filtersForTab(filters, activeTab));
     }
   }, [activeTab]);
 
-  async function loadTab(tab = activeTab, page = activePagination.page || 1, nextKeyword = keyword) {
+  async function loadTab(tab = activeTab, page = activePagination.page || 1, nextFilters = filtersForTab(filters, tab)) {
     setLoading(true);
     setError("");
     try {
@@ -330,7 +370,7 @@ export function SettingsModule() {
       }
       const pageSize = tab === "auditLogs" ? AUDIT_PAGE_SIZE : PAGE_SIZE;
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      appendFilterParams(params, tab, nextFilters);
       const result = await apiJson<{
         customers?: CustomerRow[];
         suppliers?: SupplierRow[];
@@ -364,7 +404,6 @@ export function SettingsModule() {
 
   function selectTab(tab: SettingsTabKey) {
     setActiveTab(tab);
-    setKeyword("");
     setExpandedId("");
     setCustomerForm(null);
     setCustomerMessage("");
@@ -376,16 +415,66 @@ export function SettingsModule() {
   }
 
   function submitSearch() {
-    void loadTab(activeTab, 1, keyword);
+    void loadTab(activeTab, 1, filtersForTab(filters, activeTab));
   }
 
   function resetSearch() {
-    setKeyword("");
-    void loadTab(activeTab, 1, "");
+    setFilters((current) => resetFilters(current, activeTab));
+    void loadTab(activeTab, 1, emptyFiltersForTab(activeTab));
   }
 
   function refreshCurrent() {
-    void loadTab(activeTab, activePagination.page || 1, keyword);
+    void loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
+  }
+
+  async function refreshExchangeRatesManually() {
+    setExchangeRefreshing(true);
+    setExchangeMessage("");
+    try {
+      const payload = exchangeForm || exchangeFormFromSettings(exchangeSettings);
+      const result = await apiJson<{ ok?: boolean; message?: string; settings?: ExchangeRateSettings }>(
+        "/api/exchange-rates/refresh",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            date: new Date().toISOString().slice(0, 10),
+            source: payload.source,
+            rateType: payload.rateType,
+          }),
+        },
+      );
+      setExchangeMessage(result.ok ? "今日汇率已刷新" : (result.message || "今日汇率获取失败，已使用最近可用汇率。"));
+    } catch (refreshError) {
+      setExchangeMessage(refreshError instanceof Error ? refreshError.message : "刷新汇率失败");
+    } finally {
+      setExchangeRefreshing(false);
+    }
+  }
+
+  async function deleteRecord(kind: "customer" | "supplier" | "user", id: string) {
+    const labels = { customer: "客户", supplier: "供应商", user: "用户" };
+    const message = kind === "user"
+      ? "确认停用该用户吗？该操作会写入操作日志。"
+      : `确认删除该${labels[kind]}吗？该操作会写入操作日志。`;
+    if (!window.confirm(message)) return;
+    setError("");
+    try {
+      const result = await apiJson<{ success?: boolean; ok?: boolean; message?: string }>(
+        kind === "customer"
+          ? `/api/customers/${encodeURIComponent(id)}`
+          : kind === "supplier"
+            ? `/api/suppliers/${encodeURIComponent(id)}`
+            : `/api/users/${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      await loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
+      if (kind === "user") {
+        setExchangeMessage("");
+        setError(result.message || "用户已停用");
+      }
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : `${labels[kind]}操作失败`);
+    }
   }
 
   function startCreateCustomer() {
@@ -489,7 +578,7 @@ export function SettingsModule() {
       );
       if (result.success !== true) throw new Error(result.message || "客户资料保存失败");
       setCustomerForm(null);
-      await loadTab("customers", activePagination.page || 1, keyword);
+      await loadTab("customers", activePagination.page || 1, filters.customers);
     } catch (saveError) {
       setCustomerMessage(saveError instanceof Error ? saveError.message : "客户资料保存失败");
     } finally {
@@ -536,7 +625,7 @@ export function SettingsModule() {
       );
       if (result.success !== true) throw new Error(result.message || "供应商资料保存失败");
       setSupplierForm(null);
-      await loadTab("suppliers", activePagination.page || 1, keyword);
+      await loadTab("suppliers", activePagination.page || 1, filters.suppliers);
     } catch (saveError) {
       setSupplierMessage(saveError instanceof Error ? saveError.message : "供应商资料保存失败");
     } finally {
@@ -593,7 +682,7 @@ export function SettingsModule() {
       );
       if (result.success !== true) throw new Error(result.message || "用户保存失败");
       setUserForm(null);
-      await loadTab("users", activePagination.page || 1, keyword);
+      await loadTab("users", activePagination.page || 1, filters.users);
     } catch (saveError) {
       setUserMessage(saveError instanceof Error ? saveError.message : "用户保存失败");
     } finally {
@@ -667,13 +756,59 @@ export function SettingsModule() {
       {activeTab !== "exchangeRates" ? (
         <div className={styles.listToolbar}>
           <input
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
+            value={activeFilter.keyword || ""}
+            onChange={(event) => updateFilter(activeTab, "keyword", event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") submitSearch();
             }}
             placeholder={placeholderFor(activeTab)}
           />
+          {activeTab === "suppliers" ? (
+            <>
+              <select
+                value={filters.suppliers.type}
+                onChange={(event) => updateFilter("suppliers", "type", event.target.value)}
+              >
+                <option value="">全部类型</option>
+                {SUPPLIER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              <select
+                value={filters.suppliers.status}
+                onChange={(event) => updateFilter("suppliers", "status", event.target.value)}
+              >
+                <option value="">全部状态</option>
+                {SUPPLIER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </>
+          ) : null}
+          {activeTab === "users" ? (
+            <>
+              <select
+                value={filters.users.status}
+                onChange={(event) => updateFilter("users", "status", event.target.value)}
+              >
+                <option value="">全部状态</option>
+                {USER_APPROVAL_STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+              </select>
+              <select
+                value={filters.users.role}
+                onChange={(event) => updateFilter("users", "role", event.target.value)}
+              >
+                <option value="">全部角色</option>
+                {USER_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+              </select>
+            </>
+          ) : null}
+          {activeTab === "auditLogs" ? (
+            <input
+              value={filters.auditLogs.action}
+              onChange={(event) => updateFilter("auditLogs", "action", event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitSearch();
+              }}
+              placeholder="动作"
+            />
+          ) : null}
           <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
           <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
         </div>
@@ -730,11 +865,13 @@ export function SettingsModule() {
           loading={loading && !exchangeSettings}
           saving={exchangeSaving}
           message={exchangeMessage}
+          refreshing={exchangeRefreshing}
           onChange={setExchangeForm}
           onReset={() => {
             setExchangeForm(exchangeFormFromSettings(exchangeSettings));
             setExchangeMessage("");
           }}
+          onRefresh={refreshExchangeRatesManually}
           onSubmit={saveExchangeSettings}
         />
       ) : (
@@ -749,11 +886,23 @@ export function SettingsModule() {
           onEditCustomer={startEditCustomer}
           onEditSupplier={startEditSupplier}
           onEditUser={startEditUser}
-          onPage={(nextPage) => loadTab(activeTab, nextPage, keyword)}
+          onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
+          onDeleteSupplier={(supplier) => void deleteRecord("supplier", supplier.id)}
+          onDeleteUser={(user) => void deleteRecord("user", user.id)}
+          onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}
         />
       )}
     </section>
   );
+
+  function updateFilter(tab: SettingsTabKey, key: string, value: string) {
+    setFilters((current) => {
+      if (tab === "customers") return { ...current, customers: { ...current.customers, [key]: value } };
+      if (tab === "suppliers") return { ...current, suppliers: { ...current.suppliers, [key]: value } };
+      if (tab === "users") return { ...current, users: { ...current.users, [key]: value } };
+      return { ...current, auditLogs: { ...current.auditLogs, [key]: value } };
+    });
+  }
 }
 
 function SettingsTable({
@@ -767,6 +916,9 @@ function SettingsTable({
   onEditCustomer,
   onEditSupplier,
   onEditUser,
+  onDeleteCustomer,
+  onDeleteSupplier,
+  onDeleteUser,
   onPage,
 }: {
   tab: SettingsTabKey;
@@ -779,6 +931,9 @@ function SettingsTable({
   onEditCustomer: (customer: CustomerRow) => void;
   onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
+  onDeleteCustomer: (customer: CustomerRow) => void;
+  onDeleteSupplier: (supplier: SupplierRow) => void;
+  onDeleteUser: (user: UserRow) => void;
   onPage: (page: number) => void;
 }) {
   const colSpan = columns.length + 1;
@@ -808,6 +963,9 @@ function SettingsTable({
                 onEditCustomer={onEditCustomer}
                 onEditSupplier={onEditSupplier}
                 onEditUser={onEditUser}
+                onDeleteCustomer={onDeleteCustomer}
+                onDeleteSupplier={onDeleteSupplier}
+                onDeleteUser={onDeleteUser}
               />
             )) : (
               <tr>
@@ -836,6 +994,9 @@ function SettingsRows({
   onEditCustomer,
   onEditSupplier,
   onEditUser,
+  onDeleteCustomer,
+  onDeleteSupplier,
+  onDeleteUser,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
@@ -845,6 +1006,9 @@ function SettingsRows({
   onEditCustomer: (customer: CustomerRow) => void;
   onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
+  onDeleteCustomer: (customer: CustomerRow) => void;
+  onDeleteSupplier: (supplier: SupplierRow) => void;
+  onDeleteUser: (user: UserRow) => void;
 }) {
   const detailFields = detailFieldsFor(tab, row);
   return (
@@ -859,19 +1023,34 @@ function SettingsRows({
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
                 {tab === "customers" ? (
-                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditCustomer(row as CustomerRow); }}>
-                    编辑客户
-                  </button>
+                  <>
+                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditCustomer(row as CustomerRow); }}>
+                      编辑客户
+                    </button>
+                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteCustomer(row as CustomerRow); }}>
+                      删除客户
+                    </button>
+                  </>
                 ) : null}
                 {tab === "suppliers" ? (
-                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditSupplier(row as SupplierRow); }}>
-                    编辑供应商
-                  </button>
+                  <>
+                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditSupplier(row as SupplierRow); }}>
+                      编辑供应商
+                    </button>
+                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteSupplier(row as SupplierRow); }}>
+                      删除供应商
+                    </button>
+                  </>
                 ) : null}
                 {tab === "users" ? (
-                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditUser(row as UserRow); }}>
-                    编辑用户
-                  </button>
+                  <>
+                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditUser(row as UserRow); }}>
+                      编辑用户
+                    </button>
+                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteUser(row as UserRow); }}>
+                      停用用户
+                    </button>
+                  </>
                 ) : null}
               </div>
               <div className={styles.detailGrid}>
@@ -892,18 +1071,22 @@ function ExchangeSettingsCard({
   form,
   loading,
   saving,
+  refreshing,
   message,
   onChange,
   onReset,
+  onRefresh,
   onSubmit,
 }: {
   settings: ExchangeRateSettings | null;
   form: ExchangeRateForm | null;
   loading: boolean;
   saving: boolean;
+  refreshing: boolean;
   message: string;
   onChange: (form: ExchangeRateForm) => void;
   onReset: () => void;
+  onRefresh: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
@@ -920,6 +1103,9 @@ function ExchangeSettingsCard({
           <strong>汇率设置</strong>
           <span>维护外币折人民币来源、自动更新策略，以及退税和物流供应商相关系统开关。</span>
         </div>
+        <button className={styles.secondaryButton} type="button" onClick={onRefresh} disabled={refreshing || saving}>
+          {refreshing ? "刷新中..." : "手动刷新今日汇率"}
+        </button>
       </div>
 
       {message ? (
@@ -1659,6 +1845,45 @@ function kebabTab(tab: SettingsTabKey) {
 
 function emptyPagination(pageSize: number): Pagination {
   return { page: 1, pageSize, total: 0, totalPages: 1 };
+}
+
+function filtersForTab(filters: SettingsFilters, tab: SettingsTabKey) {
+  if (tab === "customers") return filters.customers;
+  if (tab === "suppliers") return filters.suppliers;
+  if (tab === "users") return filters.users;
+  return filters.auditLogs;
+}
+
+function appendFilterParams(params: URLSearchParams, tab: SettingsTabKey, filters: SettingsFilters[keyof SettingsFilters]) {
+  if ("keyword" in filters && filters.keyword.trim()) params.set("keyword", filters.keyword.trim());
+  if (tab === "suppliers") {
+    const supplierFilters = filters as SettingsFilters["suppliers"];
+    if (supplierFilters.type) params.set("type", supplierFilters.type);
+    if (supplierFilters.status) params.set("status", supplierFilters.status);
+  }
+  if (tab === "users") {
+    const userFilters = filters as SettingsFilters["users"];
+    if (userFilters.role) params.set("role", userFilters.role);
+    if (userFilters.status) params.set("status", userFilters.status);
+  }
+  if (tab === "auditLogs") {
+    const logFilters = filters as SettingsFilters["auditLogs"];
+    if (logFilters.action.trim()) params.set("action", logFilters.action.trim());
+  }
+}
+
+function emptyFiltersForTab(tab: SettingsTabKey) {
+  if (tab === "customers") return { keyword: "" };
+  if (tab === "suppliers") return { keyword: "", type: "", status: "" };
+  if (tab === "users") return { keyword: "", role: "", status: "" };
+  return { keyword: "", action: "" };
+}
+
+function resetFilters(filters: SettingsFilters, tab: SettingsTabKey): SettingsFilters {
+  return {
+    ...filters,
+    [tab]: emptyFiltersForTab(tab),
+  } as SettingsFilters;
 }
 
 function exchangeFormFromSettings(settings: ExchangeRateSettings | null): ExchangeRateForm {

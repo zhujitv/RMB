@@ -180,9 +180,13 @@ const emptyQuickOrderForm: QuickOrderForm = {
 export function OrdersModule({
   currentUser,
   permissions,
+  initialKeyword = "",
+  initialOpenToken = 0,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
+  initialKeyword?: string;
+  initialOpenToken?: number;
 }) {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -235,6 +239,16 @@ export function OrdersModule({
   useEffect(() => {
     void loadOrders(1, "");
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    setKeyword(value);
+    setSubmittedKeyword(value);
+    setExpandedId("");
+    setNotice("");
+    void loadOrders(1, value, submittedOrderStatus);
+  }, [initialKeyword, initialOpenToken]);
 
   function submitSearch() {
     const value = keyword.trim();

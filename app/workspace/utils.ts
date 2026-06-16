@@ -35,6 +35,22 @@ export function canWritePermission(
   return fallbackRoles.includes(user.role);
 }
 
+export function canReadPermission(
+  user: User,
+  permissions: PermissionSnapshot | undefined,
+  area: string,
+  fallbackRoles: string[] = [],
+) {
+  if (user.role === "管理员") return true;
+  if (permissions?.reads && Object.prototype.hasOwnProperty.call(permissions.reads, area)) {
+    return Boolean(permissions.reads[area]);
+  }
+  if (Array.isArray(permissions?.readKeys) && permissions.readKeys.length) {
+    return permissions.readKeys.includes(area);
+  }
+  return fallbackRoles.includes(user.role);
+}
+
 export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

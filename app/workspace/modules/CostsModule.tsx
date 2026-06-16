@@ -232,9 +232,13 @@ const emptyCostFilters: CostFilters = {
 export function CostsModule({
   currentUser,
   permissions,
+  initialKeyword = "",
+  initialOpenToken = 0,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
+  initialKeyword?: string;
+  initialOpenToken?: number;
 }) {
   const [rows, setRows] = useState<CostRow[]>([]);
   const [orderRows, setOrderRows] = useState<CostOrderSummary[]>([]);
@@ -301,6 +305,17 @@ export function CostsModule({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    const nextFilters = { ...emptyCostFilters, keyword: value };
+    setFilters(nextFilters);
+    setSubmittedFilters(nextFilters);
+    setExpandedId("");
+    setNotice("");
+    void loadCosts(1, nextFilters, archiveScope, "details");
+  }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
     void loadCosts(1, { ...emptyCostFilters });
