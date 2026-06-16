@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName } from "../utils";
@@ -134,7 +134,7 @@ export function PaymentsModule({
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [expandedId, setExpandedId] = useState("");
+  const [detailPayment, setDetailPayment] = useState<PaymentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -187,7 +187,7 @@ export function PaymentsModule({
     const nextFilters = { ...emptyPaymentFilters, keyword: value };
     setFilters(nextFilters);
     setSubmittedFilters(nextFilters);
-    setExpandedId("");
+    setDetailPayment(null);
     setNotice("");
     void loadPayments(1, nextFilters);
   }, [initialKeyword, initialOpenToken]);
@@ -197,7 +197,7 @@ export function PaymentsModule({
   }
 
   function submitSearch() {
-    setExpandedId("");
+    setDetailPayment(null);
     setNotice("");
     const nextFilters = Object.fromEntries(
       Object.entries(filters).map(([key, value]) => [key, String(value || "").trim()]),
@@ -209,13 +209,13 @@ export function PaymentsModule({
   function resetSearch() {
     setFilters({ ...emptyPaymentFilters });
     setSubmittedFilters({ ...emptyPaymentFilters });
-    setExpandedId("");
+    setDetailPayment(null);
     setNotice("");
     void loadPayments(1, { ...emptyPaymentFilters });
   }
 
   function gotoPage(nextPage: number) {
-    setExpandedId("");
+    setDetailPayment(null);
     setNotice("");
     void loadPayments(nextPage, submittedFilters);
   }
@@ -265,7 +265,7 @@ export function PaymentsModule({
           onSaved={() => {
             setCreateOpen(false);
             setEditPayment(null);
-            setExpandedId("");
+            setDetailPayment(null);
             setNotice(editPayment ? "收款已更新" : "收款已保存");
             void loadPayments(1, submittedFilters);
           }}
@@ -301,7 +301,23 @@ export function PaymentsModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={styles.tableWrap}>
+      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
+        {loading ? (
+          <div className={styles.emptyState}>数据加载中...</div>
+        ) : payments.length ? (
+          payments.map((payment) => (
+            <PaymentMobileCard
+              key={payment.id}
+              payment={payment}
+              onViewDetail={() => setDetailPayment(payment)}
+            />
+          ))
+        ) : (
+          <div className={styles.emptyState}>未找到匹配的收款明细</div>
+        )}
+      </div>
+
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -322,13 +338,12 @@ export function PaymentsModule({
               <PaymentTableRows
                 key={payment.id}
                 payment={payment}
-                expanded={expandedId === payment.id}
-                onToggle={() => setExpandedId((current) => current === payment.id ? "" : payment.id)}
+                onViewDetail={() => setDetailPayment(payment)}
                 deleting={deletingId === payment.id}
                 onEdit={() => {
                   setCreateOpen(false);
                   setEditPayment(payment);
-                  setExpandedId(payment.id);
+                  setDetailPayment(payment);
                 }}
                 onDelete={() => void deletePayment(payment)}
                 onConfirmArrived={() => void confirmPaymentArrived(payment)}
@@ -345,6 +360,21 @@ export function PaymentsModule({
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
+      {detailPayment ? (
+        <PaymentDetailDrawer
+          payment={detailPayment}
+          canManage={canManagePayments}
+          deleting={deletingId === detailPayment.id}
+          confirming={confirmingId === detailPayment.id}
+          onEdit={() => {
+            setCreateOpen(false);
+            setEditPayment(detailPayment);
+          }}
+          onDelete={() => void deletePayment(detailPayment)}
+          onConfirmArrived={() => void confirmPaymentArrived(detailPayment)}
+          onClose={() => setDetailPayment(null)}
+        />
+      ) : null}
       {confirmation ? (
         <ConfirmationDialog
           state={confirmation}
@@ -377,7 +407,7 @@ export function PaymentsModule({
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除收款失败");
-      setExpandedId("");
+      setDetailPayment(null);
       await loadPayments(page, submittedFilters);
       setNotice(result.message || "收款已删除");
     } catch (deleteError) {
@@ -420,7 +450,7 @@ export function PaymentsModule({
         }),
       });
       if (result.success !== true) throw new Error(result.message || "确认到账失败");
-      setExpandedId("");
+      setDetailPayment(null);
       await loadPayments(page, submittedFilters);
       setNotice(result.message || "收款已确认到账");
     } catch (confirmError) {
@@ -664,9 +694,8 @@ function QuickCreatePaymentPanel({
 
 function PaymentTableRows({
   payment,
-  expanded,
+  onViewDetail,
   deleting,
-  onToggle,
   onEdit,
   onDelete,
   onConfirmArrived,
@@ -674,9 +703,8 @@ function PaymentTableRows({
   confirming,
 }: {
   payment: PaymentRow;
-  expanded: boolean;
+  onViewDetail: () => void;
   deleting: boolean;
-  onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onConfirmArrived: () => void;
@@ -685,74 +713,105 @@ function PaymentTableRows({
 }) {
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
+      <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td><strong>{payment.orderNo || "-"}</strong></td>
         <td title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
         <td>{payment.paymentDate || "-"}</td>
         <td>{moneyText(payment.currency, payment.amount, payment.amountCny)}</td>
         <td><span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={6}>
-            <div className={styles.detailCard}>
-              <div className={styles.detailActions}>
-                {canManage ? (
-                  <>
-                    {payment.status === "待确认" ? (
-                      <button
-                        className={styles.primaryButtonCompact}
-                        type="button"
-                        disabled={confirming}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onConfirmArrived();
-                        }}
-                      >
-                        {confirming ? "确认中..." : "确认到账"}
-                      </button>
-                    ) : null}
-                    <button
-                      className={styles.primaryButtonCompact}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEdit();
-                      }}
-                    >
-                      编辑收款
-                    </button>
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      disabled={deleting}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete();
-                      }}
-                    >
-                      {deleting ? "删除中..." : "删除收款"}
-                    </button>
-                  </>
-                ) : <span className={styles.mutedText}>只读查看</span>}
-              </div>
-              <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={customerLegalName(payment)} wide />
-                <DetailField label="收款类型" value={payment.paymentType || "-"} />
-                <DetailField label="币种 / 汇率" value={`${payment.currency || "-"} / ${Number(payment.exchangeRate || 0).toFixed(4)}`} />
-                <DetailField label="折人民币" value={formatCny(Number(payment.amountCny || 0))} />
-                <DetailField label="银行流水号" value={payment.bankReference || "-"} hidden={!payment.bankReference} />
-                <DetailField label="汇率来源" value={rateMeta(payment)} />
-                <DetailField label="创建人" value={payment.createdBy?.name || "-"} />
-                <DetailField label="修改人" value={payment.updatedBy?.name || "-"} />
-                <DetailField label="备注" value={payment.remark || "-"} wide hidden={!payment.remark} />
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
     </>
+  );
+}
+
+function PaymentMobileCard({
+  payment,
+  onViewDetail,
+}: {
+  payment: PaymentRow;
+  onViewDetail: () => void;
+}) {
+  return (
+    <article className={styles.mobileDataCard}>
+      <div className={styles.mobileDataHeader}>
+        <div className={styles.mobileDataMeta}>
+          <strong>{payment.orderNo || "-"}</strong>
+          <span title={customerLegalName(payment)}>{customerDisplayName(payment)}</span>
+          <span>收款日期：{payment.paymentDate || "-"}</span>
+        </div>
+        <span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span>
+      </div>
+      <div className={styles.mobileMetricGrid}>
+        <div className={styles.mobileMetricItem}>
+          <span>金额</span>
+          <strong>{moneyText(payment.currency, payment.amount, payment.amountCny)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>收款类型</span>
+          <strong>{payment.paymentType || "-"}</strong>
+        </div>
+      </div>
+      <div className={styles.mobileDataActions}>
+        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
+      </div>
+    </article>
+  );
+}
+
+function PaymentDetailDrawer({
+  payment,
+  canManage,
+  deleting,
+  confirming,
+  onEdit,
+  onDelete,
+  onConfirmArrived,
+  onClose,
+}: {
+  payment: PaymentRow;
+  canManage: boolean;
+  deleting: boolean;
+  confirming: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onConfirmArrived: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <SideDetailDrawer
+      ariaLabel="收款详情"
+      kicker="收款管理"
+      title={`${payment.orderNo || "-"} · ${customerLegalName(payment)}`}
+      subtitle={`收款日期：${payment.paymentDate || "-"} · 状态：${payment.status || "-"}`}
+      onClose={onClose}
+      actions={canManage ? (
+        <>
+          {payment.status === "待确认" ? (
+            <button className={styles.primaryButtonCompact} type="button" disabled={confirming} onClick={onConfirmArrived}>
+              {confirming ? "确认中..." : "确认到账"}
+            </button>
+          ) : null}
+          <button className={styles.primaryButtonCompact} type="button" onClick={onEdit}>编辑收款</button>
+          <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onDelete}>
+            {deleting ? "删除中..." : "删除收款"}
+          </button>
+        </>
+      ) : undefined}
+    >
+      <div className={styles.detailGrid}>
+        <DetailField label="客户全称" value={customerLegalName(payment)} wide />
+        <DetailField label="收款类型" value={payment.paymentType || "-"} />
+        <DetailField label="币种 / 汇率" value={`${payment.currency || "-"} / ${Number(payment.exchangeRate || 0).toFixed(4)}`} />
+        <DetailField label="收款金额" value={moneyText(payment.currency, payment.amount, payment.amountCny)} />
+        <DetailField label="折人民币" value={formatCny(Number(payment.amountCny || 0))} />
+        <DetailField label="银行流水号" value={payment.bankReference || "-"} hidden={!payment.bankReference} />
+        <DetailField label="汇率来源" value={rateMeta(payment)} />
+        <DetailField label="创建人" value={payment.createdBy?.name || "-"} />
+        <DetailField label="修改人" value={payment.updatedBy?.name || "-"} />
+        <DetailField label="备注" value={payment.remark || "-"} wide hidden={!payment.remark} />
+      </div>
+    </SideDetailDrawer>
   );
 }
 

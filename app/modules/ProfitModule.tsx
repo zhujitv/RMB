@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
 import type { User } from "../types";
 import { customerDisplayName, customerLegalName } from "../utils";
@@ -58,7 +58,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
   const [totalPages, setTotalPages] = useState(1);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
-  const [expandedId, setExpandedId] = useState("");
+  const [detailRow, setDetailRow] = useState<ProfitRow | null>(null);
   const [settlingId, setSettlingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -101,7 +101,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
-    setExpandedId("");
+    setDetailRow(null);
     setNotice("");
     void loadRows(1, value);
   }
@@ -109,13 +109,13 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
-    setExpandedId("");
+    setDetailRow(null);
     setNotice("");
     void loadRows(1, "");
   }
 
   function gotoPage(nextPage: number) {
-    setExpandedId("");
+    setDetailRow(null);
     setNotice("");
     void loadRows(nextPage, submittedKeyword);
   }
@@ -151,7 +151,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       );
       if (result.success !== true) throw new Error(result.message || "结算业务员提成失败");
       await loadRows(page, submittedKeyword);
-      setExpandedId(row.id);
+      setDetailRow(row);
       setNotice(result.message || "业务员提成已结算");
     } catch (settleError) {
       setError(settleError instanceof Error ? settleError.message : "结算业务员提成失败");
@@ -196,7 +196,23 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={styles.tableWrap}>
+      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
+        {loading ? (
+          <div className={styles.emptyState}>数据加载中...</div>
+        ) : rows.length ? (
+          rows.map((row) => (
+            <ProfitMobileCard
+              key={row.id}
+              row={row}
+              onViewDetail={() => setDetailRow(row)}
+            />
+          ))
+        ) : (
+          <div className={styles.emptyState}>未找到匹配的利润分析订单</div>
+        )}
+      </div>
+
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -218,8 +234,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
               <ProfitRows
                 key={row.id}
                 row={row}
-                expanded={expandedId === row.id}
-                onToggle={() => setExpandedId((current) => current === row.id ? "" : row.id)}
+                onViewDetail={() => setDetailRow(row)}
                 settling={settlingId === row.id}
                 canSettleCommission={canSettleCommission}
                 onSettle={() => void settleCommission(row)}
@@ -234,6 +249,15 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={gotoPage} />
+      {detailRow ? (
+        <ProfitDetailDrawer
+          row={detailRow}
+          settling={settlingId === detailRow.id}
+          canSettleCommission={canSettleCommission}
+          onSettle={() => void settleCommission(detailRow)}
+          onClose={() => setDetailRow(null)}
+        />
+      ) : null}
       {confirmation ? (
         <ConfirmationDialog
           state={confirmation}
@@ -248,71 +272,127 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
 
 function ProfitRows({
   row,
-  expanded,
   settling,
   canSettleCommission,
-  onToggle,
+  onViewDetail,
   onSettle,
 }: {
   row: ProfitRow;
-  expanded: boolean;
   settling: boolean;
   canSettleCommission: boolean;
-  onToggle: () => void;
+  onViewDetail: () => void;
   onSettle: () => void;
 }) {
   const summary = row.summary || {};
   const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
+      <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td><strong>{row.orderNo || "-"}</strong></td>
         <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{formatCny(summary.receivableCny)}</td>
         <td>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</td>
         <td><strong>{formatCny(summary.expectedGrossProfit)}</strong></td>
         <td>{formatPercent(summary.expectedGrossMargin)}</td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={7}>
-            <div className={styles.detailCard}>
-              <div className={styles.detailActions}>
-                {commissionCanSettle ? (
-                  <button
-                    className={styles.primaryButtonCompact}
-                    type="button"
-                    disabled={settling}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSettle();
-                    }}
-                  >
-                    {settling ? "结算中..." : "结算提成"}
-                  </button>
-                ) : null}
-              </div>
-              <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={customerLegalName(row)} wide />
-                <DetailField label="订单号" value={row.orderNo || "-"} />
-                <DetailField label="提单号" value={row.blNo || "-"} />
-                <DetailField label="业务员" value={row.salespersonName || "-"} />
-                <DetailField label="已到账金额" value={formatCny(summary.arrivedPaymentsCny)} />
-                <DetailField label="已实现毛利" value={formatCny(summary.realizedGrossProfit)} />
-                <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
-                <DetailField label="业务员提成" value={formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
-                <DetailField label="提成比例" value={`${Number(summary.commissionRate || 0).toFixed(2)}%`} />
-                <DetailField label="提成状态" value={summary.commissionStatus || row.commissionStatus || "-"} />
-                <DetailField label="结算人" value={row.commissionSettledByName || "-"} />
-                <DetailField label="结算时间" value={row.commissionSettledAt ? new Date(row.commissionSettledAt).toLocaleString("zh-CN") : "-"} />
-                <DetailField label="成本结构" value={costGroupText(summary.costGroups)} wide />
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
     </>
+  );
+}
+
+function ProfitMobileCard({
+  row,
+  onViewDetail,
+}: {
+  row: ProfitRow;
+  onViewDetail: () => void;
+}) {
+  const summary = row.summary || {};
+  return (
+    <article className={styles.mobileDataCard}>
+      <div className={styles.mobileDataHeader}>
+        <div className={styles.mobileDataMeta}>
+          <strong>{row.orderNo || "-"}</strong>
+          <span title={customerLegalName(row)}>{customerDisplayName(row)}</span>
+          <span>业务员：{row.salespersonName || "-"}</span>
+        </div>
+        <span className={`${styles.statusPill} ${summary.commissionCanSettle ? styles.statusSuccess : styles.statusMuted}`}>
+          {summary.commissionStatus || row.commissionStatus || "-"}
+        </span>
+      </div>
+      <div className={styles.mobileMetricGrid}>
+        <div className={styles.mobileMetricItem}>
+          <span>最终应收</span>
+          <strong>{formatCny(summary.receivableCny)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>总成本</span>
+          <strong>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>预计毛利</span>
+          <strong>{formatCny(summary.expectedGrossProfit)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>预计毛利率</span>
+          <strong>{formatPercent(summary.expectedGrossMargin)}</strong>
+        </div>
+      </div>
+      <div className={styles.mobileDataActions}>
+        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
+      </div>
+    </article>
+  );
+}
+
+function ProfitDetailDrawer({
+  row,
+  settling,
+  canSettleCommission,
+  onSettle,
+  onClose,
+}: {
+  row: ProfitRow;
+  settling: boolean;
+  canSettleCommission: boolean;
+  onSettle: () => void;
+  onClose: () => void;
+}) {
+  const summary = row.summary || {};
+  const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
+  return (
+    <SideDetailDrawer
+      ariaLabel="利润分析详情"
+      kicker="利润分析"
+      title={`${row.orderNo || "-"} · ${customerLegalName(row)}`}
+      subtitle={`提单号：${row.blNo || "-"} · 业务员：${row.salespersonName || "-"}`}
+      onClose={onClose}
+      actions={commissionCanSettle ? (
+        <button className={styles.primaryButtonCompact} type="button" disabled={settling} onClick={onSettle}>
+          {settling ? "结算中..." : "结算提成"}
+        </button>
+      ) : undefined}
+    >
+      <div className={styles.detailGrid}>
+        <DetailField label="客户全称" value={customerLegalName(row)} wide />
+        <DetailField label="订单号" value={row.orderNo || "-"} />
+        <DetailField label="提单号" value={row.blNo || "-"} />
+        <DetailField label="业务员" value={row.salespersonName || "-"} />
+        <DetailField label="最终应收" value={formatCny(summary.receivableCny)} />
+        <DetailField label="已到账金额" value={formatCny(summary.arrivedPaymentsCny)} />
+        <DetailField label="总成本" value={formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)} />
+        <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
+        <DetailField label="预计毛利率" value={formatPercent(summary.expectedGrossMargin)} />
+        <DetailField label="已实现毛利" value={formatCny(summary.realizedGrossProfit)} />
+        <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
+        <DetailField label="业务员提成" value={formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
+        <DetailField label="提成比例" value={`${Number(summary.commissionRate || 0).toFixed(2)}%`} />
+        <DetailField label="提成状态" value={summary.commissionStatus || row.commissionStatus || "-"} />
+        <DetailField label="结算人" value={row.commissionSettledByName || "-"} />
+        <DetailField label="结算时间" value={row.commissionSettledAt ? new Date(row.commissionSettledAt).toLocaleString("zh-CN") : "-"} />
+        <DetailField label="成本结构" value={costGroupText(summary.costGroups)} wide />
+      </div>
+    </SideDetailDrawer>
   );
 }
 

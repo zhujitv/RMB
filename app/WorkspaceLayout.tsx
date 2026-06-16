@@ -49,12 +49,21 @@ export function WorkspaceLayout({
   children,
 }: WorkspaceLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const active = MENU_ITEMS.find((item) => item.key === activeMenu);
   const avatarText = payload.user.avatarInitials?.trim() || initials(payload.user.name);
 
   return (
     <div className={styles.appShell}>
-      <aside className={styles.sidebar}>
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          aria-label="关闭导航菜单"
+          className={styles.mobileNavBackdrop}
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+      <aside className={`${styles.sidebar} ${mobileNavOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.brandBlock}>
           <strong>NEXTWOOD</strong>
           <span className={styles.brandPlatform}>NEXTWOOD 供应链协同平台</span>
@@ -64,7 +73,10 @@ export function WorkspaceLayout({
           <button
             className={`${styles.navItem} ${activeMenu === "welcome" ? styles.navItemActive : ""}`}
             type="button"
-            onClick={() => onSelectMenu("welcome")}
+            onClick={() => {
+              onSelectMenu("welcome");
+              setMobileNavOpen(false);
+            }}
           >
             <NavIcon menuKey="welcome" />
             <span>工作台首页</span>
@@ -74,7 +86,10 @@ export function WorkspaceLayout({
               key={item.key}
               className={`${styles.navItem} ${activeMenu === item.key ? styles.navItemActive : ""}`}
               type="button"
-              onClick={() => onSelectMenu(item.key)}
+              onClick={() => {
+                onSelectMenu(item.key);
+                setMobileNavOpen(false);
+              }}
             >
               <NavIcon menuKey={item.key} />
               <span>{item.label}</span>
@@ -84,9 +99,21 @@ export function WorkspaceLayout({
       </aside>
       <div className={styles.mainColumn}>
         <header className={styles.topbar}>
-          <div>
-            <span className={styles.kicker}>业务工作台</span>
-            <h1>{activeMenu === "welcome" ? "工作台首页" : active?.label || "功能模块"}</h1>
+          <div className={styles.topbarTitleRow}>
+            <button
+              type="button"
+              className={styles.mobileMenuButton}
+              aria-label="打开导航菜单"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <div>
+              <span className={styles.kicker}>业务工作台</span>
+              <h1>{activeMenu === "welcome" ? "工作台首页" : active?.label || "功能模块"}</h1>
+            </div>
           </div>
           <div className={styles.accountArea}>
             <button className={styles.accountButton} type="button" onClick={() => setMenuOpen((open) => !open)}>

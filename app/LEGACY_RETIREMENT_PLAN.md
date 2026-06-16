@@ -27,7 +27,7 @@ As of this plan:
 
 ## Key Findings Before Retirement
 
-1. `middleware.js` now redirects both `/workspace` and `/index.html` to `/`.
+1. `proxy.js` now redirects both `/workspace` and `/index.html` to `/`.
 2. `app/page.jsx` now renders the production workspace directly at `/`.
 3. `package.json` lint no longer checks legacy `app.js` files.
 4. Tests have been rewritten to validate workspace React/API sources instead of legacy HTML/JS.
@@ -60,7 +60,7 @@ Goal:
 Tasks:
 
 1. Change `app/page.jsx` to render the production workspace directly at `/`.
-2. Keep `middleware.js` root redirect aligned with the same behavior.
+2. Keep `proxy.js` root redirect aligned with the same behavior.
 3. Decide whether `/index.html` should:
    - temporarily redirect to `/`, or
    - remain accessible only behind an explicit fallback path.

@@ -8,8 +8,13 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const { Prisma, PrismaClient } = await import("@prisma/client");
-const prisma = new PrismaClient();
+const [{ PrismaPg }, { Prisma, PrismaClient }] = await Promise.all([
+  import("@prisma/adapter-pg"),
+  import("../lib/generated/prisma/client.js"),
+]);
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
 const TARGET_AMOUNT = new Prisma.Decimal(TARGET_AMOUNT_TEXT);
 
 async function main() {

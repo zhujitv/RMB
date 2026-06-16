@@ -156,8 +156,10 @@
 - [ ] `DATABASE_URL` 未硬编码。
 - [ ] `JWT_SECRET` 或 session secret 足够强。
 - [ ] R2 Access Key 仅服务端环境变量。
-- [ ] Vercel build 不自动执行生产迁移。
+- [ ] `npm run build` 只做应用构建，不自动执行生产迁移。
 - [ ] 迁移通过 `npm run db:deploy` 独立执行。
+- [ ] 合并前至少执行一次 `npm run verify:ci`。
+- [ ] 发布前至少执行一次 `npm run verify:release`。
 - [ ] 安全响应头已配置。
 - [ ] 强制 HTTPS。
 - [ ] 生产环境关闭 debug 详细错误。

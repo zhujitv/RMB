@@ -699,16 +699,37 @@ prisma generate
 next build
 ```
 
+生产迁移需要独立执行：
+
+```bash
+npm run db:deploy
+```
+
 数据库迁移必须在上线前单独执行：
 
 ```bash
 npm run db:deploy
 ```
 
+Prisma 7 额外约定：
+
+- `prisma/schema.prisma` 只保留 `datasource provider`，连接串配置放在 `prisma.config.ts`
+- Prisma Client 生成到 `lib/generated/prisma`
+- 服务端数据库入口统一使用 `lib/prisma.js`
+
+Next.js 16 额外约定：
+
+- 根路径请求拦截文件使用 `proxy.js`
+- 不再使用 `middleware.js`
+
 ## 常用命令
 
 ```bash
 npm run dev
+npm run build:app
+npm run verify:ci
+npm run verify
+npm run audit
 npm run build
 npm run start
 npm run db:generate
@@ -734,6 +755,18 @@ npm run db:deploy
 8. 使用公司管理员账号登录；如果是空数据库，先配置安全的 `INITIAL_ADMIN_EMAIL` 和 `INITIAL_ADMIN_PASSWORD` 完成引导。
 9. 创建正式用户、客户、供应商和权限配置。
 
+建议部署前执行完整验收：
+
+```bash
+npm run verify:release
+```
+
+建议合并前执行 CI 验收：
+
+```bash
+npm run verify:ci
+```
+
 最新退税归档迁移：
 
 ```text
@@ -756,6 +789,19 @@ vercel --prod
 
 若使用自动部署，请将本地改动提交并推送到已连接 Vercel 的 GitHub 仓库，由 Vercel 自动构建发布。
 
+GitHub Actions 已补充两条可用发布链路：
+
+- PR 会触发 `.github/workflows/vercel-deploy.yml`，生成 preview 部署并回写 URL
+- 生产发布通过 `workflow_dispatch` 手动触发
+  - 不填 `deployment_url`：执行 `verify:release` 后构建并发布生产
+  - 填写 `deployment_url`：直接把已有 preview `promote` 到生产
+
+当前 Actions 需要的仓库 secrets：
+
+- `VERCEL_TOKEN`
+- `DATABASE_URL`
+- `CRON_SECRET`
+
 ## 安全注意事项
 
 - 不要将 `.env` 提交到 GitHub。
@@ -763,3 +809,4 @@ vercel --prod
 - 上传文件只保存 R2 Key，下载时后端生成短期签名 URL。
 - 所有新增、编辑、删除、上传、下载和退税状态修改都会记录操作日志。
 - 删除订单不直接删除 R2 原始文件，避免退税资料丢失。
+- 依赖升级或锁文件变更后，至少执行一次 `npm run audit` 和 `npm run verify`。

@@ -526,17 +526,29 @@ function DomesticLogisticsRows({
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
                 {canCreateLogisticsExpense ? (
-                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenFeeEntry(); }}>
+                  <button
+                    className={`${styles.logisticsActionBtn} ${styles.logisticsSecondaryBtn}`}
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onOpenFeeEntry(); }}
+                  >
                     录入费用
                   </button>
                 ) : null}
                 {canEditDomesticLogistics ? (
-                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
+                  <button
+                    className={`${styles.logisticsActionBtn} ${styles.logisticsPrimaryBtn} ${styles.logisticsEditBtn}`}
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onEdit(); }}
+                  >
                     {info ? "编辑物流信息" : "录入物流信息"}
                   </button>
                 ) : null}
                 {canDeleteDomesticLogistics && info?.id ? (
-                  <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteDomesticLogistics(); }}>
+                  <button
+                    className={`${styles.logisticsActionBtn} ${styles.logisticsDangerBtn}`}
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onDeleteDomesticLogistics(); }}
+                  >
                     删除
                   </button>
                 ) : null}

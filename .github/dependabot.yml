@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      app-runtime:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "@prisma/*"
+          - "prisma"
+          - "pdf-parse"
+      aws-sdk:
+        patterns:
+          - "@aws-sdk/*"
+      tooling:
+        patterns:
+          - "@types/*"
+          - "typescript"
+          - "postcss"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

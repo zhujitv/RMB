@@ -38,7 +38,17 @@ Verification for migrated modules:
 
 - `npm run typecheck`
 - `npm run lint`
+- `npm test`
 - `npm run build`
+- `npm run audit`
+- `npm run verify:ci`
+- `npm run verify:release`
+- `npm run verify`
+
+Platform upgrade baseline:
+
+- Next.js request interception now uses `proxy.js`, not `middleware.js`.
+- Prisma 7 uses `prisma.config.ts` plus generated client output under `lib/generated/prisma`.
 
 Production guardrails:
 

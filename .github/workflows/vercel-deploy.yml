@@ -1,0 +1,133 @@
+name: Vercel Deploy
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: "已有 preview 部署 URL；填写后直接 promote 到生产"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: vercel-deploy-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Load Vercel project metadata
+        run: |
+          org_id=$(node -p 'JSON.parse(require("fs").readFileSync("./.vercel/project.json", "utf8")).orgId')
+          project_id=$(node -p 'JSON.parse(require("fs").readFileSync("./.vercel/project.json", "utf8")).projectId')
+          echo "VERCEL_ORG_ID=$org_id" >> "$GITHUB_ENV"
+          echo "VERCEL_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pull preview environment
+        run: npx vercel@54.13.0 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Verify preview artifact
+        run: npm run verify:ci
+
+      - name: Build preview deployment
+        run: npx vercel@54.13.0 build --token="$VERCEL_TOKEN"
+
+      - name: Deploy preview
+        id: deploy
+        run: |
+          url=$(npx vercel@54.13.0 deploy --prebuilt --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        with:
+          script: |
+            const body = `Vercel preview ready: ${process.env.DEPLOYMENT_URL}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+  production:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Checkout
+        if: ${{ inputs.deployment_url == '' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: ${{ inputs.deployment_url == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Load Vercel project metadata
+        if: ${{ inputs.deployment_url == '' }}
+        run: |
+          org_id=$(node -p 'JSON.parse(require("fs").readFileSync("./.vercel/project.json", "utf8")).orgId')
+          project_id=$(node -p 'JSON.parse(require("fs").readFileSync("./.vercel/project.json", "utf8")).projectId')
+          echo "VERCEL_ORG_ID=$org_id" >> "$GITHUB_ENV"
+          echo "VERCEL_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+
+      - name: Promote existing preview
+        if: ${{ inputs.deployment_url != '' }}
+        run: |
+          npx vercel@54.13.0 promote "${{ inputs.deployment_url }}" --token="$VERCEL_TOKEN"
+          echo "Promoted deployment: ${{ inputs.deployment_url }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install dependencies
+        if: ${{ inputs.deployment_url == '' }}
+        run: npm ci
+
+      - name: Pull production environment
+        if: ${{ inputs.deployment_url == '' }}
+        run: npx vercel@54.13.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Verify release candidate
+        if: ${{ inputs.deployment_url == '' }}
+        run: npm run verify:release
+
+      - name: Build production deployment
+        if: ${{ inputs.deployment_url == '' }}
+        run: npx vercel@54.13.0 build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy production
+        if: ${{ inputs.deployment_url == '' }}
+        run: |
+          url=$(npx vercel@54.13.0 deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "Production deployment: $url" >> "$GITHUB_STEP_SUMMARY"

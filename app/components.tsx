@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./WorkspaceShell.module.css";
 
 export type ConfirmationDialogState = {
@@ -125,43 +126,167 @@ export function ConfirmationDialog({
       : "";
 
   return (
-    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label={state.title}>
-      <div className={`${styles.confirmDialog} ${variantClass}`}>
-        <div className={styles.confirmDialogHeader}>
-          <strong>{state.title}</strong>
-          {state.message ? <span>{state.message}</span> : null}
-        </div>
-
-        {state.details?.length ? (
-          <div className={styles.confirmDialogDetails}>
-            {state.details.map((detail) => (
-              <span key={detail}>{detail}</span>
-            ))}
+    <DismissibleLayer
+      ariaLabel={state.title}
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={`${styles.confirmDialog} ${variantClass}`}
+      dismissible={false}
+      onClose={onCancel}
+    >
+      {() => (
+        <>
+          <div className={styles.confirmDialogHeader}>
+            <strong>{state.title}</strong>
+            {state.message ? <span>{state.message}</span> : null}
           </div>
-        ) : null}
 
-        {state.requireInput ? (
-          <label className={styles.confirmDialogInput}>
-            {state.inputLabel || "原因"}
-            <textarea
-              value={state.inputValue || ""}
-              onChange={(event) => onInputChange?.(event.target.value)}
-              placeholder={state.inputPlaceholder}
-              rows={3}
-              autoFocus
-            />
-            {state.inputError ? <small>{state.inputError}</small> : null}
-          </label>
-        ) : null}
+          {state.details?.length ? (
+            <div className={styles.confirmDialogDetails}>
+              {state.details.map((detail) => (
+                <span key={detail}>{detail}</span>
+              ))}
+            </div>
+          ) : null}
 
-        <div className={styles.confirmDialogActions}>
-          <button className={styles.secondaryButton} type="button" onClick={onCancel}>
-            {state.cancelLabel || "取消"}
-          </button>
-          <button className={state.variant === "danger" ? styles.dangerButton : styles.primaryButtonCompact} type="button" onClick={onConfirm}>
-            {state.confirmLabel || "确认"}
-          </button>
+          {state.requireInput ? (
+            <label className={styles.confirmDialogInput}>
+              {state.inputLabel || "原因"}
+              <textarea
+                value={state.inputValue || ""}
+                onChange={(event) => onInputChange?.(event.target.value)}
+                placeholder={state.inputPlaceholder}
+                rows={3}
+                autoFocus
+              />
+              {state.inputError ? <small>{state.inputError}</small> : null}
+            </label>
+          ) : null}
+
+          <div className={styles.confirmDialogActions}>
+            <button className={styles.secondaryButton} type="button" onClick={onCancel}>
+              {state.cancelLabel || "取消"}
+            </button>
+            <button className={state.variant === "danger" ? styles.dangerButton : styles.primaryButtonCompact} type="button" onClick={onConfirm}>
+              {state.confirmLabel || "确认"}
+            </button>
+          </div>
+        </>
+      )}
+    </DismissibleLayer>
+  );
+}
+
+export function SideDetailDrawer({
+  ariaLabel,
+  kicker,
+  title,
+  subtitle,
+  actions,
+  children,
+  onClose,
+}: {
+  ariaLabel: string;
+  kicker?: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <DismissibleLayer
+      ariaLabel={ariaLabel}
+      overlayClassName={styles.drawerOverlay}
+      surfaceClassName={styles.sideDrawer}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+        <header className={styles.sideDrawerHeader}>
+          <div className={styles.sideDrawerTitle}>
+            {kicker ? <span>{kicker}</span> : null}
+            <strong>{title}</strong>
+            {subtitle ? <small>{subtitle}</small> : null}
+          </div>
+          <div className={styles.sideDrawerActions}>
+            {actions}
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+          </div>
+        </header>
+        <div className={styles.sideDrawerBody}>
+          {children}
         </div>
+        </>
+      )}
+    </DismissibleLayer>
+  );
+}
+
+export function DismissibleLayer({
+  ariaLabel,
+  overlayClassName,
+  surfaceClassName,
+  onClose,
+  children,
+  dismissible = true,
+  dismissConfirmMessage = "",
+}: {
+  ariaLabel: string;
+  overlayClassName: string;
+  surfaceClassName: string;
+  onClose: () => void;
+  children: (controls: { requestClose: () => void; closeImmediately: () => void; isClosing: boolean }) => ReactNode;
+  dismissible?: boolean;
+  dismissConfirmMessage?: string;
+}) {
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  function closeImmediately() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    onClose();
+  }
+
+  function requestClose() {
+    if (!dismissible) return;
+    if (dismissConfirmMessage && typeof window !== "undefined" && !window.confirm(dismissConfirmMessage)) return;
+    if (closing) return;
+    setClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      onClose();
+    }, 180);
+  }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  });
+
+  return (
+    <div
+      className={`${overlayClassName} ${closing ? styles.dialogLayerClosing : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel}
+      onClick={requestClose}
+    >
+      <div
+        className={`${surfaceClassName} ${closing ? styles.dialogSurfaceClosing : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children({ requestClose, closeImmediately, isClosing: closing })}
       </div>
     </div>
   );

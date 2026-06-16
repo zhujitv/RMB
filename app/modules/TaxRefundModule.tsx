@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -214,7 +214,6 @@ export function TaxRefundModule({
   const [declarationStartMonth, setDeclarationStartMonth] = useState("");
   const [declarationEndMonth, setDeclarationEndMonth] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [expandedRowId, setExpandedRowId] = useState("");
   const [detailOrderId, setDetailOrderId] = useState("");
   const [detailRow, setDetailRow] = useState<TaxRefundRow | null>(null);
   const [detail, setDetail] = useState<TaxRefundDetail | null>(null);
@@ -290,7 +289,6 @@ export function TaxRefundModule({
     if (!initialOpenToken || !value) return;
     setKeyword(value);
     setSubmittedKeyword(value);
-    setExpandedRowId("");
     setNotice("");
     void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }, [initialKeyword, initialOpenToken]);
@@ -314,7 +312,6 @@ export function TaxRefundModule({
 
   function switchMode(nextMode: TaxRefundMode) {
     setMode(nextMode);
-    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -330,7 +327,6 @@ export function TaxRefundModule({
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
-    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -344,7 +340,6 @@ export function TaxRefundModule({
     setDeclarationStartMonth("");
     setDeclarationEndMonth("");
     setStatusFilter("");
-    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -353,7 +348,6 @@ export function TaxRefundModule({
   }
 
   function gotoPage(nextPage: number) {
-    setExpandedRowId("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
@@ -777,7 +771,7 @@ export function TaxRefundModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={styles.tableWrap}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -800,20 +794,14 @@ export function TaxRefundModule({
                 <TaxRefundTableRow
                   key={row.id}
                   row={row}
-                  expanded={expandedRowId === row.id}
-                  packageDownloading={packageDownloadingId === row.id}
-                  onToggle={() => setExpandedRowId((current) => (current === row.id ? "" : row.id))}
                   onViewDetail={() => void loadDetail(row)}
-                  onDownloadPackage={() => void downloadPackage(row)}
                   onSubmitTaxRefund={() => void submitTaxRefund(row)}
                   onCancelArchive={() => void cancelTaxRefundArchive(row)}
                   onUpdateStatus={(status) => void updateTaxRefundStatus(row, status)}
-                  onOpenMissingTarget={(label) => void openMissingTarget(row, label)}
                   canSubmitTaxRefund={canManageTaxRefund && mode === "current" && !row.taxArchived && rowStatus === "READY"}
                   canCancelArchive={canCancelArchive && (mode === "archive" || row.taxArchived || rowStatus === "SUBMITTED")}
                   canUpdateStatus={canManageTaxRefund && mode === "current" && !row.taxArchived && rowStatus !== "SUBMITTED"}
                   submittingTax={submittingTaxId === row.id}
-                  cancelingArchive={cancelingArchiveId === row.id}
                 />
               );
             }) : (
@@ -887,144 +875,59 @@ export function TaxRefundModule({
 
 function TaxRefundTableRow({
   row,
-  expanded,
-  packageDownloading,
-  onToggle,
   onViewDetail,
-  onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
   onUpdateStatus,
-  onOpenMissingTarget,
   canSubmitTaxRefund,
   canCancelArchive,
   canUpdateStatus,
   submittingTax,
-  cancelingArchive,
 }: {
   row: TaxRefundRow;
-  expanded: boolean;
-  packageDownloading: boolean;
-  onToggle: () => void;
   onViewDetail: () => void;
-  onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
   onUpdateStatus: (status: string) => void;
-  onOpenMissingTarget: (label: string) => void;
   canSubmitTaxRefund: boolean;
   canCancelArchive: boolean;
   canUpdateStatus: boolean;
   submittingTax: boolean;
-  cancelingArchive: boolean;
 }) {
   const completeness = row.documentCompleteness || {};
   const completed = Number(completeness.completed || 0);
   const total = Number(completeness.total || 0);
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
-  const missingTargets = taxMissingTargets(completeness);
-  const missingLabels = missingTargets.map((target) => target.label);
   const currentStatus = taxRowStatus(row);
-  const canDownloadPackage = taxRefundHasPackageContent(row);
 
   return (
-    <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
-        <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
-        <td>{declarationDate}</td>
-        <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
-        <td onClick={(event) => event.stopPropagation()}>
-          {canUpdateStatus ? (
-            <select
-              value={currentStatus}
-              onChange={(event) => onUpdateStatus(event.target.value)}
-              disabled={submittingTax}
-            >
-              {TAX_REFUND_STATUS_OPTIONS.filter((option) => option.value).map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          ) : (
-            <span className={`${styles.statusPill} ${statusClass(currentStatus)}`}>{row.taxRefundStatusLabel || taxStatusLabel(currentStatus)}</span>
-          )}
-        </td>
-        <td>
-          <button
-            className={styles.rowDetailButton}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggle();
-            }}
+    <tr>
+      <td><strong>{row.orderNo || "-"}</strong></td>
+      <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+      <td>{declarationDate}</td>
+      <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
+      <td>
+        {canUpdateStatus ? (
+          <select
+            value={currentStatus}
+            onChange={(event) => onUpdateStatus(event.target.value)}
+            disabled={submittingTax}
           >
-            {expanded ? "收起" : "详情"}
-          </button>
-        </td>
-      </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={6}>
-            <div className={`${styles.detailCard} ${styles.taxDropdownMenu}`}>
-              <div className={styles.taxDropdownActions}>
-                <button className={styles.primaryButtonCompact} type="button" onClick={onViewDetail}>
-                  查看资料
-                </button>
-                <button className={styles.secondaryButton} type="button" disabled={packageDownloading || !canDownloadPackage} onClick={onDownloadPackage}>
-                  {packageDownloading ? "下载中..." : "下载资料包"}
-                </button>
-                {canSubmitTaxRefund ? (
-                  <button className={styles.primaryButtonCompact} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
-                    {submittingTax ? "提交中..." : "提交退税"}
-                  </button>
-                ) : null}
-                {canCancelArchive ? (
-                  <button className={styles.secondaryButton} type="button" disabled={cancelingArchive} onClick={onCancelArchive}>
-                    {cancelingArchive ? "处理中..." : "取消归档"}
-                  </button>
-                ) : null}
-              </div>
-              <div className={styles.taxDropdownGrid}>
-                <div>
-                  <strong>退税资料菜单</strong>
-                  <div className={styles.taxDropdownMeta}>
-                    <span>订单号：{row.orderNo || "-"}</span>
-                    <span>提单号：{row.blNo || "-"}</span>
-                    <span>申报日期：{declarationDate}</span>
-                  </div>
-                </div>
-                <div className={styles.taxDropdownSummary}>
-                  <span className={`${styles.statusPill} ${missingLabels.length ? styles.statusWarning : styles.statusSuccess}`}>
-                    {missingLabels.length ? `${missingLabels.length} 项待处理` : "资料已完整"}
-                  </span>
-                </div>
-              </div>
-              {missingLabels.length ? (
-                <div className={styles.taxDropdownMissing}>
-                  <span>缺失资料</span>
-                  <div className={styles.missingChipList}>
-                    {missingTargets.map((target) => (
-                      <button
-                        key={`${target.targetKey}:${target.label}`}
-                        className={styles.missingChipButton}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenMissingTarget(target.targetKey);
-                        }}
-                      >
-                        {target.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+            {TAX_REFUND_STATUS_OPTIONS.filter((option) => option.value).map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        ) : (
+          <span className={`${styles.statusPill} ${statusClass(currentStatus)}`}>{row.taxRefundStatusLabel || taxStatusLabel(currentStatus)}</span>
+        )}
+      </td>
+      <td>
+        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>
+          查看资料
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -1076,10 +979,20 @@ function TaxRefundDetailDrawer({
   canWriteDocuments: boolean;
 }) {
   const displayCustomer = customerLegalName(row);
+  const dismissLocked = packageDownloading || submittingTax || Boolean(uploadingKey);
+  const dismissConfirmMessage = dismissLocked ? "当前内容尚未保存，确定关闭吗？" : "";
 
   return (
-    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="退税资料详情">
-      <aside className={styles.taxRefundDrawer}>
+    <DismissibleLayer
+      ariaLabel="退税资料详情"
+      overlayClassName={styles.drawerOverlay}
+      surfaceClassName={styles.taxRefundDrawer}
+      dismissible
+      dismissConfirmMessage={dismissConfirmMessage}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
         <header className={styles.taxRefundDrawerHeader}>
           <div className={styles.taxRefundDrawerTitle}>
             <span>退税资料详情</span>
@@ -1099,7 +1012,7 @@ function TaxRefundDetailDrawer({
                 {submittingTax ? "提交中..." : "提交退税并归档"}
               </button>
             )}
-            <button className={styles.ghostButton} type="button" onClick={onClose}>关闭</button>
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
           </div>
         </header>
         <div className={styles.taxRefundDrawerBody}>
@@ -1121,8 +1034,9 @@ function TaxRefundDetailDrawer({
             canWriteDocuments={canWriteDocuments}
           />
         </div>
-      </aside>
-    </div>
+        </>
+      )}
+    </DismissibleLayer>
   );
 }
 
@@ -1346,15 +1260,27 @@ function ManualShippingDocumentsDialog({
     onChange({ ...form, [key]: value });
   }
 
+  const dismissConfirmMessage = sending
+    ? "当前内容尚未保存，确定关闭吗？"
+    : form ? "当前内容尚未保存，确定关闭吗？" : "";
+
   return (
-    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="手动发送清关资料">
-      <div className={styles.shippingDocsDialog}>
+    <DismissibleLayer
+      ariaLabel="手动发送清关资料"
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={styles.shippingDocsDialog}
+      dismissible
+      dismissConfirmMessage={dismissConfirmMessage}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
         <div className={styles.modalHeader}>
           <div>
             <strong>手动发送清关资料</strong>
             <span>{order.orderNo || "-"} · {customerLegalName(order)}</span>
           </div>
-          <button className={styles.ghostButton} type="button" onClick={onClose} disabled={sending}>关闭</button>
+          <button className={styles.ghostButton} type="button" onClick={requestClose} disabled={sending}>关闭</button>
         </div>
 
         {loading ? (
@@ -1413,7 +1339,7 @@ function ManualShippingDocumentsDialog({
             </div>
 
             <div className={styles.modalFooter}>
-              <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={sending}>取消</button>
+              <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={sending}>取消</button>
               <button className={styles.primaryButtonCompact} type="submit" disabled={sending}>
                 {sending ? "发送中..." : "发送清关资料"}
               </button>
@@ -1422,8 +1348,9 @@ function ManualShippingDocumentsDialog({
         ) : (
           <div className={styles.inlineError}>{message || "清关资料发送信息生成失败"}</div>
         )}
-      </div>
-    </div>
+        </>
+      )}
+    </DismissibleLayer>
   );
 }
 

@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
 import type { PermissionSnapshot, User } from "../types";
@@ -196,7 +196,7 @@ export function OrdersModule({
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [expandedId, setExpandedId] = useState("");
+  const [detailOrder, setDetailOrder] = useState<OrderRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -245,7 +245,7 @@ export function OrdersModule({
     if (!initialOpenToken || !value) return;
     setKeyword(value);
     setSubmittedKeyword(value);
-    setExpandedId("");
+    setDetailOrder(null);
     setNotice("");
     void loadOrders(1, value, submittedOrderStatus);
   }, [initialKeyword, initialOpenToken]);
@@ -254,7 +254,7 @@ export function OrdersModule({
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setSubmittedOrderStatus(orderStatus);
-    setExpandedId("");
+    setDetailOrder(null);
     setNotice("");
     void loadOrders(1, value, orderStatus);
   }
@@ -264,13 +264,13 @@ export function OrdersModule({
     setSubmittedKeyword("");
     setOrderStatus("");
     setSubmittedOrderStatus("");
-    setExpandedId("");
+    setDetailOrder(null);
     setNotice("");
     void loadOrders(1, "", "");
   }
 
   function gotoPage(nextPage: number) {
-    setExpandedId("");
+    setDetailOrder(null);
     setNotice("");
     void loadOrders(nextPage, submittedKeyword, submittedOrderStatus);
   }
@@ -298,7 +298,7 @@ export function OrdersModule({
         { method: "DELETE" },
       );
       if (result.success === false) throw new Error(result.message || "删除应收订单失败");
-      setExpandedId("");
+      setDetailOrder(null);
       setEditOrder(null);
       setCreateOpen(false);
       await loadOrders(page, submittedKeyword);
@@ -356,7 +356,7 @@ export function OrdersModule({
             setNotice(editOrder ? "订单已更新" : "订单已保存");
             setCreateOpen(false);
             setEditOrder(null);
-            setExpandedId("");
+            setDetailOrder(null);
             void loadOrders(1, submittedKeyword, submittedOrderStatus);
           }}
         />
@@ -382,7 +382,23 @@ export function OrdersModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={styles.tableWrap}>
+      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
+        {loading ? (
+          <div className={styles.emptyState}>数据加载中...</div>
+        ) : orders.length ? (
+          orders.map((order) => (
+            <OrderMobileCard
+              key={order.id}
+              order={order}
+              onViewDetail={() => setDetailOrder(order)}
+            />
+          ))
+        ) : (
+          <div className={styles.emptyState}>未找到匹配的应收订单</div>
+        )}
+      </div>
+
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -405,13 +421,12 @@ export function OrdersModule({
               <OrderTableRows
                 key={order.id}
                 order={order}
-                expanded={expandedId === order.id}
-                onToggle={() => setExpandedId((current) => current === order.id ? "" : order.id)}
+                onViewDetail={() => setDetailOrder(order)}
                 onEdit={() => {
                   if (!canWriteOrders) return;
                   setCreateOpen(false);
                   setEditOrder(order);
-                  setExpandedId(order.id);
+                  setDetailOrder(order);
                 }}
                 onDelete={() => void deleteOrder(order)}
                 deleting={deletingId === order.id}
@@ -427,6 +442,20 @@ export function OrdersModule({
       </div>
 
       <PaginationBar total={total} page={page} totalPages={totalPages} onPage={gotoPage} />
+      {detailOrder ? (
+        <OrderDetailDrawer
+          order={detailOrder}
+          canWrite={canWriteOrders}
+          deleting={deletingId === detailOrder.id}
+          onEdit={() => {
+            if (!canWriteOrders) return;
+            setCreateOpen(false);
+            setEditOrder(detailOrder);
+          }}
+          onDelete={() => void deleteOrder(detailOrder)}
+          onClose={() => setDetailOrder(null)}
+        />
+      ) : null}
       {confirmation ? (
         <ConfirmationDialog
           state={confirmation}
@@ -835,16 +864,14 @@ function QuickCreateOrderPanel({
 
 function OrderTableRows({
   order,
-  expanded,
-  onToggle,
+  onViewDetail,
   onEdit,
   onDelete,
   deleting,
   canWrite,
 }: {
   order: OrderRow;
-  expanded: boolean;
-  onToggle: () => void;
+  onViewDetail: () => void;
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
@@ -857,7 +884,7 @@ function OrderTableRows({
     : formatCny(outstandingCny);
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
+      <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td><strong>{order.orderNo || "-"}</strong></td>
         <td title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td>{order.blNo || order.billOfLadingNo || "-"}</td>
@@ -865,49 +892,111 @@ function OrderTableRows({
         <td>{formatCny(receivedCny)}</td>
         <td>{outstanding}</td>
         <td><span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={8}>
-            <div className={styles.detailCard}>
-              {canWrite ? (
-                <div className={styles.detailActions}>
-                  <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>
-                    编辑订单
-                  </button>
-                  <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
-                    {deleting ? "删除中..." : "删除订单"}
-                  </button>
-                </div>
-              ) : null}
-              <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={customerLegalName(order)} wide />
-                <DetailField label="业务员" value={order.salespersonName || "-"} />
-                <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
-                <DetailField label="付款条款" value={paymentTermText(order)} />
-                <DetailField label="到期日" value={`${order.dueDate || "-"} ${order.summary?.reminderStatus ? `· ${order.summary.reminderStatus}` : ""}`} />
-                <DetailField label="提醒天数" value={`${order.reminderDays ?? "-"} 天`} />
-                <DetailField label="提单日期" value={order.blDate || "-"} />
-                <DetailField label="预计发货" value={order.expectedShipmentDate || "-"} />
-                <DetailField label="预计到港" value={order.expectedArrivalDate || "-"} />
-                <DetailField label="预计收款" value={order.expectedPaymentDate || "-"} />
-                <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
-                <DetailField label="实际发货金额" value={moneyText(order.currency, order.actualShipmentAmount, order.actualShipmentAmountCny)} />
-                <DetailField label="最终应收" value={moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)} />
-                <DetailField label="预付款要求" value={formatCny(order.summary?.requiredDepositAmount)} />
-                <DetailField label="已收预付款" value={formatCny(order.summary?.receivedDepositCny)} />
-                <DetailField label="预付款差额" value={formatCny(order.summary?.depositGapCny)} />
-                <DetailField label="币种 / 汇率" value={`${order.currency || "-"} / ${Number(order.exchangeRate || 0).toFixed(4)}`} />
-                <DetailField label="汇率来源" value={rateMeta(order)} />
-                <DetailField label="物流供应商" value={logisticsSupplierText(order.logisticsSuppliers)} wide />
-                <DetailField label="备注" value={order.remark || "-"} wide hidden={!order.remark} />
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
     </>
+  );
+}
+
+function OrderMobileCard({
+  order,
+  onViewDetail,
+}: {
+  order: OrderRow;
+  onViewDetail: () => void;
+}) {
+  const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
+  const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
+  const outstanding = Number(order.summary?.overpaidCny || 0) > 0
+    ? `多收 ${formatCny(order.summary?.overpaidCny)}`
+    : formatCny(outstandingCny);
+  return (
+    <article className={styles.mobileDataCard}>
+      <div className={styles.mobileDataHeader}>
+        <div className={styles.mobileDataMeta}>
+          <strong>{order.orderNo || "-"}</strong>
+          <span title={customerLegalName(order)}>{customerDisplayName(order)}</span>
+          <span>提单号：{order.blNo || order.billOfLadingNo || "-"}</span>
+        </div>
+        <span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span>
+      </div>
+      <div className={styles.mobileMetricGrid}>
+        <div className={styles.mobileMetricItem}>
+          <span>最终应收</span>
+          <strong>{moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>已收</span>
+          <strong>{formatCny(receivedCny)}</strong>
+        </div>
+        <div className={styles.mobileMetricItem}>
+          <span>未收</span>
+          <strong>{outstanding}</strong>
+        </div>
+      </div>
+      <div className={styles.mobileDataActions}>
+        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
+      </div>
+    </article>
+  );
+}
+
+function OrderDetailDrawer({
+  order,
+  canWrite,
+  deleting,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  order: OrderRow;
+  canWrite: boolean;
+  deleting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <SideDetailDrawer
+      ariaLabel="应收订单详情"
+      kicker="应收订单"
+      title={`${order.orderNo || "-"} · ${customerLegalName(order)}`}
+      subtitle={`提单号：${order.blNo || order.billOfLadingNo || "-"} · 状态：${order.status || "-"}`}
+      onClose={onClose}
+      actions={canWrite ? (
+        <>
+          <button className={styles.primaryButtonCompact} type="button" onClick={onEdit}>编辑订单</button>
+          <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onDelete}>
+            {deleting ? "删除中..." : "删除订单"}
+          </button>
+        </>
+      ) : undefined}
+    >
+      <div className={styles.detailGrid}>
+        <DetailField label="客户全称" value={customerLegalName(order)} wide />
+        <DetailField label="业务员" value={order.salespersonName || "-"} />
+        <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
+        <DetailField label="付款条款" value={paymentTermText(order)} wide />
+        <DetailField label="到期日" value={`${order.dueDate || "-"} ${order.summary?.reminderStatus ? `· ${order.summary.reminderStatus}` : ""}`} />
+        <DetailField label="提醒天数" value={`${order.reminderDays ?? "-"} 天`} />
+        <DetailField label="提单日期" value={order.blDate || "-"} />
+        <DetailField label="预计发货" value={order.expectedShipmentDate || "-"} />
+        <DetailField label="预计到港" value={order.expectedArrivalDate || "-"} />
+        <DetailField label="预计收款" value={order.expectedPaymentDate || "-"} />
+        <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
+        <DetailField label="实际发货金额" value={moneyText(order.currency, order.actualShipmentAmount, order.actualShipmentAmountCny)} />
+        <DetailField label="最终应收" value={moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)} />
+        <DetailField label="已收金额" value={formatCny(Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0))} />
+        <DetailField label="未收金额" value={formatCny(Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0))} />
+        <DetailField label="预付款要求" value={formatCny(order.summary?.requiredDepositAmount)} />
+        <DetailField label="已收预付款" value={formatCny(order.summary?.receivedDepositCny)} />
+        <DetailField label="预付款差额" value={formatCny(order.summary?.depositGapCny)} />
+        <DetailField label="币种 / 汇率" value={`${order.currency || "-"} / ${Number(order.exchangeRate || 0).toFixed(4)}`} />
+        <DetailField label="汇率来源" value={rateMeta(order)} />
+        <DetailField label="物流供应商" value={logisticsSupplierText(order.logisticsSuppliers)} wide />
+        <DetailField label="备注" value={order.remark || "-"} wide hidden={!order.remark} />
+      </div>
+    </SideDetailDrawer>
   );
 }
 

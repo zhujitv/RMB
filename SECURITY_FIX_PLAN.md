@@ -161,7 +161,13 @@
 ## 发布前安全验收
 
 - `npm run lint`
+- `npm run typecheck`
+- `npm test`
+- `npm run verify:ci`
 - `npm run build`
+- `npm run verify:release`
+- `npm run audit`
+- `npm run verify`
 - `npm run db:deploy`
 - 未登录访问所有 `/api/*` 业务接口返回 401。
 - 各角色访问越权订单、客户、供应商、附件返回 403 或 404。

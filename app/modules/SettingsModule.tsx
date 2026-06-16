@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, SideDetailDrawer } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
@@ -318,7 +318,7 @@ export function SettingsModule() {
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
-  const [expandedId, setExpandedId] = useState("");
+  const [detailRow, setDetailRow] = useState<CustomerRow | SupplierRow | UserRow | AuditLogRow | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm | null>(null);
   const [customerSaving, setCustomerSaving] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
@@ -390,7 +390,7 @@ export function SettingsModule() {
         [tab]: result.pagination || emptyPagination(pageSize),
       }));
       markLoaded(tab);
-      setExpandedId("");
+      setDetailRow(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取系统设置失败");
     } finally {
@@ -404,7 +404,7 @@ export function SettingsModule() {
 
   function selectTab(tab: SettingsTabKey) {
     setActiveTab(tab);
-    setExpandedId("");
+    setDetailRow(null);
     setCustomerForm(null);
     setCustomerMessage("");
     setSupplierForm(null);
@@ -479,14 +479,14 @@ export function SettingsModule() {
 
   function startCreateCustomer() {
     setActiveTab("customers");
-    setExpandedId("");
+    setDetailRow(null);
     setCustomerMessage("");
     setCustomerForm(emptyCustomerForm());
   }
 
   function startCreateSupplier() {
     setActiveTab("suppliers");
-    setExpandedId("");
+    setDetailRow(null);
     setSupplierMessage("");
     setSupplierForm(emptySupplierForm());
   }
@@ -511,7 +511,7 @@ export function SettingsModule() {
 
   function startCreateUser() {
     setActiveTab("users");
-    setExpandedId("");
+    setDetailRow(null);
     setUserMessage("");
     setUserForm(emptyUserForm());
     void ensureActiveSuppliers();
@@ -520,21 +520,21 @@ export function SettingsModule() {
 
   function startEditCustomer(customer: CustomerRow) {
     setActiveTab("customers");
-    setExpandedId(customer.id);
+    setDetailRow(customer);
     setCustomerMessage("");
     setCustomerForm(customerFormFromRow(customer));
   }
 
   function startEditSupplier(supplier: SupplierRow) {
     setActiveTab("suppliers");
-    setExpandedId(supplier.id);
+    setDetailRow(supplier);
     setSupplierMessage("");
     setSupplierForm(supplierFormFromRow(supplier));
   }
 
   function startEditUser(user: UserRow) {
     setActiveTab("users");
-    setExpandedId(user.id);
+    setDetailRow(user);
     setUserMessage("");
     setUserForm(userFormFromRow(user));
     void ensureActiveSuppliers();
@@ -881,8 +881,9 @@ export function SettingsModule() {
           columns={listColumns}
           loading={loading && !loadedTabs.has(activeTab)}
           pagination={activePagination}
-          expandedId={expandedId}
-          onToggle={setExpandedId}
+          detailRow={detailRow}
+          onViewDetail={setDetailRow}
+          onCloseDetail={() => setDetailRow(null)}
           onEditCustomer={startEditCustomer}
           onEditSupplier={startEditSupplier}
           onEditUser={startEditUser}
@@ -911,8 +912,9 @@ function SettingsTable({
   columns,
   loading,
   pagination,
-  expandedId,
-  onToggle,
+  detailRow,
+  onViewDetail,
+  onCloseDetail,
   onEditCustomer,
   onEditSupplier,
   onEditUser,
@@ -926,8 +928,9 @@ function SettingsTable({
   columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   loading: boolean;
   pagination: Pagination;
-  expandedId: string;
-  onToggle: (id: string) => void;
+  detailRow: CustomerRow | SupplierRow | UserRow | AuditLogRow | null;
+  onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow) => void;
+  onCloseDetail: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
@@ -939,7 +942,7 @@ function SettingsTable({
   const colSpan = columns.length + 1;
   return (
     <>
-      <div className={styles.tableWrap}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -958,8 +961,7 @@ function SettingsTable({
                 tab={tab}
                 row={row}
                 columns={columns}
-                expanded={expandedId === row.id}
-                onToggle={() => onToggle(expandedId === row.id ? "" : row.id)}
+                onViewDetail={() => onViewDetail(row)}
                 onEditCustomer={onEditCustomer}
                 onEditSupplier={onEditSupplier}
                 onEditUser={onEditUser}
@@ -981,6 +983,19 @@ function SettingsTable({
         totalPages={pagination.totalPages}
         onPage={onPage}
       />
+      {detailRow ? (
+        <SettingsDetailDrawer
+          tab={tab}
+          row={detailRow}
+          onClose={onCloseDetail}
+          onEditCustomer={onEditCustomer}
+          onEditSupplier={onEditSupplier}
+          onEditUser={onEditUser}
+          onDeleteCustomer={onDeleteCustomer}
+          onDeleteSupplier={onDeleteSupplier}
+          onDeleteUser={onDeleteUser}
+        />
+      ) : null}
     </>
   );
 }
@@ -989,8 +1004,7 @@ function SettingsRows({
   tab,
   row,
   columns,
-  expanded,
-  onToggle,
+  onViewDetail,
   onEditCustomer,
   onEditSupplier,
   onEditUser,
@@ -1001,8 +1015,38 @@ function SettingsRows({
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
   columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
-  expanded: boolean;
-  onToggle: () => void;
+  onViewDetail: () => void;
+  onEditCustomer: (customer: CustomerRow) => void;
+  onEditSupplier: (supplier: SupplierRow) => void;
+  onEditUser: (user: UserRow) => void;
+  onDeleteCustomer: (customer: CustomerRow) => void;
+  onDeleteSupplier: (supplier: SupplierRow) => void;
+  onDeleteUser: (user: UserRow) => void;
+}) {
+  return (
+    <>
+      <tr className={styles.clickableRow} onClick={onViewDetail}>
+        {columns.map((column) => <td key={String(column.key)}>{valueFor(row, column)}</td>)}
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
+      </tr>
+    </>
+  );
+}
+
+function SettingsDetailDrawer({
+  tab,
+  row,
+  onClose,
+  onEditCustomer,
+  onEditSupplier,
+  onEditUser,
+  onDeleteCustomer,
+  onDeleteSupplier,
+  onDeleteUser,
+}: {
+  tab: SettingsTabKey;
+  row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
+  onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
@@ -1011,58 +1055,44 @@ function SettingsRows({
   onDeleteUser: (user: UserRow) => void;
 }) {
   const detailFields = detailFieldsFor(tab, row);
+  const actions = tab === "customers"
+    ? (
+      <>
+        <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditCustomer(row as CustomerRow)}>编辑客户</button>
+        <button className={styles.dangerButton} type="button" onClick={() => onDeleteCustomer(row as CustomerRow)}>删除客户</button>
+      </>
+    )
+    : tab === "suppliers"
+      ? (
+        <>
+          <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditSupplier(row as SupplierRow)}>编辑供应商</button>
+          <button className={styles.dangerButton} type="button" onClick={() => onDeleteSupplier(row as SupplierRow)}>删除供应商</button>
+        </>
+      )
+      : tab === "users"
+        ? (
+          <>
+            <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditUser(row as UserRow)}>编辑用户</button>
+            <button className={styles.dangerButton} type="button" onClick={() => onDeleteUser(row as UserRow)}>停用用户</button>
+          </>
+        )
+        : undefined;
+
   return (
-    <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
-        {columns.map((column) => <td key={String(column.key)}>{valueFor(row, column)}</td>)}
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
-      </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={columns.length + 1}>
-            <div className={styles.detailCard}>
-              <div className={styles.detailActions}>
-                {tab === "customers" ? (
-                  <>
-                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditCustomer(row as CustomerRow); }}>
-                      编辑客户
-                    </button>
-                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteCustomer(row as CustomerRow); }}>
-                      删除客户
-                    </button>
-                  </>
-                ) : null}
-                {tab === "suppliers" ? (
-                  <>
-                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditSupplier(row as SupplierRow); }}>
-                      编辑供应商
-                    </button>
-                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteSupplier(row as SupplierRow); }}>
-                      删除供应商
-                    </button>
-                  </>
-                ) : null}
-                {tab === "users" ? (
-                  <>
-                    <button className={styles.primaryButtonCompact} type="button" onClick={(event) => { event.stopPropagation(); onEditUser(row as UserRow); }}>
-                      编辑用户
-                    </button>
-                    <button className={styles.dangerButton} type="button" onClick={(event) => { event.stopPropagation(); onDeleteUser(row as UserRow); }}>
-                      停用用户
-                    </button>
-                  </>
-                ) : null}
-              </div>
-              <div className={styles.detailGrid}>
-                {detailFields.map((field) => (
-                  <DetailField key={field.label} label={field.label} value={field.value} wide={field.wide} />
-                ))}
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <SideDetailDrawer
+      ariaLabel="系统设置详情"
+      kicker="系统设置"
+      title={drawerTitleFor(tab, row)}
+      subtitle={drawerSubtitleFor(tab, row)}
+      actions={actions}
+      onClose={onClose}
+    >
+      <div className={styles.detailGrid}>
+        {detailFields.map((field) => (
+          <DetailField key={field.label} label={field.label} value={field.value} wide={field.wide} />
+        ))}
+      </div>
+    </SideDetailDrawer>
   );
 }
 
@@ -1823,6 +1853,40 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
     { label: "对象", value: log.entityLabel || "-", wide: true },
     { label: "IP", value: log.ipAddress || "-" },
   ];
+}
+
+function drawerTitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow) {
+  if (tab === "customers") {
+    const customer = row as CustomerRow;
+    return customer.shortName || customer.name || "客户详情";
+  }
+  if (tab === "suppliers") {
+    const supplier = row as SupplierRow;
+    return supplier.supplierName || "供应商详情";
+  }
+  if (tab === "users") {
+    const user = row as UserRow;
+    return user.name || user.email || "用户详情";
+  }
+  const log = row as AuditLogRow;
+  return log.entityLabel || log.action || "操作日志";
+}
+
+function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow) {
+  if (tab === "customers") {
+    const customer = row as CustomerRow;
+    return `国家：${customer.country || "-"} · 默认币种：${customer.defaultCurrency || "-"}`;
+  }
+  if (tab === "suppliers") {
+    const supplier = row as SupplierRow;
+    return `类型：${supplier.supplierType || "-"} · 状态：${supplier.status || "-"}`;
+  }
+  if (tab === "users") {
+    const user = row as UserRow;
+    return `角色：${user.role || "-"} · 状态：${userStatus(user)}`;
+  }
+  const log = row as AuditLogRow;
+  return `时间：${formatDateTime(log.createdAt)} · 操作人：${log.user?.name || "-"}`;
 }
 
 function valueFor(row: CustomerRow | SupplierRow | UserRow | AuditLogRow, column: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>) {

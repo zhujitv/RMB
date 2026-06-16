@@ -336,9 +336,44 @@
   z-index: 10;
 }
 
+.topbarTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
 .topbar h1 {
   margin: 2px 0 0;
   font-size: 20px;
+}
+
+.mobileMenuButton {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #dbe1ea;
+  background: #fff;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.mobileMenuButton span {
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: #334155;
+  display: block;
+}
+
+.mobileNavBackdrop {
+  display: none;
 }
 
 .kicker {
@@ -1189,6 +1224,86 @@
   background: #fff;
 }
 
+.desktopOnly {
+  display: block;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.mobileCardList {
+  display: grid;
+  gap: 12px;
+}
+
+.mobileDataCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.mobileDataHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobileDataHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.mobileDataMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobileDataMeta span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobileMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobileMetricItem {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.mobileMetricItem span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobileMetricItem strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.mobileDataActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .dataTable {
   width: 100%;
   border-collapse: collapse;
@@ -1206,10 +1321,28 @@
 }
 
 .dataTable th {
-  color: #64748b;
+  color: #334155;
   background: #f8fafc;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.dataTable td {
+  color: #475569;
+  font-weight: 400;
+}
+
+.dataTable td strong {
+  color: #334155;
+  font-weight: 600;
+}
+
+.dataTable button,
+.dataTable select,
+.dataTable input,
+.dataTable textarea {
+  font-weight: 400;
+  color: #334155;
 }
 
 .clickableRow {
@@ -1285,10 +1418,74 @@
 
 .detailActions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-start;
   flex-wrap: wrap;
   margin-bottom: 14px;
+}
+
+.logisticsActionBtn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.logisticsActionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logisticsSecondaryBtn {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.logisticsSecondaryBtn:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.logisticsPrimaryBtn {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.logisticsPrimaryBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.logisticsEditBtn {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+  font-weight: 500;
+}
+
+.logisticsEditBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+  color: #ffffff;
+  border-color: #1d4ed8;
+}
+
+.logisticsDangerBtn {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.logisticsDangerBtn:hover:not(:disabled) {
+  background: #fee2e2;
 }
 
 .taxDropdownMenu {
@@ -1572,6 +1769,39 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.tablePinnedTwoCols .dataTable th:nth-child(1),
+.tablePinnedTwoCols .dataTable td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 120px;
+  width: 120px;
+}
+
+.tablePinnedTwoCols .dataTable th:nth-child(2),
+.tablePinnedTwoCols .dataTable td:nth-child(2) {
+  position: sticky;
+  left: 120px;
+  z-index: 3;
+  min-width: 170px;
+  width: 170px;
+}
+
+.tablePinnedTwoCols .dataTable th:nth-child(1),
+.tablePinnedTwoCols .dataTable th:nth-child(2) {
+  background: #f8fafc;
+}
+
+.tablePinnedTwoCols .dataTable td:nth-child(1),
+.tablePinnedTwoCols .dataTable td:nth-child(2) {
+  background: #fff;
+}
+
+.tablePinnedTwoCols .clickableRow:hover td:nth-child(1),
+.tablePinnedTwoCols .clickableRow:hover td:nth-child(2) {
+  background: #f8fafc;
 }
 
 .detailField {
@@ -2224,6 +2454,8 @@
   place-items: center;
   background: rgba(15, 23, 42, 0.36);
   padding: 24px;
+  opacity: 1;
+  transition: opacity 180ms ease;
 }
 
 .drawerOverlay {
@@ -2233,6 +2465,84 @@
   display: flex;
   justify-content: flex-end;
   background: rgba(15, 23, 42, 0.32);
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.dialogLayerClosing {
+  opacity: 0;
+}
+
+.dialogSurfaceClosing {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.sideDrawer {
+  width: min(980px, 88vw);
+  height: 100vh;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sideDrawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+}
+
+.sideDrawerTitle {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.sideDrawerTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sideDrawerTitle strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sideDrawerTitle small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sideDrawerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sideDrawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 22px;
 }
 
 .taxRefundDrawer {
@@ -2244,6 +2554,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .taxRefundDrawerHeader {
@@ -2388,6 +2701,13 @@
   padding: 18px;
   display: grid;
   gap: 14px;
+}
+
+.confirmDialog,
+.shippingDocsDialog {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .confirmDialog {
@@ -2729,12 +3049,18 @@
     width: min(100vw, 900px);
   }
 
-  .taxRefundDrawerHeader {
+  .sideDrawer {
+    width: min(100vw, 900px);
+  }
+
+  .taxRefundDrawerHeader,
+  .sideDrawerHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .taxRefundDrawerActions {
+  .taxRefundDrawerActions,
+  .sideDrawerActions {
     justify-content: flex-start;
   }
 
@@ -2785,18 +3111,68 @@
 }
 
 @media (max-width: 640px) {
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  .mobileCardList {
+    gap: 10px;
+  }
+
+  .mobileDataCard {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .mobileDataHeader {
+    align-items: flex-start;
+  }
+
+  .mobileMetricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobileMetricItem {
+    padding: 9px 10px;
+  }
+
   .detailGrid {
     grid-template-columns: 1fr;
   }
 
+  .tableWrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .dataTable {
-    min-width: 0;
+    min-width: 720px;
+    table-layout: auto;
   }
 
   .dataTable th,
   .dataTable td {
     padding: 11px 10px;
     font-size: 13px;
+  }
+
+  .dataTable th {
+    white-space: nowrap;
+  }
+
+  .tablePinnedTwoCols .dataTable th:nth-child(1),
+  .tablePinnedTwoCols .dataTable td:nth-child(1),
+  .tablePinnedTwoCols .dataTable th:nth-child(2),
+  .tablePinnedTwoCols .dataTable td:nth-child(2) {
+    position: static;
+    left: auto;
+    min-width: auto;
+    width: auto;
   }
 
   .reportFilterGrid {
@@ -2824,11 +3200,17 @@
     width: 100vw;
   }
 
-  .taxRefundDrawerBody {
+  .sideDrawer {
+    width: 100vw;
+  }
+
+  .taxRefundDrawerBody,
+  .sideDrawerBody {
     padding: 12px;
   }
 
-  .taxRefundDrawerActions {
+  .taxRefundDrawerActions,
+  .sideDrawerActions {
     gap: 6px;
   }
 
@@ -3157,18 +3539,49 @@
     grid-template-columns: 1fr;
   }
 
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.42);
+    z-index: 39;
+  }
+
   .sidebar {
-    position: static;
-    border-right: 0;
-    border-bottom: 1px solid #e2e8f0;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(280px, 84vw);
+    min-height: 100vh;
+    z-index: 40;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
   }
 
   .navList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .quickGrid {
     grid-template-columns: 1fr;
+  }
+
+  .mobileMenuButton {
+    display: inline-flex;
+  }
+
+  .topbar {
+    padding: 0 18px;
   }
 
   .quickCreateHeader,
@@ -3222,10 +3635,28 @@
 
   .topbar {
     height: auto;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     padding: 18px;
-    flex-direction: column;
+    flex-direction: row;
+  }
+
+  .topbarTitleRow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .accountButton {
+    padding-right: 8px;
+  }
+
+  .accountButton > span:last-child {
+    display: none;
   }
 
   .content {
