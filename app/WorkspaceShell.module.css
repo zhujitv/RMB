@@ -40,26 +40,41 @@
 }
 
 .loginScreen {
+  position: relative;
+  min-height: 100dvh;
   align-content: center;
-  gap: 22px;
+  padding: 56px 32px 72px;
+}
+
+.loginCard {
+  width: min(420px, 100%);
+  background: #fff;
+  border-color: #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  padding: 32px;
 }
 
 .loginBrand {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .loginBrand h1 {
   margin: 0;
-  font-size: 34px;
+  color: #111827;
+  font-size: 30px;
+  line-height: 1.2;
   letter-spacing: 0;
   font-weight: 700;
 }
 
 .loginBrand p {
-  margin: 8px 0 0;
-  color: #64748b;
-  font-size: 14px;
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 500;
 }
 
 .authForm {
@@ -186,8 +201,14 @@
 }
 
 .loginFooter {
-  color: #94a3b8;
-  font-size: 13px;
+  position: absolute;
+  right: 32px;
+  bottom: 24px;
+  left: 32px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .appShell {
@@ -3611,6 +3632,16 @@
   .loginScreen,
   .loadingScreen {
     padding: 18px;
+  }
+
+  .loginScreen {
+    padding: 40px 18px 72px;
+  }
+
+  .loginFooter {
+    right: 18px;
+    bottom: 18px;
+    left: 18px;
   }
 
   .authForm label {

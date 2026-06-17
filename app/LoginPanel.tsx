@@ -27,7 +27,7 @@ export function LoginPanel({
       <section className={styles.loginCard} aria-label="登录">
         <div className={styles.loginBrand}>
           <h1>NEXTWOOD</h1>
-          <p>Business Collaboration Platform</p>
+          <p>供应链协同平台</p>
         </div>
         <form className={styles.authForm} onSubmit={onLogin}>
           <label>
@@ -73,7 +73,7 @@ export function LoginPanel({
           </form>
         </details>
       </section>
-      <footer className={styles.loginFooter}>© 浙江莱诺建材有限公司</footer>
+      <footer className={styles.loginFooter}>© 2026 浙江莱诺建材有限公司</footer>
     </main>
   );
 }
