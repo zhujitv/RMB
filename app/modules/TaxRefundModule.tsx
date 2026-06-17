@@ -703,7 +703,7 @@ export function TaxRefundModule({
   }
 
   return (
-    <section className={styles.moduleCard}>
+    <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
           <span className={styles.kicker}>业务模块</span>
@@ -771,7 +771,7 @@ export function TaxRefundModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
+      <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -902,8 +902,8 @@ function TaxRefundTableRow({
   const currentStatus = taxRowStatus(row);
 
   return (
-    <tr>
-      <td><strong>{row.orderNo || "-"}</strong></td>
+    <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <td>{row.orderNo || "-"}</td>
       <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
       <td>{declarationDate}</td>
       <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
@@ -911,6 +911,7 @@ function TaxRefundTableRow({
         {canUpdateStatus ? (
           <select
             value={currentStatus}
+            onClick={(event) => event.stopPropagation()}
             onChange={(event) => onUpdateStatus(event.target.value)}
             disabled={submittingTax}
           >
@@ -923,8 +924,8 @@ function TaxRefundTableRow({
         )}
       </td>
       <td>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>
-          查看资料
+        <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>
+          详情
         </button>
       </td>
     </tr>
