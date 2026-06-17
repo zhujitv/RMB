@@ -24,56 +24,78 @@ export function LoginPanel({
 }: LoginPanelProps) {
   return (
     <main className={styles.loginScreen}>
-      <section className={styles.loginCard} aria-label="登录">
+      <div className={styles.loginAmbientGlow} aria-hidden="true" />
+      <section className={styles.loginLayout} aria-label="NEXTWOOD 登录">
         <div className={styles.loginBrand}>
           <h1>NEXTWOOD</h1>
-          <p>Business Collaboration Platform</p>
         </div>
-        <form className={styles.authForm} onSubmit={onLogin}>
-          <label>
-            <span>邮箱</span>
-            <input name="email" type="email" autoComplete="email" required />
-          </label>
-          <label>
-            <span>密码</span>
-            <input name="password" type="password" autoComplete="current-password" required />
-          </label>
-          {message ? <p className={styles.formMessage}>{message}</p> : null}
-          <button className={styles.primaryButton} type="submit" disabled={loginBusy}>
-            {loginBusy ? "登录中..." : "登录"}
-          </button>
-        </form>
-        <details
-          className={styles.registerPanel}
-          open={registerOpen}
-          onToggle={(event) => onRegisterToggle(event.currentTarget.open)}
-        >
-          <summary>申请加入平台</summary>
-          <form className={styles.authForm} onSubmit={onRegister}>
-            <label>
-              <span>姓名</span>
-              <input name="name" type="text" autoComplete="name" required />
-            </label>
+
+        <section className={styles.loginCard} aria-label="登录">
+          <div className={styles.loginCardHeader}>
+            <span>企业账号</span>
+            <h2>欢迎登录</h2>
+          </div>
+          <form className={`${styles.authForm} ${styles.loginAuthForm}`} onSubmit={onLogin}>
             <label>
               <span>邮箱</span>
               <input name="email" type="email" autoComplete="email" required />
             </label>
             <label>
               <span>密码</span>
-              <input name="password" type="password" autoComplete="new-password" required />
+              <input name="password" type="password" autoComplete="current-password" required />
             </label>
-            <label>
-              <span>确认密码</span>
-              <input name="confirmPassword" type="password" autoComplete="new-password" required />
-            </label>
-            <button className={styles.secondaryButton} type="submit" disabled={registerBusy}>
-              {registerBusy ? "提交中..." : "提交审核"}
+            {message ? <p className={styles.formMessage}>{message}</p> : null}
+            <button className={styles.loginSubmitButton} type="submit" disabled={loginBusy}>
+              {loginBusy ? "登录中..." : "登录"}
             </button>
-            <small>提交后需管理员审核通过方可登录。</small>
           </form>
-        </details>
+          <div className={styles.loginRegisterLine}>
+            <span>没有账号？</span>
+            <button type="button" onClick={() => onRegisterToggle(true)}>
+              申请加入平台
+            </button>
+          </div>
+        </section>
       </section>
-      <footer className={styles.loginFooter}>© 浙江莱诺建材有限公司</footer>
+
+      {registerOpen ? (
+        <div className={styles.loginModalLayer} role="presentation">
+          <div className={styles.loginModalBackdrop} onClick={() => onRegisterToggle(false)} />
+          <section className={styles.loginModalCard} role="dialog" aria-modal="true" aria-label="申请加入平台">
+            <div className={styles.loginModalHeader}>
+              <div>
+                <span>平台申请</span>
+                <h2>申请加入平台</h2>
+              </div>
+              <button type="button" onClick={() => onRegisterToggle(false)} aria-label="关闭申请表单">
+                关闭
+              </button>
+            </div>
+            <form className={`${styles.authForm} ${styles.loginAuthForm}`} onSubmit={onRegister}>
+              <label>
+                <span>姓名</span>
+                <input name="name" type="text" autoComplete="name" required />
+              </label>
+              <label>
+                <span>邮箱</span>
+                <input name="email" type="email" autoComplete="email" required />
+              </label>
+              <label>
+                <span>密码</span>
+                <input name="password" type="password" autoComplete="new-password" required />
+              </label>
+              <label>
+                <span>确认密码</span>
+                <input name="confirmPassword" type="password" autoComplete="new-password" required />
+              </label>
+              <button className={styles.loginSubmitButton} type="submit" disabled={registerBusy}>
+                {registerBusy ? "提交中..." : "提交申请"}
+              </button>
+              <small>提交后需管理员审核通过方可登录。</small>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -53,6 +53,40 @@ type DomesticLogisticsDocument = {
   uploadStatus?: string;
 };
 
+type CustomsRecognitionResult = {
+  attempted?: boolean;
+  documentId?: string;
+  orderId?: string;
+  documentType?: string;
+  customsDeclarationNo?: string;
+  customsDeclarationDate?: string;
+  currentCustomsDeclarationNo?: string;
+  currentCustomsDeclarationDate?: string;
+  customsParseStatus?: string;
+  customsParseMessage?: string;
+  applied?: boolean;
+  requiresConfirmation?: boolean;
+  conflictFields?: string[];
+};
+
+type UploadedDocument = DomesticLogisticsDocument & {
+  customsRecognition?: CustomsRecognitionResult | null;
+};
+
+type UploadDocumentResponse = {
+  success?: boolean;
+  message?: string;
+  data?: UploadedDocument;
+  document?: UploadedDocument;
+};
+
+type CustomsRecognitionResponse = {
+  success?: boolean;
+  data?: CustomsRecognitionResult;
+  customsRecognition?: CustomsRecognitionResult;
+  message?: string;
+};
+
 type DomesticLogisticsRow = {
   id: string;
   orderId?: string;
@@ -112,6 +146,33 @@ function emptyTransportItem(): TransportItem {
     cargoName: "",
     remark: "",
   };
+}
+
+function customsRecognitionNotice(result?: CustomsRecognitionResult | null) {
+  const status = result?.customsParseStatus || "";
+  const declarationNo = result?.customsDeclarationNo || "";
+  const declarationDate = result?.customsDeclarationDate || "";
+  if (status === "SUCCESS" && declarationNo && declarationDate) {
+    return `已识别报关单号：${declarationNo}；已识别申报日期：${declarationDate}`;
+  }
+  if (declarationNo || declarationDate) {
+    return [
+      declarationNo ? `已识别报关单号：${declarationNo}` : "",
+      declarationDate ? `已识别申报日期：${declarationDate}` : "",
+      "未识别成功，请手工填写",
+    ].filter(Boolean).join("；");
+  }
+  return "报关单已上传，但未识别到报关单号或申报日期，请手工填写";
+}
+
+function customsRecognitionDetails(result?: CustomsRecognitionResult | null) {
+  if (!result) return [];
+  return [
+    result.currentCustomsDeclarationNo ? `当前报关单号：${result.currentCustomsDeclarationNo}` : "",
+    result.currentCustomsDeclarationDate ? `当前申报日期：${result.currentCustomsDeclarationDate}` : "",
+    result.customsDeclarationNo ? `本次识别报关单号：${result.customsDeclarationNo}` : "",
+    result.customsDeclarationDate ? `本次识别申报日期：${result.customsDeclarationDate}` : "",
+  ].filter(Boolean);
 }
 
 export function DomesticLogisticsModule({
@@ -242,9 +303,10 @@ export function DomesticLogisticsModule({
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null) {
     if (!file) return;
+    const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
     setUploadingKey(`${orderId}:${documentType}`);
     setError("");
-    setNotice("");
+    setNotice(isCustomsDeclaration ? "正在识别报关单信息..." : "");
     try {
       if (!isPdfFile(file)) {
         throw new Error("只能上传 PDF 文件");
@@ -259,12 +321,40 @@ export function DomesticLogisticsModule({
         credentials: "include",
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as UploadDocumentResponse;
       if (!response.ok || data?.success !== true) {
         throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
       }
+      const uploadedDocument = data.document || data.data;
+      const recognition = uploadedDocument?.customsRecognition || null;
+      if (isCustomsDeclaration && recognition?.requiresConfirmation && uploadedDocument?.id) {
+        const confirmationResult = await requestConfirmation({
+          title: "已存在报关单信息",
+          message: "是否使用本次识别结果覆盖？",
+          details: customsRecognitionDetails(recognition),
+          confirmLabel: "覆盖并同步",
+          cancelLabel: "保留原信息",
+          variant: "warning",
+        });
+        if (confirmationResult.confirmed) {
+          setNotice("正在识别报关单信息...");
+          const overrideResult = await apiJson<CustomsRecognitionResponse>(`/api/order-documents/${encodeURIComponent(uploadedDocument.id)}/recognize-customs`, {
+            method: "POST",
+            body: JSON.stringify({ confirmOverride: true }),
+          });
+          const nextRecognition = overrideResult.customsRecognition || overrideResult.data || recognition;
+          setNotice(customsRecognitionNotice(nextRecognition));
+        } else {
+          setNotice(recognition.applied
+            ? "已自动同步空白报关单字段，已有报关单信息未覆盖。"
+            : "已存在报关单信息，未覆盖本次识别结果。");
+        }
+      } else if (isCustomsDeclaration) {
+        setNotice(customsRecognitionNotice(recognition));
+      } else {
+        setNotice("报关资料已上传");
+      }
       await loadRows(submittedKeyword, businessScope);
-      setNotice("报关资料已上传");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -600,6 +690,7 @@ function DomesticLogisticsRows({
                 documents={row.documents || []}
                 uploadingKey={uploadingKey}
                 deletingDocumentId={deletingDocumentId}
+                currentUserRole={currentUserRole}
                 canUpload={canUploadCustomsDocuments}
                 canDelete={canDeleteCustomsDocuments}
                 onUpload={onUploadDocument}
@@ -821,6 +912,7 @@ function CustomsDocumentPanel({
   documents,
   uploadingKey,
   deletingDocumentId,
+  currentUserRole,
   canUpload,
   canDelete,
   onUpload,
@@ -830,11 +922,13 @@ function CustomsDocumentPanel({
   documents: DomesticLogisticsDocument[];
   uploadingKey: string;
   deletingDocumentId: string;
+  currentUserRole: string;
   canUpload: boolean;
   canDelete: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null) => void;
   onDelete: (document: DomesticLogisticsDocument) => void;
 }) {
+  const canPreviewOrDownload = ["管理员", "财务", "物流资料录入员", "物流供应商"].includes(currentUserRole);
   return (
     <div className={styles.documentGroupCard}>
       <strong>报关资料上传</strong>
@@ -857,7 +951,9 @@ function CustomsDocumentPanel({
             <div>
               {canUpload ? (
                 <label className={styles.secondaryButton}>
-                  {uploading ? "上传中..." : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
+                  {uploading
+                    ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
+                    : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
                   <input
                     type="file"
                     accept="application/pdf,.pdf"
@@ -872,8 +968,12 @@ function CustomsDocumentPanel({
               ) : null}
               {matchedDocuments.map((document) => (
                 <span key={document.id} className={styles.fileListItemActions}>
-                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                  {canPreviewOrDownload ? (
+                    <>
+                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                    </>
+                  ) : null}
                   {canDelete ? (
                     <button
                       className={styles.secondaryButton}

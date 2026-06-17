@@ -279,21 +279,41 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
     documentType,
     uploadSource: normalizedUploadSource,
   }));
+  let customsRecognition = null;
   if (isCustomsDeclarationDocumentType(documentType)) {
-    await parseAndApplyCustomsDocument(request, actor, document, body).catch((error) => {
+    customsRecognition = await parseAndApplyCustomsDocument(request, actor, document, body, {
+      returnDetails: true,
+    }).catch((error) => {
       console.error("报关单自动识别异常", {
         orderId: order.id,
         documentId: document.id,
         message: error?.message || "未知错误",
         stack: error?.stack || "",
       });
+      return {
+        attempted: true,
+        documentId: document.id,
+        orderId: order.id,
+        documentType,
+        customsDeclarationNo: "",
+        customsDeclarationDate: "",
+        customsParseStatus: "FAILED",
+        customsParseStatusLabel: "识别失败",
+        customsParseMessage: "报关单已上传，但未识别到报关单号或申报日期，请手工填写",
+        applied: false,
+        requiresConfirmation: false,
+        conflictFields: [],
+      };
     });
   }
   if (["COMMERCIAL_INVOICE", "PACKING_LIST", "CUSTOMS_ENTRY_FORM"].includes(documentType)) {
     await tryAutoShippingDocumentsNotification(request, actor, order.id);
   }
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
-  return serializeOrderDocument(document);
+  return {
+    ...serializeOrderDocument(document),
+    ...(customsRecognition ? { customsRecognition } : {}),
+  };
 }
 
 export async function deleteOrderDocument(request, actor, id) {

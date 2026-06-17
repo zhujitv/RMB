@@ -105,9 +105,9 @@ export function customsParseMessage(fields: Partial<CustomsFields> = {}, status 
   if (status === "SUCCESS") return "已识别：\n✓ 报关单号\n✓ 申报日期";
   const missing: string[] = [];
   if (!fields.customsDeclarationDate) missing.push("申报日期");
-  if (!fields.customsDeclarationNo) missing.push("海关编号");
+  if (!fields.customsDeclarationNo) missing.push("报关单号");
   if (status === "PARTIAL") return `文件已上传，已自动识别部分信息，未自动识别到${missing.join("/")}，请手工填写。`;
-  return "文件已上传，但未自动识别到申报日期/海关编号，请手工填写。";
+  return "报关单已上传，但未识别到报关单号或申报日期，请手工填写";
 }
 
 function normalizeDateParts(year: string, month: string, day: string) {

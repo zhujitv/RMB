@@ -97,7 +97,7 @@ test("returns failed status without blocking upload when fields are absent", () 
   assert.equal(result.customsDeclarationNo, "");
   assert.equal(result.customsDeclarationDate, "");
   assert.equal(result.customsDeclarationParseStatus, "FAILED");
-  assert.equal(result.customsDeclarationParseMessage, "文件已上传，但未自动识别到申报日期/海关编号，请手工填写。");
+  assert.equal(result.customsDeclarationParseMessage, "报关单已上传，但未识别到报关单号或申报日期，请手工填写");
 });
 
 test("normalizes valid declaration dates and rejects invalid dates", () => {

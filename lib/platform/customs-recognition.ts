@@ -6,6 +6,7 @@ import * as customsDeclarationParser from "../customs-declaration-parser";
 import {
   CUSTOMS_FILE_READ_FAILED_MESSAGE,
   LOGISTICS_OPERATOR_ROLE,
+  canWrite,
   codedError,
   customsParseStatusLabel,
   dateFromInput,
@@ -20,6 +21,10 @@ import {
   serializeOrder,
   writeAudit,
 } from "./shared";
+import {
+  canAccessDomesticLogisticsOrder,
+  canUseDomesticLogisticsDocumentScope,
+} from "./masters-access";
 import { orderAccessWhere } from "./order-access";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 
@@ -45,18 +50,65 @@ function hasCustomsRecognitionValue(fields = {}) {
   return Boolean(fields.customsDeclarationNo || fields.customsDeclarationDate);
 }
 
-function mergeManualCustomsFields(parsedFields = {}, before = null) {
+function currentCustomsFields(before = null) {
+  return {
+    customsDeclarationNo: before?.customsDeclarationNo || "",
+    customsDeclarationDate: before?.customsDeclarationDate ? dateToInput(before.customsDeclarationDate) : "",
+  };
+}
+
+function buildCustomsRecognitionResult({
+  document = {},
+  parsedFields = {},
+  currentFields = {},
+  status = "FAILED",
+  message = "",
+  applied = false,
+  requiresConfirmation = false,
+  conflictFields = [],
+  order = null,
+} = {}) {
+  return {
+    attempted: true,
+    documentId: document?.id || "",
+    orderId: document?.orderId || order?.id || "",
+    documentType: document?.documentType || "",
+    customsDeclarationNo: parsedFields.customsDeclarationNo || "",
+    customsDeclarationDate: parsedFields.customsDeclarationDate || "",
+    currentCustomsDeclarationNo: currentFields.customsDeclarationNo || "",
+    currentCustomsDeclarationDate: currentFields.customsDeclarationDate || "",
+    customsParseStatus: status,
+    customsParseStatusLabel: customsParseStatusLabel(status),
+    customsParseMessage: message || customsDeclarationParser.customsParseMessage(parsedFields, status),
+    applied: Boolean(applied),
+    requiresConfirmation: Boolean(requiresConfirmation),
+    conflictFields,
+    order,
+  };
+}
+
+function mergeCustomsFields(parsedFields = {}, before = null, force = false) {
   const preserved = [];
+  const conflictFields = [];
+  const currentFields = currentCustomsFields(before);
   const fields = { ...parsedFields };
-  if (!fields.customsDeclarationNo && before?.customsDeclarationNo) {
-    fields.customsDeclarationNo = before.customsDeclarationNo;
+  if (fields.customsDeclarationNo && currentFields.customsDeclarationNo && fields.customsDeclarationNo !== currentFields.customsDeclarationNo && !force) {
+    conflictFields.push("customsDeclarationNo");
+    fields.customsDeclarationNo = currentFields.customsDeclarationNo;
+    preserved.push("customsDeclarationNo");
+  } else if (!fields.customsDeclarationNo && currentFields.customsDeclarationNo) {
+    fields.customsDeclarationNo = currentFields.customsDeclarationNo;
     preserved.push("customsDeclarationNo");
   }
-  if (!fields.customsDeclarationDate && before?.customsDeclarationDate) {
-    fields.customsDeclarationDate = dateToInput(before.customsDeclarationDate);
+  if (fields.customsDeclarationDate && currentFields.customsDeclarationDate && fields.customsDeclarationDate !== currentFields.customsDeclarationDate && !force) {
+    conflictFields.push("customsDeclarationDate");
+    fields.customsDeclarationDate = currentFields.customsDeclarationDate;
+    preserved.push("customsDeclarationDate");
+  } else if (!fields.customsDeclarationDate && currentFields.customsDeclarationDate) {
+    fields.customsDeclarationDate = currentFields.customsDeclarationDate;
     preserved.push("customsDeclarationDate");
   }
-  return { fields, preserved };
+  return { fields, preserved, conflictFields, currentFields };
 }
 
 async function parseCustomsDocumentBuffer(buffer, document = {}) {
@@ -144,10 +196,6 @@ async function applyCustomsParseFailure(request, actor, orderId, message, code =
       ? before.customsDeclarationParseSource || customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_MANUAL
       : customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
   };
-  if (!manualProtected) {
-    data.customsDeclarationNo = null;
-    data.customsDeclarationDate = null;
-  }
   const order = await prisma.receivableOrder.update({
     where: { id: orderId },
     data,
@@ -219,26 +267,104 @@ export async function parseAndApplyCustomsDocument(
     action = "自动识别成功",
     failureAction = "自动识别失败",
     allowManualFailure = false,
+    returnDetails = false,
   } = {},
 ) {
   const before = await prisma.receivableOrder.findUnique({ where: { id: document.orderId } });
   if (!before) throw permissionError("应收订单不存在", 404);
   const manualProtected = before.customsDeclarationParseSource === "MANUAL" || before.customsParseStatus === "MANUAL";
-  if (manualProtected && !force) return null;
   try {
     const { fields, status, source, message } = await parseCustomsDocumentBuffer(buffer, document);
     if (!hasCustomsRecognitionValue(fields)) {
-      return applyCustomsParseFailure(request, actor, document.orderId, message, "CUSTOMS_PARSE_NO_FIELDS", failureAction, {
+      const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, message, "CUSTOMS_PARSE_NO_FIELDS", failureAction, {
         allowManualFailure,
       });
+      return returnDetails
+        ? buildCustomsRecognitionResult({
+          document,
+          parsedFields: fields,
+          currentFields: currentCustomsFields(before),
+          status,
+          message,
+          applied: false,
+          order: failureOrder,
+        })
+        : failureOrder;
     }
-    const merged = manualProtected ? mergeManualCustomsFields(fields, before) : { fields, preserved: [] };
+    const merged = mergeCustomsFields(fields, before, force);
     const updateSource = merged.preserved.length
       ? customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_MANUAL
       : source;
+    if (merged.conflictFields.length && !force) {
+      const shouldApplyPartial = Boolean(
+        (fields.customsDeclarationNo && !merged.currentFields.customsDeclarationNo)
+        || (fields.customsDeclarationDate && !merged.currentFields.customsDeclarationDate)
+      );
+      if (shouldApplyPartial) {
+        const order = await prisma.receivableOrder.update({
+          where: { id: document.orderId },
+          data: customsUpdateData(
+            merged.fields,
+            customsDeclarationParser.customsParseStatusFromFields(merged.fields),
+            "已识别新报关单信息，已有字段待确认覆盖。",
+            updateSource,
+          ),
+          include: includeOrderRelations(),
+        });
+        await runNonCriticalTask("报关单识别待确认日志写入", () => writeAudit(request, actor, "自动识别报关单信息待确认", "receivable_orders", order.id, serializeCustomsRecognition(before), {
+          ...serializeCustomsRecognition(order),
+          documentId: document.id,
+          conflictFields: merged.conflictFields,
+        }));
+        return returnDetails
+          ? buildCustomsRecognitionResult({
+            document,
+            parsedFields: fields,
+            currentFields: merged.currentFields,
+            status,
+            message,
+            applied: true,
+            requiresConfirmation: true,
+            conflictFields: merged.conflictFields,
+            order: serializeOrder(order),
+          })
+          : null;
+      }
+      return returnDetails
+        ? buildCustomsRecognitionResult({
+          document,
+          parsedFields: fields,
+          currentFields: merged.currentFields,
+          status,
+          message,
+          applied: false,
+          requiresConfirmation: true,
+          conflictFields: merged.conflictFields,
+        })
+        : null;
+    }
+    if (manualProtected && !force && (merged.currentFields.customsDeclarationNo || merged.currentFields.customsDeclarationDate)) {
+      return returnDetails
+        ? buildCustomsRecognitionResult({
+          document,
+          parsedFields: fields,
+          currentFields: merged.currentFields,
+          status,
+          message,
+          applied: false,
+          requiresConfirmation: true,
+          conflictFields: ["customsDeclarationNo", "customsDeclarationDate"].filter((field) => merged.currentFields[field]),
+        })
+        : null;
+    }
     const order = await prisma.receivableOrder.update({
       where: { id: document.orderId },
-      data: customsUpdateData(merged.fields, status, message, updateSource),
+      data: customsUpdateData(
+        merged.fields,
+        customsDeclarationParser.customsParseStatusFromFields(merged.fields),
+        message,
+        updateSource,
+      ),
       include: includeOrderRelations(),
     });
     await runNonCriticalTask("报关单识别日志写入", () => writeAudit(request, actor, status === "SUCCESS" ? action : "自动部分识别报关单信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
@@ -248,16 +374,82 @@ export async function parseAndApplyCustomsDocument(
       recognitionSource: source,
       preservedManualFields: merged.preserved,
     }));
-    return serializeOrder(order);
+    const serializedOrder = serializeOrder(order);
+    return returnDetails
+      ? buildCustomsRecognitionResult({
+        document,
+        parsedFields: fields,
+        currentFields: merged.currentFields,
+        status,
+        message,
+        applied: true,
+        order: serializedOrder,
+      })
+      : serializedOrder;
   } catch (error) {
     const publicMessage = customsFailurePublicMessage(error, error?.message || "报关单识别失败");
-    return applyCustomsParseFailure(request, actor, document.orderId, publicMessage, error?.code || "CUSTOMS_PARSE_FAILED", failureAction, {
+    const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, publicMessage, error?.code || "CUSTOMS_PARSE_FAILED", failureAction, {
       allowManualFailure,
       publicMessage,
       technicalError: error,
       document,
     });
+    return returnDetails
+      ? buildCustomsRecognitionResult({
+        document,
+        parsedFields: {},
+        currentFields: currentCustomsFields(before),
+        status: "FAILED",
+        message: publicMessage,
+        applied: false,
+        order: failureOrder,
+      })
+      : failureOrder;
   }
+}
+
+export async function recognizeUploadedCustomsDocument(request, actor, documentId, input = {}) {
+  if (!canWrite(actor, "documents") || !canWrite(actor, "domesticLogistics")) {
+    throw permissionError("没有权限触发报关单识别", 403);
+  }
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, deletedAt: null },
+    include: {
+      order: {
+        include: {
+          customer: true,
+          createdBy: true,
+          salesperson: true,
+          logisticsSuppliers: { select: { supplierId: true } },
+        },
+      },
+      cost: { include: { supplier: true } },
+      supplier: true,
+      uploadedBy: true,
+    },
+  });
+  if (!document) throw permissionError("报关单文件不存在", 404);
+  if (!isCustomsDeclarationDocumentType(document.documentType)) {
+    const error = permissionError("该文件不是报关单文件，无法执行报关单识别", 400);
+    error.code = "INVALID_CUSTOMS_DOCUMENT_TYPE";
+    throw error;
+  }
+  if (!canUseDomesticLogisticsDocumentScope(actor, document.documentType) || !canAccessDomesticLogisticsOrder(actor, document.order)) {
+    throw permissionError("无权限触发该订单报关单识别", 403);
+  }
+  if (document.uploadStatus !== "SUCCESS") {
+    const error = permissionError("该报关单文件尚未上传成功，无法识别", 400);
+    error.code = "CUSTOMS_DOCUMENT_NOT_READY";
+    throw error;
+  }
+  const buffer = await readCustomsDeclarationPdfBuffer(document);
+  return parseAndApplyCustomsDocument(request, actor, document, buffer, {
+    force: input.confirmOverride === true,
+    action: input.confirmOverride === true ? "确认覆盖报关单识别信息" : "自动识别成功",
+    failureAction: "自动识别失败",
+    allowManualFailure: true,
+    returnDetails: true,
+  });
 }
 
 export async function updateCustomsRecognition(request, actor, orderId, input = {}) {
