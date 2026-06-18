@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.ts", "utf8");
+const orderDocumentRoute = readFileSync("app/api/order-documents/[id]/route.ts", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
@@ -56,7 +57,20 @@ test("tax refund customs recognition stays focused on current declaration fields
 
 test("admin can delete uploaded customs documents with confirmation", () => {
   assert.match(domesticLogisticsModule, /const canDeleteCustomsDocuments = canWritePermission\(currentUser, permissions, "documents", \["管理员"\]\)/);
-  assert.match(domesticLogisticsModule, /title: "确认删除文件？"/);
+  assert.match(domesticLogisticsModule, /title: "确定删除该文件？"/);
+  assert.match(domesticLogisticsModule, /message: "删除后需要重新上传。"/);
+  assert.match(domesticLogisticsModule, /onClick=\{\(\) => onDelete\(currentCustomsDeclaration\)\}/);
   assert.match(domesticLogisticsModule, /confirmLabel: "删除文件"/);
   assert.match(domesticLogisticsModule, /variant: "danger"/);
+  assert.match(domesticLogisticsModule, /setNotice\(result\.message \|\| "已删除文件"\)/);
+  assert.match(domesticLogisticsModule, /删除失败，请重试/);
+});
+
+test("deleting customs declaration clears recognized declaration fields", () => {
+  assert.match(orderDocumentRoute, /message: "已删除文件"/);
+  assert.match(orderDocumentRoute, /apiError\(error, "删除失败，请重试"\)/);
+  assert.match(orderDocumentsService, /isCustomsDeclarationDocumentType\(before\.documentType\)/);
+  assert.match(orderDocumentsService, /customsDeclarationNo: null/);
+  assert.match(orderDocumentsService, /customsDeclarationDate: null/);
+  assert.match(orderDocumentsService, /customsParseStatus: null/);
 });

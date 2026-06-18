@@ -732,8 +732,8 @@ export function TaxRefundModule({
 
   async function deleteDocument(orderId: string, document: TaxDocument) {
     const result = await requestConfirmation({
-      title: "确认删除文件？",
-      message: "删除后该文件不会参与退税资料完整度统计。",
+      title: "确定删除该文件？",
+      message: "删除后需要重新上传。",
       details: [document.fileName || document.documentTypeLabel || "-"],
       confirmLabel: "删除文件",
       cancelLabel: "取消",
@@ -748,12 +748,12 @@ export function TaxRefundModule({
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
         method: "DELETE",
       });
-      if (result.success !== true) throw new Error(result.message || "删除文件失败");
+      if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
       await fetchDetail(orderId);
       await loadRows(page, submittedKeyword, mode);
-      setNotice(result.message || "资料文件已删除");
+      setNotice(result.message || "已删除文件");
     } catch (deleteError) {
-      setDetailError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
+      setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");
     } finally {
       setDeletingDocumentId("");
     }

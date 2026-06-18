@@ -331,8 +331,8 @@ export function DomesticLogisticsModule({
 
   async function deleteDocument(document: DomesticLogisticsDocument) {
     const confirmationResult = await requestConfirmation({
-      title: "确认删除文件？",
-      message: "删除后该文件不会继续显示在报关资料中。",
+      title: "确定删除该文件？",
+      message: "删除后需要重新上传。",
       details: [`文件：${document.fileName || document.documentTypeLabel || "-"}`],
       confirmLabel: "删除文件",
       cancelLabel: "取消",
@@ -346,11 +346,11 @@ export function DomesticLogisticsModule({
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/order-documents/${encodeURIComponent(document.id)}`, {
         method: "DELETE",
       });
-      if (result.success !== true) throw new Error(result.message || "删除文件失败");
+      if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
       await loadRows(submittedKeyword, businessScope);
-      setNotice(result.message || "报关资料已删除");
+      setNotice(result.message || "已删除文件");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除文件失败");
+      setError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");
     } finally {
       setDeletingDocumentId("");
     }
@@ -941,6 +941,16 @@ function CustomsDocumentPanel({
                       }}
                     />
                   </label>
+                ) : null}
+                {currentCustomsDeclaration && canDelete ? (
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    disabled={deletingDocumentId === currentCustomsDeclaration.id}
+                    onClick={() => onDelete(currentCustomsDeclaration)}
+                  >
+                    {deletingDocumentId === currentCustomsDeclaration.id ? "删除中..." : "删除"}
+                  </button>
                 ) : null}
               </div>
             </div>

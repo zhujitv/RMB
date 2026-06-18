@@ -349,11 +349,25 @@ export async function deleteOrderDocument(request, actor, id) {
     data: { deletedAt: new Date() },
     include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
   });
+  if (isCustomsDeclarationDocumentType(before.documentType)) {
+    await prisma.receivableOrder.update({
+      where: { id: before.orderId },
+      data: {
+        customsDeclarationNo: null,
+        customsDeclarationDate: null,
+        customsParsedAt: null,
+        customsParseStatus: null,
+        customsParseMessage: null,
+        customsDeclarationParseSource: null,
+      },
+    });
+  }
   await runNonCriticalTask("成本发票状态同步", () => syncCostInvoiceStatus(before.costId));
   await runNonCriticalTask("文件删除操作日志写入", () => writeAudit(request, actor, "删除文件", "order_documents", id, before, {
     orderNo: before.order?.orderNo,
     fileName: standardFilenameForDocument(before),
     originalFilename: before.originalFilename || before.originalName || before.fileName,
+    clearedCustomsRecognition: isCustomsDeclarationDocumentType(before.documentType),
   }));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
   return serializeOrderDocument(document);
