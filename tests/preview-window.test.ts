@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.ts", "utf8");
+const downloadRoute = readFileSync("app/api/order-documents/[id]/download/route.ts", "utf8");
 const orderDocumentRoute = readFileSync("app/api/order-documents/[id]/route.ts", "utf8");
 const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
@@ -13,10 +14,20 @@ const customsRecognitionService = readFileSync("lib/platform/customs-recognition
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
+  assert.match(previewRoute, /"Content-Type": "application\/pdf"/);
   assert.match(previewRoute, /"Content-Disposition": `inline; filename="/);
+  assert.doesNotMatch(previewRoute, /attachment/);
   assert.match(previewRoute, /"Cache-Control": "private, max-age=300"/);
   assert.match(previewRoute, /"X-Content-Type-Options": "nosniff"/);
-  assert.match(previewRoute, /const contentType = mimeType \|\| document\.mimeType \|\| "application\/pdf"/);
+  assert.doesNotMatch(previewRoute, /pdfjs|pdf2json|recognizeCustoms|parseCustoms|DOMMatrix/);
+});
+
+test("download route returns attachment file streams", () => {
+  assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
+  assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
+  assert.match(downloadRoute, /"Content-Disposition": `attachment; filename="/);
+  assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
+  assert.doesNotMatch(downloadRoute, /inline/);
 });
 
 test("preview route returns structured JSON errors when stream fails", () => {
@@ -28,9 +39,14 @@ test("preview route returns structured JSON errors when stream fails", () => {
 
 test("workspace modules use preview links instead of legacy preview windows", () => {
   const previewHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/preview`\}/;
+  const downloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
   assert.match(taxRefundModule, previewHref);
   assert.match(domesticLogisticsModule, previewHref);
   assert.match(costsModule, previewHref);
+  assert.match(taxRefundModule, downloadHref);
+  assert.match(domesticLogisticsModule, downloadHref);
+  assert.match(costsModule, downloadHref);
+  assert.doesNotMatch(taxRefundModule, /\/download`} target="_blank"/);
 });
 
 test("detail drawers and cards now own file management layout", () => {

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
-import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, signedDownloadUrl, uploadToR2 } from "../r2";
+import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { parseAndApplyCustomsDocument } from "./customs-recognition";
 import {
   canAccessDomesticLogisticsOrder,
@@ -379,17 +379,21 @@ export async function getOrderDocumentDownload(request, actor, id) {
     where: { id },
     include: { order: { include: { customer: true, logisticsSuppliers: { select: { supplierId: true } } } }, cost: true, supplier: true, uploadedBy: true },
   });
-  if (!document || document.deletedAt) throw permissionError("单证不存在或已删除", 404);
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw permissionError("无权限下载该订单单证");
   if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能下载", 400);
+  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
   const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
-  const url = await signedDownloadUrl(document.storageKey, standardFilename);
+  const body = await readR2Object(document.storageKey).catch((error) => {
+    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+    throw error;
+  });
   await runNonCriticalTask("文件下载操作日志写入", () => writeAudit(request, actor, "下载文件", "order_documents", document.id, null, {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
     originalFilename: document.originalFilename || document.originalName || document.fileName,
   }));
-  return { url, document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
 }
 
 export async function getOrderDocumentPreview(request, actor, id) {
@@ -398,20 +402,23 @@ export async function getOrderDocumentPreview(request, actor, id) {
     where: { id },
     include: { order: { include: { customer: true, logisticsSuppliers: { select: { supplierId: true } } } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
   });
-  if (!document || document.deletedAt) throw codedError("单证不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
   const mimeType = String(document.mimeType || "application/pdf").toLowerCase();
-  if (!["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+  if (mimeType !== "application/pdf") {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
-  if (!document.storageKey) throw codedError("文件存储 key 缺失，无法预览", 404, "R2_OBJECT_NOT_FOUND");
-  const body = await readR2Object(document.storageKey);
+  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  const body = await readR2Object(document.storageKey).catch((error) => {
+    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+    throw error;
+  });
   const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
   await runNonCriticalTask("文件预览操作日志写入", () => writeAudit(request, actor, "预览文件", "order_documents", document.id, null, {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
     originalFilename: document.originalFilename || document.originalName || document.fileName,
   }));
-  return { body, mimeType, document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
 }

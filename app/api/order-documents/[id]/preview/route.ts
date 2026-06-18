@@ -9,7 +9,8 @@ function asciiFileName(name = "document") {
     .replace(/[\r\n"]/g, "_")
     .replace(/[^\x20-\x7E]/g, "_")
     .replace(/[\\/:*?<>|]+/g, "_");
-  return cleaned || "document";
+  const withPdfSuffix = /\.pdf$/i.test(cleaned) ? cleaned : `${cleaned || "document"}.pdf`;
+  return withPdfSuffix || "document.pdf";
 }
 
 type RouteContext = {
@@ -39,14 +40,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const { body, document, mimeType } = await getOrderDocumentPreview(request, actor, id);
-    const contentType = mimeType || document.mimeType || "application/pdf";
+    const { body, document } = await getOrderDocumentPreview(request, actor, id);
     const fileName = asciiFileName(document.fileName || "document");
     return new Response(body, {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": "application/pdf",
         "Content-Length": String(body.length),
-        "Content-Disposition": `inline; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(document.fileName || "document")}`,
+        "Content-Disposition": `inline; filename="${fileName}"`,
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },
