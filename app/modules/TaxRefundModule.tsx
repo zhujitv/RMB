@@ -418,6 +418,55 @@ export function TaxRefundModule({
     await fetchDetail(row.id);
   }
 
+  function patchRowsForOrder(orderId: string, patch: Partial<TaxRefundDetail>) {
+    const rowPatch = taxRefundRowPatchFromDetail(patch);
+    if (!Object.keys(rowPatch).length) return;
+    setRows((current) => current.map((row) => (row.id === orderId ? { ...row, ...rowPatch } : row)));
+    setDetailRow((current) => (current?.id === orderId ? { ...current, ...rowPatch } : current));
+  }
+
+  function patchDetailForOrder(orderId: string, patch: Partial<TaxRefundDetail>) {
+    setDetail((current) => {
+      if (!current || current.id !== orderId) return current;
+      return {
+        ...current,
+        ...patch,
+        documents: patch.documents || current.documents,
+        costs: patch.costs || current.costs,
+      };
+    });
+    patchRowsForOrder(orderId, patch);
+  }
+
+  function patchUploadedDocument(orderId: string, document: TaxDocument) {
+    if (!document.id) return;
+    setDetail((current) => {
+      if (!current || current.id !== orderId) return current;
+      return {
+        ...current,
+        documents: upsertTaxDocument(current.documents || [], document),
+      };
+    });
+  }
+
+  function patchCustomsRecognition(orderId: string, result: CustomsRecognitionResult | null | undefined) {
+    if (!result) return;
+    if (result.order) {
+      patchDetailForOrder(orderId, result.order);
+      return;
+    }
+    if (!result.applied) return;
+    patchDetailForOrder(orderId, {
+      ...(result.customsDeclarationNo !== undefined ? { customsDeclarationNo: result.customsDeclarationNo || "" } : {}),
+      ...(result.customsDeclarationDate !== undefined ? {
+        customsDeclarationDate: result.customsDeclarationDate || "",
+        declarationDate: result.customsDeclarationDate || "",
+      } : {}),
+      ...(result.customsParseStatus !== undefined ? { customsParseStatusLabel: result.customsParseStatusLabel || result.customsParseStatus || "" } : {}),
+      ...(result.customsParseMessage !== undefined ? { customsParseMessage: result.customsParseMessage || "" } : {}),
+    });
+  }
+
   async function openMissingTarget(row: TaxRefundRow, targetKey: string) {
     setPendingDetailTarget(targetKey || "tax-detail-top");
     await loadDetail(row);
@@ -428,6 +477,7 @@ export function TaxRefundModule({
     setDetailOrderId("");
     setDetail(null);
     setDetailError("");
+    void loadRows(page, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
   async function downloadPackage(row: TaxRefundRow) {
@@ -482,13 +532,12 @@ export function TaxRefundModule({
       if (!result) throw new Error(response.message || "报关单识别失败");
       const statusText = customsRecognitionStatusText(result);
       setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText);
+      patchCustomsRecognition(order.id, result);
       if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
         setNotice(response.message || result.customsParseMessage || "未识别成功，请手工填写报关单号和申报日期");
         return;
       }
       setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText || "识别成功");
-      await fetchDetail(order.id);
-      await loadRows(page, submittedKeyword, mode);
       setNotice(response.message || "报关单信息已自动回填，并同步更新退税资料列表申报日期。");
     } catch (recognizeError) {
       const message = recognizeError instanceof Error ? recognizeError.message : "未识别成功，请手工填写报关单号和申报日期";
@@ -506,6 +555,7 @@ export function TaxRefundModule({
     }
     const statusText = customsRecognitionStatusText(result);
     setDocumentRecognitionStatus(document.id, statusText);
+    patchCustomsRecognition(orderId, result);
     if (result.customsParseStatus === "SUCCESS" || result.customsParseStatus === "PARTIAL") {
       setNotice("报关单已上传，识别结果已自动回填并同步到退税资料列表。");
     } else {
@@ -696,13 +746,14 @@ export function TaxRefundModule({
         throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
       }
       const uploadedDocument = data.document || data.data;
+      if (uploadedDocument?.id) {
+        patchUploadedDocument(orderId, uploadedDocument);
+      }
       if (isCustomsDeclaration && uploadedDocument?.id) {
         await handleUploadedCustomsRecognition(orderId, uploadedDocument, uploadedDocument.customsRecognition || data.customsRecognition || null);
       } else {
         setNotice("资料文件已上传");
       }
-      await fetchDetail(orderId);
-      await loadRows(page, submittedKeyword, mode);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -739,11 +790,28 @@ export function TaxRefundModule({
         if (document.documentType === "CUSTOMS_ENTRY_FORM") {
           nextDetail.customsDeclarationNo = "";
           nextDetail.customsDeclarationDate = "";
+          nextDetail.declarationDate = "";
+          nextDetail.customsParseStatusLabel = "";
+          nextDetail.customsParseSourceLabel = "";
+          nextDetail.customsParseMessage = "";
         }
         return nextDetail;
       });
-      await fetchDetail(orderId);
-      await loadRows(page, submittedKeyword, mode);
+      setRecognitionStatusByDocument((current) => {
+        const next = { ...current };
+        delete next[document.id];
+        return next;
+      });
+      if (document.documentType === "CUSTOMS_ENTRY_FORM") {
+        patchRowsForOrder(orderId, {
+          customsDeclarationNo: "",
+          customsDeclarationDate: "",
+          declarationDate: "",
+          customsParseStatusLabel: "",
+          customsParseSourceLabel: "",
+          customsParseMessage: "",
+        });
+      }
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");
@@ -969,9 +1037,10 @@ export function TaxRefundModule({
           onDownloadPackage={() => void downloadPackage(detailRow)}
           onSubmitTaxRefund={() => void submitTaxRefund(detailRow)}
           onCancelArchive={() => void cancelTaxRefundArchive(detailRow)}
-          onCustomsSaved={async (orderId) => {
-            await fetchDetail(orderId);
-            await loadRows(page, submittedKeyword, mode);
+          onCustomsSaved={async (orderId, order) => {
+            if (order) {
+              patchDetailForOrder(orderId, order);
+            }
             setNotice("报关单信息已保存");
           }}
           onUpload={uploadDocument}
@@ -1128,7 +1197,7 @@ function TaxRefundDetailDrawer({
   onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
-  onCustomsSaved: (orderId: string) => Promise<void>;
+  onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
   onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
@@ -1234,7 +1303,7 @@ function TaxRefundDetailPanel({
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
   readOnly: boolean;
-  onCustomsSaved: (orderId: string) => Promise<void>;
+  onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
   onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
@@ -1610,7 +1679,7 @@ function CustomsRecognitionForm({
   readOnly: boolean;
   recognizing: boolean;
   canRecognize: boolean;
-  onSaved: (orderId: string) => Promise<void>;
+  onSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
 }) {
   const [customsDeclarationNo, setCustomsDeclarationNo] = useState(detail.customsDeclarationNo || "");
@@ -1628,7 +1697,7 @@ function CustomsRecognitionForm({
     setSaving(true);
     setMessage("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(detail.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(detail.id)}`, {
         method: "PATCH",
         body: JSON.stringify({
           action: "updateCustomsRecognition",
@@ -1638,7 +1707,7 @@ function CustomsRecognitionForm({
       });
       if (result.success !== true) throw new Error(result.message || "报关单信息保存失败");
       setMessage(result.message || "报关单信息已保存");
-      await onSaved(detail.id);
+      await onSaved(detail.id, result.order || null);
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "报关单信息保存失败");
     } finally {
@@ -2177,6 +2246,40 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
     && !factorySupplierCosts([cost]).length
     && TAX_LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType || "")
   ));
+}
+
+function upsertTaxDocument(documents: TaxDocument[], document: TaxDocument) {
+  const existing = documents.filter((item) => item.id !== document.id);
+  const nextDocuments = document.documentType === "CUSTOMS_ENTRY_FORM"
+    ? existing.filter((item) => !(item.documentType === "CUSTOMS_ENTRY_FORM" && item.uploadStatus === "SUCCESS"))
+    : existing;
+  return [document, ...nextDocuments];
+}
+
+function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
+  const patch: Partial<TaxRefundRow> = {};
+  if (detail.orderNo !== undefined) patch.orderNo = detail.orderNo;
+  if (detail.blNo !== undefined) patch.blNo = detail.blNo;
+  if (detail.customerName !== undefined) patch.customerName = detail.customerName;
+  if (detail.customerFullName !== undefined) patch.customerFullName = detail.customerFullName;
+  if (detail.customerShortName !== undefined) patch.customerShortName = detail.customerShortName;
+  if (detail.currency !== undefined) patch.currency = detail.currency;
+  if (detail.customsDeclarationNo !== undefined) patch.customsDeclarationNo = detail.customsDeclarationNo;
+  if (detail.customsDeclarationDate !== undefined) patch.customsDeclarationDate = detail.customsDeclarationDate;
+  if (detail.declarationDate !== undefined) patch.declarationDate = detail.declarationDate;
+  if (detail.customsParseStatusLabel !== undefined) patch.customsParseStatusLabel = detail.customsParseStatusLabel;
+  if (detail.customsParseSourceLabel !== undefined) patch.customsParseSourceLabel = detail.customsParseSourceLabel;
+  if (detail.customsParseMessage !== undefined) patch.customsParseMessage = detail.customsParseMessage;
+  if (detail.taxRefundStatus !== undefined) patch.taxRefundStatus = detail.taxRefundStatus;
+  if (detail.taxRefundStatusLabel !== undefined) patch.taxRefundStatusLabel = detail.taxRefundStatusLabel;
+  if (detail.taxArchived !== undefined) patch.taxArchived = detail.taxArchived;
+  if (detail.taxRefundArchivedByName !== undefined) patch.taxRefundArchivedByName = detail.taxRefundArchivedByName;
+  if (detail.taxRefundArchivedAt !== undefined) patch.taxRefundArchivedAt = detail.taxRefundArchivedAt;
+  if (detail.taxRefundArchiveRemark !== undefined) patch.taxRefundArchiveRemark = detail.taxRefundArchiveRemark;
+  if (detail.taxSubmittedByName !== undefined) patch.taxSubmittedByName = detail.taxSubmittedByName;
+  if (detail.taxSubmittedAt !== undefined) patch.taxSubmittedAt = detail.taxSubmittedAt;
+  if (detail.documentCompleteness !== undefined) patch.documentCompleteness = detail.documentCompleteness;
+  return patch;
 }
 
 function customsEntryDocuments(documents: TaxDocument[]) {

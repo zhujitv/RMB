@@ -64,6 +64,19 @@ test("tax refund detail uses one file table for preview download and delete", ()
   assert.match(taxRefundModule, /重新识别报关单/);
 });
 
+test("tax refund detail keeps upload delete and recognition updates local", () => {
+  assert.doesNotMatch(taxRefundModule, /window\.location\.reload/);
+  assert.match(taxRefundModule, /function patchUploadedDocument\(orderId: string, document: TaxDocument\)/);
+  assert.match(taxRefundModule, /function patchCustomsRecognition\(orderId: string, result: CustomsRecognitionResult \| null \| undefined\)/);
+  assert.match(taxRefundModule, /patchUploadedDocument\(orderId, uploadedDocument\)/);
+  assert.match(taxRefundModule, /patchCustomsRecognition\(order\.id, result\)/);
+  assert.match(taxRefundModule, /patchCustomsRecognition\(orderId, result\)/);
+  assert.match(taxRefundModule, /documents: \(current\.documents \|\| \[\]\)\.filter\(\(item\) => item\.id !== document\.id\)/);
+  assert.match(taxRefundModule, /delete next\[document\.id\]/);
+  assert.doesNotMatch(taxRefundModule, /await fetchDetail\(orderId\);\s*await loadRows\(page, submittedKeyword, mode\);/);
+  assert.doesNotMatch(taxRefundModule, /await fetchDetail\(order\.id\);\s*await loadRows\(page, submittedKeyword, mode\);/);
+});
+
 test("detail drawers and cards now own file management layout", () => {
   assert.match(styles, /\.taxRefundDrawer \{/);
   assert.match(styles, /\.taxRefundDrawerHeader \{/);
