@@ -51,6 +51,11 @@ export function WorkspaceLayout({
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const active = MENU_ITEMS.find((item) => item.key === activeMenu);
+  const topbarTitle = activeMenu === "welcome"
+    ? "工作台首页"
+    : activeMenu === "account"
+      ? "账户设置"
+      : active?.label || "功能模块";
   const avatarText = payload.user.avatarInitials?.trim() || initials(payload.user.name);
 
   return (
@@ -111,8 +116,7 @@ export function WorkspaceLayout({
               <span />
             </button>
             <div>
-              <span className={styles.kicker}>业务工作台</span>
-              <h1>{activeMenu === "welcome" ? "工作台首页" : active?.label || "功能模块"}</h1>
+              <h1>{topbarTitle}</h1>
             </div>
           </div>
           <div className={styles.accountArea}>
