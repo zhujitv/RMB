@@ -1748,7 +1748,7 @@ function CustomsUploadCard({
                 </div>
                 {canUpload ? (
                   <label className={styles.secondaryButton}>
-                    {uploading ? "上传中..." : "替换当前 PDF"}
+                    {uploading ? "上传中..." : (visibleDocuments.length ? "替换当前PDF" : "上传PDF文件")}
                     <input
                       type="file"
                       accept="application/pdf,.pdf"

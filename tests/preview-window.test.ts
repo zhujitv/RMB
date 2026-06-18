@@ -82,8 +82,8 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
-  assert.match(taxRefundModule, /替换当前 PDF/);
-  assert.doesNotMatch(taxRefundModule, /重新上传报关单 PDF|替换\/上传新版PDF/);
+  assert.match(taxRefundModule, /visibleDocuments\.length \? "替换当前PDF" : "上传PDF文件"/);
+  assert.doesNotMatch(taxRefundModule, /重新上传报关单 PDF|替换\/上传新版PDF|替换当前 PDF/);
   assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
   assert.match(customsRecognitionService, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
   assert.match(customsRecognitionService, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
