@@ -1385,24 +1385,28 @@ function TaxRefundDetailPanel({
           onSaved={onCustomsSaved}
           onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
         />
-        <div className={styles.documentGroupCard}>
+        <div className={`${styles.documentGroupCard} ${styles.exportDocumentsCard}`}>
           <strong>出口资料上传</strong>
-          {TAX_EXPORT_UPLOAD_TYPES.map((documentType) => (
-            <TaxUploadItem
-              key={documentType.value}
-              targetKey={taxDocumentTargetKey(documentType.value)}
-              orderId={detail.id}
-              type={documentType.value}
-              label={documentType.label}
-              documents={(detail.documents || []).filter((document) => document.documentType === documentType.value && document.uploadStatus === "SUCCESS")}
-              uploading={uploadingKey === `${detail.id}:${documentType.value}`}
-              deletingDocumentId={deletingDocumentId}
-              canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
-              canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
-              onUpload={onUpload}
-              onDelete={onDelete}
-            />
-          ))}
+          <div className={styles.exportDocumentGrid}>
+            {TAX_EXPORT_UPLOAD_TYPES.map((documentType) => (
+              <ExportDocumentUploadCard
+                key={documentType.value}
+                targetKey={taxDocumentTargetKey(documentType.value)}
+                orderId={detail.id}
+                type={documentType.value}
+                label={documentType.label}
+                document={latestTaxDocument((detail.documents || []).filter((document) => (
+                  document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
+                )))[0] || null}
+                uploading={uploadingKey === uploadScopeKey(detail.id, documentType.value)}
+                deletingDocumentId={deletingDocumentId}
+                canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
+                canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
+                onUpload={onUpload}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
         </div>
         <CustomsUploadCard
           order={detail}
@@ -1663,6 +1667,91 @@ function TaxUploadItem({
         canRecognize={false}
         onDelete={onDelete}
       />
+    </div>
+  );
+}
+
+function ExportDocumentUploadCard({
+  targetKey,
+  orderId,
+  type,
+  label,
+  document,
+  uploading,
+  deletingDocumentId,
+  canUpload,
+  canDelete,
+  onUpload,
+  onDelete,
+}: {
+  targetKey: string;
+  orderId: string;
+  type: string;
+  label: string;
+  document: TaxDocument | null;
+  uploading: boolean;
+  deletingDocumentId: string;
+  canUpload: boolean;
+  canDelete: boolean;
+  onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
+  onDelete: (orderId: string, document: TaxDocument) => void;
+}) {
+  const uploaded = Boolean(document);
+  const deleting = Boolean(document?.id && deletingDocumentId === document.id);
+  return (
+    <div className={styles.exportDocumentCard} id={taxTargetDomId(targetKey)}>
+      <div className={styles.exportDocumentHeader}>
+        <strong>{label}</strong>
+        <span>{uploaded ? "已上传 1 个文件" : "暂未上传"}</span>
+      </div>
+      {document ? (
+        <div className={styles.exportDocumentFile}>
+          <div className={styles.exportDocumentFileName} title={document.fileName || "-"}>
+            {document.fileName || "-"}
+          </div>
+          <div className={styles.exportDocumentMeta}>
+            <span>上传人：{document.uploadedByName || "-"}</span>
+            <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
+          </div>
+          <div className={styles.exportDocumentStatus}>识别状态：-</div>
+          <div className={styles.exportDocumentActions}>
+            <span className={styles.exportDocumentActionLabel}>操作：</span>
+            <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+            {canDelete ? (
+              <button
+                className={styles.fileActionButton}
+                type="button"
+                disabled={deleting}
+                onClick={() => onDelete(orderId, document)}
+              >
+                {deleting ? "删除中..." : "删除"}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.exportDocumentEmpty}>暂未上传</div>
+      )}
+      {canUpload ? (
+        <label className={`${styles.secondaryButton} ${styles.exportDocumentUploadButton}`}>
+          {uploading ? "上传中..." : (uploaded ? "替换当前PDF" : "上传PDF文件")}
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={uploading}
+            hidden
+            onChange={(event) => {
+              onUpload(orderId, type, event.target.files?.[0] || null);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      ) : (
+        <button className={`${styles.secondaryButton} ${styles.exportDocumentUploadButton}`} type="button" disabled title="无权限操作">
+          无权限操作
+        </button>
+      )}
     </div>
   );
 }
@@ -2250,8 +2339,13 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
 
 function upsertTaxDocument(documents: TaxDocument[], document: TaxDocument) {
   const existing = documents.filter((item) => item.id !== document.id);
-  const nextDocuments = document.documentType === "CUSTOMS_ENTRY_FORM"
-    ? existing.filter((item) => !(item.documentType === "CUSTOMS_ENTRY_FORM" && item.uploadStatus === "SUCCESS"))
+  const nextDocuments = document.documentType
+    ? existing.filter((item) => !(
+      item.documentType === document.documentType
+      && item.uploadStatus === "SUCCESS"
+      && (item.costId || "") === (document.costId || "")
+      && (item.supplierId || "") === (document.supplierId || "")
+    ))
     : existing;
   return [document, ...nextDocuments];
 }

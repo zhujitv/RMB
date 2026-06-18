@@ -3201,6 +3201,96 @@
   flex-wrap: wrap;
 }
 
+.exportDocumentsCard {
+  grid-column: 1 / -1;
+}
+
+.exportDocumentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.exportDocumentCard {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.exportDocumentHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exportDocumentHeader strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.exportDocumentHeader span {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.exportDocumentFile {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.exportDocumentFileName {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exportDocumentMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.exportDocumentStatus,
+.exportDocumentEmpty {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.exportDocumentActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exportDocumentActionLabel {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.exportDocumentUploadButton {
+  justify-self: flex-start;
+}
+
 .customsUploadCard {
   grid-column: 1 / -1;
   border: 1px solid #dbeafe;
@@ -3409,6 +3499,10 @@
   }
 
   .customsUploadBlocks {
+    grid-template-columns: 1fr;
+  }
+
+  .exportDocumentGrid {
     grid-template-columns: 1fr;
   }
 

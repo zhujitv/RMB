@@ -77,6 +77,19 @@ test("tax refund detail keeps upload delete and recognition updates local", () =
   assert.doesNotMatch(taxRefundModule, /await fetchDetail\(order\.id\);\s*await loadRows\(page, submittedKeyword, mode\);/);
 });
 
+test("tax refund export documents use compact cards instead of wide tables", () => {
+  assert.match(taxRefundModule, /<strong>出口资料上传<\/strong>[\s\S]*styles\.exportDocumentGrid[\s\S]*<ExportDocumentUploadCard/);
+  assert.match(taxRefundModule, /function ExportDocumentUploadCard\(/);
+  assert.match(taxRefundModule, /document=\{latestTaxDocument\(/);
+  assert.match(taxRefundModule, /styles\.exportDocumentFileName[\s\S]*title=\{document\.fileName \|\| "-"\}/);
+  assert.match(taxRefundModule, /styles\.exportDocumentActionLabel\}>操作：<\/span>/);
+  assert.match(taxRefundModule, /uploaded \? "替换当前PDF" : "上传PDF文件"/);
+  assert.match(styles, /\.exportDocumentsCard \{[\s\S]*grid-column: 1 \/ -1;/);
+  assert.match(styles, /\.exportDocumentGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 16px;/);
+  assert.match(styles, /\.exportDocumentFileName \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
+  assert.match(styles, /@media \(max-width: 920px\) \{[\s\S]*\.exportDocumentGrid \{[\s\S]*grid-template-columns: 1fr;/);
+});
+
 test("detail drawers and cards now own file management layout", () => {
   assert.match(styles, /\.taxRefundDrawer \{/);
   assert.match(styles, /\.taxRefundDrawerHeader \{/);
