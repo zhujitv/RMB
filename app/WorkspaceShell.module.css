@@ -1960,6 +1960,8 @@
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .detailGrid {

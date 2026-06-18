@@ -730,6 +730,18 @@ export function TaxRefundModule({
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
+      setDetail((current) => {
+        if (!current || current.id !== orderId) return current;
+        const nextDetail: TaxRefundDetail = {
+          ...current,
+          documents: (current.documents || []).filter((item) => item.id !== document.id),
+        };
+        if (document.documentType === "CUSTOMS_ENTRY_FORM") {
+          nextDetail.customsDeclarationNo = "";
+          nextDetail.customsDeclarationDate = "";
+        }
+        return nextDetail;
+      });
       await fetchDetail(orderId);
       await loadRows(page, submittedKeyword, mode);
       setNotice(result.message || "已删除文件");
@@ -1377,18 +1389,17 @@ function TaxRefundDetailPanel({
         {Object.entries(groups).filter(([groupName]) => !["出口资料", "报关资料", "工厂资料", "物流资料"].includes(groupName)).map(([groupName, documents]) => (
           <div className={styles.documentGroupCard} key={groupName}>
             <strong>{groupName}</strong>
-            {documents.length ? documents.map((document) => (
-              <div className={styles.fileListItem} key={document.id}>
-                <div>
-                  <span>{document.documentTypeLabel || document.documentType || "资料"}</span>
-                  <small>{document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDate(document.uploadedAt)}</small>
-                </div>
-                <div>
-                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-                  <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-                </div>
-              </div>
-            )) : <span className={styles.mutedText}>暂未上传</span>}
+            <DocumentFileTable
+              orderId={detail.id}
+              documents={documents}
+              deletingDocumentId={deletingDocumentId}
+              recognizingDocumentId={recognizingDocumentId}
+              recognitionStatusByDocument={recognitionStatusByDocument}
+              canPreviewOrDownload
+              canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
+              canRecognize={false}
+              onDelete={onDelete}
+            />
           </div>
         ))}
       </div>
@@ -1546,17 +1557,12 @@ function TaxUploadItem({
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
   return (
-    <div className={styles.fileListItem} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
-      <div>
-        <span>{label}</span>
-        <small>{documents.length ? `已上传 ${documents.length} 个文件` : "暂未上传"}</small>
-        {documents.map((document) => (
-          <small key={document.id}>
-            {document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDate(document.uploadedAt)}
-          </small>
-        ))}
-      </div>
-      <div>
+    <div className={styles.customsDocumentBlock} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
+      <div className={styles.customsDocumentBlockHeader}>
+        <div>
+          <strong>{label}</strong>
+          <span>{documents.length ? `已上传 ${documents.length} 个文件` : "暂未上传"}</span>
+        </div>
         {canUpload ? (
           <label className={styles.secondaryButton}>
             {uploading ? "上传中..." : "选择PDF"}
@@ -1576,23 +1582,18 @@ function TaxUploadItem({
             无权限操作
           </button>
         )}
-        {documents.map((document) => (
-          <span key={document.id} className={styles.fileListItemActions}>
-            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
-            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-            {canDelete ? (
-              <button
-                className={styles.secondaryButton}
-                type="button"
-                disabled={deletingDocumentId === document.id}
-                onClick={() => onDelete(orderId, document)}
-              >
-                {deletingDocumentId === document.id ? "删除中..." : "删除"}
-              </button>
-            ) : null}
-          </span>
-        ))}
       </div>
+      <DocumentFileTable
+        orderId={orderId}
+        documents={documents}
+        deletingDocumentId={deletingDocumentId}
+        recognizingDocumentId=""
+        recognitionStatusByDocument={{}}
+        canPreviewOrDownload
+        canDelete={canDelete}
+        canRecognize={false}
+        onDelete={onDelete}
+      />
     </div>
   );
 }
@@ -1747,9 +1748,7 @@ function CustomsUploadCard({
                 </div>
                 {canUpload ? (
                   <label className={styles.secondaryButton}>
-                    {uploading
-                      ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
-                      : (documentType.value === "CUSTOMS_ENTRY_FORM" ? "重新上传报关单 PDF" : "选择PDF")}
+                    {uploading ? "上传中..." : "替换当前 PDF"}
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
@@ -1764,6 +1763,7 @@ function CustomsUploadCard({
                 ) : null}
               </div>
               <DocumentFileTable
+                orderId={order.id}
                 order={order}
                 documents={visibleDocuments}
                 deletingDocumentId={deletingDocumentId}
@@ -1784,6 +1784,7 @@ function CustomsUploadCard({
 }
 
 function DocumentFileTable({
+  orderId,
   order,
   documents,
   deletingDocumentId,
@@ -1795,7 +1796,8 @@ function DocumentFileTable({
   onDelete,
   onRecognize,
 }: {
-  order: TaxRefundDetail;
+  orderId: string;
+  order?: TaxRefundDetail;
   documents: TaxDocument[];
   deletingDocumentId: string;
   recognizingDocumentId: string;
@@ -1804,8 +1806,9 @@ function DocumentFileTable({
   canDelete: boolean;
   canRecognize: boolean;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  onRecognize: (order: TaxRefundDetail, document: TaxDocument) => void;
+  onRecognize?: (order: TaxRefundDetail, document: TaxDocument) => void;
 }) {
+  const showRecognize = Boolean(canRecognize && order && onRecognize);
   if (!documents.length) {
     return <div className={styles.emptyState}>暂未上传</div>;
   }
@@ -1821,7 +1824,7 @@ function DocumentFileTable({
             <th>预览</th>
             <th>下载</th>
             <th>删除</th>
-            {canRecognize ? <th>重新识别</th> : null}
+            {showRecognize ? <th>重新识别</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -1838,7 +1841,7 @@ function DocumentFileTable({
                 <td><span className={styles.recognitionStatus}>{recognitionStatus}</span></td>
                 <td>
                   {canPreviewOrDownload ? (
-                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                    <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
                   ) : <span className={styles.mutedText}>-</span>}
                 </td>
                 <td>
@@ -1852,19 +1855,19 @@ function DocumentFileTable({
                       className={styles.secondaryButton}
                       type="button"
                       disabled={deletingDocumentId === document.id}
-                      onClick={() => onDelete(order.id, document)}
+                      onClick={() => onDelete(orderId, document)}
                     >
                       {deletingDocumentId === document.id ? "删除中..." : "删除"}
                     </button>
                   ) : <span className={styles.mutedText}>-</span>}
                 </td>
-                {canRecognize ? (
+                {showRecognize ? (
                   <td>
                     <button
                       className={styles.secondaryButton}
                       type="button"
                       disabled={recognizing}
-                      onClick={() => onRecognize(order, document)}
+                      onClick={() => onRecognize?.(order as TaxRefundDetail, document)}
                     >
                       {recognizing ? "识别中..." : "重新识别报关单"}
                     </button>
@@ -1877,6 +1880,11 @@ function DocumentFileTable({
       </table>
     </div>
   );
+}
+
+function openDocumentPreview(documentId: string) {
+  if (!documentId) return;
+  window.open(`/api/order-documents/${encodeURIComponent(documentId)}/preview`, "_blank", "noopener,noreferrer");
 }
 
 function CustomsFilePickerDialog({

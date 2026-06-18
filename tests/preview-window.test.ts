@@ -16,6 +16,7 @@ const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 test("preview route returns inline file streams with cache and nosniff headers", () => {
   assert.match(previewRoute, /"Content-Type": "application\/pdf"/);
   assert.match(previewRoute, /"Content-Disposition": `inline; filename="/);
+  assert.match(previewRoute, /document\.originalFilename \|\| document\.originalName \|\| document\.fileName/);
   assert.doesNotMatch(previewRoute, /attachment/);
   assert.match(previewRoute, /"Cache-Control": "private, max-age=300"/);
   assert.match(previewRoute, /"X-Content-Type-Options": "nosniff"/);
@@ -26,6 +27,7 @@ test("download route returns attachment file streams", () => {
   assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
   assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
   assert.match(downloadRoute, /"Content-Disposition": `attachment; filename="/);
+  assert.match(downloadRoute, /document\.originalFilename \|\| document\.originalName \|\| document\.fileName/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
   assert.doesNotMatch(downloadRoute, /inline/);
 });
@@ -40,13 +42,26 @@ test("preview route returns structured JSON errors when stream fails", () => {
 test("workspace modules use preview links instead of legacy preview windows", () => {
   const previewHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/preview`\}/;
   const downloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
-  assert.match(taxRefundModule, previewHref);
+  assert.match(taxRefundModule, /window\.open\(`\/api\/order-documents\/\$\{encodeURIComponent\(documentId\)\}\/preview`, "_blank"/);
   assert.match(domesticLogisticsModule, previewHref);
   assert.match(costsModule, previewHref);
   assert.match(taxRefundModule, downloadHref);
   assert.match(domesticLogisticsModule, downloadHref);
   assert.match(costsModule, downloadHref);
   assert.doesNotMatch(taxRefundModule, /\/download`} target="_blank"/);
+});
+
+test("tax refund detail uses one file table for preview download and delete", () => {
+  assert.match(taxRefundModule, /function DocumentFileTable\(/);
+  assert.match(taxRefundModule, /<th>文件名<\/th>[\s\S]*<th>上传人<\/th>[\s\S]*<th>上传时间<\/th>[\s\S]*<th>识别状态<\/th>[\s\S]*<th>预览<\/th>[\s\S]*<th>下载<\/th>[\s\S]*<th>删除<\/th>/);
+  assert.match(taxRefundModule, /onClick=\{\(\) => openDocumentPreview\(document\.id\)\}/);
+  assert.match(taxRefundModule, /onClick=\{\(\) => onDelete\(orderId, document\)\}/);
+  assert.match(taxRefundModule, /确定删除该文件？/);
+  assert.match(taxRefundModule, /删除后需要重新上传。/);
+  assert.match(taxRefundModule, /setDetail\(\(current\) =>/);
+  assert.match(taxRefundModule, /documents: \(current\.documents \|\| \[\]\)\.filter\(\(item\) => item\.id !== document\.id\)/);
+  assert.match(taxRefundModule, /<DocumentFileTable[\s\S]*canRecognize=\{false\}/);
+  assert.match(taxRefundModule, /重新识别报关单/);
 });
 
 test("detail drawers and cards now own file management layout", () => {
@@ -67,7 +82,8 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
-  assert.match(taxRefundModule, /重新上传报关单 PDF/);
+  assert.match(taxRefundModule, /替换当前 PDF/);
+  assert.doesNotMatch(taxRefundModule, /重新上传报关单 PDF|替换\/上传新版PDF/);
   assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
   assert.match(customsRecognitionService, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
   assert.match(customsRecognitionService, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
@@ -103,6 +119,7 @@ test("admin can delete uploaded customs documents with confirmation", () => {
 test("deleting customs declaration clears recognized declaration fields", () => {
   assert.match(orderDocumentRoute, /message: "已删除文件"/);
   assert.match(orderDocumentRoute, /apiError\(error, "删除失败，请重试"\)/);
+  assert.match(orderDocumentsService, /文件不存在或已删除/);
   assert.match(orderDocumentsService, /isCustomsDeclarationDocumentType\(before\.documentType\)/);
   assert.match(orderDocumentsService, /customsDeclarationNo: null/);
   assert.match(orderDocumentsService, /customsDeclarationDate: null/);

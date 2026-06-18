@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const actor = await getActor(request);
     const { id } = await params;
     const { body, document } = await getOrderDocumentDownload(request, actor, id);
-    const fileName = asciiFileName(document.fileName || "document");
+    const fileName = asciiFileName(document.originalFilename || document.originalName || document.fileName || "document");
     return new Response(body, {
       headers: {
         "Content-Type": "application/pdf",

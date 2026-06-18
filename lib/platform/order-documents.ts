@@ -342,7 +342,7 @@ export async function deleteOrderDocument(request, actor, id) {
     where: { id },
     include: { order: { include: { customer: true } }, cost: true, supplier: true, uploadedBy: true },
   });
-  if (!before || before.deletedAt) throw permissionError("单证不存在或已删除", 404);
+  if (!before || before.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canModifyDocument(actor, before)) throw permissionError("无权限删除该订单单证");
   const document = await prisma.orderDocument.update({
     where: { id },
