@@ -459,25 +459,12 @@ export function TaxRefundModule({
 
   function customsRecognitionStatusText(result: CustomsRecognitionResult | null | undefined) {
     if (!result) return "";
-    if (result.customsParseStatus === "FAILED") return "识别失败，请手工填写";
+    if (result.customsParseStatus === "FAILED") return "未识别成功，请手工填写报关单号和申报日期";
     const missing: string[] = [];
     if (!result.customsDeclarationNo) missing.push("未识别到报关单号");
     if (!result.customsDeclarationDate) missing.push("未识别到申报日期");
     if (missing.length) return missing.join(" / ");
     return "识别成功";
-  }
-
-  function customsRecognitionDetails(result: CustomsRecognitionResult | null | undefined, includeCurrent = false) {
-    if (!result) return [];
-    return [
-      `识别到报关单号：${result.customsDeclarationNo || "未识别到报关单号"}`,
-      `识别到申报日期：${result.customsDeclarationDate || "未识别到申报日期"}`,
-      ...(includeCurrent ? [
-        `当前报关单号：${result.currentCustomsDeclarationNo || detail?.customsDeclarationNo || "-"}`,
-        `当前申报日期：${result.currentCustomsDeclarationDate || detail?.customsDeclarationDate || "-"}`,
-      ] : []),
-      result.customsParseMessage ? `识别结果：${result.customsParseMessage}` : "",
-    ].filter(Boolean);
   }
 
   async function applyRecognizedCustomsFields(orderId: string, result: CustomsRecognitionResult) {
@@ -513,26 +500,7 @@ export function TaxRefundModule({
       const statusText = customsRecognitionStatusText(result);
       setDocumentRecognitionStatus(document.id, statusText);
       if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
-        setNotice(statusText || "识别失败，请手工填写");
-        return;
-      }
-      const hasCurrentFields = Boolean(order.customsDeclarationNo || order.customsDeclarationDate);
-      const confirmResult = await requestConfirmation({
-        title: hasCurrentFields ? "当前订单已有报关单信息" : "识别到报关单信息",
-        message: hasCurrentFields
-          ? "当前订单已有报关单信息，是否使用本次识别结果覆盖？"
-          : "是否写入当前订单退税资料？",
-        details: customsRecognitionDetails({
-          ...result,
-          currentCustomsDeclarationNo: order.customsDeclarationNo || result.currentCustomsDeclarationNo || "",
-          currentCustomsDeclarationDate: order.customsDeclarationDate || result.currentCustomsDeclarationDate || "",
-        }, hasCurrentFields),
-        confirmLabel: hasCurrentFields ? "覆盖并写入" : "写入退税资料",
-        cancelLabel: "取消",
-        variant: hasCurrentFields ? "warning" : "default",
-      });
-      if (!confirmResult.confirmed) {
-        setNotice("已识别报关单信息，未写入退税资料。");
+        setNotice("未识别成功，请手工填写报关单号和申报日期");
         return;
       }
       setRecognizingDocumentId(document.id);
@@ -541,10 +509,10 @@ export function TaxRefundModule({
       setDocumentRecognitionStatus(document.id, "识别成功");
       await fetchDetail(order.id);
       await loadRows(page, submittedKeyword, mode);
-      setNotice("报关单信息已写入当前订单退税资料");
+      setNotice("报关单信息已自动回填，并同步更新退税资料列表申报日期。");
     } catch (recognizeError) {
-      setDocumentRecognitionStatus(document.id, "识别失败，请手工填写");
-      setDetailError(recognizeError instanceof Error ? recognizeError.message : "报关单识别失败，请手工填写");
+      setDocumentRecognitionStatus(document.id, "未识别成功，请手工填写报关单号和申报日期");
+      setDetailError(recognizeError instanceof Error ? recognizeError.message : "未识别成功，请手工填写报关单号和申报日期");
     } finally {
       setRecognizingDocumentId("");
     }
@@ -557,34 +525,10 @@ export function TaxRefundModule({
     }
     const statusText = customsRecognitionStatusText(result);
     setDocumentRecognitionStatus(document.id, statusText);
-    if (result.requiresConfirmation) {
-      const confirmResult = await requestConfirmation({
-        title: "当前订单已有报关单信息",
-        message: "当前订单已有报关单信息，是否使用本次识别结果覆盖？",
-        details: customsRecognitionDetails(result, true),
-        confirmLabel: "覆盖并写入",
-        cancelLabel: "保留原信息",
-        variant: "warning",
-      });
-      if (!confirmResult.confirmed) {
-        setNotice("报关单已上传，已识别结果但未覆盖当前报关单信息。");
-        return;
-      }
-      setRecognizingDocumentId(document.id);
-      setDocumentRecognitionStatus(document.id, "识别中...");
-      const override = await apiJson<CustomsRecognitionResponse>(`/api/order-documents/${encodeURIComponent(document.id)}/recognize-customs`, {
-        method: "POST",
-        body: JSON.stringify({ confirmOverride: true }),
-      });
-      const overrideResult = override.data || override.customsRecognition;
-      setDocumentRecognitionStatus(document.id, customsRecognitionStatusText(overrideResult) || "识别成功");
-      setNotice("报关单已上传，识别结果已覆盖写入退税资料。");
-      return;
-    }
     if (result.customsParseStatus === "SUCCESS" || result.customsParseStatus === "PARTIAL") {
-      setNotice(result.applied ? "报关单已上传，识别结果已同步到退税资料。" : "报关单已上传，识别结果未写入退税资料。");
+      setNotice("报关单已上传，识别结果已自动回填并同步到退税资料列表。");
     } else {
-      setNotice("报关单已上传，但未识别到报关单号或申报日期，请手工填写");
+      setNotice("未识别成功，请手工填写报关单号和申报日期");
     }
   }
 
@@ -1806,6 +1750,9 @@ function CustomsUploadCard({
           const matchedDocuments = documents.filter((document) => (
             document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
           ));
+          const visibleDocuments = documentType.value === "CUSTOMS_ENTRY_FORM"
+            ? latestTaxDocument(matchedDocuments)
+            : matchedDocuments;
           const canUpload = canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly);
           const canDelete = canDeleteTaxDocument(canWriteDocuments, readOnly);
           const uploading = uploadingKey === uploadScopeKey(order.id, documentType.value);
@@ -1815,11 +1762,13 @@ function CustomsUploadCard({
               <div className={styles.customsDocumentBlockHeader}>
                 <div>
                   <strong>{documentType.label}</strong>
-                  <span>{matchedDocuments.length ? `已上传 ${matchedDocuments.length} 个文件` : "暂未上传"}</span>
+                  <span>{visibleDocuments.length ? `已上传 ${visibleDocuments.length} 个文件` : "暂未上传"}</span>
                 </div>
                 {canUpload ? (
                   <label className={styles.secondaryButton}>
-                    {uploading ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...") : "选择PDF"}
+                    {uploading
+                      ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
+                      : (documentType.value === "CUSTOMS_ENTRY_FORM" ? "重新上传报关单 PDF" : "选择PDF")}
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
@@ -1835,7 +1784,7 @@ function CustomsUploadCard({
               </div>
               <DocumentFileTable
                 order={order}
-                documents={matchedDocuments}
+                documents={visibleDocuments}
                 deletingDocumentId={deletingDocumentId}
                 recognizingDocumentId={recognizingDocumentId}
                 recognitionStatusByDocument={recognitionStatusByDocument}
@@ -2242,9 +2191,16 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
 }
 
 function customsEntryDocuments(documents: TaxDocument[]) {
-  return documents.filter((document) => (
+  return latestTaxDocument(documents.filter((document) => (
     document.documentType === "CUSTOMS_ENTRY_FORM" && document.uploadStatus === "SUCCESS"
-  ));
+  )));
+}
+
+function latestTaxDocument(documents: TaxDocument[]) {
+  const latest = documents.slice().sort((left, right) => (
+    new Date(right.uploadedAt || 0).getTime() - new Date(left.uploadedAt || 0).getTime()
+  ))[0];
+  return latest ? [latest] : [];
 }
 
 function logisticsInvoiceLabel(cost: Pick<TaxCost, "costType">) {

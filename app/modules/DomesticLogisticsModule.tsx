@@ -159,20 +159,9 @@ function customsRecognitionNotice(result?: CustomsRecognitionResult | null) {
     return [
       declarationNo ? `已识别报关单号：${declarationNo}` : "",
       declarationDate ? `已识别申报日期：${declarationDate}` : "",
-      "未识别成功，请手工填写",
     ].filter(Boolean).join("；");
   }
-  return "报关单已上传，但未识别到报关单号或申报日期，请手工填写";
-}
-
-function customsRecognitionDetails(result?: CustomsRecognitionResult | null) {
-  if (!result) return [];
-  return [
-    result.currentCustomsDeclarationNo ? `当前报关单号：${result.currentCustomsDeclarationNo}` : "",
-    result.currentCustomsDeclarationDate ? `当前申报日期：${result.currentCustomsDeclarationDate}` : "",
-    result.customsDeclarationNo ? `本次识别报关单号：${result.customsDeclarationNo}` : "",
-    result.customsDeclarationDate ? `本次识别申报日期：${result.customsDeclarationDate}` : "",
-  ].filter(Boolean);
+  return "未识别成功，请手工填写报关单号和申报日期";
 }
 
 export function DomesticLogisticsModule({
@@ -211,7 +200,7 @@ export function DomesticLogisticsModule({
   const canEditDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
   const canUploadCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "物流供应商", "物流资料录入员"])
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
-  const canDeleteCustomsDocuments = false;
+  const canDeleteCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员"]);
   const canCreateLogisticsExpense = canWritePermission(currentUser, permissions, "logistics", ["管理员", "物流供应商"]);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
@@ -327,29 +316,7 @@ export function DomesticLogisticsModule({
       }
       const uploadedDocument = data.document || data.data;
       const recognition = uploadedDocument?.customsRecognition || null;
-      if (isCustomsDeclaration && recognition?.requiresConfirmation && uploadedDocument?.id) {
-        const confirmationResult = await requestConfirmation({
-          title: "已存在报关单信息",
-          message: "是否使用本次识别结果覆盖？",
-          details: customsRecognitionDetails(recognition),
-          confirmLabel: "覆盖并同步",
-          cancelLabel: "保留原信息",
-          variant: "warning",
-        });
-        if (confirmationResult.confirmed) {
-          setNotice("正在识别报关单信息...");
-          const overrideResult = await apiJson<CustomsRecognitionResponse>(`/api/order-documents/${encodeURIComponent(uploadedDocument.id)}/recognize-customs`, {
-            method: "POST",
-            body: JSON.stringify({ confirmOverride: true }),
-          });
-          const nextRecognition = overrideResult.customsRecognition || overrideResult.data || recognition;
-          setNotice(customsRecognitionNotice(nextRecognition));
-        } else {
-          setNotice(recognition.applied
-            ? "已自动同步空白报关单字段，已有报关单信息未覆盖。"
-            : "已存在报关单信息，未覆盖本次识别结果。");
-        }
-      } else if (isCustomsDeclaration) {
+      if (isCustomsDeclaration) {
         setNotice(customsRecognitionNotice(recognition));
       } else {
         setNotice("报关资料已上传");
@@ -936,7 +903,49 @@ function CustomsDocumentPanel({
         const matchedDocuments = documents.filter((document) => (
           document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
         ));
+        const currentCustomsDeclaration = documentType.value === "CUSTOMS_ENTRY_FORM"
+          ? latestUploadedDocument(matchedDocuments)
+          : null;
         const uploading = uploadingKey === `${orderId}:${documentType.value}`;
+        if (documentType.value === "CUSTOMS_ENTRY_FORM") {
+          return (
+            <div className={styles.fileListItem} key={documentType.value}>
+              <div>
+                <span>{documentType.label}</span>
+                {currentCustomsDeclaration ? (
+                  <small>
+                    {currentCustomsDeclaration.fileName || "-"} ｜ {currentCustomsDeclaration.uploadedByName || "-"} ｜ {formatDateTime(currentCustomsDeclaration.uploadedAt)}
+                  </small>
+                ) : (
+                  <small>暂未上传</small>
+                )}
+              </div>
+              <div>
+                {currentCustomsDeclaration && canPreviewOrDownload ? (
+                  <>
+                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/download`}>下载</a>
+                  </>
+                ) : null}
+                {canUpload ? (
+                  <label className={styles.secondaryButton}>
+                    {uploading ? "识别中..." : "重新上传报关单 PDF"}
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      disabled={uploading}
+                      hidden
+                      onChange={(event) => {
+                        onUpload(orderId, documentType.value, event.target.files?.[0] || null);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            </div>
+          );
+        }
         return (
           <div className={styles.fileListItem} key={documentType.value}>
             <div>
@@ -996,6 +1005,12 @@ function CustomsDocumentPanel({
 
 function firstItemValue(info: DomesticLogisticsInfo | null | undefined, key: keyof TransportItem) {
   return info?.transportItems?.find((item) => item[key])?.[key] || "";
+}
+
+function latestUploadedDocument(documents: DomesticLogisticsDocument[]) {
+  return documents.slice().sort((left, right) => (
+    new Date(right.uploadedAt || 0).getTime() - new Date(left.uploadedAt || 0).getTime()
+  ))[0] || null;
 }
 
 function expenseOrderFromDomesticRow(row: DomesticLogisticsRow) {

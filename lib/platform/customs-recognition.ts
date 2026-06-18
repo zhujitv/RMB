@@ -182,6 +182,7 @@ async function readCustomsDeclarationPdfBuffer(document = {}) {
 async function applyCustomsParseFailure(request, actor, orderId, message, code = "CUSTOMS_PARSE_FAILED", action = "自动识别失败", options = {}) {
   const before = await prisma.receivableOrder.findUnique({ where: { id: orderId } });
   const allowManualFailure = Boolean(options?.allowManualFailure);
+  const clearFields = Boolean(options?.clearFields);
   const technicalError = options?.technicalError || null;
   const publicMessage = options?.publicMessage || message || "识别失败";
   const manualProtected = before?.customsDeclarationParseSource === "MANUAL" || before?.customsParseStatus === "MANUAL";
@@ -189,6 +190,10 @@ async function applyCustomsParseFailure(request, actor, orderId, message, code =
     return before ? serializeOrder(before) : null;
   }
   const data = {
+    ...(clearFields ? {
+      customsDeclarationNo: null,
+      customsDeclarationDate: null,
+    } : {}),
     customsParsedAt: new Date(),
     customsParseStatus: "FAILED",
     customsParseMessage: publicMessage,
@@ -267,6 +272,8 @@ export async function parseAndApplyCustomsDocument(
     action = "自动识别成功",
     failureAction = "自动识别失败",
     allowManualFailure = false,
+    replaceWithParsedFields = false,
+    clearFieldsOnFailure = false,
     returnDetails = false,
   } = {},
 ) {
@@ -278,6 +285,7 @@ export async function parseAndApplyCustomsDocument(
     if (!hasCustomsRecognitionValue(fields)) {
       const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, message, "CUSTOMS_PARSE_NO_FIELDS", failureAction, {
         allowManualFailure,
+        clearFields: clearFieldsOnFailure,
       });
       return returnDetails
         ? buildCustomsRecognitionResult({
@@ -290,6 +298,36 @@ export async function parseAndApplyCustomsDocument(
           order: failureOrder,
         })
         : failureOrder;
+    }
+    if (replaceWithParsedFields) {
+      const order = await prisma.receivableOrder.update({
+        where: { id: document.orderId },
+        data: customsUpdateData(
+          fields,
+          customsDeclarationParser.customsParseStatusFromFields(fields),
+          message,
+          source,
+        ),
+        include: includeOrderRelations(),
+      });
+      await runNonCriticalTask("报关单识别日志写入", () => writeAudit(request, actor, status === "SUCCESS" ? action : "自动部分识别报关单信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
+        ...serializeCustomsRecognition(order),
+        documentId: document.id,
+        uploadSource: document.uploadSource || "",
+        recognitionSource: source,
+      }));
+      const serializedOrder = serializeOrder(order);
+      return returnDetails
+        ? buildCustomsRecognitionResult({
+          document,
+          parsedFields: fields,
+          currentFields: currentCustomsFields(before),
+          status,
+          message,
+          applied: true,
+          order: serializedOrder,
+        })
+        : serializedOrder;
     }
     const merged = mergeCustomsFields(fields, before, force);
     const updateSource = merged.preserved.length
@@ -390,6 +428,7 @@ export async function parseAndApplyCustomsDocument(
     const publicMessage = customsFailurePublicMessage(error, error?.message || "报关单识别失败");
     const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, publicMessage, error?.code || "CUSTOMS_PARSE_FAILED", failureAction, {
       allowManualFailure,
+      clearFields: clearFieldsOnFailure,
       publicMessage,
       technicalError: error,
       document,
@@ -448,6 +487,8 @@ export async function recognizeUploadedCustomsDocument(request, actor, documentI
     action: input.confirmOverride === true ? "确认覆盖报关单识别信息" : "自动识别成功",
     failureAction: "自动识别失败",
     allowManualFailure: true,
+    replaceWithParsedFields: true,
+    clearFieldsOnFailure: true,
     returnDetails: true,
   });
 }

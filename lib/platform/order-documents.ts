@@ -237,29 +237,45 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
   });
   await uploadToR2({ key: storageKey, body, contentType: mimeType });
   let document;
+  let replacedCustomsDocumentCount = 0;
   try {
-    document = await prisma.orderDocument.create({
-      data: {
-        orderId: order.id,
-        costId: cost?.id || null,
-        supplierId: resolvedSupplierId || null,
-        relatedModule,
-        documentType,
-        fileName: standardFilename,
-        originalName: originalFileName,
-        originalFilename: originalFileName,
-        standardFilename,
-        fileSize: Number(file.size || body.byteLength || 0),
-        mimeType,
-        r2Bucket,
-        storageKey,
-        fileUrl: null,
-        uploadStatus: "SUCCESS",
-        uploadProgress: 100,
-        uploadedById: actor.id,
-        uploadedAt: new Date(),
-      },
-      include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+    document = await prisma.$transaction(async (tx) => {
+      const created = await tx.orderDocument.create({
+        data: {
+          orderId: order.id,
+          costId: cost?.id || null,
+          supplierId: resolvedSupplierId || null,
+          relatedModule,
+          documentType,
+          fileName: standardFilename,
+          originalName: originalFileName,
+          originalFilename: originalFileName,
+          standardFilename,
+          fileSize: Number(file.size || body.byteLength || 0),
+          mimeType,
+          r2Bucket,
+          storageKey,
+          fileUrl: null,
+          uploadStatus: "SUCCESS",
+          uploadProgress: 100,
+          uploadedById: actor.id,
+          uploadedAt: new Date(),
+        },
+        include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+      });
+      if (isCustomsDeclarationDocumentType(documentType)) {
+        const replaced = await tx.orderDocument.updateMany({
+          where: {
+            orderId: order.id,
+            documentType: "CUSTOMS_ENTRY_FORM",
+            id: { not: created.id },
+            deletedAt: null,
+          },
+          data: { deletedAt: new Date() },
+        });
+        replacedCustomsDocumentCount = replaced.count || 0;
+      }
+      return created;
     });
   } catch (error) {
     await deleteR2Object(storageKey).catch(() => null);
@@ -278,10 +294,14 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
     originalFilename: document.originalFilename || document.originalName,
     documentType,
     uploadSource: normalizedUploadSource,
+    replacedCustomsDocumentCount,
   }));
   let customsRecognition = null;
   if (isCustomsDeclarationDocumentType(documentType)) {
     customsRecognition = await parseAndApplyCustomsDocument(request, actor, document, body, {
+      allowManualFailure: true,
+      replaceWithParsedFields: true,
+      clearFieldsOnFailure: true,
       returnDetails: true,
     }).catch((error) => {
       console.error("报关单自动识别异常", {
@@ -299,7 +319,7 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
         customsDeclarationDate: "",
         customsParseStatus: "FAILED",
         customsParseStatusLabel: "识别失败",
-        customsParseMessage: "报关单已上传，但未识别到报关单号或申报日期，请手工填写",
+        customsParseMessage: "未识别成功，请手工填写报关单号和申报日期",
         applied: false,
         requiresConfirmation: false,
         conflictFields: [],

@@ -6,6 +6,7 @@ const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.ts
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
@@ -35,4 +36,27 @@ test("detail drawers and cards now own file management layout", () => {
   assert.match(styles, /\.taxRefundDrawerBody \{/);
   assert.match(styles, /\.detailCard \{/);
   assert.match(styles, /\.detailCard \* \{/);
+});
+
+test("domestic logistics customs declaration keeps one current upload", () => {
+  assert.match(domesticLogisticsModule, /重新上传报关单 PDF/);
+  assert.match(domesticLogisticsModule, /latestUploadedDocument\(matchedDocuments\)/);
+  assert.match(orderDocumentsService, /documentType: "CUSTOMS_ENTRY_FORM"/);
+  assert.match(orderDocumentsService, /id: \{ not: created\.id \}/);
+  assert.match(orderDocumentsService, /data: \{ deletedAt: new Date\(\) \}/);
+});
+
+test("tax refund customs recognition stays focused on current declaration fields", () => {
+  assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
+  assert.match(taxRefundModule, /重新上传报关单 PDF/);
+  assert.match(taxRefundModule, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
+  assert.match(taxRefundModule, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
+  assert.doesNotMatch(taxRefundModule, /运输方式|车牌号|起运地|到达地|货物名称/);
+});
+
+test("admin can delete uploaded customs documents with confirmation", () => {
+  assert.match(domesticLogisticsModule, /const canDeleteCustomsDocuments = canWritePermission\(currentUser, permissions, "documents", \["管理员"\]\)/);
+  assert.match(domesticLogisticsModule, /title: "确认删除文件？"/);
+  assert.match(domesticLogisticsModule, /confirmLabel: "删除文件"/);
+  assert.match(domesticLogisticsModule, /variant: "danger"/);
 });

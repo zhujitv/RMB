@@ -11,7 +11,6 @@ type RouteContext = {
 
 type CustomsRecognitionRouteResult = {
   order?: unknown;
-  requiresConfirmation?: boolean;
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       data: result,
       customsRecognition: result,
       order: result?.order || null,
-      message: result?.requiresConfirmation ? "已存在报关单信息，请确认是否覆盖。" : "报关单识别已完成",
+      message: "报关单识别已完成",
     });
   } catch (error: unknown) {
     return apiError(error, "报关单识别失败");
