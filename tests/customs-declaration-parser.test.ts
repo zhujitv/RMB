@@ -107,6 +107,7 @@ test("normalizes valid declaration dates and rejects invalid dates", () => {
 
 test("parser source does not reference bundled fixture documents", async () => {
   const source = await fs.readFile(new URL("../lib/customs-declaration-parser.ts", import.meta.url), "utf8");
+  const packageJson = await fs.readFile(new URL("../package.json", import.meta.url), "utf8");
   const forbidden = [
     "05-versions" + "-space",
     ["test", "data"].join("/"),
@@ -115,7 +116,9 @@ test("parser source does not reference bundled fixture documents", async () => {
   ];
 
   forbidden.forEach((pattern) => assert.equal(source.toLowerCase().includes(pattern), false));
-  assert.match(source, /import\(["']pdf-parse["']\)/);
-  assert.doesNotMatch(source, /pdf-parse\/lib\/pdf-parse\.js/);
-  assert.match(source, /parser\.getText\(/);
+  assert.match(source, /import\(["']pdf2json["']\)/);
+  assert.match(packageJson, /"pdf2json"/);
+  assert.doesNotMatch(packageJson, /"pdf-parse"/);
+  assert.doesNotMatch(source, /pdf-parse|pdfjs-dist|DOMMatrix|getScreenshot|render\(/);
+  assert.match(source, /parseBuffer\(pdfData, 0\)/);
 });

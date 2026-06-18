@@ -130,7 +130,7 @@ function customsFailurePublicMessage(error, fallback = "报关单识别失败") 
     return CUSTOMS_FILE_READ_FAILED_MESSAGE;
   }
   const message = String(error?.message || "");
-  if (/ENOENT|no such file|pdf-parse|storage|R2|S3|对象存储|文件流|file path/i.test(message)) {
+  if (/ENOENT|no such file|storage|R2|S3|对象存储|文件流|file path/i.test(message)) {
     return CUSTOMS_FILE_READ_FAILED_MESSAGE;
   }
   return fallback;
@@ -180,7 +180,7 @@ function specificCustomsFileReadError(error = {}) {
 
 function specificCustomsParseError(error = {}) {
   if (error?.code === "CUSTOMS_PDF_NO_TEXT") {
-    return codedError("PDF没有可提取文字，OCR未启用", 422, "CUSTOMS_PDF_NO_TEXT");
+    return codedError("PDF未提取到文字，请手工填写报关单号和申报日期。", 422, "CUSTOMS_PDF_NO_TEXT");
   }
   return codedError(error?.message || "文件无法读取", error?.status || 500, error?.code || "CUSTOMS_PARSE_FAILED");
 }

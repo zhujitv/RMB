@@ -2,6 +2,8 @@ export const CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO = "AUTO_PDF_TEXT";
 export const CUSTOMS_DECLARATION_PARSE_SOURCE_MANUAL = "MANUAL";
 export const CUSTOMS_DECLARATION_PARSE_STATUSES = ["SUCCESS", "PARTIAL", "FAILED"] as const;
 
+process.env.PDF2JSON_DISABLE_LOGS ||= "1";
+
 type CustomsParseStatus = (typeof CUSTOMS_DECLARATION_PARSE_STATUSES)[number];
 
 type CustomsFields = {
@@ -21,11 +23,6 @@ type Candidate = {
   index: number;
 };
 
-type PdfParseConstructor = new (input: { data: Buffer }) => {
-  getText(): Promise<{ text?: string } | null | undefined>;
-  destroy(): Promise<void>;
-};
-
 type PdfParseOptions = {
   requireText?: boolean;
 };
@@ -36,11 +33,37 @@ type ParserError = Error & {
   expose?: boolean;
 };
 
+type Pdf2JsonTextRun = {
+  T?: string;
+};
+
+type Pdf2JsonTextItem = {
+  x?: number;
+  y?: number;
+  R?: Pdf2JsonTextRun[];
+};
+
+type Pdf2JsonOutput = {
+  Pages?: Array<{
+    Texts?: Pdf2JsonTextItem[];
+  }>;
+};
+
+type Pdf2JsonParser = {
+  on(eventName: "pdfParser_dataError", listener: (error: { parserError?: Error } | Error) => void): Pdf2JsonParser;
+  on(eventName: "pdfParser_dataReady", listener: (data: Pdf2JsonOutput) => void): Pdf2JsonParser;
+  parseBuffer(pdfBuffer: Buffer, verbosity?: number): void;
+  getRawTextContent?(): string;
+  destroy?(): void;
+};
+
+type Pdf2JsonParserConstructor = new (context?: unknown, needRawText?: boolean, password?: string) => Pdf2JsonParser;
+
 const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
 const NON_DECLARATION_DATE_LABEL_PATTERN = /(出口|录入|打印|放行|签发)日期/g;
 const DECLARATION_NO_PATTERN = /[A-Z0-9]{8,32}/gi;
-let pdfParseClassPromise: Promise<PdfParseConstructor> | null = null;
+let pdf2JsonParserClassPromise: Promise<Pdf2JsonParserConstructor> | null = null;
 
 export function toHalfWidth(value = "") {
   return String(value || "")
@@ -84,7 +107,6 @@ export function parseCustomsDeclarationText(text = ""): CustomsParseResult {
 }
 
 export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
-  const PDFParse = await loadPdfParse();
   const pdfData = Buffer.isBuffer(buffer)
     ? buffer
     : buffer instanceof Uint8Array
@@ -92,19 +114,11 @@ export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuf
       : buffer instanceof ArrayBuffer
         ? Buffer.from(new Uint8Array(buffer))
         : Buffer.alloc(0);
-  const parser = new PDFParse({
-    data: pdfData,
-  });
-  try {
-    const result = await parser.getText();
-    const normalizedText = normalizePdfText(result?.text || "");
-    if (options.requireText && !normalizedText) {
-      throw parserError("PDF没有可提取文字", 422, "CUSTOMS_PDF_NO_TEXT");
-    }
-    return parseCustomsDeclarationText(normalizedText);
-  } finally {
-    await parser.destroy();
+  const normalizedText = normalizePdfText(await extractPdfTextWithPdf2Json(pdfData));
+  if (options.requireText && !normalizedText) {
+    throw parserError("PDF未提取到文字，请手工填写报关单号和申报日期。", 422, "CUSTOMS_PDF_NO_TEXT");
   }
+  return parseCustomsDeclarationText(normalizedText);
 }
 
 export function customsParseStatusFromFields(fields: Partial<CustomsFields> = {}): CustomsParseStatus {
@@ -134,19 +148,18 @@ function normalizeDateParts(year: string, month: string, day: string) {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-async function loadPdfParse(): Promise<PdfParseConstructor> {
-  if (!pdfParseClassPromise) {
-    pdfParseClassPromise = import("pdf-parse").then((module) => {
+async function loadPdf2JsonParser(): Promise<Pdf2JsonParserConstructor> {
+  if (!pdf2JsonParserClassPromise) {
+    pdf2JsonParserClassPromise = import("pdf2json").then((module) => {
       const moduleRecord = module as Record<string, unknown>;
-      const defaultRecord = (moduleRecord.default || null) as Record<string, unknown> | null;
-      const PDFParse = (moduleRecord.PDFParse || defaultRecord?.PDFParse || moduleRecord.default) as PdfParseConstructor | undefined;
-      if (typeof PDFParse !== "function") {
-        throw new Error("pdf-parse 未导出可用的 PDFParse 构造器。");
+      const PDFParser = (moduleRecord.default || moduleRecord.PDFParser) as Pdf2JsonParserConstructor | undefined;
+      if (typeof PDFParser !== "function") {
+        throw new Error("pdf2json 未导出可用的 PDFParser 构造器。");
       }
-      return PDFParse;
+      return PDFParser;
     });
   }
-  return pdfParseClassPromise;
+  return pdf2JsonParserClassPromise;
 }
 
 function escapeRegExp(value = "") {
@@ -159,6 +172,87 @@ function parserError(message: string, status: number, code: string): ParserError
   error.code = code;
   error.expose = true;
   return error;
+}
+
+async function extractPdfTextWithPdf2Json(pdfData: Buffer) {
+  const PDFParser = await loadPdf2JsonParser();
+  return new Promise<string>((resolve, reject) => {
+    const parser = new PDFParser(null, true);
+    let settled = false;
+    function finish(callback: () => void) {
+      if (settled) return;
+      settled = true;
+      try {
+        parser.destroy?.();
+      } finally {
+        callback();
+      }
+    }
+    parser.on("pdfParser_dataError", (error) => {
+      const parserErrorObject = error instanceof Error ? error : error?.parserError;
+      finish(() => reject(parserError(
+        parserErrorObject?.message || "PDF文本提取失败",
+        422,
+        "CUSTOMS_PDF_TEXT_EXTRACT_FAILED",
+      )));
+    });
+    parser.on("pdfParser_dataReady", (pdfData) => {
+      const rawText = typeof parser.getRawTextContent === "function" ? parser.getRawTextContent() : "";
+      const structuredText = textFromPdf2JsonOutput(pdfData);
+      finish(() => resolve([rawText, structuredText].filter(Boolean).join("\n")));
+    });
+    try {
+      parser.parseBuffer(pdfData, 0);
+    } catch (error) {
+      const typedError = error as Error;
+      finish(() => reject(parserError(typedError.message || "PDF文本提取失败", 422, "CUSTOMS_PDF_TEXT_EXTRACT_FAILED")));
+    }
+  });
+}
+
+function textFromPdf2JsonOutput(pdfData: Pdf2JsonOutput = {}) {
+  return (pdfData.Pages || [])
+    .map((page) => linesFromPdf2JsonTexts(page.Texts || []).join("\n"))
+    .join("\n\n");
+}
+
+function linesFromPdf2JsonTexts(texts: Pdf2JsonTextItem[] = []) {
+  const sorted = texts.slice().sort((left, right) => (
+    Number(left.y || 0) - Number(right.y || 0)
+    || Number(left.x || 0) - Number(right.x || 0)
+  ));
+  const lines: string[] = [];
+  let currentY: number | null = null;
+  let currentLine = "";
+  for (const item of sorted) {
+    const y = Number(item.y || 0);
+    const text = decodePdf2JsonText(item);
+    if (!text) continue;
+    if (currentY === null || Math.abs(y - currentY) <= 0.35) {
+      currentLine += text;
+      currentY = currentY === null ? y : currentY;
+    } else {
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      currentLine = text;
+      currentY = y;
+    }
+  }
+  if (currentLine.trim()) lines.push(currentLine.trim());
+  return lines;
+}
+
+function decodePdf2JsonText(item: Pdf2JsonTextItem = {}) {
+  return (item.R || [])
+    .map((run) => decodePdf2JsonRun(run.T || ""))
+    .join("");
+}
+
+function decodePdf2JsonRun(value = "") {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function compactForNearbySearch(text = "") {

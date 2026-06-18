@@ -66,8 +66,7 @@ test("tax refund re-recognition uses order route and surfaces specific backend r
   assert.match(customsRecognitionService, /未找到报关单文件，请先上传报关单。/);
   assert.match(customsRecognitionService, /文件不存在/);
   assert.match(customsRecognitionService, /文件无法读取/);
-  assert.match(customsRecognitionService, /PDF没有可提取文字/);
-  assert.match(customsRecognitionService, /OCR未启用/);
+  assert.match(customsRecognitionService, /PDF未提取到文字，请手工填写报关单号和申报日期。/);
   assert.match(customsRecognitionService, /未识别到报关单号/);
   assert.match(customsRecognitionService, /未识别到申报日期/);
   assert.match(customsRecognitionService, /hasCustomsRecognitionValue\(fields\)/);
