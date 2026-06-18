@@ -3201,17 +3201,17 @@
   flex-wrap: wrap;
 }
 
-.exportDocumentsCard {
+.fileUploadSection {
   grid-column: 1 / -1;
 }
 
-.exportDocumentGrid {
+.fileUploadGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.exportDocumentCard {
+.fileUploadCard {
   min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -3221,7 +3221,7 @@
   gap: 10px;
 }
 
-.exportDocumentHeader {
+.fileUploadHeader {
   min-width: 0;
   display: flex;
   align-items: flex-start;
@@ -3229,26 +3229,26 @@
   gap: 10px;
 }
 
-.exportDocumentHeader strong {
+.fileUploadHeader strong {
   min-width: 0;
   color: #0f172a;
   font-size: 14px;
 }
 
-.exportDocumentHeader span {
+.fileUploadHeader span {
   flex: 0 0 auto;
   color: #64748b;
   font-size: 12px;
   white-space: nowrap;
 }
 
-.exportDocumentFile {
+.fileUploadFile {
   min-width: 0;
   display: grid;
   gap: 7px;
 }
 
-.exportDocumentFileName {
+.fileUploadFileName {
   min-width: 0;
   color: #0f172a;
   font-size: 13px;
@@ -3258,7 +3258,7 @@
   white-space: nowrap;
 }
 
-.exportDocumentMeta {
+.fileUploadMeta {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3268,26 +3268,26 @@
   line-height: 1.45;
 }
 
-.exportDocumentStatus,
-.exportDocumentEmpty {
+.fileUploadStatus,
+.fileUploadEmpty {
   color: #64748b;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.exportDocumentActions {
+.fileUploadActions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.exportDocumentActionLabel {
+.fileUploadActionLabel {
   color: #64748b;
   font-size: 12px;
 }
 
-.exportDocumentUploadButton {
+.fileUploadButton {
   justify-self: flex-start;
 }
 
@@ -3303,45 +3303,6 @@
 
 .customsUploadCard > strong {
   color: #0f172a;
-}
-
-.customsUploadBlocks {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.customsDocumentBlock {
-  min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.customsDocumentBlockHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.customsDocumentBlockHeader div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.customsDocumentBlockHeader strong {
-  color: #0f172a;
-  font-size: 14px;
-}
-
-.customsDocumentBlockHeader span {
-  color: #64748b;
-  font-size: 12px;
 }
 
 .documentFileTableWrap {
@@ -3498,11 +3459,7 @@
     grid-template-columns: 1fr;
   }
 
-  .customsUploadBlocks {
-    grid-template-columns: 1fr;
-  }
-
-  .exportDocumentGrid {
+  .fileUploadGrid {
     grid-template-columns: 1fr;
   }
 
@@ -3688,7 +3645,6 @@
     grid-template-columns: 1fr;
   }
 
-  .customsDocumentBlockHeader,
   .customsFormActions {
     align-items: stretch;
     flex-direction: column;

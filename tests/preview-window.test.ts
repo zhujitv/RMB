@@ -78,16 +78,26 @@ test("tax refund detail keeps upload delete and recognition updates local", () =
 });
 
 test("tax refund export documents use compact cards instead of wide tables", () => {
-  assert.match(taxRefundModule, /<strong>出口资料上传<\/strong>[\s\S]*styles\.exportDocumentGrid[\s\S]*<ExportDocumentUploadCard/);
-  assert.match(taxRefundModule, /function ExportDocumentUploadCard\(/);
+  assert.match(taxRefundModule, /<strong>出口资料上传<\/strong>[\s\S]*styles\.fileUploadGrid[\s\S]*<FileUploadCard/);
+  assert.match(taxRefundModule, /function FileUploadCard\(/);
   assert.match(taxRefundModule, /document=\{latestTaxDocument\(/);
-  assert.match(taxRefundModule, /styles\.exportDocumentFileName[\s\S]*title=\{document\.fileName \|\| "-"\}/);
-  assert.match(taxRefundModule, /styles\.exportDocumentActionLabel\}>操作：<\/span>/);
+  assert.match(taxRefundModule, /styles\.fileUploadFileName[\s\S]*title=\{document\.fileName \|\| "-"\}/);
+  assert.match(taxRefundModule, /styles\.fileUploadActionLabel\}>操作：<\/span>/);
   assert.match(taxRefundModule, /uploaded \? "替换当前PDF" : "上传PDF文件"/);
-  assert.match(styles, /\.exportDocumentsCard \{[\s\S]*grid-column: 1 \/ -1;/);
-  assert.match(styles, /\.exportDocumentGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 16px;/);
-  assert.match(styles, /\.exportDocumentFileName \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
-  assert.match(styles, /@media \(max-width: 920px\) \{[\s\S]*\.exportDocumentGrid \{[\s\S]*grid-template-columns: 1fr;/);
+  assert.match(styles, /\.fileUploadSection \{[\s\S]*grid-column: 1 \/ -1;/);
+  assert.match(styles, /\.fileUploadGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 16px;/);
+  assert.match(styles, /\.fileUploadFileName \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
+  assert.match(styles, /@media \(max-width: 920px\) \{[\s\S]*\.fileUploadGrid \{[\s\S]*grid-template-columns: 1fr;/);
+});
+
+test("tax refund customs uploads share the file upload card layout", () => {
+  assert.match(taxRefundModule, /<strong>报关资料上传<\/strong>[\s\S]*styles\.fileUploadGrid[\s\S]*TAX_CUSTOMS_UPLOAD_TYPES\.map/);
+  assert.match(taxRefundModule, /canRecognize = documentType\.value === "CUSTOMS_ENTRY_FORM" && canRecognizeCustoms/);
+  assert.match(taxRefundModule, /onRecognize=\{onRecognize\}/);
+  assert.match(taxRefundModule, /recognitionStatus=\{recognitionStatus\}/);
+  assert.match(taxRefundModule, /function TaxUploadItem\([\s\S]*<FileUploadCard/);
+  assert.doesNotMatch(taxRefundModule, /customsDocumentBlock/);
+  assert.doesNotMatch(taxRefundModule, /customsUploadBlocks/);
 });
 
 test("detail drawers and cards now own file management layout", () => {
@@ -108,7 +118,7 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
-  assert.match(taxRefundModule, /visibleDocuments\.length \? "替换当前PDF" : "上传PDF文件"/);
+  assert.match(taxRefundModule, /uploaded \? "替换当前PDF" : "上传PDF文件"/);
   assert.doesNotMatch(taxRefundModule, /重新上传报关单 PDF|替换\/上传新版PDF|替换当前 PDF/);
   assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
   assert.match(customsRecognitionService, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);

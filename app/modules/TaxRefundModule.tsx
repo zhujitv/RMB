@@ -1385,11 +1385,11 @@ function TaxRefundDetailPanel({
           onSaved={onCustomsSaved}
           onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
         />
-        <div className={`${styles.documentGroupCard} ${styles.exportDocumentsCard}`}>
+        <div className={`${styles.documentGroupCard} ${styles.fileUploadSection}`}>
           <strong>出口资料上传</strong>
-          <div className={styles.exportDocumentGrid}>
+          <div className={styles.fileUploadGrid}>
             {TAX_EXPORT_UPLOAD_TYPES.map((documentType) => (
-              <ExportDocumentUploadCard
+              <FileUploadCard
                 key={documentType.value}
                 targetKey={taxDocumentTargetKey(documentType.value)}
                 orderId={detail.id}
@@ -1402,6 +1402,7 @@ function TaxRefundDetailPanel({
                 deletingDocumentId={deletingDocumentId}
                 canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
                 canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
+                canPreviewOrDownload
                 onUpload={onUpload}
                 onDelete={onDelete}
               />
@@ -1630,94 +1631,91 @@ function TaxUploadItem({
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
   return (
-    <div className={styles.customsDocumentBlock} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
-      <div className={styles.customsDocumentBlockHeader}>
-        <div>
-          <strong>{label}</strong>
-          <span>{documents.length ? `已上传 ${documents.length} 个文件` : "暂未上传"}</span>
-        </div>
-        {canUpload ? (
-          <label className={styles.secondaryButton}>
-            {uploading ? "上传中..." : "选择PDF"}
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={uploading}
-              hidden
-              onChange={(event) => {
-                onUpload(orderId, type, event.target.files?.[0] || null, scope);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
-        ) : (
-          <button className={styles.secondaryButton} type="button" disabled title="无权限操作">
-            无权限操作
-          </button>
-        )}
-      </div>
-      <DocumentFileTable
-        orderId={orderId}
-        documents={documents}
-        deletingDocumentId={deletingDocumentId}
-        recognizingDocumentId=""
-        recognitionStatusByDocument={{}}
-        canPreviewOrDownload
-        canDelete={canDelete}
-        canRecognize={false}
-        onDelete={onDelete}
-      />
-    </div>
+    <FileUploadCard
+      targetKey={targetKey}
+      orderId={orderId}
+      type={type}
+      label={label}
+      document={latestTaxDocument(documents)[0] || null}
+      uploading={uploading}
+      deletingDocumentId={deletingDocumentId}
+      scope={scope}
+      canUpload={canUpload}
+      canDelete={canDelete}
+      canPreviewOrDownload
+      onUpload={onUpload}
+      onDelete={onDelete}
+    />
   );
 }
 
-function ExportDocumentUploadCard({
+function FileUploadCard({
   targetKey,
   orderId,
   type,
   label,
+  order,
   document,
   uploading,
   deletingDocumentId,
+  recognizingDocumentId = "",
+  recognitionStatus = "-",
+  scope,
   canUpload,
   canDelete,
+  canPreviewOrDownload,
+  canRecognize = false,
   onUpload,
   onDelete,
+  onRecognize,
 }: {
-  targetKey: string;
+  targetKey?: string;
   orderId: string;
   type: string;
   label: string;
+  order?: TaxRefundDetail;
   document: TaxDocument | null;
   uploading: boolean;
   deletingDocumentId: string;
+  recognizingDocumentId?: string;
+  recognitionStatus?: string;
+  scope?: UploadScope;
   canUpload: boolean;
   canDelete: boolean;
+  canPreviewOrDownload: boolean;
+  canRecognize?: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
+  onRecognize?: (order: TaxRefundDetail, document: TaxDocument) => void;
 }) {
   const uploaded = Boolean(document);
   const deleting = Boolean(document?.id && deletingDocumentId === document.id);
+  const recognizing = Boolean(document?.id && recognizingDocumentId === document.id);
+  const statusText = recognizing ? "识别中..." : recognitionStatus;
   return (
-    <div className={styles.exportDocumentCard} id={taxTargetDomId(targetKey)}>
-      <div className={styles.exportDocumentHeader}>
+    <div className={styles.fileUploadCard} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
+      <div className={styles.fileUploadHeader}>
         <strong>{label}</strong>
         <span>{uploaded ? "已上传 1 个文件" : "暂未上传"}</span>
       </div>
       {document ? (
-        <div className={styles.exportDocumentFile}>
-          <div className={styles.exportDocumentFileName} title={document.fileName || "-"}>
+        <div className={styles.fileUploadFile}>
+          <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
             {document.fileName || "-"}
           </div>
-          <div className={styles.exportDocumentMeta}>
+          <div className={styles.fileUploadMeta}>
             <span>上传人：{document.uploadedByName || "-"}</span>
             <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
           </div>
-          <div className={styles.exportDocumentStatus}>识别状态：-</div>
-          <div className={styles.exportDocumentActions}>
-            <span className={styles.exportDocumentActionLabel}>操作：</span>
-            <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
-            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+          <div className={styles.fileUploadStatus}>识别状态：{statusText || "-"}</div>
+          <div className={styles.fileUploadActions}>
+            <span className={styles.fileUploadActionLabel}>操作：</span>
+            {canPreviewOrDownload ? (
+              <>
+                <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
+                <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+              </>
+            ) : null}
             {canDelete ? (
               <button
                 className={styles.fileActionButton}
@@ -1728,13 +1726,23 @@ function ExportDocumentUploadCard({
                 {deleting ? "删除中..." : "删除"}
               </button>
             ) : null}
+            {canRecognize && order && onRecognize ? (
+              <button
+                className={styles.fileActionButton}
+                type="button"
+                disabled={recognizing}
+                onClick={() => onRecognize(order, document)}
+              >
+                {recognizing ? "识别中..." : "重新识别报关单"}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (
-        <div className={styles.exportDocumentEmpty}>暂未上传</div>
+        <div className={styles.fileUploadEmpty}>暂未上传</div>
       )}
       {canUpload ? (
-        <label className={`${styles.secondaryButton} ${styles.exportDocumentUploadButton}`}>
+        <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
           {uploading ? "上传中..." : (uploaded ? "替换当前PDF" : "上传PDF文件")}
           <input
             type="file"
@@ -1742,13 +1750,13 @@ function ExportDocumentUploadCard({
             disabled={uploading}
             hidden
             onChange={(event) => {
-              onUpload(orderId, type, event.target.files?.[0] || null);
+              onUpload(orderId, type, event.target.files?.[0] || null, scope);
               event.currentTarget.value = "";
             }}
           />
         </label>
       ) : (
-        <button className={`${styles.secondaryButton} ${styles.exportDocumentUploadButton}`} type="button" disabled title="无权限操作">
+        <button className={`${styles.secondaryButton} ${styles.fileUploadButton}`} type="button" disabled title="无权限操作">
           无权限操作
         </button>
       )}
@@ -1885,55 +1893,40 @@ function CustomsUploadCard({
   return (
     <div className={styles.customsUploadCard} id={taxTargetDomId("customs-documents")}>
       <strong>报关资料上传</strong>
-      <div className={styles.customsUploadBlocks}>
+      <div className={styles.fileUploadGrid}>
         {TAX_CUSTOMS_UPLOAD_TYPES.map((documentType) => {
           const matchedDocuments = documents.filter((document) => (
             document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
           ));
-          const visibleDocuments = documentType.value === "CUSTOMS_ENTRY_FORM"
-            ? latestTaxDocument(matchedDocuments)
-            : matchedDocuments;
+          const document = latestTaxDocument(matchedDocuments)[0] || null;
           const canUpload = canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly);
           const canDelete = canDeleteTaxDocument(canWriteDocuments, readOnly);
           const uploading = uploadingKey === uploadScopeKey(order.id, documentType.value);
           const canRecognize = documentType.value === "CUSTOMS_ENTRY_FORM" && canRecognizeCustoms;
+          const recognitionStatus = document
+            ? recognitionStatusByDocument[document.id] || customsRecognitionStatusTextFromResult(document.customsRecognition) || "-"
+            : "-";
           return (
-            <div className={styles.customsDocumentBlock} key={documentType.value} id={taxTargetDomId(taxDocumentTargetKey(documentType.value))}>
-              <div className={styles.customsDocumentBlockHeader}>
-                <div>
-                  <strong>{documentType.label}</strong>
-                  <span>{visibleDocuments.length ? `已上传 ${visibleDocuments.length} 个文件` : "暂未上传"}</span>
-                </div>
-                {canUpload ? (
-                  <label className={styles.secondaryButton}>
-                    {uploading ? "上传中..." : (visibleDocuments.length ? "替换当前PDF" : "上传PDF文件")}
-                    <input
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      disabled={uploading}
-                      hidden
-                      onChange={(event) => {
-                        onUpload(order.id, documentType.value, event.target.files?.[0] || null);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                ) : null}
-              </div>
-              <DocumentFileTable
-                orderId={order.id}
-                order={order}
-                documents={visibleDocuments}
-                deletingDocumentId={deletingDocumentId}
-                recognizingDocumentId={recognizingDocumentId}
-                recognitionStatusByDocument={recognitionStatusByDocument}
-                canPreviewOrDownload={canPreviewOrDownload}
-                canDelete={canDelete}
-                canRecognize={canRecognize}
-                onDelete={onDelete}
-                onRecognize={onRecognize}
-              />
-            </div>
+            <FileUploadCard
+              key={documentType.value}
+              targetKey={taxDocumentTargetKey(documentType.value)}
+              orderId={order.id}
+              type={documentType.value}
+              label={documentType.label}
+              order={order}
+              document={document}
+              uploading={uploading}
+              deletingDocumentId={deletingDocumentId}
+              recognizingDocumentId={recognizingDocumentId}
+              recognitionStatus={recognitionStatus}
+              canUpload={canUpload}
+              canDelete={canDelete}
+              canPreviewOrDownload={canPreviewOrDownload}
+              canRecognize={canRecognize}
+              onUpload={onUpload}
+              onDelete={onDelete}
+              onRecognize={onRecognize}
+            />
           );
         })}
       </div>
@@ -2335,6 +2328,16 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
     && !factorySupplierCosts([cost]).length
     && TAX_LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType || "")
   ));
+}
+
+function customsRecognitionStatusTextFromResult(result: CustomsRecognitionResult | null | undefined) {
+  if (!result) return "";
+  if (result.customsParseStatus === "FAILED") return "未识别成功，请手工填写报关单号和申报日期";
+  const missing: string[] = [];
+  if (!result.customsDeclarationNo) missing.push("未识别到报关单号");
+  if (!result.customsDeclarationDate) missing.push("未识别到申报日期");
+  if (missing.length) return missing.join(" / ");
+  return "识别成功";
 }
 
 function upsertTaxDocument(documents: TaxDocument[], document: TaxDocument) {
