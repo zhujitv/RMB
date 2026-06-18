@@ -80,6 +80,7 @@ type TaxDocument = {
   uploadStatusLabel?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+  customsRecognition?: CustomsRecognitionResult;
 };
 
 type TaxCost = {
@@ -111,6 +112,45 @@ type TaxRefundDetail = TaxRefundRow & {
   costs?: TaxCost[];
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
 };
+
+type CustomsRecognitionResult = {
+  attempted?: boolean;
+  documentId?: string;
+  orderId?: string;
+  documentType?: string;
+  customsDeclarationNo?: string;
+  customsDeclarationDate?: string;
+  currentCustomsDeclarationNo?: string;
+  currentCustomsDeclarationDate?: string;
+  customsParseStatus?: string;
+  customsParseStatusLabel?: string;
+  customsParseMessage?: string;
+  applied?: boolean;
+  requiresConfirmation?: boolean;
+  conflictFields?: string[];
+  order?: TaxRefundDetail | null;
+};
+
+type UploadDocumentResponse = {
+  success?: boolean;
+  message?: string;
+  data?: TaxDocument;
+  document?: TaxDocument;
+  customsRecognition?: CustomsRecognitionResult;
+};
+
+type CustomsRecognitionResponse = {
+  success?: boolean;
+  message?: string;
+  data?: CustomsRecognitionResult;
+  customsRecognition?: CustomsRecognitionResult;
+  order?: TaxRefundDetail | null;
+};
+
+type CustomsFilePickerState = {
+  order: TaxRefundDetail;
+  documents: TaxDocument[];
+} | null;
 
 type TaxRefundResponse = {
   orders: TaxRefundRow[];
@@ -225,6 +265,9 @@ export function TaxRefundModule({
   const [cancelingArchiveId, setCancelingArchiveId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
+  const [recognizingDocumentId, setRecognizingDocumentId] = useState("");
+  const [recognitionStatusByDocument, setRecognitionStatusByDocument] = useState<Record<string, string>>({});
+  const [customsFilePicker, setCustomsFilePicker] = useState<CustomsFilePickerState>(null);
   const [manualShippingOrder, setManualShippingOrder] = useState<TaxRefundDetail | null>(null);
   const [manualShippingDraft, setManualShippingDraft] = useState<ManualShippingDraft | null>(null);
   const [manualShippingForm, setManualShippingForm] = useState<ManualShippingForm | null>(null);
@@ -409,6 +452,155 @@ export function TaxRefundModule({
     }
   }
 
+  function setDocumentRecognitionStatus(documentId: string, status: string) {
+    if (!documentId) return;
+    setRecognitionStatusByDocument((current) => ({ ...current, [documentId]: status }));
+  }
+
+  function customsRecognitionStatusText(result: CustomsRecognitionResult | null | undefined) {
+    if (!result) return "";
+    if (result.customsParseStatus === "FAILED") return "识别失败，请手工填写";
+    const missing: string[] = [];
+    if (!result.customsDeclarationNo) missing.push("未识别到报关单号");
+    if (!result.customsDeclarationDate) missing.push("未识别到申报日期");
+    if (missing.length) return missing.join(" / ");
+    return "识别成功";
+  }
+
+  function customsRecognitionDetails(result: CustomsRecognitionResult | null | undefined, includeCurrent = false) {
+    if (!result) return [];
+    return [
+      `识别到报关单号：${result.customsDeclarationNo || "未识别到报关单号"}`,
+      `识别到申报日期：${result.customsDeclarationDate || "未识别到申报日期"}`,
+      ...(includeCurrent ? [
+        `当前报关单号：${result.currentCustomsDeclarationNo || detail?.customsDeclarationNo || "-"}`,
+        `当前申报日期：${result.currentCustomsDeclarationDate || detail?.customsDeclarationDate || "-"}`,
+      ] : []),
+      result.customsParseMessage ? `识别结果：${result.customsParseMessage}` : "",
+    ].filter(Boolean);
+  }
+
+  async function applyRecognizedCustomsFields(orderId: string, result: CustomsRecognitionResult) {
+    const response = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "updateCustomsRecognition",
+        customsDeclarationNo: result.customsDeclarationNo || "",
+        customsDeclarationDate: result.customsDeclarationDate || "",
+      }),
+    });
+    if (response.success !== true) throw new Error(response.message || "报关单信息写入失败");
+  }
+
+  async function recognizeCustomsDocument(order: TaxRefundDetail, document: TaxDocument) {
+    if (!document.id) return;
+    setRecognizingDocumentId(document.id);
+    setDocumentRecognitionStatus(document.id, "识别中...");
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const preview = await apiJson<CustomsRecognitionResponse>("/api/tax-refunds/customs/reparse", {
+        method: "POST",
+        body: JSON.stringify({
+          orderId: order.id,
+          documentId: document.id,
+          documentType: "CUSTOMS_ENTRY_FORM",
+        }),
+      });
+      const result = preview.data || preview.customsRecognition;
+      if (!result) throw new Error(preview.message || "报关单识别失败");
+      const statusText = customsRecognitionStatusText(result);
+      setDocumentRecognitionStatus(document.id, statusText);
+      if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
+        setNotice(statusText || "识别失败，请手工填写");
+        return;
+      }
+      const hasCurrentFields = Boolean(order.customsDeclarationNo || order.customsDeclarationDate);
+      const confirmResult = await requestConfirmation({
+        title: hasCurrentFields ? "当前订单已有报关单信息" : "识别到报关单信息",
+        message: hasCurrentFields
+          ? "当前订单已有报关单信息，是否使用本次识别结果覆盖？"
+          : "是否写入当前订单退税资料？",
+        details: customsRecognitionDetails({
+          ...result,
+          currentCustomsDeclarationNo: order.customsDeclarationNo || result.currentCustomsDeclarationNo || "",
+          currentCustomsDeclarationDate: order.customsDeclarationDate || result.currentCustomsDeclarationDate || "",
+        }, hasCurrentFields),
+        confirmLabel: hasCurrentFields ? "覆盖并写入" : "写入退税资料",
+        cancelLabel: "取消",
+        variant: hasCurrentFields ? "warning" : "default",
+      });
+      if (!confirmResult.confirmed) {
+        setNotice("已识别报关单信息，未写入退税资料。");
+        return;
+      }
+      setRecognizingDocumentId(document.id);
+      setDocumentRecognitionStatus(document.id, "识别中...");
+      await applyRecognizedCustomsFields(order.id, result);
+      setDocumentRecognitionStatus(document.id, "识别成功");
+      await fetchDetail(order.id);
+      await loadRows(page, submittedKeyword, mode);
+      setNotice("报关单信息已写入当前订单退税资料");
+    } catch (recognizeError) {
+      setDocumentRecognitionStatus(document.id, "识别失败，请手工填写");
+      setDetailError(recognizeError instanceof Error ? recognizeError.message : "报关单识别失败，请手工填写");
+    } finally {
+      setRecognizingDocumentId("");
+    }
+  }
+
+  async function handleUploadedCustomsRecognition(orderId: string, document: TaxDocument, result: CustomsRecognitionResult | null | undefined) {
+    if (!result?.attempted || !document.id) {
+      setNotice("报关单已上传");
+      return;
+    }
+    const statusText = customsRecognitionStatusText(result);
+    setDocumentRecognitionStatus(document.id, statusText);
+    if (result.requiresConfirmation) {
+      const confirmResult = await requestConfirmation({
+        title: "当前订单已有报关单信息",
+        message: "当前订单已有报关单信息，是否使用本次识别结果覆盖？",
+        details: customsRecognitionDetails(result, true),
+        confirmLabel: "覆盖并写入",
+        cancelLabel: "保留原信息",
+        variant: "warning",
+      });
+      if (!confirmResult.confirmed) {
+        setNotice("报关单已上传，已识别结果但未覆盖当前报关单信息。");
+        return;
+      }
+      setRecognizingDocumentId(document.id);
+      setDocumentRecognitionStatus(document.id, "识别中...");
+      const override = await apiJson<CustomsRecognitionResponse>(`/api/order-documents/${encodeURIComponent(document.id)}/recognize-customs`, {
+        method: "POST",
+        body: JSON.stringify({ confirmOverride: true }),
+      });
+      const overrideResult = override.data || override.customsRecognition;
+      setDocumentRecognitionStatus(document.id, customsRecognitionStatusText(overrideResult) || "识别成功");
+      setNotice("报关单已上传，识别结果已覆盖写入退税资料。");
+      return;
+    }
+    if (result.customsParseStatus === "SUCCESS" || result.customsParseStatus === "PARTIAL") {
+      setNotice(result.applied ? "报关单已上传，识别结果已同步到退税资料。" : "报关单已上传，识别结果未写入退税资料。");
+    } else {
+      setNotice("报关单已上传，但未识别到报关单号或申报日期，请手工填写");
+    }
+  }
+
+  function recognizeFromUploadedCustoms(order: TaxRefundDetail) {
+    const documents = customsEntryDocuments(order.documents || []);
+    if (!documents.length) {
+      setDetailError("请先上传报关单 PDF，再识别报关信息。");
+      return;
+    }
+    if (documents.length === 1) {
+      void recognizeCustomsDocument(order, documents[0]);
+      return;
+    }
+    setCustomsFilePicker({ order, documents });
+  }
+
   async function submitTaxRefund(row: TaxRefundRow) {
     const completeness = row.documentCompleteness || {};
     const completed = Number(completeness.completed || 0);
@@ -553,10 +745,11 @@ export function TaxRefundModule({
   async function uploadDocument(orderId: string, documentType: string, file: File | null, scope: UploadScope = {}) {
     if (!file) return;
     const uploadKey = uploadScopeKey(orderId, documentType, scope);
+    const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
     setUploadingKey(uploadKey);
     setDetailError("");
     setError("");
-    setNotice("");
+    setNotice(isCustomsDeclaration ? "识别中..." : "");
     try {
       if (!isPdfFile(file)) {
         throw new Error("只能上传 PDF 文件");
@@ -573,17 +766,23 @@ export function TaxRefundModule({
         credentials: "include",
         body: formData,
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({})) as UploadDocumentResponse;
       if (!response.ok || data?.success !== true) {
         throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
       }
+      const uploadedDocument = data.document || data.data;
+      if (isCustomsDeclaration && uploadedDocument?.id) {
+        await handleUploadedCustomsRecognition(orderId, uploadedDocument, uploadedDocument.customsRecognition || data.customsRecognition || null);
+      } else {
+        setNotice("资料文件已上传");
+      }
       await fetchDetail(orderId);
       await loadRows(page, submittedKeyword, mode);
-      setNotice("资料文件已上传");
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
       setUploadingKey("");
+      setRecognizingDocumentId("");
     }
   }
 
@@ -826,6 +1025,8 @@ export function TaxRefundModule({
           cancelingArchive={cancelingArchiveId === detailRow.id}
           uploadingKey={uploadingKey}
           deletingDocumentId={deletingDocumentId}
+          recognizingDocumentId={recognizingDocumentId}
+          recognitionStatusByDocument={recognitionStatusByDocument}
           canSendShippingDocuments={canSendShippingDocuments}
           onClose={closeDetailDrawer}
           onDownloadPackage={() => void downloadPackage(detailRow)}
@@ -838,6 +1039,8 @@ export function TaxRefundModule({
           }}
           onUpload={uploadDocument}
           onDelete={deleteDocument}
+          onRecognizeCustomsDocument={recognizeCustomsDocument}
+          onRecognizeFromUploadedCustoms={recognizeFromUploadedCustoms}
           onOpenManualShippingDocuments={openManualShippingDocuments}
           onOpenDomesticLogistics={() => {
             const keywordValue = (detail?.orderNo || detailRow?.orderNo || detailRow.id || "").trim();
@@ -845,6 +1048,17 @@ export function TaxRefundModule({
           }}
           currentUserRole={currentUser.role}
           canWriteDocuments={canWriteDocuments}
+        />
+      ) : null}
+      {customsFilePicker ? (
+        <CustomsFilePickerDialog
+          state={customsFilePicker}
+          recognizingDocumentId={recognizingDocumentId}
+          onClose={() => setCustomsFilePicker(null)}
+          onSelect={(order, document) => {
+            setCustomsFilePicker(null);
+            void recognizeCustomsDocument(order, document);
+          }}
         />
       ) : null}
       {manualShippingOrder ? (
@@ -943,6 +1157,8 @@ function TaxRefundDetailDrawer({
   cancelingArchive,
   uploadingKey,
   deletingDocumentId,
+  recognizingDocumentId,
+  recognitionStatusByDocument,
   canSendShippingDocuments,
   onClose,
   onDownloadPackage,
@@ -951,6 +1167,8 @@ function TaxRefundDetailDrawer({
   onCustomsSaved,
   onUpload,
   onDelete,
+  onRecognizeCustomsDocument,
+  onRecognizeFromUploadedCustoms,
   onOpenManualShippingDocuments,
   onOpenDomesticLogistics,
   currentUserRole,
@@ -966,6 +1184,8 @@ function TaxRefundDetailDrawer({
   cancelingArchive: boolean;
   uploadingKey: string;
   deletingDocumentId: string;
+  recognizingDocumentId: string;
+  recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
   onClose: () => void;
   onDownloadPackage: () => void;
@@ -974,6 +1194,8 @@ function TaxRefundDetailDrawer({
   onCustomsSaved: (orderId: string) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
+  onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
+  onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
@@ -1024,10 +1246,14 @@ function TaxRefundDetailDrawer({
             fallback={row}
             uploadingKey={uploadingKey}
             deletingDocumentId={deletingDocumentId}
+            recognizingDocumentId={recognizingDocumentId}
+            recognitionStatusByDocument={recognitionStatusByDocument}
             readOnly={readOnly}
             onCustomsSaved={onCustomsSaved}
             onUpload={onUpload}
             onDelete={onDelete}
+            onRecognizeCustomsDocument={onRecognizeCustomsDocument}
+            onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
             canSendShippingDocuments={canSendShippingDocuments}
             onOpenManualShippingDocuments={onOpenManualShippingDocuments}
             onOpenDomesticLogistics={onOpenDomesticLogistics}
@@ -1048,10 +1274,14 @@ function TaxRefundDetailPanel({
   fallback,
   uploadingKey,
   deletingDocumentId,
+  recognizingDocumentId,
+  recognitionStatusByDocument,
   readOnly,
   onCustomsSaved,
   onUpload,
   onDelete,
+  onRecognizeCustomsDocument,
+  onRecognizeFromUploadedCustoms,
   canSendShippingDocuments,
   onOpenManualShippingDocuments,
   onOpenDomesticLogistics,
@@ -1064,10 +1294,14 @@ function TaxRefundDetailPanel({
   fallback: TaxRefundRow;
   uploadingKey: string;
   deletingDocumentId: string;
+  recognizingDocumentId: string;
+  recognitionStatusByDocument: Record<string, string>;
   readOnly: boolean;
   onCustomsSaved: (orderId: string) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
+  onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
+  onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   canSendShippingDocuments: boolean;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenDomesticLogistics?: () => void;
@@ -1081,6 +1315,7 @@ function TaxRefundDetailPanel({
   const groups = groupDocuments(detail.documents || []);
   const domesticRemark = detail.domesticLogisticsInfo?.exportInvoiceRemark || detail.domesticLogisticsInfo?.remarkText || "";
   const factoryCosts = factorySupplierCosts(detail.costs || []);
+  const canRecognizeCustoms = canRecognizeTaxCustoms(currentUserRole, canWriteDocuments, readOnly);
   const showTaxArchiveRecord = Boolean(
     detail.taxRefundStatus === "SUBMITTED"
     || fallback.taxRefundStatus === "SUBMITTED"
@@ -1136,7 +1371,14 @@ function TaxRefundDetailPanel({
             </button>
           </div>
         ) : null}
-        <CustomsRecognitionForm detail={detail} readOnly={readOnly} onSaved={onCustomsSaved} />
+        <CustomsRecognitionForm
+          detail={detail}
+          readOnly={readOnly}
+          recognizing={Boolean(recognizingDocumentId)}
+          canRecognize={canRecognizeCustoms}
+          onSaved={onCustomsSaved}
+          onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
+        />
         <div className={styles.documentGroupCard}>
           <strong>出口资料上传</strong>
           {TAX_EXPORT_UPLOAD_TYPES.map((documentType) => (
@@ -1156,25 +1398,21 @@ function TaxRefundDetailPanel({
             />
           ))}
         </div>
-        <div className={styles.documentGroupCard}>
-          <strong>报关资料上传</strong>
-          {TAX_CUSTOMS_UPLOAD_TYPES.map((documentType) => (
-            <TaxUploadItem
-              key={documentType.value}
-              targetKey={taxDocumentTargetKey(documentType.value)}
-              orderId={detail.id}
-              type={documentType.value}
-              label={documentType.label}
-              documents={(detail.documents || []).filter((document) => document.documentType === documentType.value && document.uploadStatus === "SUCCESS")}
-              uploading={uploadingKey === `${detail.id}:${documentType.value}`}
-              deletingDocumentId={deletingDocumentId}
-              canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
-              canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
-              onUpload={onUpload}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
+        <CustomsUploadCard
+          order={detail}
+          documents={detail.documents || []}
+          uploadingKey={uploadingKey}
+          deletingDocumentId={deletingDocumentId}
+          recognizingDocumentId={recognizingDocumentId}
+          recognitionStatusByDocument={recognitionStatusByDocument}
+          currentUserRole={currentUserRole}
+          canWriteDocuments={canWriteDocuments}
+          canRecognizeCustoms={canRecognizeCustoms}
+          readOnly={readOnly}
+          onUpload={onUpload}
+          onDelete={onDelete}
+          onRecognize={onRecognizeCustomsDocument}
+        />
         <div className={styles.documentGroupCard} id={taxTargetDomId("factory-section")}>
           <strong>工厂资料上传</strong>
           {factoryCosts.length ? factoryCosts.map((cost) => (
@@ -1437,11 +1675,17 @@ function TaxUploadItem({
 function CustomsRecognitionForm({
   detail,
   readOnly,
+  recognizing,
+  canRecognize,
   onSaved,
+  onRecognizeFromUploadedCustoms,
 }: {
   detail: TaxRefundDetail;
   readOnly: boolean;
+  recognizing: boolean;
+  canRecognize: boolean;
   onSaved: (orderId: string) => Promise<void>;
+  onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
 }) {
   const [customsDeclarationNo, setCustomsDeclarationNo] = useState(detail.customsDeclarationNo || "");
   const [customsDeclarationDate, setCustomsDeclarationDate] = useState(detail.customsDeclarationDate || "");
@@ -1508,12 +1752,248 @@ function CustomsRecognitionForm({
       <div className={styles.customsFormActions}>
         {message ? <span>{message}</span> : <span>保存后将同步更新退税资料列表的申报日期。</span>}
         {readOnly ? null : (
-          <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
-            {saving ? "保存中..." : "保存报关单信息"}
-          </button>
+          <div className={styles.inlineActionGroup}>
+            {canRecognize ? (
+              <button className={styles.secondaryButton} type="button" disabled={saving || recognizing} onClick={() => onRecognizeFromUploadedCustoms(detail)}>
+                {recognizing ? "识别中..." : "从已上传报关单识别"}
+              </button>
+            ) : null}
+            <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
+              {saving ? "保存中..." : "保存报关单信息"}
+            </button>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function CustomsUploadCard({
+  order,
+  documents,
+  uploadingKey,
+  deletingDocumentId,
+  recognizingDocumentId,
+  recognitionStatusByDocument,
+  currentUserRole,
+  canWriteDocuments,
+  canRecognizeCustoms,
+  readOnly,
+  onUpload,
+  onDelete,
+  onRecognize,
+}: {
+  order: TaxRefundDetail;
+  documents: TaxDocument[];
+  uploadingKey: string;
+  deletingDocumentId: string;
+  recognizingDocumentId: string;
+  recognitionStatusByDocument: Record<string, string>;
+  currentUserRole: string;
+  canWriteDocuments: boolean;
+  canRecognizeCustoms: boolean;
+  readOnly: boolean;
+  onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
+  onDelete: (orderId: string, document: TaxDocument) => void;
+  onRecognize: (order: TaxRefundDetail, document: TaxDocument) => void;
+}) {
+  const canPreviewOrDownload = ["管理员", "财务", "物流资料录入员", "物流供应商"].includes(currentUserRole);
+  return (
+    <div className={styles.customsUploadCard} id={taxTargetDomId("customs-documents")}>
+      <strong>报关资料上传</strong>
+      <div className={styles.customsUploadBlocks}>
+        {TAX_CUSTOMS_UPLOAD_TYPES.map((documentType) => {
+          const matchedDocuments = documents.filter((document) => (
+            document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
+          ));
+          const canUpload = canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly);
+          const canDelete = canDeleteTaxDocument(canWriteDocuments, readOnly);
+          const uploading = uploadingKey === uploadScopeKey(order.id, documentType.value);
+          const canRecognize = documentType.value === "CUSTOMS_ENTRY_FORM" && canRecognizeCustoms;
+          return (
+            <div className={styles.customsDocumentBlock} key={documentType.value} id={taxTargetDomId(taxDocumentTargetKey(documentType.value))}>
+              <div className={styles.customsDocumentBlockHeader}>
+                <div>
+                  <strong>{documentType.label}</strong>
+                  <span>{matchedDocuments.length ? `已上传 ${matchedDocuments.length} 个文件` : "暂未上传"}</span>
+                </div>
+                {canUpload ? (
+                  <label className={styles.secondaryButton}>
+                    {uploading ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...") : "选择PDF"}
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      disabled={uploading}
+                      hidden
+                      onChange={(event) => {
+                        onUpload(order.id, documentType.value, event.target.files?.[0] || null);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+              <DocumentFileTable
+                order={order}
+                documents={matchedDocuments}
+                deletingDocumentId={deletingDocumentId}
+                recognizingDocumentId={recognizingDocumentId}
+                recognitionStatusByDocument={recognitionStatusByDocument}
+                canPreviewOrDownload={canPreviewOrDownload}
+                canDelete={canDelete}
+                canRecognize={canRecognize}
+                onDelete={onDelete}
+                onRecognize={onRecognize}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DocumentFileTable({
+  order,
+  documents,
+  deletingDocumentId,
+  recognizingDocumentId,
+  recognitionStatusByDocument,
+  canPreviewOrDownload,
+  canDelete,
+  canRecognize,
+  onDelete,
+  onRecognize,
+}: {
+  order: TaxRefundDetail;
+  documents: TaxDocument[];
+  deletingDocumentId: string;
+  recognizingDocumentId: string;
+  recognitionStatusByDocument: Record<string, string>;
+  canPreviewOrDownload: boolean;
+  canDelete: boolean;
+  canRecognize: boolean;
+  onDelete: (orderId: string, document: TaxDocument) => void;
+  onRecognize: (order: TaxRefundDetail, document: TaxDocument) => void;
+}) {
+  if (!documents.length) {
+    return <div className={styles.emptyState}>暂未上传</div>;
+  }
+  return (
+    <div className={styles.documentFileTableWrap}>
+      <table className={styles.documentFileTable}>
+        <thead>
+          <tr>
+            <th>文件名</th>
+            <th>上传人</th>
+            <th>上传时间</th>
+            <th>识别状态</th>
+            <th>预览</th>
+            <th>下载</th>
+            <th>删除</th>
+            {canRecognize ? <th>识别报关信息</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {documents.map((document) => {
+            const recognizing = recognizingDocumentId === document.id;
+            const recognitionStatus = recognizing
+              ? "识别中..."
+              : recognitionStatusByDocument[document.id] || "-";
+            return (
+              <tr key={document.id}>
+                <td title={document.fileName || "-"}>{document.fileName || "-"}</td>
+                <td>{document.uploadedByName || "-"}</td>
+                <td>{formatDateTime(document.uploadedAt)}</td>
+                <td><span className={styles.recognitionStatus}>{recognitionStatus}</span></td>
+                <td>
+                  {canPreviewOrDownload ? (
+                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                  ) : <span className={styles.mutedText}>-</span>}
+                </td>
+                <td>
+                  {canPreviewOrDownload ? (
+                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                  ) : <span className={styles.mutedText}>-</span>}
+                </td>
+                <td>
+                  {canDelete ? (
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={deletingDocumentId === document.id}
+                      onClick={() => onDelete(order.id, document)}
+                    >
+                      {deletingDocumentId === document.id ? "删除中..." : "删除"}
+                    </button>
+                  ) : <span className={styles.mutedText}>-</span>}
+                </td>
+                {canRecognize ? (
+                  <td>
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={recognizing}
+                      onClick={() => onRecognize(order, document)}
+                    >
+                      {recognizing ? "识别中..." : "识别报关信息"}
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CustomsFilePickerDialog({
+  state,
+  recognizingDocumentId,
+  onClose,
+  onSelect,
+}: {
+  state: NonNullable<CustomsFilePickerState>;
+  recognizingDocumentId: string;
+  onClose: () => void;
+  onSelect: (order: TaxRefundDetail, document: TaxDocument) => void;
+}) {
+  return (
+    <DismissibleLayer
+      ariaLabel="选择报关单文件"
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={styles.customsFilePickerDialog}
+      dismissible
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+          <div className={styles.modalHeader}>
+            <div>
+              <strong>选择报关单文件</strong>
+              <span>{state.order.orderNo || "-"} · 共 {state.documents.length} 个报关单文件</span>
+            </div>
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+          </div>
+          <div className={styles.customsFilePickerList}>
+            {state.documents.map((document) => (
+              <button
+                key={document.id}
+                className={styles.customsFilePickerItem}
+                type="button"
+                disabled={recognizingDocumentId === document.id}
+                onClick={() => onSelect(state.order, document)}
+              >
+                <span>{document.fileName || "-"}</span>
+                <small>{document.uploadedByName || "-"} · {formatDateTime(document.uploadedAt)}</small>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </DismissibleLayer>
   );
 }
 
@@ -1761,6 +2241,12 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
   ));
 }
 
+function customsEntryDocuments(documents: TaxDocument[]) {
+  return documents.filter((document) => (
+    document.documentType === "CUSTOMS_ENTRY_FORM" && document.uploadStatus === "SUCCESS"
+  ));
+}
+
 function logisticsInvoiceLabel(cost: Pick<TaxCost, "costType">) {
   if (["拖车费", "国内物流费", "国内拖车费"].includes(cost.costType || "")) return "拖车费发票";
   if (cost.costType === "报关费") return "报关费发票";
@@ -1781,6 +2267,10 @@ function canUploadTaxDocument(role: string, canWriteDocuments: boolean, document
 
 function canDeleteTaxDocument(canWriteDocuments: boolean, readOnly?: boolean) {
   return !readOnly && canWriteDocuments;
+}
+
+function canRecognizeTaxCustoms(role: string, canWriteDocuments: boolean, readOnly?: boolean) {
+  return !readOnly && canWriteDocuments && ["管理员", "财务", "业务员"].includes(role);
 }
 
 function uploadScopeKey(orderId: string, documentType: string, scope: UploadScope = {}) {
