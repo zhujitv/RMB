@@ -4,10 +4,12 @@ import test from "node:test";
 
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.ts", "utf8");
 const orderDocumentRoute = readFileSync("app/api/order-documents/[id]/route.ts", "utf8");
+const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
+const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
@@ -50,9 +52,26 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 test("tax refund customs recognition stays focused on current declaration fields", () => {
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
   assert.match(taxRefundModule, /重新上传报关单 PDF/);
-  assert.match(taxRefundModule, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
-  assert.match(taxRefundModule, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
+  assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
+  assert.match(customsRecognitionService, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
+  assert.match(customsRecognitionService, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
   assert.doesNotMatch(taxRefundModule, /运输方式|车牌号|起运地|到达地|货物名称/);
+});
+
+test("tax refund re-recognition uses order route and surfaces specific backend reasons", () => {
+  assert.match(taxRefundRecognizeRoute, /recognizeOrderCustomsDeclaration\(request, actor, orderId\)/);
+  assert.match(taxRefundRecognizeRoute, /apiError\(error, "重新识别报关单失败"\)/);
+  assert.match(taxRefundModule, /setDetailError\(message\)/);
+  assert.doesNotMatch(taxRefundModule, /\/api\/tax-refunds\/customs\/reparse/);
+  assert.match(customsRecognitionService, /未找到报关单文件，请先上传报关单。/);
+  assert.match(customsRecognitionService, /文件不存在/);
+  assert.match(customsRecognitionService, /文件无法读取/);
+  assert.match(customsRecognitionService, /PDF没有可提取文字/);
+  assert.match(customsRecognitionService, /OCR未启用/);
+  assert.match(customsRecognitionService, /未识别到报关单号/);
+  assert.match(customsRecognitionService, /未识别到申报日期/);
+  assert.match(customsRecognitionService, /hasCustomsRecognitionValue\(fields\)/);
+  assert.match(customsRecognitionService, /customsUpdateData\(fields, status, message, source\)/);
 });
 
 test("admin can delete uploaded customs documents with confirmation", () => {

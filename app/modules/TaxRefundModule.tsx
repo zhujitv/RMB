@@ -467,52 +467,33 @@ export function TaxRefundModule({
     return "识别成功";
   }
 
-  async function applyRecognizedCustomsFields(orderId: string, result: CustomsRecognitionResult) {
-    const response = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        action: "updateCustomsRecognition",
-        customsDeclarationNo: result.customsDeclarationNo || "",
-        customsDeclarationDate: result.customsDeclarationDate || "",
-      }),
-    });
-    if (response.success !== true) throw new Error(response.message || "报关单信息写入失败");
-  }
-
-  async function recognizeCustomsDocument(order: TaxRefundDetail, document: TaxDocument) {
-    if (!document.id) return;
-    setRecognizingDocumentId(document.id);
-    setDocumentRecognitionStatus(document.id, "识别中...");
+  async function recognizeCustomsDocument(order: TaxRefundDetail, document?: TaxDocument) {
+    const recognitionKey = document?.id || order.id;
+    setRecognizingDocumentId(recognitionKey);
+    setDocumentRecognitionStatus(recognitionKey, "识别中...");
     setDetailError("");
     setError("");
     setNotice("");
     try {
-      const preview = await apiJson<CustomsRecognitionResponse>("/api/tax-refunds/customs/reparse", {
+      const response = await apiJson<CustomsRecognitionResponse>(`/api/tax-refund/${encodeURIComponent(order.id)}/recognize-customs-declaration`, {
         method: "POST",
-        body: JSON.stringify({
-          orderId: order.id,
-          documentId: document.id,
-          documentType: "CUSTOMS_ENTRY_FORM",
-        }),
       });
-      const result = preview.data || preview.customsRecognition;
-      if (!result) throw new Error(preview.message || "报关单识别失败");
+      const result = response.data || response.customsRecognition;
+      if (!result) throw new Error(response.message || "报关单识别失败");
       const statusText = customsRecognitionStatusText(result);
-      setDocumentRecognitionStatus(document.id, statusText);
+      setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText);
       if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
-        setNotice("未识别成功，请手工填写报关单号和申报日期");
+        setNotice(response.message || result.customsParseMessage || "未识别成功，请手工填写报关单号和申报日期");
         return;
       }
-      setRecognizingDocumentId(document.id);
-      setDocumentRecognitionStatus(document.id, "识别中...");
-      await applyRecognizedCustomsFields(order.id, result);
-      setDocumentRecognitionStatus(document.id, "识别成功");
+      setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText || "识别成功");
       await fetchDetail(order.id);
       await loadRows(page, submittedKeyword, mode);
-      setNotice("报关单信息已自动回填，并同步更新退税资料列表申报日期。");
+      setNotice(response.message || "报关单信息已自动回填，并同步更新退税资料列表申报日期。");
     } catch (recognizeError) {
-      setDocumentRecognitionStatus(document.id, "未识别成功，请手工填写报关单号和申报日期");
-      setDetailError(recognizeError instanceof Error ? recognizeError.message : "未识别成功，请手工填写报关单号和申报日期");
+      const message = recognizeError instanceof Error ? recognizeError.message : "未识别成功，请手工填写报关单号和申报日期";
+      setDocumentRecognitionStatus(recognitionKey, message);
+      setDetailError(message);
     } finally {
       setRecognizingDocumentId("");
     }
@@ -534,15 +515,15 @@ export function TaxRefundModule({
 
   function recognizeFromUploadedCustoms(order: TaxRefundDetail) {
     const documents = customsEntryDocuments(order.documents || []);
-    if (!documents.length) {
-      setDetailError("请先上传报关单 PDF，再识别报关信息。");
-      return;
-    }
     if (documents.length === 1) {
       void recognizeCustomsDocument(order, documents[0]);
       return;
     }
-    setCustomsFilePicker({ order, documents });
+    if (documents.length > 1) {
+      setCustomsFilePicker({ order, documents });
+      return;
+    }
+    void recognizeCustomsDocument(order);
   }
 
   async function submitTaxRefund(row: TaxRefundRow) {
@@ -1699,7 +1680,7 @@ function CustomsRecognitionForm({
           <div className={styles.inlineActionGroup}>
             {canRecognize ? (
               <button className={styles.secondaryButton} type="button" disabled={saving || recognizing} onClick={() => onRecognizeFromUploadedCustoms(detail)}>
-                {recognizing ? "识别中..." : "从已上传报关单识别"}
+                {recognizing ? "识别中..." : "重新识别报关单"}
               </button>
             ) : null}
             <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
@@ -1840,7 +1821,7 @@ function DocumentFileTable({
             <th>预览</th>
             <th>下载</th>
             <th>删除</th>
-            {canRecognize ? <th>识别报关信息</th> : null}
+            {canRecognize ? <th>重新识别</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -1885,7 +1866,7 @@ function DocumentFileTable({
                       disabled={recognizing}
                       onClick={() => onRecognize(order, document)}
                     >
-                      {recognizing ? "识别中..." : "识别报关信息"}
+                      {recognizing ? "识别中..." : "重新识别报关单"}
                     </button>
                   </td>
                 ) : null}

@@ -111,8 +111,8 @@ function mergeCustomsFields(parsedFields = {}, before = null, force = false) {
   return { fields, preserved, conflictFields, currentFields };
 }
 
-async function parseCustomsDocumentBuffer(buffer, document = {}) {
-  const result = await customsDeclarationParser.parseCustomsDeclarationPdfBuffer(buffer, document);
+async function parseCustomsDocumentBuffer(buffer, document = {}, options = {}) {
+  const result = await customsDeclarationParser.parseCustomsDeclarationPdfBuffer(buffer, options);
   const fields = {
     customsDeclarationNo: result.customsDeclarationNo || "",
     customsDeclarationDate: result.customsDeclarationDate || "",
@@ -154,6 +154,42 @@ function wrapCustomsFileReadError(error, document = {}) {
   const wrapped = codedError(CUSTOMS_FILE_READ_FAILED_MESSAGE, error?.status || 500, "CUSTOMS_PDF_READ_FAILED");
   wrapped.details = customsFailureDetails(error, document);
   return wrapped;
+}
+
+function isMissingCustomsFileError(error = {}) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  return [
+    "CUSTOMS_FILE_LOCATION_MISSING",
+    "R2_OBJECT_NOT_FOUND",
+    "ENOENT",
+  ].includes(code)
+    || /ENOENT|no such file|对象不存在|key 缺失|存储信息缺失|NoSuchKey/i.test(message);
+}
+
+function specificCustomsFileReadError(error = {}) {
+  const wrappedCode = String(error?.code || "");
+  const details = error?.details || {};
+  const sourceCode = String(details?.errorCode || "");
+  const sourceMessage = String(details?.errorMessage || error?.message || "");
+  if (isMissingCustomsFileError({ code: sourceCode || wrappedCode, message: sourceMessage })) {
+    return codedError("文件不存在", 404, "CUSTOMS_FILE_NOT_FOUND");
+  }
+  return codedError("文件无法读取", error?.status || 500, "CUSTOMS_FILE_UNREADABLE");
+}
+
+function specificCustomsParseError(error = {}) {
+  if (error?.code === "CUSTOMS_PDF_NO_TEXT") {
+    return codedError("PDF没有可提取文字，OCR未启用", 422, "CUSTOMS_PDF_NO_TEXT");
+  }
+  return codedError(error?.message || "文件无法读取", error?.status || 500, error?.code || "CUSTOMS_PARSE_FAILED");
+}
+
+function missingCustomsFieldMessages(fields = {}) {
+  const missing = [];
+  if (!fields.customsDeclarationNo) missing.push("未识别到报关单号");
+  if (!fields.customsDeclarationDate) missing.push("未识别到申报日期");
+  return missing;
 }
 
 async function readCustomsDeclarationPdfBuffer(document = {}) {
@@ -226,7 +262,7 @@ async function latestCustomsEntryDocument(orderId) {
   return prisma.orderDocument.findFirst({
     where: { orderId, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS", deletedAt: null },
     include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
   });
 }
 
@@ -490,6 +526,92 @@ export async function recognizeUploadedCustomsDocument(request, actor, documentI
     replaceWithParsedFields: true,
     clearFieldsOnFailure: true,
     returnDetails: true,
+  });
+}
+
+export async function recognizeOrderCustomsDeclaration(request, actor, orderId) {
+  if (!["管理员", "财务", "业务员"].includes(actor?.role)) {
+    throw permissionError("没有权限重新识别报关单信息", 403);
+  }
+  if (actor?.role === LOGISTICS_OPERATOR_ROLE) throw permissionError("物流供应商不能重新识别报关单信息");
+  const before = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+  });
+  if (!before) throw permissionError("应收订单不存在或无权修改", 404);
+  const document = await latestCustomsEntryDocument(orderId);
+  if (!document) {
+    throw codedError("未找到报关单文件，请先上传报关单。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
+  }
+  if (!document.storageKey && !document.filePath && !document.fileUrl) {
+    throw codedError("文件不存在", 404, "CUSTOMS_FILE_NOT_FOUND");
+  }
+
+  let buffer;
+  try {
+    buffer = await readCustomsDeclarationPdfBuffer(document);
+  } catch (error) {
+    const specificError = specificCustomsFileReadError(error);
+    await applyCustomsParseFailure(request, actor, orderId, specificError.message, specificError.code, "重新识别失败", {
+      allowManualFailure: true,
+      publicMessage: specificError.message,
+      technicalError: error,
+      document,
+    });
+    throw specificError;
+  }
+
+  let parsed;
+  try {
+    parsed = await parseCustomsDocumentBuffer(buffer, document, { requireText: true });
+  } catch (error) {
+    const specificError = specificCustomsParseError(error);
+    await applyCustomsParseFailure(request, actor, orderId, specificError.message, specificError.code, "重新识别失败", {
+      allowManualFailure: true,
+      publicMessage: specificError.message,
+      technicalError: error,
+      document,
+    });
+    throw specificError;
+  }
+
+  const { fields, source } = parsed;
+  const missing = missingCustomsFieldMessages(fields);
+  if (!hasCustomsRecognitionValue(fields)) {
+    const message = missing.join("；") || "未识别到报关单号；未识别到申报日期";
+    await applyCustomsParseFailure(request, actor, orderId, message, "CUSTOMS_FIELDS_NOT_FOUND", "重新识别失败", {
+      allowManualFailure: true,
+      clearFields: true,
+      publicMessage: message,
+      document,
+    });
+    throw codedError(message, 422, "CUSTOMS_FIELDS_NOT_FOUND");
+  }
+
+  const status = customsDeclarationParser.customsParseStatusFromFields(fields);
+  const message = missing.length
+    ? `已识别部分信息，${missing.join("；")}。`
+    : (parsed.message || "识别成功");
+  const order = await prisma.receivableOrder.update({
+    where: { id: orderId },
+    data: customsUpdateData(fields, status, message, source),
+    include: includeOrderRelations(),
+  });
+  await runNonCriticalTask("重新识别报关单日志写入", () => writeAudit(request, actor, status === "SUCCESS" ? "重新识别报关单信息" : "重新识别报关单部分信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
+    ...serializeCustomsRecognition(order),
+    documentId: document.id,
+    uploadSource: document.uploadSource || "",
+    recognitionSource: source,
+  }));
+  const notifiedOrder = await tryAutoShippingDocumentsNotification(request, actor, order.id);
+  const serializedOrder = notifiedOrder || serializeOrder(order);
+  return buildCustomsRecognitionResult({
+    document,
+    parsedFields: fields,
+    currentFields: currentCustomsFields(before),
+    status,
+    message,
+    applied: true,
+    order: serializedOrder,
   });
 }
 

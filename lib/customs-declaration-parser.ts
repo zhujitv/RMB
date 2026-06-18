@@ -26,6 +26,16 @@ type PdfParseConstructor = new (input: { data: Buffer }) => {
   destroy(): Promise<void>;
 };
 
+type PdfParseOptions = {
+  requireText?: boolean;
+};
+
+type ParserError = Error & {
+  status?: number;
+  code?: string;
+  expose?: boolean;
+};
+
 const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
 const NON_DECLARATION_DATE_LABEL_PATTERN = /(出口|录入|打印|放行|签发)日期/g;
@@ -73,7 +83,7 @@ export function parseCustomsDeclarationText(text = ""): CustomsParseResult {
   };
 }
 
-export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined) {
+export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
   const PDFParse = await loadPdfParse();
   const pdfData = Buffer.isBuffer(buffer)
     ? buffer
@@ -87,7 +97,11 @@ export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuf
   });
   try {
     const result = await parser.getText();
-    return parseCustomsDeclarationText(result?.text || "");
+    const normalizedText = normalizePdfText(result?.text || "");
+    if (options.requireText && !normalizedText) {
+      throw parserError("PDF没有可提取文字", 422, "CUSTOMS_PDF_NO_TEXT");
+    }
+    return parseCustomsDeclarationText(normalizedText);
   } finally {
     await parser.destroy();
   }
@@ -137,6 +151,14 @@ async function loadPdfParse(): Promise<PdfParseConstructor> {
 
 function escapeRegExp(value = "") {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parserError(message: string, status: number, code: string): ParserError {
+  const error: ParserError = new Error(message);
+  error.status = status;
+  error.code = code;
+  error.expose = true;
+  return error;
 }
 
 function compactForNearbySearch(text = "") {
