@@ -7,6 +7,7 @@ import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, useCo
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
+import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 
 type DocumentCompleteness = {
@@ -1743,7 +1744,7 @@ function FileUploadCard({
       )}
       {canUpload ? (
         <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
-          {uploading ? "上传中..." : (uploaded ? "替换当前PDF" : "上传PDF文件")}
+          {uploading ? "上传中..." : UPLOAD_REPLACE_TEXT}
           <input
             type="file"
             accept="application/pdf,.pdf"

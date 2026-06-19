@@ -97,7 +97,17 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
     cargoName: optional(input.cargoDescription || input.cargoName),
     remark: optional(input.remark),
   };
-  const items = rawItems.length ? rawItems : [fallback];
+  const meaningfulRawItems = rawItems.filter((item) => [
+    item.containerNo,
+    item.truckPlateNo,
+    item.trailerPlateNo,
+    item.departureDate,
+    item.departurePlace,
+    item.arrivalPlace || item.destinationPlace,
+    item.cargoName || item.cargoDescription,
+    item.remark,
+  ].some((value) => nonEmpty(value)));
+  const items = meaningfulRawItems.length ? meaningfulRawItems : [fallback];
   const normalized = items.map((item, index) => {
     const truckPlateNo = requireText(item.truckPlateNo, transportType === "MULTIMODAL" ? `第 ${index + 1} 行首程车牌号` : `第 ${index + 1} 行车牌号`);
     const departureDate = dateFromInput(item.departureDate);

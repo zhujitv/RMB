@@ -12,6 +12,7 @@ const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
 const menuFile = readFileSync("app/menu.ts", "utf8");
 const ledgerRoute = readFileSync("app/api/ledger/route.ts", "utf8");
 const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
+const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
 
 function roleMenuLine(source: string, role: string) {
   return source.split("\n").find((line: string) => line.includes(`${role}: [`)) || "";
@@ -55,4 +56,15 @@ test("workspace boot order enters loading before permission checks", () => {
   assert.match(workspaceShell, /if \(auth\.status === "loading"\) \{\s*return <LoadingPanel message=\{auth\.message\} \/>\s*;\s*\}/);
   assert.match(workspaceShell, /if \(auth\.status !== "ready"\) return;/);
   assert.match(workspaceShell, /if \(!allowedMenuKeys\.has\(activeMenu\)\) setActiveMenu\("welcome"\);/);
+});
+
+test("same-origin guard allows localhost and 127 dev aliases without disabling production checks", () => {
+  assert.match(sharedAuth, /function localDevelopmentAliases/);
+  assert.match(sharedAuth, /\["localhost", "127\.0\.0\.1"\]\.includes\(url\.hostname\)/);
+  assert.match(sharedAuth, /http:\/\/localhost/);
+  assert.match(sharedAuth, /http:\/\/127\.0\.0\.1/);
+  assert.match(sharedAuth, /process\.env\.NODE_ENV === "production" && !origin && !referer/);
+  assert.match(sharedAuth, /NEXT_PUBLIC_APP_URL/);
+  assert.match(sharedAuth, /APP_URL/);
+  assert.match(sharedAuth, /ALLOWED_ORIGINS/);
 });

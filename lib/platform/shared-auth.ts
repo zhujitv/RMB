@@ -205,6 +205,41 @@ export function headerOrigin(value) {
   }
 }
 
+function originListFromEnv() {
+  return [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.APP_BASE_URL,
+    process.env.ALLOWED_ORIGINS,
+  ].flatMap((value) => String(value || "").split(/[\s,;]+/)).map(headerOrigin).filter(Boolean);
+}
+
+function localDevelopmentAliases(origin) {
+  if (process.env.NODE_ENV === "production") return [];
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname)) return [];
+    const port = url.port ? `:${url.port}` : "";
+    return [`http://localhost${port}`, `http://127.0.0.1${port}`];
+  } catch {
+    return [];
+  }
+}
+
+function allowedRequestOrigins(expectedOrigin) {
+  return new Set([
+    expectedOrigin,
+    ...originListFromEnv(),
+    ...localDevelopmentAliases(expectedOrigin),
+    ...originListFromEnv().flatMap(localDevelopmentAliases),
+  ].filter(Boolean));
+}
+
+export function isAllowedRequestOrigin(candidateOrigin, expectedOrigin) {
+  if (!candidateOrigin) return false;
+  return allowedRequestOrigins(expectedOrigin).has(candidateOrigin);
+}
+
 export function assertSameOriginRequest(request) {
   const method = String(request?.method || "GET").toUpperCase();
   if (!UNSAFE_METHODS.includes(method)) return;
@@ -212,10 +247,10 @@ export function assertSameOriginRequest(request) {
   if (!expectedOrigin) return;
   const origin = headerOrigin(request.headers?.get("origin"));
   const referer = headerOrigin(request.headers?.get("referer"));
-  if (origin && origin !== expectedOrigin) {
+  if (origin && !isAllowedRequestOrigin(origin, expectedOrigin)) {
     throw permissionError("请求来源不合法", 403);
   }
-  if (!origin && referer && referer !== expectedOrigin) {
+  if (!origin && referer && !isAllowedRequestOrigin(referer, expectedOrigin)) {
     throw permissionError("请求来源不合法", 403);
   }
   if (process.env.NODE_ENV === "production" && !origin && !referer) {

@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
+import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
 
 type TransportItem = {
@@ -929,7 +930,7 @@ function CustomsDocumentPanel({
                 ) : null}
                 {canUpload ? (
                   <label className={styles.secondaryButton}>
-                    {uploading ? "识别中..." : "重新上传报关单 PDF"}
+                    {uploading ? "识别中..." : UPLOAD_REPLACE_TEXT}
                     <input
                       type="file"
                       accept="application/pdf,.pdf"
@@ -972,7 +973,7 @@ function CustomsDocumentPanel({
                 <label className={styles.secondaryButton}>
                   {uploading
                     ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
-                    : (matchedDocuments.length ? "替换/上传新版PDF" : "选择PDF文件")}
+                    : UPLOAD_REPLACE_TEXT}
                   <input
                     type="file"
                     accept="application/pdf,.pdf"
@@ -1095,7 +1096,7 @@ function normalizeFormTransportItems(items: TransportItem[]) {
     arrivalPlace: (item.arrivalPlace || "").trim(),
     cargoName: (item.cargoName || "").trim(),
     remark: (item.remark || "").trim(),
-  }));
+  })).filter((item) => Object.values(item).some(Boolean));
 }
 
 function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {

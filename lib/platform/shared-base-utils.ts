@@ -43,12 +43,17 @@ export function ok<T>(data: T, init?: ResponseInit) {
 
 export function dateFromInput(value: unknown) {
   if (!value) return null;
-  return new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function dateToInput(value: Date | null | undefined) {
   if (!value) return "";
-  return value.toISOString().slice(0, 10);
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
 export function num(value: unknown, fallback = 0) {

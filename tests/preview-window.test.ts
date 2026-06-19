@@ -9,6 +9,7 @@ const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recog
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const uploadTexts = readFileSync("app/uploadTexts.ts", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
@@ -83,7 +84,8 @@ test("tax refund export documents use compact cards instead of wide tables", () 
   assert.match(taxRefundModule, /document=\{latestTaxDocument\(/);
   assert.match(taxRefundModule, /styles\.fileUploadFileName[\s\S]*title=\{document\.fileName \|\| "-"\}/);
   assert.match(taxRefundModule, /styles\.fileUploadActionLabel\}>操作：<\/span>/);
-  assert.match(taxRefundModule, /uploaded \? "替换当前PDF" : "上传PDF文件"/);
+  assert.match(uploadTexts, /export const UPLOAD_REPLACE_TEXT = "替换\/上传新版PDF";/);
+  assert.match(taxRefundModule, /uploading \? "上传中\.\.\." : UPLOAD_REPLACE_TEXT/);
   assert.match(styles, /\.fileUploadSection \{[\s\S]*grid-column: 1 \/ -1;/);
   assert.match(styles, /\.fileUploadGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 16px;/);
   assert.match(styles, /\.fileUploadFileName \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
@@ -109,7 +111,7 @@ test("detail drawers and cards now own file management layout", () => {
 });
 
 test("domestic logistics customs declaration keeps one current upload", () => {
-  assert.match(domesticLogisticsModule, /重新上传报关单 PDF/);
+  assert.match(domesticLogisticsModule, /UPLOAD_REPLACE_TEXT/);
   assert.match(domesticLogisticsModule, /latestUploadedDocument\(matchedDocuments\)/);
   assert.match(orderDocumentsService, /documentType: "CUSTOMS_ENTRY_FORM"/);
   assert.match(orderDocumentsService, /id: \{ not: created\.id \}/);
@@ -118,8 +120,9 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
-  assert.match(taxRefundModule, /uploaded \? "替换当前PDF" : "上传PDF文件"/);
-  assert.doesNotMatch(taxRefundModule, /重新上传报关单 PDF|替换\/上传新版PDF|替换当前 PDF/);
+  assert.match(taxRefundModule, /UPLOAD_REPLACE_TEXT/);
+  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}`, /重新上传报关单 PDF|重新上传PDF|替换文件/);
+  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}`, /"上传新版PDF"/);
   assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
   assert.match(customsRecognitionService, /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/);
   assert.match(customsRecognitionService, /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/);
