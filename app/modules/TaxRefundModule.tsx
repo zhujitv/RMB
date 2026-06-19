@@ -286,7 +286,7 @@ export function TaxRefundModule({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务", "成本录入员"]);
+  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务"]);
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";

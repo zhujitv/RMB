@@ -11,6 +11,7 @@ import {
   customerShortName,
   dateToInput,
   includeOrderRelations,
+  logServerError,
   nonEmpty,
   normalizeClearanceEmailLanguage,
   normalizeShippingDocumentTypes,
@@ -361,7 +362,7 @@ export async function tryAutoShippingDocumentsNotification(request, actor, order
   try {
     return await attemptShippingDocumentsNotification(request, actor, orderId, "auto");
   } catch (error) {
-    console.error("清关资料自动通知异常", { orderId, error: error?.message || error });
+    logServerError("清关资料自动通知异常", error, { orderId });
     return null;
   }
 }

@@ -48,7 +48,7 @@ model User {
   name         String
   email        String   @unique
   passwordHash String   @map("password_hash")
-  role         String   @default("查看者")
+  role         String   @default("业务员")
   phone        String?
   avatarInitials String? @map("avatar_initials")
   defaultLanguage String? @map("default_language")
@@ -76,7 +76,6 @@ model User {
   salespersonCommissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSalesperson")
   archivedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundArchivedBy")
   submittedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundSubmittedBy")
-  attachments Attachment[]
   sessions    UserSession[]
   loginAttempts LoginAttempt[]
   auditLogs   AuditLog[]
@@ -682,25 +681,6 @@ model SystemSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
-}
-
-model Attachment {
-  id          String    @id @default(cuid())
-  relatedType String    @map("related_type")
-  relatedId   String    @map("related_id")
-  fileName    String    @map("file_name")
-  fileUrl     String    @map("file_url")
-  fileSize    Int?      @map("file_size")
-  mimeType    String?   @map("mime_type")
-  uploadedById String?  @map("uploaded_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  deletedAt   DateTime? @map("deleted_at")
-
-  uploadedBy User? @relation(fields: [uploadedById], references: [id])
-
-  @@index([relatedType, relatedId])
-  @@index([deletedAt])
-  @@map("attachments")
 }
 
 model AuditLog {

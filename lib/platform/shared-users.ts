@@ -282,7 +282,7 @@ export async function registerUser(request, input = {}) {
       name,
       email,
       passwordHash: hashPassword(password),
-      role: "查看者",
+      role: "业务员",
       avatarInitials: resolveAvatarInitials(input, name),
       customPermissions: null,
       mustChangePassword: false,
@@ -301,7 +301,7 @@ export async function registerUser(request, input = {}) {
 
 export async function saveUser(request, actor, input, id = null) {
   assertWrite(actor, "users");
-  const role = ROLES.includes(input.role) ? input.role : "查看者";
+  const role = ROLES.includes(input.role) ? input.role : "业务员";
   const customPermissions = normalizedCustomPermissionInput(input.customPermissions || input.permissions, role);
   const before = id ? await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT }) : null;
   if (id && !before) throw permissionError("用户不存在", 404);

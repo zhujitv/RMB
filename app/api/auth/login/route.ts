@@ -6,6 +6,8 @@ import {
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
   isUnsafeDefaultAdminEmail,
+  logSecurityEvent,
+  logServerError,
   normalizeEmail,
   passwordHashNeedsUpgrade,
   publicUser,
@@ -97,7 +99,7 @@ export async function POST(request: NextRequest) {
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {
       await recordLoginAttempt(request, email, false, null);
-      console.error("login failed: default admin disabled", { email });
+      logSecurityEvent("login failed", { reason: "default_admin_disabled", email });
       return loginFailure("默认管理员账号已禁用，请使用公司管理员账号登录。", 403, "DEFAULT_ADMIN_DISABLED");
     }
     let user = await prisma.user.findFirst({
@@ -105,28 +107,28 @@ export async function POST(request: NextRequest) {
       select: LOGIN_USER_SELECT,
     });
     if (!user) {
-      console.error("login failed: user not found", { email });
+      logSecurityEvent("login failed", { reason: "user_not_found", email });
       await recordLoginAttemptTyped(request, email, false, null);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (!(await verifyPassword(body.password || "", user.passwordHash))) {
-      console.error("login failed: wrong password", { email, userId: user.id });
+      logSecurityEvent("login failed", { reason: "wrong_password", email, userId: user.id });
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
-      console.error("login failed: user pending approval", { email, userId: user.id });
+      logSecurityEvent("login failed", { reason: "user_pending_approval", email, userId: user.id });
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
-      console.error("login failed: user rejected", { email, userId: user.id });
+      logSecurityEvent("login failed", { reason: "user_rejected", email, userId: user.id });
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号审核未通过，请联系管理员。", 403, "USER_REJECTED");
     }
     if (!user.isActive || approvalStatus === "DISABLED") {
-      console.error("login failed: user disabled", { email, userId: user.id });
+      logSecurityEvent("login failed", { reason: "user_disabled", email, userId: user.id });
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
@@ -162,10 +164,9 @@ export async function POST(request: NextRequest) {
     const typedError = (error || {}) as ErrorLike;
     if (typedError.status) return apiError(error, "登录失败");
     const classified = classifyLoginServiceError(typedError);
-    console.error("login failed: database error", {
+    logServerError("login failed: service error", typedError, {
       code: classified.code,
       prismaCode: typedError.code || "",
-      message: typedError.message || "",
     });
     return NextResponse.json({
       success: false,

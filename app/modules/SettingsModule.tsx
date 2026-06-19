@@ -267,7 +267,7 @@ const COMMISSION_FORMULA_DEDUCTIONS = [
   { value: "CONFIRMED_TOTAL_COST_CNY", label: "已确认总成本" },
   { value: "PAID_CONFIRMED_COST_CNY", label: "已支付确认成本" },
 ];
-const USER_ROLES = ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "物流资料录入员", "查看者"];
+const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
   { label: "已启用", value: "APPROVED" },
@@ -2327,12 +2327,12 @@ function emptyUserForm(): UserForm {
     id: "",
     name: "",
     email: "",
-    role: "查看者",
+    role: "业务员",
     approvalStatus: "APPROVED",
     supplierId: "",
     password: "",
     permissionMode: "ROLE",
-    dataScope: "NONE",
+    dataScope: "OWN",
     menus: [],
     reads: [],
     writes: [],
@@ -2341,11 +2341,12 @@ function emptyUserForm(): UserForm {
 
 function userFormFromRow(user: UserRow): UserForm {
   const custom = user.customPermissions || null;
+  const role = USER_ROLES.includes(user.role || "") ? String(user.role) : "业务员";
   return {
     id: user.id,
     name: user.name || "",
     email: user.email || "",
-    role: user.role || "查看者",
+    role,
     approvalStatus: user.approvalStatus || (user.isActive === false ? "DISABLED" : "APPROVED"),
     supplierId: user.supplierId || "",
     password: "",
@@ -2368,8 +2369,7 @@ function permissionDefaultsForRole(config: PermissionConfig | null, role: string
 
 function defaultDataScopeForRole(role: string) {
   if (role === "管理员" || role === "财务") return "ALL";
-  if (role === "业务员" || role === "物流供应商") return "OWN";
-  if (role === "成本录入员") return "OWN_COST";
+  if (role === "业务员" || role === "物流供应商" || role === "物流资料录入员") return "OWN";
   return "NONE";
 }
 

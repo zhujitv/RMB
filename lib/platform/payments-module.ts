@@ -2,9 +2,12 @@
 import { prisma } from "../prisma";
 import {
   PAYMENT_STATUSES,
+  PAYMENT_INPUT_SCHEMA,
   PAYMENT_TYPES,
   amountCny,
   applyCommonFilters,
+  assertInputSchema,
+  assertJsonObject,
   assertWrite,
   dateFromInput,
   effectivePermissions,
@@ -126,6 +129,7 @@ function paymentListWhere(query, accessWhere) {
 
 export async function savePayment(request, actor, input, id = null) {
   assertWrite(actor, "payments");
+  input = assertInputSchema(assertJsonObject(input), PAYMENT_INPUT_SCHEMA);
   const before = id ? await prisma.payment.findFirst({ where: { id, deletedAt: null } }) : null;
   if (id && !before) throw Object.assign(new Error("收款记录不存在或已删除"), { status: 404 });
   const order = await assertOrderOpen(requireText(input.orderId, "关联订单"), actor);

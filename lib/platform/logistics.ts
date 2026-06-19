@@ -14,7 +14,6 @@ export {
   requestDomesticLogisticsCorrection,
   saveDomesticLogisticsInfo,
 } from "./domestic-logistics-api";
-export * from "./legacy-attachments";
 export * from "./order-documents";
 export * from "./shipping-documents";
 export * from "./customs-recognition";

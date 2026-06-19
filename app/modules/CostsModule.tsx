@@ -268,7 +268,7 @@ export function CostsModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
-  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "成本录入员", "业务员"]);
+  const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
 
   async function loadCosts(
     nextPage = page,

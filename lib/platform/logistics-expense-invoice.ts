@@ -5,12 +5,12 @@ import {
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
   LOGISTICS_OPERATOR_ROLE,
-  MAX_PDF_UPLOAD_BYTES,
   codedError,
   customerBusinessName,
   nextStandardFilenameForUpload,
   normalizeEmail,
   normalizedCostType,
+  readValidatedPdfUploadFile,
   runNonCriticalTask,
   validEmail,
   writeAudit,
@@ -55,31 +55,8 @@ export async function notifyLogisticsSupplierInvoice(expense) {
   });
 }
 
-function invoiceFileExtension(mimeType = "", fileName = "") {
-  const lower = String(fileName || "").toLowerCase();
-  if (mimeType === "application/pdf" && lower.endsWith(".pdf")) return ".pdf";
-  return "";
-}
-
-function assertInvoiceFileSignature(body, mimeType) {
-  if (mimeType === "application/pdf") {
-    if (body.byteLength < 5 || body.subarray(0, 5).toString("ascii") !== "%PDF-") throw codedError("文件格式错误，只能上传有效 PDF 文件。", 400, "FILE_SIGNATURE_INVALID");
-    const pdfTail = body.subarray(Math.max(0, body.byteLength - 2048)).toString("latin1");
-    if (!pdfTail.includes("%%EOF")) throw codedError("文件格式错误，只能上传完整 PDF 文件。", 400, "FILE_SIGNATURE_INVALID");
-    return;
-  }
-  throw codedError("文件格式错误，只能上传有效 PDF 文件。", 400, "FILE_SIGNATURE_INVALID");
-}
-
 export async function createLogisticsInvoiceDocument(request, actor, expense, file, metadata = {}) {
-  const originalFileName = safeFileName(file?.name || "invoice.pdf");
-  const mimeType = file?.type || "application/pdf";
-  const extension = invoiceFileExtension(mimeType, originalFileName);
-  if (!extension) throw codedError("文件类型不允许，只能上传 PDF 文件。", 400, "FILE_TYPE_NOT_ALLOWED");
-  const arrayBuffer = await file.arrayBuffer();
-  const body = Buffer.from(arrayBuffer);
-  if (body.byteLength > MAX_PDF_UPLOAD_BYTES) throw codedError("文件超过大小限制，最大支持 20MB。", 413, "FILE_TOO_LARGE");
-  assertInvoiceFileSignature(body, mimeType);
+  const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "invoice.pdf");
   const order = expense.order;
   const costContext = expense.cost || { id: expense.costId, costType: expense.costType };
   const baseStandardFilename = await nextStandardFilenameForUpload(order, "SUPPLIER_INVOICE", {
@@ -111,7 +88,7 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
         originalName: originalFileName,
         originalFilename: originalFileName,
         standardFilename,
-        fileSize: Number(file.size || body.byteLength || 0),
+        fileSize,
         mimeType,
         r2Bucket,
         storageKey,
@@ -127,7 +104,6 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
       logisticsExpenseId: expense.id,
       invoiceNo: metadata.invoiceNo || "",
       fileName: standardFilename,
-      originalFilename: originalFileName,
     }));
     return document;
   } catch (error) {

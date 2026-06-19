@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, currentSessionInfo, getActor, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
+import { apiError, currentSessionInfo, getActor, logServerError, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +23,7 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;
     if (!typedError.status || typedError.status >= 500) {
-      console.error("auth me failed: account info load error", {
-        message: typedError.message,
-        code: typedError.code,
-        stack: typedError.stack,
-      });
+      logServerError("auth me failed: account info load error", typedError);
       return apiError(error, "系统暂时无法读取账户信息，请联系管理员。");
     }
     return apiError(error, "请先登录");

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertCronSecret, getCronActor, ok, refreshExchangeRatesForDate, writeAudit } from "../../../../lib/platform-db";
+import { apiError, assertCronSecret, getCronActor, logServerError, ok, refreshExchangeRatesForDate, writeAudit } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       result.rateDate,
       null,
       result,
-    ).catch((error: unknown) => console.error("自动汇率操作日志写入失败", error));
+    ).catch((error: unknown) => logServerError("自动汇率操作日志写入失败", error, { rateDate: result.rateDate }));
     return ok(result);
   } catch (error: unknown) {
     return apiError(error, "自动更新汇率失败");

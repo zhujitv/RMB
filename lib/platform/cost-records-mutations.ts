@@ -2,11 +2,15 @@
 import { prisma } from "../prisma";
 import {
   COST_PAYMENT_STATUSES,
+  COST_BATCH_INPUT_SCHEMA,
+  COST_INPUT_SCHEMA,
   COST_TYPES,
   CURRENCIES,
   FACTORY_SUPPLIER_COST_TYPES,
   LOGISTICS_COST_TYPES,
   amountCny,
+  assertInputSchema,
+  assertJsonObject,
   assertWrite,
   booleanInput,
   canConfirmLogisticsCost,
@@ -14,6 +18,7 @@ import {
   confirmedFactorySupplierMismatch,
   costTypeAllowsForeignCurrency,
   dateFromInput,
+  effectivePermissions,
   inputHasOwn,
   isLogisticsCostType,
   nonEmpty,
@@ -39,6 +44,10 @@ import {
   duplicateCostFingerprint,
   includeCostRelations,
 } from "./cost-records-shared";
+
+function isOwnCostScope(actor) {
+  return effectivePermissions(actor).dataScope === "OWN_COST";
+}
 
 async function buildCostData(order, actor, input, id = null, before = null) {
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
@@ -88,8 +97,8 @@ async function buildCostData(order, actor, input, id = null, before = null) {
   }
   const requestedCostConfirmed = booleanInput(input.costConfirmed, before?.costConfirmed || false);
   const canConfirmOrdinaryCost = ["管理员", "业务员"].includes(actor?.role);
-  if (actor?.role === "成本录入员" && before?.costConfirmed) {
-    throw codedError("已确认成本不能由成本录入员继续修改，请联系管理员处理。", 403, "CONFIRMED_COST_LOCKED");
+  if (isOwnCostScope(actor) && before?.costConfirmed) {
+    throw codedError("已确认成本不能继续修改，请联系管理员处理。", 403, "CONFIRMED_COST_LOCKED");
   }
   if (requestedCostConfirmed && !canConfirmOrdinaryCost) {
     throw codedError("当前角色无权限确认成本。", 403, "COST_CONFIRMATION_REQUIRES_REVIEWER");
@@ -178,10 +187,12 @@ async function buildLogisticsCostData(order, actor, input, id = null, before = n
 
 export async function saveCost(request, actor, input, id = null) {
   assertWrite(actor, "costs");
+  input = assertInputSchema(assertJsonObject(input), COST_INPUT_SCHEMA);
   const before = id ? await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } }) : null;
   if (id && (!before || before.deletedAt)) throw permissionError("成本记录不存在或已删除", 404);
-  if (before && actor.role === "成本录入员" && before.createdById !== actor.id) throw permissionError("只能维护自己录入的成本记录");
-  if (before && actor.role !== "成本录入员" && !canAccessOrder(actor, before.order)) throw permissionError("无权限修改该成本记录");
+  const ownCostScope = isOwnCostScope(actor);
+  if (before && ownCostScope && before.createdById !== actor.id) throw permissionError("只能维护自己录入的成本记录");
+  if (before && !ownCostScope && !canAccessOrder(actor, before.order)) throw permissionError("无权限修改该成本记录");
   const order = await assertCostWritableOrder(requireText(input.orderId || input.receivableOrderId || input.order_id, "关联订单"), actor, before);
   const data = await buildCostData(order, actor, input, id, before);
   const result = id
@@ -203,6 +214,7 @@ export async function saveCost(request, actor, input, id = null) {
 
 export async function saveCosts(request, actor, input) {
   assertWrite(actor, "costs");
+  input = assertInputSchema(assertJsonObject(input), COST_BATCH_INPUT_SCHEMA);
   const order = await assertCostWritableOrder(requireText(input.orderId || input.receivableOrderId || input.order_id, "关联订单"), actor);
   const items = Array.isArray(input.items) ? input.items : [];
   if (!items.length) {
@@ -210,6 +222,10 @@ export async function saveCosts(request, actor, input) {
     error.status = 400;
     throw error;
   }
+  items.forEach((item, index) => {
+    const itemInput = assertJsonObject(item, `第 ${index + 1} 行成本明细`);
+    assertInputSchema({ ...input, ...itemInput }, COST_INPUT_SCHEMA);
+  });
   const rows = await Promise.all(items.map((item) => buildCostData(order, actor, {
     ...input,
     ...item,
@@ -242,8 +258,9 @@ export async function deleteCost(request, actor, id) {
   assertWrite(actor, "costs");
   const before = await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } });
   if (!before || before.deletedAt) throw permissionError("成本记录不存在或已删除", 404);
-  if (actor.role === "成本录入员" && before.createdById !== actor.id) throw permissionError("只能删除自己录入的成本记录");
-  if (actor.role !== "成本录入员" && !canAccessOrder(actor, before.order)) throw permissionError("无权限删除该成本记录");
+  const ownCostScope = isOwnCostScope(actor);
+  if (ownCostScope && before.createdById !== actor.id) throw permissionError("只能删除自己录入的成本记录");
+  if (!ownCostScope && !canAccessOrder(actor, before.order)) throw permissionError("无权限删除该成本记录");
   const cost = await prisma.orderCost.update({
     where: { id },
     data: { deletedAt: new Date(), updatedById: actor.id },

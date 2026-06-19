@@ -34,30 +34,56 @@ const BLOCKED_BOT_PATTERNS = [
   /diffbot/i,
 ];
 
+const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
+
+const SECURITY_HEADERS = {
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+    "object-src 'none'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline'${IS_DEVELOPMENT ? " 'unsafe-eval'" : ""}`,
+    "connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+    "worker-src 'self' blob:",
+    "frame-src 'self' blob:",
+    "media-src 'self' blob: data:",
+  ].join("; "),
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "SAMEORIGIN",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
+};
+
 function isBlockedBot(userAgent = "") {
   return BLOCKED_BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
+}
+
+function applySecurityHeaders(response: NextResponse) {
+  Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
 }
 
 export function proxy(request: NextRequest) {
   const userAgent = request.headers.get("user-agent") || "";
   if (isBlockedBot(userAgent)) {
-    return new NextResponse("Forbidden", {
-      status: 403,
-      headers: {
-        "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
-      },
-    });
+    return applySecurityHeaders(new NextResponse("Forbidden", { status: 403 }));
   }
 
   if (request.nextUrl.pathname === "/workspace" || request.nextUrl.pathname === "/index.html") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
-  const response = NextResponse.next();
-  response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate");
-  return response;
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { dateToInput } from "./shared-base-utils";
+import { dateToInput, logServerError } from "./shared-base-utils";
 import {
   CUSTOMS_PARSE_SOURCE_LABELS,
   CUSTOMS_PARSE_STATUS_LABELS,
@@ -178,7 +178,7 @@ export function safeSerializeCost(cost) {
   try {
     return serializeCost(cost);
   } catch (error) {
-    console.error("成本返回数据序列化失败", error);
+    logServerError("成本返回数据序列化失败", error, { costId: cost?.id || "" });
     return fallbackSerializedCost(cost);
   }
 }

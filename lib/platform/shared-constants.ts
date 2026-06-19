@@ -1,9 +1,9 @@
 // @ts-nocheck
-import { nonEmpty } from "./shared-base-utils";
+import { logServerError, nonEmpty } from "./shared-base-utils";
 
 export const LOGISTICS_OPERATOR_ROLE = "物流供应商";
 export const LEGACY_LOGISTICS_OPERATOR_ROLE = "物流资料录入员";
-export const ROLES = ["管理员", "业务员", "财务", "成本录入员", LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE, "查看者"];
+export const ROLES = ["管理员", "业务员", "财务", LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE];
 export const USER_APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "DISABLED"];
 export const CURRENCIES = ["USD", "EUR", "GBP", "CNY", "HKD"];
 export const ORDER_STATUSES = ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
@@ -85,7 +85,7 @@ export async function runNonCriticalTask(label, task) {
   try {
     return await task();
   } catch (error) {
-    console.error(`${label}失败`, error);
+    logServerError(`${label}失败`, error);
     return null;
   }
 }

@@ -2,9 +2,13 @@ export {
   addDays,
   amountCny,
   apiError,
+  assertInputSchema,
+  assertJsonObject,
   codedError,
   dateFromInput,
   dateToInput,
+  logSecurityEvent,
+  logServerError,
   nonEmpty,
   normalizeCreditDays,
   normalizeDateText,
@@ -17,9 +21,11 @@ export {
   requirePositive,
   requireText,
   requireValidEmailList,
+  sanitizeForLog,
   todayInputInChina,
   validEmail,
 } from "./shared-base-utils";
+export type { InputSchema } from "./shared-base-utils";
 import { PAYMENT_TERM_LABELS, PAYMENT_TERM_TYPES } from "./shared-constants";
 import { optional } from "./shared-base-utils";
 

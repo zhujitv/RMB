@@ -4,10 +4,13 @@ import {
   CURRENCIES,
   ORDER_STATUSES,
   PAYMENT_TYPES,
+  RECEIVABLE_ORDER_INPUT_SCHEMA,
   TRADE_TERMS,
   addDays,
   amountCny,
   applyCommonFilters,
+  assertInputSchema,
+  assertJsonObject,
   assertRead,
   assertWrite,
   codedError,
@@ -22,6 +25,7 @@ import {
   getExchangeRateSettings,
   includeOrderRelations,
   inputHasOwn,
+  logServerError,
   nonEmpty,
   optional,
   pageParams,
@@ -251,6 +255,7 @@ export async function searchReceivableOrders(query, actor) {
 
 export async function saveOrder(request, actor, input, id = null) {
   assertWrite(actor, "orders");
+  input = assertInputSchema(assertJsonObject(input), RECEIVABLE_ORDER_INPUT_SCHEMA);
   const before = id
     ? await prisma.receivableOrder.findFirst({ where: { id, deletedAt: null }, include: includeOrderRelations() })
     : null;
@@ -379,17 +384,17 @@ export async function saveOrder(request, actor, input, id = null) {
     orderWithSuppliers = await prisma.receivableOrder.findUnique({ where: { id: order.id }, include: includeOrderRelations() }) || order;
   }
   writeAudit(request, actor, id ? "更新应收订单" : "新增应收订单", "receivable_orders", order.id, before, order)
-    .catch((error) => console.error("订单操作日志写入失败", error));
+    .catch((error) => logServerError("订单操作日志写入失败", error, { orderId: order.id }));
   const shouldSyncStatus = data.actualShipmentAmount != null || orderWithSuppliers.payments?.some(confirmedPayment);
   let synced = orderWithSuppliers;
   if (shouldSyncStatus) {
     try {
       synced = await syncOrderStatus(order.id);
     } catch (error) {
-      console.error("订单状态同步失败", error);
+      logServerError("订单状态同步失败", error, { orderId: order.id });
     }
   }
-  refreshTaxRefundCompleteness(order.id).catch((error) => console.error("退税资料完整度刷新失败", error));
+  refreshTaxRefundCompleteness(order.id).catch((error) => logServerError("退税资料完整度刷新失败", error, { orderId: order.id }));
   return serializeOrder(synced || order);
 }
 

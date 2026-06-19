@@ -14,10 +14,12 @@ import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
   LOGISTICS_OPERATOR_ROLE,
-  MAX_PDF_UPLOAD_BYTES,
+  ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA,
   ORDER_DOCUMENT_TYPES,
   SALES_DOCUMENT_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
+  assertInputSchema,
+  assertJsonObject,
   assertRead,
   assertWrite,
   canRead,
@@ -25,10 +27,12 @@ import {
   codedError,
   effectivePermissions,
   isCustomsDeclarationDocumentType,
+  logServerError,
   nextStandardFilenameForUpload,
   normalizeOrderDocumentType,
   normalizeUploadSource,
   permissionError,
+  readValidatedPdfUploadFile,
   refreshTaxRefundCompleteness,
   requireText,
   resolveStandardFilenameForPersistedDocument,
@@ -186,22 +190,16 @@ export async function listOrderDocuments(query, actor) {
 
 export async function uploadOrderDocument(request, actor, { orderId, documentType, file, costId = "", supplierId = "", uploadSource = "" }) {
   assertWrite(actor, "documents");
+  const uploadInput = assertInputSchema(assertJsonObject({ orderId, documentType, costId, supplierId, uploadSource }), ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA);
+  orderId = uploadInput.orderId;
+  documentType = uploadInput.documentType;
+  costId = uploadInput.costId || "";
+  supplierId = uploadInput.supplierId || "";
+  uploadSource = uploadInput.uploadSource || "";
   documentType = normalizeOrderDocumentType(documentType);
   if (!ORDER_DOCUMENT_TYPES.includes(documentType)) throw permissionError("请选择有效单证类型", 400);
   const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId }, actor);
-  const originalFileName = safeFileName(file?.name || "document.pdf");
-  const mimeType = file?.type || "application/pdf";
-  if (!originalFileName.toLowerCase().endsWith(".pdf") || mimeType !== "application/pdf") {
-    const error = permissionError("文件类型不允许，只能上传 PDF 文件", 400);
-    error.code = "FILE_TYPE_NOT_ALLOWED";
-    throw error;
-  }
-  const fileSize = Number(file.size || 0);
-  if (fileSize > MAX_PDF_UPLOAD_BYTES) {
-    const error = permissionError("文件超过大小限制，最大支持 20MB PDF。", 413);
-    error.code = "FILE_TOO_LARGE";
-    throw error;
-  }
+  const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "document.pdf");
   const { bucket: r2Bucket } = ensureR2Configured();
   const standardFilename = await nextStandardFilenameForUpload(order, documentType, {
     cost,
@@ -209,24 +207,6 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
     supplierId: resolvedSupplierId || "",
     relatedModule,
   });
-  const arrayBuffer = await file.arrayBuffer();
-  const body = Buffer.from(arrayBuffer);
-  if (body.byteLength > MAX_PDF_UPLOAD_BYTES) {
-    const error = permissionError("文件超过大小限制，最大支持 20MB PDF。", 413);
-    error.code = "FILE_TOO_LARGE";
-    throw error;
-  }
-  if (body.byteLength < 5 || body.subarray(0, 5).toString("ascii") !== "%PDF-") {
-    const error = permissionError("文件格式错误，只能上传有效 PDF 文件", 400);
-    error.code = "FILE_SIGNATURE_INVALID";
-    throw error;
-  }
-  const pdfTail = body.subarray(Math.max(0, body.byteLength - 2048)).toString("latin1");
-  if (!pdfTail.includes("%%EOF")) {
-    const error = permissionError("文件格式错误，只能上传完整 PDF 文件", 400);
-    error.code = "FILE_SIGNATURE_INVALID";
-    throw error;
-  }
   const storageFileName = safeFileName(`${order.orderNo || order.id}_${documentType}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
   const storageKey = buildOrderDocumentKey({
     orderId: order.id,
@@ -251,7 +231,7 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
           originalName: originalFileName,
           originalFilename: originalFileName,
           standardFilename,
-          fileSize: Number(file.size || body.byteLength || 0),
+          fileSize,
           mimeType,
           r2Bucket,
           storageKey,
@@ -291,7 +271,6 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
   await runNonCriticalTask("文件上传操作日志写入", () => writeAudit(request, actor, uploadAction, "order_documents", document.id, null, {
     orderNo: order.orderNo,
     fileName: document.standardFilename || document.fileName,
-    originalFilename: document.originalFilename || document.originalName,
     documentType,
     uploadSource: normalizedUploadSource,
     replacedCustomsDocumentCount,
@@ -304,11 +283,9 @@ export async function uploadOrderDocument(request, actor, { orderId, documentTyp
       clearFieldsOnFailure: true,
       returnDetails: true,
     }).catch((error) => {
-      console.error("报关单自动识别异常", {
+      logServerError("报关单自动识别异常", error, {
         orderId: order.id,
         documentId: document.id,
-        message: error?.message || "未知错误",
-        stack: error?.stack || "",
       });
       return {
         attempted: true,
@@ -366,7 +343,6 @@ export async function deleteOrderDocument(request, actor, id) {
   await runNonCriticalTask("文件删除操作日志写入", () => writeAudit(request, actor, "删除文件", "order_documents", id, before, {
     orderNo: before.order?.orderNo,
     fileName: standardFilenameForDocument(before),
-    originalFilename: before.originalFilename || before.originalName || before.fileName,
     clearedCustomsRecognition: isCustomsDeclarationDocumentType(before.documentType),
   }));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
@@ -391,7 +367,6 @@ export async function getOrderDocumentDownload(request, actor, id) {
   await runNonCriticalTask("文件下载操作日志写入", () => writeAudit(request, actor, "下载文件", "order_documents", document.id, null, {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
-    originalFilename: document.originalFilename || document.originalName || document.fileName,
   }));
   return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
 }
@@ -418,7 +393,6 @@ export async function getOrderDocumentPreview(request, actor, id) {
   await runNonCriticalTask("文件预览操作日志写入", () => writeAudit(request, actor, "预览文件", "order_documents", document.id, null, {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
-    originalFilename: document.originalFilename || document.originalName || document.fileName,
   }));
   return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
 }

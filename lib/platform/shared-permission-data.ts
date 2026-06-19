@@ -4,10 +4,10 @@ export const WRITE_PERMISSIONS = {
   customers: ["管理员"],
   orders: ["管理员", "业务员"],
   payments: ["管理员", "财务"],
-  costs: ["管理员", "业务员", "成本录入员"],
+  costs: ["管理员", "业务员"],
   logistics: ["管理员", "物流供应商"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
-  documents: ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "物流资料录入员"],
+  documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   taxRefund: ["管理员", "财务"],
   commissions: ["管理员", "财务"],
   suppliers: ["管理员"],
@@ -19,31 +19,27 @@ export const ROLE_MENUS = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  成本录入员: ["costs", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
   物流资料录入员: ["domesticLogistics", "manual"],
-  查看者: ["manual"],
 };
 
 export const ROLE_SCOPE_TEXT = {
   管理员: "可查看和管理全部数据",
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
-  成本录入员: "仅可录入成本并查看成本相关数据",
   物流供应商: "仅可查看分配订单、提交物流费用并上传发票",
   物流资料录入员: "可录入物流信息和报关资料",
-  查看者: "只读权限",
 };
 
 export const READ_PERMISSIONS = {
   users: ["管理员"],
   customers: ["管理员", "业务员"],
-  suppliers: ["管理员", "成本录入员"],
-  orders: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
-  payments: ["管理员", "业务员", "财务", "查看者"],
-  costs: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
+  suppliers: ["管理员"],
+  orders: ["管理员", "业务员", "财务"],
+  payments: ["管理员", "业务员", "财务"],
+  costs: ["管理员", "业务员", "财务"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
-  documents: ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "物流资料录入员"],
+  documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   taxRefund: ["管理员", "业务员", "财务"],
   commissions: ["管理员", "业务员", "财务"],
   reports: ["管理员", "业务员", "财务"],
@@ -130,7 +126,6 @@ export function roleWriteKeys(role) {
 export function roleDataScope(role) {
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
-  if (role === "成本录入员") return "OWN_COST";
   if (role === "物流供应商") return "OWN";
   if (role === "物流资料录入员") return "OWN";
   return "NONE";
@@ -139,7 +134,6 @@ export function roleDataScope(role) {
 export function customDataScopeFallback(role, writeKeys = []) {
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
-  if (role === "成本录入员") return "OWN_COST";
   if (role === "物流供应商") return "OWN";
   if (role === "物流资料录入员") return "OWN";
   return writeKeys.length ? "OWN" : roleDataScope(role);

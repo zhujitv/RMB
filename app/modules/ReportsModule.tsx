@@ -78,9 +78,9 @@ const REPORT_TYPES: ReportType[] = [
 ];
 
 const REPORT_READ_ROLES: Record<string, string[]> = {
-  orders: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
-  payments: ["管理员", "业务员", "财务", "查看者"],
-  costs: ["管理员", "业务员", "财务", "成本录入员", "查看者"],
+  orders: ["管理员", "业务员", "财务"],
+  payments: ["管理员", "业务员", "财务"],
+  costs: ["管理员", "业务员", "财务"],
   commissions: ["管理员", "业务员", "财务"],
   taxRefund: ["管理员", "业务员", "财务"],
 };

@@ -1,7 +1,7 @@
 import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 
-export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|authorization|cookie|session|storageKey|r2Key|r2Bucket|fileUrl)/i;
+export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|authorization|cookie|session|storageKey|r2Key|r2Bucket|fileUrl|originalName|originalFilename)/i;
 
 type AuditRequestLike = {
   headers?: {

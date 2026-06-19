@@ -81,7 +81,7 @@ export function isExternalLogisticsSupplierAccount(actor) {
 
 export function canAccessDomesticLogisticsOrder(actor, order) {
   if (!canRead(actor, "domesticLogistics")) return false;
-  if (["管理员", "财务", "查看者"].includes(actor?.role)) return true;
+  if (["管理员", "财务"].includes(actor?.role)) return true;
   if (isInternalLogisticsOperator(actor)) return true;
   if (isExternalLogisticsSupplierAccount(actor)) {
     return (order.logisticsSuppliers || []).some((row) => row.supplierId === actor.supplierId);

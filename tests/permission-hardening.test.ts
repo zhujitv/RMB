@@ -22,17 +22,17 @@ test("fixed role menus do not expose forbidden global modules", () => {
   for (const source of [backend, menuFile]) {
     assert(!roleMenuLine(source, "业务员").includes('"dashboard"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
-    assert(!roleMenuLine(source, "成本录入员").includes('"profit"'));
-    assert(!roleMenuLine(source, "查看者").includes('"dashboard"'));
   }
   assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
   assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
 });
 
-test("viewer fallback stays read-only and falls back to manual page only", () => {
-  assert.match(menuFile, /查看者: \["manual"\]/);
-  assert.match(backend, /查看者: \["manual"\]/);
-  assert.match(backend, /查看者: "只读权限"/);
+test("removed viewer and cost entry roles are not exposed by role configuration", () => {
+  assert.doesNotMatch(menuFile, /查看者|成本录入员/);
+  assert.doesNotMatch(backend, /查看者:|成本录入员:/);
+  assert.doesNotMatch(backend, /ROLES = \[[^\]]*(查看者|成本录入员)/);
+  assert.doesNotMatch(backend, /READ_PERMISSIONS[\s\S]*(查看者|成本录入员)/);
+  assert.doesNotMatch(backend, /WRITE_PERMISSIONS[\s\S]*(查看者|成本录入员)/);
 });
 
 test("global dashboard APIs require admin global scope before returning data", () => {

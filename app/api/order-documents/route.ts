@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listOrderDocuments, MAX_PDF_UPLOAD_BYTES, ok, uploadOrderDocument } from "../../../lib/platform-db";
+import { apiError, assertPdfUploadFileCandidate, getActor, listOrderDocuments, logServerError, ok, uploadOrderDocument } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,26 +52,7 @@ export async function POST(request: NextRequest) {
       error.code = "UPLOAD_CONTEXT_MISSING";
       throw error;
     }
-    if (!(candidate instanceof File)) {
-      const error = new Error("请选择 PDF 文件") as ErrorLike;
-      error.status = 400;
-      error.code = "FILE_REQUIRED";
-      throw error;
-    }
-    file = candidate;
-    const fileName = String(file.name || "");
-    if (!fileName.toLowerCase().endsWith(".pdf") || file.type !== "application/pdf") {
-      const error = new Error("文件类型不允许，只能上传 PDF 文件") as ErrorLike;
-      error.status = 400;
-      error.code = "FILE_TYPE_NOT_ALLOWED";
-      throw error;
-    }
-    if (Number(file.size || 0) > MAX_PDF_UPLOAD_BYTES) {
-      const error = new Error("文件超过大小限制，最大支持 20MB PDF。") as ErrorLike;
-      error.status = 413;
-      error.code = "FILE_TOO_LARGE";
-      throw error;
-    }
+    file = assertPdfUploadFileCandidate(candidate).file;
     const document = await uploadOrderDocument(request, actor, {
       orderId,
       documentType,
@@ -94,14 +75,12 @@ export async function POST(request: NextRequest) {
 }
 
 function logUploadFailure({ actor, orderId, documentType, file, error }: UploadFailureContext) {
-  console.error("订单单证上传失败", {
+  logServerError("订单单证上传失败", error, {
     orderId: orderId || "",
     documentType: documentType || "",
-    originalName: file?.name || "",
     fileSize: Number(file?.size || 0),
+    mimeType: file?.type || "",
     userId: actor?.id || "",
-    message: error?.message || "未知错误",
-    stack: error?.stack || "",
   });
 }
 

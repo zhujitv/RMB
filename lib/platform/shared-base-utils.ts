@@ -20,8 +20,70 @@ export function codedError(message: string, status: number, code: string): AppEr
   return error;
 }
 
+const SENSITIVE_LOG_KEY_PATTERN = /(password|passwd|pwd|token|secret|authorization|cookie|database_url|databaseurl|smtp|r2_|access_key|secret_key|file(name)?|original(name|filename)|email|url)$/i;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeLogValue(key: string, value: unknown, depth = 0): unknown {
+  if (SENSITIVE_LOG_KEY_PATTERN.test(key)) return "[redacted]";
+  if (value == null) return value;
+  if (typeof value === "string") return value.length > 300 ? `${value.slice(0, 300)}...` : value;
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    if (depth >= 2) return `[array:${value.length}]`;
+    return value.slice(0, 20).map((item, index) => sanitizeLogValue(String(index), item, depth + 1));
+  }
+  if (isPlainRecord(value)) {
+    if (depth >= 2) return "[object]";
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [entryKey, sanitizeLogValue(entryKey, entryValue, depth + 1)]),
+    );
+  }
+  return String(value);
+}
+
+function errorForLog(error: unknown) {
+  const typedError = (error || {}) as AppError & { name?: string; stack?: string };
+  const status = typedError.status || 500;
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    name: typedError.name || "Error",
+    status,
+    code: typedError.code || undefined,
+    message: (!isProduction || status < 500 || typedError.expose) ? (typedError.message || "未知错误") : "internal_server_error",
+    stack: !isProduction ? typedError.stack : undefined,
+  };
+}
+
+export function sanitizeForLog(input: unknown) {
+  return sanitizeLogValue("context", input);
+}
+
+export function logServerError(label: string, error: unknown, context: Record<string, unknown> = {}) {
+  const typedError = (error || {}) as AppError;
+  const status = typedError.status || 500;
+  if (process.env.NODE_ENV === "production" && status < 500) return;
+  const sanitizedContext = sanitizeLogValue("context", context);
+  const payload = {
+    ...(isPlainRecord(sanitizedContext) ? sanitizedContext : {}),
+    error: errorForLog(error),
+  };
+  if (status >= 500) {
+    console.error(label, payload);
+  } else {
+    console.warn(label, payload);
+  }
+}
+
+export function logSecurityEvent(label: string, context: Record<string, unknown> = {}) {
+  console.warn(label, sanitizeLogValue("context", context));
+}
+
 export function apiError(error: unknown, fallback = "请求处理失败") {
-  console.error(error);
+  logServerError(fallback, error);
   const isProduction = process.env.NODE_ENV === "production";
   const exposeDetails = process.env.EXPOSE_ERROR_DETAILS === "true";
   const typedError = (error || {}) as AppError;
@@ -75,6 +137,67 @@ export function normalizeEmail(value: unknown) {
 
 export function validEmail(value: unknown = "") {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+type InputSchemaKind = "text" | "positiveNumber" | "nonNegativeNumber" | "date" | "enum" | "email" | "array";
+
+type InputSchemaField = {
+  label: string;
+  kind?: InputSchemaKind;
+  required?: boolean | ((input: Record<string, unknown>) => boolean);
+  enumValues?: readonly string[];
+};
+
+export type InputSchema = Record<string, InputSchemaField>;
+
+function inputHasValue(value: unknown) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function inputFieldRequired(field: InputSchemaField, input: Record<string, unknown>) {
+  return typeof field.required === "function" ? field.required(input) : Boolean(field.required);
+}
+
+export function assertJsonObject(value: unknown, label = "请求参数") {
+  if (!isPlainRecord(value)) {
+    throw codedError(`${label}格式错误`, 400, "INVALID_REQUEST_BODY");
+  }
+  return value;
+}
+
+export function assertInputSchema(input: Record<string, unknown>, schema: InputSchema) {
+  for (const [key, field] of Object.entries(schema)) {
+    const value = input[key];
+    const hasValue = inputHasValue(value);
+    if (!hasValue) {
+      if (inputFieldRequired(field, input)) {
+        throw codedError(`${field.label}不能为空`, 400, "VALIDATION_REQUIRED");
+      }
+      continue;
+    }
+    if (field.kind === "text" && !nonEmpty(value)) {
+      throw codedError(`${field.label}不能为空`, 400, "VALIDATION_REQUIRED");
+    }
+    if (field.kind === "positiveNumber" && !(num(value) > 0)) {
+      throw codedError(`${field.label}必须大于 0`, 400, "VALIDATION_POSITIVE_NUMBER");
+    }
+    if (field.kind === "nonNegativeNumber" && !(num(value) >= 0)) {
+      throw codedError(`${field.label}不能小于 0`, 400, "VALIDATION_NON_NEGATIVE_NUMBER");
+    }
+    if (field.kind === "date" && !dateFromInput(value)) {
+      throw codedError(`${field.label}不是有效日期`, 400, "VALIDATION_INVALID_DATE");
+    }
+    if (field.kind === "enum" && field.enumValues && !field.enumValues.includes(nonEmpty(value))) {
+      throw codedError(`${field.label}不在允许范围内`, 400, "VALIDATION_INVALID_ENUM");
+    }
+    if (field.kind === "email" && !validEmail(value)) {
+      throw codedError(`${field.label}格式错误`, 400, "VALIDATION_INVALID_EMAIL");
+    }
+    if (field.kind === "array" && !Array.isArray(value)) {
+      throw codedError(`${field.label}格式错误`, 400, "VALIDATION_INVALID_ARRAY");
+    }
+  }
+  return input;
 }
 
 export function parseEmailList(value: unknown) {

@@ -92,11 +92,11 @@ export async function assertCostWritableOrder(orderId, actor, before = null) {
     throw error;
   }
   const scope = effectivePermissions(actor).dataScope;
-  if (actor.role === "成本录入员" || scope === "OWN_COST") {
+  if (scope === "OWN_COST") {
     if (!canWrite(actor, "costs")) throw permissionError("没有权限执行该操作");
     if (before) {
       if (before.createdById !== actor.id) throw permissionError("只能维护自己录入的成本记录");
-      if (before.orderId !== order.id) throw permissionError("成本录入员不能转移历史成本到其他订单");
+      if (before.orderId !== order.id) throw permissionError("不能转移历史成本到其他订单");
       return order;
     }
     return order;
