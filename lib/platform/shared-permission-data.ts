@@ -17,7 +17,7 @@ export const WRITE_PERMISSIONS = {
 
 export const ROLE_MENUS = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
   物流资料录入员: ["domesticLogistics", "manual"],
@@ -41,7 +41,7 @@ export const READ_PERMISSIONS = {
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   taxRefund: ["管理员", "业务员", "财务"],
-  commissions: ["管理员", "业务员", "财务"],
+  commissions: ["管理员", "财务"],
   reports: ["管理员", "业务员", "财务"],
   settings: ["管理员"],
   auditLogs: ["管理员"],

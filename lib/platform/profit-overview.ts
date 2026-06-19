@@ -21,9 +21,14 @@ import { listPayments } from "./payments-module";
 import { orderAccessWhere, scopeOrderForActor } from "./order-access";
 export { getAuditLogs } from "./audit-logs";
 
-export async function getProfitAnalysis(query, actor) {
-  assertRead(actor, "costs");
+function assertProfitAnalysisAccess(actor) {
   assertRead(actor, "orders");
+  assertRead(actor, "costs");
+  assertRead(actor, "commissions");
+}
+
+export async function getProfitAnalysis(query, actor) {
+  assertProfitAnalysisAccess(actor);
   const where = profitFilterWhere(query, actor);
   const [orders, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.findMany({
@@ -130,8 +135,7 @@ function serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings) {
 }
 
 export async function listProfitAnalysisPage(query, actor) {
-  assertRead(actor, "costs");
-  assertRead(actor, "orders");
+  assertProfitAnalysisAccess(actor);
   const { page, pageSize } = pageParams(query, 20, 100);
   const where = profitFilterWhere(query, actor);
   const [total, orders, commissionFormulaSettings] = await Promise.all([

@@ -13,6 +13,8 @@ const menuFile = readFileSync("app/menu.ts", "utf8");
 const ledgerRoute = readFileSync("app/api/ledger/route.ts", "utf8");
 const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
 const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
+const reportService = readFileSync("lib/report-service.ts", "utf8");
+const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 
 function roleMenuLine(source: string, role: string) {
   return source.split("\n").find((line: string) => line.includes(`${role}: [`)) || "";
@@ -21,6 +23,7 @@ function roleMenuLine(source: string, role: string) {
 test("fixed role menus do not expose forbidden global modules", () => {
   for (const source of [backend, menuFile]) {
     assert(!roleMenuLine(source, "业务员").includes('"dashboard"'));
+    assert(!roleMenuLine(source, "业务员").includes('"profit"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
   }
   assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
@@ -40,6 +43,14 @@ test("global dashboard APIs require admin global scope before returning data", (
   assert.match(backend, /export async function getOverview[\s\S]*requireAdminGlobal\(actor, "无权限访问经营总览"\)/);
   assert.match(ledgerRoute, /requireAdminGlobal\(actor, "无权限访问经营总览"\)/);
   assert.match(overviewRoute, /requireAdminGlobal\(actor, "无权限访问经营总览"\)/);
+});
+
+test("profit and commission reports require financial commission read permission", () => {
+  assert.match(backend, /function assertProfitAnalysisAccess\(actor\)[\s\S]*assertRead\(actor, "commissions"\)/);
+  assert.match(backend, /commissions: \["管理员", "财务"\]/);
+  assert.match(reportService, /profits: \{ label: "利润分析", area: "commissions"/);
+  assert.match(reportsModule, /\{ key: "profits", label: "利润分析", area: "commissions" \}/);
+  assert.match(reportsModule, /commissions: \["管理员", "财务"\]/);
 });
 
 test("workspace auth distinguishes expired login from server-side profile failure", () => {

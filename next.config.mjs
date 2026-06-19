@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const isDevelopment = process.env.NODE_ENV !== "production";
+const appOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.nextwood.net";
 
 const securityHeaders = [
   {
@@ -25,6 +26,8 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Access-Control-Allow-Origin", value: appOrigin },
+  { key: "Vary", value: "Origin" },
   {
     key: "X-Robots-Tag",
     value: "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",

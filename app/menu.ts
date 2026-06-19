@@ -15,7 +15,7 @@ export const MENU_ITEMS: MenuItem[] = [
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
   物流资料录入员: ["domesticLogistics", "manual"],

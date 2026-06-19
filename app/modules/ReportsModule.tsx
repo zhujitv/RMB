@@ -71,7 +71,7 @@ const REPORT_TYPES: ReportType[] = [
   { key: "receivables", label: "应收订单明细", area: "orders" },
   { key: "payments", label: "收款明细", area: "payments" },
   { key: "costs", label: "成本明细", area: "costs" },
-  { key: "profits", label: "利润分析", area: "orders" },
+  { key: "profits", label: "利润分析", area: "commissions" },
   { key: "commissions", label: "业务员提成", area: "commissions" },
   { key: "overdue", label: "逾期催款", area: "orders" },
   { key: "tax-refunds", label: "退税资料", area: "taxRefund" },
@@ -81,7 +81,7 @@ const REPORT_READ_ROLES: Record<string, string[]> = {
   orders: ["管理员", "业务员", "财务"],
   payments: ["管理员", "业务员", "财务"],
   costs: ["管理员", "业务员", "财务"],
-  commissions: ["管理员", "业务员", "财务"],
+  commissions: ["管理员", "财务"],
   taxRefund: ["管理员", "业务员", "财务"],
 };
 

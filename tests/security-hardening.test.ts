@@ -27,6 +27,10 @@ test("global security headers are configured for pages api and proxy responses",
   }
   assert.match(nextConfig, /frame-ancestors 'self'/);
   assert.match(proxy, /applySecurityHeaders/);
+  assert.match(nextConfig, /Access-Control-Allow-Origin/);
+  assert.match(proxy, /Access-Control-Allow-Origin/);
+  assert.doesNotMatch(nextConfig, /Access-Control-Allow-Origin", value: "\*"/);
+  assert.doesNotMatch(proxy, /"Access-Control-Allow-Origin": "\*"/);
 });
 
 test("critical write paths use shared input schemas", () => {

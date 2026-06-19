@@ -16,7 +16,7 @@ export const REPORT_TYPES = {
   receivables: { label: "应收订单明细", area: "orders", filename: "receivable-orders" },
   payments: { label: "收款明细", area: "payments", filename: "payments" },
   costs: { label: "成本明细", area: "costs", filename: "order-costs" },
-  profits: { label: "利润分析", area: "orders", filename: "profit-analysis" },
+  profits: { label: "利润分析", area: "commissions", filename: "profit-analysis" },
   commissions: { label: "业务员提成", area: "commissions", filename: "salesperson-commissions" },
   overdue: { label: "逾期催款", area: "orders", filename: "payment-reminders" },
   "tax-refunds": { label: "退税资料", area: "taxRefund", filename: "tax-refund-materials" },

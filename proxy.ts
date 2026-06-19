@@ -35,6 +35,7 @@ const BLOCKED_BOT_PATTERNS = [
 ];
 
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.nextwood.net";
 
 const SECURITY_HEADERS = {
   "Content-Security-Policy": [
@@ -57,6 +58,8 @@ const SECURITY_HEADERS = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",
   "Cross-Origin-Opener-Policy": "same-origin",
+  "Access-Control-Allow-Origin": APP_ORIGIN,
+  "Vary": "Origin",
   "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
 };
 
