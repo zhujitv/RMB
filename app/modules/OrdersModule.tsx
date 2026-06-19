@@ -314,7 +314,6 @@ export function OrdersModule({
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>业务模块</span>
           <h2>应收订单</h2>
         </div>
         <div className={styles.headerActions}>

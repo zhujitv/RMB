@@ -164,7 +164,6 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>业务模块</span>
           <h2>利润分析</h2>
         </div>
         <button

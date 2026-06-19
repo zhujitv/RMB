@@ -911,7 +911,6 @@ export function TaxRefundModule({
     <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>业务模块</span>
           <h2>退税资料</h2>
         </div>
         <button

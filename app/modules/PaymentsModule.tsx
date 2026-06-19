@@ -224,7 +224,6 @@ export function PaymentsModule({
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>业务模块</span>
           <h2>收款管理</h2>
         </div>
         <div className={styles.headerActions}>

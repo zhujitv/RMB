@@ -147,7 +147,6 @@ export function DashboardModule() {
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
         <div>
-          <span className={styles.kicker}>业务模块</span>
           <h2>经营总览</h2>
           <p>经营总览作为分析工具按需加载，登录后不会预取经营统计。</p>
         </div>
