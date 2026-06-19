@@ -9,6 +9,7 @@ const backend = [
   readFileSync("lib/platform/shared-tax-sync.ts", "utf8"),
   readFileSync("lib/platform/shared-order-summary.ts", "utf8"),
   readFileSync("lib/platform/shared-order-calculations.ts", "utf8"),
+  readFileSync("lib/platform/commission-formula.ts", "utf8"),
   readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8"),
   readFileSync("lib/platform/shared-order-relations.ts", "utf8"),
   readFileSync("lib/platform/shared-users.ts", "utf8"),
@@ -23,10 +24,13 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-queries.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow.ts", "utf8"),
+  readFileSync("lib/platform/profit-overview.ts", "utf8"),
+  readFileSync("lib/platform/tax-refunds.ts", "utf8"),
 ].join("\n");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
+const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
@@ -120,4 +124,27 @@ test("logistics expense supplier picker only keeps logistics-capable suppliers",
 test("logistics supplier login locks supplier field to current supplier", () => {
   assert.match(logisticsModule, /supplierId: isLockedSupplier \? currentUserSupplierId/);
   assert.match(logisticsModule, /setForm\(\(current\) => \(\{ \.\.\.current, supplierId: currentUserSupplierId \}\)\);/);
+});
+
+test("sales commission base uses actual received payments minus logistics costs", () => {
+  assert.match(backend, /calculateCommissionFormulaBase/);
+  assert.match(backend, /ACTUAL_RECEIVED_MINUS_LOGISTICS/);
+  assert.match(backend, /source: "ARRIVED_PAYMENTS_CNY"/);
+  assert.match(backend, /deductions: \["LOGISTICS_COST_CNY"\]/);
+  assert.match(backend, /getCommissionFormulaSettings/);
+  assert.match(backend, /logisticsCostCny: summary\.logisticsCostCny/);
+  assert.match(backend, /commissionBaseCny: summary\.commissionBaseCny/);
+  assert.match(settingsModule, /提成公式/);
+  assert.match(settingsModule, /公式模板/);
+  assert.match(profitModule, /提成基数/);
+  assert.doesNotMatch(backend, /const estimatedCommissionBaseCny = Math\.max\(expectedGrossProfit, 0\);/);
+  assert.doesNotMatch(backend, /const settleableCommissionBaseCny = Math\.max\(expectedGrossProfit, 0\);/);
+});
+
+test("commission settlement requires complete tax refund logistics costs", () => {
+  assert.match(backend, /taxDocumentCompleteness\(order\)/);
+  assert.match(backend, /taxLogisticsCostsComplete/);
+  assert.match(backend, /不可结算：物流费用未完整/);
+  assert.match(backend, /TAX_LOGISTICS_COSTS_INCOMPLETE/);
+  assert.match(profitModule, /提成前置缺失/);
 });

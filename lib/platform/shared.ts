@@ -3,6 +3,7 @@ export * from "./shared-permissions";
 export * from "./shared-auth";
 export * from "./shared-utils";
 export * from "./shared-exchange";
+export * from "./commission-formula";
 export * from "./shared-serialization";
 export * from "./shared-tax";
 export * from "./shared-order-summary";

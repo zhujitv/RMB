@@ -310,6 +310,7 @@ export const COMMISSION_STATUSES = [
   "不可结算：提成比例未设置",
   "不可结算：未分配真实业务员",
   "不可结算：订单未收齐",
+  "不可结算：物流费用未完整",
   "不可结算：成本未全部确认",
   "不可结算：物流成本未确认",
   "不可结算：提成金额为0",
@@ -326,6 +327,47 @@ export const DEFAULT_EXCHANGE_RATE_SETTINGS = {
   allowAdminIncompleteTaxSubmit: false,
   allowMultipleOrderLogisticsSuppliers: false,
 };
+export const COMMISSION_FORMULA_SETTING_KEY = "commission_formula";
+export const COMMISSION_FORMULA_SOURCES = ["ARRIVED_PAYMENTS_CNY", "FOB_CNY", "EXPECTED_GROSS_PROFIT_CNY", "REALIZED_GROSS_PROFIT_CNY"];
+export const COMMISSION_FORMULA_DEDUCTIONS = ["LOGISTICS_COST_CNY", "TOTAL_COST_CNY", "CONFIRMED_TOTAL_COST_CNY", "PAID_CONFIRMED_COST_CNY"];
+export const COMMISSION_FORMULA_PRESETS = {
+  ACTUAL_RECEIVED_MINUS_LOGISTICS: {
+    mode: "ACTUAL_RECEIVED_MINUS_LOGISTICS",
+    label: "实际到账 - 物流成本",
+    source: "ARRIVED_PAYMENTS_CNY",
+    deductions: ["LOGISTICS_COST_CNY"],
+    floorAtZero: true,
+  },
+  ACTUAL_PROFIT: {
+    mode: "ACTUAL_PROFIT",
+    label: "实际利润",
+    source: "REALIZED_GROSS_PROFIT_CNY",
+    deductions: [],
+    floorAtZero: true,
+  },
+  FOB_TOTAL: {
+    mode: "FOB_TOTAL",
+    label: "FOB总额",
+    source: "FOB_CNY",
+    deductions: [],
+    floorAtZero: true,
+  },
+  FOB_MINUS_LOGISTICS: {
+    mode: "FOB_MINUS_LOGISTICS",
+    label: "FOB - 物流成本",
+    source: "FOB_CNY",
+    deductions: ["LOGISTICS_COST_CNY"],
+    floorAtZero: true,
+  },
+  CUSTOM: {
+    mode: "CUSTOM",
+    label: "自定义公式",
+    source: "ARRIVED_PAYMENTS_CNY",
+    deductions: ["LOGISTICS_COST_CNY"],
+    floorAtZero: true,
+  },
+};
+export const DEFAULT_COMMISSION_FORMULA_SETTINGS = COMMISSION_FORMULA_PRESETS.ACTUAL_RECEIVED_MINUS_LOGISTICS;
 export const AUTO_RATE_CURRENCIES = ["USD", "EUR", "GBP", "HKD"];
 export const BOC_CURRENCY_NAMES = {
   USD: "美元",

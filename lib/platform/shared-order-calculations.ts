@@ -1,5 +1,7 @@
 import { nonEmpty, normalizeEmail, num } from "./shared-base-utils";
+import { calculateCommissionFormulaBase } from "./commission-formula";
 import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES } from "./shared-constants";
+import { taxDocumentCompleteness } from "./shared-tax-completeness";
 
 type PaymentLike = {
   status?: string | null;
@@ -48,6 +50,7 @@ type OrderSummary = {
   commissionRate: number;
   realSalespersonSet: boolean;
   arrivedOutstandingCny: number;
+  taxLogisticsCostsComplete?: boolean;
   allCostsConfirmed: boolean;
   logisticsCostConfirmed: boolean;
   settleableCommissionCny: number;
@@ -56,6 +59,14 @@ type OrderSummary = {
   commissionAmountCny?: number;
   reminderStatus?: string;
   overdueDays?: number;
+  [key: string]: unknown;
+};
+
+type TaxLogisticsMissingItem = {
+  label?: string | null;
+  invoiceLabel?: string | null;
+  missingCostLabel?: string | null;
+  costType?: string | null;
   [key: string]: unknown;
 };
 
@@ -115,6 +126,7 @@ export function derivedCommissionStatus(order: OrderLike, summary: OrderSummary)
   if (summary.commissionRate <= 0) return "不可结算：提成比例未设置";
   if (!summary.realSalespersonSet) return "不可结算：未分配真实业务员";
   if (summary.arrivedOutstandingCny > 0 || !["已收齐", "多收款"].includes(order.status || "")) return "不可结算：订单未收齐";
+  if (!summary.taxLogisticsCostsComplete) return "不可结算：物流费用未完整";
   if (!summary.allCostsConfirmed) return "不可结算：成本未全部确认";
   if (!summary.logisticsCostConfirmed) return "不可结算：物流成本未确认";
   if (summary.settleableCommissionCny <= 0) return "不可结算：提成金额为0";
@@ -146,7 +158,7 @@ export function calcReminderStatus({
   return { status: "未到期", overdueDays: 0 };
 }
 
-export function summarizeOrder(order: OrderLike) {
+export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Record<string, unknown> | null) {
   const estimatedAmount = Number(order.estimatedReceivableAmount ?? order.receivableAmount);
   const estimatedCny = Number(order.estimatedReceivableAmountCny ?? order.receivableAmountCny);
   const actualAmount = order.actualShipmentAmount == null ? null : Number(order.actualShipmentAmount);
@@ -179,6 +191,9 @@ export function summarizeOrder(order: OrderLike) {
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const logisticsCosts = commissionLogisticsCosts(order);
   const logisticsCostCny = logisticsCosts.reduce((sum, cost) => sum + Number(cost.amountCny), 0);
+  const taxCompleteness = taxDocumentCompleteness(order);
+  const taxLogisticsMissing = (taxCompleteness.logistics?.missing || []) as TaxLogisticsMissingItem[];
+  const taxLogisticsCostsComplete = taxLogisticsMissing.length === 0;
   const arrivedBalanceCny = receivableCny - arrivedPaymentsCny;
   const arrivedOutstandingCny = Math.max(arrivedBalanceCny, 0);
   const balanceCny = receivableCny - confirmedPaymentsCny;
@@ -199,9 +214,19 @@ export function summarizeOrder(order: OrderLike) {
   const realSalespersonSet = hasRealSalesperson(order);
   const allCostsAreConfirmed = allCostsConfirmed(order.costs || []);
   const logisticsCostConfirmed = logisticsCostsConfirmed(logisticsCosts);
-  const estimatedCommissionBaseCny = Math.max(expectedGrossProfit, 0);
+  const commissionFormula = calculateCommissionFormulaBase({
+    receivableCny,
+    arrivedPaymentsCny,
+    totalCostCny,
+    confirmedTotalCostCny,
+    paidConfirmedCostCny,
+    logisticsCostCny,
+    expectedGrossProfit,
+    realizedGrossProfit,
+  }, commissionFormulaSettings);
+  const estimatedCommissionBaseCny = commissionFormula.baseCny;
   const estimatedCommissionCny = roundMoney((estimatedCommissionBaseCny * commissionRate) / 100);
-  const settleableCommissionBaseCny = Math.max(expectedGrossProfit, 0);
+  const settleableCommissionBaseCny = commissionFormula.baseCny;
   const settleableCommissionCny = roundMoney((settleableCommissionBaseCny * commissionRate) / 100);
   const reminder = calcReminderStatus({
     outstandingCny,
@@ -243,10 +268,18 @@ export function summarizeOrder(order: OrderLike) {
     paidConfirmedCostCny,
     logisticsCostCny,
     confirmedLogisticsCostCny: logisticsCostConfirmed ? logisticsCostCny : 0,
+    taxLogisticsCostsComplete,
+    taxLogisticsMissing,
+    taxLogisticsMissingLabels: taxLogisticsMissing.map((item) => item.label || item.invoiceLabel || item.missingCostLabel || item.costType || "物流费用").filter(Boolean),
     allCostsConfirmed: allCostsAreConfirmed,
     logisticsCostConfirmed,
     realSalespersonSet,
     commissionRate,
+    commissionFormulaMode: commissionFormula.mode,
+    commissionFormulaLabel: commissionFormula.label,
+    commissionFormulaDescription: commissionFormula.description,
+    commissionFormulaSource: commissionFormula.source,
+    commissionFormulaDeductions: commissionFormula.deductions,
     commissionBaseCny: estimatedCommissionBaseCny,
     estimatedCommissionBaseCny,
     estimatedCommissionCny,

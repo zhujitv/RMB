@@ -6,6 +6,8 @@ import {
   confirmedCost,
   customerFullName,
   customerShortName,
+  getCommissionFormulaSettings,
+  includeOrderRelations,
   nonEmpty,
   normalizedCostType,
   pageParams,
@@ -22,7 +24,16 @@ export { getAuditLogs } from "./audit-logs";
 export async function getProfitAnalysis(query, actor) {
   assertRead(actor, "costs");
   assertRead(actor, "orders");
-  return listOrders(query, actor);
+  const where = profitFilterWhere(query, actor);
+  const [orders, commissionFormulaSettings] = await Promise.all([
+    prisma.receivableOrder.findMany({
+      where,
+      include: includeOrderRelations(),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    }),
+    getCommissionFormulaSettings(),
+  ]);
+  return orders.map((order) => serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings));
 }
 
 function profitKeywordWhere(keyword) {
@@ -67,9 +78,9 @@ function profitFilterWhere(query, actor) {
   };
 }
 
-function serializeProfitAnalysisOrder(order, actor) {
+function serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings) {
   const scoped = scopeOrderForActor(order, actor);
-  const summary = summarizeOrder(scoped);
+  const summary = summarizeOrder(scoped, commissionFormulaSettings);
   const fullCustomerName = customerFullName(scoped.customer, scoped.customerNameSnapshot);
   const shortCustomerName = customerShortName(scoped.customer);
   const costGroups = (scoped.costs || [])
@@ -97,6 +108,13 @@ function serializeProfitAnalysisOrder(order, actor) {
       arrivedPaymentsCny: summary.arrivedPaymentsCny,
       confirmedTotalCostCny: summary.confirmedTotalCostCny,
       totalCostCny: summary.totalCostCny,
+      logisticsCostCny: summary.logisticsCostCny,
+      commissionBaseCny: summary.commissionBaseCny,
+      commissionFormulaMode: summary.commissionFormulaMode,
+      commissionFormulaLabel: summary.commissionFormulaLabel,
+      commissionFormulaDescription: summary.commissionFormulaDescription,
+      taxLogisticsCostsComplete: summary.taxLogisticsCostsComplete,
+      taxLogisticsMissingLabels: summary.taxLogisticsMissingLabels,
       expectedGrossProfit: summary.expectedGrossProfit,
       expectedGrossMargin: summary.expectedGrossMargin,
       realizedGrossProfit: summary.realizedGrossProfit,
@@ -116,29 +134,18 @@ export async function listProfitAnalysisPage(query, actor) {
   assertRead(actor, "orders");
   const { page, pageSize } = pageParams(query, 20, 100);
   const where = profitFilterWhere(query, actor);
-  const [total, orders] = await Promise.all([
+  const [total, orders, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
       where,
-      include: {
-        customer: true,
-        salesperson: true,
-        commissionSettledBy: true,
-        payments: {
-          where: { deletedAt: null },
-          select: { amountCny: true, status: true, deletedAt: true, paymentType: true },
-        },
-        costs: {
-          where: { deletedAt: null },
-          include: { supplier: true },
-        },
-      },
+      include: includeOrderRelations(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
+    getCommissionFormulaSettings(),
   ]);
-  const rows = orders.map((order) => serializeProfitAnalysisOrder(order, actor));
+  const rows = orders.map((order) => serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings));
   return pageResult(rows, total, page, pageSize);
 }
 

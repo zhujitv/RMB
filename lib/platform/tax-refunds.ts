@@ -18,6 +18,7 @@ import {
   customerFullName,
   customerShortName,
   getExchangeRateSettings,
+  getCommissionFormulaSettings,
   includeOrderRelations,
   needsTaxRefundCompletenessRefresh,
   nonEmpty,
@@ -352,7 +353,8 @@ export async function settleCommission(request, actor, orderId, input = {}) {
   if (["已结算", "SETTLED"].includes(before.commissionStatus)) {
     throw codedError("该订单业务员提成已结算，不能重复结算。", 400, "COMMISSION_ALREADY_SETTLED");
   }
-  const summary = summarizeOrder(before);
+  const commissionFormulaSettings = await getCommissionFormulaSettings();
+  const summary = summarizeOrder(before, commissionFormulaSettings);
   if (summary.commissionRate <= 0) {
     throw codedError("提成比例未设置，不能结算业务员提成。", 400, "COMMISSION_RATE_NOT_SET");
   }
@@ -361,6 +363,10 @@ export async function settleCommission(request, actor, orderId, input = {}) {
   }
   if (summary.arrivedOutstandingCny > 0 || !["已收齐", "多收款"].includes(before.status)) {
     throw codedError("当前订单货款尚未全部到账，不能结算业务员提成。", 400, "ORDER_NOT_FULLY_PAID");
+  }
+  if (!summary.taxLogisticsCostsComplete) {
+    const missingText = (summary.taxLogisticsMissingLabels || []).join("、") || "物流费用";
+    throw codedError(`退税资料中的物流费用未完整，缺少：${missingText}。不能结算业务员提成。`, 400, "TAX_LOGISTICS_COSTS_INCOMPLETE");
   }
   if (!summary.allCostsConfirmed) {
     throw codedError("当前订单成本尚未全部确认完成，不能结算业务员提成。", 400, "COST_NOT_CONFIRMED");

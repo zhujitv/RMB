@@ -8,7 +8,7 @@ import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 
-type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "auditLogs";
+type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "auditLogs";
 
 type SettingsFilters = {
   customers: {
@@ -133,6 +133,7 @@ type AuditLogRow = {
 };
 
 type ExchangeRateSettings = Record<string, unknown>;
+type CommissionFormulaSettings = Record<string, unknown>;
 
 type ExchangeRateForm = {
   source: string;
@@ -141,6 +142,14 @@ type ExchangeRateForm = {
   allowManualEdit: boolean;
   allowMultipleOrderLogisticsSuppliers: boolean;
   allowAdminIncompleteTaxSubmit: boolean;
+};
+
+type CommissionFormulaForm = {
+  mode: string;
+  label: string;
+  source: string;
+  deductions: string[];
+  floorAtZero: boolean;
 };
 
 type PermissionOption = {
@@ -239,6 +248,25 @@ const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运�
 const LOGISTICS_COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
 const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
 const EXCHANGE_RATE_TYPES = ["现汇买入价", "现汇卖出价", "中间价"];
+const COMMISSION_FORMULA_PRESETS = [
+  { value: "ACTUAL_RECEIVED_MINUS_LOGISTICS", label: "实际到账 - 物流成本", source: "ARRIVED_PAYMENTS_CNY", deductions: ["LOGISTICS_COST_CNY"] },
+  { value: "ACTUAL_PROFIT", label: "实际利润", source: "REALIZED_GROSS_PROFIT_CNY", deductions: [] },
+  { value: "FOB_TOTAL", label: "FOB总额", source: "FOB_CNY", deductions: [] },
+  { value: "FOB_MINUS_LOGISTICS", label: "FOB - 物流成本", source: "FOB_CNY", deductions: ["LOGISTICS_COST_CNY"] },
+  { value: "CUSTOM", label: "自定义公式", source: "ARRIVED_PAYMENTS_CNY", deductions: ["LOGISTICS_COST_CNY"] },
+];
+const COMMISSION_FORMULA_SOURCES = [
+  { value: "ARRIVED_PAYMENTS_CNY", label: "实际到账货款" },
+  { value: "FOB_CNY", label: "FOB总额" },
+  { value: "EXPECTED_GROSS_PROFIT_CNY", label: "预计利润" },
+  { value: "REALIZED_GROSS_PROFIT_CNY", label: "实际利润" },
+];
+const COMMISSION_FORMULA_DEDUCTIONS = [
+  { value: "LOGISTICS_COST_CNY", label: "物流成本总和" },
+  { value: "TOTAL_COST_CNY", label: "总成本" },
+  { value: "CONFIRMED_TOTAL_COST_CNY", label: "已确认总成本" },
+  { value: "PAID_CONFIRMED_COST_CNY", label: "已支付确认成本" },
+];
 const USER_ROLES = ["管理员", "业务员", "财务", "成本录入员", "物流供应商", "物流资料录入员", "查看者"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
@@ -256,6 +284,7 @@ const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }
   { key: "suppliers", label: "供应商资料", description: "供应商类型、状态和物流相关开关。" },
   { key: "users", label: "用户与权限", description: "用户角色、账号状态和权限模式。" },
   { key: "exchangeRates", label: "汇率设置", description: "汇率来源、自动更新和管理员开关。" },
+  { key: "commissionFormula", label: "提成公式", description: "按公司规则组合业务员提成基数。" },
   { key: "auditLogs", label: "操作日志", description: "关键操作追溯记录。" },
 ];
 
@@ -307,6 +336,8 @@ export function SettingsModule() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [exchangeSettings, setExchangeSettings] = useState<ExchangeRateSettings | null>(null);
   const [exchangeForm, setExchangeForm] = useState<ExchangeRateForm | null>(null);
+  const [commissionFormulaSettings, setCommissionFormulaSettings] = useState<CommissionFormulaSettings | null>(null);
+  const [commissionFormulaForm, setCommissionFormulaForm] = useState<CommissionFormulaForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
@@ -315,6 +346,7 @@ export function SettingsModule() {
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
     exchangeRates: emptyPagination(PAGE_SIZE),
+    commissionFormula: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -331,6 +363,8 @@ export function SettingsModule() {
   const [exchangeSaving, setExchangeSaving] = useState(false);
   const [exchangeRefreshing, setExchangeRefreshing] = useState(false);
   const [exchangeMessage, setExchangeMessage] = useState("");
+  const [commissionFormulaSaving, setCommissionFormulaSaving] = useState(false);
+  const [commissionFormulaMessage, setCommissionFormulaMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -362,6 +396,14 @@ export function SettingsModule() {
         const settings = result.settings || {};
         setExchangeSettings(settings);
         setExchangeForm(exchangeFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "commissionFormula") {
+        const result = await apiJson<{ settings: CommissionFormulaSettings }>("/api/settings/commission-formula");
+        const settings = result.settings || {};
+        setCommissionFormulaSettings(settings);
+        setCommissionFormulaForm(commissionFormulaFormFromSettings(settings));
         markLoaded(tab);
         return;
       }
@@ -412,6 +454,7 @@ export function SettingsModule() {
     setUserForm(null);
     setUserMessage("");
     setExchangeMessage("");
+    setCommissionFormulaMessage("");
   }
 
   function submitSearch() {
@@ -716,6 +759,32 @@ export function SettingsModule() {
     }
   }
 
+  async function saveCommissionFormulaSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!commissionFormulaForm) return;
+    setCommissionFormulaSaving(true);
+    setCommissionFormulaMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: CommissionFormulaSettings; message?: string }>(
+        "/api/commission-formula/settings",
+        {
+          method: "PATCH",
+          body: JSON.stringify(commissionFormulaForm),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "提成公式设置保存失败");
+      const nextSettings = result.settings || commissionFormulaForm;
+      setCommissionFormulaSettings(nextSettings);
+      setCommissionFormulaForm(commissionFormulaFormFromSettings(nextSettings));
+      markLoaded("commissionFormula");
+      setCommissionFormulaMessage(result.message || "提成公式设置已保存");
+    } catch (saveError) {
+      setCommissionFormulaMessage(saveError instanceof Error ? saveError.message : "提成公式设置保存失败");
+    } finally {
+      setCommissionFormulaSaving(false);
+    }
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -752,7 +821,7 @@ export function SettingsModule() {
         ))}
       </div>
 
-      {activeTab !== "exchangeRates" ? (
+      {activeTab !== "exchangeRates" && activeTab !== "commissionFormula" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -872,6 +941,20 @@ export function SettingsModule() {
           }}
           onRefresh={refreshExchangeRatesManually}
           onSubmit={saveExchangeSettings}
+        />
+      ) : activeTab === "commissionFormula" ? (
+        <CommissionFormulaSettingsCard
+          settings={commissionFormulaSettings}
+          form={commissionFormulaForm}
+          loading={loading && !commissionFormulaSettings}
+          saving={commissionFormulaSaving}
+          message={commissionFormulaMessage}
+          onChange={setCommissionFormulaForm}
+          onReset={() => {
+            setCommissionFormulaForm(commissionFormulaFormFromSettings(commissionFormulaSettings));
+            setCommissionFormulaMessage("");
+          }}
+          onSubmit={saveCommissionFormulaSettings}
         />
       ) : (
         <SettingsTable
@@ -1180,6 +1263,121 @@ function ExchangeSettingsCard({
 
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存汇率设置"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
+      </div>
+    </form>
+  );
+}
+
+function CommissionFormulaSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+}: {
+  settings: CommissionFormulaSettings | null;
+  form: CommissionFormulaForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: CommissionFormulaForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载提成公式设置</div>;
+  const currentForm = form || commissionFormulaFormFromSettings(settings);
+  const formulaText = commissionFormulaPreview(currentForm);
+
+  function setField<K extends keyof CommissionFormulaForm>(key: K, value: CommissionFormulaForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  function applyPreset(mode: string) {
+    const preset = COMMISSION_FORMULA_PRESETS.find((item) => item.value === mode) || COMMISSION_FORMULA_PRESETS[0];
+    onChange({
+      ...currentForm,
+      mode: preset.value,
+      label: preset.label,
+      source: preset.source,
+      deductions: [...preset.deductions],
+    });
+  }
+
+  function toggleDeduction(value: string) {
+    const exists = currentForm.deductions.includes(value);
+    const deductions = exists
+      ? currentForm.deductions.filter((item) => item !== value)
+      : [...currentForm.deductions, value];
+    onChange({ ...currentForm, mode: "CUSTOM", label: currentForm.label || "自定义公式", deductions });
+  }
+
+  return (
+    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>提成公式</strong>
+          <span>管理员可按公司制度组合业务员提成基数，结算、利润分析和提成报表会使用同一公式。</span>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <div className={styles.reportFilterGrid}>
+        <label>
+          公式模板
+          <select value={currentForm.mode} onChange={(event) => applyPreset(event.target.value)}>
+            {COMMISSION_FORMULA_PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+          </select>
+        </label>
+        <label>
+          公式名称
+          <input value={currentForm.label} onChange={(event) => setField("label", event.target.value)} />
+        </label>
+        <label>
+          收入来源
+          <select
+            value={currentForm.source}
+            onChange={(event) => onChange({ ...currentForm, mode: "CUSTOM", source: event.target.value })}
+          >
+            {COMMISSION_FORMULA_SOURCES.map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}
+          </select>
+        </label>
+        <BooleanSelect
+          label="提成基数负数归零"
+          value={currentForm.floorAtZero}
+          onChange={(value) => setField("floorAtZero", value)}
+        />
+      </div>
+
+      <div className={styles.documentGroupCard}>
+        <strong>扣减项</strong>
+        <div className={styles.reportFilterGrid}>
+          {COMMISSION_FORMULA_DEDUCTIONS.map((item) => (
+            <label key={item.value}>
+              <input
+                type="checkbox"
+                checked={currentForm.deductions.includes(item.value)}
+                onChange={() => toggleDeduction(item.value)}
+              />
+              {item.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.emptyState}>当前公式：提成基数 = {formulaText}</div>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存提成公式"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
       </div>
     </form>
@@ -1902,6 +2100,7 @@ function placeholderFor(tab: SettingsTabKey) {
 
 function kebabTab(tab: SettingsTabKey) {
   if (tab === "exchangeRates") return "exchange-rates";
+  if (tab === "commissionFormula") return "commission-formula";
   if (tab === "auditLogs") return "audit-logs";
   return tab;
 }
@@ -1958,6 +2157,28 @@ function exchangeFormFromSettings(settings: ExchangeRateSettings | null): Exchan
     allowMultipleOrderLogisticsSuppliers: Boolean(settings?.allowMultipleOrderLogisticsSuppliers),
     allowAdminIncompleteTaxSubmit: Boolean(settings?.allowAdminIncompleteTaxSubmit),
   };
+}
+
+function commissionFormulaFormFromSettings(settings: CommissionFormulaSettings | null): CommissionFormulaForm {
+  const fallback = COMMISSION_FORMULA_PRESETS[0];
+  const deductions = Array.isArray(settings?.deductions)
+    ? settings.deductions.filter((item): item is string => typeof item === "string")
+    : fallback.deductions;
+  return {
+    mode: stringSetting(settings, "mode", fallback.value),
+    label: stringSetting(settings, "label", fallback.label),
+    source: stringSetting(settings, "source", fallback.source),
+    deductions,
+    floorAtZero: settings?.floorAtZero !== false,
+  };
+}
+
+function commissionFormulaPreview(form: CommissionFormulaForm) {
+  const sourceLabel = COMMISSION_FORMULA_SOURCES.find((item) => item.value === form.source)?.label || form.source;
+  const deductionLabels = form.deductions
+    .map((deduction) => COMMISSION_FORMULA_DEDUCTIONS.find((item) => item.value === deduction)?.label || deduction)
+    .filter(Boolean);
+  return [sourceLabel, ...deductionLabels.map((label) => `- ${label}`)].join(" ");
 }
 
 function stringSetting(settings: ExchangeRateSettings | null, key: string, fallback: string) {

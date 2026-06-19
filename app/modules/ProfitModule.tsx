@@ -13,6 +13,12 @@ type ProfitSummary = {
   arrivedPaymentsCny?: number;
   confirmedTotalCostCny?: number;
   totalCostCny?: number;
+  logisticsCostCny?: number;
+  commissionBaseCny?: number;
+  commissionFormulaLabel?: string;
+  commissionFormulaDescription?: string;
+  taxLogisticsCostsComplete?: boolean;
+  taxLogisticsMissingLabels?: string[];
   expectedGrossProfit?: number;
   expectedGrossMargin?: number | null;
   realizedGrossProfit?: number;
@@ -128,8 +134,8 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       details: [
       `订单号：${row.orderNo || "-"}`,
       `已到账：${formatCny(summary.arrivedPaymentsCny)}`,
-      `已确认总成本：${formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}`,
-      `预计毛利：${formatCny(summary.expectedGrossProfit)}`,
+      `物流成本：${formatCny(summary.logisticsCostCny)}`,
+      `提成基数：${formatCny(summary.commissionBaseCny)}`,
       `提成比例：${Number(summary.commissionRate || 0).toFixed(2)}%`,
       `应结算提成：${formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)}`,
       ],
@@ -380,10 +386,14 @@ function ProfitDetailDrawer({
         <DetailField label="最终应收" value={formatCny(summary.receivableCny)} />
         <DetailField label="已到账金额" value={formatCny(summary.arrivedPaymentsCny)} />
         <DetailField label="总成本" value={formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)} />
+        <DetailField label="物流成本" value={formatCny(summary.logisticsCostCny)} />
         <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
         <DetailField label="预计毛利率" value={formatPercent(summary.expectedGrossMargin)} />
         <DetailField label="已实现毛利" value={formatCny(summary.realizedGrossProfit)} />
         <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
+        <DetailField label="提成公式" value={summary.commissionFormulaLabel || summary.commissionFormulaDescription || "-"} />
+        <DetailField label="提成前置缺失" value={(summary.taxLogisticsMissingLabels || []).join("、") || "-"} wide />
+        <DetailField label="提成基数" value={formatCny(summary.commissionBaseCny)} />
         <DetailField label="业务员提成" value={formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
         <DetailField label="提成比例" value={`${Number(summary.commissionRate || 0).toFixed(2)}%`} />
         <DetailField label="提成状态" value={summary.commissionStatus || row.commissionStatus || "-"} />

@@ -312,7 +312,7 @@ async function baseRows(type, query, actor) {
   if (type === "costs") return (await listCosts(query, actor)).map(costToRow);
   if (type === "overdue") return (await getReminders(query, actor)).map(orderToOverdue);
   if (type === "profits") return (await getProfitAnalysis(query, actor)).map(orderToProfit);
-  if (type === "commissions") return (await listOrders(query, actor)).map(orderToCommission);
+  if (type === "commissions") return (await getProfitAnalysis(query, actor)).map(orderToCommission);
   if (type === "tax-refunds") return (await listOrders(query, actor)).map(orderToTaxRefund);
   return (await listOrders(query, actor)).map(orderToReceivable);
 }
