@@ -1858,18 +1858,21 @@
 
 .dataTable td {
   color: #475569;
+  font-size: 13px;
   font-weight: 400;
 }
 
 .dataTable td strong {
-  color: #334155;
-  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .dataTable button,
 .dataTable select,
 .dataTable input,
 .dataTable textarea {
+  font-size: 13px;
   font-weight: 400;
   color: #334155;
 }
@@ -3051,6 +3054,8 @@
   align-items: center;
   gap: 12px;
   color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
   flex-wrap: wrap;
 }
 
@@ -4929,6 +4934,7 @@
 .dataTable th,
 .tableSortButton {
   color: var(--text-heading);
+  font-size: 13px;
   font-weight: var(--font-weight-subtitle);
 }
 
@@ -4942,6 +4948,14 @@
 :global(.text-body),
 :global(.text-table) {
   font-weight: var(--font-weight-table);
+}
+
+.dataTable td,
+.dataTable td strong,
+.moneyCell,
+:global(.text-table) {
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
 }
 
 .authForm input,
@@ -5077,7 +5091,14 @@
 
 .dataTable .rowDetailButton {
   color: var(--text-heading);
+  font-size: 13px;
   font-weight: var(--font-weight-button);
+}
+
+.dataTable .statusPill {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
 }
 
 .reportFilterGrid label,
