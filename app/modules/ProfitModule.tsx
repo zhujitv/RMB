@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
 import { ResponsiveDataView } from "../ResponsiveDataView";
 import type { User } from "../types";
@@ -237,11 +237,11 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
             <table className={styles.dataTable}>
               <thead>
                 <tr>
-                  <th>订单号</th>
-                  <th>客户简称</th>
-                  <th>最终应收</th>
-                  <th>总成本</th>
-                  <th>预计毛利</th>
+                  <th className={styles.orderNoColumn}>订单号</th>
+                  <th className={styles.customerColumn}>客户简称</th>
+                  <th className={styles.amountColumn}>最终应收</th>
+                  <th className={styles.amountColumn}>总成本</th>
+                  <th className={styles.amountColumn}>预计毛利</th>
                   <th>预计毛利率</th>
                   <th>详情</th>
                 </tr>
@@ -311,11 +311,11 @@ function ProfitRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
-        <td>{formatCny(summary.receivableCny)}</td>
-        <td>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</td>
-        <td><strong>{formatCny(summary.expectedGrossProfit)}</strong></td>
+        <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
+        <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.receivableCny} /></td>
+        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.confirmedTotalCostCny ?? summary.totalCostCny} /></td>
+        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.expectedGrossProfit} /></td>
         <td>{formatPercent(summary.expectedGrossMargin)}</td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>

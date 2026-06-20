@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName } from "../utils";
@@ -379,10 +379,10 @@ export function PaymentsModule({
         <table className={styles.dataTable}>
           <thead>
             <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
+              <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.customerColumn}>客户简称</th>
               <th>收款日期</th>
-              <th>金额</th>
+              <th className={styles.amountColumn}>金额</th>
               <th>状态</th>
               <th>详情</th>
             </tr>
@@ -792,10 +792,10 @@ function PaymentTableRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td><strong>{payment.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
+        <td className={styles.orderNoColumn}><strong>{payment.orderNo || "-"}</strong></td>
+        <td className={styles.customerColumn} title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
         <td>{payment.paymentDate || "-"}</td>
-        <td>{moneyText(payment.currency, payment.amount, payment.amountCny)}</td>
+        <td className={styles.amountColumn}><MoneyAmount currency={payment.currency} amount={payment.amount} amountCny={payment.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>

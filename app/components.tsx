@@ -2,6 +2,7 @@
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
+import { formatAmount, formatCny } from "./formatters";
 import styles from "./WorkspaceShell.module.css";
 
 export type ConfirmationDialogState = {
@@ -99,6 +100,41 @@ export function UiButton({
         : styles.secondaryButton;
 
   return <button {...props} className={mergeClassNames(variantClass, className)} />;
+}
+
+export function MoneyAmount({
+  currency = "CNY",
+  amount,
+  amountCny,
+  prefix = "",
+  className,
+}: {
+  currency?: string;
+  amount?: unknown;
+  amountCny?: unknown;
+  prefix?: string;
+  className?: string;
+}) {
+  const normalizedCurrency = String(currency || "CNY").toUpperCase();
+  const hasAmount = amount !== "" && amount != null;
+  const primaryAmount = Number(hasAmount ? amount : amountCny || 0);
+  const cnyAmount = Number(amountCny ?? amount ?? 0);
+  const showForeignAmount = normalizedCurrency !== "CNY" && hasAmount && Number.isFinite(primaryAmount);
+
+  if (!showForeignAmount) {
+    return (
+      <div className={mergeClassNames(styles.amountCell, styles.amountCellSingle, className)}>
+        <div className={styles.currencyAmount}>{prefix}{formatCny(cnyAmount)}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={mergeClassNames(styles.amountCell, className)}>
+      <div className={styles.currencyAmount}>{prefix}{normalizedCurrency} {formatAmount(primaryAmount)}</div>
+      <div className={styles.cnyAmount}>≈ {formatCny(cnyAmount)}</div>
+    </div>
+  );
 }
 
 export function UiCheckbox({

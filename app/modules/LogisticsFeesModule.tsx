@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
@@ -511,11 +511,11 @@ export function LogisticsFeesModule({
         <table className={styles.dataTable}>
           <thead>
             <tr>
-              <th>订单号</th>
-              <th>提单号</th>
-              <th>客户简称</th>
+              <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.blNoColumn}>提单号</th>
+              <th className={styles.customerColumn}>客户简称</th>
               <th>供应商</th>
-              <th>费用合计</th>
+              <th className={styles.amountColumn}>费用合计</th>
               <th>审核状态</th>
               <th>发票状态</th>
               <th>付款状态</th>
@@ -606,13 +606,12 @@ function LogisticsExpenseRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
-        <td><strong>{expense.orderNo || "-"}</strong></td>
-        <td>{expense.blNo || expense.billOfLadingNo || "-"}</td>
-        <td title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
+        <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
+        <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
+        <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
         <td>{expense.supplierName || "-"}</td>
-        <td>
-          <strong>{formatCny(expense.amountCny || 0)}</strong>
-          <small className={styles.mutedText}>{expense.costType || "-"} {expense.currency || "CNY"} {Number(expense.amount || 0).toFixed(2)}</small>
+        <td className={styles.amountColumn}>
+          <MoneyAmount currency={expense.currency} amount={expense.amount} amountCny={expense.amountCny || 0} />
         </td>
         <td><StatusPill value={auditStatus} /></td>
         <td><StatusPill value={invoiceStatus} /></td>

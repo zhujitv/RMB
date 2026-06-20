@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
 import type { PermissionSnapshot, User } from "../types";
@@ -398,12 +398,12 @@ export function OrdersModule({
         <table className={styles.dataTable}>
           <thead>
             <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
-              <th>提单号</th>
-              <th>最终应收</th>
-              <th>已收</th>
-              <th>未收</th>
+              <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.customerColumn}>客户简称</th>
+              <th className={styles.blNoColumn}>提单号</th>
+              <th className={styles.amountColumn}>最终应收</th>
+              <th className={styles.amountColumn}>已收</th>
+              <th className={styles.amountColumn}>未收</th>
               <th>状态</th>
               <th>详情</th>
             </tr>
@@ -875,18 +875,20 @@ function OrderTableRows({
 }) {
   const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
   const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
-  const outstanding = Number(order.summary?.overpaidCny || 0) > 0
-    ? `多收 ${formatCny(order.summary?.overpaidCny)}`
-    : formatCny(outstandingCny);
+  const overpaidCny = Number(order.summary?.overpaidCny || 0);
+  const displayedBalanceCny = overpaidCny > 0 ? overpaidCny : outstandingCny;
+  const displayedBalanceAmount = overpaidCny > 0
+    ? orderCurrencyAmount(order, overpaidCny)
+    : (order.summary?.outstandingAmount ?? orderCurrencyAmount(order, outstandingCny));
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td><strong>{order.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(order)}>{customerDisplayName(order)}</td>
-        <td>{order.blNo || order.billOfLadingNo || "-"}</td>
-        <td>{moneyCell(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)}</td>
-        <td>{formatCny(receivedCny)}</td>
-        <td>{outstanding}</td>
+        <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
+        <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
+        <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
+        <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={order.finalReceivableAmount} amountCny={order.finalReceivableAmountCny} /></td>
+        <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={orderCurrencyAmount(order, receivedCny)} amountCny={receivedCny} /></td>
+        <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={displayedBalanceAmount} amountCny={displayedBalanceCny} prefix={overpaidCny > 0 ? "多收 " : ""} /></td>
         <td><span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
@@ -951,10 +953,6 @@ function OrderDetailDrawer({
       </div>
     </SideDetailDrawer>
   );
-}
-
-function moneyCell(currency = "CNY", amount: unknown, amountCny: unknown) {
-  return <span className={styles.moneyCell}>{moneyText(currency, amount, amountCny)}</span>;
 }
 
 function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
@@ -1023,6 +1021,14 @@ function rateMeta(order: OrderRow) {
   const source = order.exchangeRateSource || "待获取";
   const type = order.exchangeRateType || "-";
   return `来源：${source} / 类型：${type}${order.exchangeRateDate ? ` / 日期：${order.exchangeRateDate}` : ""}`;
+}
+
+function orderCurrencyAmount(order: OrderRow, cnyAmount: unknown) {
+  const currency = String(order.currency || "CNY").toUpperCase();
+  const exchangeRate = Number(order.exchangeRate || 0);
+  const cny = Number(cnyAmount || 0);
+  if (currency === "CNY" || !(exchangeRate > 0)) return undefined;
+  return cny / exchangeRate;
 }
 
 function orderStatusClass(status = "") {

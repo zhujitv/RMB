@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
@@ -1164,11 +1164,11 @@ function CostTableRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td><strong>{cost.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
+        <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
+        <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
         <td>{cost.costType || "-"}</td>
         <td>{supplierName}</td>
-        <td>{moneyText(cost.currency, cost.amount, cost.amountCny)}</td>
+        <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
@@ -1181,11 +1181,11 @@ function CostDetailTableHead() {
   return (
     <thead>
       <tr>
-        <th>订单号</th>
-        <th>客户简称</th>
+        <th className={styles.orderNoColumn}>订单号</th>
+        <th className={styles.customerColumn}>客户简称</th>
         <th>成本类型</th>
         <th>供应商</th>
-        <th>成本金额</th>
+        <th className={styles.amountColumn}>成本金额</th>
         <th>付款状态</th>
         <th>发票状态</th>
         <th>详情</th>
@@ -1198,10 +1198,10 @@ function CostOrderTableHead() {
   return (
     <thead>
       <tr>
-        <th>订单号</th>
-        <th>客户简称</th>
-        <th>提单号</th>
-        <th>总成本</th>
+        <th className={styles.orderNoColumn}>订单号</th>
+        <th className={styles.customerColumn}>客户简称</th>
+        <th className={styles.blNoColumn}>提单号</th>
+        <th className={styles.amountColumn}>总成本</th>
         <th>成本确认</th>
         <th>资料状态</th>
         <th>成本条数</th>
@@ -1225,10 +1225,10 @@ function CostOrderSummaryRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td><strong>{order.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(order)}>{customerDisplayName(order)}</td>
-        <td>{order.blNo || order.billOfLadingNo || "-"}</td>
-        <td>{formatCny(Number(order.totalCostCny || 0))}</td>
+        <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
+        <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
+        <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
+        <td className={styles.amountColumn}><MoneyAmount amountCny={order.totalCostCny || 0} /></td>
         <td><span className={styles.statusPill}>{confirmProgress}</span></td>
         <td><span className={styles.statusPill}>{documentProgress}</span></td>
         <td>{Number(order.costCount || 0)}</td>
