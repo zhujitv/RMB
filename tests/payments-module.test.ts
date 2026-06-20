@@ -35,13 +35,19 @@ test("payment order search supports receivable summaries without runtime permiss
   assert.match(paymentsModule, /搜索应收订单失败/);
 });
 
-test("payments list filters by order number and keeps detail-only expanded information", () => {
-  assert.match(paymentsModule, /type PaymentFilters = \{\s*orderNo: string;/);
-  assert.match(paymentsModule, /value=\{filters\.orderNo\}/);
-  assert.match(paymentsModule, /setFilter\("orderNo"/);
-  assert.match(paymentsModule, /placeholder="输入订单号，如 PV260"/);
-  assert.match(paymentsService, /query\?\.get\("orderNo"\) \|\| query\?\.get\("searchOrderNo"\) \|\| query\?\.get\("order"\)/);
-  assert.match(paymentsService, /orderNo: \{ contains: orderText/);
+test("payments list uses backend keyword fuzzy search and keeps detail-only expanded information", () => {
+  assert.match(paymentsModule, /type PaymentFilters = \{\s*keyword: string;/);
+  assert.match(paymentsModule, /value=\{filters\.keyword\}/);
+  assert.match(paymentsModule, /setFilter\("keyword"/);
+  assert.match(paymentsModule, /placeholder="搜索订单号 \/ 客户简称 \/ 客户全称 \/ 备注"/);
+  assert.match(paymentsService, /const keyword = nonEmpty\(query\?\.get\("keyword"\)\)/);
+  assert.match(paymentsService, /bankReference: \{ contains: keyword/);
+  assert.match(paymentsService, /remark: \{ contains: keyword/);
+  assert.match(paymentsService, /paymentType: \{ contains: keyword/);
+  assert.match(paymentsService, /orderNo: \{ contains: keyword/);
+  assert.match(paymentsService, /customerNameSnapshot: \{ contains: keyword/);
+  assert.match(paymentsService, /shortName: \{ contains: keyword/);
+  assert.match(paymentsService, /name: \{ contains: keyword/);
   assert.match(paymentsModule, /<DetailField label="订单号"/);
   assert.match(paymentsModule, /<DetailField label="创建时间"/);
   assert.match(paymentsModule, /<DetailField label="更新时间"/);

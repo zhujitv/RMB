@@ -118,7 +118,7 @@ type QuickPaymentForm = {
 };
 
 type PaymentFilters = {
-  orderNo: string;
+  keyword: string;
   month: string;
   currency: string;
   paymentStatus: string;
@@ -139,7 +139,7 @@ const emptyQuickPaymentForm: QuickPaymentForm = {
 };
 
 const emptyPaymentFilters: PaymentFilters = {
-  orderNo: "",
+  keyword: "",
   month: "",
   currency: "",
   paymentStatus: "",
@@ -232,7 +232,7 @@ export function PaymentsModule({
   useEffect(() => {
     const value = initialKeyword.trim();
     if (!initialOpenToken || !value) return;
-    const nextFilters = { ...emptyPaymentFilters, orderNo: value };
+    const nextFilters = { ...emptyPaymentFilters, keyword: value };
     setFilters(nextFilters);
     setSubmittedFilters(nextFilters);
     setDetailPayment(null);
@@ -319,10 +319,6 @@ export function PaymentsModule({
         />
       ) : null}
 
-      <div className={styles.infoStrip}>
-        正式回款统计仅以已到账状态为准，待确认收款不计入经营数据。
-      </div>
-
       <div className={styles.metricGrid} aria-label="收款汇总统计">
         {summaryCards.map((card) => (
           <article key={card.label} className={`${styles.metricCard} ${card.tone}`}>
@@ -335,12 +331,12 @@ export function PaymentsModule({
 
       <div className={styles.listToolbar}>
         <input
-          value={filters.orderNo}
-          onChange={(event) => setFilter("orderNo", event.target.value)}
+          value={filters.keyword}
+          onChange={(event) => setFilter("keyword", event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="输入订单号，如 PV260"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 备注"
         />
         <input value={filters.month} onChange={(event) => setFilter("month", event.target.value)} type="month" />
         <select value={filters.currency} onChange={(event) => setFilter("currency", event.target.value)} disabled={loading}>

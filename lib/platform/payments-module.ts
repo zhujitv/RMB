@@ -111,6 +111,7 @@ function paymentListWhere(query, accessWhere) {
       OR: [
         { bankReference: { contains: keyword, mode: "insensitive" } },
         { remark: { contains: keyword, mode: "insensitive" } },
+        { paymentType: { contains: keyword, mode: "insensitive" } },
         {
           order: {
             is: {
