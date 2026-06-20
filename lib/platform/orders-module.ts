@@ -55,30 +55,26 @@ import {
   defaultOrderLogisticsSupplier,
   syncOrderLogisticsSuppliers,
 } from "./masters-access";
+import { sortReceivableRowsByPaymentPriority } from "./order-receivable-sort";
 
 export async function listOrders(query, actor, options = {}) {
   assertRead(actor, "orders");
   const where = orderListWhere(query, actor);
-  if (options.paginated) {
-    const { page, pageSize } = pageParams(query, 20, 100);
-    const [total, orders] = await Promise.all([
-      prisma.receivableOrder.count({ where }),
-      prisma.receivableOrder.findMany({
-        where,
-        include: includeOrderRelations(),
-        orderBy: [{ createdAt: "desc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
-    return pageResult(orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))), total, page, pageSize);
-  }
   const orders = await prisma.receivableOrder.findMany({
     where,
     include: includeOrderRelations(),
     orderBy: [{ createdAt: "desc" }],
   });
-  return applyCommonFilters(orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))), query);
+  const sortedRows = sortReceivableRowsByPaymentPriority(applyCommonFilters(
+    orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),
+    query,
+  ));
+  if (options.paginated) {
+    const { page, pageSize } = pageParams(query, 20, 100);
+    const start = (page - 1) * pageSize;
+    return pageResult(sortedRows.slice(start, start + pageSize), sortedRows.length, page, pageSize);
+  }
+  return sortedRows;
 }
 
 function orderListWhere(query, actor) {
