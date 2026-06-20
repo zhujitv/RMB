@@ -381,23 +381,7 @@ export function OrdersModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
-        {loading ? (
-          <div className={styles.emptyState}>数据加载中...</div>
-        ) : orders.length ? (
-          orders.map((order) => (
-            <OrderMobileCard
-              key={order.id}
-              order={order}
-              onViewDetail={() => setDetailOrder(order)}
-            />
-          ))
-        ) : (
-          <div className={styles.emptyState}>未找到匹配的应收订单</div>
-        )}
-      </div>
-
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -894,49 +878,6 @@ function OrderTableRows({
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
     </>
-  );
-}
-
-function OrderMobileCard({
-  order,
-  onViewDetail,
-}: {
-  order: OrderRow;
-  onViewDetail: () => void;
-}) {
-  const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
-  const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
-  const outstanding = Number(order.summary?.overpaidCny || 0) > 0
-    ? `多收 ${formatCny(order.summary?.overpaidCny)}`
-    : formatCny(outstandingCny);
-  return (
-    <article className={styles.mobileDataCard}>
-      <div className={styles.mobileDataHeader}>
-        <div className={styles.mobileDataMeta}>
-          <strong>{order.orderNo || "-"}</strong>
-          <span title={customerLegalName(order)}>{customerDisplayName(order)}</span>
-          <span>提单号：{order.blNo || order.billOfLadingNo || "-"}</span>
-        </div>
-        <span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span>
-      </div>
-      <div className={styles.mobileMetricGrid}>
-        <div className={styles.mobileMetricItem}>
-          <span>最终应收</span>
-          <strong>{moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>已收</span>
-          <strong>{formatCny(receivedCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>未收</span>
-          <strong>{outstanding}</strong>
-        </div>
-      </div>
-      <div className={styles.mobileDataActions}>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
-      </div>
-    </article>
   );
 }
 
