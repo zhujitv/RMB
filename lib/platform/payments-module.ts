@@ -91,7 +91,7 @@ function withPaymentWhere(where, condition) {
 }
 
 function paymentListWhere(query, accessWhere) {
-  const keyword = nonEmpty(query?.get("keyword"));
+  const keyword = nonEmpty(query?.get("keyword") || query?.get("q") || query?.get("search"));
   const orderText = nonEmpty(query?.get("orderNo") || query?.get("searchOrderNo") || query?.get("order"));
   const party = nonEmpty(query?.get("party"));
   const currency = nonEmpty(query?.get("currency"));
