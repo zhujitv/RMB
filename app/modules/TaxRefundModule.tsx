@@ -338,6 +338,20 @@ export function TaxRefundModule({
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      setDetailRow(null);
+      setDetailOrderId("");
+      setDetail(null);
+      setNotice("");
+      void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter]);
+
+  useEffect(() => {
     if (!detail || !pendingDetailTarget || detailLoading) return;
     const targetId = taxTargetDomId(pendingDetailTarget);
     const timer = window.setTimeout(() => {
@@ -949,7 +963,7 @@ export function TaxRefundModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户 / 供应商"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 报关单号 / 提单号"
         />
         <input
           type="month"

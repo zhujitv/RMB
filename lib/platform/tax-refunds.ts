@@ -109,7 +109,7 @@ export async function listTaxRefundOrders(query, actor) {
   assertRead(actor, "taxRefund");
   const page = Math.max(1, Math.round(num(query.get("page"), 1)));
   const pageSize = Math.min(100, Math.max(1, Math.round(num(query.get("pageSize"), 20))));
-  const keyword = nonEmpty(query.get("q") || query.get("keyword") || query.get("search"));
+  const keyword = nonEmpty(query.get("keyword"));
   const mode = nonEmpty(query.get("mode")) === "archive" ? "archive" : "current";
   const statusFilter = nonEmpty(query.get("status"));
   const declarationStartMonth = nonEmpty(query.get("declarationStartMonth"));
@@ -127,22 +127,12 @@ export async function listTaxRefundOrders(query, actor) {
     OR: [
       { orderNo: { contains: keyword, mode: "insensitive" } },
       { blNo: { contains: keyword, mode: "insensitive" } },
+      { customsDeclarationNo: { contains: keyword, mode: "insensitive" } },
       { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
-      { country: { contains: keyword, mode: "insensitive" } },
-      { currency: { contains: keyword, mode: "insensitive" } },
       { taxRefundStatus: { contains: keyword, mode: "insensitive" } },
       { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } },
       { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } },
-      { customer: { is: { country: { contains: keyword, mode: "insensitive" } } } },
       { salesperson: { is: { name: { contains: keyword, mode: "insensitive" } } } },
-      { costs: { some: {
-        deletedAt: null,
-        OR: [
-          { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } },
-          { vendorName: { contains: keyword, mode: "insensitive" } },
-          { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
-        ],
-      } } },
       ...(statusMatches.length ? [{ taxRefundStatus: { in: statusMatches } }] : []),
     ],
   } : {};

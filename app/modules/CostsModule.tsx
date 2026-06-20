@@ -165,10 +165,6 @@ type CostOrderSummary = {
 
 type CostFilters = {
   keyword: string;
-  orderNo: string;
-  blNo: string;
-  customerName: string;
-  supplierName: string;
   costType: string;
   paymentStatus: string;
   costConfirmed: string;
@@ -217,10 +213,6 @@ function emptyCostItemForm(): CostItemForm {
 
 const emptyCostFilters: CostFilters = {
   keyword: "",
-  orderNo: "",
-  blNo: "",
-  customerName: "",
-  supplierName: "",
   costType: "",
   paymentStatus: "",
   costConfirmed: "",
@@ -285,7 +277,9 @@ export function CostsModule({
         archiveScope: nextArchiveScope,
         view: nextView,
       });
+      if (nextFilters.keyword.trim()) params.set("keyword", nextFilters.keyword.trim());
       Object.entries(nextFilters).forEach(([key, value]) => {
+        if (key === "keyword") return;
         const text = String(value || "").trim();
         if (text) params.set(key, text);
       });
@@ -322,6 +316,36 @@ export function CostsModule({
   useEffect(() => {
     void loadCosts(1, { ...emptyCostFilters });
   }, []);
+
+  useEffect(() => {
+    const value = filters.keyword.trim();
+    if (value === submittedFilters.keyword) return;
+    const timer = window.setTimeout(() => {
+      const nextFilters = Object.fromEntries(
+        Object.entries(filters).map(([key, filterValue]) => [
+          key,
+          key === "keyword" ? value : String(filterValue || "").trim(),
+        ]),
+      ) as CostFilters;
+      setSubmittedFilters(nextFilters);
+      setDetailCost(null);
+      setDetailOrderSummary(null);
+      setNotice("");
+      void loadCosts(1, nextFilters, archiveScope, costView);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [
+    filters.keyword,
+    filters.costType,
+    filters.paymentStatus,
+    filters.costConfirmed,
+    filters.invoiceStatus,
+    filters.dateFrom,
+    filters.dateTo,
+    submittedFilters.keyword,
+    archiveScope,
+    costView,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeRows = costView === "orders" ? orderRows : rows;
@@ -448,7 +472,7 @@ export function CostsModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 客户简称 / 供应商 / 成本类型"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 成本类型 / 供应商 / 备注"
         />
         <select value={archiveScope} onChange={(event) => changeArchiveScope(event.target.value)} disabled={loading}>
           <option value="current">当前业务</option>
@@ -460,22 +484,6 @@ export function CostsModule({
       </div>
 
       <div className={styles.reportFilterGrid}>
-        <label>
-          订单号
-          <input value={filters.orderNo} onChange={(event) => setFilter("orderNo", event.target.value)} placeholder="订单号" />
-        </label>
-        <label>
-          提单号
-          <input value={filters.blNo} onChange={(event) => setFilter("blNo", event.target.value)} placeholder="提单号" />
-        </label>
-        <label>
-          客户
-          <input value={filters.customerName} onChange={(event) => setFilter("customerName", event.target.value)} placeholder="客户简称 / 全称" />
-        </label>
-        <label>
-          供应商
-          <input value={filters.supplierName} onChange={(event) => setFilter("supplierName", event.target.value)} placeholder="供应商名称" />
-        </label>
         <label>
           成本类型
           <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>

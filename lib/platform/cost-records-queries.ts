@@ -75,10 +75,6 @@ function costInvoiceStatusFilter(value) {
 
 function costFilterClauses(query) {
   const keyword = insensitiveContains(query.get("keyword"));
-  const orderNo = insensitiveContains(query.get("orderNo"));
-  const blNo = insensitiveContains(query.get("blNo"));
-  const customerName = insensitiveContains(query.get("customerName"));
-  const supplierName = insensitiveContains(query.get("supplierName"));
   const costType = nonEmpty(query.get("costType"));
   const paymentStatus = nonEmpty(query.get("paymentStatus"));
   const costConfirmed = costConfirmedFilter(query.get("costConfirmed"));
@@ -92,29 +88,13 @@ function costFilterClauses(query) {
         { costType: keyword },
         { vendorName: keyword },
         { supplierNameSnapshot: keyword },
+        { remark: keyword },
         { order: { is: { orderNo: keyword } } },
-        { order: { is: { blNo: keyword } } },
         { order: { is: { customerNameSnapshot: keyword } } },
         { order: { is: { customer: { is: { name: keyword } } } } },
         { order: { is: { customer: { is: { shortName: keyword } } } } },
         { supplier: { is: { supplierName: keyword } } },
         { supplier: { is: { supplierType: keyword } } },
-      ],
-    } : null,
-    orderNo ? { order: { is: { orderNo } } } : null,
-    blNo ? { order: { is: { blNo } } } : null,
-    customerName ? {
-      OR: [
-        { order: { is: { customerNameSnapshot: customerName } } },
-        { order: { is: { customer: { is: { name: customerName } } } } },
-        { order: { is: { customer: { is: { shortName: customerName } } } } },
-      ],
-    } : null,
-    supplierName ? {
-      OR: [
-        { supplierNameSnapshot: supplierName },
-        { vendorName: supplierName },
-        { supplier: { is: { supplierName } } },
       ],
     } : null,
     costType && COST_TYPES.includes(costType) ? { costType: { in: equivalentCostTypes(costType) } } : null,

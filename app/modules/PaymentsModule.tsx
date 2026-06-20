@@ -207,7 +207,9 @@ export function PaymentsModule({
         page: String(nextPage),
         pageSize: String(PAGE_SIZE),
       });
+      if (nextFilters.keyword.trim()) params.set("keyword", nextFilters.keyword.trim());
       Object.entries(nextFilters).forEach(([key, value]) => {
+        if (key === "keyword") return;
         const text = String(value || "").trim();
         if (text) params.set(key, text);
       });
@@ -239,6 +241,25 @@ export function PaymentsModule({
     setNotice("");
     void loadPayments(1, nextFilters);
   }, [initialKeyword, initialOpenToken]);
+
+  useEffect(() => {
+    const value = filters.keyword.trim();
+    if (value === submittedFilters.keyword) return;
+    const timer = window.setTimeout(() => {
+      const nextFilters = {
+        ...filters,
+        keyword: value,
+        month: filters.month.trim(),
+        currency: filters.currency.trim(),
+        paymentStatus: filters.paymentStatus.trim(),
+      };
+      setSubmittedFilters(nextFilters);
+      setDetailPayment(null);
+      setNotice("");
+      void loadPayments(1, nextFilters);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [filters.keyword, filters.month, filters.currency, filters.paymentStatus, submittedFilters.keyword]);
 
   function setFilter<K extends keyof PaymentFilters>(key: K, value: PaymentFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));

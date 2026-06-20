@@ -40,7 +40,9 @@ test("payments list uses backend keyword fuzzy search and keeps detail-only expa
   assert.match(paymentsModule, /value=\{filters\.keyword\}/);
   assert.match(paymentsModule, /setFilter\("keyword"/);
   assert.match(paymentsModule, /placeholder="搜索订单号 \/ 客户简称 \/ 客户全称 \/ 备注"/);
-  assert.match(paymentsService, /const keyword = nonEmpty\(query\?\.get\("keyword"\) \|\| query\?\.get\("q"\) \|\| query\?\.get\("search"\)\)/);
+  assert.match(paymentsModule, /window\.setTimeout\(\(\) => \{/);
+  assert.match(paymentsModule, /}, 300\)/);
+  assert.match(paymentsService, /const keyword = nonEmpty\(query\?\.get\("keyword"\)\)/);
   assert.match(paymentsService, /bankReference: \{ contains: keyword/);
   assert.match(paymentsService, /remark: \{ contains: keyword/);
   assert.match(paymentsService, /paymentType: \{ contains: keyword/);

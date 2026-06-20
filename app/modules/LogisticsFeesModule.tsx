@@ -232,6 +232,18 @@ export function LogisticsFeesModule({
     void loadStatement(statementMonth);
   }, [refreshToken]);
 
+  useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      setExpandedId("");
+      setNotice("");
+      void loadExpenses(1, value, status, costType);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, submittedKeyword, status, costType]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function submitSearch() {
@@ -479,7 +491,7 @@ export function LogisticsFeesModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户 / 供应商"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 提单号 / 供应商"
         />
         <select value={status} onChange={(event) => { setStatus(event.target.value); setNotice(""); void loadExpenses(1, submittedKeyword, event.target.value, costType); }}>
           {AUDIT_FILTERS.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}

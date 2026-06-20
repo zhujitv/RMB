@@ -104,6 +104,18 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
     void loadRows(1, "");
   }, []);
 
+  useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      setDetailRow(null);
+      setNotice("");
+      void loadRows(1, value);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, submittedKeyword]);
+
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
@@ -192,7 +204,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户 / 供应商 / 业务员"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 业务员"
         />
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>

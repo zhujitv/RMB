@@ -82,9 +82,7 @@ export async function listOrders(query, actor, options = {}) {
 }
 
 function orderListWhere(query, actor) {
-  const keyword = nonEmpty(query?.get("keyword") || query?.get("q") || query?.get("search"));
-  const orderText = nonEmpty(query?.get("order") || query?.get("orderNo"));
-  const party = nonEmpty(query?.get("party") || query?.get("customerName"));
+  const keyword = nonEmpty(query?.get("keyword"));
   const country = nonEmpty(query?.get("country"));
   const currency = nonEmpty(query?.get("currency"));
   const orderStatus = nonEmpty(query?.get("orderStatus"));
@@ -108,39 +106,9 @@ function orderListWhere(query, actor) {
         { orderNo: { contains: keyword, mode: "insensitive" } },
         { blNo: { contains: keyword, mode: "insensitive" } },
         { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
-        { country: { contains: keyword, mode: "insensitive" } },
-        { currency: { contains: keyword, mode: "insensitive" } },
-        { status: { contains: keyword, mode: "insensitive" } },
         { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } },
         { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } },
-        { customer: { is: { country: { contains: keyword, mode: "insensitive" } } } },
         { salesperson: { is: { name: { contains: keyword, mode: "insensitive" } } } },
-        { costs: { some: {
-          deletedAt: null,
-          OR: [
-            { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } },
-            { vendorName: { contains: keyword, mode: "insensitive" } },
-            { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
-          ],
-        } } },
-      ],
-    });
-  }
-  if (orderText) {
-    filters.push({
-      OR: [
-        { orderNo: { contains: orderText, mode: "insensitive" } },
-        { blNo: { contains: orderText, mode: "insensitive" } },
-      ],
-    });
-  }
-  if (party) {
-    filters.push({
-      OR: [
-        { customerNameSnapshot: { contains: party, mode: "insensitive" } },
-        { customer: { is: { name: { contains: party, mode: "insensitive" } } } },
-        { customer: { is: { shortName: { contains: party, mode: "insensitive" } } } },
-        { salesperson: { is: { name: { contains: party, mode: "insensitive" } } } },
       ],
     });
   }

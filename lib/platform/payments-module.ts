@@ -91,9 +91,7 @@ function withPaymentWhere(where, condition) {
 }
 
 function paymentListWhere(query, accessWhere) {
-  const keyword = nonEmpty(query?.get("keyword") || query?.get("q") || query?.get("search"));
-  const orderText = nonEmpty(query?.get("orderNo") || query?.get("searchOrderNo") || query?.get("order"));
-  const party = nonEmpty(query?.get("party"));
+  const keyword = nonEmpty(query?.get("keyword"));
   const currency = nonEmpty(query?.get("currency"));
   const paymentStatus = nonEmpty(query?.get("paymentStatus"));
   const month = nonEmpty(query?.get("month"));
@@ -117,43 +115,14 @@ function paymentListWhere(query, accessWhere) {
             is: {
               OR: [
                 { orderNo: { contains: keyword, mode: "insensitive" } },
-                { blNo: { contains: keyword, mode: "insensitive" } },
                 { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
-                { country: { contains: keyword, mode: "insensitive" } },
                 { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } },
                 { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } },
-                { salesperson: { is: { name: { contains: keyword, mode: "insensitive" } } } },
               ],
             },
           },
         },
       ],
-    });
-  }
-  if (orderText) {
-    filters.push({
-      order: {
-        is: {
-          OR: [
-            { orderNo: { contains: orderText, mode: "insensitive" } },
-            { blNo: { contains: orderText, mode: "insensitive" } },
-          ],
-        },
-      },
-    });
-  }
-  if (party) {
-    filters.push({
-      order: {
-        is: {
-          OR: [
-            { customerNameSnapshot: { contains: party, mode: "insensitive" } },
-            { customer: { is: { name: { contains: party, mode: "insensitive" } } } },
-            { customer: { is: { shortName: { contains: party, mode: "insensitive" } } } },
-            { salesperson: { is: { name: { contains: party, mode: "insensitive" } } } },
-          ],
-        },
-      },
     });
   }
   return { AND: filters };

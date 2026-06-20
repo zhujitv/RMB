@@ -252,6 +252,21 @@ export function DomesticLogisticsModule({
     });
   }, [initialOpenToken]);
 
+  useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      setPage(1);
+      setExpandedId("");
+      setEditingOrderId("");
+      setFeeEntryOrderId("");
+      setNotice("");
+      void loadRows(value, businessScope);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, submittedKeyword, businessScope]);
+
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageRows = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -413,7 +428,7 @@ export function DomesticLogisticsModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户 / 到达地 / 货物"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 提单号 / 柜号 / 物流供应商"
         />
         <select value={businessScope} onChange={(event) => changeBusinessScope(event.target.value)} disabled={loading}>
           {ARCHIVE_SCOPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

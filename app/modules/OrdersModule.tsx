@@ -250,6 +250,19 @@ export function OrdersModule({
     void loadOrders(1, value, submittedOrderStatus);
   }, [initialKeyword, initialOpenToken]);
 
+  useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      setSubmittedOrderStatus(orderStatus);
+      setDetailOrder(null);
+      setNotice("");
+      void loadOrders(1, value, orderStatus);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, orderStatus, submittedKeyword]);
+
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
@@ -368,7 +381,7 @@ export function OrdersModule({
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 提单号 / 客户简称 / 供应商"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 提单号 / 业务员"
         />
         <select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} disabled={loading}>
           <option value="">全部订单状态</option>

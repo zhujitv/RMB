@@ -112,6 +112,16 @@ export function DashboardModule() {
     void loadOverview(currentMonth, "");
   }, []);
 
+  useEffect(() => {
+    const value = keyword.trim();
+    if (value === submittedKeyword) return;
+    const timer = window.setTimeout(() => {
+      setSubmittedKeyword(value);
+      void loadOverview(month, value);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword, month, submittedKeyword]);
+
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
@@ -163,7 +173,7 @@ export function DashboardModule() {
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="综合搜索：订单号 / 提单号 / 客户 / 供应商 / 业务员"
+          placeholder="搜索订单号 / 客户简称 / 客户全称 / 业务员"
         />
         <button className={styles.primaryButtonCompact} type="button" disabled={loading} onClick={submitSearch}>查询</button>
         <button className={styles.secondaryButton} type="button" disabled={loading} onClick={resetSearch}>重置</button>

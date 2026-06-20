@@ -35,7 +35,7 @@ import { orderAccessWhere } from "./order-access";
 
 export async function listDomesticLogisticsOrders(query, actor) {
   assertRead(actor, "domesticLogistics");
-  const keyword = nonEmpty(query.get("keyword") || query.get("q") || query.get("orderNo"));
+  const keyword = nonEmpty(query.get("keyword"));
   const businessScope = archiveScope(query);
   const andConditions = [];
   if (keyword) {
@@ -46,22 +46,15 @@ export async function listDomesticLogisticsOrders(query, actor) {
         { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
         { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } },
         { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } },
-        { customer: { is: { country: { contains: keyword, mode: "insensitive" } } } },
+        { logisticsSuppliers: { some: { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } } } },
+        { logisticsSuppliers: { some: { supplier: { is: { supplierType: { contains: keyword, mode: "insensitive" } } } } } },
         { domesticLogisticsInfos: { some: {
           deletedAt: null,
           OR: [
-            { destinationPlace: { contains: keyword, mode: "insensitive" } },
-            { cargoDescription: { contains: keyword, mode: "insensitive" } },
-            { expressTrackingNo: { contains: keyword, mode: "insensitive" } },
             { remarkText: { contains: keyword, mode: "insensitive" } },
             { transportItems: { some: {
               OR: [
                 { containerNo: { contains: keyword, mode: "insensitive" } },
-                { truckPlateNo: { contains: keyword, mode: "insensitive" } },
-                { trailerPlateNo: { contains: keyword, mode: "insensitive" } },
-                { departurePlace: { contains: keyword, mode: "insensitive" } },
-                { arrivalPlace: { contains: keyword, mode: "insensitive" } },
-                { cargoName: { contains: keyword, mode: "insensitive" } },
               ],
             } } },
           ],
