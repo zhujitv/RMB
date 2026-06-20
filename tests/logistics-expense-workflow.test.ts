@@ -34,6 +34,8 @@ const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
   assert.match(schema, /model LogisticsExpense/);
@@ -136,9 +138,28 @@ test("sales commission base uses actual received payments minus logistics costs"
   assert.match(backend, /commissionBaseCny: summary\.commissionBaseCny/);
   assert.match(settingsModule, /提成公式/);
   assert.match(settingsModule, /公式模板/);
+  assert.match(settingsModule, /commissionDeductionGrid/);
+  assert.match(settingsModule, /UiOptionCard/);
+  assert.match(settingsModule, /从FOB中扣减物流费用/);
+  assert.match(settingsModule, /<UiSwitch[\s\S]*label="提成基数负数归零"/);
+  assert.match(settingsModule, /toggleDeduction\(item\.value\)/);
   assert.match(profitModule, /提成基数/);
   assert.doesNotMatch(backend, /const estimatedCommissionBaseCny = Math\.max\(expectedGrossProfit, 0\);/);
   assert.doesNotMatch(backend, /const settleableCommissionBaseCny = Math\.max\(expectedGrossProfit, 0\);/);
+});
+
+test("checkbox controls use modern custom selection styling", () => {
+  assert.match(settingsModule, /commissionDeductionGrid/);
+  assert.match(settingsModule, /UiCheckbox/);
+  assert.match(reportsModule, /variant="table"/);
+  assert.match(workspaceStyles, /\.uiChoiceCardChecked/);
+  assert.match(workspaceStyles, /border-color: #3b82f6/);
+  assert.match(workspaceStyles, /background: rgba\(59, 130, 246, 0\.08\)/);
+  assert.match(workspaceStyles, /\.checkboxPanel label:has\(input:checked\)/);
+  assert.match(workspaceStyles, /\.permissionGroup label:has\(input:checked\)/);
+  assert.match(workspaceStyles, /\.inlineCheckbox:has\(input:checked\)/);
+  assert.match(workspaceStyles, /\.tableCheckbox:checked/);
+  assert.match(workspaceStyles, /background-image: url\("data:image\/svg\+xml/);
 });
 
 test("commission settlement requires complete tax refund logistics costs", () => {

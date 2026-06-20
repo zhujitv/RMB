@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, SideDetailDrawer } from "../components";
+import { DetailField, PaginationBar, SideDetailDrawer, UiCheckbox, UiOptionCard, UiSwitch } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
@@ -262,10 +262,10 @@ const COMMISSION_FORMULA_SOURCES = [
   { value: "REALIZED_GROSS_PROFIT_CNY", label: "实际利润" },
 ];
 const COMMISSION_FORMULA_DEDUCTIONS = [
-  { value: "LOGISTICS_COST_CNY", label: "物流成本总和" },
-  { value: "TOTAL_COST_CNY", label: "总成本" },
-  { value: "CONFIRMED_TOTAL_COST_CNY", label: "已确认总成本" },
-  { value: "PAID_CONFIRMED_COST_CNY", label: "已支付确认成本" },
+  { value: "LOGISTICS_COST_CNY", label: "物流成本总和", description: "从FOB中扣减物流费用" },
+  { value: "TOTAL_COST_CNY", label: "总成本", description: "扣减所有成本" },
+  { value: "CONFIRMED_TOTAL_COST_CNY", label: "已确认总成本", description: "只扣减已确认的成本" },
+  { value: "PAID_CONFIRMED_COST_CNY", label: "已支付确认成本", description: "只扣减已支付且已确认的成本" },
 ];
 const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
 const USER_APPROVAL_STATUS_OPTIONS = [
@@ -274,11 +274,6 @@ const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "已拒绝", value: "REJECTED" },
   { label: "已停用", value: "DISABLED" },
 ];
-const BOOLEAN_OPTIONS = [
-  { label: "关闭", value: false },
-  { label: "开启", value: true },
-];
-
 const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }[] = [
   { key: "customers", label: "客户资料", description: "客户简称、国家、币种和负责业务员。" },
   { key: "suppliers", label: "供应商资料", description: "供应商类型、状态和物流相关开关。" },
@@ -1351,25 +1346,25 @@ function CommissionFormulaSettingsCard({
             {COMMISSION_FORMULA_SOURCES.map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}
           </select>
         </label>
-        <BooleanSelect
+        <UiSwitch
           label="提成基数负数归零"
-          value={currentForm.floorAtZero}
+          description="开启后，扣减后的负数基数按 0 处理。"
+          checked={currentForm.floorAtZero}
           onChange={(value) => setField("floorAtZero", value)}
         />
       </div>
 
       <div className={styles.documentGroupCard}>
         <strong>扣减项</strong>
-        <div className={styles.reportFilterGrid}>
+        <div className={styles.commissionDeductionGrid}>
           {COMMISSION_FORMULA_DEDUCTIONS.map((item) => (
-            <label key={item.value}>
-              <input
-                type="checkbox"
-                checked={currentForm.deductions.includes(item.value)}
-                onChange={() => toggleDeduction(item.value)}
-              />
-              {item.label}
-            </label>
+            <UiOptionCard
+              key={item.value}
+              label={item.label}
+              description={item.description}
+              checked={currentForm.deductions.includes(item.value)}
+              onChange={() => toggleDeduction(item.value)}
+            />
           ))}
         </div>
       </div>
@@ -1507,14 +1502,12 @@ function CustomerEditPanel({
           <strong>清关资料自动通知</strong>
           <span>用于自动或手动向客户发送商业发票、装箱单和报关单。</span>
         </div>
-        <label className={styles.inlineCheckbox}>
-          <input
-            type="checkbox"
-            checked={form.enableAutoShippingDocsNotification}
-            onChange={(event) => setField("enableAutoShippingDocsNotification", event.target.checked)}
-          />
-          <span>启用报关单确认后的自动发送</span>
-        </label>
+        <UiCheckbox
+          variant="inline"
+          label="启用报关单确认后的自动发送"
+          checked={form.enableAutoShippingDocsNotification}
+          onChange={(event) => setField("enableAutoShippingDocsNotification", event.currentTarget.checked)}
+        />
         <div className={styles.reportFilterGrid}>
           <label>
             清关资料接收邮箱
@@ -1546,14 +1539,13 @@ function CustomerEditPanel({
           <strong>自动发送资料</strong>
           <div>
             {SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => (
-              <label key={option.value}>
-                <input
-                  type="checkbox"
-                  checked={form.autoSendDocumentTypes.includes(option.value)}
-                  onChange={() => toggleShippingDocumentType(option.value)}
-                />
-                {option.label}
-              </label>
+              <UiCheckbox
+                key={option.value}
+                variant="compact"
+                label={option.label}
+                checked={form.autoSendDocumentTypes.includes(option.value)}
+                onChange={() => toggleShippingDocumentType(option.value)}
+              />
             ))}
           </div>
         </div>
@@ -1706,15 +1698,14 @@ function SupplierEditPanel({
         <strong>允许录入的物流费用类型</strong>
         <div>
           {LOGISTICS_COST_TYPES.map((costType) => (
-            <label key={costType}>
-              <input
-                type="checkbox"
-                checked={form.allowedLogisticsCostTypes.includes(costType)}
-                disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
-                onChange={() => toggleCostType(costType)}
-              />
-              {costType}
-            </label>
+            <UiCheckbox
+              key={costType}
+              variant="compact"
+              label={costType}
+              checked={form.allowedLogisticsCostTypes.includes(costType)}
+              disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
+              onChange={() => toggleCostType(costType)}
+            />
           ))}
         </div>
       </div>
@@ -1734,16 +1725,16 @@ function BooleanSelect({ label, value, disabled, onChange }: {
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label>
-      {label}
-      <select value={String(Boolean(value))} disabled={disabled} onChange={(event) => onChange(event.target.value === "true")}>
-        {BOOLEAN_OPTIONS.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
-      </select>
-    </label>
+    <UiSwitch
+      label={label}
+      checked={Boolean(value)}
+      disabled={disabled}
+      onChange={onChange}
+    />
   );
 }
 
-function PermissionCheckboxGroup({
+function PermissionChoiceGroup({
   title,
   options,
   values,
@@ -1759,14 +1750,13 @@ function PermissionCheckboxGroup({
       <strong>{title}</strong>
       <div>
         {options.map((option) => (
-          <label key={option.value}>
-            <input
-              type="checkbox"
-              checked={values.includes(option.value)}
-              onChange={() => onToggle(option.value)}
-            />
-            {option.label}
-          </label>
+          <UiCheckbox
+            key={option.value}
+            variant="compact"
+            label={option.label}
+            checked={values.includes(option.value)}
+            onChange={() => onToggle(option.value)}
+          />
         ))}
       </div>
     </section>
@@ -1935,19 +1925,19 @@ function UserEditPanel({
         </div>
         {form.permissionMode === "CUSTOM" ? (
           <div className={styles.permissionMatrix}>
-            <PermissionCheckboxGroup
+            <PermissionChoiceGroup
               title="菜单权限"
               options={permissionConfig?.menuPermissionOptions || []}
               values={form.menus}
               onToggle={(value) => togglePermission("menus", value)}
             />
-            <PermissionCheckboxGroup
+            <PermissionChoiceGroup
               title="查看权限"
               options={permissionConfig?.readPermissionOptions || []}
               values={form.reads}
               onToggle={(value) => togglePermission("reads", value)}
             />
-            <PermissionCheckboxGroup
+            <PermissionChoiceGroup
               title="操作权限"
               options={permissionConfig?.writePermissionOptions || []}
               values={form.writes}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar } from "../components";
+import { DetailField, PaginationBar, UiCheckbox } from "../components";
 import { canReadPermission, customerDisplayName, customerLegalName, downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -410,7 +410,13 @@ export function ReportsModule({
           <thead>
             <tr>
               <th>
-                <input aria-label="全选当前页" type="checkbox" checked={allPageSelected} disabled={!rows.length} onChange={togglePageSelection} />
+                <UiCheckbox
+                  label="全选当前页"
+                  variant="table"
+                  checked={allPageSelected}
+                  disabled={!rows.length}
+                  onChange={togglePageSelection}
+                />
               </th>
               {visibleColumns.map((column) => (
                 <th key={column.key}>
@@ -492,13 +498,14 @@ function ReportRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td>
-          <input
-            aria-label="选择此行"
-            type="checkbox"
-            checked={selected}
-            onClick={(event) => event.stopPropagation()}
-            onChange={onSelect}
-          />
+          <span onClick={(event) => event.stopPropagation()}>
+            <UiCheckbox
+              label="选择此行"
+              variant="table"
+              checked={selected}
+              onChange={onSelect}
+            />
+          </span>
         </td>
         {visibleColumns.map((column) => <td key={column.key}>{displayValue(row, column)}</td>)}
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
