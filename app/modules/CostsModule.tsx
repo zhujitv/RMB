@@ -527,31 +527,7 @@ export function CostsModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
-        {loading ? (
-          <div className={styles.emptyState}>数据加载中...</div>
-        ) : activeRows.length ? (
-          costView === "orders"
-            ? orderRows.map((order) => (
-              <CostOrderMobileCard
-                key={order.id}
-                order={order}
-                onViewDetail={() => setDetailOrderSummary(order)}
-              />
-            ))
-            : rows.map((cost) => (
-              <CostMobileCard
-                key={cost.id}
-                cost={cost}
-                onViewDetail={() => setDetailCost(cost)}
-              />
-            ))
-        ) : (
-          <div className={styles.emptyState}>未找到匹配的{costView === "orders" ? "订单成本汇总" : "成本明细"}</div>
-        )}
-      </div>
-
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           {costView === "orders" ? <CostOrderTableHead /> : <CostDetailTableHead />}
           <tbody>
@@ -566,7 +542,7 @@ export function CostsModule({
                   order={order}
                   onViewDetail={() => setDetailOrderSummary(order)}
                   onViewDetails={() => {
-                    const nextFilters = { ...emptyCostFilters, orderNo: order.orderNo || "" };
+                    const nextFilters = { ...emptyCostFilters, keyword: order.orderNo || "" };
                     setCostView("details");
                     setFilters(nextFilters);
                     setSubmittedFilters(nextFilters);
@@ -617,7 +593,7 @@ export function CostsModule({
         <CostOrderSummaryDrawer
           order={detailOrderSummary}
           onViewDetails={() => {
-            const nextFilters = { ...emptyCostFilters, orderNo: detailOrderSummary.orderNo || "" };
+            const nextFilters = { ...emptyCostFilters, keyword: detailOrderSummary.orderNo || "" };
             setCostView("details");
             setFilters(nextFilters);
             setSubmittedFilters(nextFilters);
@@ -1201,43 +1177,6 @@ function CostTableRows({
   );
 }
 
-function CostMobileCard({
-  cost,
-  onViewDetail,
-}: {
-  cost: CostRow;
-  onViewDetail: () => void;
-}) {
-  const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
-  return (
-    <article className={styles.mobileDataCard}>
-      <div className={styles.mobileDataHeader}>
-        <div className={styles.mobileDataMeta}>
-          <strong>{cost.orderNo || "-"}</strong>
-          <span>{cost.costType || "-"}</span>
-          <span>{supplierName}</span>
-        </div>
-        <span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>
-          {cost.paymentStatus || "-"}
-        </span>
-      </div>
-      <div className={styles.mobileMetricGrid}>
-        <div className={styles.mobileMetricItem}>
-          <span>成本金额</span>
-          <strong>{moneyText(cost.currency, cost.amount, cost.amountCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>发票状态</span>
-          <strong>{cost.invoiceStatus || "-"}</strong>
-        </div>
-      </div>
-      <div className={styles.mobileDataActions}>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
-      </div>
-    </article>
-  );
-}
-
 function CostDetailTableHead() {
   return (
     <thead>
@@ -1296,45 +1235,6 @@ function CostOrderSummaryRows({
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
     </>
-  );
-}
-
-function CostOrderMobileCard({
-  order,
-  onViewDetail,
-}: {
-  order: CostOrderSummary;
-  onViewDetail: () => void;
-}) {
-  const confirmProgress = order.costConfirmProgress?.text || "无成本";
-  const documentProgress = order.documentProgress?.text || "无需资料";
-  return (
-    <article className={styles.mobileDataCard}>
-      <div className={styles.mobileDataHeader}>
-        <div className={styles.mobileDataMeta}>
-          <strong>{order.orderNo || "-"}</strong>
-          <span title={customerLegalName(order)}>{customerDisplayName(order)}</span>
-          <span>提单号：{order.blNo || order.billOfLadingNo || "-"}</span>
-        </div>
-      </div>
-      <div className={styles.mobileMetricGrid}>
-        <div className={styles.mobileMetricItem}>
-          <span>总成本</span>
-          <strong>{formatCny(Number(order.totalCostCny || 0))}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>成本确认</span>
-          <strong>{confirmProgress}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>资料状态</span>
-          <strong>{documentProgress}</strong>
-        </div>
-      </div>
-      <div className={styles.mobileDataActions}>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
-      </div>
-    </article>
   );
 }
 
