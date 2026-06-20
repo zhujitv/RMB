@@ -21,6 +21,8 @@ const costsModule = readFileSync("lib/platform/cost-records-mutations.ts", "utf8
 const loginRoute = readFileSync("app/api/auth/login/route.ts", "utf8");
 const registerRoute = readFileSync("app/api/auth/register/route.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
+const packageJson = readFileSync("package.json", "utf8");
+const runWithEnvScript = readFileSync("scripts/run-with-env.mjs", "utf8");
 
 function cspFor(isDevelopment: boolean) {
   return execFileSync(process.execPath, [
@@ -137,6 +139,22 @@ test("server and audit logs redact sensitive file and credential fields", () => 
   assert.doesNotMatch(orderDocumentsRoute, /originalName: file/);
   assert.doesNotMatch(orderDocumentsRoute, /originalFilename/);
   assert.doesNotMatch(orderDocumentsService, /originalFilename: document\.originalFilename/);
+});
+
+test("expected auth failures do not flood server error logs", () => {
+  assert.match(sharedBaseUtils, /function shouldLogApiErrorStatus\(status: number\)/);
+  assert.match(sharedBaseUtils, /status === 401 \|\| status === 403/);
+  assert.match(sharedBaseUtils, /LOG_EXPECTED_AUTH_ERRORS === "true"/);
+  assert.match(sharedBaseUtils, /if \(shouldLogApiErrorStatus\(status\)\) logServerError\(fallback, error\)/);
+});
+
+test("local build scripts load env files before prisma commands", () => {
+  assert.match(packageJson, /"build:app": "node scripts\/run-with-env\.mjs prisma generate && next build"/);
+  assert.match(packageJson, /"build:release": "node scripts\/run-with-env\.mjs prisma migrate deploy && npm run build:app"/);
+  assert.match(packageJson, /"db:deploy": "node scripts\/run-with-env\.mjs prisma migrate deploy"/);
+  assert.match(runWithEnvScript, /const ENV_FILES = \["\.env", "\.env\.local"\]/);
+  assert.match(runWithEnvScript, /originalEnvKeys\.has\(key\)/);
+  assert.match(runWithEnvScript, /spawnSync\(command, args/);
 });
 
 test("legacy attachment model and service are removed", () => {

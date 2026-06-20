@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build:app": "prisma generate && next build",
-    "build:release": "prisma migrate deploy && npm run build:app",
+    "build:app": "node scripts/run-with-env.mjs prisma generate && next build",
+    "build:release": "node scripts/run-with-env.mjs prisma migrate deploy && npm run build:app",
     "build": "npm run build:app",
     "lint": "node --experimental-strip-types --check proxy.ts && node --check next.config.mjs && node --experimental-strip-types --check lib/platform-db.ts && node --experimental-strip-types --check lib/prisma.ts",
     "typecheck": "tsc --noEmit",
@@ -19,7 +19,7 @@
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "node scripts/run-with-env.mjs prisma migrate deploy",
     "db:studio": "prisma studio"
   },
   "dependencies": {

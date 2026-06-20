@@ -82,12 +82,17 @@ export function logSecurityEvent(label: string, context: Record<string, unknown>
   console.warn(label, sanitizeLogValue("context", context));
 }
 
+function shouldLogApiErrorStatus(status: number) {
+  if (status === 401 || status === 403) return process.env.LOG_EXPECTED_AUTH_ERRORS === "true";
+  return true;
+}
+
 export function apiError(error: unknown, fallback = "请求处理失败") {
-  logServerError(fallback, error);
-  const isProduction = process.env.NODE_ENV === "production";
-  const exposeDetails = process.env.EXPOSE_ERROR_DETAILS === "true";
   const typedError = (error || {}) as AppError;
   const status = typedError.status || 500;
+  if (shouldLogApiErrorStatus(status)) logServerError(fallback, error);
+  const isProduction = process.env.NODE_ENV === "production";
+  const exposeDetails = process.env.EXPOSE_ERROR_DETAILS === "true";
   const safeMessage = isProduction && status >= 500 && !typedError.expose ? fallback : (typedError.message || fallback);
   return NextResponse.json(
     {
