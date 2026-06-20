@@ -228,7 +228,6 @@ export function ManualModule() {
       </div>
 
       <div className={styles.manualRuleCard}>
-        <strong>重要规则</strong>
         <ul>
           {IMPORTANT_RULES.map((rule) => <li key={rule}>{rule}</li>)}
         </ul>

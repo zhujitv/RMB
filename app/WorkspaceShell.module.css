@@ -1478,20 +1478,23 @@
 
 .manualHeroBadge {
   min-width: 220px;
-  border-radius: 20px;
-  background: #0f172a;
-  color: #fff;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+  color: #1d4ed8;
   padding: 22px;
   display: grid;
   gap: 8px;
 }
 
 .manualHeroBadge strong {
+  color: #1d4ed8;
   font-size: 22px;
+  font-weight: 700;
 }
 
 .manualHeroBadge span {
-  color: #cbd5e1;
+  color: #64748b;
   font-size: 13px;
 }
 
@@ -1573,7 +1576,7 @@
 }
 
 .manualRuleCard ul {
-  margin: 10px 0 0;
+  margin: 0;
   padding-left: 18px;
   color: #7c2d12;
   line-height: 1.75;
