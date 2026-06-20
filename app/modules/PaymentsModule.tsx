@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
-import { formatCny, moneyText } from "../formatters";
+import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
@@ -118,7 +118,7 @@ type QuickPaymentForm = {
 };
 
 type PaymentFilters = {
-  keyword: string;
+  orderNo: string;
   month: string;
   currency: string;
   paymentStatus: string;
@@ -139,7 +139,7 @@ const emptyQuickPaymentForm: QuickPaymentForm = {
 };
 
 const emptyPaymentFilters: PaymentFilters = {
-  keyword: "",
+  orderNo: "",
   month: "",
   currency: "",
   paymentStatus: "",
@@ -232,7 +232,7 @@ export function PaymentsModule({
   useEffect(() => {
     const value = initialKeyword.trim();
     if (!initialOpenToken || !value) return;
-    const nextFilters = { ...emptyPaymentFilters, keyword: value };
+    const nextFilters = { ...emptyPaymentFilters, orderNo: value };
     setFilters(nextFilters);
     setSubmittedFilters(nextFilters);
     setDetailPayment(null);
@@ -335,12 +335,12 @@ export function PaymentsModule({
 
       <div className={styles.listToolbar}>
         <input
-          value={filters.keyword}
-          onChange={(event) => setFilter("keyword", event.target.value)}
+          value={filters.orderNo}
+          onChange={(event) => setFilter("orderNo", event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") submitSearch();
           }}
-          placeholder="搜索订单号 / 客户简称 / 银行流水"
+          placeholder="输入订单号，如 PV260"
         />
         <input value={filters.month} onChange={(event) => setFilter("month", event.target.value)} type="month" />
         <select value={filters.currency} onChange={(event) => setFilter("currency", event.target.value)} disabled={loading}>
@@ -358,23 +358,7 @@ export function PaymentsModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
-        {loading ? (
-          <div className={styles.emptyState}>数据加载中...</div>
-        ) : payments.length ? (
-          payments.map((payment) => (
-            <PaymentMobileCard
-              key={payment.id}
-              payment={payment}
-              onViewDetail={() => setDetailPayment(payment)}
-            />
-          ))
-        ) : (
-          <div className={styles.emptyState}>未找到匹配的收款明细</div>
-        )}
-      </div>
-
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -802,40 +786,6 @@ function PaymentTableRows({
   );
 }
 
-function PaymentMobileCard({
-  payment,
-  onViewDetail,
-}: {
-  payment: PaymentRow;
-  onViewDetail: () => void;
-}) {
-  return (
-    <article className={styles.mobileDataCard}>
-      <div className={styles.mobileDataHeader}>
-        <div className={styles.mobileDataMeta}>
-          <strong>{payment.orderNo || "-"}</strong>
-          <span title={customerLegalName(payment)}>{customerDisplayName(payment)}</span>
-          <span>收款日期：{payment.paymentDate || "-"}</span>
-        </div>
-        <span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span>
-      </div>
-      <div className={styles.mobileMetricGrid}>
-        <div className={styles.mobileMetricItem}>
-          <span>金额</span>
-          <strong>{moneyText(payment.currency, payment.amount, payment.amountCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>收款类型</span>
-          <strong>{payment.paymentType || "-"}</strong>
-        </div>
-      </div>
-      <div className={styles.mobileDataActions}>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
-      </div>
-    </article>
-  );
-}
-
 function PaymentDetailDrawer({
   payment,
   canManage,
@@ -877,16 +827,24 @@ function PaymentDetailDrawer({
       ) : undefined}
     >
       <div className={styles.detailGrid}>
+        <DetailField label="订单号" value={payment.orderNo || "-"} />
         <DetailField label="客户全称" value={customerLegalName(payment)} wide />
+        <DetailField label="客户简称" value={customerDisplayName(payment) || "-"} />
+        <DetailField label="收款日期" value={payment.paymentDate || "-"} />
+        <DetailField label="收款金额" value={payment.amount == null ? "-" : formatAmount(payment.amount)} />
+        <DetailField label="收款币种" value={payment.currency || "-"} />
         <DetailField label="收款类型" value={payment.paymentType || "-"} />
+        <DetailField label="收款状态" value={payment.status || "-"} />
+        <DetailField label="关联销售订单" value={payment.orderNo || "-"} />
         <DetailField label="币种 / 汇率" value={`${payment.currency || "-"} / ${Number(payment.exchangeRate || 0).toFixed(4)}`} />
-        <DetailField label="收款金额" value={moneyText(payment.currency, payment.amount, payment.amountCny)} />
         <DetailField label="折人民币" value={formatCny(Number(payment.amountCny || 0))} />
         <DetailField label="银行流水号" value={payment.bankReference || "-"} hidden={!payment.bankReference} />
         <DetailField label="汇率来源" value={rateMeta(payment)} />
         <DetailField label="创建人" value={payment.createdBy?.name || "-"} />
         <DetailField label="修改人" value={payment.updatedBy?.name || "-"} />
         <DetailField label="备注" value={payment.remark || "-"} wide hidden={!payment.remark} />
+        <DetailField label="创建时间" value={formatDateTime(payment.createdAt)} />
+        <DetailField label="更新时间" value={formatDateTime(payment.updatedAt)} />
       </div>
     </SideDetailDrawer>
   );
