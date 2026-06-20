@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, formatPercent } from "../formatters";
+import { ResponsiveDataView } from "../ResponsiveDataView";
 import type { User } from "../types";
 import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
@@ -213,57 +214,62 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.mobileOnly} ${styles.mobileCardList}`}>
-        {loading ? (
-          <div className={styles.emptyState}>数据加载中...</div>
-        ) : rows.length ? (
-          rows.map((row) => (
-            <ProfitMobileCard
-              key={row.id}
-              row={row}
-              onViewDetail={() => setDetailRow(row)}
-            />
-          ))
-        ) : (
-          <div className={styles.emptyState}>未找到匹配的利润分析订单</div>
-        )}
-      </div>
-
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.desktopOnly}`}>
-        <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
-              <th>最终应收</th>
-              <th>总成本</th>
-              <th>预计毛利</th>
-              <th>预计毛利率</th>
-              <th>详情</th>
-            </tr>
-          </thead>
-          <tbody>
+      <ResponsiveDataView
+        mobile={(
+          <div className={styles.mobileCardList}>
             {loading ? (
-              <tr>
-                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
-              </tr>
-            ) : rows.length ? rows.map((row) => (
-              <ProfitRows
-                key={row.id}
-                row={row}
-                onViewDetail={() => setDetailRow(row)}
-                settling={settlingId === row.id}
-                canSettleCommission={canSettleCommission}
-                onSettle={() => void settleCommission(row)}
-              />
-            )) : (
-              <tr>
-                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的利润分析订单</div></td>
-              </tr>
+              <div className={styles.emptyState}>数据加载中...</div>
+            ) : rows.length ? (
+              rows.map((row) => (
+                <ProfitMobileCard
+                  key={row.id}
+                  row={row}
+                  onViewDetail={() => setDetailRow(row)}
+                />
+              ))
+            ) : (
+              <div className={styles.emptyState}>未找到匹配的利润分析订单</div>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )}
+        desktop={(
+          <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
+            <table className={styles.dataTable}>
+              <thead>
+                <tr>
+                  <th>订单号</th>
+                  <th>客户简称</th>
+                  <th>最终应收</th>
+                  <th>总成本</th>
+                  <th>预计毛利</th>
+                  <th>预计毛利率</th>
+                  <th>详情</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
+                  </tr>
+                ) : rows.length ? rows.map((row) => (
+                  <ProfitRows
+                    key={row.id}
+                    row={row}
+                    onViewDetail={() => setDetailRow(row)}
+                    settling={settlingId === row.id}
+                    canSettleCommission={canSettleCommission}
+                    onSettle={() => void settleCommission(row)}
+                  />
+                )) : (
+                  <tr>
+                    <td colSpan={7}><div className={styles.emptyState}>未找到匹配的利润分析订单</div></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      />
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={gotoPage} />
       {detailRow ? (
