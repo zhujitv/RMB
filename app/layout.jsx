@@ -1,4 +1,7 @@
 import "./globals.css";
+import { headers } from "next/headers";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "NEXTWOOD 供应链协同平台",
@@ -18,7 +21,8 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  await headers();
   return (
     <html lang="zh-CN">
       <body>{children}</body>

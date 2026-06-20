@@ -20,6 +20,7 @@ export {
   parseEmailList,
   requirePositive,
   requireText,
+  requireValidEmail,
   requireValidEmailList,
   sanitizeForLog,
   todayInputInChina,

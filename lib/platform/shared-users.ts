@@ -5,6 +5,7 @@ import {
   nonEmpty,
   normalizeEmail,
   requireText,
+  requireValidEmail,
 } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 import {
@@ -261,7 +262,7 @@ export async function listUsers(actor, query = null, options = {}) {
 export async function registerUser(request, input = {}) {
   await ensureDefaultUsers();
   const name = requireText(input.name, "姓名");
-  const email = requireText(normalizeEmail(input.email), "邮箱");
+  const email = requireValidEmail(input.email, "邮箱");
   const password = String(input.password || "");
   const confirmPassword = String(input.confirmPassword || input.passwordConfirm || "");
   if (confirmPassword && confirmPassword !== password) {
@@ -313,7 +314,7 @@ export async function saveUser(request, actor, input, id = null) {
       : (input.isActive === false ? "DISABLED" : "APPROVED"));
   const data = {
     name,
-    email: requireText(normalizeEmail(input.email), "邮箱"),
+    email: requireValidEmail(input.email, "邮箱"),
     role,
     avatarInitials: resolveAvatarInitials(input, name, before),
     supplierId: null,

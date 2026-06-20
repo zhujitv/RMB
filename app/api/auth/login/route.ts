@@ -56,6 +56,8 @@ const LOGIN_USER_SELECT = {
   updatedAt: true,
 };
 
+const LOGIN_SERVICE_UNAVAILABLE_MESSAGE = "登录服务暂时不可用，请稍后重试或联系管理员。";
+
 function loginFailure(message: string, status: number, code: string) {
   return NextResponse.json({
     success: false,
@@ -76,18 +78,21 @@ function classifyLoginServiceError(error: ErrorLike) {
   ) {
     return {
       code: "PRISMA_SCHEMA_MISMATCH",
-      message: "数据库结构未同步，请执行 npx prisma migrate deploy && npx prisma generate。",
+      message: LOGIN_SERVICE_UNAVAILABLE_MESSAGE,
+      diagnostic: "Prisma schema mismatch; run migrations and regenerate the Prisma client.",
     };
   }
-  if (["P1000", "P1001", "P1002", "P1017"].includes(code) || /database_url|connect|authentication failed/i.test(message)) {
+  if (["P1000", "P1001", "P1002", "P1010", "P1017"].includes(code) || /database_url|connect|authentication failed/i.test(message)) {
     return {
       code: "DATABASE_CONNECTION_ERROR",
-      message: "数据库连接失败，请检查 DATABASE_URL 和数据库账号密码。",
+      message: LOGIN_SERVICE_UNAVAILABLE_MESSAGE,
+      diagnostic: "Database connection failed; verify runtime database configuration and credentials.",
     };
   }
   return {
     code: code || "LOGIN_SERVICE_ERROR",
-    message: "登录服务异常，请联系管理员查看部署日志。",
+    message: LOGIN_SERVICE_UNAVAILABLE_MESSAGE,
+    diagnostic: "Unexpected login service error.",
   };
 }
 
@@ -166,6 +171,7 @@ export async function POST(request: NextRequest) {
     const classified = classifyLoginServiceError(typedError);
     logServerError("login failed: service error", typedError, {
       code: classified.code,
+      diagnostic: classified.diagnostic,
       prismaCode: typedError.code || "",
     });
     return NextResponse.json({

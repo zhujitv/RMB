@@ -2347,23 +2347,26 @@
   gap: 4px;
 }
 
-.trendBars i {
+.trendBarSvg {
   width: 8px;
-  min-height: 6px;
-  border-radius: 999px 999px 2px 2px;
   display: block;
+  height: 100%;
+  overflow: visible;
 }
 
 .trendReceivable {
   background: #2563eb;
+  fill: #2563eb;
 }
 
 .trendPaid {
   background: #10b981;
+  fill: #10b981;
 }
 
 .trendUnpaid {
   background: #f97316;
+  fill: #f97316;
 }
 
 .rankItem {
@@ -2459,6 +2462,28 @@
   position: relative;
 }
 
+.donutSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donutTrack,
+.donutSegment {
+  fill: none;
+  stroke-width: 18;
+}
+
+.donutTrack {
+  stroke: #e2e8f0;
+}
+
+.donutSegment {
+  stroke-linecap: round;
+}
+
 .donutRing::after {
   content: "";
   position: absolute;
@@ -2502,6 +2527,46 @@
   border-radius: 999px;
 }
 
+.costColorBlue {
+  background: #2563eb;
+  stroke: #2563eb;
+}
+
+.costColorGreen {
+  background: #10b981;
+  stroke: #10b981;
+}
+
+.costColorOrange {
+  background: #f97316;
+  stroke: #f97316;
+}
+
+.costColorPurple {
+  background: #7c3aed;
+  stroke: #7c3aed;
+}
+
+.costColorTeal {
+  background: #14b8a6;
+  stroke: #14b8a6;
+}
+
+.costColorRose {
+  background: #e11d48;
+  stroke: #e11d48;
+}
+
+.costColorAmber {
+  background: #f59e0b;
+  stroke: #f59e0b;
+}
+
+.costColorSlate {
+  background: #64748b;
+  stroke: #64748b;
+}
+
 .costLegendRow span {
   overflow-wrap: anywhere;
   font-weight: 700;
@@ -2535,6 +2600,48 @@
 .dashboardEmpty small {
   color: #64748b;
   line-height: 1.45;
+}
+
+.notFoundPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: #f8fafc;
+}
+
+.notFoundPanel {
+  width: min(420px, 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.08);
+  padding: 34px;
+  text-align: center;
+}
+
+.notFoundPanel span {
+  display: inline-grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.notFoundPanel h1 {
+  margin: 18px 0 8px;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.notFoundPanel p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .emptyState {

@@ -139,6 +139,13 @@ export function validEmail(value: unknown = "") {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
+export function requireValidEmail(value: unknown, label: string) {
+  const email = normalizeEmail(value);
+  if (!email) throw codedError(`${label}不能为空`, 400, "VALIDATION_REQUIRED");
+  if (!validEmail(email)) throw codedError(`${label}格式错误`, 400, "VALIDATION_INVALID_EMAIL");
+  return email;
+}
+
 type InputSchemaKind = "text" | "positiveNumber" | "nonNegativeNumber" | "date" | "enum" | "email" | "array";
 
 type InputSchemaField = {

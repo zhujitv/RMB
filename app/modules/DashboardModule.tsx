@@ -250,9 +250,9 @@ function TrendPanel({ rows }: { rows: TrendRow[] }) {
             {rows.map((row) => (
               <div key={row.label || "-"} className={styles.dashboardTrendMonth}>
                 <div className={styles.trendBars}>
-                  <i className={styles.trendReceivable} style={{ height: barHeight(row.receivable, maxAmount) }} title={`应收 ${formatCny(row.receivable)}`} />
-                  <i className={styles.trendPaid} style={{ height: barHeight(row.paid, maxAmount) }} title={`回款 ${formatCny(row.paid)}`} />
-                  <i className={styles.trendUnpaid} style={{ height: barHeight(row.unpaid, maxAmount) }} title={`未收 ${formatCny(row.unpaid)}`} />
+                  <TrendBar className={styles.trendReceivable} value={row.receivable} max={maxAmount} label={`应收 ${formatCny(row.receivable)}`} />
+                  <TrendBar className={styles.trendPaid} value={row.paid} max={maxAmount} label={`回款 ${formatCny(row.paid)}`} />
+                  <TrendBar className={styles.trendUnpaid} value={row.unpaid} max={maxAmount} label={`未收 ${formatCny(row.unpaid)}`} />
                 </div>
                 <span>{monthLabel(row.label)}</span>
               </div>
@@ -314,27 +314,36 @@ function LowMarginPanel({ rows }: { rows: RiskOrder[] }) {
 
 function CostStructurePanel({ rows }: { rows: OverviewGroup[] }) {
   const total = sumBy(rows, (row) => Number(row.amount || 0));
-  const palette = ["#2563eb", "#10b981", "#f97316", "#7c3aed", "#14b8a6", "#e11d48", "#f59e0b", "#64748b"];
+  const palette = [
+    styles.costColorBlue,
+    styles.costColorGreen,
+    styles.costColorOrange,
+    styles.costColorPurple,
+    styles.costColorTeal,
+    styles.costColorRose,
+    styles.costColorAmber,
+    styles.costColorSlate,
+  ];
   let cursor = 0;
   const segments = rows.slice(0, 8).map((row, index) => {
     const start = cursor;
     const end = total > 0 ? cursor + (Number(row.amount || 0) / total) * 100 : cursor;
     cursor = end;
-    return { ...row, color: palette[index % palette.length], start, end };
+    return { ...row, colorClass: palette[index % palette.length], start, end };
   });
-  const gradient = segments.length ? segments.map((row) => `${row.color} ${row.start}% ${row.end}%`).join(", ") : "#e2e8f0 0% 100%";
   return (
     <section className={styles.overviewPanel}>
       <PanelHead title="成本结构分析" count={rows.length} />
       {total > 0 ? (
         <div className={styles.costStructureLayout}>
-          <div className={styles.donutRing} style={{ background: `conic-gradient(${gradient})` }}>
+          <div className={styles.donutRing}>
+            <DonutSegments segments={segments} />
             <span>总成本<strong>{formatCny(total)}</strong></span>
           </div>
           <div className={styles.costLegendList}>
             {segments.map((row) => (
               <div key={row.label || "-"} className={styles.costLegendRow}>
-                <i style={{ background: row.color }} />
+                <i className={row.colorClass} />
                 <span>{row.label || "未填写"}</span>
                 <strong>{formatCny(row.amount)}</strong>
                 <small>{formatPercent(total > 0 ? Number(row.amount || 0) / total : null)}</small>
@@ -346,6 +355,41 @@ function CostStructurePanel({ rows }: { rows: OverviewGroup[] }) {
         <EmptyPanel title="还没有成本结构数据" note="录入成本后会自动生成环形分析。" />
       )}
     </section>
+  );
+}
+
+function TrendBar({ value, max, className, label }: { value: unknown; max: number; className: string; label: string }) {
+  const height = barHeight(value, max);
+  return (
+    <svg className={styles.trendBarSvg} viewBox="0 0 8 100" role="img" aria-label={label}>
+      <title>{label}</title>
+      <rect className={className} x="0" y={100 - height} width="8" height={height} rx="4" />
+    </svg>
+  );
+}
+
+function DonutSegments({ segments }: { segments: Array<OverviewGroup & { colorClass: string; start: number; end: number }> }) {
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <svg className={styles.donutSvg} viewBox="0 0 120 120" aria-hidden="true">
+      <circle className={styles.donutTrack} cx="60" cy="60" r={radius} />
+      {segments.map((row) => {
+        const length = Math.max(0, ((row.end - row.start) / 100) * circumference);
+        const offset = -((row.start / 100) * circumference);
+        return (
+          <circle
+            key={row.label || `${row.start}-${row.end}`}
+            className={`${styles.donutSegment} ${row.colorClass}`}
+            cx="60"
+            cy="60"
+            r={radius}
+            strokeDasharray={`${length} ${circumference - length}`}
+            strokeDashoffset={offset}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -416,7 +460,7 @@ function EmptyPanel({ title, note }: { title: string; note: string }) {
 }
 
 function barHeight(value: unknown, max: number) {
-  return `${Math.max(6, (Number(value || 0) / Math.max(max, 1)) * 100)}%`;
+  return Math.max(6, (Number(value || 0) / Math.max(max, 1)) * 100);
 }
 
 function monthLabel(value?: string) {
