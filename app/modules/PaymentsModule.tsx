@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { formatCny, moneyText } from "../formatters";
@@ -50,7 +50,15 @@ type PaymentsResponse = {
     page?: number;
     pageSize?: number;
     totalPages?: number;
+    summary?: PaymentSummary;
   };
+  summary?: PaymentSummary;
+};
+
+type PaymentSummary = {
+  arrivedAmountCny?: number;
+  pendingAmountCny?: number;
+  currentMonthCount?: number;
 };
 
 type PaymentOrderOption = {
@@ -62,10 +70,28 @@ type PaymentOrderOption = {
   customerFullName?: string;
   customerShortName?: string;
   currency?: string;
+  receivableAmount?: number;
+  receivableAmountCny?: number;
+  finalReceivableAmount?: number;
+  finalReceivableAmountCny?: number;
+  receivedAmountCny?: number;
+  outstandingAmount?: number;
+  outstandingCny?: number;
+  summary?: {
+    receivableAmount?: number;
+    receivableCny?: number;
+    confirmedPaymentsCny?: number;
+    outstandingAmount?: number;
+    outstandingCny?: number;
+  };
 };
 
 type OrdersResponse = {
-  orders: PaymentOrderOption[];
+  orders?: PaymentOrderOption[];
+  data?: {
+    orders?: PaymentOrderOption[];
+    rows?: PaymentOrderOption[];
+  };
 };
 
 type ExchangeRateResponse = {
@@ -129,6 +155,7 @@ export function PaymentsModule({
   initialOpenToken?: number;
 }) {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [summary, setSummary] = useState<PaymentSummary>({});
   const [filters, setFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
   const [submittedFilters, setSubmittedFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
   const [page, setPage] = useState(1);
@@ -150,6 +177,26 @@ export function PaymentsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
+  const summaryCards = useMemo(() => ([
+    {
+      label: "已到账金额",
+      value: formatCny(Number(summary.arrivedAmountCny || 0)),
+      note: "只统计已到账收款",
+      tone: styles.metricGreen,
+    },
+    {
+      label: "待确认金额",
+      value: formatCny(Number(summary.pendingAmountCny || 0)),
+      note: "待确认不计入经营数据",
+      tone: styles.metricOrange,
+    },
+    {
+      label: "本月收款笔数",
+      value: `${Number(summary.currentMonthCount || 0)} 笔`,
+      note: "按当前筛选条件统计",
+      tone: styles.metricBlue,
+    },
+  ]), [summary]);
 
   async function loadPayments(nextPage = page, nextFilters = submittedFilters) {
     setLoading(true);
@@ -167,6 +214,7 @@ export function PaymentsModule({
       const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
       const data = result.data || {};
       setPayments(Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : []);
+      setSummary(data.summary || result.summary || {});
       setTotal(Number(data.total ?? result.payments?.length ?? 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
@@ -273,6 +321,16 @@ export function PaymentsModule({
 
       <div className={styles.infoStrip}>
         正式回款统计仅以已到账状态为准，待确认收款不计入经营数据。
+      </div>
+
+      <div className={styles.metricGrid} aria-label="收款汇总统计">
+        {summaryCards.map((card) => (
+          <article key={card.label} className={`${styles.metricCard} ${card.tone}`}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <small>{card.note}</small>
+          </article>
+        ))}
       </div>
 
       <div className={styles.listToolbar}>
@@ -479,11 +537,14 @@ function QuickCreatePaymentPanel({
 
   async function searchOrders(keyword: string) {
     try {
-      const params = new URLSearchParams({ q: keyword.trim() });
+      const params = new URLSearchParams({ q: keyword.trim(), purpose: "payment" });
       const result = await apiJson<OrdersResponse>(`/api/receivables/search?${params}`);
-      return Array.isArray(result.orders) ? result.orders : [];
+      if (Array.isArray(result.orders)) return result.orders;
+      if (Array.isArray(result.data?.orders)) return result.data.orders;
+      if (Array.isArray(result.data?.rows)) return result.data.rows;
+      return [];
     } catch (orderError) {
-      setMessage(orderError instanceof Error ? orderError.message : "读取订单列表失败");
+      setMessage(orderError instanceof Error ? orderError.message : "搜索应收订单失败");
       return [];
     }
   }
@@ -593,7 +654,7 @@ function QuickCreatePaymentPanel({
     }
   }
 
-  const initialOrder = initialPayment?.orderId ? {
+  const initialOrder: PaymentOrderOption | null = initialPayment?.orderId ? {
     id: initialPayment.orderId,
     orderNo: initialPayment.orderNo,
     customerName: initialPayment.customerName,
@@ -605,6 +666,21 @@ function QuickCreatePaymentPanel({
     ? [initialOrder, ...orders]
     : orders;
   const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
+  const selectedOrderMeta = selectedOrder ? [
+    { label: "订单号", value: selectedOrder.orderNo || "-" },
+    { label: "客户简称", value: customerDisplayName(selectedOrder) || "-" },
+    { label: "订单币种", value: selectedOrder.currency || "-" },
+    {
+      label: "应收金额",
+      value: moneyText(
+        selectedOrder.currency || "CNY",
+        selectedOrder.finalReceivableAmount ?? selectedOrder.receivableAmount ?? selectedOrder.summary?.receivableAmount,
+        selectedOrder.finalReceivableAmountCny ?? selectedOrder.receivableAmountCny ?? selectedOrder.summary?.receivableCny,
+      ),
+    },
+    { label: "已收金额", value: formatCny(selectedOrder.receivedAmountCny ?? selectedOrder.summary?.confirmedPaymentsCny ?? 0) },
+    { label: "未收金额", value: formatCny(selectedOrder.outstandingCny ?? selectedOrder.summary?.outstandingCny ?? 0) },
+  ] : [];
 
   return (
     <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment}>
@@ -623,10 +699,10 @@ function QuickCreatePaymentPanel({
           <SearchAutocomplete
             value={selectedOrder || null}
             cacheKey="payment-orders"
-            emptyLabel="未找到订单"
+            emptyLabel="未找到应收订单"
             placeholder="输入订单号 / 提单号 / 客户简称"
             getLabel={orderLabel}
-            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}`}
+            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}${order.outstandingCny != null ? ` · 未收 ${formatCny(order.outstandingCny)}` : ""}`}
             search={searchOrders}
             onSelect={(order) => void handleOrderSelect(order)}
           />
@@ -679,7 +755,9 @@ function QuickCreatePaymentPanel({
       </div>
 
       <div className={styles.quickCreateMeta}>
-        <span>订单：{selectedOrder ? orderLabel(selectedOrder) : "-"}</span>
+        {selectedOrderMeta.length ? selectedOrderMeta.map((item) => (
+          <span key={item.label}>{item.label}：{item.value}</span>
+        )) : <span>订单：-</span>}
         <span>{exchangeMeta || "汇率来源：待获取"}</span>
       </div>
 

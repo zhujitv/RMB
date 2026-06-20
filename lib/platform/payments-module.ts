@@ -39,7 +39,11 @@ export async function listPayments(query, actor = null, options = {}) {
   if (options.paginated) {
     const { page, pageSize } = pageParams(query, 20, 100);
     const where = paymentListWhere(query, accessWhere);
-    const [total, rows] = await Promise.all([
+    const currentMonth = todayInputInChina().slice(0, 7);
+    const currentMonthStart = new Date(`${currentMonth}-01T00:00:00.000Z`);
+    const currentMonthEnd = new Date(currentMonthStart);
+    currentMonthEnd.setUTCMonth(currentMonthEnd.getUTCMonth() + 1);
+    const [total, rows, arrived, pending, currentMonthCount] = await Promise.all([
       prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
@@ -48,8 +52,31 @@ export async function listPayments(query, actor = null, options = {}) {
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
+      prisma.payment.aggregate({
+        where: withPaymentWhere(where, { status: "已到账" }),
+        _sum: { amountCny: true },
+      }),
+      prisma.payment.aggregate({
+        where: withPaymentWhere(where, { status: "待确认" }),
+        _sum: { amountCny: true },
+      }),
+      prisma.payment.count({
+        where: withPaymentWhere(where, {
+          OR: [
+            { paymentDate: { gte: currentMonthStart, lt: currentMonthEnd } },
+            { createdAt: { gte: currentMonthStart, lt: currentMonthEnd } },
+          ],
+        }),
+      }),
     ]);
-    return pageResult(rows.map(serializePayment), total, page, pageSize);
+    return {
+      ...pageResult(rows.map(serializePayment), total, page, pageSize),
+      summary: {
+        arrivedAmountCny: Number(arrived._sum.amountCny || 0),
+        pendingAmountCny: Number(pending._sum.amountCny || 0),
+        currentMonthCount,
+      },
+    };
   }
   const rows = await prisma.payment.findMany({
     where: { deletedAt: null, order: { is: accessWhere } },
@@ -57,6 +84,10 @@ export async function listPayments(query, actor = null, options = {}) {
     orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
   });
   return applyCommonFilters(rows.map(serializePayment), query);
+}
+
+function withPaymentWhere(where, condition) {
+  return { AND: [where, condition] };
 }
 
 function paymentListWhere(query, accessWhere) {
