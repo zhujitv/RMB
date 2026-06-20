@@ -5,6 +5,7 @@ const securityHeaders = staticSecurityHeaders();
 
 const nextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
   async headers() {
     return [
       {

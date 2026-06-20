@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
 
 const backend = [
   readFileSync("lib/platform/shared-constants.ts", "utf8"),
@@ -51,6 +52,55 @@ test("profit and commission reports require financial commission read permission
   assert.match(reportService, /profits: \{ label: "利润分析", area: "commissions"/);
   assert.match(reportsModule, /\{ key: "profits", label: "利润分析", area: "commissions" \}/);
   assert.match(reportsModule, /commissions: \["管理员", "财务"\]/);
+});
+
+test("role permission matrix protects financial and supplier scoped data", () => {
+  const admin = rolePermissionSnapshot("管理员");
+  assert.equal(admin.dataScope, "ALL");
+  assert.equal(admin.reads.users, true);
+  assert.equal(admin.writes.settings, true);
+  assert.equal(admin.writes.commissions, true);
+
+  const salesperson = rolePermissionSnapshot("业务员");
+  assert.equal(salesperson.dataScope, "OWN");
+  assert.equal(salesperson.menus.includes("dashboard"), false);
+  assert.equal(salesperson.menus.includes("profit"), false);
+  assert.equal(salesperson.reads.payments, true);
+  assert.equal(salesperson.reads.taxRefund, true);
+  assert.equal(salesperson.reads.commissions, false);
+  assert.equal(salesperson.writes.payments, false);
+  assert.equal(salesperson.writes.taxRefund, false);
+  assert.equal(salesperson.writes.commissions, false);
+
+  const finance = rolePermissionSnapshot("财务");
+  assert.equal(finance.dataScope, "ALL");
+  assert.equal(finance.reads.commissions, true);
+  assert.equal(finance.writes.payments, true);
+  assert.equal(finance.writes.taxRefund, true);
+  assert.equal(finance.writes.commissions, true);
+  assert.equal(finance.writes.orders, false);
+  assert.equal(finance.writes.users, false);
+
+  const logisticsSupplier = rolePermissionSnapshot("物流供应商");
+  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "manual"]);
+  assert.equal(logisticsSupplier.dataScope, "OWN");
+  assert.equal(logisticsSupplier.reads.payments, false);
+  assert.equal(logisticsSupplier.reads.costs, false);
+  assert.equal(logisticsSupplier.reads.commissions, false);
+  assert.equal(logisticsSupplier.writes.logistics, true);
+  assert.equal(logisticsSupplier.writes.domesticLogistics, true);
+  assert.equal(logisticsSupplier.writes.documents, true);
+  assert.equal(logisticsSupplier.writes.settings, false);
+
+  const logisticsClerk = rolePermissionSnapshot("物流资料录入员");
+  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "manual"]);
+  assert.equal(logisticsClerk.dataScope, "OWN");
+  assert.equal(logisticsClerk.reads.domesticLogistics, true);
+  assert.equal(logisticsClerk.reads.documents, true);
+  assert.equal(logisticsClerk.reads.payments, false);
+  assert.equal(logisticsClerk.writes.domesticLogistics, true);
+  assert.equal(logisticsClerk.writes.documents, true);
+  assert.equal(logisticsClerk.writes.logistics, false);
 });
 
 test("workspace auth distinguishes expired login from server-side profile failure", () => {

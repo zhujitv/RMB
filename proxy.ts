@@ -38,6 +38,55 @@ const BLOCKED_BOT_PATTERNS = [
 const IS_DEVELOPMENT = isDevelopmentEnv();
 const SECURITY_HEADERS = Object.fromEntries(staticSecurityHeaders().map(({ key, value }) => [key, value]));
 
+function headerOrigin(value = "") {
+  const text = String(value || "").trim();
+  if (!text || text === "null") return "";
+  try {
+    return new URL(text).origin;
+  } catch {
+    return "";
+  }
+}
+
+function originListFromEnv() {
+  return [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.APP_BASE_URL,
+    process.env.ALLOWED_ORIGINS,
+  ].flatMap((value) => String(value || "").split(/[\s,;]+/)).map(headerOrigin).filter(Boolean);
+}
+
+function localDevelopmentAliases(origin = "") {
+  if (!IS_DEVELOPMENT) return [];
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname)) return [];
+    const port = url.port ? `:${url.port}` : "";
+    return [`http://localhost${port}`, `http://127.0.0.1${port}`];
+  } catch {
+    return [];
+  }
+}
+
+function allowedRequestOrigins(expectedOrigin = "") {
+  const configuredOrigins = originListFromEnv();
+  return new Set([
+    expectedOrigin,
+    ...configuredOrigins,
+    ...localDevelopmentAliases(expectedOrigin),
+    ...configuredOrigins.flatMap(localDevelopmentAliases),
+  ].filter(Boolean));
+}
+
+function isBlockedCorsPreflight(request: NextRequest) {
+  if (request.method.toUpperCase() !== "OPTIONS") return false;
+  if (!request.headers.get("access-control-request-method")) return false;
+  const origin = headerOrigin(request.headers.get("origin") || "");
+  if (!origin) return false;
+  return !allowedRequestOrigins(request.nextUrl.origin).has(origin);
+}
+
 function isBlockedBot(userAgent = "") {
   return BLOCKED_BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
 }
@@ -74,6 +123,9 @@ export function proxy(request: NextRequest) {
   });
   const userAgent = request.headers.get("user-agent") || "";
   if (isBlockedBot(userAgent)) {
+    return applySecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
+  }
+  if (isBlockedCorsPreflight(request)) {
     return applySecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
   }
 

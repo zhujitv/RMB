@@ -19,6 +19,7 @@ const ordersModule = readFileSync("lib/platform/orders-module.ts", "utf8");
 const paymentsModule = readFileSync("lib/platform/payments-module.ts", "utf8");
 const costsModule = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const loginRoute = readFileSync("app/api/auth/login/route.ts", "utf8");
+const registerRoute = readFileSync("app/api/auth/register/route.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 
 function cspFor(isDevelopment: boolean) {
@@ -31,6 +32,7 @@ function cspFor(isDevelopment: boolean) {
 
 test("global security headers are configured for pages api and proxy responses", () => {
   assert.match(nextConfig, /staticSecurityHeaders/);
+  assert.match(nextConfig, /poweredByHeader:\s*false/);
   assert.match(proxy, /staticSecurityHeaders/);
   assert.match(securityHeaders, /X-Content-Type-Options/);
   assert.match(securityHeaders, /X-Frame-Options/);
@@ -44,6 +46,15 @@ test("global security headers are configured for pages api and proxy responses",
   assert.match(securityHeaders, /Access-Control-Allow-Origin/);
   assert.doesNotMatch(securityHeaders, /Access-Control-Allow-Origin", value: "\*"/);
   assert.doesNotMatch(proxy, /"Access-Control-Allow-Origin": "\*"/);
+});
+
+test("cors preflight blocks untrusted origins before route handlers", () => {
+  assert.match(proxy, /function isBlockedCorsPreflight/);
+  assert.match(proxy, /request\.method\.toUpperCase\(\) !== "OPTIONS"/);
+  assert.match(proxy, /access-control-request-method/);
+  assert.match(proxy, /allowedRequestOrigins\(request\.nextUrl\.origin\)\.has\(origin\)/);
+  assert.match(proxy, /isBlockedCorsPreflight\(request\)/);
+  assert.match(proxy, /new NextResponse\("Forbidden", \{ status: 403 \}\)/);
 });
 
 test("production CSP removes unsafe inline and local development connect sources", () => {
@@ -81,21 +92,41 @@ test("user email writes use shared email format validation", () => {
 
 test("login service errors do not expose deployment diagnostics to unauthenticated users", () => {
   assert.match(loginRoute, /LOGIN_SERVICE_UNAVAILABLE_MESSAGE/);
+  assert.match(loginRoute, /assertSameOriginRequest\(request\)/);
+  assert.match(loginRoute, /function loginAuditContext/);
+  assert.match(loginRoute, /loginIdHash: sha256Hex\(email\)\.slice\(0, 16\)/);
   assert.match(loginRoute, /diagnostic: "Database connection failed; verify runtime database configuration and credentials\."/);
   assert.match(loginRoute, /diagnostic: "Prisma schema mismatch; run migrations and regenerate the Prisma client\."/);
   assert.match(loginRoute, /\["P1000", "P1001", "P1002", "P1010", "P1017"\]/);
   assert.match(loginRoute, /error: classified\.message/);
   assert.doesNotMatch(loginRoute, /message: "数据库连接失败，请检查 DATABASE_URL 和数据库账号密码。"/);
   assert.doesNotMatch(loginRoute, /message: "数据库结构未同步，请执行 npx prisma migrate deploy && npx prisma generate。"/);
+  assert.doesNotMatch(loginRoute, /logSecurityEvent\("login failed", \{[^}]*email/);
+});
+
+test("anonymous auth posts require same-origin checks before processing input", () => {
+  assert.match(loginRoute, /assertSameOriginRequest\(request\);[\s\S]*await ensureDefaultUsers\(\)/);
+  assert.match(registerRoute, /assertSameOriginRequest\(request\);[\s\S]*await request\.json\(\)/);
 });
 
 test("all active PDF upload services reuse shared PDF validation", () => {
   assert.match(uploadValidation, /export function assertPdfUploadFileCandidate/);
   assert.match(uploadValidation, /export async function readValidatedPdfUploadFile/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
+  assert.match(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
+  assert.match(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
   assert.match(orderDocumentsRoute, /assertPdfUploadFileCandidate\(candidate\)/);
   assert.match(orderDocumentsService, /readValidatedPdfUploadFile\(file, "document\.pdf"\)/);
   assert.match(logisticsInvoiceService, /readValidatedPdfUploadFile\(file, "invoice\.pdf"\)/);
+});
+
+test("shared PDF validation rejects active content actions", () => {
+  assert.match(uploadValidation, /\/JavaScript\\b/);
+  assert.match(uploadValidation, /\/OpenAction\\b/);
+  assert.match(uploadValidation, /\/EmbeddedFile\\b/);
+  assert.match(uploadValidation, /\/Launch\\b/);
+  assert.match(uploadValidation, /function assertPdfDoesNotContainActiveContent/);
+  assert.match(uploadValidation, /assertPdfDoesNotContainActiveContent\(body\);[\s\S]*return \{/);
 });
 
 test("server and audit logs redact sensitive file and credential fields", () => {

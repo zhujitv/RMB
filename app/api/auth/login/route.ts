@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   apiError,
   assertLoginNotRateLimited,
+  assertSameOriginRequest,
   createUserSession,
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
@@ -13,6 +14,7 @@ import {
   publicUser,
   recordLoginAttempt,
   setSessionCookie,
+  sha256Hex,
   upgradePasswordHash,
   verifyPassword,
 } from "../../../../lib/platform-db";
@@ -67,6 +69,14 @@ function loginFailure(message: string, status: number, code: string) {
   }, { status });
 }
 
+function loginAuditContext(reason: string, email: string, userId?: string | null) {
+  return {
+    reason,
+    loginIdHash: sha256Hex(email).slice(0, 16),
+    ...(userId ? { userId } : {}),
+  };
+}
+
 function classifyLoginServiceError(error: ErrorLike) {
   const code = String(error?.code || "");
   const message = String(error?.message || "");
@@ -98,13 +108,14 @@ function classifyLoginServiceError(error: ErrorLike) {
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOriginRequest(request);
     await ensureDefaultUsers();
     const body = (await request.json()) as LoginRequestBody;
     const email = normalizeEmail(body.email);
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {
       await recordLoginAttempt(request, email, false, null);
-      logSecurityEvent("login failed", { reason: "default_admin_disabled", email });
+      logSecurityEvent("login failed", loginAuditContext("default_admin_disabled", email));
       return loginFailure("默认管理员账号已禁用，请使用公司管理员账号登录。", 403, "DEFAULT_ADMIN_DISABLED");
     }
     let user = await prisma.user.findFirst({
@@ -112,28 +123,28 @@ export async function POST(request: NextRequest) {
       select: LOGIN_USER_SELECT,
     });
     if (!user) {
-      logSecurityEvent("login failed", { reason: "user_not_found", email });
+      logSecurityEvent("login failed", loginAuditContext("user_not_found", email));
       await recordLoginAttemptTyped(request, email, false, null);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (!(await verifyPassword(body.password || "", user.passwordHash))) {
-      logSecurityEvent("login failed", { reason: "wrong_password", email, userId: user.id });
+      logSecurityEvent("login failed", loginAuditContext("wrong_password", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
-      logSecurityEvent("login failed", { reason: "user_pending_approval", email, userId: user.id });
+      logSecurityEvent("login failed", loginAuditContext("user_pending_approval", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
-      logSecurityEvent("login failed", { reason: "user_rejected", email, userId: user.id });
+      logSecurityEvent("login failed", loginAuditContext("user_rejected", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号审核未通过，请联系管理员。", 403, "USER_REJECTED");
     }
     if (!user.isActive || approvalStatus === "DISABLED") {
-      logSecurityEvent("login failed", { reason: "user_disabled", email, userId: user.id });
+      logSecurityEvent("login failed", loginAuditContext("user_disabled", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
