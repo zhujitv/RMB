@@ -11,6 +11,7 @@ const backend = [
   readFileSync("lib/platform/shared-order-calculations.ts", "utf8"),
   readFileSync("lib/platform/commission-formula.ts", "utf8"),
   readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8"),
+  readFileSync("lib/platform/shared-serialization.ts", "utf8"),
   readFileSync("lib/platform/shared-order-relations.ts", "utf8"),
   readFileSync("lib/platform/shared-users.ts", "utf8"),
   readFileSync("lib/platform/masters-access.ts", "utf8"),
@@ -100,6 +101,16 @@ test("invoice upload and confirmation workflow is present", () => {
   assert.match(logisticsModule, /invoiceStatus/);
   assert.match(logisticsModule, /已上传发票/);
   assert.match(logisticsModule, /已确认发票/);
+});
+
+test("port charge logistics invoice filenames do not fall back to factory invoice", () => {
+  assert.match(backend, /港杂费: "Port-Charges-Invoice"/);
+  assert.match(backend, /LOGISTICS_INVOICE_ENGLISH_LABELS\[costType\]/);
+  assert.match(backend, /costType: document\.cost\?\.costType \|\| document\.costType/);
+  assert.match(backend, /const logisticsCostType = normalizedCostType\(expense\.cost\?\.costType \|\| expense\.costType\)/);
+  assert.match(backend, /costType: logisticsCostType/);
+  assert.match(backend, /cost: document\.cost \|\| cost/);
+  assert.match(backend, /costType: document\.cost\?\.costType \|\| cost\.costType/);
 });
 
 test("approval sends invoice notification and preserves failure for audit", () => {

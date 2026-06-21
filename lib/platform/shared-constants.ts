@@ -235,7 +235,7 @@ export function documentStandardTypeKey(document = {}) {
     relatedModule: document.relatedModule,
     supplierId: document.supplierId,
     costId: document.costId,
-    costType: document.cost?.costType,
+    costType: document.cost?.costType || document.costType,
     cost: document.cost,
   });
 }
@@ -264,7 +264,7 @@ export function standardFilenameForDocument(document = {}, orderOverride = null)
     relatedModule: document.relatedModule,
     supplierId: document.supplierId,
     costId: document.costId,
-    costType: document.cost?.costType,
+    costType: document.cost?.costType || document.costType,
     cost: document.cost,
   });
 }

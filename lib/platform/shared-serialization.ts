@@ -184,6 +184,11 @@ export function safeSerializeCost(cost) {
 }
 
 export function serializeCost(cost) {
+  const costDocuments = (cost.documents || []).map((document) => ({
+    ...document,
+    cost: document.cost || cost,
+    costType: document.cost?.costType || cost.costType,
+  }));
   return {
     id: cost.id,
     orderId: cost.orderId,
@@ -228,12 +233,12 @@ export function serializeCost(cost) {
     remark: cost.remark || "",
     createdBy: serializeUser(cost.createdBy),
     updatedBy: serializeUser(cost.updatedBy),
-    documents: (cost.documents || []).map((document) => serializeOrderDocument(document, {
+    documents: costDocuments.map((document) => serializeOrderDocument(document, {
       ...(cost.order || {}),
       id: cost.orderId || cost.order?.id,
       orderNo: cost.order?.orderNo || cost.orderNo || "",
       blNo: cost.order?.blNo || cost.blNo || "",
-      documents: cost.documents || [],
+      documents: costDocuments,
     })),
     createdAt: cost.createdAt,
     updatedAt: cost.updatedAt,
@@ -257,7 +262,7 @@ export function serializeOrderDocument(document, orderOverride = null) {
     customerShortName: customerShortName(document.order?.customer),
     supplierName: document.supplier?.supplierName || document.cost?.supplierNameSnapshot || document.cost?.supplier?.supplierName || "",
     supplierType: document.supplier?.supplierType || document.cost?.supplier?.supplierType || "",
-    costType: document.cost?.costType || "",
+    costType: normalizedCostType(document.cost?.costType || document.costType || ""),
     documentType: document.documentType,
     documentTypeLabel: ORDER_DOCUMENT_LABELS[document.documentType] || document.documentType,
     fileName: standardFilename,

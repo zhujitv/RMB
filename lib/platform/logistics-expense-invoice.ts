@@ -58,10 +58,12 @@ export async function notifyLogisticsSupplierInvoice(expense) {
 export async function createLogisticsInvoiceDocument(request, actor, expense, file, metadata = {}) {
   const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "invoice.pdf");
   const order = expense.order;
-  const costContext = expense.cost || { id: expense.costId, costType: expense.costType };
+  const logisticsCostType = normalizedCostType(expense.cost?.costType || expense.costType);
+  const costContext = { ...(expense.cost || { id: expense.costId }), costType: logisticsCostType };
   const baseStandardFilename = await nextStandardFilenameForUpload(order, "SUPPLIER_INVOICE", {
     cost: costContext,
     costId: expense.costId,
+    costType: logisticsCostType,
     supplierId: expense.supplierId,
     relatedModule: "SUPPLIER",
   });
