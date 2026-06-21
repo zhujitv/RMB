@@ -133,6 +133,9 @@ type QuickOrderForm = {
   blNo: string;
   currency: string;
   exchangeRate: string;
+  exchangeRateDate: string;
+  exchangeRateSource: string;
+  exchangeRateType: string;
   estimatedReceivableAmount: string;
   finalReceivableAmount: string;
   actualShipmentAmount: string;
@@ -159,6 +162,9 @@ const emptyQuickOrderForm: QuickOrderForm = {
   blNo: "",
   currency: "",
   exchangeRate: "",
+  exchangeRateDate: "",
+  exchangeRateSource: "",
+  exchangeRateType: "",
   estimatedReceivableAmount: "",
   finalReceivableAmount: "",
   actualShipmentAmount: "",
@@ -538,12 +544,24 @@ function QuickCreateOrderPanel({
     const normalized = currency.trim().toUpperCase();
     if (!normalized) {
       setExchangeMeta("");
-      setFormValue("exchangeRate", "");
+      setForm((current) => ({
+        ...current,
+        exchangeRate: "",
+        exchangeRateDate: "",
+        exchangeRateSource: "",
+        exchangeRateType: "",
+      }));
       return;
     }
     if (normalized === "CNY") {
       setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      setFormValue("exchangeRate", "1");
+      setForm((current) => ({
+        ...current,
+        exchangeRate: "1",
+        exchangeRateDate: "",
+        exchangeRateSource: "系统",
+        exchangeRateType: "人民币",
+      }));
       return;
     }
     setExchangeMeta("正在获取汇率...");
@@ -551,7 +569,13 @@ function QuickCreateOrderPanel({
       const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?currency=${encodeURIComponent(normalized)}`);
       const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
       if (rate > 0) {
-        setFormValue("exchangeRate", String(rate));
+        setForm((current) => ({
+          ...current,
+          exchangeRate: String(rate),
+          exchangeRateDate: result.rate?.rateDate || "",
+          exchangeRateSource: result.rate?.source || "",
+          exchangeRateType: result.rate?.rateType || "",
+        }));
         setExchangeMeta(`来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`);
       } else {
         setExchangeMeta("汇率来源：待获取，请手工填写");
@@ -598,6 +622,9 @@ function QuickCreateOrderPanel({
       customerId: customerOption.id,
       currency: customerOption.defaultCurrency || current.currency,
       exchangeRate: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRate,
+      exchangeRateDate: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateDate,
+      exchangeRateSource: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateSource,
+      exchangeRateType: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateType,
       paymentTermType: customerOption.defaultPaymentTermType || current.paymentTermType,
       tradeTerm: customerOption.defaultTradeTerm || current.tradeTerm,
     }));
@@ -606,8 +633,28 @@ function QuickCreateOrderPanel({
 
   async function handleCurrencyChange(currency: string) {
     const normalized = currency.toUpperCase();
-    setForm((current) => ({ ...current, currency: normalized, exchangeRate: "" }));
+    setForm((current) => ({
+      ...current,
+      currency: normalized,
+      exchangeRate: "",
+      exchangeRateDate: "",
+      exchangeRateSource: "",
+      exchangeRateType: "",
+    }));
     await resolveExchangeRate(normalized);
+  }
+
+  function handleExchangeRateChange(value: string) {
+    setForm((current) => ({
+      ...current,
+      exchangeRate: value,
+      ...(current.currency && current.currency !== "CNY"
+        ? { exchangeRateSource: "手动" }
+        : {}),
+    }));
+    if (form.currency && form.currency !== "CNY") {
+      setExchangeMeta(`来源：手动 ｜ 类型：${form.exchangeRateType || "手动录入"} ｜ 汇率：${value || "-"}`);
+    }
   }
 
   function setInstallment(index: number, key: keyof PaymentInstallment, value: string) {
@@ -661,6 +708,9 @@ function QuickCreateOrderPanel({
         blNo: form.blNo.trim(),
         currency: form.currency,
         exchangeRate: Number(form.exchangeRate),
+        exchangeRateDate: form.exchangeRateDate || undefined,
+        exchangeRateSource: form.exchangeRateSource || undefined,
+        exchangeRateType: form.exchangeRateType || undefined,
         estimatedReceivableAmount: Number(form.estimatedReceivableAmount),
         finalReceivableAmount: form.finalReceivableAmount ? Number(form.finalReceivableAmount) : undefined,
         actualShipmentAmount: form.actualShipmentAmount ? Number(form.actualShipmentAmount) : undefined,
@@ -742,7 +792,7 @@ function QuickCreateOrderPanel({
         </label>
         <label>
           汇率
-          <input value={form.exchangeRate} onChange={(event) => setFormValue("exchangeRate", event.target.value)} readOnly={form.currency === "CNY"} placeholder="自动获取或手工填写" inputMode="decimal" required />
+          <input value={form.exchangeRate} onChange={(event) => handleExchangeRateChange(event.target.value)} readOnly={form.currency === "CNY"} placeholder="自动获取或手工填写" inputMode="decimal" required />
         </label>
         <label>
           预计应收金额
@@ -964,6 +1014,9 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     blNo: order.blNo || order.billOfLadingNo || "",
     currency: order.currency || "",
     exchangeRate: order.exchangeRate == null ? "" : String(order.exchangeRate),
+    exchangeRateDate: order.exchangeRateDate || "",
+    exchangeRateSource: order.exchangeRateSource || "",
+    exchangeRateType: order.exchangeRateType || "",
     estimatedReceivableAmount: order.estimatedReceivableAmount == null ? "" : String(order.estimatedReceivableAmount),
     finalReceivableAmount: order.finalReceivableAmount == null ? "" : String(order.finalReceivableAmount),
     actualShipmentAmount: order.actualShipmentAmount == null || order.actualShipmentAmount === "" ? "" : String(order.actualShipmentAmount),

@@ -39,3 +39,16 @@ test("orders api sorts unpaid orders before overpaid and fully paid orders", () 
   assert.match(ordersService, /sortReceivableRowsByPaymentPriority/);
   assert.match(ordersService, /pageResult\(sortedRows\.slice\(start, start \+ pageSize\), sortedRows\.length, page, pageSize\)/);
 });
+
+test("orders create form submits system exchange rate metadata", () => {
+  assert.match(ordersModule, /exchangeRateDate: string;/);
+  assert.match(ordersModule, /exchangeRateSource: string;/);
+  assert.match(ordersModule, /exchangeRateType: string;/);
+  assert.match(ordersModule, /exchangeRateDate: result\.rate\?\.rateDate \|\| ""/);
+  assert.match(ordersModule, /exchangeRateSource: result\.rate\?\.source \|\| ""/);
+  assert.match(ordersModule, /exchangeRateType: result\.rate\?\.rateType \|\| ""/);
+  assert.match(ordersModule, /exchangeRateDate: form\.exchangeRateDate \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateSource: form\.exchangeRateSource \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateType: form\.exchangeRateType \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateSource: "手动"/);
+});
