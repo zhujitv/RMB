@@ -31,8 +31,8 @@ test("orders page renders only the table list and not duplicate order cards", ()
 
 test("orders api sorts receivable orders by shipment date", () => {
   const sorted = sortReceivableRowsByShipmentDate([
-    { orderNo: "PV260", actualShipmentDate: "2026-06-03", expectedShipmentDate: "2026-06-01", createdAt: "2026-06-20T00:00:00.000Z" },
-    { orderNo: "MG40", expectedShipmentDate: "2026-06-12", createdAt: "2026-06-19T00:00:00.000Z" },
+    { orderNo: "PV260", actualShipmentDate: "2026-06-03", createdAt: "2026-06-20T00:00:00.000Z" },
+    { orderNo: "MG40", blDate: "2026-06-12", createdAt: "2026-06-19T00:00:00.000Z" },
     { orderNo: "PV263", actualShipmentDate: "2026-06-18", createdAt: "2026-06-18T00:00:00.000Z" },
     { orderNo: "PV252", blDate: "2026-06-08", createdAt: "2026-06-17T00:00:00.000Z" },
     { orderNo: "DM22 23", createdAt: "2026-06-16T00:00:00.000Z" },
@@ -58,12 +58,18 @@ test("orders create form submits system exchange rate metadata", () => {
 
 test("orders create form supports actual shipment date", () => {
   assert.match(prismaSchema, /actualShipmentDate\s+DateTime\?\s+@map\("actual_shipment_date"\) @db\.Date/);
-  assert.match(inputSchemas, /actualShipmentDate: \{ label: "实际发货日期", kind: "date" \}/);
+  assert.match(inputSchemas, /actualShipmentDate: \{ label: "发货时间", kind: "date" \}/);
   assert.match(ordersService, /const actualShipmentDate = dateFromInput\(input\.actualShipmentDate\)/);
   assert.match(ordersService, /actualShipmentDate,/);
   assert.match(orderSerialization, /actualShipmentDate: dateToInput\(order\.actualShipmentDate\)/);
   assert.match(ordersModule, /actualShipmentDate\?: string;/);
   assert.match(ordersModule, /actualShipmentDate: form\.actualShipmentDate \|\| undefined/);
-  assert.match(ordersModule, /实际发货日期/);
-  assert.match(ordersModule, /<DetailField label="实际发货" value=\{order\.actualShipmentDate \|\| "-"\} \/>/);
+  assert.match(ordersModule, /发货时间/);
+  assert.match(ordersModule, /<DetailField label="发货时间" value=\{order\.actualShipmentDate \|\| "-"\} \/>/);
+  assert.doesNotMatch(ordersModule, /预计发货日期/);
+  assert.doesNotMatch(ordersModule, /expectedShipmentDate: form\.expectedShipmentDate/);
+  assert.doesNotMatch(ordersModule, /form\.expectedShipmentDate/);
+  assert.doesNotMatch(ordersModule, /<DetailField label="预计发货"/);
+  assert.doesNotMatch(inputSchemas, /expectedShipmentDate/);
+  assert.doesNotMatch(inputSchemas, /预计发货日期/);
 });

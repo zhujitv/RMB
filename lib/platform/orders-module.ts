@@ -290,9 +290,7 @@ export async function saveOrder(request, actor, input, id = null) {
   const expectedArrivalDate = paymentTermType === "AFTER_ARRIVAL"
     ? dateFromInput(input.expectedArrivalDate || input.expectedPaymentDate)
     : (!paymentTermType && before ? before.expectedArrivalDate : null);
-  const expectedShipmentDate = paymentTermType === "COPY_BL"
-    ? dateFromInput(input.expectedShipmentDate || input.expectedPaymentDate)
-    : (!paymentTermType && before ? before.expectedShipmentDate : null);
+  const expectedShipmentDate = !paymentTermType && before ? before.expectedShipmentDate : null;
   const blDate = paymentTermType === "COPY_BL"
     ? dateFromInput(input.blDate)
     : (!paymentTermType && before ? before.blDate : null);
@@ -305,14 +303,14 @@ export async function saveOrder(request, actor, input, id = null) {
     : paymentTermType === "AFTER_ARRIVAL"
       ? addDays(expectedArrivalDate, creditDays)
       : paymentTermType === "COPY_BL"
-        ? (blDate || expectedShipmentDate || dateFromInput(input.dueDate))
+        ? (blDate || actualShipmentDate || dateFromInput(input.dueDate))
         : paymentTermType === "INSTALLMENT"
           ? dateFromInput(input.dueDate)
           : (dateFromInput(input.dueDate) || before?.dueDate || null);
   const expectedPaymentDate = paymentTermType === "AFTER_ARRIVAL"
     ? expectedArrivalDate
     : paymentTermType === "COPY_BL"
-      ? expectedShipmentDate
+      ? (dateFromInput(input.expectedPaymentDate) || actualShipmentDate)
       : (!paymentTermType && before ? before.expectedPaymentDate : null);
   const paymentInstallments = paymentTermType === "INSTALLMENT"
     ? input.paymentInstallments

@@ -12,7 +12,6 @@ export type ReceivableSortRow = {
   receivableAmountCny?: unknown;
   receivedAmountCny?: unknown;
   actualShipmentDate?: Date | string | null;
-  expectedShipmentDate?: Date | string | null;
   blDate?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
@@ -53,7 +52,6 @@ export function receivableUnpaidAmount(row: ReceivableSortRow) {
 
 function shipmentTimestamp(row: ReceivableSortRow) {
   return timestamp(row.actualShipmentDate)
-    || timestamp(row.expectedShipmentDate)
     || timestamp(row.blDate);
 }
 

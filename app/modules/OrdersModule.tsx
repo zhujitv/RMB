@@ -79,7 +79,6 @@ type OrderRow = {
   dueDate?: string;
   creditDays?: number | string;
   blDate?: string;
-  expectedShipmentDate?: string;
   expectedArrivalDate?: string;
   expectedPaymentDate?: string;
   depositRatio?: number | string;
@@ -143,7 +142,6 @@ type QuickOrderForm = {
   actualShipmentDate: string;
   tradeTerm: string;
   paymentTermType: string;
-  expectedShipmentDate: string;
   blDate: string;
   expectedArrivalDate: string;
   expectedPaymentDate: string;
@@ -173,7 +171,6 @@ const emptyQuickOrderForm: QuickOrderForm = {
   actualShipmentDate: "",
   tradeTerm: "FOB",
   paymentTermType: "COPY_BL",
-  expectedShipmentDate: "",
   blDate: "",
   expectedArrivalDate: "",
   expectedPaymentDate: "",
@@ -528,7 +525,7 @@ function QuickCreateOrderPanel({
     if (form.paymentTermType === "INSTALLMENT") return;
     const nextDueDate = derivedDueDate(form);
     if (nextDueDate !== form.dueDate) setFormValue("dueDate", nextDueDate);
-  }, [form.paymentTermType, form.expectedShipmentDate, form.blDate, form.expectedArrivalDate, form.creditDays]);
+  }, [form.paymentTermType, form.actualShipmentDate, form.blDate, form.expectedArrivalDate, form.creditDays]);
 
   async function loadFormOptions() {
     try {
@@ -720,7 +717,6 @@ function QuickCreateOrderPanel({
         actualShipmentDate: form.actualShipmentDate || undefined,
         tradeTerm: form.tradeTerm,
         paymentTermType: form.paymentTermType,
-        expectedShipmentDate: form.expectedShipmentDate || undefined,
         blDate: form.blDate || undefined,
         expectedArrivalDate: form.expectedArrivalDate || undefined,
         expectedPaymentDate: form.expectedPaymentDate || undefined,
@@ -811,7 +807,7 @@ function QuickCreateOrderPanel({
           <input value={form.actualShipmentAmount} onChange={(event) => setFormValue("actualShipmentAmount", event.target.value)} inputMode="decimal" placeholder="可发货后补录" />
         </label>
         <label>
-          实际发货日期
+          发货时间
           <input value={form.actualShipmentDate} onChange={(event) => setFormValue("actualShipmentDate", event.target.value)} type="date" />
         </label>
         <label>
@@ -832,10 +828,6 @@ function QuickCreateOrderPanel({
             <input value={form.creditDays} onChange={(event) => setFormValue("creditDays", event.target.value)} inputMode="numeric" required />
           </label>
         ) : null}
-        <label>
-          预计发货日期
-          <input value={form.expectedShipmentDate} onChange={(event) => setFormValue("expectedShipmentDate", event.target.value)} type="date" />
-        </label>
         <label>
           提单日期
           <input value={form.blDate} onChange={(event) => setFormValue("blDate", event.target.value)} type="date" />
@@ -993,8 +985,7 @@ function OrderDetailDrawer({
         <DetailField label="到期日" value={`${order.dueDate || "-"} ${order.summary?.reminderStatus ? `· ${order.summary.reminderStatus}` : ""}`} />
         <DetailField label="提醒天数" value={`${order.reminderDays ?? "-"} 天`} />
         <DetailField label="提单日期" value={order.blDate || "-"} />
-        <DetailField label="预计发货" value={order.expectedShipmentDate || "-"} />
-        <DetailField label="实际发货" value={order.actualShipmentDate || "-"} />
+        <DetailField label="发货时间" value={order.actualShipmentDate || "-"} />
         <DetailField label="预计到港" value={order.expectedArrivalDate || "-"} />
         <DetailField label="预计收款" value={order.expectedPaymentDate || "-"} />
         <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
@@ -1032,7 +1023,6 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     actualShipmentDate: order.actualShipmentDate || "",
     tradeTerm: order.tradeTerm || "FOB",
     paymentTermType,
-    expectedShipmentDate: order.expectedShipmentDate || "",
     blDate: order.blDate || "",
     expectedArrivalDate: order.expectedArrivalDate || "",
     expectedPaymentDate: order.expectedPaymentDate || "",
@@ -1049,7 +1039,7 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
 }
 
 function derivedDueDate(form: QuickOrderForm) {
-  if (form.paymentTermType === "COPY_BL") return form.blDate || form.expectedShipmentDate || "";
+  if (form.paymentTermType === "COPY_BL") return form.blDate || form.actualShipmentDate || "";
   if (form.paymentTermType === "AFTER_ARRIVAL") return addDaysText(form.expectedArrivalDate, Number(form.creditDays || 0));
   if (form.paymentTermType === "OA") return addDaysText(new Date().toISOString().slice(0, 10), Number(form.creditDays || 0));
   return form.dueDate;

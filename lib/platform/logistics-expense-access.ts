@@ -69,7 +69,7 @@ export function logisticsExpenseOrderSummary(order = {}) {
     containerType: "",
     port: firstItem.arrivalPlace || info.destinationPlace || "",
     loadingAddress: firstItem.departurePlace || info.departurePlace || "",
-    sailingDate: dateToInput(firstItem.departureDate || info.departureDate || order.expectedShipmentDate || order.blDate),
+    sailingDate: dateToInput(firstItem.departureDate || info.departureDate || order.actualShipmentDate || order.blDate || order.expectedShipmentDate),
     truckPlateNo: firstItem.truckPlateNo || info.truckPlateNo || "",
     cargoName: firstItem.cargoName || info.cargoDescription || "",
   };
