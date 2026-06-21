@@ -6,6 +6,7 @@ const moduleSource = readFileSync("app/modules/DomesticLogisticsModule.tsx", "ut
 const css = readFileSync("app/WorkspaceShell.module.css", "utf8");
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
+const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
@@ -26,6 +27,15 @@ test("domestic logistics transport detail keeps multi-container fields", () => {
   for (const field of ["containerNo", "truckPlateNo", "trailerPlateNo", "departurePlace", "arrivalPlace", "cargoName"]) {
     assert.match(moduleSource, new RegExp(field));
   }
+});
+
+test("domestic logistics supports bulk warehouse entry mode", () => {
+  for (const text of ["BULK_WAREHOUSE", "散货进舱", "散货进舱明细", "进舱编号/唛头", "进舱仓库"]) {
+    assert.match(moduleSource, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(sharedConstants, /BULK_WAREHOUSE/);
+  assert.match(sharedConstants, /散货进舱/);
+  assert.match(domesticLogisticsOps, /进舱日期/);
 });
 
 test("domestic logistics no longer exposes ocean auto tracking feature", () => {

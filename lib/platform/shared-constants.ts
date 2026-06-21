@@ -32,11 +32,12 @@ export const TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_SEA_20260607";
 export const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.flatMap((item) => item.costTypes);
 export const TAX_REFUND_LOGISTICS_INVOICE_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
 export const DOMESTIC_LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-export const DOMESTIC_LOGISTICS_TRANSPORT_TYPES = ["TRUCK", "EXPRESS", "MULTIMODAL"];
+export const DOMESTIC_LOGISTICS_TRANSPORT_TYPES = ["TRUCK", "EXPRESS", "MULTIMODAL", "BULK_WAREHOUSE"];
 export const DOMESTIC_LOGISTICS_TRANSPORT_LABELS = {
   TRUCK: "车辆运输",
   EXPRESS: "快递运输",
   MULTIMODAL: "多式联运",
+  BULK_WAREHOUSE: "散货进舱",
 };
 export const COMMISSION_LOGISTICS_COST_TYPES = ["国内物流费", "国内拖车费", ...LOGISTICS_COST_TYPES]
   .filter((item, index, arr) => arr.indexOf(item) === index);

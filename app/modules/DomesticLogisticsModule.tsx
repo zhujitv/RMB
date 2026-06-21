@@ -124,6 +124,7 @@ const TRANSPORT_TYPES = [
   { value: "TRUCK", label: "车辆运输" },
   { value: "EXPRESS", label: "快递运输" },
   { value: "MULTIMODAL", label: "多式联运" },
+  { value: "BULK_WAREHOUSE", label: "散货进舱" },
 ];
 const CUSTOMS_DOCUMENT_TYPES = [
   { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
@@ -795,6 +796,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
   }
 
   const isExpress = form.transportType === "EXPRESS";
+  const transportLabels = transportFieldLabels(form.transportType);
 
   return (
     <>
@@ -836,9 +838,9 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
       {!isExpress ? (
         <div className={styles.transportItemsPanel}>
           <div className={styles.transportItemsHeader}>
-            <strong>集装箱运输明细</strong>
+            <strong>{transportItemsTitle(form.transportType)}</strong>
             <div>
-              <button className={styles.secondaryButton} type="button" onClick={() => addItem(false)}>添加集装箱/车辆</button>
+              <button className={styles.secondaryButton} type="button" onClick={() => addItem(false)}>添加{transportItemsTitle(form.transportType)}</button>
               <button className={styles.secondaryButton} type="button" onClick={() => addItem(true)}>复制上一行</button>
             </div>
           </div>
@@ -846,13 +848,13 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
             {form.transportItems.map((item, index) => (
               <div className={styles.transportItemCard} key={`transport-item-${index}`}>
                 <strong>第 {index + 1} 行</strong>
-                <label>集装箱号<input value={item.containerNo || ""} onChange={(event) => updateItem(index, "containerNo", event.target.value)} /></label>
-                <label>{form.transportType === "MULTIMODAL" ? "首程车牌号" : "车牌号"}<input value={item.truckPlateNo || ""} onChange={(event) => updateItem(index, "truckPlateNo", event.target.value)} required /></label>
+                <label>{transportLabels.containerNo}<input value={item.containerNo || ""} onChange={(event) => updateItem(index, "containerNo", event.target.value)} /></label>
+                <label>{transportLabels.truckPlateNo}<input value={item.truckPlateNo || ""} onChange={(event) => updateItem(index, "truckPlateNo", event.target.value)} required /></label>
                 <label>挂车车牌<input value={item.trailerPlateNo || ""} onChange={(event) => updateItem(index, "trailerPlateNo", event.target.value)} /></label>
-                <label>起运日期<input type="date" value={item.departureDate || ""} onChange={(event) => updateItem(index, "departureDate", event.target.value)} required /></label>
-                <label>{form.transportType === "MULTIMODAL" ? "首程起运地" : "起运地"}<input value={item.departurePlace || ""} onChange={(event) => updateItem(index, "departurePlace", event.target.value)} required /></label>
-                <label>到达地<input value={item.arrivalPlace || ""} onChange={(event) => updateItem(index, "arrivalPlace", event.target.value)} required /></label>
-                <label>运输货物名称<input value={item.cargoName || ""} onChange={(event) => updateItem(index, "cargoName", event.target.value)} required /></label>
+                <label>{transportLabels.departureDate}<input type="date" value={item.departureDate || ""} onChange={(event) => updateItem(index, "departureDate", event.target.value)} required /></label>
+                <label>{transportLabels.departurePlace}<input value={item.departurePlace || ""} onChange={(event) => updateItem(index, "departurePlace", event.target.value)} required /></label>
+                <label>{transportLabels.arrivalPlace}<input value={item.arrivalPlace || ""} onChange={(event) => updateItem(index, "arrivalPlace", event.target.value)} required /></label>
+                <label>{transportLabels.cargoName}<input value={item.cargoName || ""} onChange={(event) => updateItem(index, "cargoName", event.target.value)} required /></label>
                 <label>备注<input value={item.remark || ""} onChange={(event) => updateItem(index, "remark", event.target.value)} /></label>
                 <button className={styles.secondaryButton} type="button" onClick={() => removeItem(index)}>删除本行</button>
               </div>
@@ -1081,6 +1083,43 @@ function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
   return { ...form, remarkText: form.remarkText || generateRemark(form) };
 }
 
+function transportItemsTitle(transportType: string) {
+  if (transportType === "BULK_WAREHOUSE") return "散货进舱明细";
+  if (transportType === "MULTIMODAL") return "多式联运明细";
+  return "集装箱运输明细";
+}
+
+function transportFieldLabels(transportType: string) {
+  if (transportType === "BULK_WAREHOUSE") {
+    return {
+      containerNo: "进舱编号/唛头",
+      truckPlateNo: "送货车牌号",
+      departureDate: "进舱日期",
+      departurePlace: "提货地",
+      arrivalPlace: "进舱仓库",
+      cargoName: "货物名称",
+    };
+  }
+  if (transportType === "MULTIMODAL") {
+    return {
+      containerNo: "集装箱号",
+      truckPlateNo: "首程车牌号",
+      departureDate: "起运日期",
+      departurePlace: "首程起运地",
+      arrivalPlace: "到达地",
+      cargoName: "运输货物名称",
+    };
+  }
+  return {
+    containerNo: "集装箱号",
+    truckPlateNo: "车牌号",
+    departureDate: "起运日期",
+    departurePlace: "起运地",
+    arrivalPlace: "到达地",
+    cargoName: "运输货物名称",
+  };
+}
+
 function generateRemark(form: DomesticLogisticsForm) {
   if (form.transportType === "EXPRESS") {
     return [
@@ -1089,14 +1128,15 @@ function generateRemark(form: DomesticLogisticsForm) {
       form.cargoDescription ? `运输货物名称：${form.cargoDescription}` : "",
     ].filter(Boolean).join("\n");
   }
+  const labels = transportFieldLabels(form.transportType);
   return form.transportItems.map((item) => [
-    item.containerNo ? `集装箱号：${item.containerNo}` : "",
-    item.truckPlateNo ? `车牌号：${item.truckPlateNo}` : "",
+    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
+    item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
     item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
-    item.departureDate ? `起运日：${item.departureDate}` : "",
-    item.departurePlace ? `起运地：${item.departurePlace}` : "",
-    item.arrivalPlace ? `到达地：${item.arrivalPlace}` : "",
-    item.cargoName ? `运输货物名称：${item.cargoName}` : "",
+    item.departureDate ? `${labels.departureDate}：${item.departureDate}` : "",
+    item.departurePlace ? `${labels.departurePlace}：${item.departurePlace}` : "",
+    item.arrivalPlace ? `${labels.arrivalPlace}：${item.arrivalPlace}` : "",
+    item.cargoName ? `${labels.cargoName}：${item.cargoName}` : "",
   ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
 }
 
@@ -1122,14 +1162,15 @@ function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {
   }
 
   const items = normalizeFormTransportItems(form.transportItems);
-  if (!items.length) return "请至少录入一条集装箱运输明细。";
+  const labels = transportFieldLabels(form.transportType);
+  if (!items.length) return `请至少录入一条${transportItemsTitle(form.transportType)}。`;
   for (const [index, item] of items.entries()) {
     const rowNo = `第 ${index + 1} 行`;
-    if (!item.truckPlateNo) return `请填写${rowNo}${form.transportType === "MULTIMODAL" ? "首程车牌号" : "车牌号"}。`;
-    if (!item.departureDate) return `请填写${rowNo}起运日期。`;
-    if (!item.departurePlace) return `请填写${rowNo}${form.transportType === "MULTIMODAL" ? "首程起运地" : "起运地"}。`;
-    if (!item.arrivalPlace) return `请填写${rowNo}到达地。`;
-    if (!item.cargoName) return `请填写${rowNo}运输货物名称。`;
+    if (!item.truckPlateNo) return `请填写${rowNo}${labels.truckPlateNo}。`;
+    if (!item.departureDate) return `请填写${rowNo}${labels.departureDate}。`;
+    if (!item.departurePlace) return `请填写${rowNo}${labels.departurePlace}。`;
+    if (!item.arrivalPlace) return `请填写${rowNo}${labels.arrivalPlace}。`;
+    if (!item.cargoName) return `请填写${rowNo}${labels.cargoName}。`;
   }
   return "";
 }

@@ -18,6 +18,11 @@ test("manual explains customs declaration recognition from logistics upload", ()
   assert.match(manualModule, /识别失败，不影响文件上传/);
 });
 
+test("manual explains bulk warehouse logistics mode", () => {
+  assert.match(manualModule, /散货进舱/);
+  assert.match(manualModule, /对应运输\/进舱信息/);
+});
+
 test("manual explains account and upload security rules", () => {
   assert.match(manualModule, /账号与安全/);
   assert.match(manualModule, /使用系统正式网址进入登录页/);
