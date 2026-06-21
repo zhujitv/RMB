@@ -176,6 +176,7 @@ export function serializeOrder(order) {
     estimatedReceivableAmountCny: Number(order.estimatedReceivableAmountCny ?? order.receivableAmountCny),
     actualShipmentAmount: order.actualShipmentAmount == null ? "" : Number(order.actualShipmentAmount),
     actualShipmentAmountCny: order.actualShipmentAmountCny == null ? "" : Number(order.actualShipmentAmountCny),
+    actualShipmentDate: dateToInput(order.actualShipmentDate),
     finalReceivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
     finalReceivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
     receivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),

@@ -69,6 +69,7 @@ type OrderRow = {
   estimatedReceivableAmountCny?: number;
   actualShipmentAmount?: number | "";
   actualShipmentAmountCny?: number | "";
+  actualShipmentDate?: string;
   tradeTerm?: string;
   paymentTerm?: string;
   paymentTermType?: string;
@@ -139,6 +140,7 @@ type QuickOrderForm = {
   estimatedReceivableAmount: string;
   finalReceivableAmount: string;
   actualShipmentAmount: string;
+  actualShipmentDate: string;
   tradeTerm: string;
   paymentTermType: string;
   expectedShipmentDate: string;
@@ -168,6 +170,7 @@ const emptyQuickOrderForm: QuickOrderForm = {
   estimatedReceivableAmount: "",
   finalReceivableAmount: "",
   actualShipmentAmount: "",
+  actualShipmentDate: "",
   tradeTerm: "FOB",
   paymentTermType: "COPY_BL",
   expectedShipmentDate: "",
@@ -714,6 +717,7 @@ function QuickCreateOrderPanel({
         estimatedReceivableAmount: Number(form.estimatedReceivableAmount),
         finalReceivableAmount: form.finalReceivableAmount ? Number(form.finalReceivableAmount) : undefined,
         actualShipmentAmount: form.actualShipmentAmount ? Number(form.actualShipmentAmount) : undefined,
+        actualShipmentDate: form.actualShipmentDate || undefined,
         tradeTerm: form.tradeTerm,
         paymentTermType: form.paymentTermType,
         expectedShipmentDate: form.expectedShipmentDate || undefined,
@@ -805,6 +809,10 @@ function QuickCreateOrderPanel({
         <label>
           实际发货金额
           <input value={form.actualShipmentAmount} onChange={(event) => setFormValue("actualShipmentAmount", event.target.value)} inputMode="decimal" placeholder="可发货后补录" />
+        </label>
+        <label>
+          实际发货日期
+          <input value={form.actualShipmentDate} onChange={(event) => setFormValue("actualShipmentDate", event.target.value)} type="date" />
         </label>
         <label>
           贸易条款
@@ -986,6 +994,7 @@ function OrderDetailDrawer({
         <DetailField label="提醒天数" value={`${order.reminderDays ?? "-"} 天`} />
         <DetailField label="提单日期" value={order.blDate || "-"} />
         <DetailField label="预计发货" value={order.expectedShipmentDate || "-"} />
+        <DetailField label="实际发货" value={order.actualShipmentDate || "-"} />
         <DetailField label="预计到港" value={order.expectedArrivalDate || "-"} />
         <DetailField label="预计收款" value={order.expectedPaymentDate || "-"} />
         <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
@@ -1020,6 +1029,7 @@ function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     estimatedReceivableAmount: order.estimatedReceivableAmount == null ? "" : String(order.estimatedReceivableAmount),
     finalReceivableAmount: order.finalReceivableAmount == null ? "" : String(order.finalReceivableAmount),
     actualShipmentAmount: order.actualShipmentAmount == null || order.actualShipmentAmount === "" ? "" : String(order.actualShipmentAmount),
+    actualShipmentDate: order.actualShipmentDate || "",
     tradeTerm: order.tradeTerm || "FOB",
     paymentTermType,
     expectedShipmentDate: order.expectedShipmentDate || "",

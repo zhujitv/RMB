@@ -235,6 +235,7 @@ model ReceivableOrder {
   estimatedReceivableAmountCny Decimal   @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
   actualShipmentAmount         Decimal?  @map("actual_shipment_amount") @db.Decimal(18, 2)
   actualShipmentAmountCny      Decimal?  @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
+  actualShipmentDate           DateTime? @map("actual_shipment_date") @db.Date
   finalReceivableAmount        Decimal   @map("final_receivable_amount") @db.Decimal(18, 2)
   finalReceivableAmountCny     Decimal   @map("final_receivable_amount_cny") @db.Decimal(18, 2)
   tradeTerm           String    @default("FOB") @map("trade_term")

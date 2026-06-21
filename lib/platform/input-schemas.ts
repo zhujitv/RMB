@@ -24,6 +24,7 @@ export const RECEIVABLE_ORDER_INPUT_SCHEMA: InputSchema = {
     required: (input) => !hasAny(input, ["estimatedReceivableAmount"]),
   },
   actualShipmentAmount: { label: "实际发货金额", kind: "positiveNumber" },
+  actualShipmentDate: { label: "实际发货日期", kind: "date" },
   finalReceivableAmount: { label: "最终应收金额", kind: "positiveNumber" },
   currency: { label: "币种", kind: "enum", enumValues: CURRENCIES, required: true },
   expectedArrivalDate: { label: "预计到港日期", kind: "date" },

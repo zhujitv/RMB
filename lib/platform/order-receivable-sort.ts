@@ -11,6 +11,9 @@ export type ReceivableSortRow = {
   finalReceivableAmountCny?: unknown;
   receivableAmountCny?: unknown;
   receivedAmountCny?: unknown;
+  actualShipmentDate?: Date | string | null;
+  expectedShipmentDate?: Date | string | null;
+  blDate?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
   summary?: ReceivableSortSummary | null;
@@ -48,18 +51,38 @@ export function receivableUnpaidAmount(row: ReceivableSortRow) {
   return receivableCny - receivedCny;
 }
 
-function receivablePaymentRank(unpaidAmount: number) {
-  if (unpaidAmount > 0.004) return 1;
-  if (unpaidAmount < -0.004) return 2;
-  return 3;
+function shipmentTimestamp(row: ReceivableSortRow) {
+  return timestamp(row.actualShipmentDate)
+    || timestamp(row.expectedShipmentDate)
+    || timestamp(row.blDate);
+}
+
+export function sortReceivableRowsByShipmentDate<T extends ReceivableSortRow>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    const aShipmentTime = shipmentTimestamp(a);
+    const bShipmentTime = shipmentTimestamp(b);
+    if (aShipmentTime || bShipmentTime) {
+      return bShipmentTime - aShipmentTime
+        || timestamp(b.createdAt) - timestamp(a.createdAt)
+        || timestamp(b.updatedAt) - timestamp(a.updatedAt);
+    }
+    return timestamp(b.createdAt) - timestamp(a.createdAt)
+      || timestamp(b.updatedAt) - timestamp(a.updatedAt);
+  });
 }
 
 export function sortReceivableRowsByPaymentPriority<T extends ReceivableSortRow>(rows: T[]) {
-  return [...rows].sort((a, b) => {
+  return sortReceivableRowsByShipmentDate(rows).sort((a, b) => {
+    const aShipmentTime = shipmentTimestamp(a);
+    const bShipmentTime = shipmentTimestamp(b);
+    if (aShipmentTime || bShipmentTime) {
+      return bShipmentTime - aShipmentTime
+        || timestamp(b.createdAt) - timestamp(a.createdAt)
+        || timestamp(b.updatedAt) - timestamp(a.updatedAt);
+    }
     const aUnpaid = receivableUnpaidAmount(a);
     const bUnpaid = receivableUnpaidAmount(b);
-    return receivablePaymentRank(aUnpaid) - receivablePaymentRank(bUnpaid)
-      || bUnpaid - aUnpaid
+    return bUnpaid - aUnpaid
       || timestamp(b.createdAt) - timestamp(a.createdAt)
       || timestamp(b.updatedAt) - timestamp(a.updatedAt);
   });

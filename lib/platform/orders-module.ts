@@ -55,7 +55,7 @@ import {
   defaultOrderLogisticsSupplier,
   syncOrderLogisticsSuppliers,
 } from "./masters-access";
-import { sortReceivableRowsByPaymentPriority } from "./order-receivable-sort";
+import { sortReceivableRowsByShipmentDate } from "./order-receivable-sort";
 
 export async function listOrders(query, actor, options = {}) {
   assertRead(actor, "orders");
@@ -65,7 +65,7 @@ export async function listOrders(query, actor, options = {}) {
     include: includeOrderRelations(),
     orderBy: [{ createdAt: "desc" }],
   });
-  const sortedRows = sortReceivableRowsByPaymentPriority(applyCommonFilters(
+  const sortedRows = sortReceivableRowsByShipmentDate(applyCommonFilters(
     orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),
     query,
   ));
@@ -264,6 +264,7 @@ export async function saveOrder(request, actor, input, id = null) {
   }
   const estimatedReceivableAmount = requirePositive(input.estimatedReceivableAmount ?? input.receivableAmount, "预计应收金额");
   const actualShipmentAmount = input.actualShipmentAmount === "" || input.actualShipmentAmount == null ? null : requirePositive(input.actualShipmentAmount, "实际发货金额");
+  const actualShipmentDate = dateFromInput(input.actualShipmentDate);
   const finalReceivableAmount = input.finalReceivableAmount === "" || input.finalReceivableAmount == null
     ? (actualShipmentAmount ?? estimatedReceivableAmount)
     : requirePositive(input.finalReceivableAmount, "最终应收金额");
@@ -336,6 +337,7 @@ export async function saveOrder(request, actor, input, id = null) {
     estimatedReceivableAmountCny: amountCny(estimatedReceivableAmount, exchangeRate),
     actualShipmentAmount,
     actualShipmentAmountCny: actualShipmentAmount == null ? null : amountCny(actualShipmentAmount, exchangeRate),
+    actualShipmentDate,
     finalReceivableAmount,
     finalReceivableAmountCny: amountCny(finalReceivableAmount, exchangeRate),
     receivableAmount: finalReceivableAmount,

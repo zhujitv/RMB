@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { sortReceivableRowsByPaymentPriority } from "../lib/platform/order-receivable-sort.ts";
+import { sortReceivableRowsByShipmentDate } from "../lib/platform/order-receivable-sort.ts";
 
 const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
 const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
+const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
+const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
 
 test("orders page renders only the table list and not duplicate order cards", () => {
   assert.doesNotMatch(ordersModule, /OrderMobileCard/);
@@ -26,17 +29,17 @@ test("orders page renders only the table list and not duplicate order cards", ()
   assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{gotoPage\} \/>/);
 });
 
-test("orders api sorts unpaid orders before overpaid and fully paid orders", () => {
-  const sorted = sortReceivableRowsByPaymentPriority([
-    { orderNo: "PV260", summary: { balanceCny: 0 }, createdAt: "2026-06-20T00:00:00.000Z" },
-    { orderNo: "MG40", summary: { balanceCny: -50 }, createdAt: "2026-06-19T00:00:00.000Z" },
-    { orderNo: "PV263", summary: { balanceCny: 300 }, createdAt: "2026-06-18T00:00:00.000Z" },
-    { orderNo: "PV252", summary: { balanceCny: 900 }, createdAt: "2026-06-17T00:00:00.000Z" },
-    { orderNo: "DM22 23", summary: { balanceCny: 1200 }, createdAt: "2026-06-16T00:00:00.000Z" },
+test("orders api sorts receivable orders by shipment date", () => {
+  const sorted = sortReceivableRowsByShipmentDate([
+    { orderNo: "PV260", actualShipmentDate: "2026-06-03", expectedShipmentDate: "2026-06-01", createdAt: "2026-06-20T00:00:00.000Z" },
+    { orderNo: "MG40", expectedShipmentDate: "2026-06-12", createdAt: "2026-06-19T00:00:00.000Z" },
+    { orderNo: "PV263", actualShipmentDate: "2026-06-18", createdAt: "2026-06-18T00:00:00.000Z" },
+    { orderNo: "PV252", blDate: "2026-06-08", createdAt: "2026-06-17T00:00:00.000Z" },
+    { orderNo: "DM22 23", createdAt: "2026-06-16T00:00:00.000Z" },
   ]);
 
-  assert.deepEqual(sorted.map((row) => row.orderNo), ["DM22 23", "PV252", "PV263", "MG40", "PV260"]);
-  assert.match(ordersService, /sortReceivableRowsByPaymentPriority/);
+  assert.deepEqual(sorted.map((row) => row.orderNo), ["PV263", "MG40", "PV252", "PV260", "DM22 23"]);
+  assert.match(ordersService, /sortReceivableRowsByShipmentDate/);
   assert.match(ordersService, /pageResult\(sortedRows\.slice\(start, start \+ pageSize\), sortedRows\.length, page, pageSize\)/);
 });
 
@@ -51,4 +54,16 @@ test("orders create form submits system exchange rate metadata", () => {
   assert.match(ordersModule, /exchangeRateSource: form\.exchangeRateSource \|\| undefined/);
   assert.match(ordersModule, /exchangeRateType: form\.exchangeRateType \|\| undefined/);
   assert.match(ordersModule, /exchangeRateSource: "手动"/);
+});
+
+test("orders create form supports actual shipment date", () => {
+  assert.match(prismaSchema, /actualShipmentDate\s+DateTime\?\s+@map\("actual_shipment_date"\) @db\.Date/);
+  assert.match(inputSchemas, /actualShipmentDate: \{ label: "实际发货日期", kind: "date" \}/);
+  assert.match(ordersService, /const actualShipmentDate = dateFromInput\(input\.actualShipmentDate\)/);
+  assert.match(ordersService, /actualShipmentDate,/);
+  assert.match(orderSerialization, /actualShipmentDate: dateToInput\(order\.actualShipmentDate\)/);
+  assert.match(ordersModule, /actualShipmentDate\?: string;/);
+  assert.match(ordersModule, /actualShipmentDate: form\.actualShipmentDate \|\| undefined/);
+  assert.match(ordersModule, /实际发货日期/);
+  assert.match(ordersModule, /<DetailField label="实际发货" value=\{order\.actualShipmentDate \|\| "-"\} \/>/);
 });
