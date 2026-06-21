@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
@@ -190,6 +190,11 @@ type CostItemForm = {
   remark: string;
 };
 
+type CostFormDrawerState = {
+  mode: "create" | "edit";
+  cost: CostRow | null;
+};
+
 const PAGE_SIZE = 20;
 
 const emptyQuickCostForm: QuickCostForm = {
@@ -245,8 +250,7 @@ export function CostsModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editCost, setEditCost] = useState<CostRow | null>(null);
+  const [costFormDrawer, setCostFormDrawer] = useState<CostFormDrawerState | null>(null);
   const [documentCost, setDocumentCost] = useState<CostRow | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState("");
@@ -261,6 +265,24 @@ export function CostsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
+
+  function openCreateCostDrawer() {
+    setDetailCost(null);
+    setDetailOrderSummary(null);
+    setDocumentCost(null);
+    setCostFormDrawer({ mode: "create", cost: null });
+  }
+
+  function openEditCostDrawer(cost: CostRow) {
+    setDetailCost(null);
+    setDetailOrderSummary(null);
+    setDocumentCost(null);
+    setCostFormDrawer({ mode: "edit", cost });
+  }
+
+  function closeCostFormDrawer() {
+    setCostFormDrawer(null);
+  }
 
   async function loadCosts(
     nextPage = page,
@@ -309,6 +331,7 @@ export function CostsModule({
     setSubmittedFilters(nextFilters);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, nextFilters, archiveScope, "details");
   }, [initialKeyword, initialOpenToken]);
@@ -330,6 +353,7 @@ export function CostsModule({
       setSubmittedFilters(nextFilters);
       setDetailCost(null);
       setDetailOrderSummary(null);
+      setCostFormDrawer(null);
       setNotice("");
       void loadCosts(1, nextFilters, archiveScope, costView);
     }, 300);
@@ -361,6 +385,7 @@ export function CostsModule({
     setSubmittedFilters(nextFilters);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, nextFilters, archiveScope, costView);
   }
@@ -371,6 +396,7 @@ export function CostsModule({
     setArchiveScope("current");
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, { ...emptyCostFilters }, "current", costView);
   }
@@ -378,6 +404,7 @@ export function CostsModule({
   function gotoPage(nextPage: number) {
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     void loadCosts(nextPage, submittedFilters, archiveScope, costView);
   }
 
@@ -385,6 +412,7 @@ export function CostsModule({
     setArchiveScope(nextArchiveScope);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, submittedFilters, nextArchiveScope, costView);
   }
@@ -393,6 +421,7 @@ export function CostsModule({
     setCostView(nextView);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, submittedFilters, archiveScope, nextView);
   }
@@ -407,12 +436,9 @@ export function CostsModule({
           <button
             className={styles.primaryButtonCompact}
             type="button"
-            onClick={() => {
-              setEditCost(null);
-              setCreateOpen((current) => !current);
-            }}
+            onClick={openCreateCostDrawer}
           >
-            {createOpen ? "收起登记" : "登记成本"}
+            登记成本
           </button>
           <button
             className={styles.secondaryButton}
@@ -427,24 +453,6 @@ export function CostsModule({
           </button>
         </div>
       </div>
-
-      {createOpen || editCost ? (
-        <QuickCreateCostPanel
-          initialCost={editCost}
-          onCancel={() => {
-            setCreateOpen(false);
-            setEditCost(null);
-          }}
-          onSaved={() => {
-            setCreateOpen(false);
-            setEditCost(null);
-            setDetailCost(null);
-            setDetailOrderSummary(null);
-            setNotice(editCost ? "成本已更新" : "成本已保存");
-            void loadCosts(1, submittedFilters, archiveScope, costView);
-          }}
-        />
-      ) : null}
 
       <div className={styles.listToolbar}>
         <button
@@ -557,11 +565,7 @@ export function CostsModule({
                   cost={cost}
                   onViewDetail={() => setDetailCost(cost)}
                   deleting={deletingId === cost.id}
-                  onEdit={() => {
-                    setCreateOpen(false);
-                    setEditCost(cost);
-                    setDetailCost(cost);
-                  }}
+                  onEdit={() => openEditCostDrawer(cost)}
                   onDelete={() => void deleteCost(cost)}
                   onOpenDocuments={() => void openCostDocuments(cost.id)}
                 />
@@ -581,12 +585,28 @@ export function CostsModule({
           cost={detailCost}
           deleting={deletingId === detailCost.id}
           onOpenDocuments={() => void openCostDocuments(detailCost.id)}
-          onEdit={() => {
-            setCreateOpen(false);
-            setEditCost(detailCost);
-          }}
+          onEdit={() => openEditCostDrawer(detailCost)}
           onDelete={() => void deleteCost(detailCost)}
           onClose={() => setDetailCost(null)}
+        />
+      ) : null}
+      {costFormDrawer ? (
+        <CostFormDrawer
+          drawer={costFormDrawer}
+          onCancel={closeCostFormDrawer}
+          onSaved={async () => {
+            const savedDrawer = costFormDrawer;
+            setCostFormDrawer(null);
+            setDetailCost(null);
+            setDetailOrderSummary(null);
+            if (savedDrawer.mode === "edit" && savedDrawer.cost?.id) {
+              await fetchCostDetail(savedDrawer.cost.id);
+              setNotice("成本已更新");
+              return;
+            }
+            await loadCosts(page, submittedFilters, archiveScope, costView);
+            setNotice("成本已保存");
+          }}
         />
       ) : null}
       {detailOrderSummary ? (
@@ -638,11 +658,17 @@ export function CostsModule({
     const cost = result.cost || result.data?.cost;
     if (!cost) throw new Error(result.message || "未找到成本详情");
     setRows((current) => current.map((item) => item.id === cost.id ? { ...item, ...cost } : item));
+    setDetailCost((current) => current?.id === cost.id ? { ...current, ...cost } : current);
+    setDocumentCost((current) => current?.id === cost.id ? { ...current, ...cost } : current);
+    setCostFormDrawer((current) => current?.cost?.id === cost.id ? { ...current, cost: { ...current.cost, ...cost } } : current);
     return cost;
   }
 
   async function openCostDocuments(id: string) {
     const cached = rows.find((cost) => cost.id === id) || null;
+    setDetailCost(null);
+    setDetailOrderSummary(null);
+    setCostFormDrawer(null);
     setDocumentCost(cached);
     setDocumentLoading(true);
     setDocumentError("");
@@ -758,6 +784,7 @@ export function CostsModule({
       if (result.success !== true && result.ok !== true) throw new Error(result.message || "删除成本失败");
       setDetailCost(null);
       setDetailOrderSummary(null);
+      setCostFormDrawer((current) => current?.cost?.id === cost.id ? null : current);
       await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice(result.message || "成本已删除");
     } catch (deleteError) {
@@ -768,14 +795,53 @@ export function CostsModule({
   }
 }
 
+function CostFormDrawer({
+  drawer,
+  onCancel,
+  onSaved,
+}: {
+  drawer: CostFormDrawerState;
+  onCancel: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const cost = drawer.cost;
+  const editMode = drawer.mode === "edit";
+  const supplierName = cost ? (cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-") : "-";
+  const title = editMode
+    ? `${cost?.orderNo || "-"} · ${customerDisplayName(cost || {})}`
+    : "登记成本";
+  const subtitle = editMode
+    ? `成本类型：${cost?.costType || "-"} · 付款状态：${cost?.paymentStatus || "-"} · 供应商：${supplierName}`
+    : "选择订单后登记供应商成本，保存后当前筛选和页码保持不变。";
+
+  return (
+    <SideDetailDrawer
+      ariaLabel={editMode ? "编辑成本" : "登记成本"}
+      kicker="成本管理"
+      title={title}
+      subtitle={subtitle}
+      onClose={onCancel}
+    >
+      <QuickCreateCostPanel
+        drawerMode
+        initialCost={cost}
+        onCancel={onCancel}
+        onSaved={onSaved}
+      />
+    </SideDetailDrawer>
+  );
+}
+
 function QuickCreateCostPanel({
   initialCost,
+  drawerMode = false,
   onCancel,
   onSaved,
 }: {
   initialCost?: CostRow | null;
+  drawerMode?: boolean;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 }) {
   const [form, setForm] = useState<QuickCostForm>(() => costFormFromRow(initialCost));
   const [items, setItems] = useState<CostItemForm[]>(() => [costItemFromRow(initialCost)]);
@@ -982,7 +1048,7 @@ function QuickCreateCostPanel({
       const freshItem = emptyCostItemForm();
       setItems([freshItem]);
       setExchangeMetaByItem({ [freshItem.localId]: "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" });
-      onSaved();
+      await onSaved();
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "成本保存失败");
     } finally {
@@ -1005,7 +1071,7 @@ function QuickCreateCostPanel({
   const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={submitQuickCost}>
+    <form className={`${styles.quickCreatePanel} ${drawerMode ? styles.quickCreatePanelInDrawer : ""}`} onSubmit={submitQuickCost}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{editMode ? "编辑成本" : "批量登记成本"}</strong>
@@ -1136,7 +1202,7 @@ function QuickCreateCostPanel({
         <span>成本条数：{items.length}</span>
       </div>
 
-      <div className={styles.detailActions}>
+      <div className={`${styles.detailActions} ${drawerMode ? styles.drawerFormActions : ""}`}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : editMode ? "更新成本" : `保存 ${items.length} 条成本`}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
@@ -1253,14 +1319,20 @@ function CostDetailDrawer({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState("basic");
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
+
+  useEffect(() => {
+    setActiveTab("basic");
+  }, [cost.id]);
+
   return (
     <SideDetailDrawer
       ariaLabel="成本详情"
       kicker="成本管理"
       title={`${cost.orderNo || "-"} · ${customerLegalName(cost)}`}
-      subtitle={`成本类型：${cost.costType || "-"} · 供应商：${supplierName}`}
+      subtitle={`成本类型：${cost.costType || "-"} · 付款状态：${cost.paymentStatus || "-"} · 供应商：${supplierName}`}
       onClose={onClose}
       actions={
         <>
@@ -1277,22 +1349,69 @@ function CostDetailDrawer({
       }
     >
       {!manualCost ? <div className={styles.infoStrip}>系统生成的成本记录不可在此直接编辑。</div> : null}
-      <div className={styles.detailGrid}>
-        <DetailField label="客户全称" value={customerLegalName(cost)} wide />
-        <DetailField label="提单号" value={cost.blNo || cost.billOfLadingNo || "-"} />
-        <DetailField label="供应商" value={supplierName} />
-        <DetailField label="成本金额" value={moneyText(cost.currency, cost.amount, cost.amountCny)} />
-        <DetailField label="付款状态" value={cost.paymentStatus || "-"} />
-        <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
-        <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
-        <DetailField label="折人民币" value={formatCny(Number(cost.amountCny || 0))} />
-        <DetailField label="币种 / 汇率" value={`${cost.currency || "-"} / ${Number(cost.exchangeRate || 0).toFixed(4)}`} />
-        <DetailField label="来源" value={cost.sourceLabel || "人工录入"} />
-        <DetailField label="创建人" value={cost.createdBy?.name || "-"} />
-        <DetailField label="修改人" value={cost.updatedBy?.name || "-"} />
-        <DetailField label="备注" value={cost.remark || "-"} wide hidden={!cost.remark} />
-      </div>
+      <UiTabs
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { key: "basic", label: "基本信息" },
+          { key: "payment", label: "付款信息" },
+          { key: "invoice", label: "发票信息" },
+          { key: "audit", label: "操作记录" },
+        ]}
+      />
+      {activeTab === "basic" ? (
+        <div className={styles.detailGrid}>
+          <DetailField label="客户全称" value={customerLegalName(cost)} wide />
+          <DetailField label="订单号" value={cost.orderNo || "-"} />
+          <DetailField label="提单号" value={cost.blNo || cost.billOfLadingNo || "-"} />
+          <DetailField label="成本类型" value={cost.costType || "-"} />
+          <DetailField label="供应商" value={supplierName} />
+          <DetailMoneyField label="成本金额" cost={cost} />
+          <DetailField label="币种 / 汇率" value={`${cost.currency || "-"} / ${Number(cost.exchangeRate || 0).toFixed(4)}`} />
+          <DetailField label="来源" value={cost.sourceLabel || "人工录入"} />
+          <DetailField label="备注" value={cost.remark || "-"} wide hidden={!cost.remark} />
+        </div>
+      ) : null}
+      {activeTab === "payment" ? (
+        <div className={styles.detailGrid}>
+          <DetailField label="付款状态" value={cost.paymentStatus || "-"} />
+          <DetailField label="付款日期" value={formatDate(cost.paymentDate)} />
+          <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
+          <DetailMoneyField label="付款金额" cost={cost} />
+        </div>
+      ) : null}
+      {activeTab === "invoice" ? (
+        <div className={styles.detailGrid}>
+          <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
+          <DetailField label="供应商" value={supplierName} />
+          <DetailField label="成本类型" value={cost.costType || "-"} />
+          <DetailField label="资料维护" value="点击上方“资料维护”查看或上传发票资料。" wide />
+        </div>
+      ) : null}
+      {activeTab === "audit" ? (
+        <div className={styles.detailGrid}>
+          <DetailField label="创建人" value={cost.createdBy?.name || "-"} />
+          <DetailField label="创建时间" value={formatDate(cost.createdAt)} />
+          <DetailField label="修改人" value={cost.updatedBy?.name || "-"} />
+          <DetailField label="更新时间" value={formatDate(cost.updatedAt)} />
+          <DetailField label="记录来源" value={cost.sourceLabel || "人工录入"} />
+        </div>
+      ) : null}
     </SideDetailDrawer>
+  );
+}
+
+function DetailMoneyField({ label, cost }: { label: string; cost: CostRow }) {
+  return (
+    <div className={styles.detailField}>
+      <span>{label}</span>
+      <MoneyAmount
+        className={styles.detailAmountCell}
+        currency={cost.currency}
+        amount={cost.amount}
+        amountCny={cost.amountCny}
+      />
+    </div>
   );
 }
 

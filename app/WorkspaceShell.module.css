@@ -2431,6 +2431,10 @@
   white-space: nowrap;
 }
 
+.detailAmountCell {
+  justify-items: start;
+}
+
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4258,6 +4262,14 @@
   padding: 16px;
 }
 
+.quickCreatePanelInDrawer {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 4px;
+}
+
 .inlineEditPanel {
   margin: 0 0 16px;
   border: 1px solid #dbeafe;
@@ -4304,6 +4316,18 @@
   background: #fff;
   border: 1px solid #e2e8f0;
   padding: 6px 10px;
+}
+
+.drawerFormActions {
+  position: sticky;
+  bottom: -22px;
+  z-index: 3;
+  justify-content: flex-end;
+  margin: 18px -18px -22px;
+  padding: 12px 18px;
+  background: rgba(248, 250, 252, 0.96);
+  border-top: 1px solid #e2e8f0;
+  backdrop-filter: blur(12px);
 }
 
 .installmentPanel {

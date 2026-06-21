@@ -26,3 +26,26 @@ test("cost order summary switches to detail table through keyword filter", () =>
   assert.match(costsModule, /const nextFilters = \{ \.\.\.emptyCostFilters, keyword: detailOrderSummary\.orderNo \|\| "" \}/);
   assert.doesNotMatch(costsModule, /\{ \.\.\.emptyCostFilters, orderNo:/);
 });
+
+test("cost create and edit interactions use right side drawers instead of inline panels", () => {
+  assert.match(costsModule, /type CostFormDrawerState = \{/);
+  assert.match(costsModule, /function CostFormDrawer\(/);
+  assert.match(costsModule, /<SideDetailDrawer[\s\S]*ariaLabel=\{editMode \? "编辑成本" : "登记成本"\}/);
+  assert.match(costsModule, /<QuickCreateCostPanel[\s\S]*drawerMode/);
+  assert.match(costsModule, /onClick=\{openCreateCostDrawer\}/);
+  assert.match(costsModule, /onEdit=\{\(\) => openEditCostDrawer\(detailCost\)\}/);
+  assert.doesNotMatch(costsModule, /createOpen/);
+  assert.doesNotMatch(costsModule, /editCost/);
+  assert.doesNotMatch(costsModule, /收起登记/);
+});
+
+test("cost detail drawer is tabbed and edit refreshes the current row", () => {
+  assert.match(costsModule, /import \{[^}]*UiTabs/);
+  assert.match(costsModule, /label: "基本信息"/);
+  assert.match(costsModule, /label: "付款信息"/);
+  assert.match(costsModule, /label: "发票信息"/);
+  assert.match(costsModule, /label: "操作记录"/);
+  assert.match(costsModule, /await fetchCostDetail\(savedDrawer\.cost\.id\)/);
+  assert.match(costsModule, /await loadCosts\(page, submittedFilters, archiveScope, costView\)/);
+  assert.doesNotMatch(costsModule, /void loadCosts\(1, submittedFilters, archiveScope, costView\)/);
+});
