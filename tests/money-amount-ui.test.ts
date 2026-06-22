@@ -35,7 +35,7 @@ test("business tables use compact money amount cells instead of long money text"
   assert.match(paymentsModule, /<MoneyAmount currency=\{payment\.currency\} amount=\{payment\.amount\} amountCny=\{payment\.amountCny\}/);
   assert.match(costsModule, /<MoneyAmount currency=\{cost\.currency\} amount=\{cost\.amount\} amountCny=\{cost\.amountCny\}/);
   assert.match(profitModule, /<MoneyAmount amountCny=\{summary\.expectedGrossProfit\}/);
-  assert.match(logisticsFeesModule, /<MoneyAmount currency=\{expense\.currency\} amount=\{expense\.amount\} amountCny=\{expense\.amountCny \|\| 0\}/);
+  assert.match(logisticsFeesModule, /<MoneyAmount amountCny=\{expense\.amountCny \|\| 0\}/);
 
   for (const source of [ordersModule, paymentsModule, costsModule, logisticsFeesModule]) {
     assert.doesNotMatch(source, /<td>\{moneyText\(/);

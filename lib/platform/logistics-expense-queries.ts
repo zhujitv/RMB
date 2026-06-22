@@ -15,6 +15,7 @@ import {
   logisticsExpenseAccessWhere,
   logisticsExpenseOrderSummary,
   logisticsExpenseStatusWhere,
+  groupLogisticsExpensesByBill,
   serializeLogisticsExpense,
   LOGISTICS_OPERATOR_ROLE,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
@@ -22,6 +23,7 @@ import {
 
 export async function listLogisticsExpenses(query, actor) {
   assertCanReadLogisticsExpenses(actor);
+  const view = nonEmpty(query.get("view") || "bills");
   const keyword = insensitiveContains(query.get("keyword") || query.get("q"));
   const supplierId = nonEmpty(query.get("supplierId"));
   const costType = String(query.get("costType") || "").trim();
@@ -45,17 +47,27 @@ export async function listLogisticsExpenses(query, actor) {
     } : {}),
   };
   const { page, pageSize } = pageParams(query, 20, 100);
-  const [total, rows] = await Promise.all([
-    prisma.logisticsExpense.count({ where }),
-    prisma.logisticsExpense.findMany({
-      where,
-      include: includeLogisticsExpenseRelations(),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
-  return pageResult(rows.map(serializeLogisticsExpense), total, page, pageSize);
+  if (view === "items") {
+    const [total, rows] = await Promise.all([
+      prisma.logisticsExpense.count({ where }),
+      prisma.logisticsExpense.findMany({
+        where,
+        include: includeLogisticsExpenseRelations(),
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return pageResult(rows.map(serializeLogisticsExpense), total, page, pageSize);
+  }
+  const rows = await prisma.logisticsExpense.findMany({
+    where,
+    include: includeLogisticsExpenseRelations(),
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+  const bills = groupLogisticsExpensesByBill(rows);
+  const start = (page - 1) * pageSize;
+  return pageResult(bills.slice(start, start + pageSize), bills.length, page, pageSize);
 }
 
 export async function listLogisticsExpenseOrders(query, actor) {

@@ -2140,7 +2140,7 @@
 .logisticsItemsHead,
 .logisticsItemsRow {
   display: grid;
-  grid-template-columns: minmax(130px, 1.1fr) minmax(100px, 0.8fr) 86px 96px minmax(120px, 0.9fr) minmax(150px, 1.2fr) auto;
+  grid-template-columns: minmax(120px, 1fr) minmax(100px, 0.85fr) minmax(96px, 0.8fr) 78px 88px minmax(112px, 0.9fr) minmax(140px, 1.1fr) auto;
   gap: 8px;
   align-items: center;
 }

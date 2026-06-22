@@ -30,6 +30,7 @@ const backend = [
 ].join("\n");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
+const containerCountMigration = readFileSync("prisma/migrations/20260622100000_logistics_expense_container_count/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
@@ -42,8 +43,10 @@ test("logistics expenses are stored outside official costs until approved", () =
   assert.match(schema, /model LogisticsExpense/);
   assert.match(schema, /auditStatus\s+String\s+@default\("草稿"\)/);
   assert.match(schema, /costId\s+String\?\s+@unique/);
+  assert.match(schema, /appliedContainerCount\s+Int\?\s+@map\("applied_container_count"\)/);
   assert.match(schema, /model OrderCost[\s\S]*sourceType\s+String\s+@default\("MANUAL"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "logistics_expenses"/);
+  assert.match(containerCountMigration, /ADD COLUMN IF NOT EXISTS "applied_container_count" INTEGER/);
 });
 
 test("approval generates official costs with source tracking", () => {
@@ -137,6 +140,28 @@ test("logistics expense supplier picker only keeps logistics-capable suppliers",
 test("logistics supplier login locks supplier field to current supplier", () => {
   assert.match(logisticsModule, /supplierId: isLockedSupplier \? currentUserSupplierId/);
   assert.match(logisticsModule, /setForm\(\(current\) => \(\{ \.\.\.current, supplierId: currentUserSupplierId \}\)\);/);
+  assert.match(logisticsModule, /supplierId: isLockedSupplier \? undefined : form\.supplierId \|\| undefined/);
+  assert.match(logisticsModule, /!isLockedSupplier \? \(/);
+});
+
+test("logistics expense list groups bills by BL number and keeps item details", () => {
+  assert.match(backend, /groupLogisticsExpensesByBill/);
+  assert.match(backend, /serializeLogisticsExpenseBill/);
+  assert.match(backend, /aggregateLogisticsExpenseStatus/);
+  assert.match(logisticsModule, /items = expense\.items\?\.length \? expense\.items : \[expense\]/);
+  assert.match(logisticsModule, /费用明细/);
+  assert.match(logisticsModule, /LogisticsExpenseItemDetail/);
+  assert.doesNotMatch(logisticsModule, /<th>供应商<\/th>/);
+});
+
+test("logistics expense form supports whole shipment or applied container count", () => {
+  assert.match(logisticsModule, /appliedContainerCount: "shipment"/);
+  assert.match(logisticsModule, /lineSubtotal\(item\)/);
+  assert.match(logisticsModule, /containerCountOptions\(selectedOrder\)/);
+  assert.match(logisticsModule, /单价\/整票/);
+  assert.match(logisticsModule, /适用范围/);
+  assert.match(backend, /normalizeAppliedContainerCount/);
+  assert.match(backend, /LOGISTICS_CONTAINER_COUNT_EXCEEDS_ORDER/);
 });
 
 test("sales commission base uses actual received payments minus logistics costs", () => {

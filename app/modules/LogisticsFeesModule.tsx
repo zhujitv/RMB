@@ -50,6 +50,9 @@ type DocumentLite = {
 
 type LogisticsExpense = {
   id: string;
+  isBill?: boolean;
+  itemCount?: number;
+  items?: LogisticsExpense[];
   orderId?: string;
   orderNo?: string;
   blNo?: string;
@@ -58,6 +61,7 @@ type LogisticsExpense = {
   customerShortName?: string;
   supplierId?: string;
   supplierName?: string;
+  supplierNames?: string[];
   supplierEmail?: string;
   costId?: string;
   costType?: string;
@@ -65,6 +69,8 @@ type LogisticsExpense = {
   exchangeRate?: number;
   amount?: number;
   amountCny?: number;
+  appliedContainerCount?: number | null;
+  containerScope?: string;
   remark?: string;
   auditStatus?: string;
   invoiceStatus?: string;
@@ -118,6 +124,16 @@ type ExpenseOrderOption = {
   customerShortName?: string;
   truckPlateNo?: string;
   cargoName?: string;
+  containerCount?: number;
+  containerNos?: string[];
+  transportItems?: Array<{
+    containerNo?: string;
+    truckPlateNo?: string;
+    departureDate?: string;
+    departurePlace?: string;
+    arrivalPlace?: string;
+    cargoName?: string;
+  }>;
   logisticsSuppliers?: SupplierOption[];
 };
 
@@ -139,6 +155,7 @@ type ExpenseForm = {
 type ExpenseItemForm = {
   costType: string;
   amount: string;
+  appliedContainerCount: string;
   currency: string;
   exchangeRate: string;
   remark: string;
@@ -147,6 +164,7 @@ type ExpenseItemForm = {
 const emptyExpenseItem = (): ExpenseItemForm => ({
   costType: "拖车费",
   amount: "",
+  appliedContainerCount: "shipment",
   currency: "CNY",
   exchangeRate: "1",
   remark: "",
@@ -514,7 +532,6 @@ export function LogisticsFeesModule({
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.blNoColumn}>提单号</th>
               <th className={styles.customerColumn}>客户简称</th>
-              <th>供应商</th>
               <th className={styles.amountColumn}>费用合计</th>
               <th>审核状态</th>
               <th>发票状态</th>
@@ -524,22 +541,23 @@ export function LogisticsFeesModule({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9}><div className={styles.emptyState}>数据加载中...</div></td></tr>
+              <tr><td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((expense) => (
               <LogisticsExpenseRows
                 key={expense.id}
                 expense={expense}
                 expanded={expandedId === expense.id}
-                busy={busyId === expense.id}
+                busyId={busyId}
                 onToggle={() => setExpandedId((current) => current === expense.id ? "" : expense.id)}
                 canReview={canReviewExpense}
                 canConfirmInvoice={canConfirmInvoice}
                 canWithdraw={isLogisticsSupplier}
-                onApprove={() => void patchExpense(expense, { action: "approve" }, "审核物流费用失败")}
-                onReject={() => void rejectExpense(expense)}
-                onWithdraw={() => void withdrawExpense(expense)}
-                onMarkPaid={() => void patchExpense(expense, { action: "paymentStatus", paymentStatus: "已付款" }, "更新付款状态失败")}
-                onConfirmInvoice={() => void confirmExpenseInvoice(expense)}
+                canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
+                onApprove={(item) => void patchExpense(item, { action: "approve" }, "审核物流费用失败")}
+                onReject={(item) => void rejectExpense(item)}
+                onWithdraw={(item) => void withdrawExpense(item)}
+                onMarkPaid={(item) => void patchExpense(item, { action: "paymentStatus", paymentStatus: "已付款" }, "更新付款状态失败")}
+                onConfirmInvoice={(item) => void confirmExpenseInvoice(item)}
                 onInvoiceUploaded={() => {
                   setNotice("物流发票已上传");
                   void loadExpenses(page, submittedKeyword, status, costType);
@@ -547,7 +565,7 @@ export function LogisticsFeesModule({
                 }}
               />
             )) : (
-              <tr><td colSpan={9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
+              <tr><td colSpan={8}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
             )}
           </tbody>
         </table>
@@ -573,7 +591,7 @@ export function LogisticsFeesModule({
 function LogisticsExpenseRows({
   expense,
   expanded,
-  busy,
+  busyId,
   onToggle,
   onApprove,
   onReject,
@@ -584,14 +602,103 @@ function LogisticsExpenseRows({
   canReview,
   canConfirmInvoice,
   canWithdraw,
+  canShowSupplier,
 }: {
   expense: LogisticsExpense;
   expanded: boolean;
-  busy: boolean;
+  busyId: string;
   onToggle: () => void;
   canReview: boolean;
   canConfirmInvoice: boolean;
   canWithdraw: boolean;
+  canShowSupplier: boolean;
+  onApprove: (expense: LogisticsExpense) => void;
+  onReject: (expense: LogisticsExpense) => void;
+  onWithdraw: (expense: LogisticsExpense) => void;
+  onMarkPaid: (expense: LogisticsExpense) => void;
+  onConfirmInvoice: (expense: LogisticsExpense) => void;
+  onInvoiceUploaded: () => void;
+}) {
+  const auditStatus = expense.auditStatus || "草稿";
+  const invoiceStatus = expense.invoiceStatus || "未通知";
+  const paymentStatus = expense.paymentStatus || "待开票";
+  const items = expense.items?.length ? expense.items : [expense];
+  const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
+  return (
+    <>
+      <tr className={styles.clickableRow} onClick={onToggle}>
+        <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
+        <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
+        <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
+        <td className={styles.amountColumn}>
+          <MoneyAmount amountCny={expense.amountCny || 0} />
+        </td>
+        <td><StatusPill value={auditStatus} /></td>
+        <td><StatusPill value={invoiceStatus} /></td>
+        <td><StatusPill value={paymentStatus} /></td>
+        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+      </tr>
+      {expanded ? (
+        <tr className={styles.detailRow}>
+          <td colSpan={8}>
+            <div className={styles.detailCard} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.detailGrid}>
+                <DetailField label="客户全称" value={customerLegalName(expense)} wide />
+                <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
+                <DetailField label="费用明细" value={`${items.length} 项`} />
+                <DetailField label="账单合计" value={formatCny(expense.amountCny || 0)} />
+                <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} wide hidden={!canShowSupplier} />
+              </div>
+              <div className={styles.subList}>
+                {items.map((item, index) => (
+                  <LogisticsExpenseItemDetail
+                    key={item.id || `${expense.id}-${index}`}
+                    expense={item}
+                    index={index}
+                    busy={busyId === item.id}
+                    canReview={canReview}
+                    canConfirmInvoice={canConfirmInvoice}
+                    canWithdraw={canWithdraw}
+                    canShowSupplier={canShowSupplier}
+                    onApprove={() => onApprove(item)}
+                    onReject={() => onReject(item)}
+                    onWithdraw={() => onWithdraw(item)}
+                    onMarkPaid={() => onMarkPaid(item)}
+                    onConfirmInvoice={() => onConfirmInvoice(item)}
+                    onInvoiceUploaded={onInvoiceUploaded}
+                  />
+                ))}
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function LogisticsExpenseItemDetail({
+  expense,
+  index,
+  busy,
+  canReview,
+  canConfirmInvoice,
+  canWithdraw,
+  canShowSupplier,
+  onApprove,
+  onReject,
+  onWithdraw,
+  onMarkPaid,
+  onConfirmInvoice,
+  onInvoiceUploaded,
+}: {
+  expense: LogisticsExpense;
+  index: number;
+  busy: boolean;
+  canReview: boolean;
+  canConfirmInvoice: boolean;
+  canWithdraw: boolean;
+  canShowSupplier: boolean;
   onApprove: () => void;
   onReject: () => void;
   onWithdraw: () => void;
@@ -602,81 +709,64 @@ function LogisticsExpenseRows({
   const auditStatus = expense.auditStatus || "草稿";
   const invoiceStatus = expense.invoiceStatus || "未通知";
   const paymentStatus = expense.paymentStatus || "待开票";
-  const canUploadInvoice = ["未通知", "已通知开票"].includes(invoiceStatus);
+  const canUploadInvoice = auditStatus === "审核通过" && ["未通知", "已通知开票"].includes(invoiceStatus);
   return (
-    <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
-        <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
-        <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
-        <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
-        <td>{expense.supplierName || "-"}</td>
-        <td className={styles.amountColumn}>
-          <MoneyAmount currency={expense.currency} amount={expense.amount} amountCny={expense.amountCny || 0} />
-        </td>
-        <td><StatusPill value={auditStatus} /></td>
-        <td><StatusPill value={invoiceStatus} /></td>
-        <td><StatusPill value={paymentStatus} /></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
-      </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={9}>
-            <div className={styles.detailCard} onClick={(event) => event.stopPropagation()}>
-              <div className={styles.detailActions}>
-                {auditStatus === "待审核" && canReview ? (
-                  <>
-                    <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={onApprove}>{busy ? "处理中..." : "审核通过"}</button>
-                    <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onReject}>驳回</button>
-                  </>
-                ) : null}
-                {auditStatus === "待审核" && canWithdraw ? (
-                  <>
-                    <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回</button>
-                  </>
-                ) : null}
-                {auditStatus === "审核通过" ? (
-                  <>
-                    {invoiceStatus === "已上传" && canConfirmInvoice ? (
-                      <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onConfirmInvoice}>
-                        {busy ? "处理中..." : "确认发票"}
-                      </button>
-                    ) : null}
-                    {invoiceStatus === "已确认" && canConfirmInvoice ? (
-                      <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
-                      {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
-                      </button>
-                    ) : null}
-                    {canUploadInvoice ? <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} /> : null}
-                  </>
-                ) : null}
-                {auditStatus === "草稿" || auditStatus === "已驳回" ? (
-                  <span className={styles.mutedText}>草稿或驳回记录可由录入人重新提交。</span>
-                ) : null}
-              </div>
-              <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={customerLegalName(expense)} wide />
-                <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
-                <DetailField label="供应商" value={expense.supplierName || "-"} />
-                <DetailField label="费用类型" value={expense.costType || "-"} />
-                <DetailField label="费用金额" value={moneyText(expense.currency, expense.amount, expense.amountCny)} />
-                <DetailField label="折人民币" value={formatCny(expense.amountCny || 0)} />
-                <DetailField label="币种 / 汇率" value={`${expense.currency || "CNY"} / ${Number(expense.exchangeRate || 1).toFixed(4)}`} />
-                <DetailField label="审核人 / 时间" value={`${expense.reviewedBy?.name || "-"} / ${formatDateTime(expense.reviewedAt)}`} />
-                <DetailField label="提交时间" value={formatDateTime(expense.submittedAt)} />
-                <DetailField label="生成成本" value={expense.costId ? "已同步到成本管理" : "未同步"} />
-                <DetailField label="发票号码" value={expense.invoiceNo || "-"} />
-                <DetailField label="开票日期" value={formatDate(expense.invoiceDate)} />
-                <DetailField label="发票金额" value={expense.invoiceAmount ? formatCny(expense.invoiceAmount) : "-"} />
-                <DetailField label="发票文件" value={expense.invoiceDocument?.fileName || expense.invoiceDocument?.originalFilename || "-"} wide />
-                <DetailField label="驳回原因" value={expense.rejectReason || "-"} wide />
-                <DetailField label="审核备注" value={expense.reviewRemark || "-"} wide />
-                <DetailField label="备注" value={expense.remark || "-"} wide />
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <div className={styles.subListItem}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>明细 {index + 1} · {expense.costType || "-"}</strong>
+          <span>{expense.containerScope || "整票"} ｜ {moneyText(expense.currency, expense.amount, expense.amountCny)}</span>
+        </div>
+        <div className={styles.detailActions}>
+          <StatusPill value={auditStatus} />
+          <StatusPill value={invoiceStatus} />
+          <StatusPill value={paymentStatus} />
+        </div>
+      </div>
+      <div className={styles.detailActions}>
+        {auditStatus === "待审核" && canReview ? (
+          <>
+            <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={onApprove}>{busy ? "处理中..." : "审核通过"}</button>
+            <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onReject}>驳回</button>
+          </>
+        ) : null}
+        {auditStatus === "待审核" && canWithdraw ? (
+          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回</button>
+        ) : null}
+        {invoiceStatus === "已上传" && canConfirmInvoice ? (
+          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onConfirmInvoice}>
+            {busy ? "处理中..." : "确认发票"}
+          </button>
+        ) : null}
+        {invoiceStatus === "已确认" && canConfirmInvoice ? (
+          <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
+            {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
+          </button>
+        ) : null}
+        {canUploadInvoice ? <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} /> : null}
+        {auditStatus === "草稿" || auditStatus === "已驳回" ? (
+          <span className={styles.mutedText}>草稿或驳回记录可由录入人重新提交。</span>
+        ) : null}
+      </div>
+      <div className={styles.detailGrid}>
+        <DetailField label="供应商" value={expense.supplierName || "-"} hidden={!canShowSupplier} />
+        <DetailField label="费用类型" value={expense.costType || "-"} />
+        <DetailField label="适用范围" value={expense.containerScope || "整票"} />
+        <DetailField label="费用金额" value={moneyText(expense.currency, expense.amount, expense.amountCny)} />
+        <DetailField label="折人民币" value={formatCny(expense.amountCny || 0)} />
+        <DetailField label="币种 / 汇率" value={`${expense.currency || "CNY"} / ${Number(expense.exchangeRate || 1).toFixed(4)}`} />
+        <DetailField label="审核人 / 时间" value={`${expense.reviewedBy?.name || "-"} / ${formatDateTime(expense.reviewedAt)}`} />
+        <DetailField label="提交时间" value={formatDateTime(expense.submittedAt)} />
+        <DetailField label="生成成本" value={expense.costId ? "已同步到成本管理" : "未同步"} />
+        <DetailField label="发票号码" value={expense.invoiceNo || "-"} />
+        <DetailField label="开票日期" value={formatDate(expense.invoiceDate)} />
+        <DetailField label="发票金额" value={expense.invoiceAmount ? formatCny(expense.invoiceAmount) : "-"} />
+        <DetailField label="发票文件" value={expense.invoiceDocument?.fileName || expense.invoiceDocument?.originalFilename || "-"} wide />
+        <DetailField label="驳回原因" value={expense.rejectReason || "-"} wide />
+        <DetailField label="审核备注" value={expense.reviewRemark || "-"} wide />
+        <DetailField label="备注" value={expense.remark || "-"} wide />
+      </div>
+    </div>
   );
 }
 
@@ -727,7 +817,6 @@ export function LogisticsExpenseForm({
   useEffect(() => {
     if (!isLockedSupplier) return;
     setForm((current) => ({ ...current, supplierId: currentUserSupplierId }));
-    void searchSuppliers("");
   }, [isLockedSupplier, currentUserSupplierId]);
 
   async function searchOrders(nextKeyword: string) {
@@ -833,13 +922,20 @@ export function LogisticsExpenseForm({
     }
     const normalizedItems = form.items.map((item) => ({
       costType: item.costType,
-      amount: Number(item.amount),
+      amount: lineSubtotal(item),
+      appliedContainerCount: item.appliedContainerCount === "shipment" ? null : Number(item.appliedContainerCount),
       currency: item.currency,
       exchangeRate: Number(item.exchangeRate),
       remark: item.remark.trim(),
     }));
     const invalidIndex = normalizedItems.findIndex((item) => (
-      !item.costType || !item.amount || item.amount <= 0 || !item.currency || !item.exchangeRate || item.exchangeRate <= 0
+      !item.costType
+      || !item.amount
+      || item.amount <= 0
+      || !item.currency
+      || !item.exchangeRate
+      || item.exchangeRate <= 0
+      || (item.appliedContainerCount !== null && (!Number.isInteger(item.appliedContainerCount) || item.appliedContainerCount <= 0))
     ));
     if (invalidIndex >= 0) {
       setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、金额、币种和汇率`);
@@ -852,7 +948,7 @@ export function LogisticsExpenseForm({
         method: "POST",
         body: JSON.stringify({
           orderId: form.orderId,
-          supplierId: form.supplierId || undefined,
+          supplierId: isLockedSupplier ? undefined : form.supplierId || undefined,
           items: normalizedItems,
           auditStatus,
         }),
@@ -885,7 +981,8 @@ export function LogisticsExpenseForm({
     ? selectedSupplier.allowedLogisticsCostTypes.join(" / ")
     : "";
   const costTypeOptions = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
-  const totalAmountCny = form.items.reduce((sum, item) => sum + (Number(item.amount || 0) * Number(item.exchangeRate || 0)), 0);
+  const containerOptions = containerCountOptions(selectedOrder);
+  const totalAmountCny = form.items.reduce((sum, item) => sum + (lineSubtotal(item) * Number(item.exchangeRate || 0)), 0);
 
   return (
     <form
@@ -912,6 +1009,9 @@ export function LogisticsExpenseForm({
             placeholder="输入订单号 / 提单号 / 客户简称"
             getLabel={orderLabel}
             getDescription={(order) => {
+              if (isLockedSupplier) {
+                return customerLegalName(order);
+              }
               const supplierCount = filterLogisticsFeeSuppliers(order.logisticsSuppliers || []).length;
               return `${customerLegalName(order)}${supplierCount ? ` · 已绑定 ${supplierCount} 家物流供应商` : ""}`;
             }}
@@ -919,6 +1019,7 @@ export function LogisticsExpenseForm({
             onSelect={handleOrderSelect}
           />
         </label>
+        {!isLockedSupplier ? (
         <label>
           供应商
           <SearchAutocomplete
@@ -947,12 +1048,14 @@ export function LogisticsExpenseForm({
             }}
           />
         </label>
+        ) : null}
       </div>
       {selectedOrder ? (
         <div className={styles.detailGrid}>
           <DetailField label="订单号" value={selectedOrder.orderNo || "-"} />
           <DetailField label="提单号" value={selectedOrder.blNo || selectedOrder.billOfLadingNo || "-"} />
           <DetailField label="客户简称" value={customerDisplayName(selectedOrder)} />
+          <DetailField label="集装箱" value={containerSummaryText(selectedOrder)} />
           <DetailField label="车牌" value={selectedOrder.truckPlateNo || "-"} />
           <DetailField label="货物" value={selectedOrder.cargoName || "-"} wide />
         </div>
@@ -971,10 +1074,11 @@ export function LogisticsExpenseForm({
         <div className={styles.logisticsItemsTable}>
           <div className={styles.logisticsItemsHead}>
             <span>费用类型</span>
-            <span>金额</span>
+            <span>适用范围</span>
+            <span>单价/整票</span>
             <span>币种</span>
             <span>汇率</span>
-            <span>折人民币</span>
+            <span>小计</span>
             <span>备注</span>
             <span>操作</span>
           </div>
@@ -983,12 +1087,15 @@ export function LogisticsExpenseForm({
               <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
                 {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
+              <select value={item.appliedContainerCount} onChange={(event) => setItemField(index, "appliedContainerCount", event.target.value)}>
+                {containerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
               <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
               <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
                 {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
               <input value={item.exchangeRate} onChange={(event) => setItemField(index, "exchangeRate", event.target.value)} readOnly={item.currency === "CNY"} inputMode="decimal" required />
-              <strong>{formatCny(Number(item.amount || 0) * Number(item.exchangeRate || 0))}</strong>
+              <strong>{formatCny(lineSubtotal(item) * Number(item.exchangeRate || 0))}</strong>
               <input value={item.remark} onChange={(event) => setItemField(index, "remark", event.target.value)} placeholder="可选" />
               <button className={styles.secondaryButton} type="button" disabled={form.items.length <= 1} onClick={() => removeExpenseItem(index)}>删除</button>
             </div>
@@ -996,10 +1103,12 @@ export function LogisticsExpenseForm({
         </div>
         <div className={styles.logisticsItemsTotal}>合计：{formatCny(totalAmountCny)}</div>
       </div>
+      {!isLockedSupplier ? (
       <div className={styles.quickCreateMeta}>
         <span>供应商：{supplierSummaryText}</span>
         {supplierAllowedCostTypes ? <span>允许费用：{supplierAllowedCostTypes}</span> : null}
       </div>
+      ) : null}
       <div className={styles.detailActions}>
         <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => void submitExpense("草稿")}>
           {saving ? "保存中..." : "保存草稿"}
@@ -1085,17 +1194,24 @@ function InvoiceUploadForm({ expense, onUploaded }: { expense: LogisticsExpense;
 function StatusPill({ value }: { value: string }) {
   let tone = styles.statusMuted;
   if (["审核通过", "已确认", "已付款"].includes(value)) tone = styles.statusSuccess;
-  if (["待审核", "未通知", "已通知开票", "待付款", "草稿"].includes(value)) tone = styles.statusWarning;
-  if (["已驳回", "已退回", "已取消"].includes(value)) tone = styles.statusDanger;
+  if (["待审核", "未通知", "已通知开票", "待付款", "草稿"].includes(value) || value.startsWith("部分")) tone = styles.statusWarning;
+  if (["已驳回", "已退回", "已取消", "部分驳回"].includes(value)) tone = styles.statusDanger;
   return <span className={`${styles.statusPill} ${tone}`}>{value || "-"}</span>;
 }
 
 function normalizeExpenseOrder(order: Partial<ExpenseOrderOption>): ExpenseOrderOption {
   const id = order.orderId || order.id || "";
+  const transportItems = Array.isArray(order.transportItems) ? order.transportItems : [];
+  const containerNos = Array.isArray(order.containerNos)
+    ? order.containerNos.filter(Boolean)
+    : transportItems.map((item) => item.containerNo || "").filter(Boolean);
   return {
     ...order,
     id,
     orderId: id,
+    transportItems,
+    containerNos,
+    containerCount: Number(order.containerCount || containerNos.length || transportItems.length || 0),
     logisticsSuppliers: filterLogisticsFeeSuppliers(order.logisticsSuppliers || []),
   };
 }
@@ -1140,6 +1256,28 @@ function allowedCostTypeOptions(supplier: SupplierOption | null, shouldRestrict:
 function normalizeExpenseItemCostType(item: ExpenseItemForm, options: string[]) {
   if (!options.length || options.includes(item.costType)) return item;
   return { ...item, costType: options[0] || item.costType };
+}
+
+function lineSubtotal(item: ExpenseItemForm) {
+  const unitPrice = Number(item.amount || 0);
+  const count = item.appliedContainerCount === "shipment" ? 1 : Number(item.appliedContainerCount || 1);
+  return unitPrice * (Number.isFinite(count) && count > 0 ? count : 1);
+}
+
+function containerCountOptions(order?: ExpenseOrderOption | null) {
+  const count = Number(order?.containerCount || 0);
+  const options = [{ value: "shipment", label: "整票" }];
+  for (let index = 1; index <= count; index += 1) {
+    options.push({ value: String(index), label: `${index} 个柜` });
+  }
+  return options;
+}
+
+function containerSummaryText(order?: ExpenseOrderOption | null) {
+  const count = Number(order?.containerCount || 0);
+  if (!count) return "未录入集装箱明细";
+  const nos = order?.containerNos?.length ? `：${order.containerNos.join(" / ")}` : "";
+  return `${count} 个柜${nos}`;
 }
 
 function logisticsActionSuccessMessage(action: unknown) {

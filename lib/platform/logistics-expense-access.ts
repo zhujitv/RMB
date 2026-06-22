@@ -58,6 +58,16 @@ export function includeLogisticsExpenseRelations() {
 export function logisticsExpenseOrderSummary(order = {}) {
   const info = (order.domesticLogisticsInfos || [])[0] || {};
   const firstItem = (info.transportItems || [])[0] || {};
+  const transportItems = (info.transportItems || []).map((item) => ({
+    id: item.id || "",
+    containerNo: item.containerNo || "",
+    truckPlateNo: item.truckPlateNo || "",
+    departureDate: dateToInput(item.departureDate),
+    departurePlace: item.departurePlace || "",
+    arrivalPlace: item.arrivalPlace || "",
+    cargoName: item.cargoName || "",
+  }));
+  const containerNos = transportItems.map((item) => item.containerNo).filter(Boolean);
   return {
     orderId: order.id || "",
     orderNo: order.orderNo || "",
@@ -72,6 +82,9 @@ export function logisticsExpenseOrderSummary(order = {}) {
     sailingDate: dateToInput(firstItem.departureDate || info.departureDate || order.actualShipmentDate || order.blDate || order.expectedShipmentDate),
     truckPlateNo: firstItem.truckPlateNo || info.truckPlateNo || "",
     cargoName: firstItem.cargoName || info.cargoDescription || "",
+    transportItems,
+    containerNos,
+    containerCount: containerNos.length || transportItems.length || 0,
   };
 }
 
@@ -98,6 +111,8 @@ export function serializeLogisticsExpense(expense = {}) {
     exchangeRateType: expense.exchangeRateType || "",
     amount: Number(expense.amount || 0),
     amountCny: Number(expense.amountCny || 0),
+    appliedContainerCount: expense.appliedContainerCount == null ? null : Number(expense.appliedContainerCount || 0),
+    containerScope: expense.appliedContainerCount ? `${Number(expense.appliedContainerCount)} 个柜` : "整票",
     remark: expense.remark || "",
     auditStatus: expense.auditStatus || "草稿",
     invoiceStatus: expense.invoiceStatus || "未通知",
@@ -125,6 +140,77 @@ export function serializeLogisticsExpense(expense = {}) {
     order: orderSummary,
     sourceLabel: expense.costId ? "物流费用审核生成" : "供应商提交",
   };
+}
+
+export function aggregateLogisticsExpenseStatus(rows = [], field = "") {
+  const values = rows.map((row) => row[field]).filter(Boolean);
+  const unique = [...new Set(values)];
+  if (!unique.length) return "-";
+  if (unique.length === 1) return unique[0];
+  if (field === "auditStatus") {
+    if (unique.includes("草稿")) return "部分草稿";
+    if (unique.includes("待审核")) return "部分待审核";
+    if (unique.includes("已驳回")) return "部分驳回";
+    if (unique.includes("审核通过")) return "部分审核通过";
+  }
+  if (field === "invoiceStatus") {
+    if (unique.includes("已上传")) return "部分已上传";
+    if (unique.includes("已确认")) return "部分已确认";
+    if (unique.includes("已通知开票")) return "部分已通知";
+    if (unique.includes("未通知")) return "部分未通知";
+  }
+  if (field === "paymentStatus") {
+    if (unique.includes("已付款")) return "部分已付款";
+    if (unique.includes("待付款")) return "部分待付款";
+    if (unique.includes("已开票")) return "部分已开票";
+    if (unique.includes("待开票")) return "部分待开票";
+  }
+  return "混合状态";
+}
+
+export function serializeLogisticsExpenseBill(rows = []) {
+  const items = rows.map(serializeLogisticsExpense);
+  const first = items[0] || {};
+  const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
+  return {
+    id: `bill:${first.orderId || "order"}:${first.blNo || first.billOfLadingNo || first.orderNo || "no-bl"}`,
+    isBill: true,
+    orderId: first.orderId || "",
+    orderNo: first.orderNo || "",
+    blNo: first.blNo || first.billOfLadingNo || "",
+    billOfLadingNo: first.billOfLadingNo || first.blNo || "",
+    customerName: first.customerName || "",
+    customerShortName: first.customerShortName || "",
+    supplierName: "",
+    supplierNames: [...new Set(items.map((item) => item.supplierName).filter(Boolean))],
+    costType: items.length === 1 ? items[0].costType : `${items.length} 项费用`,
+    currency: "CNY",
+    amount: amountCny,
+    amountCny,
+    auditStatus: aggregateLogisticsExpenseStatus(items, "auditStatus"),
+    invoiceStatus: aggregateLogisticsExpenseStatus(items, "invoiceStatus"),
+    paymentStatus: aggregateLogisticsExpenseStatus(items, "paymentStatus"),
+    itemCount: items.length,
+    items,
+    order: first.order || {},
+    updatedAt: rows.reduce((latest, row) => {
+      const time = new Date(row.updatedAt || row.createdAt || 0).getTime();
+      return time > latest ? time : latest;
+    }, 0),
+  };
+}
+
+export function groupLogisticsExpensesByBill(rows = []) {
+  const groups = new Map();
+  for (const row of rows) {
+    const orderSummary = logisticsExpenseOrderSummary(row.order || {});
+    const key = [row.orderId || orderSummary.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return Array.from(groups.values())
+    .map(serializeLogisticsExpenseBill)
+    .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
 }
 
 export function logisticsExpenseAccessWhere(actor) {
@@ -265,6 +351,7 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
   if (before?.auditStatus === "审核通过" && actor?.role !== "管理员") {
     throw codedError("已审核通过的费用金额不能修改。", 403, "LOGISTICS_EXPENSE_APPROVED_LOCKED");
   }
+  const appliedContainerCount = normalizeAppliedContainerCount(input, order, before);
   return {
     orderId: order.id,
     supplierId: supplier.id,
@@ -277,6 +364,7 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
     exchangeRateType: exchange.exchangeRateType,
     amount,
     amountCny: amountCny(amount, exchange.exchangeRate),
+    appliedContainerCount,
     remark: optional(input.remark),
     auditStatus,
     submittedAt: auditStatus === "待审核" ? (before?.submittedAt || new Date()) : before?.submittedAt || null,
@@ -286,6 +374,25 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
     updatedById: actor.id,
     ...(before ? {} : { createdById: actor.id }),
   };
+}
+
+function normalizeAppliedContainerCount(input = {}, order = {}, before = null) {
+  const hasContainerCountInput = Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
+    || Object.prototype.hasOwnProperty.call(input, "containerCount")
+    || Object.prototype.hasOwnProperty.call(input, "applied_container_count");
+  if (!hasContainerCountInput && before) return before.appliedContainerCount ?? null;
+  const raw = input.appliedContainerCount ?? input.containerCount ?? input.applied_container_count;
+  const text = nonEmpty(raw);
+  if (!text || ["整票", "whole_shipment", "shipment", "all"].includes(text.toLowerCase())) return null;
+  const count = Number(text);
+  if (!Number.isInteger(count) || count <= 0) {
+    throw codedError("适用集装箱数量必须为正整数，或选择整票。", 400, "LOGISTICS_CONTAINER_COUNT_INVALID");
+  }
+  const orderSummary = logisticsExpenseOrderSummary(order);
+  if (orderSummary.containerCount > 0 && count > orderSummary.containerCount) {
+    throw codedError(`适用集装箱数量不能超过该提单号下的 ${orderSummary.containerCount} 个柜。`, 400, "LOGISTICS_CONTAINER_COUNT_EXCEEDS_ORDER");
+  }
+  return count;
 }
 
 export async function loadLogisticsExpenseForAction(id, actor) {
