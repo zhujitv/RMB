@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, currentSessionInfo, getActor, logServerError, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
+import { apiError, currentSessionInfo, getActor, getCompanyProfileSettings, logServerError, ok, publicUser, ROLES, rolePermissions, roleScopeText } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
       permissions: rolePermissions(user),
       scopeText: roleScopeText(user?.role),
       session: await currentSessionInfo(request),
+      companyProfile: await getCompanyProfileSettings(),
     });
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;

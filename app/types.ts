@@ -25,11 +25,26 @@ export type SessionInfo = {
   ipAddress?: string;
 };
 
+export type CompanyProfileSettings = {
+  brandName?: string;
+  systemName?: string;
+  companyNameZh?: string;
+  companyNameEn?: string;
+  shortName?: string;
+  website?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  logoUrl?: string;
+  footerText?: string;
+};
+
 export type AuthPayload = {
   user: User;
   permissions?: PermissionSnapshot;
   scopeText?: string;
   session?: SessionInfo;
+  companyProfile?: CompanyProfileSettings;
 };
 
 export type AuthState =
@@ -37,7 +52,7 @@ export type AuthState =
   | { status: "guest"; message?: string }
   | { status: "password-change"; user: User; message?: string }
   | { status: "ready"; payload: AuthPayload }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; detail?: string };
 
 export type MenuItem = {
   key: string;

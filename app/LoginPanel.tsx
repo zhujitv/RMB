@@ -2,9 +2,11 @@
 
 import type { FormEvent } from "react";
 import styles from "./WorkspaceShell.module.css";
+import type { CompanyProfileSettings } from "./types";
 
 type LoginPanelProps = {
   message?: string;
+  companyProfile?: CompanyProfileSettings | null;
   loginBusy: boolean;
   registerBusy: boolean;
   registerOpen: boolean;
@@ -15,6 +17,7 @@ type LoginPanelProps = {
 
 export function LoginPanel({
   message,
+  companyProfile,
   loginBusy,
   registerBusy,
   registerOpen,
@@ -22,12 +25,19 @@ export function LoginPanel({
   onLogin,
   onRegister,
 }: LoginPanelProps) {
+  const brandName = companyProfile?.brandName?.trim() || "NEXTWOOD";
+  const logoUrl = companyProfile?.logoUrl?.trim() || "";
+  const footerText = typeof companyProfile?.footerText === "string"
+    ? companyProfile.footerText.trim()
+    : "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.";
+
   return (
     <main className={styles.loginScreen}>
       <div className={styles.loginAmbientGlow} aria-hidden="true" />
-      <section className={styles.loginLayout} aria-label="NEXTWOOD 登录">
+      <section className={styles.loginLayout} aria-label={`${brandName} 登录`}>
         <div className={styles.loginBrand}>
-          <h1>NEXTWOOD</h1>
+          {logoUrl ? <img className={styles.loginBrandLogo} src={logoUrl} alt={`${brandName} logo`} /> : null}
+          <h1>{brandName}</h1>
         </div>
 
         <section className={styles.loginCard} aria-label="登录">
@@ -96,6 +106,7 @@ export function LoginPanel({
           </section>
         </div>
       ) : null}
+      {footerText ? <footer className={styles.loginFooter}>{footerText}</footer> : null}
     </main>
   );
 }

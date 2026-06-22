@@ -37,3 +37,9 @@ test("manual homepage keeps rules without the redundant important rules heading"
   assert.match(manualModule, /已提交退税前，总体完整度必须为 100%/);
   assert.match(manualModule, /PDF 附件只能上传普通 PDF/);
 });
+
+test("manual explains company profile and system branding settings", () => {
+  assert.match(manualModule, /公司资料、系统品牌/);
+  assert.match(manualModule, /品牌名称、系统名称、中英文公司名称和联系方式/);
+  assert.match(manualModule, /登录页品牌、工作台侧边栏、首页欢迎语、Logo 和页脚版权/);
+});

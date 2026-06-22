@@ -7,6 +7,7 @@ import {
   LOGISTICS_OPERATOR_ROLE,
   codedError,
   customerBusinessName,
+  customerShortName,
   nextStandardFilenameForUpload,
   normalizeEmail,
   normalizedCostType,
@@ -15,7 +16,73 @@ import {
   validEmail,
   writeAudit,
 } from "./shared";
+import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
+
+function appEntryUrl() {
+  return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net";
+}
+
+function logisticsExpenseCustomerShortName(expense = {}) {
+  const order = expense.order || {};
+  return customerShortName(order.customer) || customerBusinessName(order.customer, order.customerNameSnapshot) || "-";
+}
+
+function logisticsExpenseContainerSummaryText(expense = {}) {
+  const orderSummary = logisticsExpenseOrderSummary(expense.order || {});
+  const items = orderSummary.transportItems || [];
+  const counts = new Map();
+  for (const item of items) {
+    const type = String(item.containerType || "").trim().toUpperCase();
+    if (!type) continue;
+    counts.set(type, (counts.get(type) || 0) + 1);
+  }
+  const typeText = [...counts.entries()].map(([type, count]) => `${type}×${count}`).join("，");
+  if (typeText) return typeText;
+  if (orderSummary.containerCount) return `${orderSummary.containerCount} 个柜`;
+  return "未录入";
+}
+
+function logisticsExpenseDetailText(expenses = []) {
+  return expenses.map((expense, index) => {
+    const amount = Number(expense.amount || 0).toFixed(2);
+    const amountCnyText = Number(expense.amountCny || 0).toFixed(2);
+    const quantity = expense.billingQuantity == null
+      ? Number(expense.appliedContainerCount || 1)
+      : Number(expense.billingQuantity || 1);
+    const remark = expense.remark ? `，备注：${expense.remark}` : "";
+    return `${index + 1}. ${normalizedCostType(expense.costType)}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
+  }).join("\n");
+}
+
+function logisticsBillSummaryRows(expenses = []) {
+  const groups = new Map();
+  for (const expense of expenses) {
+    const order = expense.order || {};
+    const orderSummary = logisticsExpenseOrderSummary(order);
+    const key = [expense.supplierId || "", expense.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(expense);
+  }
+  return [...groups.values()].map((rows) => {
+    const first = rows[0] || {};
+    const order = first.order || {};
+    const orderSummary = logisticsExpenseOrderSummary(order);
+    return {
+      supplierId: first.supplierId || "",
+      supplierName: first.supplierNameSnapshot || first.supplier?.supplierName || "供应商",
+      supplierEmail: first.supplier?.email || "",
+      orderNo: order.orderNo || "-",
+      blNo: orderSummary.blNo || orderSummary.billOfLadingNo || "-",
+      containerSummary: logisticsExpenseContainerSummaryText(first),
+      customerShortName: logisticsExpenseCustomerShortName(first),
+      amountCny: rows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
+      detailText: logisticsExpenseDetailText(rows),
+      remark: rows.map((row) => row.remark || "").filter(Boolean).join("；") || "-",
+      expenses: rows,
+    };
+  });
+}
 
 function logisticsExpenseInvoiceEmail(expense = {}) {
   const order = expense.order || {};
@@ -27,14 +94,49 @@ function logisticsExpenseInvoiceEmail(expense = {}) {
     "",
     `订单号：${order.orderNo || "-"}`,
     `提单号：${order.blNo || "-"}`,
-    `客户简称：${customerBusinessName(order.customer, order.customerNameSnapshot) || "-"}`,
+    `客户简称：${logisticsExpenseCustomerShortName(expense)}`,
     "",
     "费用明细：",
-    `- ${normalizedCostType(expense.costType)} ${expense.currency || "CNY"} ${Number(expense.amount || 0).toFixed(2)}，折人民币 ${Number(expense.amountCny || 0).toFixed(2)}`,
+    logisticsExpenseDetailText([expense]),
     "",
-    `合计金额：CNY ${Number(expense.amountCny || 0).toFixed(2)}`,
+    `合计金额：¥${Number(expense.amountCny || 0).toFixed(2)}`,
     "开票要求：请确保发票金额、抬头、税号与系统供应商资料一致。",
-    `发票上传入口链接：${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net"}`,
+    `发票上传入口链接：${appEntryUrl()}`,
+    "",
+    "NEXTWOOD 供应链协同平台",
+  ].join("\n");
+  return { subject, body };
+}
+
+function logisticsExpenseInvoiceBillsEmail(supplierName = "供应商", bills = []) {
+  const first = bills[0] || {};
+  const subject = bills.length === 1
+    ? `物流费用已审核通过，请开票并上传发票 - ${first.orderNo || "-"}/${first.blNo || "-"}`
+    : `待开票物流费用清单（${bills.length} 票）`;
+  const rows = bills.map((bill, index) => [
+    `${index + 1}. 订单号：${bill.orderNo || "-"}`,
+    `   提单号：${bill.blNo || "-"}`,
+    `   柜型/柜量：${bill.containerSummary || "未录入"}`,
+    `   客户简称：${bill.customerShortName || "-"}`,
+    `   费用合计：¥${Number(bill.amountCny || 0).toFixed(2)}`,
+    "   费用明细：",
+    ...String(bill.detailText || "-").split("\n").map((line) => `   - ${line}`),
+    `   备注：${bill.remark || "-"}`,
+  ].join("\n")).join("\n\n");
+  const body = [
+    `${supplierName || "供应商"}，您好：`,
+    "",
+    "以下物流费用已审核通过，请按开票要求开具发票，并登录系统在对应账单中上传发票。",
+    "",
+    "待开票费用清单：",
+    rows || "-",
+    "",
+    "开票要求：",
+    "1. 发票金额需与系统审核通过的费用合计一致。",
+    "2. 发票抬头、税号、供应商信息需与系统资料一致。",
+    "3. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
+    "",
+    `发票上传入口：${appEntryUrl()}`,
     "",
     "NEXTWOOD 供应链协同平台",
   ].join("\n");
@@ -53,6 +155,65 @@ export async function notifyLogisticsSupplierInvoice(expense) {
     body,
     notificationId: `logistics-expense-${expense.id}`,
   });
+}
+
+export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
+  const bills = logisticsBillSummaryRows(expenses);
+  const bySupplier = new Map();
+  for (const bill of bills) {
+    const key = bill.supplierId || bill.supplierEmail || bill.supplierName;
+    if (!bySupplier.has(key)) bySupplier.set(key, {
+      supplierId: bill.supplierId,
+      supplierName: bill.supplierName,
+      supplierEmail: bill.supplierEmail,
+      bills: [],
+      expenses: [],
+    });
+    const group = bySupplier.get(key);
+    group.bills.push(bill);
+    group.expenses.push(...bill.expenses);
+  }
+  const results = [];
+  for (const group of bySupplier.values()) {
+    const email = normalizeEmail(group.supplierEmail || "");
+    if (!email || !validEmail(email)) {
+      results.push({
+        supplierId: group.supplierId || "",
+        supplierName: group.supplierName || "供应商",
+        sent: false,
+        error: "物流供应商未配置有效邮箱，未发送开票通知。",
+        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+      });
+      continue;
+    }
+    const { subject, body } = logisticsExpenseInvoiceBillsEmail(group.supplierName, group.bills);
+    try {
+      await sendShippingDocumentsEmail({
+        recipientEmails: [email],
+        ccEmails: [],
+        attachments: [],
+        subject,
+        body,
+        notificationId: `logistics-expense-invoice-${group.supplierId || email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
+      });
+      results.push({
+        supplierId: group.supplierId || "",
+        supplierName: group.supplierName || "供应商",
+        sent: true,
+        error: "",
+        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+      });
+    } catch (error) {
+      results.push({
+        supplierId: group.supplierId || "",
+        supplierName: group.supplierName || "供应商",
+        sent: false,
+        error: error?.message || "邮件发送失败",
+        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+      });
+    }
+  }
+  return results;
 }
 
 export async function createLogisticsInvoiceDocument(request, actor, expense, file, metadata = {}) {

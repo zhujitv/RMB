@@ -963,7 +963,7 @@ function CustomsDocumentPanel({
               <div>
                 {currentCustomsDeclaration && canPreviewOrDownload ? (
                   <>
-                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                    <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(currentCustomsDeclaration.id)}`} target="_blank" rel="noreferrer">预览</a>
                     <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/download`}>下载</a>
                   </>
                 ) : null}
@@ -1029,7 +1029,7 @@ function CustomsDocumentPanel({
                 <span key={document.id} className={styles.fileListItemActions}>
                   {canPreviewOrDownload ? (
                     <>
-                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/preview`} target="_blank" rel="noreferrer">预览</a>
+                      <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">预览</a>
                       <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
                     </>
                   ) : null}

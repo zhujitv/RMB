@@ -10,10 +10,12 @@ type WelcomePanelProps = {
 };
 
 export function WelcomePanel({ payload, menus, onSelectMenu }: WelcomePanelProps) {
+  const systemName = payload.companyProfile?.systemName?.trim() || "NEXTWOOD 供应链协同平台";
+
   return (
     <section className={styles.welcomeCard}>
       <span className={styles.kicker}>Welcome</span>
-      <h2>欢迎使用 NEXTWOOD 供应链协同平台</h2>
+      <h2>欢迎使用 {systemName}</h2>
       <p>当前用户：{payload.user.name} / {payload.user.role}</p>
       <p>{payload.permissions?.scopeText || payload.scopeText || "请选择左侧功能模块开始操作。"}</p>
       <div className={styles.quickGrid}>

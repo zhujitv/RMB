@@ -29,6 +29,8 @@ test("fixed role menus do not expose forbidden global modules", () => {
   }
   assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
   assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
+  assert.match(backend, /logisticsReview: "物流费用审核"/);
+  assert.match(menuFile, /logisticsReview", "taxRefund"/);
 });
 
 test("removed viewer and cost entry roles are not exposed by role configuration", () => {
@@ -60,11 +62,13 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(admin.reads.users, true);
   assert.equal(admin.writes.settings, true);
   assert.equal(admin.writes.commissions, true);
+  assert.equal(admin.menus.includes("logisticsReview"), true);
 
   const salesperson = rolePermissionSnapshot("业务员");
   assert.equal(salesperson.dataScope, "OWN");
   assert.equal(salesperson.menus.includes("dashboard"), false);
   assert.equal(salesperson.menus.includes("profit"), false);
+  assert.equal(salesperson.menus.includes("logisticsReview"), false);
   assert.equal(salesperson.reads.payments, true);
   assert.equal(salesperson.reads.taxRefund, true);
   assert.equal(salesperson.reads.commissions, false);
@@ -80,9 +84,11 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(finance.writes.commissions, true);
   assert.equal(finance.writes.orders, false);
   assert.equal(finance.writes.users, false);
+  assert.equal(finance.menus.includes("logisticsReview"), false);
 
   const logisticsSupplier = rolePermissionSnapshot("物流供应商");
   assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "manual"]);
+  assert.equal(logisticsSupplier.menus.includes("logisticsReview"), false);
   assert.equal(logisticsSupplier.dataScope, "OWN");
   assert.equal(logisticsSupplier.reads.payments, false);
   assert.equal(logisticsSupplier.reads.costs, false);
@@ -107,9 +113,11 @@ test("workspace auth distinguishes expired login from server-side profile failur
   assert.match(workspaceShell, /function clearClientAuthState\(\)/);
   assert.match(workspaceShell, /window\.localStorage\.removeItem\(key\)/);
   assert.match(workspaceShell, /window\.sessionStorage\.removeItem\(key\)/);
-  assert.match(workspaceShell, /setAuth\(\{ status: "guest", message: error\.code === "PASSWORD_CHANGE_REQUIRED" \? error\.message : "登录已过期，请重新登录。"/);
-  assert.match(workspaceShell, /setAuth\(\{ status: "error", message: "系统暂时无法读取账户信息，请联系管理员。"/);
-  assert.match(workspaceShell, /setAuth\(\{ status: "error", message: error instanceof Error \? error\.message : "用户信息加载失败" \}\)/);
+  assert.match(workspaceShell, /function authLoadErrorState\(error: unknown\): AuthState/);
+  assert.match(workspaceShell, /message: error\.code === "PASSWORD_CHANGE_REQUIRED" \? error\.message : "登录已过期，请重新登录。"/);
+  assert.match(workspaceShell, /message: "系统暂时无法读取账户信息。"/);
+  assert.match(workspaceShell, /message: "工作台初始化失败。"/);
+  assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。"/);
 });
 
 test("workspace boot order enters loading before permission checks", () => {

@@ -32,7 +32,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return ok({ success: true, expense, message: "物流费用付款状态已更新" });
     }
     const expense = await updateLogisticsExpense(request, actor, id, body);
-    return ok({ success: true, expense, message: "物流费用已保存" });
+    return ok({
+      success: true,
+      expense,
+      message: body.action === "submit"
+        ? "物流费用已提交审核"
+        : (body.action === "updateAmount" ? "物流费用金额已更新" : "物流费用已保存"),
+    });
   } catch (error: unknown) {
     return apiError(error, "更新物流费用失败");
   }

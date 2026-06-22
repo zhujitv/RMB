@@ -138,6 +138,7 @@ export function serializeLogisticsExpense(expense = {}) {
     invoiceDate: dateToInput(expense.invoiceDate),
     invoiceAmount: expense.invoiceAmount == null ? "" : Number(expense.invoiceAmount),
     invoiceRemark: expense.invoiceRemark || "",
+    invoiceNotifiedAt: expense.invoiceNotifiedAt || null,
     invoiceDocument,
     invoiceDocumentId: expense.invoiceDocumentId || "",
     invoiceUploadedBy: serializeUser(expense.invoiceUploadedBy),
@@ -185,7 +186,7 @@ export function serializeLogisticsExpenseBill(rows = []) {
   const first = items[0] || {};
   const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
   return {
-    id: `bill:${first.orderId || "order"}:${first.blNo || first.billOfLadingNo || first.orderNo || "no-bl"}`,
+    id: logisticsExpenseBillId(first),
     isBill: true,
     orderId: first.orderId || "",
     orderNo: first.orderNo || "",
@@ -210,6 +211,11 @@ export function serializeLogisticsExpenseBill(rows = []) {
       return time > latest ? time : latest;
     }, 0),
   };
+}
+
+export function logisticsExpenseBillId(expense = {}) {
+  const orderSummary = expense.order?.orderId ? expense.order : logisticsExpenseOrderSummary(expense.order || {});
+  return `bill:${expense.orderId || orderSummary.orderId || "order"}:${orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "no-bl"}`;
 }
 
 export function groupLogisticsExpensesByBill(rows = []) {

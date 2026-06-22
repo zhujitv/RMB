@@ -5,6 +5,7 @@ export * from "./shared-utils";
 export * from "./input-schemas";
 export * from "./upload-validation";
 export * from "./shared-exchange";
+export * from "./company-profile";
 export * from "./commission-formula";
 export * from "./shared-serialization";
 export * from "./shared-tax";

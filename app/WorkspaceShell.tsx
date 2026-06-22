@@ -10,6 +10,7 @@ import { LoginPanel } from "./LoginPanel";
 import { CostsModule } from "./modules/CostsModule";
 import { DashboardModule } from "./modules/DashboardModule";
 import { DomesticLogisticsModule } from "./modules/DomesticLogisticsModule";
+import { LogisticsFeesModule } from "./modules/LogisticsFeesModule";
 import { ManualModule } from "./modules/ManualModule";
 import { OrdersModule } from "./modules/OrdersModule";
 import { PaymentsModule } from "./modules/PaymentsModule";
@@ -20,12 +21,14 @@ import { TaxRefundModule } from "./modules/TaxRefundModule";
 import { PasswordChangePanel } from "./PasswordChangePanel";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
-import type { AuthPayload, AuthState, LoginResponse } from "./types";
+import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse } from "./types";
 import { normalizeEmail } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
+const AUTH_BOOT_TIMEOUT_MS = 15000;
+const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
 
 function clearClientAuthState() {
   if (typeof window === "undefined") return;
@@ -42,6 +45,37 @@ function validateAuthPayload(payload: AuthPayload) {
   if (!payload.user.role) throw new Error("账户信息缺少角色。");
 }
 
+function authLoadErrorState(error: unknown): AuthState {
+  if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
+    clearClientAuthState();
+    return {
+      status: "guest",
+      message: error.code === "PASSWORD_CHANGE_REQUIRED" ? error.message : "登录已过期，请重新登录。",
+    };
+  }
+
+  const detail = error instanceof Error ? error.message : "用户信息加载失败";
+  if (error instanceof ApiRequestError && error.status === 408) {
+    return {
+      status: "error",
+      message: "本地工作台初始化超时。",
+      detail,
+    };
+  }
+  if (error instanceof ApiRequestError && error.status >= 500) {
+    return {
+      status: "error",
+      message: "系统暂时无法读取账户信息。",
+      detail,
+    };
+  }
+  return {
+    status: "error",
+    message: "工作台初始化失败。",
+    detail,
+  };
+}
+
 export function WorkspaceShell() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading", message: "正在加载工作台..." });
   const [activeMenu, setActiveMenu] = useState("welcome");
@@ -54,35 +88,46 @@ export function WorkspaceShell() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [publicCompanyProfile, setPublicCompanyProfile] = useState<CompanyProfileSettings | null>(null);
 
   async function loadCurrentUser() {
     setAuth({ status: "loading", message: "正在加载工作台..." });
+    let nextAuth: AuthState | null = null;
+    let shouldResetMenu = false;
     try {
-      const payload = await apiJson<AuthPayload>("/api/auth/me");
+      const payload = await apiJson<AuthPayload>("/api/auth/me", { timeoutMs: AUTH_BOOT_TIMEOUT_MS });
       validateAuthPayload(payload);
       if (payload.user.mustChangePassword) {
-        setAuth({ status: "password-change", user: payload.user, message: "请先修改初始密码。" });
-        return;
-      }
-      setAuth({ status: "ready", payload });
-      setActiveMenu("welcome");
-    } catch (error) {
-      if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
-        clearClientAuthState();
-        setAuth({ status: "guest", message: error.code === "PASSWORD_CHANGE_REQUIRED" ? error.message : "登录已过期，请重新登录。" });
-      } else if (error instanceof ApiRequestError && error.status >= 500) {
-        setAuth({ status: "error", message: "系统暂时无法读取账户信息，请联系管理员。" });
+        nextAuth = { status: "password-change", user: payload.user, message: "请先修改初始密码。" };
       } else {
-        setAuth({ status: "error", message: error instanceof Error ? error.message : "用户信息加载失败" });
+        if (payload.companyProfile) setPublicCompanyProfile(payload.companyProfile);
+        nextAuth = { status: "ready", payload };
+        shouldResetMenu = true;
       }
+    } catch (error) {
+      nextAuth = authLoadErrorState(error);
+    } finally {
+      setAuth(nextAuth || { status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。" });
+      if (shouldResetMenu) setActiveMenu("welcome");
     }
   }
 
   useEffect(() => {
     void loadCurrentUser();
+    void loadPublicCompanyProfile();
   }, []);
 
+  async function loadPublicCompanyProfile() {
+    try {
+      const result = await apiJson<{ settings?: CompanyProfileSettings }>("/api/company-profile", { timeoutMs: PUBLIC_PROFILE_TIMEOUT_MS });
+      setPublicCompanyProfile(result.settings || null);
+    } catch {
+      setPublicCompanyProfile(null);
+    }
+  }
+
   const readyPayload = auth.status === "ready" ? auth.payload : null;
+  const activeCompanyProfile = readyPayload?.companyProfile || publicCompanyProfile;
   const menus = useMemo(() => {
     if (!readyPayload) return [];
     return availableMenus(readyPayload.user, readyPayload.permissions);
@@ -94,6 +139,10 @@ export function WorkspaceShell() {
     if (auth.status !== "ready") return;
     if (!allowedMenuKeys.has(activeMenu)) setActiveMenu("welcome");
   }, [activeMenu, allowedMenuKeys, auth.status]);
+
+  useEffect(() => {
+    document.title = activeCompanyProfile?.systemName?.trim() || "NEXTWOOD 供应链协同平台";
+  }, [activeCompanyProfile?.systemName]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -198,6 +247,7 @@ export function WorkspaceShell() {
     return (
       <LoginPanel
         message={auth.message}
+        companyProfile={publicCompanyProfile}
         loginBusy={loginBusy}
         registerBusy={registerBusy}
         registerOpen={registerOpen}
@@ -225,19 +275,32 @@ export function WorkspaceShell() {
       <main className={styles.loadingScreen}>
         <div className={styles.loadingCard}>
           <strong>{auth.message}</strong>
-          <button className={styles.secondaryButton} type="button" onClick={loadCurrentUser}>重试</button>
+          {auth.detail ? <p>{auth.detail}</p> : null}
+          <div className={styles.loadingActions}>
+            <button className={styles.primaryButtonCompact} type="button" onClick={loadCurrentUser}>重新加载</button>
+            <button className={styles.secondaryButton} type="button" onClick={handleLogout}>退出登录</button>
+          </div>
         </div>
       </main>
     );
   }
-
-  const payload = auth.payload;
 
   function updateCurrentUser(user: AuthPayload["user"]) {
     setAuth((current) => current.status === "ready"
       ? { ...current, payload: { ...current.payload, user } }
       : current);
   }
+
+  function updateCompanyProfile(settings: CompanyProfileSettings) {
+    setPublicCompanyProfile(settings);
+    setAuth((current) => current.status === "ready"
+      ? { ...current, payload: { ...current.payload, companyProfile: settings } }
+      : current);
+  }
+
+  const payload = publicCompanyProfile && !auth.payload.companyProfile
+    ? { ...auth.payload, companyProfile: publicCompanyProfile }
+    : auth.payload;
 
   return (
     <WorkspaceLayout
@@ -292,6 +355,15 @@ export function WorkspaceShell() {
           initialKeyword={domesticLogisticsFocus.keyword}
           initialOpenToken={domesticLogisticsFocus.token}
         />
+      ) : activeMenu === "logisticsReview" ? (
+        <LogisticsFeesModule
+          title="物流费用审核"
+          initialStatus="待审核"
+          hideCreateAction
+          currentUserRole={payload.user.role}
+          currentUserSupplierId={payload.user.supplierId || ""}
+          canCreateExpense={false}
+        />
       ) : activeMenu === "profit" ? (
         <ProfitModule currentUser={payload.user} />
       ) : activeMenu === "taxRefund" ? (
@@ -324,7 +396,7 @@ export function WorkspaceShell() {
           }}
         />
       ) : activeMenu === "settings" ? (
-        <SettingsModule />
+        <SettingsModule onCompanyProfileSaved={updateCompanyProfile} />
       ) : activeMenu === "manual" ? (
         <ManualModule />
       ) : (

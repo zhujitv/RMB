@@ -613,6 +613,7 @@ model LogisticsExpense {
   invoiceDate   DateTime? @map("invoice_date") @db.Date
   invoiceAmount Decimal?  @map("invoice_amount") @db.Decimal(18, 2)
   invoiceRemark String?   @map("invoice_remark")
+  invoiceNotifiedAt DateTime? @map("invoice_notified_at")
   invoiceDocumentId String? @unique @map("invoice_document_id")
   invoiceUploadedById String? @map("invoice_uploaded_by")
   invoiceUploadedAt DateTime? @map("invoice_uploaded_at")

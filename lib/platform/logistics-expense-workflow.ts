@@ -26,9 +26,12 @@ import {
   createOrUpdateCostFromLogisticsExpense,
   includeLogisticsExpenseRelations,
   loadLogisticsExpenseForAction,
+  logisticsExpenseBillId,
   logisticsExpenseAccessWhere,
   notifyLogisticsSupplierInvoice,
+  notifyLogisticsSupplierInvoiceBills,
   serializeLogisticsExpense,
+  serializeLogisticsExpenseBill,
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
 } from "./logistics-expense-shared";
 
@@ -59,53 +62,24 @@ export async function saveLogisticsExpenses(request, actor, input = {}) {
 
 export async function reviewLogisticsExpense(request, actor, id, input = {}) {
   assertCanReviewLogisticsExpense(actor);
-  const before = await loadLogisticsExpenseForAction(id, actor);
   const action = nonEmpty(input.action || input.reviewAction || input.auditAction);
   if (!["approve", "reject", "reopen"].includes(action)) throw codedError("请选择有效审核动作。", 400, "LOGISTICS_EXPENSE_ACTION_REQUIRED");
   if (action === "reject" && !nonEmpty(input.rejectReason || input.reason)) {
     throw codedError("驳回物流费用必须填写原因。", 400, "LOGISTICS_EXPENSE_REJECT_REASON_REQUIRED");
   }
-  let saved;
   if (action === "approve") {
-    saved = await prisma.$transaction(async (tx) => {
-      const cost = await createOrUpdateCostFromLogisticsExpense(tx, before, actor);
-      return tx.logisticsExpense.update({
-        where: { id },
-        data: {
-          auditStatus: "审核通过",
-          reviewedById: actor.id,
-          reviewedAt: new Date(),
-          reviewRemark: optional(input.reviewRemark || input.remark),
-          rejectReason: null,
-          costId: cost.id,
-          invoiceStatus: before.invoiceStatus === "已确认" || before.invoiceStatus === "已上传" ? before.invoiceStatus : "未通知",
-          paymentStatus: before.paymentStatus || "待开票",
-          updatedById: actor.id,
-        },
-        include: includeLogisticsExpenseRelations(),
-      });
-    });
-    let notified = false;
-    let emailError = "";
-    try {
-      await notifyLogisticsSupplierInvoice(saved);
-      notified = true;
-      saved = await prisma.logisticsExpense.update({
-        where: { id },
-        data: { invoiceStatus: "已通知开票", paymentStatus: "待开票", updatedById: actor.id },
-        include: includeLogisticsExpenseRelations(),
-      });
-      if (saved.costId) {
-        await prisma.orderCost.update({ where: { id: saved.costId }, data: { invoiceStatus: "已通知开票" } }).catch(() => null);
-      }
-    } catch (error) {
-      emailError = error?.message || "邮件发送失败";
-      await runNonCriticalTask("物流费用通知失败日志写入", () => writeAudit(request, actor, "物流费用开票通知失败", "logistics_expenses", id, before, { errorMessage: emailError }));
-    }
-    await runNonCriticalTask("物流费用审核日志写入", () => writeAudit(request, actor, "审核通过物流费用", "logistics_expenses", id, before, { ...saved, emailNotified: notified, emailError }));
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(saved.orderId));
-    return { expense: serializeLogisticsExpense(saved), emailNotified: notified, emailError };
+    const result = await reviewLogisticsExpenseBills(request, actor, { ...input, action, ids: [id] });
+    const firstExpense = result.expenses[0] || result.bills[0]?.items?.[0] || null;
+    return {
+      expense: firstExpense || null,
+      bill: result.bills[0] || null,
+      emailNotified: result.emailNotified,
+      emailError: result.emailError,
+      emailResults: result.emailResults,
+    };
   }
+  const before = await loadLogisticsExpenseForAction(id, actor);
+  let saved;
   const data = action === "reject"
     ? {
       auditStatus: "已驳回",
@@ -128,6 +102,110 @@ export async function reviewLogisticsExpense(request, actor, id, input = {}) {
   return { expense: serializeLogisticsExpense(saved), emailNotified: false, emailError: "" };
 }
 
+export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
+  assertCanReviewLogisticsExpense(actor);
+  const action = nonEmpty(input.action || input.reviewAction || input.auditAction || "approve");
+  if (action !== "approve") throw codedError("批量审核当前仅支持审核通过。", 400, "LOGISTICS_EXPENSE_BATCH_REVIEW_ACTION_INVALID");
+  const identifiers = normalizeLogisticsExpenseReviewIdentifiers(input);
+  if (!identifiers.length) {
+    throw codedError("请选择需要审核的物流费用账单。", 400, "LOGISTICS_EXPENSE_BATCH_REVIEW_EMPTY");
+  }
+  const bills = [];
+  const seenBillIds = new Set();
+  for (const identifier of identifiers) {
+    const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
+    if (!rows.length) throw codedError("未找到可审核的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
+    const billId = logisticsExpenseBillId(rows[0]);
+    if (seenBillIds.has(billId)) continue;
+    seenBillIds.add(billId);
+    bills.push({ billId, rows });
+  }
+  const reviewRemark = optional(input.reviewRemark || input.remark);
+  const now = new Date();
+  const allRows = bills.flatMap((bill) => bill.rows);
+  for (const row of allRows) {
+    if (row.auditStatus !== "待审核") {
+      throw codedError(`账单 ${row.order?.orderNo || row.orderId || ""}/${row.order?.blNo || "-"} 中存在非待审核费用，不能审核通过。`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_INVALID");
+    }
+  }
+  const approvedRows = await prisma.$transaction(async (tx) => {
+    const savedRows = [];
+    for (const before of allRows) {
+      const cost = await createOrUpdateCostFromLogisticsExpense(tx, before, actor);
+      const saved = await tx.logisticsExpense.update({
+        where: { id: before.id },
+        data: {
+          auditStatus: "审核通过",
+          reviewedById: actor.id,
+          reviewedAt: now,
+          reviewRemark,
+          rejectReason: null,
+          costId: cost.id,
+          invoiceStatus: ["已上传", "已确认"].includes(before.invoiceStatus) ? before.invoiceStatus : "未通知",
+          paymentStatus: "待付款",
+          updatedById: actor.id,
+        },
+        include: includeLogisticsExpenseRelations(),
+      });
+      savedRows.push(saved);
+    }
+    return savedRows;
+  });
+  const emailResults = await notifyLogisticsSupplierInvoiceBills(approvedRows);
+  const notifiedExpenseIds = new Set(emailResults.filter((result) => result.sent).flatMap((result) => result.expenseIds || []));
+  let finalRows = approvedRows;
+  if (notifiedExpenseIds.size) {
+    finalRows = [];
+    for (const row of approvedRows) {
+      if (!notifiedExpenseIds.has(row.id)) {
+        finalRows.push(row);
+        continue;
+      }
+      const saved = await prisma.logisticsExpense.update({
+        where: { id: row.id },
+        data: {
+          invoiceStatus: ["已上传", "已确认"].includes(row.invoiceStatus) ? row.invoiceStatus : "已通知开票",
+          invoiceNotifiedAt: now,
+          paymentStatus: "待付款",
+          updatedById: actor.id,
+        },
+        include: includeLogisticsExpenseRelations(),
+      });
+      if (saved.costId) {
+        await prisma.orderCost.update({ where: { id: saved.costId }, data: { invoiceStatus: "已通知开票" } }).catch(() => null);
+      }
+      finalRows.push(saved);
+    }
+  }
+  const emailErrors = emailResults.filter((result) => !result.sent).map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
+  const emailError = emailErrors.join("；");
+  for (const bill of bills) {
+    const billRows = finalRows.filter((row) => logisticsExpenseBillId(row) === bill.billId);
+    await runNonCriticalTask("物流费用批量审核日志写入", () => writeAudit(request, actor, "审核通过物流费用账单", "logistics_expenses", bill.billId, bill.rows.map(serializeLogisticsExpense), {
+      bill: serializeLogisticsExpenseBill(billRows),
+      emailResults,
+    }));
+  }
+  for (const result of emailResults.filter((item) => !item.sent)) {
+    await runNonCriticalTask("物流费用通知失败日志写入", () => writeAudit(request, actor, "物流费用开票通知失败", "logistics_expenses", result.supplierId || "supplier", null, {
+      supplierName: result.supplierName,
+      errorMessage: result.error,
+      expenseIds: result.expenseIds,
+    }));
+  }
+  for (const orderId of [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))]) {
+    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+  }
+  const serializedBills = bills.map((bill) => serializeLogisticsExpenseBill(finalRows.filter((row) => logisticsExpenseBillId(row) === bill.billId)));
+  return {
+    bills: serializedBills,
+    expenses: finalRows.map(serializeLogisticsExpense),
+    emailResults,
+    emailNotified: emailResults.some((result) => result.sent),
+    emailError,
+  };
+}
+
 export async function updateLogisticsExpense(request, actor, id, input = {}) {
   assertCanWriteLogisticsExpense(actor);
   const before = await loadLogisticsExpenseForAction(id, actor);
@@ -139,6 +217,18 @@ export async function updateLogisticsExpense(request, actor, id, input = {}) {
       include: includeLogisticsExpenseRelations(),
     });
     await runNonCriticalTask("物流费用撤回日志写入", () => writeAudit(request, actor, "撤回物流费用", "logistics_expenses", id, before, saved));
+    return serializeLogisticsExpense(saved);
+  }
+  if (input.action === "submit") {
+    if (!["草稿", "已驳回"].includes(before.auditStatus)) {
+      throw codedError("只有草稿或已驳回费用可以提交审核。", 400, "LOGISTICS_EXPENSE_SUBMIT_NOT_ALLOWED");
+    }
+    const saved = await prisma.logisticsExpense.update({
+      where: { id },
+      data: { auditStatus: "待审核", submittedAt: new Date(), rejectReason: null, updatedById: actor.id },
+      include: includeLogisticsExpenseRelations(),
+    });
+    await runNonCriticalTask("物流费用提交审核日志写入", () => writeAudit(request, actor, "提交物流费用审核", "logistics_expenses", id, before, saved));
     return serializeLogisticsExpense(saved);
   }
   const order = await assertLogisticsExpenseOrder({ orderId: before.orderId }, actor);
@@ -403,6 +493,49 @@ function parseLogisticsExpenseGroupKey(groupKey) {
     orderId: rest.slice(0, separator),
     billKey: rest.slice(separator + 1),
   };
+}
+
+function normalizeLogisticsExpenseReviewIdentifiers(input = {}) {
+  const values = [
+    ...(Array.isArray(input.billIds) ? input.billIds : []),
+    ...(Array.isArray(input.groupKeys) ? input.groupKeys : []),
+    ...(Array.isArray(input.ids) ? input.ids : []),
+    ...(Array.isArray(input.expenseIds) ? input.expenseIds : []),
+    input.billId,
+    input.groupKey,
+    input.id,
+  ];
+  return values.map(nonEmpty).filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+}
+
+async function loadLogisticsExpenseBillRowsForAction(identifier, actor) {
+  const text = requireText(identifier, "物流费用账单");
+  if (text.startsWith("bill:")) {
+    const parsed = parseLogisticsExpenseGroupKey(text);
+    if (!parsed.orderId) throw codedError("物流费用账单编号无效。", 400, "LOGISTICS_EXPENSE_BILL_ID_INVALID");
+    const rows = await prisma.logisticsExpense.findMany({
+      where: {
+        deletedAt: null,
+        orderId: parsed.orderId,
+        ...logisticsExpenseAccessWhere(actor),
+      },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    return rows.filter((row) => logisticsExpenseBillId(row) === text);
+  }
+  const before = await loadLogisticsExpenseForAction(text, actor);
+  const billId = logisticsExpenseBillId(before);
+  const rows = await prisma.logisticsExpense.findMany({
+    where: {
+      deletedAt: null,
+      orderId: before.orderId,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    include: includeLogisticsExpenseRelations(),
+    orderBy: [{ createdAt: "asc" }],
+  });
+  return rows.filter((row) => logisticsExpenseBillId(row) === billId);
 }
 
 function normalizeBatchBillingMethod(item = {}, before = null) {

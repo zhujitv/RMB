@@ -2012,9 +2012,9 @@
 .logisticsBillSummary {
   display: flex;
   gap: 10px 16px;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: space-between;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 2px 8px;
   color: #0f172a;
   font-size: 12.5px;
@@ -2026,17 +2026,20 @@
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   flex: 1 1 auto;
   gap: 6px 14px;
+  align-items: stretch;
   min-width: 0;
 }
 
-.logisticsBillSummaryMeta span {
+.logisticsBillSummaryMeta > span {
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
   min-width: 0;
-  gap: 6px;
-  align-items: center;
+  min-height: 44px;
+  gap: 3px;
+  padding: 2px 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .logisticsBillSummaryMeta strong {
@@ -2044,6 +2047,19 @@
   color: #64748b;
   font-size: 12px;
   font-weight: 600;
+}
+
+.logisticsBillSummaryValue {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logisticsContainerInfoCard {
@@ -2916,6 +2932,14 @@
 .dataTable td.orderNoColumn {
   width: 180px;
   min-width: 180px;
+}
+
+.dataTable th.selectionColumn,
+.dataTable td.selectionColumn {
+  width: 48px;
+  min-width: 48px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .dataTable th.customerColumn,

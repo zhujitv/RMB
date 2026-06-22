@@ -112,6 +112,25 @@ function canModifyDocument(actor, document) {
   return false;
 }
 
+function orderDocumentFileInclude() {
+  return {
+    order: {
+      include: {
+        customer: true,
+        logisticsSuppliers: { select: { supplierId: true } },
+        domesticLogisticsInfos: {
+          include: {
+            transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+          },
+        },
+      },
+    },
+    cost: { include: { supplier: true } },
+    supplier: true,
+    uploadedBy: true,
+  };
+}
+
 async function resolveDocumentScope({ orderId, documentType, costId, supplierId }, actor) {
   documentType = normalizeOrderDocumentType(documentType);
   const relatedModule = relatedModuleForDocumentType(documentType);
@@ -353,7 +372,7 @@ export async function getOrderDocumentDownload(request, actor, id) {
   assertRead(actor, "documents");
   const document = await prisma.orderDocument.findUnique({
     where: { id },
-    include: { order: { include: { customer: true, logisticsSuppliers: { select: { supplierId: true } } } }, cost: true, supplier: true, uploadedBy: true },
+    include: orderDocumentFileInclude(),
   });
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw permissionError("无权限下载该订单单证");
@@ -371,11 +390,24 @@ export async function getOrderDocumentDownload(request, actor, id) {
   return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
 }
 
+export async function getOrderDocumentMetadata(request, actor, id) {
+  assertRead(actor, "documents");
+  const document = await prisma.orderDocument.findUnique({
+    where: { id },
+    include: orderDocumentFileInclude(),
+  });
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (!canReadDocumentContent(actor, document)) throw codedError("无权限查看该订单单证", 403, "PERMISSION_DENIED");
+  if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能预览", 400);
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
+  return serializeOrderDocument({ ...document, standardFilename });
+}
+
 export async function getOrderDocumentPreview(request, actor, id) {
   assertRead(actor, "documents");
   const document = await prisma.orderDocument.findUnique({
     where: { id },
-    include: { order: { include: { customer: true, logisticsSuppliers: { select: { supplierId: true } } } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+    include: orderDocumentFileInclude(),
   });
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");

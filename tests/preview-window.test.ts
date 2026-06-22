@@ -5,6 +5,8 @@ import test from "node:test";
 const previewRoute = readFileSync("app/api/order-documents/[id]/preview/route.ts", "utf8");
 const downloadRoute = readFileSync("app/api/order-documents/[id]/download/route.ts", "utf8");
 const orderDocumentRoute = readFileSync("app/api/order-documents/[id]/route.ts", "utf8");
+const documentPreviewPage = readFileSync("app/documents/preview/[id]/page.tsx", "utf8");
+const documentPreviewClient = readFileSync("app/documents/preview/[id]/preview-client.tsx", "utf8");
 const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
@@ -12,12 +14,16 @@ const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const uploadTexts = readFileSync("app/uploadTexts.ts", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
+const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const sharedSerialization = readFileSync("lib/platform/shared-serialization.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
   assert.match(previewRoute, /"Content-Type": "application\/pdf"/);
-  assert.match(previewRoute, /"Content-Disposition": `inline; filename="/);
-  assert.match(previewRoute, /document\.originalFilename \|\| document\.originalName \|\| document\.fileName/);
+  assert.match(previewRoute, /preferredOrderDocumentFileName\(document\)/);
+  assert.match(previewRoute, /pdfContentDispositionHeader\("inline", fileName\)/);
+  assert.match(sharedConstants, /filename="[^`]*"; filename\*=UTF-8''\$\{encodeURIComponent\(safeFileName\)\}/);
+  assert.match(sharedConstants, /document\.originalFileName,[\s\S]*document\.originalFilename,[\s\S]*document\.originalName,[\s\S]*document\.fileName,[\s\S]*generatedOrderDocumentFileName\(document\)/);
   assert.doesNotMatch(previewRoute, /attachment/);
   assert.match(previewRoute, /"Cache-Control": "private, max-age=300"/);
   assert.match(previewRoute, /"X-Content-Type-Options": "nosniff"/);
@@ -27,8 +33,8 @@ test("preview route returns inline file streams with cache and nosniff headers",
 test("download route returns attachment file streams", () => {
   assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
   assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
-  assert.match(downloadRoute, /"Content-Disposition": `attachment; filename="/);
-  assert.match(downloadRoute, /document\.originalFilename \|\| document\.originalName \|\| document\.fileName/);
+  assert.match(downloadRoute, /preferredOrderDocumentFileName\(document\)/);
+  assert.match(downloadRoute, /pdfContentDispositionHeader\("attachment", fileName\)/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
   assert.doesNotMatch(downloadRoute, /inline/);
 });
@@ -40,16 +46,32 @@ test("preview route returns structured JSON errors when stream fails", () => {
   assert.match(previewRoute, /PDF 预览失败，请下载原文件查看/);
 });
 
-test("workspace modules use preview links instead of legacy preview windows", () => {
-  const previewHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/preview`\}/;
+test("workspace modules use dynamic document preview pages instead of API preview tabs", () => {
+  const previewHref = /href=\{`\/documents\/preview\/\$\{encodeURIComponent\(document\.id\)\}`\}/;
   const downloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
-  assert.match(taxRefundModule, /window\.open\(`\/api\/order-documents\/\$\{encodeURIComponent\(documentId\)\}\/preview`, "_blank"/);
+  assert.match(taxRefundModule, /window\.open\(`\/documents\/preview\/\$\{encodeURIComponent\(documentId\)\}`, "_blank"/);
   assert.match(domesticLogisticsModule, previewHref);
   assert.match(costsModule, previewHref);
   assert.match(taxRefundModule, downloadHref);
   assert.match(domesticLogisticsModule, downloadHref);
   assert.match(costsModule, downloadHref);
+  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}`, /\/api\/order-documents\/\$\{encodeURIComponent\([^}]+\)\}\/preview/);
   assert.doesNotMatch(taxRefundModule, /\/download`} target="_blank"/);
+});
+
+test("document preview page sets the browser title from document metadata", () => {
+  assert.match(documentPreviewPage, /<DocumentPreviewClient documentId=\{id\} \/>/);
+  assert.match(documentPreviewClient, /fetch\(`\/api\/order-documents\/\$\{encodedId\}`/);
+  assert.match(documentPreviewClient, /displayFileName/);
+  assert.match(documentPreviewClient, /downloadFileName/);
+  assert.match(documentPreviewClient, /document\.title = nextFileName/);
+  assert.match(documentPreviewClient, /src=\{previewUrl\}/);
+  assert.match(orderDocumentRoute, /export async function GET/);
+  assert.match(orderDocumentRoute, /getOrderDocumentMetadata\(request, actor, id\)/);
+  assert.match(sharedSerialization, /displayFileName/);
+  assert.match(sharedSerialization, /downloadFileName/);
+  assert.doesNotMatch(documentPreviewClient, /document\.title = "preview"/);
+  assert.doesNotMatch(documentPreviewClient, /PDF Preview|Document Preview/);
 });
 
 test("tax refund detail uses one file table for preview download and delete", () => {

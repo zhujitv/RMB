@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, UiCheckbox, useConfirmationDialog } from "../components";
 import { formatAmount, formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
@@ -91,6 +91,7 @@ type LogisticsExpense = {
   invoiceDate?: string;
   invoiceAmount?: number | "";
   invoiceRemark?: string;
+  invoiceNotifiedAt?: string | null;
   invoiceDocument?: DocumentLite | null;
   invoiceUploadedBy?: UserLite;
   invoiceUploadedAt?: string | null;
@@ -238,12 +239,18 @@ const emptyExpenseForm: ExpenseForm = {
 
 export function LogisticsFeesModule({
   embedded = false,
+  title = "物流费用录入",
+  initialStatus = "",
+  hideCreateAction = false,
   refreshToken = 0,
   currentUserRole = "",
   currentUserSupplierId = "",
   canCreateExpense: canCreateExpenseProp,
 }: {
   embedded?: boolean;
+  title?: string;
+  initialStatus?: string;
+  hideCreateAction?: boolean;
   refreshToken?: number;
   currentUserRole?: string;
   currentUserSupplierId?: string;
@@ -254,7 +261,7 @@ export function LogisticsFeesModule({
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(initialStatus);
   const [costType, setCostType] = useState("");
   const [statementMonth, setStatementMonth] = useState(new Date().toISOString().slice(0, 7));
   const [statementRows, setStatementRows] = useState<LogisticsStatementRow[]>([]);
@@ -267,6 +274,7 @@ export function LogisticsFeesModule({
   const [busyId, setBusyId] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [savingBillId, setSavingBillId] = useState("");
+  const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
   const {
     confirmation,
     requestConfirmation,
@@ -274,10 +282,13 @@ export function LogisticsFeesModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
-  const canCreateExpense = canCreateExpenseProp ?? ["管理员", "物流供应商"].includes(currentUserRole);
+  const canCreateExpense = !hideCreateAction && (canCreateExpenseProp ?? ["管理员", "物流供应商"].includes(currentUserRole));
   const canReviewExpense = currentUserRole === "管理员";
   const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
   const isLogisticsSupplier = currentUserRole === "物流供应商";
+  const reviewableRows = rows.filter(logisticsExpenseBillCanApprove);
+  const selectedReviewableRows = rows.filter((row) => selectedBillIds.includes(row.id) && logisticsExpenseBillCanApprove(row));
+  const allReviewableSelected = reviewableRows.length > 0 && reviewableRows.every((row) => selectedBillIds.includes(row.id));
 
   async function loadExpenses(nextPage = page, nextKeyword = submittedKeyword, nextStatus = status, nextCostType = costType) {
     setLoading(true);
@@ -291,7 +302,9 @@ export function LogisticsFeesModule({
       if (nextStatus) params.set("status", nextStatus);
       if (nextCostType) params.set("costType", nextCostType);
       const result = await apiJson<LogisticsExpensesResponse>(`/api/logistics-costs?${params}`);
-      setRows(Array.isArray(result.rows) ? result.rows : []);
+      const nextRows = Array.isArray(result.rows) ? result.rows : [];
+      setRows(nextRows);
+      setSelectedBillIds((current) => current.filter((id) => nextRows.some((row) => row.id === id && logisticsExpenseBillCanApprove(row))));
       setTotal(Number(result.total || 0));
       setPage(Number(result.page || nextPage));
     } catch (loadError) {
@@ -302,7 +315,7 @@ export function LogisticsFeesModule({
   }
 
   useEffect(() => {
-    void loadExpenses(1, "", "", "");
+    void loadExpenses(1, "", initialStatus, "");
     void loadStatement(statementMonth);
   }, []);
 
@@ -330,6 +343,7 @@ export function LogisticsFeesModule({
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setExpandedId("");
+    setSelectedBillIds([]);
     setNotice("");
     void loadExpenses(1, value, status, costType);
   }
@@ -337,11 +351,12 @@ export function LogisticsFeesModule({
   function resetSearch() {
     setKeyword("");
     setSubmittedKeyword("");
-    setStatus("");
+    setStatus(initialStatus);
     setCostType("");
     setExpandedId("");
+    setSelectedBillIds([]);
     setNotice("");
-    void loadExpenses(1, "", "", "");
+    void loadExpenses(1, "", initialStatus, "");
   }
 
   async function patchExpense(expense: LogisticsExpense, body: Record<string, unknown>, fallback: string) {
@@ -362,6 +377,74 @@ export function LogisticsFeesModule({
     } finally {
       setBusyId("");
     }
+  }
+
+  function toggleBillSelection(expense: LogisticsExpense, checked: boolean) {
+    if (!logisticsExpenseBillCanApprove(expense)) return;
+    setSelectedBillIds((current) => (
+      checked
+        ? (current.includes(expense.id) ? current : [...current, expense.id])
+        : current.filter((id) => id !== expense.id)
+    ));
+  }
+
+  function toggleAllReviewableBills(checked: boolean) {
+    setSelectedBillIds((current) => {
+      const reviewableIds = reviewableRows.map((row) => row.id);
+      if (!checked) return current.filter((id) => !reviewableIds.includes(id));
+      return [...new Set([...current, ...reviewableIds])];
+    });
+  }
+
+  async function reviewExpenseBills(billIds: string[], sourceExpense: LogisticsExpense | null = null) {
+    const ids = billIds.filter(Boolean);
+    if (!ids.length) {
+      setError("请选择需要审核的物流费用账单");
+      setNotice("");
+      return;
+    }
+    const busyKey = ids.length === 1 ? ids[0] : "__batch_review__";
+    setBusyId(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-costs/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "approve", billIds: ids }),
+      });
+      if (result.success !== true) throw new Error(result.message || "审核物流费用失败");
+      setSelectedBillIds((current) => current.filter((id) => !ids.includes(id)));
+      if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
+      await loadExpenses(page, submittedKeyword, status, costType);
+      await loadStatement(statementMonth);
+      setNotice(result.message || "物流费用已审核，开票通知已按供应商合并发送");
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : "审核物流费用失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function reviewSelectedBills() {
+    if (!selectedReviewableRows.length) {
+      setError("请选择待审核的物流费用账单");
+      setNotice("");
+      return;
+    }
+    const supplierCount = new Set(selectedReviewableRows.flatMap((row) => billSupplierIds(row))).size;
+    const confirmationResult = await requestConfirmation({
+      title: "合并审核 / 批量审核",
+      message: "审核通过后系统会按供应商合并发送开票通知，同一供应商只发送一封邮件。",
+      details: [
+        `选中账单：${selectedReviewableRows.length} 票`,
+        `涉及供应商：${supplierCount || 0} 家`,
+      ],
+      confirmLabel: "审核通过并通知",
+      cancelLabel: "取消",
+      variant: "warning",
+    });
+    if (!confirmationResult.confirmed) return;
+    await reviewExpenseBills(selectedReviewableRows.map((row) => row.id));
   }
 
   async function saveBillDetails(expense: LogisticsExpense, payload: LogisticsExpenseBatchSavePayload): Promise<LogisticsExpenseBatchSaveResult | null> {
@@ -469,6 +552,35 @@ export function LogisticsFeesModule({
     }
   }
 
+  async function submitDraftExpenseBill(expense: LogisticsExpense) {
+    const items = logisticsExpenseBillItems(expense);
+    const submittableItems = items.filter((item) => ["草稿", "已驳回"].includes(item.auditStatus || "草稿"));
+    if (!submittableItems.length || submittableItems.length !== items.length) {
+      setError("只有草稿或已驳回的物流费用可以提交审核");
+      setNotice("");
+      return;
+    }
+    setBusyId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      for (const item of submittableItems) {
+        const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-costs/${encodeURIComponent(item.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "submit" }),
+        });
+        if (result.success !== true) throw new Error(result.message || "提交物流费用审核失败");
+      }
+      await loadExpenses(page, submittedKeyword, status, costType);
+      await loadStatement(statementMonth);
+      setNotice("物流费用已提交审核");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "提交物流费用审核失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function rejectExpense(expense: LogisticsExpense) {
     const confirmationResult = await requestConfirmation({
       title: "驳回物流费用",
@@ -550,7 +662,7 @@ export function LogisticsFeesModule({
     <section className={`${embedded ? styles.subModuleCard : styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
-          <h2>物流费用录入</h2>
+          <h2>{title}</h2>
         </div>
         <div className={styles.headerActions}>
           {canCreateExpense ? (
@@ -655,6 +767,16 @@ export function LogisticsFeesModule({
         </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
+        {canReviewExpense ? (
+          <button
+            className={styles.billSaveButton}
+            type="button"
+            disabled={!selectedReviewableRows.length || busyId === "__batch_review__"}
+            onClick={() => void reviewSelectedBills()}
+          >
+            {busyId === "__batch_review__" ? "审核中..." : `合并审核 / 批量审核${selectedReviewableRows.length ? `（${selectedReviewableRows.length}）` : ""}`}
+          </button>
+        ) : null}
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
@@ -664,6 +786,17 @@ export function LogisticsFeesModule({
         <table className={styles.dataTable}>
           <thead>
             <tr>
+              {canReviewExpense ? (
+                <th className={styles.selectionColumn}>
+                  <UiCheckbox
+                    variant="table"
+                    label="选择本页待审核账单"
+                    checked={allReviewableSelected}
+                    disabled={!reviewableRows.length}
+                    onChange={(event) => toggleAllReviewableBills(event.target.checked)}
+                  />
+                </th>
+              ) : null}
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.containerTypeColumn}>柜型</th>
               <th className={styles.blNoColumn}>提单号</th>
@@ -677,25 +810,30 @@ export function LogisticsFeesModule({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9}><div className={styles.emptyState}>数据加载中...</div></td></tr>
+              <tr><td colSpan={canReviewExpense ? 10 : 9}><div className={styles.emptyState}>数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((expense) => (
               <LogisticsExpenseRows
                 key={expense.id}
                 expense={expense}
                 expanded={expandedId === expense.id}
+                selectionEnabled={canReviewExpense}
+                selected={selectedBillIds.includes(expense.id)}
                 busyId={busyId}
                 deletingId={deletingId}
                 saving={savingBillId === expense.id}
                 onToggle={() => setExpandedId((current) => current === expense.id ? "" : expense.id)}
+                onSelect={(checked) => toggleBillSelection(expense, checked)}
                 canReview={canReviewExpense}
                 canConfirmInvoice={canConfirmInvoice}
                 canWithdraw={isLogisticsSupplier}
                 canEditAmount={isLogisticsSupplier}
+                canSubmitDraft={canCreateExpense}
                 canDeleteExpense={canCreateExpense}
                 canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
-                onApprove={(item) => void patchExpense(item, { action: "approve" }, "审核物流费用失败")}
+                onApprove={(item) => void reviewExpenseBills([item.id], item)}
                 onReject={(item) => void rejectExpense(item)}
                 onWithdraw={(item) => void withdrawExpense(item)}
+                onSubmitDraft={(item) => void submitDraftExpenseBill(item)}
                 onSaveDetails={(payload) => saveBillDetails(expense, payload)}
                 onValidationError={(message) => {
                   setError(message);
@@ -710,7 +848,7 @@ export function LogisticsFeesModule({
                 }}
               />
             )) : (
-              <tr><td colSpan={9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
+              <tr><td colSpan={canReviewExpense ? 10 : 9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
             )}
           </tbody>
         </table>
@@ -736,13 +874,17 @@ export function LogisticsFeesModule({
 function LogisticsExpenseRows({
   expense,
   expanded,
+  selectionEnabled,
+  selected,
   busyId,
   deletingId,
   saving,
   onToggle,
+  onSelect,
   onApprove,
   onReject,
   onWithdraw,
+  onSubmitDraft,
   onSaveDetails,
   onValidationError,
   onMarkPaid,
@@ -752,24 +894,30 @@ function LogisticsExpenseRows({
   canConfirmInvoice,
   canWithdraw,
   canEditAmount,
+  canSubmitDraft,
   canDeleteExpense,
   canShowSupplier,
 }: {
   expense: LogisticsExpense;
   expanded: boolean;
+  selectionEnabled: boolean;
+  selected: boolean;
   busyId: string;
   deletingId: string;
   saving: boolean;
   onToggle: () => void;
+  onSelect: (checked: boolean) => void;
   canReview: boolean;
   canConfirmInvoice: boolean;
   canWithdraw: boolean;
   canEditAmount: boolean;
+  canSubmitDraft: boolean;
   canDeleteExpense: boolean;
   canShowSupplier: boolean;
   onApprove: (expense: LogisticsExpense) => void;
   onReject: (expense: LogisticsExpense) => void;
   onWithdraw: (expense: LogisticsExpense) => void;
+  onSubmitDraft: (expense: LogisticsExpense) => void;
   onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
   onValidationError: (message: string) => void;
   onMarkPaid: (expense: LogisticsExpense) => void;
@@ -782,6 +930,7 @@ function LogisticsExpenseRows({
   const items = expense.items?.length ? expense.items : [expense];
   const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
   const containerSummary = logisticsExpenseContainerSummary(expense, items);
+  const canApproveBill = canReview && logisticsExpenseBillCanApprove(expense);
   const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
   const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
@@ -800,6 +949,8 @@ function LogisticsExpenseRows({
   const hasPendingDeletes = deletedExpenseIds.length > 0;
   const hasPendingChanges = hasDirtyChanges || hasPendingCreates || hasPendingDeletes;
   const editedBillTotalCny = editingExpenseRows.reduce((sum, item) => sum + logisticsExpenseDraftAmountCny(item, drafts[item.id]), 0);
+  const canSubmitThisBill = canSubmitDraft && logisticsExpenseBillCanSubmit(expense);
+  const shouldShowSubmitBill = canSubmitDraft && items.some((item) => ["草稿", "已驳回"].includes(item.auditStatus || "草稿"));
 
   function updateDraft(id: string, field: keyof LogisticsExpenseDraft, value: string) {
     setBillSaved(false);
@@ -904,9 +1055,60 @@ function LogisticsExpenseRows({
       </>
     );
   }
+
+  function renderBillReviewControls() {
+    if (!canReview) return null;
+    return (
+      <button
+        className={styles.primaryButtonCompact}
+        type="button"
+        disabled={!canApproveBill || busyId === expense.id || saving}
+        title={canApproveBill ? "审核当前提单账单并通知供应商开票" : "只有待审核账单可以审核通过"}
+        onClick={(event) => {
+          event.stopPropagation();
+          onApprove(expense);
+        }}
+      >
+        {busyId === expense.id ? "审核中..." : "审核通过并通知开票"}
+      </button>
+    );
+  }
+
+  function renderBillSubmitControls() {
+    if (!shouldShowSubmitBill) return null;
+    const disabled = !canSubmitThisBill || hasPendingChanges || busyId === expense.id || saving;
+    const title = hasPendingChanges
+      ? "请先保存本账单明细，再提交审核"
+      : (canSubmitThisBill ? "将当前账单提交给管理员审核" : "只有草稿或已驳回的账单可以提交审核");
+    return (
+      <button
+        className={styles.primaryButtonCompact}
+        type="button"
+        disabled={disabled}
+        title={title}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSubmitDraft(expense);
+        }}
+      >
+        {busyId === expense.id ? "提交中..." : "提交审核"}
+      </button>
+    );
+  }
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
+        {selectionEnabled ? (
+          <td className={styles.selectionColumn} onClick={(event) => event.stopPropagation()}>
+            <UiCheckbox
+              variant="table"
+              label={`选择账单 ${expense.orderNo || expense.blNo || expense.id}`}
+              checked={selected}
+              disabled={!logisticsExpenseBillCanApprove(expense)}
+              onChange={(event) => onSelect(event.target.checked)}
+            />
+          </td>
+        ) : null}
         <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
         <td className={styles.containerTypeColumn}>{containerSummary.shortText}</td>
         <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
@@ -916,24 +1118,41 @@ function LogisticsExpenseRows({
         </td>
         <td><StatusPill value={auditStatus} /></td>
         <td><StatusPill value={invoiceStatus} /></td>
-        <td><StatusPill value={paymentStatus} /></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+          <td><StatusPill value={paymentStatus} /></td>
+          <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
         <tr className={styles.detailRow}>
-          <td colSpan={9}>
+          <td colSpan={selectionEnabled ? 10 : 9}>
             <div className={styles.logisticsBillDetail} onClick={(event) => event.stopPropagation()}>
               <div className={styles.logisticsBillSummary}>
                 <div className={styles.logisticsBillSummaryMeta}>
-	                  <span><strong>客户全称</strong>{customerLegalName(expense)}</span>
-	                  <span><strong>提单号</strong>{expense.blNo || expense.billOfLadingNo || "-"}</span>
-	                  <span><strong>费用明细</strong>{editingExpenseRows.length} 项</span>
-	                  <span><strong>账单合计</strong>{formatCny(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
+                  <span>
+                    <strong>客户全称</strong>
+                    <span className={styles.logisticsBillSummaryValue}>{customerLegalName(expense)}</span>
+                  </span>
+                  <span>
+                    <strong>提单号</strong>
+                    <span className={styles.logisticsBillSummaryValue}>{expense.blNo || expense.billOfLadingNo || "-"}</span>
+                  </span>
+                  <span>
+                    <strong>费用明细</strong>
+                    <span className={styles.logisticsBillSummaryValue}>{editingExpenseRows.length} 项</span>
+                  </span>
+                  <span>
+                    <strong>账单合计</strong>
+                    <span className={styles.logisticsBillSummaryValue}>{formatCny(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
+                  </span>
                   {canShowSupplier && supplierNames.length ? (
-                    <span><strong>供应商</strong>{supplierNames.join(" / ")}</span>
+                    <span>
+                      <strong>供应商</strong>
+                      <span className={styles.logisticsBillSummaryValue}>{supplierNames.join(" / ")}</span>
+                    </span>
                   ) : null}
                 </div>
                 <div className={styles.logisticsBillSummaryActions}>
+                  {renderBillSubmitControls()}
+                  {renderBillReviewControls()}
                   {renderBillSaveControls()}
                 </div>
               </div>
@@ -1197,12 +1416,6 @@ function LogisticsExpenseDetailLine({
       </td>
       <td>
         <div className={styles.compactDetailActions}>
-          {auditStatus === "待审核" && canReview ? (
-            <>
-              <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={() => onApprove(expense)}>{busy ? "处理中" : "通过"}</button>
-              <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => onReject(expense)}>驳回</button>
-            </>
-          ) : null}
           {auditStatus === "待审核" && canWithdraw ? (
             <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => onWithdraw(expense)}>撤回</button>
           ) : null}
@@ -2016,6 +2229,26 @@ function aggregateClientLogisticsExpenseStatus(items: LogisticsExpense[], field:
     if (unique.includes("待开票")) return "部分待开票";
   }
   return "混合状态";
+}
+
+function logisticsExpenseBillItems(expense: LogisticsExpense) {
+  return expense.items?.length ? expense.items : [expense];
+}
+
+function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
+  const items = logisticsExpenseBillItems(expense);
+  return items.length > 0 && items.every((item) => (item.auditStatus || "草稿") === "待审核");
+}
+
+function logisticsExpenseBillCanSubmit(expense: LogisticsExpense) {
+  const items = logisticsExpenseBillItems(expense);
+  return items.length > 0 && items.every((item) => ["草稿", "已驳回"].includes(item.auditStatus || "草稿"));
+}
+
+function billSupplierIds(expense: LogisticsExpense) {
+  return logisticsExpenseBillItems(expense)
+    .map((item) => item.supplierId || item.supplierName || "")
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
 }
 
 function removeLogisticsExpenseFromRows(rows: LogisticsExpense[], expenseId: string) {

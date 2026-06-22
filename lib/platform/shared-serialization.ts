@@ -12,6 +12,7 @@ import {
   normalizeCustomerName,
   normalizedCostType,
   normalizeShippingDocumentTypes,
+  preferredOrderDocumentFileName,
   standardFilenameForDocument,
 } from "./shared-constants";
 import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
@@ -248,6 +249,11 @@ export function serializeCost(cost) {
 export function serializeOrderDocument(document, orderOverride = null) {
   const originalFilename = document.originalFilename || document.originalName || document.fileName || "";
   const standardFilename = standardFilenameForDocument(document, orderOverride);
+  const displayFileName = preferredOrderDocumentFileName({
+    ...document,
+    standardFilename,
+    order: orderOverride || document.order,
+  });
   return {
     id: document.id,
     orderId: document.orderId,
@@ -266,6 +272,8 @@ export function serializeOrderDocument(document, orderOverride = null) {
     documentType: document.documentType,
     documentTypeLabel: ORDER_DOCUMENT_LABELS[document.documentType] || document.documentType,
     fileName: standardFilename,
+    displayFileName,
+    downloadFileName: displayFileName,
     storedFileName: document.fileName,
     originalName: originalFilename,
     originalFilename,

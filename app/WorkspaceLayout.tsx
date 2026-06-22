@@ -25,6 +25,7 @@ const NAV_ICONS: Record<string, string[]> = {
   costs: ["m16 16 2 2 4-4", "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14", "m3.3 7 8.7 5 8.7-5", "M12 22V12"],
   profit: ["m22 7-8.5 8.5-5-5L2 17", "M16 7h6v6"],
   domesticLogistics: ["M10 17h4V5H2v12h3", "M14 17h1V9h4l3 4v4h-2", "M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "M18 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],
+  logisticsReview: ["M10 17h4V5H2v12h3", "M14 17h1V9h4l3 4v4h-2", "M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "M18 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "m9 11 2 2 4-4"],
   taxRefund: ["M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5L10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z", "m9 13 2 2 4-4"],
   reports: ["M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z", "M14 2v4a2 2 0 0 0 2 2h4", "M8 13h8", "M8 17h8", "M12 9v8"],
   manual: ["M4 19.5A2.5 2.5 0 0 1 6.5 17H20", "M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z", "M8 7h8", "M8 11h6"],
@@ -57,6 +58,14 @@ export function WorkspaceLayout({
       ? "账户设置"
       : active?.label || "功能模块";
   const avatarText = payload.user.avatarInitials?.trim() || initials(payload.user.name);
+  const companyProfile = payload.companyProfile || {};
+  const brandName = companyProfile.brandName?.trim() || "NEXTWOOD";
+  const systemName = companyProfile.systemName?.trim() || "NEXTWOOD 供应链协同平台";
+  const companyName = companyProfile.companyNameZh?.trim() || "浙江莱诺建材有限公司";
+  const logoUrl = companyProfile.logoUrl?.trim() || "";
+  const footerText = typeof companyProfile.footerText === "string"
+    ? companyProfile.footerText.trim()
+    : "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.";
 
   return (
     <div className={styles.appShell}>
@@ -70,9 +79,10 @@ export function WorkspaceLayout({
       ) : null}
       <aside className={`${styles.sidebar} ${mobileNavOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.brandBlock}>
-          <strong>NEXTWOOD</strong>
-          <span className={styles.brandPlatform}>NEXTWOOD 供应链协同平台</span>
-          <span className={styles.brandCompany}>浙江莱诺建材有限公司</span>
+          {logoUrl ? <img className={styles.brandLogo} src={logoUrl} alt={`${brandName} logo`} /> : null}
+          <strong>{brandName}</strong>
+          <span className={styles.brandPlatform}>{systemName}</span>
+          <span className={styles.brandCompany}>{companyName}</span>
         </div>
         <nav className={styles.navList} aria-label="功能菜单">
           <button
@@ -101,6 +111,7 @@ export function WorkspaceLayout({
             </button>
           ))}
         </nav>
+        {footerText ? <div className={styles.sidebarFooter}>{footerText}</div> : null}
       </aside>
       <div className={styles.mainColumn}>
         <header className={styles.topbar}>

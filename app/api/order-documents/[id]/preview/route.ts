@@ -1,17 +1,8 @@
 import type { NextRequest } from "next/server";
-import { getActor, getOrderDocumentPreview } from "../../../../../lib/platform-db";
+import { getActor, getOrderDocumentPreview, pdfContentDispositionHeader, preferredOrderDocumentFileName } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function asciiFileName(name = "document") {
-  const cleaned = String(name || "document")
-    .replace(/[\r\n"]/g, "_")
-    .replace(/[^\x20-\x7E]/g, "_")
-    .replace(/[\\/:*?<>|]+/g, "_");
-  const withPdfSuffix = /\.pdf$/i.test(cleaned) ? cleaned : `${cleaned || "document"}.pdf`;
-  return withPdfSuffix || "document.pdf";
-}
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -41,12 +32,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const actor = await getActor(request);
     const { id } = await params;
     const { body, document } = await getOrderDocumentPreview(request, actor, id);
-    const fileName = asciiFileName(document.originalFilename || document.originalName || document.fileName || "document");
+    const fileName = preferredOrderDocumentFileName(document);
     return new Response(body, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Length": String(body.length),
-        "Content-Disposition": `inline; filename="${fileName}"`,
+        "Content-Disposition": pdfContentDispositionHeader("inline", fileName),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },

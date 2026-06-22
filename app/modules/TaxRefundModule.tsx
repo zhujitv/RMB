@@ -2049,7 +2049,7 @@ function DocumentFileTable({
 
 function openDocumentPreview(documentId: string) {
   if (!documentId) return;
-  window.open(`/api/order-documents/${encodeURIComponent(documentId)}/preview`, "_blank", "noopener,noreferrer");
+  window.open(`/documents/preview/${encodeURIComponent(documentId)}`, "_blank", "noopener,noreferrer");
 }
 
 function CustomsFilePickerDialog({

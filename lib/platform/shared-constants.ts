@@ -274,6 +274,74 @@ export function standardFilenameForDocument(document = {}, orderOverride = null)
   });
 }
 
+function firstNonEmptyText(...values) {
+  return values.map((value) => String(value || "").trim()).find(Boolean) || "";
+}
+
+function documentReferenceNo(document = {}) {
+  const order = document.order || {};
+  const transportItems = (order.domesticLogisticsInfos || [])
+    .flatMap((info) => Array.isArray(info.transportItems) ? info.transportItems : []);
+  const firstContainerNo = transportItems.map((item) => item.containerNo).find(Boolean) || "";
+  const documentType = normalizeOrderDocumentType(document.documentType || "");
+  return firstNonEmptyText(
+    document.documentNo,
+    document.customsDeclarationNo,
+    document.customsDeclarationNumber,
+    documentType === "CUSTOMS_ENTRY_FORM" ? firstContainerNo : "",
+    order.blNo,
+    order.billOfLadingNo,
+    document.blNo,
+    document.billOfLadingNo,
+    order.orderNo,
+    document.orderNo,
+    document.id,
+    "文件",
+  );
+}
+
+export function ensurePdfFileName(fileName = "document.pdf") {
+  const cleaned = String(fileName || "")
+    .replace(/[\u0000-\u001f\u007f\r\n"]/g, "_")
+    .replace(/[\\/:*?<>|]+/g, "_")
+    .trim();
+  const normalized = cleaned || "document.pdf";
+  return /\.pdf$/i.test(normalized) ? normalized : `${normalized}.pdf`;
+}
+
+export function generatedOrderDocumentFileName(document = {}) {
+  const documentType = normalizeOrderDocumentType(document.documentType || "");
+  const label = ORDER_DOCUMENT_LABELS[documentType] || documentType || "单证";
+  return ensurePdfFileName(`${label}-${documentReferenceNo(document)}`);
+}
+
+export function preferredOrderDocumentFileName(document = {}) {
+  return ensurePdfFileName(firstNonEmptyText(
+    document.originalFileName,
+    document.originalFilename,
+    document.originalName,
+    document.fileName,
+    document.standardFilename,
+    generatedOrderDocumentFileName(document),
+  ));
+}
+
+export function asciiContentDispositionFileName(fileName = "document.pdf") {
+  const fallback = ensurePdfFileName(fileName)
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/[\r\n"\\/:*?<>|;]+/g, "_")
+    .trim();
+  return ensurePdfFileName(fallback || "document.pdf");
+}
+
+export function pdfContentDispositionHeader(disposition = "inline", fileName = "document.pdf") {
+  const normalizedDisposition = disposition === "attachment" ? "attachment" : "inline";
+  const safeFileName = ensurePdfFileName(fileName);
+  const asciiFileName = asciiContentDispositionFileName(safeFileName);
+  return `${normalizedDisposition}; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(safeFileName)}`;
+}
+
 export async function nextStandardFilenameForUpload(order = {}, documentType = "", context = {}) {
   const existing = orderDocumentsForStandardNaming(order);
   const probe = {
@@ -332,6 +400,20 @@ export const DEFAULT_EXCHANGE_RATE_SETTINGS = {
   allowManualEdit: true,
   allowAdminIncompleteTaxSubmit: false,
   allowMultipleOrderLogisticsSuppliers: false,
+};
+export const COMPANY_PROFILE_SETTING_KEY = "company_profile";
+export const DEFAULT_COMPANY_PROFILE_SETTINGS = {
+  brandName: "NEXTWOOD",
+  systemName: "NEXTWOOD 供应链协同平台",
+  companyNameZh: "浙江莱诺建材有限公司",
+  companyNameEn: "Zhejiang Lainuo Building Materials Co., Ltd.",
+  shortName: "NEXTWOOD",
+  website: "https://www.nextwood.net",
+  contactEmail: "",
+  contactPhone: "",
+  address: "",
+  logoUrl: "",
+  footerText: "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.",
 };
 export const COMMISSION_FORMULA_SETTING_KEY = "commission_formula";
 export const COMMISSION_FORMULA_SOURCES = ["ARRIVED_PAYMENTS_CNY", "FOB_CNY", "EXPECTED_GROSS_PROFIT_CNY", "REALIZED_GROSS_PROFIT_CNY"];

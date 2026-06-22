@@ -30,10 +30,14 @@ const backend = [
   readFileSync("lib/platform/tax-refunds.ts", "utf8"),
 ].join("\n");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
+const menuFile = readFileSync("app/menu.ts", "utf8");
+const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
 const containerCountMigration = readFileSync("prisma/migrations/20260622100000_logistics_expense_container_count/migration.sql", "utf8");
+const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233000_logistics_expense_invoice_notification/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
+const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
 const logisticsExpenseDeleteRoute = readFileSync("app/api/logistics-expenses/[id]/route.ts", "utf8");
 const logisticsExpenseBatchRoute = readFileSync("app/api/logistics-expenses/batch-update/route.ts", "utf8");
 const logisticsExpenseBatchSaveRoute = readFileSync("app/api/logistics-expenses/batch-save/route.ts", "utf8");
@@ -51,9 +55,11 @@ test("logistics expenses are stored outside official costs until approved", () =
   assert.match(schema, /appliedContainerCount\s+Int\?\s+@map\("applied_container_count"\)/);
   assert.match(schema, /billingMethod\s+String\?\s+@map\("billing_method"\)/);
   assert.match(schema, /billingQuantity\s+Decimal\?\s+@map\("billing_quantity"\)/);
+  assert.match(schema, /invoiceNotifiedAt\s+DateTime\?\s+@map\("invoice_notified_at"\)/);
   assert.match(schema, /model OrderCost[\s\S]*sourceType\s+String\s+@default\("MANUAL"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "logistics_expenses"/);
   assert.match(containerCountMigration, /ADD COLUMN IF NOT EXISTS "applied_container_count" INTEGER/);
+  assert.match(invoiceNotificationMigration, /ADD COLUMN IF NOT EXISTS "invoice_notified_at"/);
 });
 
 test("approval generates official costs with source tracking", () => {
@@ -61,6 +67,8 @@ test("approval generates official costs with source tracking", () => {
   assert.match(backend, /sourceId: expense\.id/);
   assert.match(backend, /costConfirmed: true/);
   assert.match(backend, /审核通过物流费用/);
+  assert.match(backend, /reviewLogisticsExpenseBills/);
+  assert.match(backend, /invoiceNotifiedAt: now/);
   assert.match(costsModule, /label="来源" value=\{cost\.sourceLabel \|\| "人工录入"\}/);
 });
 
@@ -143,11 +151,23 @@ test("approval sends invoice notification and preserves failure for audit", () =
 });
 
 test("logistics information page exposes per-order expense entry actions", () => {
-  assert.match(logisticsModule, /<h2>物流费用录入<\/h2>/);
+  assert.match(logisticsModule, /title = "物流费用录入"/);
+  assert.match(logisticsModule, /<h2>\{title\}<\/h2>/);
   assert.match(logisticsModule, /新增物流费用/);
   assert.match(logisticsModule, /导出对账单/);
   assert.match(domesticLogisticsModule, /录入费用/);
   assert.match(domesticLogisticsModule, /<LogisticsFeesModule/);
+});
+
+test("admin has a direct logistics expense review menu", () => {
+  assert.match(menuFile, /\{ key: "logisticsReview", label: "物流费用审核"/);
+  assert.match(menuFile, /管理员: \["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview"/);
+  assert.match(workspaceShell, /activeMenu === "logisticsReview"/);
+  assert.match(workspaceShell, /title="物流费用审核"/);
+  assert.match(workspaceShell, /initialStatus="待审核"/);
+  assert.match(workspaceShell, /hideCreateAction/);
+  assert.match(logisticsModule, /initialStatus = ""/);
+  assert.match(logisticsModule, /useState\(initialStatus\)/);
 });
 
 test("logistics expense supplier picker only keeps logistics-capable suppliers", () => {
@@ -181,6 +201,64 @@ test("logistics expense list groups bills by BL number and keeps item details", 
   assert.match(logisticsModule, /同步成本状态/);
   assert.match(logisticsModule, /<th>操作<\/th>/);
   assert.doesNotMatch(logisticsModule, /<th>供应商<\/th>/);
+});
+
+test("logistics expense approval works at bill level and groups invoice emails by supplier", () => {
+  assert.match(logisticsReviewRoute, /export async function PATCH/);
+  assert.match(logisticsReviewRoute, /reviewLogisticsExpenseBills\(request, actor, body\)/);
+  assert.match(logisticsReviewRoute, /开票通知已按供应商合并发送/);
+  assert.match(backend, /export async function reviewLogisticsExpenseBills/);
+  assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
+  assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
+  assert.match(backend, /notifyLogisticsSupplierInvoiceBills\(approvedRows\)/);
+  assert.match(backend, /const bySupplier = new Map/);
+  assert.match(backend, /group\.bills\.push\(bill\)/);
+  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: \[email\]/);
+  assert.match(backend, /待开票费用清单/);
+  assert.match(backend, /订单号：/);
+  assert.match(backend, /提单号：/);
+  assert.match(backend, /柜型\/柜量：/);
+  assert.match(backend, /客户简称：/);
+  assert.match(backend, /费用合计：/);
+  assert.match(backend, /费用明细：/);
+  assert.match(backend, /发票上传入口/);
+  assert.match(backend, /invoiceStatus: \["已上传", "已确认"\]\.includes\(row\.invoiceStatus\) \? row\.invoiceStatus : "已通知开票"/);
+  assert.match(backend, /paymentStatus: "待付款"/);
+  assert.match(backend, /reviewedById: actor\.id/);
+  assert.match(backend, /reviewedAt: now/);
+  assert.match(backend, /invoiceNotifiedAt: now/);
+  assert.doesNotMatch(backend, /for \(const bill[\s\S]*notifyLogisticsSupplierInvoice\(bill/);
+});
+
+test("logistics expense page supports single bill review and merged batch review", () => {
+  assert.match(logisticsModule, /selectedBillIds/);
+  assert.match(logisticsModule, /selectedReviewableRows/);
+  assert.match(logisticsModule, /toggleAllReviewableBills/);
+  assert.match(logisticsModule, /reviewSelectedBills/);
+  assert.match(logisticsModule, /\/api\/logistics-costs\/review/);
+  assert.match(logisticsModule, /合并审核 \/ 批量审核/);
+  assert.match(logisticsModule, /同一供应商只发送一封邮件/);
+  assert.match(logisticsModule, /审核通过并通知开票/);
+  assert.match(logisticsModule, /logisticsExpenseBillCanApprove/);
+  assert.match(logisticsModule, /<UiCheckbox[\s\S]*variant="table"[\s\S]*选择本页待审核账单/);
+  assert.match(logisticsModule, /selectionEnabled=\{canReviewExpense\}/);
+  assert.match(workspaceStyles, /\.dataTable th\.selectionColumn/);
+  assert.doesNotMatch(logisticsModule, />通过<\/button>/);
+});
+
+test("draft logistics expense bills can be submitted for review", () => {
+  assert.match(backend, /input\.action === "submit"/);
+  assert.match(backend, /只有草稿或已驳回费用可以提交审核。/);
+  assert.match(backend, /auditStatus: "待审核"/);
+  assert.match(backend, /submittedAt: new Date\(\)/);
+  assert.match(backend, /rejectReason: null/);
+  assert.match(logisticsModule, /submitDraftExpenseBill/);
+  assert.match(logisticsModule, /action: "submit"/);
+  assert.match(logisticsModule, /物流费用已提交审核/);
+  assert.match(logisticsModule, /renderBillSubmitControls/);
+  assert.match(logisticsModule, /提交中\.\.\." : "提交审核"/);
+  assert.match(logisticsModule, /请先保存本账单明细，再提交审核/);
+  assert.match(logisticsModule, /logisticsExpenseBillCanSubmit/);
 });
 
 test("logistics expense form supports positive applied quantity", () => {

@@ -7,9 +7,10 @@ import { DetailField, PaginationBar, SideDetailDrawer, UiCheckbox, UiOptionCard,
 import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
+import type { CompanyProfileSettings } from "../types";
 import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
 
-type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "auditLogs";
+type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "auditLogs";
 
 type SettingsFilters = {
   customers: {
@@ -153,6 +154,20 @@ type CommissionFormulaForm = {
   floorAtZero: boolean;
 };
 
+type CompanyProfileForm = {
+  brandName: string;
+  systemName: string;
+  companyNameZh: string;
+  companyNameEn: string;
+  shortName: string;
+  website: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  logoUrl: string;
+  footerText: string;
+};
+
 type PermissionOption = {
   value: string;
   label: string;
@@ -275,6 +290,7 @@ const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "已停用", value: "DISABLED" },
 ];
 const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }[] = [
+  { key: "companyProfile", label: "公司资料", description: "维护公司名称、系统品牌、联系方式和页面展示文案。" },
   { key: "customers", label: "客户资料", description: "客户简称、国家、币种和负责业务员。" },
   { key: "suppliers", label: "供应商资料", description: "供应商类型、状态和物流相关开关。" },
   { key: "users", label: "用户与权限", description: "用户角色、账号状态和权限模式。" },
@@ -316,8 +332,12 @@ const AUDIT_COLUMNS: TableColumn<AuditLogRow>[] = [
   { key: "ipAddress", label: "IP" },
 ];
 
-export function SettingsModule() {
-  const [activeTab, setActiveTab] = useState<SettingsTabKey>("customers");
+type SettingsModuleProps = {
+  onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
+};
+
+export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = {}) {
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>("companyProfile");
   const [filters, setFilters] = useState<SettingsFilters>({
     customers: { keyword: "" },
     suppliers: { keyword: "", type: "", status: "" },
@@ -329,6 +349,8 @@ export function SettingsModule() {
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
+  const [companyProfileSettings, setCompanyProfileSettings] = useState<CompanyProfileSettings | null>(null);
+  const [companyProfileForm, setCompanyProfileForm] = useState<CompanyProfileForm | null>(null);
   const [exchangeSettings, setExchangeSettings] = useState<ExchangeRateSettings | null>(null);
   const [exchangeForm, setExchangeForm] = useState<ExchangeRateForm | null>(null);
   const [commissionFormulaSettings, setCommissionFormulaSettings] = useState<CommissionFormulaSettings | null>(null);
@@ -337,6 +359,7 @@ export function SettingsModule() {
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
   const [pagination, setPagination] = useState<Record<SettingsTabKey, Pagination>>({
+    companyProfile: emptyPagination(PAGE_SIZE),
     customers: emptyPagination(PAGE_SIZE),
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
@@ -355,6 +378,8 @@ export function SettingsModule() {
   const [userForm, setUserForm] = useState<UserForm | null>(null);
   const [userSaving, setUserSaving] = useState(false);
   const [userMessage, setUserMessage] = useState("");
+  const [companyProfileSaving, setCompanyProfileSaving] = useState(false);
+  const [companyProfileMessage, setCompanyProfileMessage] = useState("");
   const [exchangeSaving, setExchangeSaving] = useState(false);
   const [exchangeRefreshing, setExchangeRefreshing] = useState(false);
   const [exchangeMessage, setExchangeMessage] = useState("");
@@ -386,6 +411,14 @@ export function SettingsModule() {
     setLoading(true);
     setError("");
     try {
+      if (tab === "companyProfile") {
+        const result = await apiJson<{ settings: CompanyProfileSettings }>("/api/settings/company-profile");
+        const settings = result.settings || {};
+        setCompanyProfileSettings(settings);
+        setCompanyProfileForm(companyProfileFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
       if (tab === "exchangeRates") {
         const result = await apiJson<{ settings: ExchangeRateSettings }>("/api/settings/exchange-rates");
         const settings = result.settings || {};
@@ -448,6 +481,7 @@ export function SettingsModule() {
     setSupplierMessage("");
     setUserForm(null);
     setUserMessage("");
+    setCompanyProfileMessage("");
     setExchangeMessage("");
     setCommissionFormulaMessage("");
   }
@@ -728,6 +762,45 @@ export function SettingsModule() {
     }
   }
 
+  async function saveCompanyProfileSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!companyProfileForm) return;
+    if (!companyProfileForm.brandName.trim()) {
+      setCompanyProfileMessage("请填写品牌名称");
+      return;
+    }
+    if (!companyProfileForm.systemName.trim()) {
+      setCompanyProfileMessage("请填写系统名称");
+      return;
+    }
+    if (!companyProfileForm.companyNameZh.trim()) {
+      setCompanyProfileMessage("请填写公司中文名称");
+      return;
+    }
+    setCompanyProfileSaving(true);
+    setCompanyProfileMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: CompanyProfileSettings; message?: string }>(
+        "/api/settings/company-profile",
+        {
+          method: "PATCH",
+          body: JSON.stringify(companyProfileForm),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "公司资料保存失败");
+      const nextSettings = result.settings || companyProfileForm;
+      setCompanyProfileSettings(nextSettings);
+      setCompanyProfileForm(companyProfileFormFromSettings(nextSettings));
+      onCompanyProfileSaved?.(nextSettings);
+      markLoaded("companyProfile");
+      setCompanyProfileMessage(result.message || "公司资料已保存");
+    } catch (saveError) {
+      setCompanyProfileMessage(saveError instanceof Error ? saveError.message : "公司资料保存失败");
+    } finally {
+      setCompanyProfileSaving(false);
+    }
+  }
+
   async function saveExchangeSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!exchangeForm) return;
@@ -816,7 +889,7 @@ export function SettingsModule() {
         ))}
       </div>
 
-      {activeTab !== "exchangeRates" && activeTab !== "commissionFormula" ? (
+      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -921,7 +994,21 @@ export function SettingsModule() {
         />
       ) : null}
 
-      {activeTab === "exchangeRates" ? (
+      {activeTab === "companyProfile" ? (
+        <CompanyProfileSettingsCard
+          settings={companyProfileSettings}
+          form={companyProfileForm}
+          loading={loading && !companyProfileSettings}
+          saving={companyProfileSaving}
+          message={companyProfileMessage}
+          onChange={setCompanyProfileForm}
+          onReset={() => {
+            setCompanyProfileForm(companyProfileFormFromSettings(companyProfileSettings));
+            setCompanyProfileMessage("");
+          }}
+          onSubmit={saveCompanyProfileSettings}
+        />
+      ) : activeTab === "exchangeRates" ? (
         <ExchangeSettingsCard
           settings={exchangeSettings}
           form={exchangeForm}
@@ -1170,6 +1257,107 @@ function SettingsDetailDrawer({
         ))}
       </div>
     </SideDetailDrawer>
+  );
+}
+
+function CompanyProfileSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+}: {
+  settings: CompanyProfileSettings | null;
+  form: CompanyProfileForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: CompanyProfileForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载公司资料</div>;
+  const currentForm = form || companyProfileFormFromSettings(settings);
+
+  function setField<K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  return (
+    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>公司资料 / 系统品牌配置</strong>
+          <span>用于工作台侧边栏、首页欢迎语、页脚版权和后续单公司交付时的品牌信息。</span>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <div className={styles.reportFilterGrid}>
+        <label>
+          品牌名称
+          <input value={currentForm.brandName} onChange={(event) => setField("brandName", event.target.value)} required />
+        </label>
+        <label>
+          系统名称
+          <input value={currentForm.systemName} onChange={(event) => setField("systemName", event.target.value)} required />
+        </label>
+        <label>
+          公司中文名称
+          <input value={currentForm.companyNameZh} onChange={(event) => setField("companyNameZh", event.target.value)} required />
+        </label>
+        <label>
+          公司英文名称
+          <input value={currentForm.companyNameEn} onChange={(event) => setField("companyNameEn", event.target.value)} />
+        </label>
+        <label>
+          公司简称
+          <input value={currentForm.shortName} onChange={(event) => setField("shortName", event.target.value)} />
+        </label>
+        <label>
+          官网地址
+          <input value={currentForm.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://www.example.com" />
+        </label>
+        <label>
+          联系邮箱
+          <input value={currentForm.contactEmail} onChange={(event) => setField("contactEmail", event.target.value)} type="email" />
+        </label>
+        <label>
+          联系电话
+          <input value={currentForm.contactPhone} onChange={(event) => setField("contactPhone", event.target.value)} />
+        </label>
+        <label>
+          Logo 地址
+          <input value={currentForm.logoUrl} onChange={(event) => setField("logoUrl", event.target.value)} placeholder="可为空，支持 http/https 图片地址" />
+        </label>
+        <label>
+          页脚版权文案
+          <input value={currentForm.footerText} onChange={(event) => setField("footerText", event.target.value)} />
+        </label>
+        <label>
+          公司地址
+          <textarea value={currentForm.address} onChange={(event) => setField("address", event.target.value)} rows={3} />
+        </label>
+      </div>
+
+      <div className={styles.emptyState}>
+        当前品牌预览：{currentForm.brandName || "-"} · {currentForm.systemName || "-"} · {currentForm.companyNameZh || "-"}
+      </div>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存公司资料"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
+      </div>
+    </form>
   );
 }
 
@@ -2138,6 +2326,22 @@ function resetFilters(filters: SettingsFilters, tab: SettingsTabKey): SettingsFi
   } as SettingsFilters;
 }
 
+function companyProfileFormFromSettings(settings: CompanyProfileSettings | null): CompanyProfileForm {
+  return {
+    brandName: stringSetting(settings, "brandName", "NEXTWOOD"),
+    systemName: stringSetting(settings, "systemName", "NEXTWOOD 供应链协同平台"),
+    companyNameZh: stringSetting(settings, "companyNameZh", "浙江莱诺建材有限公司"),
+    companyNameEn: optionalStringSetting(settings, "companyNameEn"),
+    shortName: stringSetting(settings, "shortName", "NEXTWOOD"),
+    website: stringSetting(settings, "website", "https://www.nextwood.net"),
+    contactEmail: stringSetting(settings, "contactEmail", ""),
+    contactPhone: stringSetting(settings, "contactPhone", ""),
+    address: stringSetting(settings, "address", ""),
+    logoUrl: stringSetting(settings, "logoUrl", ""),
+    footerText: optionalStringSetting(settings, "footerText"),
+  };
+}
+
 function exchangeFormFromSettings(settings: ExchangeRateSettings | null): ExchangeRateForm {
   return {
     source: stringSetting(settings, "source", "中国银行"),
@@ -2171,9 +2375,14 @@ function commissionFormulaPreview(form: CommissionFormulaForm) {
   return [sourceLabel, ...deductionLabels.map((label) => `- ${label}`)].join(" ");
 }
 
-function stringSetting(settings: ExchangeRateSettings | null, key: string, fallback: string) {
+function stringSetting(settings: Record<string, unknown> | null | undefined, key: string, fallback: string) {
   const value = settings?.[key];
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function optionalStringSetting(settings: Record<string, unknown> | null | undefined, key: string) {
+  const value = settings?.[key];
+  return typeof value === "string" ? value : "";
 }
 
 function userStatus(user: UserRow) {
