@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
 import {
+  amountCny,
   nonEmpty,
   optional,
   permissionError,
@@ -25,6 +26,7 @@ import {
   createOrUpdateCostFromLogisticsExpense,
   includeLogisticsExpenseRelations,
   loadLogisticsExpenseForAction,
+  logisticsExpenseAccessWhere,
   notifyLogisticsSupplierInvoice,
   serializeLogisticsExpense,
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
@@ -142,6 +144,274 @@ export async function updateLogisticsExpense(request, actor, id, input = {}) {
   const saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
   await runNonCriticalTask("物流费用修改日志写入", () => writeAudit(request, actor, "修改物流费用", "logistics_expenses", id, before, saved));
   return serializeLogisticsExpense(saved);
+}
+
+export async function batchUpdateLogisticsExpenses(request, actor, input = {}) {
+  assertCanWriteLogisticsExpense(actor);
+  const items = Array.isArray(input)
+    ? input
+    : (Array.isArray(input.items) ? input.items : (Array.isArray(input.rows) ? input.rows : []));
+  if (!items.length) {
+    throw codedError("请提供需要保存的物流费用明细。", 400, "LOGISTICS_EXPENSE_BATCH_EMPTY");
+  }
+  const prepared = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index] || {};
+    const id = nonEmpty(item.id);
+    if (!id) {
+      throw codedError(`第 ${index + 1} 行保存失败：缺少物流费用ID。`, 400, "LOGISTICS_EXPENSE_BATCH_ID_REQUIRED");
+    }
+    const before = await loadLogisticsExpenseForAction(id, actor);
+    const costType = before.costType || "物流费用";
+    const unitAmount = Number(item.amount);
+    const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
+    if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
+    }
+    if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CONTAINER_COUNT_INVALID");
+    }
+    const blockReason = logisticsExpenseUpdateBlockReason(before);
+    if (blockReason) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
+    }
+    const amount = unitAmount * appliedContainerCount;
+    prepared.push({
+      index,
+      before,
+      data: {
+        amount,
+        amountCny: amountCny(amount, before.exchangeRate || 1),
+        appliedContainerCount,
+        remark: optional(item.remark),
+        updatedById: actor.id,
+      },
+    });
+  }
+  const savedRows = [];
+  for (const item of prepared) {
+    const saved = await prisma.logisticsExpense.update({
+      where: { id: item.before.id },
+      data: item.data,
+      include: includeLogisticsExpenseRelations(),
+    });
+    savedRows.push(saved);
+    await runNonCriticalTask("物流费用批量修改日志写入", () => writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
+  }
+  for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
+    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+  }
+  return savedRows.map(serializeLogisticsExpense);
+}
+
+export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
+  assertCanWriteLogisticsExpense(actor);
+  const updates = Array.isArray(input.updates) ? input.updates : [];
+  const creates = Array.isArray(input.creates) ? input.creates : [];
+  const deletes = Array.isArray(input.deletes) ? input.deletes : [];
+  if (!updates.length && !creates.length && !deletes.length) {
+    throw codedError("请提供需要保存的物流费用明细。", 400, "LOGISTICS_EXPENSE_BATCH_SAVE_EMPTY");
+  }
+  const preparedUpdates = [];
+  const preparedDeletes = [];
+  for (let index = 0; index < updates.length; index += 1) {
+    const item = updates[index] || {};
+    const before = await loadLogisticsExpenseForBatchItem(item.id, actor, index);
+    const data = logisticsExpenseBatchUpdateData(item, before, actor, index);
+    preparedUpdates.push({ before, data });
+  }
+  for (let index = 0; index < deletes.length; index += 1) {
+    const before = await loadLogisticsExpenseForBatchItem(deletes[index], actor, index);
+    const block = logisticsExpenseDeleteBlock(before);
+    if (block) {
+      throw codedError(`第 ${index + 1} 行${before.costType || "物流费用"}删除失败：${block.message}`, 400, block.code);
+    }
+    preparedDeletes.push(before);
+  }
+  const baseExpense = preparedUpdates[0]?.before || preparedDeletes[0] || await loadBatchSaveBaseExpense(input, actor);
+  const order = await assertLogisticsExpenseOrder({ orderId: baseExpense.orderId }, actor);
+  const supplier = await assertLogisticsExpenseSupplier(actor, order, { supplierId: baseExpense.supplierId });
+  const preparedCreates = [];
+  for (let index = 0; index < creates.length; index += 1) {
+    const item = creates[index] || {};
+    const costType = nonEmpty(item.expenseType || item.costType);
+    if (!costType) {
+      throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_COST_TYPE_REQUIRED");
+    }
+    const unitAmount = Number(item.amount);
+    const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
+    if (!nonEmpty(item.amount)) {
+      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
+    }
+    if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_INVALID");
+    }
+    if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_CONTAINER_COUNT_INVALID");
+    }
+    const blockReason = logisticsExpenseUpdateBlockReason(baseExpense);
+    if (blockReason) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_STATUS_BLOCKED");
+    }
+    const amount = unitAmount * appliedContainerCount;
+    const data = await buildLogisticsExpenseData(order, supplier, actor, {
+      costType,
+      amount,
+      appliedContainerCount,
+      currency: baseExpense.currency || "CNY",
+      exchangeRate: baseExpense.exchangeRate || 1,
+      exchangeRateDate: baseExpense.exchangeRateDate,
+      exchangeRateSource: baseExpense.exchangeRateSource,
+      exchangeRateType: baseExpense.exchangeRateType,
+      remark: item.remark,
+      auditStatus: ["草稿", "待审核", "已驳回"].includes(baseExpense.auditStatus) ? baseExpense.auditStatus : "草稿",
+      supplierId: baseExpense.supplierId,
+    });
+    preparedCreates.push({ data });
+  }
+  const savedRows = [];
+  for (const item of preparedUpdates) {
+    const saved = await prisma.logisticsExpense.update({
+      where: { id: item.before.id },
+      data: item.data,
+      include: includeLogisticsExpenseRelations(),
+    });
+    savedRows.push(saved);
+    await runNonCriticalTask("物流费用批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
+  }
+  for (const item of preparedCreates) {
+    const saved = await prisma.logisticsExpense.create({
+      data: item.data,
+      include: includeLogisticsExpenseRelations(),
+    });
+    savedRows.push(saved);
+    await runNonCriticalTask("物流费用批量新增日志写入", () => writeAudit(request, actor, "批量新增物流费用明细", "logistics_expenses", saved.id, null, saved));
+  }
+  const deletedIds = [];
+  for (const before of preparedDeletes) {
+    const saved = await prisma.logisticsExpense.update({
+      where: { id: before.id },
+      data: { deletedAt: new Date(), updatedById: actor.id },
+      include: includeLogisticsExpenseRelations(),
+    });
+    deletedIds.push(before.id);
+    await runNonCriticalTask("物流费用批量删除日志写入", () => writeAudit(request, actor, "批量删除物流费用明细", "logistics_expenses", before.id, before, saved));
+  }
+  const affectedOrderIds = [
+    ...savedRows.map((row) => row.orderId),
+    ...preparedDeletes.map((row) => row.orderId),
+  ].filter(Boolean);
+  for (const orderId of [...new Set(affectedOrderIds)]) {
+    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+  }
+  return {
+    items: savedRows.map(serializeLogisticsExpense),
+    deletedIds,
+  };
+}
+
+export async function deleteLogisticsExpense(request, actor, id) {
+  assertCanWriteLogisticsExpense(actor);
+  const before = await loadLogisticsExpenseForAction(id, actor);
+  const block = logisticsExpenseDeleteBlock(before);
+  if (block) throw codedError(block.message, 400, block.code);
+  const saved = await prisma.logisticsExpense.update({
+    where: { id },
+    data: { deletedAt: new Date(), updatedById: actor.id },
+    include: includeLogisticsExpenseRelations(),
+  });
+  await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, before, saved));
+  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(saved.orderId));
+  return serializeLogisticsExpense(saved);
+}
+
+async function loadLogisticsExpenseForBatchItem(id, actor, index) {
+  const expenseId = nonEmpty(id);
+  if (!expenseId) {
+    throw codedError(`第 ${index + 1} 行保存失败：缺少物流费用ID。`, 400, "LOGISTICS_EXPENSE_BATCH_ID_REQUIRED");
+  }
+  return loadLogisticsExpenseForAction(expenseId, actor);
+}
+
+function logisticsExpenseBatchUpdateData(item, before, actor, index) {
+  const costType = before.costType || "物流费用";
+  if (!nonEmpty(item.amount)) {
+    throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_REQUIRED");
+  }
+  const unitAmount = Number(item.amount);
+  const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
+  if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+    throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
+  }
+  if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
+    throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CONTAINER_COUNT_INVALID");
+  }
+  const blockReason = logisticsExpenseUpdateBlockReason(before);
+  if (blockReason) {
+    throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
+  }
+  const amount = unitAmount * appliedContainerCount;
+  return {
+    amount,
+    amountCny: amountCny(amount, before.exchangeRate || 1),
+    appliedContainerCount,
+    remark: optional(item.remark),
+    updatedById: actor?.id,
+  };
+}
+
+async function loadBatchSaveBaseExpense(input, actor) {
+  const parsed = parseLogisticsExpenseGroupKey(input.groupKey);
+  const orderId = nonEmpty(input.orderId || parsed.orderId);
+  if (!orderId) {
+    throw codedError("新增费用明细缺少账单分组信息。", 400, "LOGISTICS_EXPENSE_BATCH_GROUP_REQUIRED");
+  }
+  const expense = await prisma.logisticsExpense.findFirst({
+    where: {
+      deletedAt: null,
+      orderId,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    include: includeLogisticsExpenseRelations(),
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+  if (!expense) {
+    throw codedError("未找到账单分组，无法新增费用明细。", 404, "LOGISTICS_EXPENSE_BATCH_GROUP_NOT_FOUND");
+  }
+  return expense;
+}
+
+function parseLogisticsExpenseGroupKey(groupKey) {
+  const text = nonEmpty(groupKey);
+  if (!text.startsWith("bill:")) return {};
+  const rest = text.slice(5);
+  const separator = rest.indexOf(":");
+  if (separator < 0) return { orderId: rest };
+  return {
+    orderId: rest.slice(0, separator),
+    billKey: rest.slice(separator + 1),
+  };
+}
+
+function logisticsExpenseUpdateBlockReason(expense) {
+  if (expense.costId) return "该费用已同步到成本，不能修改。";
+  if (expense.auditStatus === "审核通过") return "已审核，不能修改。";
+  if (["已上传", "已确认"].includes(expense.invoiceStatus)) return "已开票，不能修改。";
+  if (["已开票", "待付款", "已付款"].includes(expense.paymentStatus)) return "已付款流程中，不能修改。";
+  if (!["草稿", "待审核", "已驳回"].includes(expense.auditStatus)) return "当前状态不能修改。";
+  return "";
+}
+
+function logisticsExpenseDeleteBlock(expense) {
+  if (expense.costId) return { message: "该费用已同步到成本，请先取消同步后再删除。", code: "LOGISTICS_EXPENSE_SYNCED_COST_DELETE_BLOCKED" };
+  if (expense.auditStatus === "审核通过") return { message: "已审核通过的物流费用不能删除。", code: "LOGISTICS_EXPENSE_APPROVED_DELETE_BLOCKED" };
+  if (["已上传", "已确认"].includes(expense.invoiceStatus) || ["已开票", "待付款", "已付款"].includes(expense.paymentStatus)) {
+    return { message: "已开票或已付款的物流费用不能删除。", code: "LOGISTICS_EXPENSE_INVOICED_DELETE_BLOCKED" };
+  }
+  if (!["草稿", "待审核", "已驳回"].includes(expense.auditStatus)) {
+    return { message: "当前状态的物流费用不能删除。", code: "LOGISTICS_EXPENSE_DELETE_STATUS_BLOCKED" };
+  }
+  return null;
 }
 
 export async function uploadLogisticsExpenseInvoice(request, actor, id, formData) {

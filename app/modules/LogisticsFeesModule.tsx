@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, useConfirmationDialog } from "../components";
-import { formatCny, formatDate, formatDateTime, moneyText } from "../formatters";
+import { formatAmount, formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
@@ -51,6 +51,7 @@ type DocumentLite = {
 type LogisticsExpense = {
   id: string;
   isBill?: boolean;
+  isTemporary?: boolean;
   itemCount?: number;
   items?: LogisticsExpense[];
   orderId?: string;
@@ -71,6 +72,7 @@ type LogisticsExpense = {
   amountCny?: number;
   appliedContainerCount?: number | null;
   containerScope?: string;
+  order?: Partial<ExpenseOrderOption>;
   remark?: string;
   auditStatus?: string;
   invoiceStatus?: string;
@@ -161,10 +163,44 @@ type ExpenseItemForm = {
   remark: string;
 };
 
+type LogisticsExpenseDraft = {
+  costType: string;
+  unitAmount: string;
+  appliedContainerCount: string;
+  remark: string;
+};
+
+type LogisticsExpenseBatchUpdateItem = {
+  id: string;
+  amount: number;
+  appliedContainerCount: number;
+  remark: string;
+};
+
+type LogisticsExpenseBatchCreateItem = {
+  expenseType: string;
+  amount: number;
+  appliedContainerCount: number;
+  remark: string;
+};
+
+type LogisticsExpenseBatchSavePayload = {
+  groupKey: string;
+  orderId?: string;
+  updates: LogisticsExpenseBatchUpdateItem[];
+  creates: LogisticsExpenseBatchCreateItem[];
+  deletes: string[];
+};
+
+type LogisticsExpenseBatchSaveResult = {
+  items: LogisticsExpense[];
+  deletedIds: string[];
+};
+
 const emptyExpenseItem = (): ExpenseItemForm => ({
   costType: "拖车费",
   amount: "",
-  appliedContainerCount: "shipment",
+  appliedContainerCount: "1",
   currency: "CNY",
   exchangeRate: "1",
   remark: "",
@@ -205,6 +241,8 @@ export function LogisticsFeesModule({
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
+  const [savingBillId, setSavingBillId] = useState("");
   const {
     confirmation,
     requestConfirmation,
@@ -299,6 +337,79 @@ export function LogisticsFeesModule({
       setError(actionError instanceof Error ? actionError.message : fallback);
     } finally {
       setBusyId("");
+    }
+  }
+
+  async function saveBillDetails(expense: LogisticsExpense, payload: LogisticsExpenseBatchSavePayload): Promise<LogisticsExpenseBatchSaveResult | null> {
+    if (!payload.updates.length && !payload.creates.length && !payload.deletes.length) {
+      setNotice("没有需要保存的修改");
+      return null;
+    }
+    setBusyId(expense.id);
+    setSavingBillId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; items?: LogisticsExpense[]; rows?: LogisticsExpense[]; deletedIds?: string[]; message?: string }>("/api/logistics-expenses/batch-save", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      if (result.success !== true) throw new Error(result.message || "保存本账单明细失败");
+      const savedRows = Array.isArray(result.items) ? result.items : (Array.isArray(result.rows) ? result.rows : []);
+      const deletedIds = Array.isArray(result.deletedIds) ? result.deletedIds : payload.deletes;
+      const reconciliation = reconcileLogisticsExpenseRowsAfterBatchSave(rows, expense.id, savedRows, deletedIds);
+      setRows(reconciliation.rows);
+      if (reconciliation.removedBill) setTotal((current) => Math.max(0, current - 1));
+      await loadStatement(statementMonth);
+      setNotice(result.message || "✓ 已保存");
+      return { items: savedRows, deletedIds };
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "保存本账单明细失败");
+      return null;
+    } finally {
+      setBusyId("");
+      setSavingBillId("");
+    }
+  }
+
+  async function deleteExpense(expense: LogisticsExpense) {
+    const blockReason = logisticsExpenseDeleteBlockReason(expense);
+    if (blockReason) {
+      setError(blockReason);
+      setNotice("");
+      return;
+    }
+    const confirmationResult = await requestConfirmation({
+      title: "删除物流费用明细",
+      message: "确定删除这条费用明细吗？删除后不可恢复。",
+      details: [
+        `订单：${expense.orderNo || "-"}`,
+        `费用：${expense.costType || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`,
+      ],
+      confirmLabel: "确认删除",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
+    setBusyId(expense.id);
+    setDeletingId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-expenses/${encodeURIComponent(expense.id)}`, {
+        method: "DELETE",
+      });
+      if (result.success !== true) throw new Error(result.message || "删除物流费用明细失败");
+      const removal = removeLogisticsExpenseFromRows(rows, expense.id);
+      setRows(removal.rows);
+      if (removal.removedBill) setTotal((current) => Math.max(0, current - 1));
+      await loadStatement(statementMonth);
+      setNotice("已删除");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除物流费用明细失败");
+    } finally {
+      setBusyId("");
+      setDeletingId("");
     }
   }
 
@@ -548,14 +659,23 @@ export function LogisticsFeesModule({
                 expense={expense}
                 expanded={expandedId === expense.id}
                 busyId={busyId}
+                deletingId={deletingId}
+                saving={savingBillId === expense.id}
                 onToggle={() => setExpandedId((current) => current === expense.id ? "" : expense.id)}
                 canReview={canReviewExpense}
                 canConfirmInvoice={canConfirmInvoice}
                 canWithdraw={isLogisticsSupplier}
+                canEditAmount={isLogisticsSupplier}
+                canDeleteExpense={canCreateExpense}
                 canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
                 onApprove={(item) => void patchExpense(item, { action: "approve" }, "审核物流费用失败")}
                 onReject={(item) => void rejectExpense(item)}
                 onWithdraw={(item) => void withdrawExpense(item)}
+                onSaveDetails={(payload) => saveBillDetails(expense, payload)}
+                onValidationError={(message) => {
+                  setError(message);
+                  setNotice("");
+                }}
                 onMarkPaid={(item) => void patchExpense(item, { action: "paymentStatus", paymentStatus: "已付款" }, "更新付款状态失败")}
                 onConfirmInvoice={(item) => void confirmExpenseInvoice(item)}
                 onInvoiceUploaded={() => {
@@ -592,29 +712,41 @@ function LogisticsExpenseRows({
   expense,
   expanded,
   busyId,
+  deletingId,
+  saving,
   onToggle,
   onApprove,
   onReject,
   onWithdraw,
+  onSaveDetails,
+  onValidationError,
   onMarkPaid,
   onConfirmInvoice,
   onInvoiceUploaded,
   canReview,
   canConfirmInvoice,
   canWithdraw,
+  canEditAmount,
+  canDeleteExpense,
   canShowSupplier,
 }: {
   expense: LogisticsExpense;
   expanded: boolean;
   busyId: string;
+  deletingId: string;
+  saving: boolean;
   onToggle: () => void;
   canReview: boolean;
   canConfirmInvoice: boolean;
   canWithdraw: boolean;
+  canEditAmount: boolean;
+  canDeleteExpense: boolean;
   canShowSupplier: boolean;
   onApprove: (expense: LogisticsExpense) => void;
   onReject: (expense: LogisticsExpense) => void;
   onWithdraw: (expense: LogisticsExpense) => void;
+  onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
+  onValidationError: (message: string) => void;
   onMarkPaid: (expense: LogisticsExpense) => void;
   onConfirmInvoice: (expense: LogisticsExpense) => void;
   onInvoiceUploaded: () => void;
@@ -624,6 +756,124 @@ function LogisticsExpenseRows({
   const paymentStatus = expense.paymentStatus || "待开票";
   const items = expense.items?.length ? expense.items : [expense];
   const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
+  const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
+  const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
+  const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
+  const [deletedExpenseIds, setDeletedExpenseIds] = useState<string[]>([]);
+  const [billSaved, setBillSaved] = useState(false);
+  useEffect(() => {
+    setDrafts(logisticsExpenseDraftsFromItems(items));
+    setNewExpenseRows([]);
+    setDeletedExpenseIds([]);
+  }, [itemsSignature]);
+  const persistedEditingRows = items.filter((item) => !deletedExpenseIds.includes(item.id));
+  const editingExpenseRows = [...persistedEditingRows, ...newExpenseRows];
+  const changedItems = persistedEditingRows.filter((item) => logisticsExpenseDraftChanged(item, drafts[item.id]));
+  const hasDirtyChanges = changedItems.length > 0;
+  const hasPendingCreates = newExpenseRows.length > 0;
+  const hasPendingDeletes = deletedExpenseIds.length > 0;
+  const hasPendingChanges = hasDirtyChanges || hasPendingCreates || hasPendingDeletes;
+  const editedBillTotalCny = editingExpenseRows.reduce((sum, item) => sum + logisticsExpenseDraftAmountCny(item, drafts[item.id]), 0);
+
+  function updateDraft(id: string, field: keyof LogisticsExpenseDraft, value: string) {
+    setBillSaved(false);
+    setDrafts((current) => ({
+      ...current,
+      [id]: {
+        ...(current[id] || logisticsExpenseDraftFromItem(items.find((item) => item.id === id) || ({ id } as LogisticsExpense))),
+        [field]: value,
+      },
+    }));
+  }
+
+  function addExpenseDetailRow() {
+    const temporaryRow = createTemporaryLogisticsExpenseRow(expense, items, newExpenseRows.length);
+    setNewExpenseRows((current) => [...current, temporaryRow]);
+    setDrafts((current) => ({
+      ...current,
+      [temporaryRow.id]: logisticsExpenseDraftFromItem(temporaryRow),
+    }));
+    setBillSaved(false);
+  }
+
+  function stageDeleteExpenseDetail(row: LogisticsExpense) {
+    if (row.isTemporary) {
+      setNewExpenseRows((current) => current.filter((item) => item.id !== row.id));
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[row.id];
+        return next;
+      });
+      setBillSaved(false);
+      return;
+    }
+    const blockReason = logisticsExpenseDeleteBlockReason(row);
+    if (blockReason) {
+      onValidationError(blockReason);
+      return;
+    }
+    setDeletedExpenseIds((current) => current.includes(row.id) ? current : [...current, row.id]);
+    setBillSaved(false);
+  }
+
+  async function handleSaveBillDetails() {
+    const invalidIndex = editingExpenseRows.findIndex((item) => {
+      const draft = drafts[item.id];
+      return (item.isTemporary || logisticsExpenseDraftChanged(item, draft)) && !validLogisticsExpenseDraft(draft, item.isTemporary);
+    });
+    if (invalidIndex >= 0) {
+      const item = editingExpenseRows[invalidIndex];
+      const validationMessage = logisticsExpenseDraftValidationMessage(item, drafts[item.id], invalidIndex);
+      onValidationError(validationMessage);
+      return;
+    }
+    const payload: LogisticsExpenseBatchSavePayload = {
+      groupKey: expense.id,
+      orderId: expense.orderId,
+      updates: changedItems.map((item) => logisticsExpenseDraftPayload(item, drafts[item.id])),
+      creates: newExpenseRows.map((item) => logisticsExpenseDraftCreatePayload(item, drafts[item.id])),
+      deletes: deletedExpenseIds,
+    };
+    const saved = await onSaveDetails(payload);
+    if (saved) {
+      setNewExpenseRows([]);
+      setDeletedExpenseIds([]);
+      setBillSaved(true);
+    }
+  }
+
+  function renderBillSaveControls() {
+    if (!canEditAmount) return null;
+    return (
+      <>
+        <span className={`${styles.saveStateBadge} ${hasPendingChanges ? styles.saveStateDirty : (billSaved ? styles.saveStateSaved : "")}`}>
+          {hasPendingChanges ? "● 有未保存修改" : (billSaved ? "✓ 已保存" : "")}
+        </span>
+        <button
+          className={styles.billAddLineButton}
+          type="button"
+          disabled={saving}
+          onClick={(event) => {
+            event.stopPropagation();
+            addExpenseDetailRow();
+          }}
+        >
+          + 新增费用明细
+        </button>
+        <button
+          className={styles.billSaveButton}
+          type="button"
+          disabled={!hasPendingChanges || saving}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleSaveBillDetails();
+          }}
+        >
+          {saving ? "保存中..." : "保存本账单明细"}
+        </button>
+      </>
+    );
+  }
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
@@ -641,34 +891,45 @@ function LogisticsExpenseRows({
       {expanded ? (
         <tr className={styles.detailRow}>
           <td colSpan={8}>
-            <div className={styles.detailCard} onClick={(event) => event.stopPropagation()}>
-              <div className={styles.detailGrid}>
-                <DetailField label="客户全称" value={customerLegalName(expense)} wide />
-                <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
-                <DetailField label="费用明细" value={`${items.length} 项`} />
-                <DetailField label="账单合计" value={formatCny(expense.amountCny || 0)} />
-                <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} wide hidden={!canShowSupplier} />
+            <div className={styles.logisticsBillDetail} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.logisticsBillSummary}>
+                <div className={styles.logisticsBillSummaryMeta}>
+                  <span><strong>客户全称</strong>{customerLegalName(expense)}</span>
+                  <span><strong>提单号</strong>{expense.blNo || expense.billOfLadingNo || "-"}</span>
+                  <span><strong>费用明细</strong>{editingExpenseRows.length} 项</span>
+                  <span><strong>账单合计</strong>{formatCny(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
+                  {canShowSupplier && supplierNames.length ? (
+                    <span><strong>供应商</strong>{supplierNames.join(" / ")}</span>
+                  ) : null}
+                </div>
+                <div className={styles.logisticsBillSummaryActions}>
+                  {renderBillSaveControls()}
+                </div>
               </div>
-              <div className={styles.subList}>
-                {items.map((item, index) => (
-                  <LogisticsExpenseItemDetail
-                    key={item.id || `${expense.id}-${index}`}
-                    expense={item}
-                    index={index}
-                    busy={busyId === item.id}
-                    canReview={canReview}
-                    canConfirmInvoice={canConfirmInvoice}
-                    canWithdraw={canWithdraw}
-                    canShowSupplier={canShowSupplier}
-                    onApprove={() => onApprove(item)}
-                    onReject={() => onReject(item)}
-                    onWithdraw={() => onWithdraw(item)}
-                    onMarkPaid={() => onMarkPaid(item)}
-                    onConfirmInvoice={() => onConfirmInvoice(item)}
-                    onInvoiceUploaded={onInvoiceUploaded}
-                  />
-                ))}
-              </div>
+              <LogisticsExpenseDetailsTable
+                items={editingExpenseRows}
+                drafts={drafts}
+                busyId={busyId}
+                deletingId={deletingId}
+                canReview={canReview}
+                canConfirmInvoice={canConfirmInvoice}
+                canWithdraw={canWithdraw}
+                canEditAmount={canEditAmount}
+                canDeleteExpense={canDeleteExpense}
+                onApprove={onApprove}
+                onReject={onReject}
+                onWithdraw={onWithdraw}
+                onDraftChange={updateDraft}
+                onStageDelete={stageDeleteExpenseDetail}
+                onMarkPaid={onMarkPaid}
+                onConfirmInvoice={onConfirmInvoice}
+                onInvoiceUploaded={onInvoiceUploaded}
+              />
+              {canEditAmount ? (
+                <div className={styles.logisticsBillDetailFooter}>
+                  {renderBillSaveControls()}
+                </div>
+              ) : null}
             </div>
           </td>
         </tr>
@@ -677,96 +938,250 @@ function LogisticsExpenseRows({
   );
 }
 
-function LogisticsExpenseItemDetail({
-  expense,
-  index,
-  busy,
+function LogisticsExpenseDetailsTable({
+  items,
+  drafts,
+  busyId,
+  deletingId,
   canReview,
   canConfirmInvoice,
   canWithdraw,
-  canShowSupplier,
+  canEditAmount,
+  canDeleteExpense,
   onApprove,
   onReject,
   onWithdraw,
+  onDraftChange,
+  onStageDelete,
+  onMarkPaid,
+  onConfirmInvoice,
+  onInvoiceUploaded,
+}: {
+  items: LogisticsExpense[];
+  drafts: Record<string, LogisticsExpenseDraft>;
+  busyId: string;
+  deletingId: string;
+  canReview: boolean;
+  canConfirmInvoice: boolean;
+  canWithdraw: boolean;
+  canEditAmount: boolean;
+  canDeleteExpense: boolean;
+  onApprove: (expense: LogisticsExpense) => void;
+  onReject: (expense: LogisticsExpense) => void;
+  onWithdraw: (expense: LogisticsExpense) => void;
+  onDraftChange: (id: string, field: keyof LogisticsExpenseDraft, value: string) => void;
+  onStageDelete: (expense: LogisticsExpense) => void;
+  onMarkPaid: (expense: LogisticsExpense) => void;
+  onConfirmInvoice: (expense: LogisticsExpense) => void;
+  onInvoiceUploaded: () => void;
+}) {
+  return (
+    <div className={styles.logisticsDetailTableWrap}>
+      <table className={styles.logisticsDetailTable}>
+        <thead>
+          <tr>
+            <th>序号</th>
+            <th>费用类型</th>
+            <th>适用数量</th>
+            <th className={styles.numericCell}>金额</th>
+            <th className={styles.numericCell}>折人民币</th>
+            <th>备注</th>
+            <th>同步成本状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((expense, index) => (
+            <LogisticsExpenseDetailLine
+              key={expense.id || `${expense.orderId || "expense"}-${index}`}
+              expense={expense}
+              draft={drafts[expense.id] || logisticsExpenseDraftFromItem(expense)}
+              index={index}
+              busy={busyId === expense.id}
+              deleting={deletingId === expense.id}
+              canReview={canReview}
+              canConfirmInvoice={canConfirmInvoice}
+              canWithdraw={canWithdraw}
+              canEditAmount={canEditAmount}
+              canDeleteExpense={canDeleteExpense}
+              onApprove={onApprove}
+              onReject={onReject}
+              onWithdraw={onWithdraw}
+              onDraftChange={onDraftChange}
+              onStageDelete={onStageDelete}
+              onMarkPaid={onMarkPaid}
+              onConfirmInvoice={onConfirmInvoice}
+              onInvoiceUploaded={onInvoiceUploaded}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LogisticsExpenseDetailLine({
+  expense,
+  draft,
+  index,
+  busy,
+  deleting,
+  canReview,
+  canConfirmInvoice,
+  canWithdraw,
+  canEditAmount,
+  canDeleteExpense,
+  onApprove,
+  onReject,
+  onWithdraw,
+  onDraftChange,
+  onStageDelete,
   onMarkPaid,
   onConfirmInvoice,
   onInvoiceUploaded,
 }: {
   expense: LogisticsExpense;
+  draft: LogisticsExpenseDraft;
   index: number;
   busy: boolean;
+  deleting: boolean;
   canReview: boolean;
   canConfirmInvoice: boolean;
   canWithdraw: boolean;
-  canShowSupplier: boolean;
-  onApprove: () => void;
-  onReject: () => void;
-  onWithdraw: () => void;
-  onMarkPaid: () => void;
-  onConfirmInvoice: () => void;
+  canEditAmount: boolean;
+  canDeleteExpense: boolean;
+  onApprove: (expense: LogisticsExpense) => void;
+  onReject: (expense: LogisticsExpense) => void;
+  onWithdraw: (expense: LogisticsExpense) => void;
+  onDraftChange: (id: string, field: keyof LogisticsExpenseDraft, value: string) => void;
+  onStageDelete: (expense: LogisticsExpense) => void;
+  onMarkPaid: (expense: LogisticsExpense) => void;
+  onConfirmInvoice: (expense: LogisticsExpense) => void;
   onInvoiceUploaded: () => void;
 }) {
   const auditStatus = expense.auditStatus || "草稿";
   const invoiceStatus = expense.invoiceStatus || "未通知";
   const paymentStatus = expense.paymentStatus || "待开票";
+  const editBlockReason = logisticsExpenseEditBlockReason(expense);
+  const canEditThisAmount = canEditAmount && !editBlockReason;
+  const shouldRenderRemarkInput = canEditAmount || auditStatus === "审核通过";
+  const editedSubtotal = editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount);
+  const editedAmountCny = editedSubtotal * Number(expense.exchangeRate || 1);
   const canUploadInvoice = auditStatus === "审核通过" && ["未通知", "已通知开票"].includes(invoiceStatus);
+  const deleteBlockReason = logisticsExpenseDeleteBlockReason(expense);
   return (
-    <div className={styles.subListItem}>
-      <div className={styles.quickCreateHeader}>
-        <div>
-          <strong>明细 {index + 1} · {expense.costType || "-"}</strong>
-          <span>{expense.containerScope || "整票"} ｜ {moneyText(expense.currency, expense.amount, expense.amountCny)}</span>
+    <tr>
+      <td className={styles.indexCell}>{index + 1}</td>
+      <td>
+        {expense.isTemporary ? (
+          <select
+            className={styles.inlineCostTypeSelect}
+            value={draft.costType}
+            onChange={(event) => onDraftChange(expense.id, "costType", event.target.value)}
+            aria-label="费用类型"
+          >
+            {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+        ) : (
+          expense.costType || "-"
+        )}
+      </td>
+      <td>
+        {canEditThisAmount ? (
+          <input
+            className={styles.inlineQuantityInput}
+            type="number"
+            min="1"
+            step="1"
+            value={draft.appliedContainerCount}
+            onChange={(event) => onDraftChange(expense.id, "appliedContainerCount", event.target.value)}
+            aria-label="适用数量"
+          />
+        ) : (
+          editableQuantityText(expense.appliedContainerCount)
+        )}
+      </td>
+      <td className={styles.numericCell}>
+        {canEditThisAmount ? (
+          <div className={styles.inlineAmountEditor}>
+            <input
+              value={draft.unitAmount}
+              onChange={(event) => onDraftChange(expense.id, "unitAmount", event.target.value)}
+              inputMode="decimal"
+              aria-label="物流费用单价"
+            />
+            <span>{expense.currency || "CNY"}</span>
+          </div>
+        ) : (
+          expenseAmountText(expense)
+        )}
+      </td>
+      <td className={styles.numericCell}>{formatCny(canEditThisAmount ? editedAmountCny : (expense.amountCny || 0))}</td>
+      <td className={styles.remarkCell} title={draft.remark || expense.remark || ""}>
+        {shouldRenderRemarkInput ? (
+          <div className={styles.inlineRemarkCell}>
+            <input
+              className={styles.inlineRemarkInput}
+              value={draft.remark}
+              onChange={(event) => onDraftChange(expense.id, "remark", event.target.value)}
+              disabled={!canEditThisAmount}
+              placeholder="-"
+              aria-label="物流费用备注"
+            />
+            {!canEditThisAmount && editBlockReason ? (
+              <span className={styles.inlineEditHint}>{editBlockReason}</span>
+            ) : null}
+          </div>
+        ) : (
+          expense.remark || "-"
+        )}
+      </td>
+      <td>
+        <div className={styles.costSyncCell}>
+          <span>{expenseCostSyncText(expense)}</span>
         </div>
-        <div className={styles.detailActions}>
-          <StatusPill value={auditStatus} />
-          <StatusPill value={invoiceStatus} />
-          <StatusPill value={paymentStatus} />
+      </td>
+      <td>
+        <div className={styles.compactDetailActions}>
+          {auditStatus === "待审核" && canReview ? (
+            <>
+              <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={() => onApprove(expense)}>{busy ? "处理中" : "通过"}</button>
+              <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => onReject(expense)}>驳回</button>
+            </>
+          ) : null}
+          {auditStatus === "待审核" && canWithdraw ? (
+            <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => onWithdraw(expense)}>撤回</button>
+          ) : null}
+          {invoiceStatus === "已上传" && canConfirmInvoice ? (
+            <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => onConfirmInvoice(expense)}>
+              {busy ? "处理中" : "确认发票"}
+            </button>
+          ) : null}
+          {invoiceStatus === "已确认" && canConfirmInvoice ? (
+            <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={() => onMarkPaid(expense)}>
+              {paymentStatus === "已付款" ? "已付款" : "标记付款"}
+            </button>
+          ) : null}
+          {canUploadInvoice ? (
+            <div className={styles.compactInvoiceUpload}>
+              <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} />
+            </div>
+          ) : null}
+          <button
+            className={styles.logisticsLineDeleteButton}
+            type="button"
+            disabled={!canDeleteExpense || busy || deleting || (!expense.isTemporary && Boolean(deleteBlockReason))}
+            title={!canDeleteExpense ? "无权限删除该费用明细" : (deleteBlockReason || "删除这条费用明细")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onStageDelete(expense);
+            }}
+          >
+            {deleting ? "删除中..." : (expense.isTemporary ? "移除" : "删除")}
+          </button>
         </div>
-      </div>
-      <div className={styles.detailActions}>
-        {auditStatus === "待审核" && canReview ? (
-          <>
-            <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={onApprove}>{busy ? "处理中..." : "审核通过"}</button>
-            <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onReject}>驳回</button>
-          </>
-        ) : null}
-        {auditStatus === "待审核" && canWithdraw ? (
-          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onWithdraw}>撤回</button>
-        ) : null}
-        {invoiceStatus === "已上传" && canConfirmInvoice ? (
-          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={onConfirmInvoice}>
-            {busy ? "处理中..." : "确认发票"}
-          </button>
-        ) : null}
-        {invoiceStatus === "已确认" && canConfirmInvoice ? (
-          <button className={styles.secondaryButton} type="button" disabled={busy || paymentStatus === "已付款"} onClick={onMarkPaid}>
-            {paymentStatus === "已付款" ? "已付款" : "标记已付款"}
-          </button>
-        ) : null}
-        {canUploadInvoice ? <InvoiceUploadForm expense={expense} onUploaded={onInvoiceUploaded} /> : null}
-        {auditStatus === "草稿" || auditStatus === "已驳回" ? (
-          <span className={styles.mutedText}>草稿或驳回记录可由录入人重新提交。</span>
-        ) : null}
-      </div>
-      <div className={styles.detailGrid}>
-        <DetailField label="供应商" value={expense.supplierName || "-"} hidden={!canShowSupplier} />
-        <DetailField label="费用类型" value={expense.costType || "-"} />
-        <DetailField label="适用范围" value={expense.containerScope || "整票"} />
-        <DetailField label="费用金额" value={moneyText(expense.currency, expense.amount, expense.amountCny)} />
-        <DetailField label="折人民币" value={formatCny(expense.amountCny || 0)} />
-        <DetailField label="币种 / 汇率" value={`${expense.currency || "CNY"} / ${Number(expense.exchangeRate || 1).toFixed(4)}`} />
-        <DetailField label="审核人 / 时间" value={`${expense.reviewedBy?.name || "-"} / ${formatDateTime(expense.reviewedAt)}`} />
-        <DetailField label="提交时间" value={formatDateTime(expense.submittedAt)} />
-        <DetailField label="生成成本" value={expense.costId ? "已同步到成本管理" : "未同步"} />
-        <DetailField label="发票号码" value={expense.invoiceNo || "-"} />
-        <DetailField label="开票日期" value={formatDate(expense.invoiceDate)} />
-        <DetailField label="发票金额" value={expense.invoiceAmount ? formatCny(expense.invoiceAmount) : "-"} />
-        <DetailField label="发票文件" value={expense.invoiceDocument?.fileName || expense.invoiceDocument?.originalFilename || "-"} wide />
-        <DetailField label="驳回原因" value={expense.rejectReason || "-"} wide />
-        <DetailField label="审核备注" value={expense.reviewRemark || "-"} wide />
-        <DetailField label="备注" value={expense.remark || "-"} wide />
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -923,7 +1338,7 @@ export function LogisticsExpenseForm({
     const normalizedItems = form.items.map((item) => ({
       costType: item.costType,
       amount: lineSubtotal(item),
-      appliedContainerCount: item.appliedContainerCount === "shipment" ? null : Number(item.appliedContainerCount),
+      appliedContainerCount: Number(item.appliedContainerCount || 1),
       currency: item.currency,
       exchangeRate: Number(item.exchangeRate),
       remark: item.remark.trim(),
@@ -935,10 +1350,11 @@ export function LogisticsExpenseForm({
       || !item.currency
       || !item.exchangeRate
       || item.exchangeRate <= 0
-      || (item.appliedContainerCount !== null && (!Number.isInteger(item.appliedContainerCount) || item.appliedContainerCount <= 0))
+      || !Number.isInteger(item.appliedContainerCount)
+      || item.appliedContainerCount <= 0
     ));
     if (invalidIndex >= 0) {
-      setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、金额、币种和汇率`);
+      setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、单价、适用数量、币种和汇率`);
       return;
     }
     setSaving(true);
@@ -981,7 +1397,6 @@ export function LogisticsExpenseForm({
     ? selectedSupplier.allowedLogisticsCostTypes.join(" / ")
     : "";
   const costTypeOptions = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
-  const containerOptions = containerCountOptions(selectedOrder);
   const totalAmountCny = form.items.reduce((sum, item) => sum + (lineSubtotal(item) * Number(item.exchangeRate || 0)), 0);
 
   return (
@@ -1074,8 +1489,8 @@ export function LogisticsExpenseForm({
         <div className={styles.logisticsItemsTable}>
           <div className={styles.logisticsItemsHead}>
             <span>费用类型</span>
-            <span>适用范围</span>
-            <span>单价/整票</span>
+            <span>适用数量</span>
+            <span>单价</span>
             <span>币种</span>
             <span>汇率</span>
             <span>小计</span>
@@ -1087,9 +1502,15 @@ export function LogisticsExpenseForm({
               <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
                 {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
-              <select value={item.appliedContainerCount} onChange={(event) => setItemField(index, "appliedContainerCount", event.target.value)}>
-                {containerOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              <input
+                value={item.appliedContainerCount}
+                onChange={(event) => setItemField(index, "appliedContainerCount", event.target.value)}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                required
+              />
               <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
               <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
                 {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
@@ -1260,17 +1681,8 @@ function normalizeExpenseItemCostType(item: ExpenseItemForm, options: string[]) 
 
 function lineSubtotal(item: ExpenseItemForm) {
   const unitPrice = Number(item.amount || 0);
-  const count = item.appliedContainerCount === "shipment" ? 1 : Number(item.appliedContainerCount || 1);
+  const count = Number(item.appliedContainerCount || 1);
   return unitPrice * (Number.isFinite(count) && count > 0 ? count : 1);
-}
-
-function containerCountOptions(order?: ExpenseOrderOption | null) {
-  const count = Number(order?.containerCount || 0);
-  const options = [{ value: "shipment", label: "整票" }];
-  for (let index = 1; index <= count; index += 1) {
-    options.push({ value: String(index), label: `${index} 个柜` });
-  }
-  return options;
 }
 
 function containerSummaryText(order?: ExpenseOrderOption | null) {
@@ -1280,9 +1692,309 @@ function containerSummaryText(order?: ExpenseOrderOption | null) {
   return `${count} 个柜${nos}`;
 }
 
+function expenseAmountText(expense: LogisticsExpense) {
+  const currency = expense.currency || "CNY";
+  if (currency === "CNY") return formatCny(expense.amount || expense.amountCny || 0);
+  return `${currency} ${formatAmount(expense.amount || 0)}`;
+}
+
+function expenseUnitAmount(expense: LogisticsExpense) {
+  const count = Number(expense.appliedContainerCount || 1);
+  const divisor = Number.isFinite(count) && count > 0 ? count : 1;
+  return Number(expense.amount || 0) / divisor;
+}
+
+function logisticsExpenseDraftFromItem(expense: Partial<LogisticsExpense>): LogisticsExpenseDraft {
+  return {
+    costType: expense.costType || "拖车费",
+    unitAmount: editableNumberText(expenseUnitAmount(expense as LogisticsExpense)),
+    appliedContainerCount: editableQuantityText(expense.appliedContainerCount),
+    remark: expense.remark || "",
+  };
+}
+
+function logisticsExpenseDraftsFromItems(items: LogisticsExpense[]) {
+  return items.reduce<Record<string, LogisticsExpenseDraft>>((acc, item) => {
+    if (item.id) acc[item.id] = logisticsExpenseDraftFromItem(item);
+    return acc;
+  }, {});
+}
+
+function logisticsExpenseDraftSignature(expense: LogisticsExpense) {
+  return [
+    expense.id,
+    expense.costType || "",
+    expense.amount || 0,
+    expense.amountCny || 0,
+    expense.appliedContainerCount || 1,
+    expense.exchangeRate || 1,
+    expense.remark || "",
+  ].join(":");
+}
+
+function logisticsExpenseDraftChanged(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
+  if (!draft) return false;
+  const initial = logisticsExpenseDraftFromItem(expense);
+  return draft.costType !== initial.costType
+    || draft.unitAmount.trim() !== initial.unitAmount
+    || draft.appliedContainerCount !== initial.appliedContainerCount
+    || draft.remark !== initial.remark;
+}
+
+function validLogisticsExpenseDraft(draft?: LogisticsExpenseDraft, isCreate = false) {
+  if (!draft) return false;
+  if (!draft.costType || !COST_TYPES.includes(draft.costType)) return false;
+  if (!draft.unitAmount.trim()) return false;
+  const unitAmount = Number(draft.unitAmount);
+  const count = Number(draft.appliedContainerCount);
+  return Number.isFinite(unitAmount) && (isCreate ? unitAmount > 0 : unitAmount >= 0) && Number.isInteger(count) && count > 0;
+}
+
+function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchUpdateItem {
+  const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
+  return {
+    id: expense.id,
+    amount: Number(safeDraft.unitAmount),
+    appliedContainerCount: Number(safeDraft.appliedContainerCount),
+    remark: safeDraft.remark.trim(),
+  };
+}
+
+function logisticsExpenseDraftCreatePayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchCreateItem {
+  const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
+  return {
+    expenseType: safeDraft.costType,
+    amount: Number(safeDraft.unitAmount),
+    appliedContainerCount: Number(safeDraft.appliedContainerCount),
+    remark: safeDraft.remark.trim(),
+  };
+}
+
+function logisticsExpenseDraftValidationMessage(expense: LogisticsExpense, draft: LogisticsExpenseDraft | undefined, index: number) {
+  const lineNo = index + 1;
+  if (!draft?.costType || !COST_TYPES.includes(draft.costType)) return `第 ${lineNo} 行请选择费用类型`;
+  if (!draft.unitAmount.trim()) return `第 ${lineNo} 行金额不能为空`;
+  const unitAmount = Number(draft.unitAmount);
+  if (!Number.isFinite(unitAmount) || unitAmount < 0) return `第 ${lineNo} 行金额必须大于或等于 0`;
+  if (expense.isTemporary && unitAmount <= 0) return `第 ${lineNo} 行金额必须大于 0`;
+  const count = Number(draft.appliedContainerCount);
+  if (!Number.isInteger(count) || count <= 0) return `第 ${lineNo} 行适用数量必须为正整数`;
+  return `第 ${lineNo} 行填写不完整`;
+}
+
+function logisticsExpenseDraftAmountCny(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
+  if (!draft || (!validLogisticsExpenseDraft(draft, expense.isTemporary) && !draft.unitAmount.trim())) return Number(expense.amountCny || 0);
+  return editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount) * Number(expense.exchangeRate || 1);
+}
+
+function editableNumberText(value: unknown) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return "";
+  const rounded = Math.round(numeric * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function editableQuantityText(value: unknown) {
+  const numeric = Number(value || 1);
+  return Number.isInteger(numeric) && numeric > 0 ? String(numeric) : "1";
+}
+
+function editableLineSubtotal(unitAmount: string, appliedContainerCount: string) {
+  const unitPrice = Number(unitAmount || 0);
+  const count = Number(appliedContainerCount || 1);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) return 0;
+  return unitPrice * (Number.isFinite(count) && count > 0 ? count : 1);
+}
+
+function createTemporaryLogisticsExpenseRow(expense: LogisticsExpense, items: LogisticsExpense[], index: number): LogisticsExpense {
+  const base = items[0] || expense;
+  const now = Date.now();
+  return {
+    id: `temp:${expense.id}:${now}:${index}`,
+    isTemporary: true,
+    orderId: expense.orderId || base.orderId,
+    orderNo: expense.orderNo || base.orderNo,
+    blNo: expense.blNo || expense.billOfLadingNo || base.blNo || base.billOfLadingNo,
+    billOfLadingNo: expense.billOfLadingNo || expense.blNo || base.billOfLadingNo || base.blNo,
+    customerName: expense.customerName || base.customerName,
+    customerShortName: expense.customerShortName || base.customerShortName,
+    supplierId: base.supplierId,
+    supplierName: base.supplierName,
+    costType: "拖车费",
+    currency: base.currency || "CNY",
+    exchangeRate: Number(base.exchangeRate || 1),
+    amount: 0,
+    amountCny: 0,
+    appliedContainerCount: 1,
+    remark: "",
+    auditStatus: ["草稿", "待审核", "已驳回"].includes(base.auditStatus || "") ? base.auditStatus : "草稿",
+    invoiceStatus: "未通知",
+    paymentStatus: "待开票",
+    order: expense.order || base.order,
+  };
+}
+
+function aggregateClientLogisticsExpenseStatus(items: LogisticsExpense[], field: keyof LogisticsExpense) {
+  const unique = [...new Set(items.map((item) => item[field]).filter(Boolean).map(String))];
+  if (!unique.length) return "-";
+  if (unique.length === 1) return unique[0];
+  if (field === "auditStatus") {
+    if (unique.includes("草稿")) return "部分草稿";
+    if (unique.includes("待审核")) return "部分待审核";
+    if (unique.includes("已驳回")) return "部分驳回";
+    if (unique.includes("审核通过")) return "部分审核通过";
+  }
+  if (field === "invoiceStatus") {
+    if (unique.includes("已上传")) return "部分已上传";
+    if (unique.includes("已确认")) return "部分已确认";
+    if (unique.includes("已通知开票")) return "部分已通知";
+    if (unique.includes("未通知")) return "部分未通知";
+  }
+  if (field === "paymentStatus") {
+    if (unique.includes("已付款")) return "部分已付款";
+    if (unique.includes("待付款")) return "部分待付款";
+    if (unique.includes("已开票")) return "部分已开票";
+    if (unique.includes("待开票")) return "部分待开票";
+  }
+  return "混合状态";
+}
+
+function removeLogisticsExpenseFromRows(rows: LogisticsExpense[], expenseId: string) {
+  let removedBill = false;
+  let billId = "";
+  const nextRows = rows.flatMap((row) => {
+    const items = row.items?.length ? row.items : [row];
+    if (!items.some((item) => item.id === expenseId)) return [row];
+    billId = row.id;
+    const nextItems = items.filter((item) => item.id !== expenseId);
+    if (!nextItems.length) {
+      removedBill = true;
+      return [];
+    }
+    return [rebuildLogisticsExpenseBill(row, nextItems)];
+  });
+  return { rows: nextRows, removedBill, billId };
+}
+
+function replaceLogisticsExpenseItemsInRows(rows: LogisticsExpense[], savedItems: LogisticsExpense[]) {
+  const savedById = new Map(savedItems.map((item) => [item.id, item]));
+  return rows.map((row) => {
+    const items = row.items?.length ? row.items : [row];
+    if (!items.some((item) => savedById.has(item.id))) return row;
+    const nextItems = items.map((item) => savedById.get(item.id) || item);
+    return rebuildLogisticsExpenseBill(row, nextItems);
+  });
+}
+
+function reconcileLogisticsExpenseRowsAfterBatchSave(rows: LogisticsExpense[], billId: string, savedItems: LogisticsExpense[], deletedIds: string[]) {
+  const savedById = new Map(savedItems.map((item) => [item.id, item]));
+  const deletedIdSet = new Set(deletedIds);
+  let matchedBill = false;
+  let removedBill = false;
+  const nextRows = rows.flatMap((row) => {
+    const items = row.items?.length ? row.items : [row];
+    const belongsToBill = row.id === billId || items.some((item) => savedById.has(item.id) || deletedIdSet.has(item.id));
+    if (!belongsToBill) return [row];
+    matchedBill = true;
+    const nextItems = items
+      .filter((item) => !deletedIdSet.has(item.id))
+      .map((item) => savedById.get(item.id) || item);
+    for (const savedItem of savedItems) {
+      if (!nextItems.some((item) => item.id === savedItem.id)) nextItems.push(savedItem);
+    }
+    if (!nextItems.length) {
+      removedBill = true;
+      return [];
+    }
+    return [rebuildLogisticsExpenseBill(row, nextItems)];
+  });
+  if (!matchedBill && savedItems.length) {
+    nextRows.unshift(buildLogisticsExpenseBillFromItems(savedItems));
+  }
+  return { rows: nextRows, removedBill };
+}
+
+function buildLogisticsExpenseBillFromItems(items: LogisticsExpense[]) {
+  const first = items[0] || {};
+  return rebuildLogisticsExpenseBill({
+    id: logisticsExpenseBillIdFromItem(first),
+    isBill: true,
+    orderId: first.orderId,
+    orderNo: first.orderNo,
+    blNo: first.blNo || first.billOfLadingNo,
+    billOfLadingNo: first.billOfLadingNo || first.blNo,
+    customerName: first.customerName,
+    customerShortName: first.customerShortName,
+    order: first.order,
+  } as LogisticsExpense, items);
+}
+
+function logisticsExpenseBillIdFromItem(item: Partial<LogisticsExpense>) {
+  return `bill:${item.orderId || "order"}:${item.blNo || item.billOfLadingNo || item.orderNo || "no-bl"}`;
+}
+
+function rebuildLogisticsExpenseBill(row: LogisticsExpense, nextItems: LogisticsExpense[]) {
+  const amountCny = nextItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
+  const amount = nextItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const first = nextItems[0] || {};
+  return {
+    ...row,
+    ...(
+      nextItems.length === 1
+        ? {
+            costType: first.costType,
+            currency: first.currency,
+            exchangeRate: first.exchangeRate,
+            amount,
+          }
+        : {
+            costType: `${nextItems.length} 项费用`,
+            amount: amountCny,
+          }
+    ),
+    amountCny,
+    auditStatus: aggregateClientLogisticsExpenseStatus(nextItems, "auditStatus"),
+    invoiceStatus: aggregateClientLogisticsExpenseStatus(nextItems, "invoiceStatus"),
+    paymentStatus: aggregateClientLogisticsExpenseStatus(nextItems, "paymentStatus"),
+    itemCount: nextItems.length,
+    supplierNames: [...new Set(nextItems.map((item) => item.supplierName).filter(Boolean))],
+    items: nextItems,
+  } as LogisticsExpense;
+}
+
+function expenseCostSyncText(expense: LogisticsExpense) {
+  const status = String((expense as LogisticsExpense & { costSyncStatus?: string }).costSyncStatus || "").trim();
+  if (["未同步", "已同步", "同步失败"].includes(status)) return status;
+  return expense.costId ? "已同步" : "未同步";
+}
+
+function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
+  const auditStatus = expense.auditStatus || "草稿";
+  const invoiceStatus = expense.invoiceStatus || "未通知";
+  const paymentStatus = expense.paymentStatus || "待开票";
+  if (expense.costId || auditStatus === "审核通过") return "已审核，不能修改";
+  if (["已上传", "已确认"].includes(invoiceStatus)) return "已开票，不能修改";
+  if (["已开票", "待付款", "已付款"].includes(paymentStatus)) return "已付款流程中，不能修改";
+  return "";
+}
+
+function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
+  const auditStatus = expense.auditStatus || "草稿";
+  const invoiceStatus = expense.invoiceStatus || "未通知";
+  const paymentStatus = expense.paymentStatus || "待开票";
+  if (expense.costId) return "该费用已同步到成本，请先取消同步后再删除。";
+  if (auditStatus === "审核通过") return "已审核通过的物流费用不能删除。";
+  if (["已上传", "已确认"].includes(invoiceStatus) || ["已开票", "待付款", "已付款"].includes(paymentStatus)) {
+    return "已开票或已付款的物流费用不能删除。";
+  }
+  if (!["草稿", "待审核", "已驳回"].includes(auditStatus)) return "当前状态的物流费用不能删除。";
+  return "";
+}
+
 function logisticsActionSuccessMessage(action: unknown) {
   if (action === "approve") return "物流费用已审核通过";
   if (action === "reject") return "物流费用已驳回";
+  if (action === "updateAmount") return "物流费用金额已更新";
   if (action === "paymentStatus") return "物流费用付款状态已更新";
   if (action === "confirmInvoice") return "物流发票已确认";
   return "物流费用已更新";
