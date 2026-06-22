@@ -7,6 +7,7 @@ import { DetailField, PaginationBar, SideDetailDrawer, UiCheckbox, UiOptionCard,
 import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
+import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
 
 type SettingsTabKey = "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "auditLogs";
 
@@ -245,7 +246,6 @@ const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
 const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-const LOGISTICS_COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
 const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
 const EXCHANGE_RATE_TYPES = ["现汇买入价", "现汇卖出价", "中间价"];
 const COMMISSION_FORMULA_PRESETS = [

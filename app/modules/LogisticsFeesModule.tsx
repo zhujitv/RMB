@@ -8,9 +8,10 @@ import { formatAmount, formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
+import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
 
 const PAGE_SIZE = 20;
-const COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
+const COST_TYPES = [...LOGISTICS_COST_TYPES];
 const DEFAULT_BILLING_METHOD = "按柜";
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const LOGISTICS_FEE_SUPPLIER_TYPES = [

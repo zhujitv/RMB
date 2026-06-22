@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const backend = [
+  readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
   readFileSync("lib/platform/shared-constants.ts", "utf8"),
   readFileSync("lib/platform/shared-tax.ts", "utf8"),
   readFileSync("lib/platform/shared-tax-completeness.ts", "utf8"),
@@ -120,6 +121,18 @@ test("port charge logistics invoice filenames do not fall back to factory invoic
   assert.match(backend, /costType: logisticsCostType/);
   assert.match(backend, /cost: document\.cost \|\| cost/);
   assert.match(backend, /costType: document\.cost\?\.costType \|\| cost\.costType/);
+});
+
+test("logistics cost type dictionary includes advance and drop-off fees in business order", () => {
+  assert.match(backend, /"拖车费",\s*"报关费",\s*"港杂费",\s*"进港费",\s*"提箱费",\s*"落箱费",\s*"预提费",\s*"查验费",\s*"超重费",\s*"海运费",\s*"保险费",\s*"其他物流费用"/);
+  assert.match(backend, /预提费: "Advance Charge"/);
+  assert.match(backend, /落箱费: "Container Drop-off Fee"/);
+  assert.match(backend, /预提费: "Advance-Charge-Invoice"/);
+  assert.match(backend, /落箱费: "Container-Drop-off-Fee-Invoice"/);
+  assert.match(logisticsModule, /const COST_TYPES = \[\.\.\.LOGISTICS_COST_TYPES\]/);
+  assert.match(settingsModule, /LOGISTICS_COST_TYPES/);
+  assert.match(costsModule, /COST_FILTER_TYPES = \[\.\.\.QUICK_COST_TYPES, \.\.\.LOGISTICS_COST_TYPES\]/);
+  assert.match(reportsModule, /\.\.\.LOGISTICS_COST_TYPES/);
 });
 
 test("approval sends invoice notification and preserves failure for audit", () => {

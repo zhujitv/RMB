@@ -9,6 +9,7 @@ import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
+import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
 const COST_PAYMENT_STATUSES = ["待支付", "部分支付", "已支付", "已取消"];
@@ -20,7 +21,9 @@ const COST_CONFIRMATION_OPTIONS = [
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const FOREIGN_CURRENCY_COST_TYPES = ["国外佣金", "国外代理费", "佣金"];
 const FACTORY_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
-const LOGISTICS_INVOICE_COST_TYPES = ["拖车费", "国内物流费", "国内拖车费", "报关费", "港杂费", "海运费"];
+const LOGISTICS_INVOICE_COST_TYPES = [...LOGISTICS_COST_TYPES, "国内物流费", "国内拖车费"];
+const COST_FILTER_TYPES = [...QUICK_COST_TYPES, ...LOGISTICS_COST_TYPES]
+  .filter((type, index, rows) => rows.indexOf(type) === index);
 const FACTORY_DOCUMENT_TYPES = [
   { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", required: true },
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", required: true },
@@ -496,7 +499,7 @@ export function CostsModule({
           成本类型
           <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>
             <option value="">全部成本类型</option>
-            {[...QUICK_COST_TYPES, "拖车费", "报关费", "港杂费", "海运费", "保险费", "其他物流费用"].map((type) => (
+            {COST_FILTER_TYPES.map((type) => (
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
