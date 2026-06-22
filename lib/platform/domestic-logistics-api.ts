@@ -52,11 +52,13 @@ export async function listDomesticLogisticsOrders(query, actor) {
           deletedAt: null,
           OR: [
             { remarkText: { contains: keyword, mode: "insensitive" } },
-            { transportItems: { some: {
-              OR: [
-                { containerNo: { contains: keyword, mode: "insensitive" } },
-              ],
-            } } },
+	            { transportItems: { some: {
+	              OR: [
+	                { containerNo: { contains: keyword, mode: "insensitive" } },
+	                { containerType: { contains: keyword, mode: "insensitive" } },
+	                { sealNo: { contains: keyword, mode: "insensitive" } },
+	              ],
+	            } } },
           ],
         } } },
       ],
@@ -144,10 +146,12 @@ export async function saveDomesticLogisticsInfo(request, actor, input, id = null
     await tx.domesticLogisticsTransportItem.deleteMany({ where: { logisticsInfoId: saved.id } });
     if (transportItems.length) {
       await tx.domesticLogisticsTransportItem.createMany({
-        data: transportItems.map((item, index) => ({
-          logisticsInfoId: saved.id,
-          containerNo: item.containerNo || null,
-          truckPlateNo: item.truckPlateNo || null,
+	        data: transportItems.map((item, index) => ({
+	          logisticsInfoId: saved.id,
+	          containerNo: item.containerNo || null,
+	          containerType: item.containerType || null,
+	          sealNo: item.sealNo || null,
+	          truckPlateNo: item.truckPlateNo || null,
           trailerPlateNo: item.trailerPlateNo || null,
           departureDate: item.departureDate || null,
           departurePlace: item.departurePlace || null,

@@ -32,6 +32,9 @@ import {
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
 } from "./logistics-expense-shared";
 
+const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
+const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
+
 export async function saveLogisticsExpenses(request, actor, input = {}) {
   assertCanWriteLogisticsExpense(actor);
   const order = await assertLogisticsExpenseOrder(input, actor);
@@ -164,26 +167,30 @@ export async function batchUpdateLogisticsExpenses(request, actor, input = {}) {
     const before = await loadLogisticsExpenseForAction(id, actor);
     const costType = before.costType || "物流费用";
     const unitAmount = Number(item.amount);
-    const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
-    if (!Number.isFinite(unitAmount) || unitAmount < 0) {
-      throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
-    }
-    if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
-      throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CONTAINER_COUNT_INVALID");
-    }
-    const blockReason = logisticsExpenseUpdateBlockReason(before);
-    if (blockReason) {
-      throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
-    }
-    const amount = unitAmount * appliedContainerCount;
-    prepared.push({
+    const billingMethod = normalizeBatchBillingMethod(item, before);
+    const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
+    const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
+	    if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+	      throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
+	    }
+	    const blockReason = logisticsExpenseUpdateBlockReason(before);
+	    if (blockReason) {
+	      throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
+	    }
+	    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+	    const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
+	      || Object.prototype.hasOwnProperty.call(item, "container_type");
+	    prepared.push({
       index,
       before,
       data: {
         amount,
         amountCny: amountCny(amount, before.exchangeRate || 1),
-        appliedContainerCount,
-        remark: optional(item.remark),
+	        ...(hasContainerType ? { containerType: optional(item.containerType ?? item.container_type) } : {}),
+	        appliedContainerCount,
+	        billingMethod,
+	        billingQuantity,
+	        remark: optional(item.remark),
         updatedById: actor.id,
       },
     });
@@ -239,26 +246,27 @@ export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
       throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_COST_TYPE_REQUIRED");
     }
     const unitAmount = Number(item.amount);
-    const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
-    if (!nonEmpty(item.amount)) {
-      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
-    }
+    const billingMethod = normalizeBatchBillingMethod(item);
+    const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
+    const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
+	    if (!nonEmpty(item.amount)) {
+	      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
+	    }
     if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
       throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_INVALID");
     }
-    if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
-      throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_CONTAINER_COUNT_INVALID");
-    }
-    const blockReason = logisticsExpenseUpdateBlockReason(baseExpense);
+	    const blockReason = logisticsExpenseUpdateBlockReason(baseExpense);
     if (blockReason) {
       throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_STATUS_BLOCKED");
     }
-    const amount = unitAmount * appliedContainerCount;
-    const data = await buildLogisticsExpenseData(order, supplier, actor, {
-      costType,
-      amount,
-      appliedContainerCount,
-      currency: baseExpense.currency || "CNY",
+	    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+	    const data = await buildLogisticsExpenseData(order, supplier, actor, {
+	      costType,
+	      amount,
+	      appliedContainerCount,
+	      billingMethod,
+	      billingQuantity,
+	      currency: baseExpense.currency || "CNY",
       exchangeRate: baseExpense.exchangeRate || 1,
       exchangeRateDate: baseExpense.exchangeRateDate,
       exchangeRateSource: baseExpense.exchangeRateSource,
@@ -339,23 +347,27 @@ function logisticsExpenseBatchUpdateData(item, before, actor, index) {
     throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_REQUIRED");
   }
   const unitAmount = Number(item.amount);
-  const appliedContainerCount = Number(item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1);
-  if (!Number.isFinite(unitAmount) || unitAmount < 0) {
-    throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
-  }
-  if (!Number.isInteger(appliedContainerCount) || appliedContainerCount <= 0) {
-    throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_CONTAINER_COUNT_INVALID");
-  }
+  const billingMethod = normalizeBatchBillingMethod(item, before);
+  const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
+  const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
+	  if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+	    throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
+	  }
   const blockReason = logisticsExpenseUpdateBlockReason(before);
   if (blockReason) {
     throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
   }
-  const amount = unitAmount * appliedContainerCount;
+  const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+  const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
+    || Object.prototype.hasOwnProperty.call(item, "container_type");
   return {
     amount,
     amountCny: amountCny(amount, before.exchangeRate || 1),
-    appliedContainerCount,
-    remark: optional(item.remark),
+	    ...(hasContainerType ? { containerType: optional(item.containerType ?? item.container_type) } : {}),
+	    appliedContainerCount,
+	    billingMethod,
+	    billingQuantity,
+	    remark: optional(item.remark),
     updatedById: actor?.id,
   };
 }
@@ -391,6 +403,38 @@ function parseLogisticsExpenseGroupKey(groupKey) {
     orderId: rest.slice(0, separator),
     billKey: rest.slice(separator + 1),
   };
+}
+
+function normalizeBatchBillingMethod(item = {}, before = null) {
+  const method = nonEmpty(item.billingMethod ?? item.billing_method ?? before?.billingMethod ?? DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD);
+  if (!LOGISTICS_EXPENSE_BILLING_METHODS.includes(method)) {
+    throw codedError("请选择有效计费方式。", 400, "LOGISTICS_EXPENSE_BILLING_METHOD_INVALID");
+  }
+  return method;
+}
+
+function integerBillingMethod(method) {
+  return ["按柜", "按票", "按次"].includes(method);
+}
+
+function normalizeBatchBillingQuantity(item = {}, billingMethod = DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD, costType = "物流费用", index = 0) {
+  const raw = item.billingQuantity ?? item.billing_quantity ?? item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1;
+  const quantity = Number(raw);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量/范围必须大于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_QUANTITY_INVALID");
+  }
+  if (integerBillingMethod(billingMethod) && !Number.isInteger(quantity)) {
+    throw codedError(`第 ${index + 1} 行${costType}保存失败：按柜、按票、按次的适用数量/范围必须为正整数。`, 400, "LOGISTICS_EXPENSE_BATCH_QUANTITY_INTEGER_REQUIRED");
+  }
+  return quantity;
+}
+
+function legacyAppliedContainerCount(quantity) {
+  return Math.max(1, Math.ceil(Number(quantity || 1)));
+}
+
+function billingAmountFromUnit(unitAmount, billingQuantity, billingMethod) {
+  return billingMethod === "手工输入" ? unitAmount : unitAmount * billingQuantity;
 }
 
 function logisticsExpenseUpdateBlockReason(expense) {

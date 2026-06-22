@@ -87,9 +87,12 @@ export function canReadDomesticLogisticsOrder(actor, order = {}) {
 export function normalizeDomesticTransportItems(input = {}, transportType = "TRUCK") {
   if (transportType === "EXPRESS") return [];
   const labels = domesticTransportFieldLabels(transportType);
+  const supportsContainerFields = transportType !== "BULK_WAREHOUSE";
   const rawItems = Array.isArray(input.transportItems) ? input.transportItems : [];
   const fallback = {
     containerNo: optional(input.containerNo),
+    containerType: optional(input.containerType),
+    sealNo: optional(input.sealNo),
     truckPlateNo: optional(input.truckPlateNo),
     trailerPlateNo: optional(input.trailerPlateNo),
     departureDate: input.departureDate || "",
@@ -98,9 +101,11 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
     cargoName: optional(input.cargoDescription || input.cargoName),
     remark: optional(input.remark),
   };
-  const meaningfulRawItems = rawItems.filter((item) => [
-    item.containerNo,
-    item.truckPlateNo,
+	  const meaningfulRawItems = rawItems.filter((item) => [
+	    item.containerNo,
+	    item.containerType,
+	    item.sealNo,
+	    item.truckPlateNo,
     item.trailerPlateNo,
     item.departureDate,
     item.departurePlace,
@@ -109,13 +114,23 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
     item.remark,
   ].some((value) => nonEmpty(value)));
   const items = meaningfulRawItems.length ? meaningfulRawItems : [fallback];
-  const normalized = items.map((item, index) => {
-    const truckPlateNo = requireText(item.truckPlateNo, `第 ${index + 1} 行${labels.truckPlateNo}`);
-    const departureDate = dateFromInput(item.departureDate);
-    if (!departureDate) throw codedError(`请选择第 ${index + 1} 行${labels.departureDate}`, 400, "DEPARTURE_DATE_REQUIRED");
-    return {
-      containerNo: optional(item.containerNo),
-      truckPlateNo,
+	  const normalized = items.map((item, index) => {
+	    const containerNo = optional(item.containerNo);
+	    const containerType = supportsContainerFields ? normalizeDomesticContainerType(item.containerType, index) : null;
+	    if (supportsContainerFields && !containerNo) {
+	      throw codedError(`请填写第 ${index + 1} 行${labels.containerNo}`, 400, "DOMESTIC_CONTAINER_NO_REQUIRED");
+	    }
+	    if (supportsContainerFields && !containerType) {
+	      throw codedError(`请选择第 ${index + 1} 行柜型。`, 400, "DOMESTIC_CONTAINER_TYPE_REQUIRED");
+	    }
+	    const truckPlateNo = requireText(item.truckPlateNo, `第 ${index + 1} 行${labels.truckPlateNo}`);
+	    const departureDate = dateFromInput(item.departureDate);
+	    if (!departureDate) throw codedError(`请选择第 ${index + 1} 行${labels.departureDate}`, 400, "DEPARTURE_DATE_REQUIRED");
+	    return {
+	      containerNo,
+	      containerType,
+	      sealNo: supportsContainerFields ? optional(item.sealNo) : null,
+	      truckPlateNo,
       trailerPlateNo: optional(item.trailerPlateNo),
       departureDate,
       departurePlace: requireText(item.departurePlace, `第 ${index + 1} 行${labels.departurePlace}`),
@@ -126,7 +141,16 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
     };
   });
   if (!normalized.length) throw codedError("请至少填写一条集装箱运输明细", 400, "TRANSPORT_ITEMS_REQUIRED");
-  return normalized;
+	  return normalized;
+}
+
+function normalizeDomesticContainerType(value, index) {
+  const type = nonEmpty(value).toUpperCase();
+  if (!type) return null;
+  if (!["20GP", "40GP", "40HQ", "45HQ"].includes(type)) {
+    throw codedError(`请选择第 ${index + 1} 行有效柜型。`, 400, "DOMESTIC_CONTAINER_TYPE_INVALID");
+  }
+  return type;
 }
 
 function domesticTransportFieldLabels(transportType = "TRUCK") {
@@ -162,9 +186,11 @@ function domesticTransportFieldLabels(transportType = "TRUCK") {
 
 function domesticLogisticsRemarkFromItems(items = [], transportType = "TRUCK") {
   const labels = domesticTransportFieldLabels(transportType);
-  return items.map((item) => [
-    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
-    item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
+	  return items.map((item) => [
+	    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
+	    item.containerType ? `柜型：${item.containerType}` : "",
+	    item.sealNo ? `封号：${item.sealNo}` : "",
+	    item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
     item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
     item.departureDate ? `${labels.departureDate}：${dateToInput(item.departureDate)}` : "",
     item.departurePlace ? `${labels.departurePlace}：${item.departurePlace}` : "",

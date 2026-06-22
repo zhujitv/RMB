@@ -347,10 +347,12 @@ export function serializeCustomsRecognition(order = {}) {
 export function serializeDomesticLogisticsTransportItem(item) {
   if (!item) return null;
   return {
-    id: item.id,
-    logisticsInfoId: item.logisticsInfoId,
-    containerNo: item.containerNo || "",
-    truckPlateNo: item.truckPlateNo || "",
+	    id: item.id,
+	    logisticsInfoId: item.logisticsInfoId,
+	    containerNo: item.containerNo || "",
+	    containerType: item.containerType || "",
+	    sealNo: item.sealNo || "",
+	    truckPlateNo: item.truckPlateNo || "",
     trailerPlateNo: item.trailerPlateNo || "",
     departureDate: dateToInput(item.departureDate),
     departurePlace: item.departurePlace || "",

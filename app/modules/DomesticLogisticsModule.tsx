@@ -14,6 +14,8 @@ import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile }
 type TransportItem = {
   id?: string;
   containerNo?: string;
+  containerType?: string;
+  sealNo?: string;
   truckPlateNo?: string;
   trailerPlateNo?: string;
   departureDate?: string;
@@ -136,10 +138,13 @@ const ARCHIVE_SCOPE_OPTIONS = [
   { value: "archive", label: "已归档业务" },
   { value: "all", label: "全部业务" },
 ];
+const CONTAINER_TYPE_OPTIONS = ["20GP", "40GP", "40HQ", "45HQ"];
 
 function emptyTransportItem(): TransportItem {
   return {
     containerNo: "",
+    containerType: "",
+    sealNo: "",
     truckPlateNo: "",
     trailerPlateNo: "",
     departureDate: "",
@@ -657,6 +662,12 @@ function DomesticLogisticsRows({
                   {info.transportItems.map((item, index) => (
                     <div className={styles.subListItem} key={`${item.containerNo || item.truckPlateNo || index}-${index}`}>
                       <strong>明细 {index + 1}{item.containerNo ? ` · ${item.containerNo}` : ""}</strong>
+                      {showContainerManagementFields(info.transportType || "") ? (
+                        <>
+                          <span>柜型：{item.containerType || "-"}</span>
+                          <span>封号：{item.sealNo || "-"}</span>
+                        </>
+                      ) : null}
                       <span>车牌号：{item.truckPlateNo || "-"}</span>
                       <span>挂车车牌：{item.trailerPlateNo || "-"}</span>
                       <span>起运日期：{formatDate(item.departureDate)}</span>
@@ -840,7 +851,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
           <div className={styles.transportItemsHeader}>
             <strong>{transportItemsTitle(form.transportType)}</strong>
             <div>
-              <button className={styles.secondaryButton} type="button" onClick={() => addItem(false)}>添加{transportItemsTitle(form.transportType)}</button>
+              <button className={styles.secondaryButton} type="button" onClick={() => addItem(false)}>{addTransportItemText(form.transportType)}</button>
               <button className={styles.secondaryButton} type="button" onClick={() => addItem(true)}>复制上一行</button>
             </div>
           </div>
@@ -849,6 +860,18 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
               <div className={styles.transportItemCard} key={`transport-item-${index}`}>
                 <strong>第 {index + 1} 行</strong>
                 <label>{transportLabels.containerNo}<input value={item.containerNo || ""} onChange={(event) => updateItem(index, "containerNo", event.target.value)} /></label>
+                {showContainerManagementFields(form.transportType) ? (
+                  <>
+                    <label>
+                      柜型
+                      <select value={item.containerType || ""} onChange={(event) => updateItem(index, "containerType", event.target.value)}>
+                        <option value="">请选择柜型</option>
+                        {CONTAINER_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
+                    </label>
+                    <label>封号<input value={item.sealNo || ""} onChange={(event) => updateItem(index, "sealNo", event.target.value)} placeholder="可选" /></label>
+                  </>
+                ) : null}
                 <label>{transportLabels.truckPlateNo}<input value={item.truckPlateNo || ""} onChange={(event) => updateItem(index, "truckPlateNo", event.target.value)} required /></label>
                 <label>挂车车牌<input value={item.trailerPlateNo || ""} onChange={(event) => updateItem(index, "trailerPlateNo", event.target.value)} /></label>
                 <label>{transportLabels.departureDate}<input type="date" value={item.departureDate || ""} onChange={(event) => updateItem(index, "departureDate", event.target.value)} required /></label>
@@ -1042,6 +1065,9 @@ function latestUploadedDocument(documents: DomesticLogisticsDocument[]) {
 
 function expenseOrderFromDomesticRow(row: DomesticLogisticsRow) {
   const info = row.domesticLogisticsInfo;
+  const transportItems = info?.transportItems || [];
+  const containerNos = transportItems.map((item) => item.containerNo || "").filter(Boolean);
+  const containerTypes = uniqueContainerTypes(transportItems.map((item) => item.containerType));
   return {
     id: row.orderId || row.id,
     orderId: row.orderId || row.id,
@@ -1053,6 +1079,11 @@ function expenseOrderFromDomesticRow(row: DomesticLogisticsRow) {
     logisticsSuppliers: row.logisticsSuppliers || [],
     truckPlateNo: info?.truckPlateNo || firstItemValue(info, "truckPlateNo"),
     cargoName: info?.cargoDescription || firstItemValue(info, "cargoName"),
+    containerNos,
+    containerTypes,
+    containerType: containerTypes.length === 1 ? containerTypes[0] : "",
+    containerCount: containerNos.length || transportItems.length || 0,
+    transportItems,
   };
 }
 
@@ -1086,7 +1117,16 @@ function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
 function transportItemsTitle(transportType: string) {
   if (transportType === "BULK_WAREHOUSE") return "散货进舱明细";
   if (transportType === "MULTIMODAL") return "多式联运明细";
-  return "集装箱运输明细";
+  return "集装箱管理";
+}
+
+function addTransportItemText(transportType: string) {
+  if (transportType === "BULK_WAREHOUSE") return "新增进舱明细";
+  return "新增集装箱";
+}
+
+function showContainerManagementFields(transportType: string) {
+  return transportType !== "BULK_WAREHOUSE";
 }
 
 function transportFieldLabels(transportType: string) {
@@ -1131,6 +1171,8 @@ function generateRemark(form: DomesticLogisticsForm) {
   const labels = transportFieldLabels(form.transportType);
   return form.transportItems.map((item) => [
     item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
+    showContainerManagementFields(form.transportType) && item.containerType ? `柜型：${item.containerType}` : "",
+    showContainerManagementFields(form.transportType) && item.sealNo ? `封号：${item.sealNo}` : "",
     item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
     item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
     item.departureDate ? `${labels.departureDate}：${item.departureDate}` : "",
@@ -1143,6 +1185,8 @@ function generateRemark(form: DomesticLogisticsForm) {
 function normalizeFormTransportItems(items: TransportItem[]) {
   return items.map((item) => ({
     containerNo: (item.containerNo || "").trim(),
+    containerType: (item.containerType || "").trim().toUpperCase(),
+    sealNo: (item.sealNo || "").trim(),
     truckPlateNo: (item.truckPlateNo || "").trim(),
     trailerPlateNo: (item.trailerPlateNo || "").trim(),
     departureDate: (item.departureDate || "").trim(),
@@ -1151,6 +1195,12 @@ function normalizeFormTransportItems(items: TransportItem[]) {
     cargoName: (item.cargoName || "").trim(),
     remark: (item.remark || "").trim(),
   })).filter((item) => Object.values(item).some(Boolean));
+}
+
+function uniqueContainerTypes(values: unknown[]) {
+  return values
+    .map((value) => String(value || "").trim().toUpperCase())
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
 }
 
 function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {
@@ -1166,6 +1216,8 @@ function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {
   if (!items.length) return `请至少录入一条${transportItemsTitle(form.transportType)}。`;
   for (const [index, item] of items.entries()) {
     const rowNo = `第 ${index + 1} 行`;
+    if (showContainerManagementFields(form.transportType) && !item.containerNo) return `请填写${rowNo}${labels.containerNo}。`;
+    if (showContainerManagementFields(form.transportType) && !CONTAINER_TYPE_OPTIONS.includes(item.containerType || "")) return `请选择${rowNo}柜型。`;
     if (!item.truckPlateNo) return `请填写${rowNo}${labels.truckPlateNo}。`;
     if (!item.departureDate) return `请填写${rowNo}${labels.departureDate}。`;
     if (!item.departurePlace) return `请填写${rowNo}${labels.departurePlace}。`;

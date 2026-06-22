@@ -56,8 +56,10 @@ test("keyword search covers the required business fields", () => {
   assert.match(services.costs, /remark: keyword/);
   assert.match(services.costs, /supplierNameSnapshot: keyword/);
 
-  assert.match(services.logistics, /containerNo: \{ contains: keyword/);
-  assert.match(services.logistics, /logisticsSuppliers: \{ some: \{ supplier: \{ is: \{ supplierName: \{ contains: keyword/);
+	  assert.match(services.logistics, /containerNo: \{ contains: keyword/);
+	  assert.match(services.logistics, /containerType: \{ contains: keyword/);
+	  assert.match(services.logistics, /sealNo: \{ contains: keyword/);
+	  assert.match(services.logistics, /logisticsSuppliers: \{ some: \{ supplier: \{ is: \{ supplierName: \{ contains: keyword/);
 
   assert.match(services.taxRefund, /customsDeclarationNo: \{ contains: keyword/);
   assert.match(services.taxRefund, /blNo: \{ contains: keyword/);

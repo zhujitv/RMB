@@ -28,6 +28,14 @@
   font-size: 14px;
 }
 
+.loadingActions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
 .loadingDot {
   width: 12px;
   height: 12px;
@@ -69,6 +77,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
   min-width: 0;
   padding: 0;
   overflow: hidden;
@@ -85,6 +95,23 @@
   line-height: 1;
   letter-spacing: 0;
   font-weight: 700;
+}
+
+.loginBrandLogo {
+  max-width: 84px;
+  max-height: 42px;
+  object-fit: contain;
+}
+
+.loginFooter {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 18px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .loginCard {
@@ -742,25 +769,38 @@
 
 .brandBlock {
   display: grid;
+  justify-items: center;
   gap: 0;
   padding: 2px 8px 18px;
   border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.brandLogo {
+  max-width: 96px;
+  max-height: 44px;
+  object-fit: contain;
+  margin-bottom: 10px;
 }
 
 .brandBlock strong {
+  width: 100%;
   margin: 0;
   color: #0f172a;
   font-size: 18px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .brandBlock span {
+  width: 100%;
   margin: 6px 0 0;
   font-size: 12px;
   line-height: 1.45;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .brandPlatform {
@@ -769,6 +809,15 @@
 
 .brandCompany {
   color: #94a3b8;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding: 14px 8px 0;
+  border-top: 1px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .navList {
@@ -1974,7 +2023,7 @@
 
 .logisticsBillSummaryMeta {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) minmax(130px, 0.8fr) minmax(96px, 0.6fr) minmax(140px, 0.7fr) minmax(180px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   flex: 1 1 auto;
   gap: 6px 14px;
   min-width: 0;
@@ -1995,6 +2044,78 @@
   color: #64748b;
   font-size: 12px;
   font-weight: 600;
+}
+
+.logisticsContainerInfoCard {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.logisticsContainerInfoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logisticsContainerInfoHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsContainerInfoHeader span {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.logisticsContainerInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.logisticsContainerInfoGrid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.logisticsContainerInfoGrid strong {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsContainerInfoList {
+  display: grid;
+  gap: 3px;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.logisticsContainerInfoList span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .logisticsContainerInfoGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .logisticsBillSummaryActions,
@@ -2095,7 +2216,7 @@
 
 .logisticsDetailTable {
   width: 100%;
-  min-width: 1060px;
+  min-width: 1040px;
   border-collapse: collapse;
   table-layout: fixed;
   color: #0f172a;
@@ -2135,7 +2256,9 @@
 
 .logisticsDetailTable th:nth-child(3),
 .logisticsDetailTable td:nth-child(3) {
-  width: 96px;
+  width: 126px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(4),
@@ -2156,11 +2279,15 @@
 .logisticsDetailTable th:nth-child(7),
 .logisticsDetailTable td:nth-child(7) {
   width: 150px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(8),
 .logisticsDetailTable td:nth-child(8) {
   width: 140px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .numericCell {
@@ -2184,12 +2311,13 @@
 .costSyncCell {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  align-items: flex-start;
+  justify-content: center;
+  align-items: center;
   gap: 4px;
   min-height: 30px;
   max-width: 100%;
   overflow: hidden;
+  text-align: center;
 }
 
 .costSyncCell > span {
@@ -2202,8 +2330,8 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   flex-wrap: nowrap;
   gap: 5px;
   max-width: 100%;
@@ -2270,9 +2398,18 @@
 }
 
 .inlineQuantityInput {
-  width: 72px;
-  text-align: right;
+  display: block;
+  width: 90px;
+  margin: 0 auto;
+  -moz-appearance: textfield;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.inlineQuantityInput::-webkit-outer-spin-button,
+.inlineQuantityInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .inlineRemarkCell {
@@ -2511,18 +2648,22 @@
 }
 
 .inlineInvoiceForm input {
-  min-height: 36px;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   border: 1px solid #dbe1ea;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
   color: #0f172a;
-  padding: 0 10px;
+  padding: 0 12px;
   font: inherit;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .inlineInvoiceForm input[type="file"] {
   max-width: 230px;
-  padding-top: 7px;
+  padding-top: 8px;
 }
 
 .logisticsItemsPanel {
@@ -2566,7 +2707,7 @@
 .logisticsItemsHead,
 .logisticsItemsRow {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(100px, 0.85fr) minmax(96px, 0.8fr) 78px 88px minmax(112px, 0.9fr) minmax(140px, 1.1fr) auto;
+  grid-template-columns: minmax(112px, 1fr) minmax(116px, 0.9fr) minmax(96px, 0.8fr) 74px 84px minmax(112px, 0.9fr) minmax(140px, 1.1fr) auto;
   gap: 8px;
   align-items: center;
 }
@@ -2587,13 +2728,17 @@
 .logisticsItemsRow input,
 .logisticsItemsRow select {
   width: 100%;
-  min-height: 36px;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   border: 1px solid #dbe1ea;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
   color: #0f172a;
-  padding: 0 10px;
+  padding: 0 12px;
   font: inherit;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .logisticsItemsRow strong {
@@ -2783,6 +2928,12 @@
 .dataTable td.blNoColumn {
   width: 180px;
   min-width: 180px;
+}
+
+.dataTable th.containerTypeColumn,
+.dataTable td.containerTypeColumn {
+  width: 116px;
+  min-width: 116px;
 }
 
 .dataTable th.amountColumn,
@@ -4130,13 +4281,17 @@
 }
 
 .customsFormGrid input {
-  height: 38px;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   border: 1px solid #dbe1ea;
-  border-radius: 11px;
+  border-radius: 8px;
   background: #fff;
   color: #0f172a;
-  padding: 0 10px;
+  padding: 0 12px;
   font: inherit;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .customsFormGrid input:focus {
@@ -5028,34 +5183,43 @@
 .remarkCard {
   display: grid;
   gap: 6px;
+  align-content: start;
+  grid-template-rows: minmax(20px, auto) auto;
   color: #475569;
   font-size: 13px;
   font-weight: 700;
+  line-height: 20px;
 }
 
 .transportItemCard input,
+.transportItemCard select,
 .remarkCard textarea {
   width: 100%;
+  box-sizing: border-box;
   border: 1px solid #dbe1ea;
-  border-radius: 11px;
+  border-radius: 8px;
   background: #fff;
   color: #0f172a;
-  padding: 0 10px;
+  padding: 0 12px;
   font: inherit;
+  font-size: 14px;
+  line-height: 20px;
 }
 
-.transportItemCard input {
-  height: 38px;
+.transportItemCard input,
+.transportItemCard select {
+  height: 40px;
+  min-height: 40px;
 }
 
 .remarkCard textarea {
   min-height: 126px;
-  padding: 10px;
+  padding: 10px 12px;
   resize: vertical;
-  line-height: 1.55;
 }
 
 .transportItemCard input:focus,
+.transportItemCard select:focus,
 .remarkCard textarea:focus {
   outline: none;
   border-color: #2563eb;
@@ -5103,6 +5267,11 @@
 
   .loginBrand h1 {
     font-size: 36px;
+  }
+
+  .loginFooter {
+    position: static;
+    padding: 0 24px;
   }
 
   .loginCard {
@@ -5400,7 +5569,7 @@
 .subListItem strong,
 :global(.text-body),
 :global(.text-table) {
-  font-weight: var(--font-weight-table);
+  font-weight: var(--font-weight-body);
 }
 
 .dataTable td,
@@ -5425,6 +5594,7 @@
 .shippingDocsFormGrid textarea,
 .customsFormGrid input,
 .transportItemCard input,
+.transportItemCard select,
 .remarkCard textarea,
 .dataTable input,
 .dataTable select,
@@ -5446,6 +5616,7 @@
 .listToolbar select,
 .reportFilterGrid select,
 .shippingDocsFormGrid select,
+.transportItemCard select,
 .dataTable select,
 .logisticsItemsRow select {
   appearance: none;
@@ -5459,6 +5630,7 @@
 .listToolbar select,
 .reportFilterGrid select,
 .shippingDocsFormGrid select,
+.transportItemCard select,
 .dataTable select,
 .logisticsItemsRow select {
   padding-right: 34px;
@@ -5475,6 +5647,7 @@
 .reportFilterGrid input[type="number"],
 .shippingDocsFormGrid input[type="date"],
 .customsFormGrid input[type="date"],
+.transportItemCard input[type="date"],
 .dataTable input[type="date"],
 .dataTable input[type="number"],
 .logisticsItemsRow input[type="date"],
@@ -5646,6 +5819,124 @@
   font-weight: var(--font-weight-button);
 }
 
+.logisticsTypographyScope .primaryButtonCompact {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.logisticsTypographyScope .primaryButtonCompact:hover:not(:disabled),
+.logisticsTypographyScope .primaryButtonCompact:focus:not(:disabled),
+.logisticsTypographyScope .primaryButtonCompact:focus-visible:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.22);
+}
+
+.logisticsTypographyScope .primaryButtonCompact:active:not(:disabled) {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(30, 64, 175, 0.2);
+}
+
+.logisticsTypographyScope .primaryButtonCompact:disabled,
+.logisticsTypographyScope .secondaryButton:disabled,
+.logisticsTypographyScope .billSaveButton:disabled,
+.logisticsTypographyScope .billAddLineButton:disabled,
+.logisticsTypographyScope .logisticsLineDeleteButton:disabled {
+  border-color: #d1d5db;
+  background: #e5e7eb;
+  color: #374151;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.logisticsTypographyScope .secondaryButton {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.logisticsTypographyScope .secondaryButton:hover:not(:disabled),
+.logisticsTypographyScope .secondaryButton:focus:not(:disabled),
+.logisticsTypographyScope .secondaryButton:focus-visible:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.logisticsTypographyScope .secondaryButton:active:not(:disabled) {
+  border-color: #64748b;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.logisticsTypographyScope .billSaveButton {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billSaveButton:hover:not(:disabled),
+.logisticsTypographyScope .billSaveButton:focus:not(:disabled),
+.logisticsTypographyScope .billSaveButton:focus-visible:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billSaveButton:active:not(:disabled) {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billAddLineButton {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.logisticsTypographyScope .billAddLineButton:hover:not(:disabled),
+.logisticsTypographyScope .billAddLineButton:focus:not(:disabled),
+.logisticsTypographyScope .billAddLineButton:focus-visible:not(:disabled) {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.logisticsTypographyScope .billAddLineButton:active:not(:disabled) {
+  border-color: #60a5fa;
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton {
+  border-color: #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton:hover:not(:disabled),
+.logisticsTypographyScope .logisticsLineDeleteButton:focus:not(:disabled),
+.logisticsTypographyScope .logisticsLineDeleteButton:focus-visible:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton:active:not(:disabled) {
+  border-color: #f87171;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
 .logisticsTypographyScope .listToolbar input,
 .logisticsTypographyScope .listToolbar select,
 .logisticsTypographyScope .reportFilterGrid input,
@@ -5655,6 +5946,7 @@
 .logisticsTypographyScope .logisticsItemsRow input,
 .logisticsTypographyScope .logisticsItemsRow select,
 .logisticsTypographyScope .transportItemCard input,
+.logisticsTypographyScope .transportItemCard select,
 .logisticsTypographyScope .remarkCard textarea,
 .logisticsTypographyScope .inlineInvoiceForm input,
 .logisticsTypographyScope .customsFormGrid input,
@@ -5664,6 +5956,32 @@
   color: var(--text);
   font-size: 13px;
   font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select,
+.logisticsTypographyScope .transportItemCard input,
+.logisticsTypographyScope .transportItemCard select,
+.logisticsTypographyScope .inlineInvoiceForm input,
+.logisticsTypographyScope .customsFormGrid input {
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.logisticsTypographyScope .transportItemCard select,
+.logisticsTypographyScope .logisticsItemsRow select {
+  padding-right: 34px;
+}
+
+.logisticsTypographyScope .transportItemCard label,
+.logisticsTypographyScope .customsFormGrid label {
+  align-content: start;
+  line-height: 20px;
 }
 
 .logisticsTypographyScope .reportFilterGrid label,

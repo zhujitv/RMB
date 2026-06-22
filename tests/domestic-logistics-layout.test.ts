@@ -20,13 +20,30 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
   assert.match(moduleSource, /录入费用/);
   assert.match(moduleSource, /CustomsDocumentPanel/);
   assert.match(moduleSource, /集装箱运输明细/);
+  assert.match(moduleSource, /集装箱管理/);
   assert.match(moduleSource, /出口发票备注/);
 });
 
 test("domestic logistics transport detail keeps multi-container fields", () => {
-  for (const field of ["containerNo", "truckPlateNo", "trailerPlateNo", "departurePlace", "arrivalPlace", "cargoName"]) {
+  for (const field of ["containerNo", "containerType", "sealNo", "truckPlateNo", "trailerPlateNo", "departurePlace", "arrivalPlace", "cargoName"]) {
     assert.match(moduleSource, new RegExp(field));
   }
+  assert.match(moduleSource, /CONTAINER_TYPE_OPTIONS = \["20GP", "40GP", "40HQ", "45HQ"\]/);
+  assert.match(moduleSource, /新增集装箱/);
+  assert.match(moduleSource, /请选择柜型/);
+  assert.match(domesticLogisticsOps, /normalizeDomesticContainerType/);
+  assert.match(domesticLogisticsOps, /DOMESTIC_CONTAINER_NO_REQUIRED/);
+  assert.match(domesticLogisticsOps, /DOMESTIC_CONTAINER_TYPE_REQUIRED/);
+  assert.match(domesticLogisticsOps, /DOMESTIC_CONTAINER_TYPE_INVALID/);
+});
+
+test("domestic logistics form controls keep consistent input and select height", () => {
+  assert.match(css, /\.transportItemCard input,\n\.transportItemCard select,/);
+  assert.match(css, /\.transportItemCard input,\n\.transportItemCard select \{[\s\S]*height: 40px;[\s\S]*min-height: 40px;/);
+  assert.match(css, /\.transportItemCard input,\n\.transportItemCard select[\s\S]*border-radius: 8px;[\s\S]*padding: 0 12px;[\s\S]*font-size: 14px;[\s\S]*line-height: 20px;/);
+  assert.match(css, /\.transportItemCard select,[\s\S]*\.logisticsItemsRow select \{[\s\S]*appearance: none;/);
+  assert.match(css, /\.logisticsTypographyScope \.transportItemCard input,[\s\S]*\.logisticsTypographyScope \.transportItemCard select,[\s\S]*height: 40px;[\s\S]*border-radius: 8px;/);
+  assert.match(css, /\.logisticsTypographyScope \.transportItemCard label,[\s\S]*line-height: 20px;/);
 });
 
 test("domestic logistics supports bulk warehouse entry mode", () => {

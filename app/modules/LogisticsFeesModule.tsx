@@ -11,6 +11,7 @@ import styles from "../WorkspaceShell.module.css";
 
 const PAGE_SIZE = 20;
 const COST_TYPES = ["拖车费", "报关费", "港杂费", "海运费", "保险费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"];
+const DEFAULT_BILLING_METHOD = "按柜";
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const LOGISTICS_FEE_SUPPLIER_TYPES = [
   "物流供应商",
@@ -70,7 +71,10 @@ type LogisticsExpense = {
   exchangeRate?: number;
   amount?: number;
   amountCny?: number;
+  containerType?: string;
   appliedContainerCount?: number | null;
+  billingMethod?: string;
+  billingQuantity?: number | null;
   containerScope?: string;
   order?: Partial<ExpenseOrderOption>;
   remark?: string;
@@ -128,8 +132,13 @@ type ExpenseOrderOption = {
   cargoName?: string;
   containerCount?: number;
   containerNos?: string[];
+  containerType?: string;
+  containerTypes?: string[];
   transportItems?: Array<{
+    id?: string;
     containerNo?: string;
+    containerType?: string;
+    sealNo?: string;
     truckPlateNo?: string;
     departureDate?: string;
     departurePlace?: string;
@@ -156,6 +165,7 @@ type ExpenseForm = {
 
 type ExpenseItemForm = {
   costType: string;
+  billingMethod: string;
   amount: string;
   appliedContainerCount: string;
   currency: string;
@@ -165,6 +175,7 @@ type ExpenseItemForm = {
 
 type LogisticsExpenseDraft = {
   costType: string;
+  billingMethod: string;
   unitAmount: string;
   appliedContainerCount: string;
   remark: string;
@@ -173,6 +184,8 @@ type LogisticsExpenseDraft = {
 type LogisticsExpenseBatchUpdateItem = {
   id: string;
   amount: number;
+  billingMethod: string;
+  billingQuantity: number;
   appliedContainerCount: number;
   remark: string;
 };
@@ -180,6 +193,8 @@ type LogisticsExpenseBatchUpdateItem = {
 type LogisticsExpenseBatchCreateItem = {
   expenseType: string;
   amount: number;
+  billingMethod: string;
+  billingQuantity: number;
   appliedContainerCount: number;
   remark: string;
 };
@@ -197,8 +212,16 @@ type LogisticsExpenseBatchSaveResult = {
   deletedIds: string[];
 };
 
+type LogisticsExpenseContainerSummary = {
+  hasContainers: boolean;
+  typeLines: string[];
+  containerNoLines: string[];
+  shortText: string;
+};
+
 const emptyExpenseItem = (): ExpenseItemForm => ({
   costType: "拖车费",
+  billingMethod: "按柜",
   amount: "",
   appliedContainerCount: "1",
   currency: "CNY",
@@ -641,6 +664,7 @@ export function LogisticsFeesModule({
           <thead>
             <tr>
               <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.containerTypeColumn}>柜型</th>
               <th className={styles.blNoColumn}>提单号</th>
               <th className={styles.customerColumn}>客户简称</th>
               <th className={styles.amountColumn}>费用合计</th>
@@ -652,7 +676,7 @@ export function LogisticsFeesModule({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td></tr>
+              <tr><td colSpan={9}><div className={styles.emptyState}>数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((expense) => (
               <LogisticsExpenseRows
                 key={expense.id}
@@ -685,7 +709,7 @@ export function LogisticsFeesModule({
                 }}
               />
             )) : (
-              <tr><td colSpan={8}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
+              <tr><td colSpan={9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
             )}
           </tbody>
         </table>
@@ -756,6 +780,7 @@ function LogisticsExpenseRows({
   const paymentStatus = expense.paymentStatus || "待开票";
   const items = expense.items?.length ? expense.items : [expense];
   const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
+  const containerSummary = logisticsExpenseContainerSummary(expense, items);
   const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
   const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
@@ -777,13 +802,17 @@ function LogisticsExpenseRows({
 
   function updateDraft(id: string, field: keyof LogisticsExpenseDraft, value: string) {
     setBillSaved(false);
-    setDrafts((current) => ({
-      ...current,
-      [id]: {
-        ...(current[id] || logisticsExpenseDraftFromItem(items.find((item) => item.id === id) || ({ id } as LogisticsExpense))),
+    setDrafts((current) => {
+      const currentDraft = current[id] || logisticsExpenseDraftFromItem(items.find((item) => item.id === id) || ({ id } as LogisticsExpense));
+      const nextDraft = {
+        ...currentDraft,
         [field]: value,
-      },
-    }));
+      };
+      return {
+        ...current,
+        [id]: nextDraft,
+      };
+    });
   }
 
   function addExpenseDetailRow() {
@@ -878,6 +907,7 @@ function LogisticsExpenseRows({
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
         <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
+        <td className={styles.containerTypeColumn}>{containerSummary.shortText}</td>
         <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
         <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
         <td className={styles.amountColumn}>
@@ -890,14 +920,14 @@ function LogisticsExpenseRows({
       </tr>
       {expanded ? (
         <tr className={styles.detailRow}>
-          <td colSpan={8}>
+          <td colSpan={9}>
             <div className={styles.logisticsBillDetail} onClick={(event) => event.stopPropagation()}>
               <div className={styles.logisticsBillSummary}>
                 <div className={styles.logisticsBillSummaryMeta}>
-                  <span><strong>客户全称</strong>{customerLegalName(expense)}</span>
-                  <span><strong>提单号</strong>{expense.blNo || expense.billOfLadingNo || "-"}</span>
-                  <span><strong>费用明细</strong>{editingExpenseRows.length} 项</span>
-                  <span><strong>账单合计</strong>{formatCny(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
+	                  <span><strong>客户全称</strong>{customerLegalName(expense)}</span>
+	                  <span><strong>提单号</strong>{expense.blNo || expense.billOfLadingNo || "-"}</span>
+	                  <span><strong>费用明细</strong>{editingExpenseRows.length} 项</span>
+	                  <span><strong>账单合计</strong>{formatCny(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
                   {canShowSupplier && supplierNames.length ? (
                     <span><strong>供应商</strong>{supplierNames.join(" / ")}</span>
                   ) : null}
@@ -906,6 +936,7 @@ function LogisticsExpenseRows({
                   {renderBillSaveControls()}
                 </div>
               </div>
+              <LogisticsBillContainerInfo summary={containerSummary} />
               <LogisticsExpenseDetailsTable
                 items={editingExpenseRows}
                 drafts={drafts}
@@ -925,16 +956,38 @@ function LogisticsExpenseRows({
                 onConfirmInvoice={onConfirmInvoice}
                 onInvoiceUploaded={onInvoiceUploaded}
               />
-              {canEditAmount ? (
-                <div className={styles.logisticsBillDetailFooter}>
-                  {renderBillSaveControls()}
-                </div>
-              ) : null}
             </div>
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+function LogisticsBillContainerInfo({ summary }: { summary: LogisticsExpenseContainerSummary }) {
+  return (
+    <div className={styles.logisticsContainerInfoCard}>
+      <div className={styles.logisticsContainerInfoHeader}>
+        <strong>集装箱信息</strong>
+        {!summary.hasContainers ? <span>未录入集装箱信息</span> : null}
+      </div>
+      {summary.hasContainers ? (
+        <div className={styles.logisticsContainerInfoGrid}>
+          <div>
+            <strong>柜型汇总：</strong>
+            <div className={styles.logisticsContainerInfoList}>
+              {summary.typeLines.length ? summary.typeLines.map((line) => <span key={line}>{line}</span>) : <span>未录入柜型</span>}
+            </div>
+          </div>
+          <div>
+            <strong>柜号列表：</strong>
+            <div className={styles.logisticsContainerInfoList}>
+              {summary.containerNoLines.length ? summary.containerNoLines.map((line) => <span key={line}>{line}</span>) : <span>未录入柜号</span>}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -973,7 +1026,7 @@ function LogisticsExpenseDetailsTable({
   onStageDelete: (expense: LogisticsExpense) => void;
   onMarkPaid: (expense: LogisticsExpense) => void;
   onConfirmInvoice: (expense: LogisticsExpense) => void;
-  onInvoiceUploaded: () => void;
+	onInvoiceUploaded: () => void;
 }) {
   return (
     <div className={styles.logisticsDetailTableWrap}>
@@ -983,7 +1036,7 @@ function LogisticsExpenseDetailsTable({
             <th>序号</th>
             <th>费用类型</th>
             <th>适用数量</th>
-            <th className={styles.numericCell}>金额</th>
+            <th className={styles.numericCell}>单价/金额</th>
             <th className={styles.numericCell}>折人民币</th>
             <th>备注</th>
             <th>同步成本状态</th>
@@ -996,10 +1049,10 @@ function LogisticsExpenseDetailsTable({
               key={expense.id || `${expense.orderId || "expense"}-${index}`}
               expense={expense}
               draft={drafts[expense.id] || logisticsExpenseDraftFromItem(expense)}
-              index={index}
-              busy={busyId === expense.id}
-              deleting={deletingId === expense.id}
-              canReview={canReview}
+	              index={index}
+	              busy={busyId === expense.id}
+	              deleting={deletingId === expense.id}
+	              canReview={canReview}
               canConfirmInvoice={canConfirmInvoice}
               canWithdraw={canWithdraw}
               canEditAmount={canEditAmount}
@@ -1023,10 +1076,10 @@ function LogisticsExpenseDetailsTable({
 function LogisticsExpenseDetailLine({
   expense,
   draft,
-  index,
-  busy,
-  deleting,
-  canReview,
+	  index,
+	  busy,
+	  deleting,
+	  canReview,
   canConfirmInvoice,
   canWithdraw,
   canEditAmount,
@@ -1040,11 +1093,11 @@ function LogisticsExpenseDetailLine({
   onConfirmInvoice,
   onInvoiceUploaded,
 }: {
-  expense: LogisticsExpense;
-  draft: LogisticsExpenseDraft;
-  index: number;
-  busy: boolean;
-  deleting: boolean;
+	  expense: LogisticsExpense;
+	  draft: LogisticsExpenseDraft;
+	  index: number;
+	  busy: boolean;
+	  deleting: boolean;
   canReview: boolean;
   canConfirmInvoice: boolean;
   canWithdraw: boolean;
@@ -1085,21 +1138,21 @@ function LogisticsExpenseDetailLine({
         ) : (
           expense.costType || "-"
         )}
-      </td>
+	      </td>
       <td>
         {canEditThisAmount ? (
           <input
             className={styles.inlineQuantityInput}
-            type="number"
-            min="1"
-            step="1"
-            value={draft.appliedContainerCount}
-            onChange={(event) => onDraftChange(expense.id, "appliedContainerCount", event.target.value)}
-            aria-label="适用数量"
-          />
-        ) : (
-          editableQuantityText(expense.appliedContainerCount)
-        )}
+	            type="number"
+	            min="1"
+	            step="1"
+	            value={draft.appliedContainerCount}
+	            onChange={(event) => onDraftChange(expense.id, "appliedContainerCount", event.target.value)}
+	            aria-label="适用数量"
+	          />
+	        ) : (
+	          editableQuantityText(expenseBillingQuantity(expense))
+	        )}
       </td>
       <td className={styles.numericCell}>
         {canEditThisAmount ? (
@@ -1274,18 +1327,18 @@ export function LogisticsExpenseForm({
     }));
   }
 
-  function setItemField<K extends keyof ExpenseItemForm>(index: number, key: K, value: ExpenseItemForm[K]) {
-    setForm((current) => ({
-      ...current,
-      items: current.items.map((item, itemIndex) => (
-        itemIndex === index
-          ? {
-              ...item,
-              [key]: value,
-              ...(key === "currency" && value === "CNY" ? { exchangeRate: "1" } : {}),
-            }
-          : item
-      )),
+	  function setItemField<K extends keyof ExpenseItemForm>(index: number, key: K, value: ExpenseItemForm[K]) {
+	    setForm((current) => ({
+	      ...current,
+	      items: current.items.map((item, itemIndex) => (
+	        itemIndex === index
+	          ? {
+	              ...item,
+	              [key]: value,
+	              ...(key === "currency" && value === "CNY" ? { exchangeRate: "1" } : {}),
+	            }
+	          : item
+	      )),
     }));
   }
 
@@ -1335,11 +1388,13 @@ export function LogisticsExpenseForm({
       setMessage("请选择关联订单");
       return;
     }
-    const normalizedItems = form.items.map((item) => ({
-      costType: item.costType,
-      amount: lineSubtotal(item),
-      appliedContainerCount: Number(item.appliedContainerCount || 1),
-      currency: item.currency,
+	    const normalizedItems = form.items.map((item) => ({
+	      costType: item.costType,
+	      billingMethod: DEFAULT_BILLING_METHOD,
+	      amount: lineSubtotal(item),
+	      billingQuantity: Number(item.appliedContainerCount || 1),
+	      appliedContainerCount: Number(item.appliedContainerCount || 1),
+	      currency: item.currency,
       exchangeRate: Number(item.exchangeRate),
       remark: item.remark.trim(),
     }));
@@ -1347,14 +1402,14 @@ export function LogisticsExpenseForm({
       !item.costType
       || !item.amount
       || item.amount <= 0
-      || !item.currency
-      || !item.exchangeRate
-      || item.exchangeRate <= 0
-      || !Number.isInteger(item.appliedContainerCount)
-      || item.appliedContainerCount <= 0
-    ));
+	      || !item.currency
+	      || !item.exchangeRate
+	      || item.exchangeRate <= 0
+	      || !validBillingQuantity(item.appliedContainerCount)
+	      || item.appliedContainerCount <= 0
+	    ));
     if (invalidIndex >= 0) {
-      setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、单价、适用数量、币种和汇率`);
+	      setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、单价/金额、适用数量、币种和汇率`);
       return;
     }
     setSaving(true);
@@ -1488,10 +1543,10 @@ export function LogisticsExpenseForm({
         </div>
         <div className={styles.logisticsItemsTable}>
           <div className={styles.logisticsItemsHead}>
-            <span>费用类型</span>
-            <span>适用数量</span>
-            <span>单价</span>
-            <span>币种</span>
+	            <span>费用类型</span>
+	            <span>适用数量</span>
+	            <span>单价/金额</span>
+	            <span>币种</span>
             <span>汇率</span>
             <span>小计</span>
             <span>备注</span>
@@ -1499,18 +1554,18 @@ export function LogisticsExpenseForm({
           </div>
           {form.items.map((item, index) => (
             <div className={styles.logisticsItemsRow} key={`${index}-${item.costType}`}>
-              <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
-                {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
-              </select>
-              <input
-                value={item.appliedContainerCount}
-                onChange={(event) => setItemField(index, "appliedContainerCount", event.target.value)}
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                required
-              />
+	              <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
+	                {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+	              </select>
+	              <input
+	                value={item.appliedContainerCount}
+	                onChange={(event) => setItemField(index, "appliedContainerCount", event.target.value)}
+	                type="number"
+	                min="1"
+	                step="1"
+	                inputMode="decimal"
+	                required
+	              />
               <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
               <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
                 {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
@@ -1626,12 +1681,19 @@ function normalizeExpenseOrder(order: Partial<ExpenseOrderOption>): ExpenseOrder
   const containerNos = Array.isArray(order.containerNos)
     ? order.containerNos.filter(Boolean)
     : transportItems.map((item) => item.containerNo || "").filter(Boolean);
+  const containerTypes = uniqueContainerTypes([
+    order.containerType,
+    ...(order.containerTypes || []),
+    ...transportItems.map((item) => item.containerType),
+  ]);
   return {
     ...order,
     id,
     orderId: id,
     transportItems,
     containerNos,
+    containerTypes,
+    containerType: order.containerType || (containerTypes.length === 1 ? containerTypes[0] : ""),
     containerCount: Number(order.containerCount || containerNos.length || transportItems.length || 0),
     logisticsSuppliers: filterLogisticsFeeSuppliers(order.logisticsSuppliers || []),
   };
@@ -1681,8 +1743,90 @@ function normalizeExpenseItemCostType(item: ExpenseItemForm, options: string[]) 
 
 function lineSubtotal(item: ExpenseItemForm) {
   const unitPrice = Number(item.amount || 0);
-  const count = Number(item.appliedContainerCount || 1);
-  return unitPrice * (Number.isFinite(count) && count > 0 ? count : 1);
+  const quantity = Number(item.appliedContainerCount || 1);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) return 0;
+  return unitPrice * (Number.isFinite(quantity) && quantity > 0 ? quantity : 1);
+}
+
+function validBillingQuantity(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return false;
+  return Number.isInteger(numeric);
+}
+
+function billingQuantityLegacyInteger(value: unknown) {
+  const numeric = Number(value || 1);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+  return Math.max(1, Math.ceil(numeric));
+}
+
+function normalizeContainerType(value: unknown) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function uniqueContainerTypes(values: unknown[]) {
+  return values
+    .map(normalizeContainerType)
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function uniqueTextValues(values: unknown[]) {
+  return values
+    .map((value) => String(value || "").trim())
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function logisticsExpenseContainerSummary(expense: Partial<LogisticsExpense>, items: LogisticsExpense[] = []): LogisticsExpenseContainerSummary {
+  const rows = [expense, ...(items.length ? items : [])];
+  const seenTransportItems = new Set<string>();
+  const transportItems: Array<{ containerNo: string; containerType: string }> = [];
+  const fallbackNos: string[] = [];
+  const fallbackTypes: unknown[] = [];
+  let fallbackCount = 0;
+
+  for (const row of rows) {
+    const order = row.order || {};
+    const orderTransportItems = Array.isArray(order.transportItems) ? order.transportItems : [];
+    fallbackNos.push(...(order.containerNos || []));
+    fallbackTypes.push(order.containerType, ...(order.containerTypes || []));
+    fallbackCount = Math.max(fallbackCount, Number(order.containerCount || 0));
+    for (const item of orderTransportItems) {
+      const containerNo = String(item.containerNo || "").trim();
+      const containerType = normalizeContainerType(item.containerType);
+      const key = item.id || `${containerNo}|${containerType}|${String(item.sealNo || "").trim()}`;
+      if ((!containerNo && !containerType) || seenTransportItems.has(key)) continue;
+      seenTransportItems.add(key);
+      transportItems.push({ containerNo, containerType });
+    }
+  }
+
+  const typeCounts = new Map<string, number>();
+  if (transportItems.length) {
+    for (const item of transportItems) {
+      if (!item.containerType) continue;
+      typeCounts.set(item.containerType, (typeCounts.get(item.containerType) || 0) + 1);
+    }
+  } else {
+    const types = uniqueContainerTypes(fallbackTypes);
+    const nos = uniqueTextValues(fallbackNos);
+    if (types.length === 1) {
+      typeCounts.set(types[0], nos.length || fallbackCount || 1);
+    } else {
+      for (const type of types) typeCounts.set(type, 0);
+    }
+  }
+
+  const typeLines = [...typeCounts.entries()].map(([type, count]) => (count > 0 ? `${type} × ${count}` : type));
+  const containerNoLines = transportItems.length
+    ? uniqueTextValues(transportItems.map((item) => item.containerNo))
+    : uniqueTextValues(fallbackNos);
+  const hasContainers = Boolean(typeLines.length || containerNoLines.length);
+  return {
+    hasContainers,
+    typeLines,
+    containerNoLines,
+    shortText: hasContainers && typeLines.length ? typeLines.map((line) => line.replace(/\s×\s/g, "×")).join(" / ") : "未录入",
+  };
 }
 
 function containerSummaryText(order?: ExpenseOrderOption | null) {
@@ -1699,16 +1843,22 @@ function expenseAmountText(expense: LogisticsExpense) {
 }
 
 function expenseUnitAmount(expense: LogisticsExpense) {
-  const count = Number(expense.appliedContainerCount || 1);
+  const count = Number(expenseBillingQuantity(expense));
   const divisor = Number.isFinite(count) && count > 0 ? count : 1;
   return Number(expense.amount || 0) / divisor;
+}
+
+function expenseBillingQuantity(expense: Partial<LogisticsExpense>) {
+  const quantity = Number(expense.billingQuantity ?? expense.appliedContainerCount ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
 }
 
 function logisticsExpenseDraftFromItem(expense: Partial<LogisticsExpense>): LogisticsExpenseDraft {
   return {
     costType: expense.costType || "拖车费",
+    billingMethod: DEFAULT_BILLING_METHOD,
     unitAmount: editableNumberText(expenseUnitAmount(expense as LogisticsExpense)),
-    appliedContainerCount: editableQuantityText(expense.appliedContainerCount),
+    appliedContainerCount: editableQuantityText(expenseBillingQuantity(expense)),
     remark: expense.remark || "",
   };
 }
@@ -1722,64 +1872,69 @@ function logisticsExpenseDraftsFromItems(items: LogisticsExpense[]) {
 
 function logisticsExpenseDraftSignature(expense: LogisticsExpense) {
   return [
-    expense.id,
-    expense.costType || "",
-    expense.amount || 0,
-    expense.amountCny || 0,
-    expense.appliedContainerCount || 1,
-    expense.exchangeRate || 1,
-    expense.remark || "",
-  ].join(":");
+	    expense.id,
+	    expense.costType || "",
+	    expense.amount || 0,
+	    expense.amountCny || 0,
+	    expense.containerType || "",
+	    expense.appliedContainerCount || 1,
+	    expense.billingMethod || "",
+	    expense.billingQuantity || "",
+	    expense.exchangeRate || 1,
+	    expense.remark || "",
+	  ].join(":");
 }
 
 function logisticsExpenseDraftChanged(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
   if (!draft) return false;
-  const initial = logisticsExpenseDraftFromItem(expense);
-  return draft.costType !== initial.costType
-    || draft.unitAmount.trim() !== initial.unitAmount
-    || draft.appliedContainerCount !== initial.appliedContainerCount
-    || draft.remark !== initial.remark;
+	  const initial = logisticsExpenseDraftFromItem(expense);
+	  return draft.costType !== initial.costType
+	    || draft.unitAmount.trim() !== initial.unitAmount
+	    || draft.appliedContainerCount !== initial.appliedContainerCount
+	    || draft.remark !== initial.remark;
 }
 
 function validLogisticsExpenseDraft(draft?: LogisticsExpenseDraft, isCreate = false) {
-  if (!draft) return false;
-  if (!draft.costType || !COST_TYPES.includes(draft.costType)) return false;
-  if (!draft.unitAmount.trim()) return false;
-  const unitAmount = Number(draft.unitAmount);
-  const count = Number(draft.appliedContainerCount);
-  return Number.isFinite(unitAmount) && (isCreate ? unitAmount > 0 : unitAmount >= 0) && Number.isInteger(count) && count > 0;
+	  if (!draft) return false;
+	  if (!draft.costType || !COST_TYPES.includes(draft.costType)) return false;
+	  if (!draft.unitAmount.trim()) return false;
+	  const unitAmount = Number(draft.unitAmount);
+	  return Number.isFinite(unitAmount) && (isCreate ? unitAmount > 0 : unitAmount >= 0) && validBillingQuantity(draft.appliedContainerCount);
 }
 
 function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchUpdateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
-  return {
-    id: expense.id,
-    amount: Number(safeDraft.unitAmount),
-    appliedContainerCount: Number(safeDraft.appliedContainerCount),
-    remark: safeDraft.remark.trim(),
-  };
+	  return {
+	    id: expense.id,
+	    amount: Number(safeDraft.unitAmount),
+	    billingMethod: DEFAULT_BILLING_METHOD,
+	    billingQuantity: Number(safeDraft.appliedContainerCount),
+	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
+	    remark: safeDraft.remark.trim(),
+	  };
 }
 
 function logisticsExpenseDraftCreatePayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchCreateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
-  return {
-    expenseType: safeDraft.costType,
-    amount: Number(safeDraft.unitAmount),
-    appliedContainerCount: Number(safeDraft.appliedContainerCount),
-    remark: safeDraft.remark.trim(),
-  };
+	  return {
+	    expenseType: safeDraft.costType,
+	    amount: Number(safeDraft.unitAmount),
+	    billingMethod: DEFAULT_BILLING_METHOD,
+	    billingQuantity: Number(safeDraft.appliedContainerCount),
+	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
+	    remark: safeDraft.remark.trim(),
+	  };
 }
 
 function logisticsExpenseDraftValidationMessage(expense: LogisticsExpense, draft: LogisticsExpenseDraft | undefined, index: number) {
-  const lineNo = index + 1;
-  if (!draft?.costType || !COST_TYPES.includes(draft.costType)) return `第 ${lineNo} 行请选择费用类型`;
-  if (!draft.unitAmount.trim()) return `第 ${lineNo} 行金额不能为空`;
-  const unitAmount = Number(draft.unitAmount);
-  if (!Number.isFinite(unitAmount) || unitAmount < 0) return `第 ${lineNo} 行金额必须大于或等于 0`;
-  if (expense.isTemporary && unitAmount <= 0) return `第 ${lineNo} 行金额必须大于 0`;
-  const count = Number(draft.appliedContainerCount);
-  if (!Number.isInteger(count) || count <= 0) return `第 ${lineNo} 行适用数量必须为正整数`;
-  return `第 ${lineNo} 行填写不完整`;
+	  const lineNo = index + 1;
+	  if (!draft?.costType || !COST_TYPES.includes(draft.costType)) return `第 ${lineNo} 行请选择费用类型`;
+	  if (!draft.unitAmount.trim()) return `第 ${lineNo} 行金额不能为空`;
+	  const unitAmount = Number(draft.unitAmount);
+	  if (!Number.isFinite(unitAmount) || unitAmount < 0) return `第 ${lineNo} 行金额必须大于或等于 0`;
+	  if (expense.isTemporary && unitAmount <= 0) return `第 ${lineNo} 行金额必须大于 0`;
+	  if (!validBillingQuantity(draft.appliedContainerCount)) return `第 ${lineNo} 行适用数量必须为正整数`;
+	  return `第 ${lineNo} 行填写不完整`;
 }
 
 function logisticsExpenseDraftAmountCny(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
@@ -1796,7 +1951,8 @@ function editableNumberText(value: unknown) {
 
 function editableQuantityText(value: unknown) {
   const numeric = Number(value || 1);
-  return Number.isInteger(numeric) && numeric > 0 ? String(numeric) : "1";
+  if (!Number.isFinite(numeric) || numeric <= 0) return "1";
+  return String(Math.max(1, Math.round(numeric)));
 }
 
 function editableLineSubtotal(unitAmount: string, appliedContainerCount: string) {
@@ -1822,11 +1978,13 @@ function createTemporaryLogisticsExpenseRow(expense: LogisticsExpense, items: Lo
     supplierName: base.supplierName,
     costType: "拖车费",
     currency: base.currency || "CNY",
-    exchangeRate: Number(base.exchangeRate || 1),
-    amount: 0,
-    amountCny: 0,
-    appliedContainerCount: 1,
-    remark: "",
+	    exchangeRate: Number(base.exchangeRate || 1),
+	    amount: 0,
+	    amountCny: 0,
+	    appliedContainerCount: 1,
+	    billingMethod: DEFAULT_BILLING_METHOD,
+	    billingQuantity: 1,
+	    remark: "",
     auditStatus: ["草稿", "待审核", "已驳回"].includes(base.auditStatus || "") ? base.auditStatus : "草稿",
     invoiceStatus: "未通知",
     paymentStatus: "待开票",

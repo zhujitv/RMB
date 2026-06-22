@@ -357,6 +357,8 @@ model DomesticLogisticsTransportItem {
   id                String   @id @default(cuid())
   logisticsInfoId   String   @map("logistics_info_id")
   containerNo       String?  @map("container_no")
+  containerType     String?  @map("container_type")
+  sealNo            String?  @map("seal_no")
   truckPlateNo      String?  @map("truck_plate_no")
   trailerPlateNo    String?  @map("trailer_plate_no")
   departureDate     DateTime? @map("departure_date") @db.Date
@@ -594,7 +596,10 @@ model LogisticsExpense {
   exchangeRateType   String?   @map("exchange_rate_type")
   amount        Decimal   @db.Decimal(18, 2)
   amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  containerType String?   @map("container_type")
   appliedContainerCount Int? @map("applied_container_count")
+  billingMethod String?   @map("billing_method")
+  billingQuantity Decimal? @map("billing_quantity") @db.Decimal(18, 4)
   remark        String?
   auditStatus   String    @default("草稿") @map("audit_status")
   invoiceStatus String    @default("未通知") @map("invoice_status")

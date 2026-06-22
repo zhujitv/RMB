@@ -30,6 +30,9 @@ import {
 } from "./shared";
 import { assertSupplierActive } from "./supplier-masters";
 
+const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
+const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
+
 export function includeLogisticsExpenseRelations() {
   return {
     order: {
@@ -58,16 +61,19 @@ export function includeLogisticsExpenseRelations() {
 export function logisticsExpenseOrderSummary(order = {}) {
   const info = (order.domesticLogisticsInfos || [])[0] || {};
   const firstItem = (info.transportItems || [])[0] || {};
-  const transportItems = (info.transportItems || []).map((item) => ({
-    id: item.id || "",
-    containerNo: item.containerNo || "",
-    truckPlateNo: item.truckPlateNo || "",
+	  const transportItems = (info.transportItems || []).map((item) => ({
+	    id: item.id || "",
+	    containerNo: item.containerNo || "",
+	    containerType: item.containerType || item.container_type || "",
+	    sealNo: item.sealNo || item.seal_no || "",
+	    truckPlateNo: item.truckPlateNo || "",
     departureDate: dateToInput(item.departureDate),
     departurePlace: item.departurePlace || "",
     arrivalPlace: item.arrivalPlace || "",
     cargoName: item.cargoName || "",
   }));
   const containerNos = transportItems.map((item) => item.containerNo).filter(Boolean);
+  const containerTypes = [...new Set(transportItems.map((item) => item.containerType).filter(Boolean))];
   return {
     orderId: order.id || "",
     orderNo: order.orderNo || "",
@@ -76,7 +82,8 @@ export function logisticsExpenseOrderSummary(order = {}) {
     customerShortName: customerShortName(order.customer),
     customerName: customerBusinessName(order.customer, order.customerNameSnapshot),
     vesselVoyage: "",
-    containerType: "",
+    containerType: containerTypes.length === 1 ? containerTypes[0] : "",
+    containerTypes,
     port: firstItem.arrivalPlace || info.destinationPlace || "",
     loadingAddress: firstItem.departurePlace || info.departurePlace || "",
     sailingDate: dateToInput(firstItem.departureDate || info.departureDate || order.actualShipmentDate || order.blDate || order.expectedShipmentDate),
@@ -109,11 +116,16 @@ export function serializeLogisticsExpense(expense = {}) {
     exchangeRateDate: dateToInput(expense.exchangeRateDate),
     exchangeRateSource: expense.exchangeRateSource || "",
     exchangeRateType: expense.exchangeRateType || "",
-    amount: Number(expense.amount || 0),
-    amountCny: Number(expense.amountCny || 0),
-    appliedContainerCount: expense.appliedContainerCount == null ? null : Number(expense.appliedContainerCount || 0),
-    containerScope: expense.appliedContainerCount ? `${Number(expense.appliedContainerCount)} 个柜` : "整票",
-    remark: expense.remark || "",
+	    amount: Number(expense.amount || 0),
+	    amountCny: Number(expense.amountCny || 0),
+	    containerType: expense.containerType || "",
+	    appliedContainerCount: expense.appliedContainerCount == null ? 1 : Number(expense.appliedContainerCount || 1),
+	    billingMethod: normalizeBillingMethodValue(expense.billingMethod),
+	    billingQuantity: expense.billingQuantity == null
+	      ? Number(expense.appliedContainerCount || 1)
+	      : Number(expense.billingQuantity || 1),
+	    containerScope: `${expense.billingQuantity == null ? Number(expense.appliedContainerCount || 1) : Number(expense.billingQuantity || 1)}`,
+	    remark: expense.remark || "",
     auditStatus: expense.auditStatus || "草稿",
     invoiceStatus: expense.invoiceStatus || "未通知",
     paymentStatus: expense.paymentStatus || "待开票",
@@ -343,15 +355,15 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
       defaultDate: todayInputInChina(),
       allowHistoricalSource: before?.exchangeRateSource === "历史录入",
     });
-  const requestedStatus = nonEmpty(input.auditStatus || input.status || (input.submit === false ? "草稿" : "待审核"));
+  const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? before.auditStatus : (input.submit === false ? "草稿" : "待审核")));
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "待审核";
-  if (before?.auditStatus === "待审核" && actor?.role !== "管理员") {
-    throw codedError("待审核费用不能直接修改，请先撤回后再修改。", 403, "LOGISTICS_EXPENSE_PENDING_LOCKED");
-  }
   if (before?.auditStatus === "审核通过" && actor?.role !== "管理员") {
     throw codedError("已审核通过的费用金额不能修改。", 403, "LOGISTICS_EXPENSE_APPROVED_LOCKED");
   }
-  const appliedContainerCount = normalizeAppliedContainerCount(input, order, before);
+  const billingMethod = normalizeLogisticsExpenseBillingMethod(input, before);
+  const billingQuantity = normalizeLogisticsExpenseBillingQuantity(input, billingMethod, before);
+  const appliedContainerCount = normalizeAppliedContainerCount(input, order, before, billingQuantity);
+  const containerType = normalizeLogisticsExpenseContainerType(input, order, before);
   return {
     orderId: order.id,
     supplierId: supplier.id,
@@ -363,9 +375,12 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
     exchangeRateSource: exchange.exchangeRateSource,
     exchangeRateType: exchange.exchangeRateType,
     amount,
-    amountCny: amountCny(amount, exchange.exchangeRate),
-    appliedContainerCount,
-    remark: optional(input.remark),
+	    amountCny: amountCny(amount, exchange.exchangeRate),
+	    containerType,
+	    appliedContainerCount,
+	    billingMethod,
+	    billingQuantity,
+	    remark: optional(input.remark),
     auditStatus,
     submittedAt: auditStatus === "待审核" ? (before?.submittedAt || new Date()) : before?.submittedAt || null,
     invoiceStatus: before?.invoiceStatus || "未通知",
@@ -376,23 +391,73 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
   };
 }
 
-function normalizeAppliedContainerCount(input = {}, order = {}, before = null) {
-  const hasContainerCountInput = Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
+function normalizeBillingMethodValue(value) {
+  const text = nonEmpty(value || DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD);
+  return LOGISTICS_EXPENSE_BILLING_METHODS.includes(text) ? text : DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD;
+}
+
+function integerBillingMethod(method) {
+  return ["按柜", "按票", "按次"].includes(normalizeBillingMethodValue(method));
+}
+
+function normalizeLogisticsExpenseBillingMethod(input = {}, before = null) {
+  const hasBillingMethodInput = Object.prototype.hasOwnProperty.call(input, "billingMethod")
+    || Object.prototype.hasOwnProperty.call(input, "billing_method");
+  if (!hasBillingMethodInput && before) return normalizeBillingMethodValue(before.billingMethod);
+  const requested = nonEmpty(input.billingMethod ?? input.billing_method ?? DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD);
+  if (!LOGISTICS_EXPENSE_BILLING_METHODS.includes(requested)) {
+    throw codedError("请选择有效计费方式。", 400, "LOGISTICS_BILLING_METHOD_INVALID");
+  }
+  return requested;
+}
+
+function normalizeLogisticsExpenseBillingQuantity(input = {}, billingMethod = DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD, before = null) {
+  const hasQuantityInput = Object.prototype.hasOwnProperty.call(input, "billingQuantity")
+    || Object.prototype.hasOwnProperty.call(input, "billing_quantity")
+    || Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
     || Object.prototype.hasOwnProperty.call(input, "containerCount")
     || Object.prototype.hasOwnProperty.call(input, "applied_container_count");
-  if (!hasContainerCountInput && before) return before.appliedContainerCount ?? null;
+  if (!hasQuantityInput && before) return Number(before.billingQuantity ?? before.appliedContainerCount ?? 1);
+  const raw = input.billingQuantity ?? input.billing_quantity ?? input.appliedContainerCount ?? input.containerCount ?? input.applied_container_count;
+  const text = nonEmpty(raw);
+  if (!text || ["整票", "whole_shipment", "shipment", "all"].includes(text.toLowerCase())) return 1;
+  const quantity = Number(text);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw codedError("适用数量/范围必须大于 0。", 400, "LOGISTICS_BILLING_QUANTITY_INVALID");
+  }
+  if (integerBillingMethod(billingMethod) && !Number.isInteger(quantity)) {
+    throw codedError("按柜、按票、按次的适用数量/范围必须为正整数。", 400, "LOGISTICS_BILLING_QUANTITY_INTEGER_REQUIRED");
+  }
+  return quantity;
+}
+
+function normalizeLogisticsExpenseContainerType(input = {}, order = {}, before = null) {
+  const hasContainerTypeInput = Object.prototype.hasOwnProperty.call(input, "containerType")
+    || Object.prototype.hasOwnProperty.call(input, "container_type");
+  if (!hasContainerTypeInput && before) return before.containerType || null;
+  const requested = optional(input.containerType ?? input.container_type);
+  if (!requested) return null;
+  const summary = logisticsExpenseOrderSummary(order);
+  const allowedTypes = summary.containerTypes || [];
+  if (allowedTypes.length && !allowedTypes.includes(requested)) {
+    throw codedError("请选择有效集装箱柜型。", 400, "LOGISTICS_CONTAINER_TYPE_INVALID");
+  }
+  return requested;
+}
+
+function normalizeAppliedContainerCount(input = {}, order = {}, before = null, billingQuantity = 1) {
+  const hasContainerCountInput = Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
+	    || Object.prototype.hasOwnProperty.call(input, "containerCount")
+	    || Object.prototype.hasOwnProperty.call(input, "applied_container_count");
+  if (!hasContainerCountInput && before) return before.appliedContainerCount ?? 1;
   const raw = input.appliedContainerCount ?? input.containerCount ?? input.applied_container_count;
   const text = nonEmpty(raw);
-  if (!text || ["整票", "whole_shipment", "shipment", "all"].includes(text.toLowerCase())) return null;
+  if (!text || ["整票", "whole_shipment", "shipment", "all"].includes(text.toLowerCase())) return Math.max(1, Math.ceil(Number(billingQuantity || 1)));
   const count = Number(text);
-  if (!Number.isInteger(count) || count <= 0) {
-    throw codedError("适用集装箱数量必须为正整数，或选择整票。", 400, "LOGISTICS_CONTAINER_COUNT_INVALID");
+  if (!Number.isFinite(count) || count <= 0) {
+	    throw codedError("适用数量必须为正整数。", 400, "LOGISTICS_CONTAINER_COUNT_INVALID");
   }
-  const orderSummary = logisticsExpenseOrderSummary(order);
-  if (orderSummary.containerCount > 0 && count > orderSummary.containerCount) {
-    throw codedError(`适用集装箱数量不能超过该提单号下的 ${orderSummary.containerCount} 个柜。`, 400, "LOGISTICS_CONTAINER_COUNT_EXCEEDS_ORDER");
-  }
-  return count;
+  return Math.max(1, Math.ceil(count));
 }
 
 export async function loadLogisticsExpenseForAction(id, actor) {
