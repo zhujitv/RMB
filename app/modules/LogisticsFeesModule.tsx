@@ -1,6 +1,5 @@
 "use client";
 
-import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
@@ -1169,6 +1168,7 @@ function LogisticsExpenseRows({
           className={styles.billAddLineButton}
           type="button"
           disabled={saving}
+          onKeyDown={preventEnterFormSubmit}
           onClick={(event) => {
             event.stopPropagation();
             addExpenseDetailRow();
@@ -1180,6 +1180,7 @@ function LogisticsExpenseRows({
           className={styles.billSaveButton}
           type="button"
           disabled={!hasPendingChanges || saving}
+          onKeyDown={preventEnterFormSubmit}
           onClick={(event) => {
             event.stopPropagation();
             void handleSaveBillDetails();
@@ -1428,7 +1429,7 @@ function LogisticsExpenseDetailsTable({
   onStageDelete: (expense: LogisticsExpense) => void;
 }) {
   return (
-    <div className={styles.logisticsDetailTableWrap}>
+    <div className={styles.logisticsDetailTableWrap} onKeyDown={preventEnterFormSubmit}>
       <table className={styles.logisticsDetailTable}>
         <thead>
           <tr>
@@ -1807,7 +1808,6 @@ export function LogisticsExpenseForm({
       onKeyDown={preventEnterFormSubmit}
       onSubmit={(event) => {
         event.preventDefault();
-        void submitExpense("待审核");
       }}
     >
       <div className={styles.quickCreateHeader}>
@@ -1885,8 +1885,8 @@ export function LogisticsExpenseForm({
             <span>可一次登记多条拖车费、报关费、港杂费等费用。</span>
           </div>
           <div className={styles.headerActions}>
-            <button className={styles.secondaryButton} type="button" onClick={() => addExpenseItem(false)}>添加费用</button>
-            <button className={styles.secondaryButton} type="button" onClick={() => addExpenseItem(true)}>复制上一行</button>
+            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(false)}>添加费用</button>
+            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(true)}>复制上一行</button>
           </div>
         </div>
         <div className={styles.logisticsItemsTable}>
@@ -1937,7 +1937,7 @@ export function LogisticsExpenseForm({
         <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => void submitExpense("草稿")}>
           {saving ? "保存中..." : "保存草稿"}
         </button>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>
+        <button className={styles.primaryButtonCompact} type="button" disabled={saving} onKeyDown={preventEnterFormSubmit} onClick={() => void submitExpense("待审核")}>
           {saving ? "提交中..." : "提交审核"}
         </button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
@@ -2079,8 +2079,7 @@ function InvoiceUploadForm({
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function uploadInvoice(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function uploadInvoice() {
     if (!file) {
       setMessage("请选择发票文件");
       return;
@@ -2113,9 +2112,9 @@ function InvoiceUploadForm({
   }
 
   return (
-    <form className={styles.inlineInvoiceForm} onKeyDown={preventEnterFormSubmit} onSubmit={uploadInvoice}>
+    <form className={styles.inlineInvoiceForm} onKeyDown={preventEnterFormSubmit} onSubmit={(event) => event.preventDefault()}>
       <input type="file" accept="application/pdf,.pdf" aria-label={`${group.label}选择发票文件`} onChange={(event) => setFile(event.target.files?.[0] || null)} />
-      <button className={styles.secondaryButton} type="submit" disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
+      <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => void uploadInvoice()} disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
       {message ? <span className={styles.inlineFormMessage}>{message}</span> : null}
     </form>
   );

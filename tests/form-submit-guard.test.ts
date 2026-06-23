@@ -5,14 +5,21 @@ import { preventEnterFormSubmit } from "../app/formGuards.ts";
 
 function keyboardEvent(key: string, tagName: string) {
   let defaultPrevented = false;
+  let propagationStopped = false;
   return {
     key,
     target: { tagName },
     preventDefault() {
       defaultPrevented = true;
     },
+    stopPropagation() {
+      propagationStopped = true;
+    },
     get defaultPrevented() {
       return defaultPrevented;
+    },
+    get propagationStopped() {
+      return propagationStopped;
     },
   };
 }
@@ -21,6 +28,7 @@ const logisticsFeesModule = readFileSync("app/modules/LogisticsFeesModule.tsx", 
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const sharedSerialization = readFileSync("lib/platform/shared-serialization.ts", "utf8");
 
 test("form guard blocks Enter from submitting single-line controls", () => {
   const event = keyboardEvent("Enter", "INPUT");
@@ -28,6 +36,7 @@ test("form guard blocks Enter from submitting single-line controls", () => {
   preventEnterFormSubmit(event as never);
 
   assert.equal(event.defaultPrevented, true);
+  assert.equal(event.propagationStopped, true);
 });
 
 test("form guard keeps textarea line breaks usable", () => {
@@ -36,6 +45,14 @@ test("form guard keeps textarea line breaks usable", () => {
   preventEnterFormSubmit(event as never);
 
   assert.equal(event.defaultPrevented, false);
+  assert.equal(event.propagationStopped, false);
+});
+
+test("legacy full logistics cost permissions include newly added document fee", () => {
+  assert.match(sharedSerialization, /export function expandLegacyFullLogisticsCostTypeList/);
+  assert.match(sharedSerialization, /const documentFeeType = "打单费"/);
+  assert.match(sharedSerialization, /legacyFullRows\.every\(\(item\) => rows\.includes\(item\)\)/);
+  assert.match(sharedSerialization, /allowedLogisticsCostTypes: expandLegacyFullLogisticsCostTypeList/);
 });
 
 test("risky business forms use the shared Enter submit guard", () => {

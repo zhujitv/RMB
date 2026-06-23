@@ -78,6 +78,16 @@ export function normalizeLogisticsCostTypeList(value = []) {
   return rows.filter((item, index, arr) => arr.indexOf(item) === index);
 }
 
+export function expandLegacyFullLogisticsCostTypeList(value = []) {
+  const rows = normalizeLogisticsCostTypeList(value);
+  const documentFeeType = "打单费";
+  const legacyFullRows = LOGISTICS_COST_TYPES.filter((item) => item !== documentFeeType);
+  if (!rows.includes(documentFeeType) && legacyFullRows.every((item) => rows.includes(item))) {
+    return LOGISTICS_COST_TYPES;
+  }
+  return rows;
+}
+
 export function serializeSupplier(supplier) {
   return {
     id: supplier.id,
@@ -98,7 +108,7 @@ export function serializeSupplier(supplier) {
     allowLogisticsExpenseEntry: Boolean(supplier.allowLogisticsExpenseEntry),
     allowLogisticsInvoiceUpload: Boolean(supplier.allowLogisticsInvoiceUpload),
     isDefaultLogisticsSupplier: Boolean(supplier.isDefaultLogisticsSupplier),
-    allowedLogisticsCostTypes: normalizeLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []),
+    allowedLogisticsCostTypes: expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []),
     createdBy: serializeUser(supplier.createdBy),
     updatedBy: serializeUser(supplier.updatedBy),
     createdAt: supplier.createdAt,

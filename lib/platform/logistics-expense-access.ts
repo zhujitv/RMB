@@ -16,8 +16,8 @@ import {
   customerBusinessName,
   customerShortName,
   dateToInput,
+  expandLegacyFullLogisticsCostTypeList,
   nonEmpty,
-  normalizeLogisticsCostTypeList,
   normalizedCostType,
   optional,
   permissionError,
@@ -385,7 +385,7 @@ export async function assertLogisticsExpenseSupplier(actor, order, input = {}) {
 
 function assertSupplierCostTypeAllowed(actor, supplier, costType) {
   if (actor?.role === "管理员") return;
-  const allowed = normalizeLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []);
+  const allowed = expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []);
   if (!allowed.includes(costType)) {
     throw codedError(`当前供应商不能录入${costType}。`, 403, "LOGISTICS_COST_TYPE_NOT_ALLOWED");
   }

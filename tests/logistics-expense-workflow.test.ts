@@ -173,6 +173,15 @@ test("logistics cost type dictionary includes document, advance and drop-off fee
   assert.match(reportsModule, /\.\.\.LOGISTICS_COST_TYPES/);
 });
 
+test("logistics expense entry prevents Enter-triggered submit and row creation", () => {
+  assert.match(logisticsModule, /onSubmit=\{\(event\) => \{\s*event\.preventDefault\(\);\s*\}\}/);
+  assert.doesNotMatch(logisticsModule, /type="submit"/);
+  assert.match(logisticsModule, /className=\{styles\.logisticsDetailTableWrap\} onKeyDown=\{preventEnterFormSubmit\}/);
+  assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => addExpenseItem\(false\)\}/);
+  assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => addExpenseItem\(true\)\}/);
+  assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => void uploadInvoice\(\)\}/);
+});
+
 test("approval sends invoice notification and preserves failure for audit", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);

@@ -9,4 +9,5 @@ export function preventEnterFormSubmit(event: KeyboardEvent<HTMLElement>) {
   if (tagName === "textarea" || target?.isContentEditable) return;
 
   event.preventDefault();
+  event.stopPropagation();
 }
