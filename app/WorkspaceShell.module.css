@@ -2540,44 +2540,49 @@
 
 .logisticsDetailTable th:nth-child(2),
 .logisticsDetailTable td:nth-child(2) {
-  width: 92px;
+  width: 84px;
   text-align: center;
   vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(3),
 .logisticsDetailTable td:nth-child(3) {
-  width: 96px;
+  width: 86px;
   text-align: center;
   vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(4),
 .logisticsDetailTable td:nth-child(4) {
-  width: 150px;
+  width: 140px;
 }
 
 .logisticsDetailTable th:nth-child(5),
 .logisticsDetailTable td:nth-child(5) {
-  width: 170px;
+  width: 130px;
 }
 
 .logisticsDetailTable th:nth-child(6),
 .logisticsDetailTable td:nth-child(6) {
-  width: 112px;
-  text-align: center;
-  vertical-align: middle;
+  width: 160px;
 }
 
 .logisticsDetailTable th:nth-child(7),
 .logisticsDetailTable td:nth-child(7) {
-  width: 116px;
+  width: 104px;
   text-align: center;
   vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(8),
 .logisticsDetailTable td:nth-child(8) {
+  width: 112px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsDetailTable th:nth-child(9),
+.logisticsDetailTable td:nth-child(9) {
   width: 120px;
   text-align: center;
   vertical-align: middle;

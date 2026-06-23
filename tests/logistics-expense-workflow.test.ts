@@ -571,6 +571,10 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.doesNotMatch(logisticsModule, /<th>计费方式<\/th>/);
   assert.match(logisticsModule, /<th>数量<\/th>/);
   assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>金额<\/th>/);
+  assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>折人民币<\/th>/);
+  assert.match(logisticsModule, /formatOriginalCurrencyAccounting\(originalCurrency, originalAmount\)/);
+  assert.match(logisticsModule, /logisticsExpenseAmountCny\(expense, originalAmount, originalCurrency\)/);
+  assert.doesNotMatch(logisticsExpenseDetailLineSource, /formatCnyAccounting\(expense\.amountCny \|\| expense\.amount \|\| 0\)[\s\S]*<span>\{expense\.currency/);
   assert.match(logisticsModule, /<th>发票状态<\/th>/);
   assert.match(logisticsModule, /<th>成本同步<\/th>/);
   assert.doesNotMatch(logisticsExpenseDetailLineSource, /onWithdraw|onMarkPaid|onConfirmInvoice|确认发票|标记付款/);
@@ -715,7 +719,7 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(logisticsModule, /logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /\.logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /border: 1px solid #fecaca/);
-  assert.match(workspaceStyles, /th:nth-child\(8\)[\s\S]*width: 140px/);
+  assert.match(workspaceStyles, /th:nth-child\(9\)[\s\S]*width: 120px/);
 });
 
 test("sales commission base uses actual received payments minus logistics costs", () => {

@@ -1477,6 +1477,7 @@ function LogisticsExpenseDetailsTable({
             <th>柜型</th>
             <th>数量</th>
             <th className={styles.numericCell}>金额</th>
+            <th className={styles.numericCell}>折人民币</th>
             <th>备注</th>
             <th>发票状态</th>
             <th>成本同步</th>
@@ -1532,6 +1533,9 @@ function LogisticsExpenseDetailLine({
   const shouldRenderRemarkInput = canEditThisAmount;
   const editedSubtotal = editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount);
   const editedAmountCny = editedSubtotal * Number(expense.exchangeRate || 1);
+  const originalAmount = logisticsExpenseOriginalAmount(expense);
+  const originalCurrency = normalizeCurrencyCode(expense.currency);
+  const amountCny = logisticsExpenseAmountCny(expense, originalAmount, originalCurrency);
   const deleteBlockReason = billEditable ? logisticsExpenseDeleteBlockReason(expense) : `账单${billAuditStatus}，不能删除明细`;
   return (
     <tr>
@@ -1575,11 +1579,13 @@ function LogisticsExpenseDetailLine({
               aria-label="物流费用单价"
             />
           ) : (
-            <strong>{formatCnyAccounting(expense.amountCny || expense.amount || 0)}</strong>
+            <strong>{formatOriginalCurrencyAccounting(originalCurrency, originalAmount)}</strong>
           )}
-          <span>{expense.currency || "CNY"}</span>
+          {canEditThisAmount ? <span>{originalCurrency}</span> : null}
         </div>
-        {canEditThisAmount ? <small className={styles.inlineAmountHint}>{formatCnyAccounting(editedAmountCny)}</small> : null}
+      </td>
+      <td className={styles.numericCell}>
+        <strong>{formatCnyAccounting(canEditThisAmount ? editedAmountCny : amountCny)}</strong>
       </td>
       <td className={styles.remarkCell} title={draft.remark || expense.remark || ""}>
         {shouldRenderRemarkInput ? (
@@ -2402,6 +2408,12 @@ function expenseAmountText(expense: LogisticsExpense) {
 
 function formatCnyAccounting(value: unknown) {
   return `¥ ${formatAmount(value)}`;
+}
+
+function formatOriginalCurrencyAccounting(currency: string, value: unknown) {
+  const normalized = normalizeCurrencyCode(currency);
+  if (normalized === "CNY") return formatCnyAccounting(value);
+  return `${normalized} ${formatAmount(value)}`;
 }
 
 function LogisticsCurrencyTotalSummary({
