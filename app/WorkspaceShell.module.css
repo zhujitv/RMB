@@ -4079,6 +4079,33 @@
   gap: 14px;
 }
 
+.notificationTemplateField {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notificationTemplateField textarea {
+  width: 100%;
+  min-height: 84px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 9px 10px;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.notificationTemplateField textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
 .customerShippingPanel {
   border: 1px solid #dbeafe;
   border-radius: 16px;

@@ -157,6 +157,9 @@ type CommissionFormulaForm = {
 
 type NotificationTemplateForm = {
   autoSendOnApproval: boolean;
+  recipientEmailFields: string[];
+  ccAdminEmails: boolean;
+  ccEmails: string;
   singleSubjectTemplate: string;
   batchSubjectTemplate: string;
   bodyTemplate: string;
@@ -309,8 +312,33 @@ const NOTIFICATION_TEMPLATE_VARIABLES = [
   ["{uploadUrl}", "发票上传入口"],
   ["{signature}", "邮件落款"],
 ] as const;
+const NOTIFICATION_RECIPIENT_EMAIL_OPTIONS = [
+  {
+    value: "operatorUsers.email",
+    label: "绑定登录账号邮箱",
+    description: "读取物流供应商绑定的系统登录账号邮箱。",
+  },
+  {
+    value: "contactEmail",
+    label: "供应商联系邮箱",
+    description: "读取供应商资料中的联系邮箱。",
+  },
+  {
+    value: "email",
+    label: "供应商主邮箱",
+    description: "读取供应商资料中的主邮箱。",
+  },
+  {
+    value: "financeEmail",
+    label: "供应商财务邮箱",
+    description: "读取供应商资料中的财务邮箱。",
+  },
+] as const;
 const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
   autoSendOnApproval: true,
+  recipientEmailFields: NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => item.value),
+  ccAdminEmails: true,
+  ccEmails: "",
   singleSubjectTemplate: "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}",
   batchSubjectTemplate: "待开票物流费用清单（{billCount} 票）",
   bodyTemplate: [
@@ -498,8 +526,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         return;
       }
       if (tab === "notificationTemplates") {
-        const result = await apiJson<{ settings: NotificationTemplateSettings }>("/api/settings/notification-templates");
-        const settings = result.settings || {};
+        const settings = await fetchNotificationTemplateSettings();
         setNotificationTemplateSettings(settings);
         setNotificationTemplateForm(notificationTemplateFormFromSettings(settings));
         markLoaded(tab);
@@ -536,6 +563,11 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchNotificationTemplateSettings() {
+    const result = await apiJson<{ settings: NotificationTemplateSettings }>("/api/settings/notification-templates");
+    return result.settings || {};
   }
 
   function markLoaded(tab: SettingsTabKey) {
@@ -930,15 +962,16 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setNotificationTemplateSaving(true);
     setNotificationTemplateMessage("");
     try {
+      const payload = { ...notificationTemplateForm };
       const result = await apiJson<{ success?: boolean; settings?: NotificationTemplateSettings; message?: string }>(
         "/api/settings/notification-templates",
         {
           method: "PATCH",
-          body: JSON.stringify(notificationTemplateForm),
+          body: JSON.stringify(payload),
         },
       );
       if (result.success !== true) throw new Error(result.message || "通知模板保存失败");
-      const nextSettings = result.settings || notificationTemplateForm;
+      const nextSettings = await fetchNotificationTemplateSettings();
       setNotificationTemplateSettings(nextSettings);
       setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings));
       markLoaded("notificationTemplates");
@@ -1712,6 +1745,15 @@ function NotificationTemplateSettingsCard({
     onChange({ ...currentForm, [key]: value });
   }
 
+  function toggleRecipientEmailField(value: string) {
+    const current = currentForm.recipientEmailFields || [];
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value];
+    if (!next.length) return;
+    setField("recipientEmailFields", next);
+  }
+
   return (
     <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
@@ -1734,6 +1776,46 @@ function NotificationTemplateSettingsCard({
           checked={currentForm.autoSendOnApproval}
           onChange={(value) => setField("autoSendOnApproval", value)}
         />
+      </div>
+
+      <section className={styles.documentGroupCard}>
+        <strong>物流公司收件邮箱来源</strong>
+        <div className={styles.quickCreateMeta}>
+          <span>邮件收件人直接读取系统里的物流供应商资料，不在发送时手工输入。</span>
+        </div>
+        <div className={styles.commissionDeductionGrid}>
+          {NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => (
+            <UiOptionCard
+              key={item.value}
+              label={item.label}
+              description={item.description}
+              checked={(currentForm.recipientEmailFields || []).includes(item.value)}
+              onChange={() => toggleRecipientEmailField(item.value)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.documentGroupCard}>
+        <strong>抄送设置</strong>
+        <UiSwitch
+          label="默认抄送管理员"
+          description="发送物流费用开票通知时，自动抄送系统中已启用的管理员邮箱。"
+          checked={currentForm.ccAdminEmails}
+          onChange={(value) => setField("ccAdminEmails", value)}
+        />
+        <label className={styles.notificationTemplateField}>
+          额外抄送邮箱
+          <textarea
+            value={currentForm.ccEmails}
+            onChange={(event) => setField("ccEmails", event.target.value)}
+            placeholder="多个邮箱可用逗号、分号或换行分隔"
+            rows={3}
+          />
+        </label>
+      </section>
+
+      <div className={styles.reportFilterGrid}>
         <label>
           发票上传入口
           <input
@@ -2604,12 +2686,19 @@ function commissionFormulaFormFromSettings(settings: CommissionFormulaSettings |
 function notificationTemplateFormFromSettings(settings: NotificationTemplateSettings | null): NotificationTemplateForm {
   return {
     autoSendOnApproval: settings?.autoSendOnApproval !== false,
-    singleSubjectTemplate: stringSetting(settings, "singleSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.singleSubjectTemplate),
-    batchSubjectTemplate: stringSetting(settings, "batchSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.batchSubjectTemplate),
-    bodyTemplate: stringSetting(settings, "bodyTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.bodyTemplate),
-    invoiceRequirements: stringSetting(settings, "invoiceRequirements", DEFAULT_NOTIFICATION_TEMPLATE_FORM.invoiceRequirements),
+    recipientEmailFields: stringArraySetting(
+      settings,
+      "recipientEmailFields",
+      DEFAULT_NOTIFICATION_TEMPLATE_FORM.recipientEmailFields,
+    ),
+    ccAdminEmails: settings?.ccAdminEmails !== false,
+    ccEmails: emailListSettingText(settings, "ccEmails"),
+    singleSubjectTemplate: templateStringSetting(settings, "singleSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.singleSubjectTemplate),
+    batchSubjectTemplate: templateStringSetting(settings, "batchSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.batchSubjectTemplate),
+    bodyTemplate: templateStringSetting(settings, "bodyTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.bodyTemplate),
+    invoiceRequirements: templateStringSetting(settings, "invoiceRequirements", DEFAULT_NOTIFICATION_TEMPLATE_FORM.invoiceRequirements),
     uploadUrl: optionalStringSetting(settings, "uploadUrl"),
-    signature: stringSetting(settings, "signature", DEFAULT_NOTIFICATION_TEMPLATE_FORM.signature),
+    signature: templateStringSetting(settings, "signature", DEFAULT_NOTIFICATION_TEMPLATE_FORM.signature),
   };
 }
 
@@ -2623,6 +2712,19 @@ function commissionFormulaPreview(form: CommissionFormulaForm) {
 
 function notificationTemplatePreview(form: NotificationTemplateForm) {
   const uploadUrl = form.uploadUrl || "https://www.nextwood.net";
+  const recipientLabels = form.recipientEmailFields
+    .map((value) => NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.find((item) => item.value === value)?.label || "")
+    .filter(Boolean)
+    .join("、") || "未选择";
+  const extraCcText = form.ccEmails
+    .split(/[\n,;；]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("、");
+  const ccText = [
+    form.ccAdminEmails ? "管理员邮箱" : "未默认抄送管理员",
+    extraCcText ? `额外抄送：${extraCcText}` : "",
+  ].filter(Boolean).join("；");
   const sampleBillRows = [
     "1. 订单号：PV252",
     "   提单号：STSHVS76979",
@@ -2655,7 +2757,7 @@ function notificationTemplatePreview(form: NotificationTemplateForm) {
   };
   const subject = applyNotificationTemplate(form.singleSubjectTemplate, variables);
   const body = applyNotificationTemplate(form.bodyTemplate, variables);
-  return [`标题：${subject}`, "", body].join("\n");
+  return [`收件来源：${recipientLabels}`, `抄送：${ccText}`, "", `标题：${subject}`, "", body].join("\n");
 }
 
 function applyNotificationTemplate(template: string, variables: Record<string, string>) {
@@ -2671,6 +2773,28 @@ function stringSetting(settings: Record<string, unknown> | null | undefined, key
 
 function optionalStringSetting(settings: Record<string, unknown> | null | undefined, key: string) {
   const value = settings?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function templateStringSetting(settings: Record<string, unknown> | null | undefined, key: string, fallback: string) {
+  const value = settings?.[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function stringArraySetting(settings: Record<string, unknown> | null | undefined, key: string, fallback: string[]) {
+  const value = settings?.[key];
+  if (!Array.isArray(value)) return fallback;
+  const result = value
+    .map((item) => String(item || "").trim())
+    .filter((item, index, arr) => item && arr.indexOf(item) === index);
+  return result.length ? result : fallback;
+}
+
+function emailListSettingText(settings: Record<string, unknown> | null | undefined, key: string) {
+  const value = settings?.[key];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+  }
   return typeof value === "string" ? value : "";
 }
 

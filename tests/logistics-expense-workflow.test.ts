@@ -56,6 +56,9 @@ const logisticsExpenseBatchSaveRoute = readFileSync("app/api/logistics-expenses/
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const notificationTemplateCardSource = settingsModule.match(/function NotificationTemplateSettingsCard[\s\S]*?\n}\n\nfunction CustomerEditPanel/)?.[0] || "";
+const saveNotificationTemplateSource = settingsModule.match(/async function saveNotificationTemplateSettings[\s\S]*?\n\n  return \(/)?.[0] || "";
+const notificationTemplateFormSource = settingsModule.match(/function notificationTemplateFormFromSettings[\s\S]*?\n}\n\nfunction commissionFormulaPreview/)?.[0] || "";
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
@@ -172,13 +175,21 @@ test("approval sends invoice notification and preserves failure for audit", () =
   assert.match(backend, /renderLogisticsInvoiceNotificationEmail/);
   assert.match(backend, /getLogisticsInvoiceNotificationSettings/);
   assert.match(backend, /autoSendOnApproval/);
+  assert.match(backend, /recipientEmailFields/);
+  assert.match(backend, /ccAdminEmails/);
+  assert.match(backend, /ccEmails/);
   assert.match(backend, /skipped/);
+  assert.match(backend, /resolveLogisticsSupplierInvoiceRecipients/);
   assert.match(backend, /resolveLogisticsSupplierInvoiceEmail/);
+  assert.match(backend, /logisticsInvoiceNotificationAdminEmails/);
+  assert.match(backend, /logisticsInvoiceNotificationCcEmails/);
   assert.match(backend, /supplier\.operatorUsers\.email/);
   assert.match(backend, /supplier\.contactEmail/);
   assert.match(backend, /supplier\.financeEmail/);
   assert.match(backend, /物流供应商未配置有效邮箱，已检查/);
   assert.match(backend, /物流费用已审核通过，请开票并上传发票/);
+  assert.match(backend, /recipientEmails: resolved\.emails/);
+  assert.match(backend, /role: "管理员"/);
   assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults/);
   assert.match(backend, /物流费用开票通知失败/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
@@ -199,10 +210,44 @@ test("settings include configurable logistics invoice notification template", ()
   assert.match(settingsModule, /\/api\/settings\/notification-templates/);
   assert.match(settingsModule, /NotificationTemplateSettingsCard/);
   assert.match(settingsModule, /物流费用开票通知模板/);
+  assert.match(settingsModule, /物流公司收件邮箱来源/);
+  assert.match(settingsModule, /默认抄送管理员/);
+  assert.match(settingsModule, /额外抄送邮箱/);
+  assert.match(settingsModule, /recipientEmailFields/);
+  assert.match(settingsModule, /ccAdminEmails/);
+  assert.match(settingsModule, /ccEmails/);
   assert.match(settingsModule, /保存通知模板/);
   assert.match(settingsModule, /可用变量/);
   assert.match(settingsModule, /模板预览/);
   assert.match(settingsModule, /审核通过后自动发送/);
+});
+
+test("notification template editor keeps formal fields editable and persists current state", () => {
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.invoiceRequirements\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("invoiceRequirements", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.bodyTemplate\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("bodyTemplate", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.ccEmails\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("ccEmails", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.uploadUrl\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("uploadUrl", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.singleSubjectTemplate\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("singleSubjectTemplate", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.batchSubjectTemplate\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("batchSubjectTemplate", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /value=\{currentForm\.signature\}/);
+  assert.match(notificationTemplateCardSource, /onChange=\{\(event\) => setField\("signature", event\.target\.value\)\}/);
+  assert.match(notificationTemplateCardSource, /<textarea readOnly value=\{preview\}/);
+  assert.doesNotMatch(notificationTemplateCardSource, /value=\{currentForm\.(invoiceRequirements|bodyTemplate|ccEmails|uploadUrl|singleSubjectTemplate|batchSubjectTemplate|signature)\}[\s\S]{0,120}(readOnly|disabled)/);
+  assert.match(saveNotificationTemplateSource, /const payload = \{ \.\.\.notificationTemplateForm \}/);
+  assert.match(saveNotificationTemplateSource, /method: "PATCH"/);
+  assert.match(saveNotificationTemplateSource, /body: JSON\.stringify\(payload\)/);
+  assert.match(saveNotificationTemplateSource, /const nextSettings = await fetchNotificationTemplateSettings\(\)/);
+  assert.match(notificationTemplateFormSource, /templateStringSetting\(settings, "bodyTemplate"/);
+  assert.match(notificationTemplateFormSource, /templateStringSetting\(settings, "invoiceRequirements"/);
+  assert.match(backend, /if \(value === undefined \|\| value === null\) return fallback/);
+  assert.doesNotMatch(backend, /return text \|\| fallback/);
+  assert.match(backend, /prisma\.systemSetting\.upsert/);
 });
 
 test("logistics information page exposes per-order expense entry actions", () => {
@@ -271,7 +316,8 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults\(approvedRows, emailResults, actor, now\)/);
   assert.match(backend, /const bySupplier = new Map/);
   assert.match(backend, /group\.bills\.push\(bill\)/);
-  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: \[resolved\.email\]/);
+  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: resolved\.emails/);
+  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*ccEmails/);
   assert.match(backend, /待开票费用清单/);
   assert.match(backend, /订单号：/);
   assert.match(backend, /提单号：/);

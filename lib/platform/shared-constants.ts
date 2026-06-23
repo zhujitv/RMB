@@ -473,8 +473,18 @@ export const LOGISTICS_INVOICE_NOTIFICATION_VARIABLES = [
   "uploadUrl",
   "signature",
 ];
+export const LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS = [
+  { value: "operatorUsers.email", label: "绑定登录账号邮箱", field: "supplier.operatorUsers.email" },
+  { value: "contactEmail", label: "供应商联系邮箱", field: "supplier.contactEmail" },
+  { value: "email", label: "供应商主邮箱", field: "supplier.email" },
+  { value: "financeEmail", label: "供应商财务邮箱", field: "supplier.financeEmail" },
+];
+export const DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS = LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS.map((item) => item.value);
 export const DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS = {
   autoSendOnApproval: true,
+  recipientEmailFields: DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
+  ccAdminEmails: true,
+  ccEmails: [],
   singleSubjectTemplate: "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}",
   batchSubjectTemplate: "待开票物流费用清单（{billCount} 票）",
   bodyTemplate: [

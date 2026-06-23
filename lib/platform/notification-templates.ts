@@ -1,12 +1,14 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
 import {
+  DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
   DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS,
   LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY,
+  LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS,
   LOGISTICS_INVOICE_NOTIFICATION_VARIABLES,
   runNonCriticalTask,
 } from "./shared-constants";
-import { assertJsonObject, nonEmpty } from "./shared-base-utils";
+import { assertJsonObject, nonEmpty, normalizeEmail, parseEmailList, requireValidEmailList, validEmail } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 
@@ -18,12 +20,21 @@ const TEXT_LIMITS = {
   signature: 180,
 };
 
+function cleanRecipientEmailFields(value) {
+  const allowed = new Set(LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS.map((item) => item.value));
+  const input = Array.isArray(value) ? value : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS;
+  const fields = input
+    .map((item) => String(item || "").trim())
+    .filter((item, index, arr) => allowed.has(item) && arr.indexOf(item) === index);
+  return fields.length ? fields : [...DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS];
+}
+
 function cleanTemplateText(value, fallback = "", limit = 1000) {
-  const text = String(value ?? "")
+  if (value === undefined || value === null) return fallback;
+  return String(value)
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
     .slice(0, limit)
     .trim();
-  return text || fallback;
 }
 
 function cleanOptionalUrl(value) {
@@ -46,6 +57,9 @@ export function normalizeLogisticsInvoiceNotificationSettings(value = {}) {
   return {
     ...DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS,
     autoSendOnApproval: input.autoSendOnApproval !== false,
+    recipientEmailFields: cleanRecipientEmailFields(input.recipientEmailFields),
+    ccAdminEmails: input.ccAdminEmails !== false,
+    ccEmails: requireValidEmailList(input.ccEmails || [], "通知抄送邮箱"),
     singleSubjectTemplate: cleanTemplateText(
       input.singleSubjectTemplate,
       DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.singleSubjectTemplate,
@@ -73,6 +87,7 @@ export function normalizeLogisticsInvoiceNotificationSettings(value = {}) {
       TEXT_LIMITS.signature,
     ),
     variables: LOGISTICS_INVOICE_NOTIFICATION_VARIABLES,
+    recipientEmailOptions: LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS,
   };
 }
 
@@ -113,6 +128,33 @@ export async function saveLogisticsInvoiceNotificationSettings(request, actor, i
     writeAudit(request, actor, "更新物流费用通知模板", "system_settings", LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY, before, setting)
   ));
   return serializeLogisticsInvoiceNotificationSetting(setting);
+}
+
+export async function logisticsInvoiceNotificationAdminEmails() {
+  const users = await prisma.user.findMany({
+    where: {
+      role: "管理员",
+      approvalStatus: "APPROVED",
+      isActive: true,
+    },
+    select: { email: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return users
+    .map((user) => normalizeEmail(user.email))
+    .filter((email) => email && validEmail(email))
+    .filter((email, index, arr) => arr.indexOf(email) === index);
+}
+
+export async function logisticsInvoiceNotificationCcEmails(settings = {}, recipientEmails = []) {
+  const normalizedSettings = normalizeLogisticsInvoiceNotificationSettings(settings);
+  const recipients = new Set(parseEmailList(recipientEmails));
+  const configured = parseEmailList(normalizedSettings.ccEmails || []);
+  const admins = normalizedSettings.ccAdminEmails ? await logisticsInvoiceNotificationAdminEmails() : [];
+  return [...configured, ...admins]
+    .map((email) => normalizeEmail(email))
+    .filter((email) => email && validEmail(email) && !recipients.has(email))
+    .filter((email, index, arr) => arr.indexOf(email) === index);
 }
 
 function formatCurrencyCny(value) {

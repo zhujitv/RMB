@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, safeFileName, uploadToR2 } from "../r2";
 import {
   LEGACY_LOGISTICS_OPERATOR_ROLE,
+  DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
   LOGISTICS_OPERATOR_ROLE,
   codedError,
@@ -18,7 +19,7 @@ import {
 } from "./shared";
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
 import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
-import { getLogisticsInvoiceNotificationSettings, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
+import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 
 function logisticsExpenseCustomerShortName(expense = {}) {
@@ -88,57 +89,82 @@ function supplierOperatorEmailCandidates(supplier = {}) {
   return (supplier.operatorUsers || [])
     .filter((user) => user && user.isActive !== false)
     .map((user) => ({
+      key: "operatorUsers.email",
       label: "绑定登录账号邮箱",
       field: "supplier.operatorUsers.email",
       value: user.email || "",
     }));
 }
 
-export function resolveLogisticsSupplierInvoiceEmail(supplier = {}) {
-  const candidates = [
+function logisticsSupplierEmailCandidates(supplier = {}) {
+  return [
     ...supplierOperatorEmailCandidates(supplier),
-    { label: "供应商联系邮箱", field: "supplier.contactEmail", value: supplier.contactEmail || "" },
-    { label: "供应商主邮箱", field: "supplier.email", value: supplier.email || "" },
-    { label: "供应商财务邮箱", field: "supplier.financeEmail", value: supplier.financeEmail || "" },
+    { key: "contactEmail", label: "供应商联系邮箱", field: "supplier.contactEmail", value: supplier.contactEmail || "" },
+    { key: "email", label: "供应商主邮箱", field: "supplier.email", value: supplier.email || "" },
+    { key: "financeEmail", label: "供应商财务邮箱", field: "supplier.financeEmail", value: supplier.financeEmail || "" },
   ];
+}
+
+export function resolveLogisticsSupplierInvoiceRecipients(supplier = {}, recipientEmailFields = DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS) {
+  const selected = new Set((Array.isArray(recipientEmailFields) && recipientEmailFields.length
+    ? recipientEmailFields
+    : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS
+  ).map((item) => String(item || "").trim()));
+  const candidates = [
+    ...logisticsSupplierEmailCandidates(supplier).filter((candidate) => selected.has(candidate.key)),
+  ];
+  const fallbackCandidates = candidates.length ? candidates : logisticsSupplierEmailCandidates(supplier);
   const checkedFields = candidates.map((candidate) => candidate.field);
   const checkedText = checkedFields.join("、");
+  const emails = [];
   for (const candidate of candidates) {
     const email = normalizeEmail(candidate.value || "");
     if (email && validEmail(email)) {
-      return {
-        email,
-        label: candidate.label,
-        field: candidate.field,
-        checkedFields,
-        checkedText,
-        error: "",
-      };
+      emails.push(email);
     }
   }
+  const uniqueEmails = emails.filter((email, index, arr) => arr.indexOf(email) === index);
+  if (uniqueEmails.length) {
+    return {
+      email: uniqueEmails[0],
+      emails: uniqueEmails,
+      label: candidates.find((candidate) => normalizeEmail(candidate.value || "") === uniqueEmails[0])?.label || "",
+      field: candidates.find((candidate) => normalizeEmail(candidate.value || "") === uniqueEmails[0])?.field || "",
+      checkedFields,
+      checkedText,
+      error: "",
+    };
+  }
+  const checkedFallbackText = (checkedFields.length ? checkedFields : fallbackCandidates.map((candidate) => candidate.field)).join("、");
   return {
     email: "",
+    emails: [],
     label: "",
     field: "",
-    checkedFields,
-    checkedText,
-    error: `物流供应商未配置有效邮箱，已检查：${checkedText}。`,
+    checkedFields: checkedFields.length ? checkedFields : fallbackCandidates.map((candidate) => candidate.field),
+    checkedText: checkedFallbackText,
+    error: `物流供应商未配置有效邮箱，已检查：${checkedFallbackText}。`,
   };
+}
+
+export function resolveLogisticsSupplierInvoiceEmail(supplier = {}) {
+  return resolveLogisticsSupplierInvoiceRecipients(supplier);
 }
 
 export async function notifyLogisticsSupplierInvoice(expense) {
   const settings = await getLogisticsInvoiceNotificationSettings();
   if (settings.autoSendOnApproval === false) return;
-  const resolved = resolveLogisticsSupplierInvoiceEmail(expense.supplier || {});
-  if (!resolved.email) throw codedError(`${resolved.error}未发送开票通知。`, 400, "LOGISTICS_SUPPLIER_EMAIL_REQUIRED");
+  const resolved = resolveLogisticsSupplierInvoiceRecipients(expense.supplier || {}, settings.recipientEmailFields);
+  if (!resolved.emails.length) throw codedError(`${resolved.error}未发送开票通知。`, 400, "LOGISTICS_SUPPLIER_EMAIL_REQUIRED");
   const bills = logisticsBillSummaryRows([expense]);
   const { subject, body } = await renderLogisticsInvoiceNotificationEmail(
     expense.supplierNameSnapshot || expense.supplier?.supplierName || "供应商",
     bills,
   );
+  const ccEmails = await logisticsInvoiceNotificationCcEmails(settings, resolved.emails);
   await sendShippingDocumentsEmail({
-    recipientEmails: [resolved.email],
-    ccEmails: [],
+    recipientEmails: resolved.emails,
+    ccEmails,
     attachments: [],
     subject,
     body,
@@ -177,8 +203,8 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
       });
       continue;
     }
-    const resolved = resolveLogisticsSupplierInvoiceEmail(group.supplier || { email: group.supplierEmail });
-    if (!resolved.email) {
+    const resolved = resolveLogisticsSupplierInvoiceRecipients(group.supplier || { email: group.supplierEmail }, settings.recipientEmailFields);
+    if (!resolved.emails.length) {
       results.push({
         supplierId: group.supplierId || "",
         supplierName: group.supplierName || "供应商",
@@ -190,9 +216,10 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
     }
     const { subject, body } = await renderLogisticsInvoiceNotificationEmail(group.supplierName, group.bills);
     try {
+      const ccEmails = await logisticsInvoiceNotificationCcEmails(settings, resolved.emails);
       await sendShippingDocumentsEmail({
-        recipientEmails: [resolved.email],
-        ccEmails: [],
+        recipientEmails: resolved.emails,
+        ccEmails,
         attachments: [],
         subject,
         body,
