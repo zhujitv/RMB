@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
+import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
@@ -811,7 +812,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
 
   return (
     <>
-    <form className={styles.inlineEditPanel} onSubmit={submitForm} onClick={(event) => event.stopPropagation()}>
+    <form className={styles.inlineEditPanel} onKeyDown={preventEnterFormSubmit} onSubmit={submitForm} onClick={(event) => event.stopPropagation()}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>录入物流信息 - {row.orderNo || "-"}</strong>

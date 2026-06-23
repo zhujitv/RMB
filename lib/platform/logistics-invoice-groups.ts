@@ -27,6 +27,7 @@ export const LOGISTICS_INVOICE_GROUPS: LogisticsInvoiceGroupDefinition[] = [
     label: "拖车及其他费用合并发票",
     costTypes: [
       "拖车费",
+      "打单费",
       "进港费",
       "提箱费",
       "落箱费",

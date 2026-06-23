@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
+import { preventEnterFormSubmit } from "../formGuards";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
@@ -1074,7 +1075,7 @@ function QuickCreateCostPanel({
   const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
 
   return (
-    <form className={`${styles.quickCreatePanel} ${drawerMode ? styles.quickCreatePanelInDrawer : ""}`} onSubmit={submitQuickCost}>
+    <form className={`${styles.quickCreatePanel} ${drawerMode ? styles.quickCreatePanelInDrawer : ""}`} onKeyDown={preventEnterFormSubmit} onSubmit={submitQuickCost}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{editMode ? "编辑成本" : "批量登记成本"}</strong>

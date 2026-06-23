@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
+import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -1549,7 +1550,7 @@ function ManualShippingDocumentsDialog({
         {loading ? (
           <div className={styles.emptyState}>正在生成清关资料邮件...</div>
         ) : form && draft ? (
-          <form className={styles.shippingDocsForm} onSubmit={onSubmit}>
+          <form className={styles.shippingDocsForm} onKeyDown={preventEnterFormSubmit} onSubmit={onSubmit}>
             {message ? <div className={styles.inlineError}>{message}</div> : null}
             <div className={styles.documentGroupCard}>
               <strong>将发送的资料清单</strong>

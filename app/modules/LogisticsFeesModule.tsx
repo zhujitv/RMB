@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
 import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
+import { preventEnterFormSubmit } from "../formGuards";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
@@ -1803,6 +1804,7 @@ export function LogisticsExpenseForm({
   return (
     <form
       className={styles.quickCreatePanel}
+      onKeyDown={preventEnterFormSubmit}
       onSubmit={(event) => {
         event.preventDefault();
         void submitExpense("待审核");
@@ -2111,7 +2113,7 @@ function InvoiceUploadForm({
   }
 
   return (
-    <form className={styles.inlineInvoiceForm} onSubmit={uploadInvoice}>
+    <form className={styles.inlineInvoiceForm} onKeyDown={preventEnterFormSubmit} onSubmit={uploadInvoice}>
       <input type="file" accept="application/pdf,.pdf" aria-label={`${group.label}选择发票文件`} onChange={(event) => setFile(event.target.files?.[0] || null)} />
       <button className={styles.secondaryButton} type="submit" disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
       {message ? <span className={styles.inlineFormMessage}>{message}</span> : null}
