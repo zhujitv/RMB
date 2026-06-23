@@ -106,6 +106,13 @@ test("login service errors do not expose deployment diagnostics to unauthenticat
   assert.doesNotMatch(loginRoute, /logSecurityEvent\("login failed", \{[^}]*email/);
 });
 
+test("api errors explain logistics expense billing schema mismatches", () => {
+  assert.match(sharedBaseUtils, /function prismaSchemaMismatchMessage/);
+  assert.match(sharedBaseUtils, /Unknown argument `\?\(billingMethod\|billingQuantity\)`\?/);
+  assert.match(sharedBaseUtils, /保存失败：本地数据库缺少 \$\{fieldName\} 字段，请执行迁移。/);
+  assert.match(sharedBaseUtils, /PRISMA_SCHEMA_MISMATCH/);
+});
+
 test("anonymous auth posts require same-origin checks before processing input", () => {
   assert.match(loginRoute, /assertSameOriginRequest\(request\);[\s\S]*await ensureDefaultUsers\(\)/);
   assert.match(registerRoute, /assertSameOriginRequest\(request\);[\s\S]*await request\.json\(\)/);

@@ -239,6 +239,42 @@ export async function updateLogisticsExpense(request, actor, id, input = {}) {
   return serializeLogisticsExpense(saved);
 }
 
+export async function submitLogisticsExpenseBill(request, actor, identifier) {
+  assertCanWriteLogisticsExpense(actor);
+  const rows = await loadLogisticsExpenseBillRowsForSubmit(identifier, actor);
+  if (!rows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
+  const blocked = rows.find((row) => !["草稿", "已驳回"].includes(row.auditStatus || "草稿"));
+  if (blocked) {
+    throw codedError("只有草稿或已驳回费用可以提交审核。", 400, "LOGISTICS_EXPENSE_SUBMIT_NOT_ALLOWED");
+  }
+  const submittedAt = new Date();
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  await prisma.logisticsExpense.updateMany({
+    where: {
+      id: { in: ids },
+      deletedAt: null,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    data: {
+      auditStatus: "待审核",
+      submittedAt,
+      rejectReason: null,
+      updatedById: actor.id,
+    },
+  });
+  void runNonCriticalTask("物流费用提交审核日志写入", () => writeAudit(request, actor, "提交物流费用审核", "logistics_expenses", logisticsExpenseBillId(rows[0]), rows, {
+    updatedIds: ids,
+    auditStatus: "待审核",
+    submittedAt,
+    submittedById: actor.id,
+  }));
+  return {
+    updatedIds: ids,
+    auditStatus: "待审核",
+    submittedAt: submittedAt.toISOString(),
+  };
+}
+
 export async function batchUpdateLogisticsExpenses(request, actor, input = {}) {
   assertCanWriteLogisticsExpense(actor);
   const items = Array.isArray(input)
@@ -506,6 +542,61 @@ function normalizeLogisticsExpenseReviewIdentifiers(input = {}) {
     input.id,
   ];
   return values.map(nonEmpty).filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function logisticsExpenseSubmitSelect() {
+  return {
+    id: true,
+    orderId: true,
+    supplierId: true,
+    auditStatus: true,
+    submittedAt: true,
+    order: {
+      select: {
+        id: true,
+        orderNo: true,
+        blNo: true,
+      },
+    },
+  };
+}
+
+async function loadLogisticsExpenseBillRowsForSubmit(identifier, actor) {
+  const text = requireText(identifier, "物流费用账单");
+  if (text.startsWith("bill:")) {
+    const parsed = parseLogisticsExpenseGroupKey(text);
+    if (!parsed.orderId) throw codedError("物流费用账单编号无效。", 400, "LOGISTICS_EXPENSE_BILL_ID_INVALID");
+    const rows = await prisma.logisticsExpense.findMany({
+      where: {
+        deletedAt: null,
+        orderId: parsed.orderId,
+        ...logisticsExpenseAccessWhere(actor),
+      },
+      select: logisticsExpenseSubmitSelect(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    return rows.filter((row) => logisticsExpenseBillId(row) === text);
+  }
+  const before = await prisma.logisticsExpense.findFirst({
+    where: {
+      id: text,
+      deletedAt: null,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    select: logisticsExpenseSubmitSelect(),
+  });
+  if (!before) throw permissionError("物流费用不存在或无权访问", 404);
+  const billId = logisticsExpenseBillId(before);
+  const rows = await prisma.logisticsExpense.findMany({
+    where: {
+      deletedAt: null,
+      orderId: before.orderId,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    select: logisticsExpenseSubmitSelect(),
+    orderBy: [{ createdAt: "asc" }],
+  });
+  return rows.filter((row) => logisticsExpenseBillId(row) === billId);
 }
 
 async function loadLogisticsExpenseBillRowsForAction(identifier, actor) {

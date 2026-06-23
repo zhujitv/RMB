@@ -247,18 +247,26 @@ test("logistics expense page supports single bill review and merged batch review
 });
 
 test("draft logistics expense bills can be submitted for review", () => {
-  assert.match(backend, /input\.action === "submit"/);
+  assert.match(backend, /export async function submitLogisticsExpenseBill/);
+  assert.match(backend, /loadLogisticsExpenseBillRowsForSubmit/);
+  assert.match(backend, /prisma\.logisticsExpense\.updateMany/);
   assert.match(backend, /只有草稿或已驳回费用可以提交审核。/);
   assert.match(backend, /auditStatus: "待审核"/);
-  assert.match(backend, /submittedAt: new Date\(\)/);
+  assert.match(backend, /submittedAt = new Date\(\)/);
   assert.match(backend, /rejectReason: null/);
+  assert.match(backend, /void runNonCriticalTask\("物流费用提交审核日志写入"/);
   assert.match(logisticsModule, /submitDraftExpenseBill/);
-  assert.match(logisticsModule, /action: "submit"/);
+  assert.match(logisticsModule, /action: "submitBill"/);
+  assert.match(logisticsModule, /timeoutMs: 10000/);
+  assert.match(logisticsModule, /markLogisticsExpenseBillSubmitted/);
   assert.match(logisticsModule, /物流费用已提交审核/);
+  assert.match(logisticsModule, /提交失败：/);
+  assert.match(logisticsModule, /提交超时，请重试/);
   assert.match(logisticsModule, /renderBillSubmitControls/);
   assert.match(logisticsModule, /提交中\.\.\." : "提交审核"/);
   assert.match(logisticsModule, /请先保存本账单明细，再提交审核/);
   assert.match(logisticsModule, /logisticsExpenseBillCanSubmit/);
+  assert.doesNotMatch(logisticsModule.match(/async function submitDraftExpenseBill[\s\S]*?\n  async function rejectExpense/)?.[0] || "", /loadExpenses|loadStatement/);
 });
 
 test("logistics expense form supports positive applied quantity", () => {

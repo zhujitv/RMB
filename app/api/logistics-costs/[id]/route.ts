@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, confirmLogisticsExpenseInvoice, getActor, ok, reviewLogisticsExpense, updateLogisticsExpense, updateLogisticsExpensePaymentStatus } from "../../../../lib/platform-db";
+import { apiError, confirmLogisticsExpenseInvoice, getActor, ok, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (["approve", "reject", "reopen"].includes(reviewAction)) {
       const result = await reviewLogisticsExpense(request, actor, id, body);
       return ok({ success: true, ...result, message: result.emailError ? "物流费用已审核，开票通知发送失败" : "物流费用已审核" });
+    }
+    if ((body.action || "") === "submitBill") {
+      const result = await submitLogisticsExpenseBill(request, actor, id);
+      return ok({ success: true, ...result, message: "物流费用已提交审核" });
     }
     if ((body.action || "") === "confirmInvoice") {
       const expense = await confirmLogisticsExpenseInvoice(request, actor, id, body);

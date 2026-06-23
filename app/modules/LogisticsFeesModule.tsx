@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import { apiJson } from "../api";
+import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, UiCheckbox, useConfirmationDialog } from "../components";
 import { formatAmount, formatCny, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
@@ -553,6 +553,7 @@ export function LogisticsFeesModule({
   }
 
   async function submitDraftExpenseBill(expense: LogisticsExpense) {
+    if (busyId === expense.id) return;
     const items = logisticsExpenseBillItems(expense);
     const submittableItems = items.filter((item) => ["草稿", "已驳回"].includes(item.auditStatus || "草稿"));
     if (!submittableItems.length || submittableItems.length !== items.length) {
@@ -564,18 +565,23 @@ export function LogisticsFeesModule({
     setError("");
     setNotice("");
     try {
-      for (const item of submittableItems) {
-        const result = await apiJson<{ success?: boolean; message?: string }>(`/api/logistics-costs/${encodeURIComponent(item.id)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: "submit" }),
-        });
-        if (result.success !== true) throw new Error(result.message || "提交物流费用审核失败");
-      }
-      await loadExpenses(page, submittedKeyword, status, costType);
-      await loadStatement(statementMonth);
-      setNotice("物流费用已提交审核");
+      const result = await apiJson<{ success?: boolean; message?: string; updatedIds?: string[]; submittedAt?: string }>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "submitBill" }),
+        timeoutMs: 10000,
+      });
+      if (result.success !== true) throw new Error(result.message || "提交物流费用审核失败");
+      const updatedIds = Array.isArray(result.updatedIds) && result.updatedIds.length
+        ? result.updatedIds
+        : submittableItems.map((item) => item.id);
+      setRows((currentRows) => markLogisticsExpenseBillSubmitted(currentRows, expense.id, updatedIds, result.submittedAt));
+      setSelectedBillIds((current) => current.filter((id) => id !== expense.id));
+      setNotice(result.message || "物流费用已提交审核");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "提交物流费用审核失败");
+      const message = submitError instanceof ApiRequestError && submitError.status === 408
+        ? "提交超时，请重试"
+        : (submitError instanceof Error ? submitError.message : "提交物流费用审核失败");
+      setError(`提交失败：${message}`);
     } finally {
       setBusyId("");
     }
@@ -2274,6 +2280,26 @@ function replaceLogisticsExpenseItemsInRows(rows: LogisticsExpense[], savedItems
     const items = row.items?.length ? row.items : [row];
     if (!items.some((item) => savedById.has(item.id))) return row;
     const nextItems = items.map((item) => savedById.get(item.id) || item);
+    return rebuildLogisticsExpenseBill(row, nextItems);
+  });
+}
+
+function markLogisticsExpenseBillSubmitted(rows: LogisticsExpense[], billId: string, updatedIds: string[], submittedAt?: string) {
+  const updatedIdSet = new Set(updatedIds.filter(Boolean));
+  const submittedAtValue = submittedAt || new Date().toISOString();
+  return rows.map((row) => {
+    const items = row.items?.length ? row.items : [row];
+    const belongsToBill = row.id === billId || items.some((item) => updatedIdSet.has(item.id));
+    if (!belongsToBill) return row;
+    const nextItems = items.map((item) => {
+      if (updatedIdSet.size && !updatedIdSet.has(item.id)) return item;
+      return {
+        ...item,
+        auditStatus: "待审核",
+        submittedAt: submittedAtValue,
+        rejectReason: "",
+      };
+    });
     return rebuildLogisticsExpenseBill(row, nextItems);
   });
 }

@@ -87,10 +87,32 @@ function shouldLogApiErrorStatus(status: number) {
   return true;
 }
 
+function prismaSchemaMismatchMessage(error: unknown) {
+  const typedError = (error || {}) as AppError & { name?: string };
+  const message = String(typedError.message || "");
+  const fieldMatch = message.match(/Unknown argument `?(billingMethod|billingQuantity)`?/)
+    || message.match(/column .*`?(billing_method|billing_quantity)`?.*(does not exist|not exist)/i);
+  if (!fieldMatch) return "";
+  const fieldName = String(fieldMatch[1] || "").includes("Quantity") || String(fieldMatch[1] || "").includes("quantity")
+    ? "billingQuantity"
+    : "billingMethod";
+  return `保存失败：本地数据库缺少 ${fieldName} 字段，请执行迁移。`;
+}
+
 export function apiError(error: unknown, fallback = "请求处理失败") {
   const typedError = (error || {}) as AppError;
   const status = typedError.status || 500;
   if (shouldLogApiErrorStatus(status)) logServerError(fallback, error);
+  const schemaMismatchMessage = prismaSchemaMismatchMessage(error);
+  if (schemaMismatchMessage) {
+    return NextResponse.json(
+      {
+        error: schemaMismatchMessage,
+        code: "PRISMA_SCHEMA_MISMATCH",
+      },
+      { status: 500 },
+    );
+  }
   const isProduction = process.env.NODE_ENV === "production";
   const exposeDetails = process.env.EXPOSE_ERROR_DETAILS === "true";
   const safeMessage = isProduction && status >= 500 && !typedError.expose ? fallback : (typedError.message || fallback);
