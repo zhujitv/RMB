@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, confirmLogisticsExpenseInvoice, getActor, ok, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
+import { apiError, codedError, confirmLogisticsExpenseInvoice, getActor, logServerError, ok, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         : (body.action === "updateAmount" ? "物流费用金额已更新" : "物流费用已保存"),
     });
   } catch (error: unknown) {
-    return apiError(error, "更新物流费用失败");
+    return apiError(maskLogisticsReviewTimeoutError(error), "更新物流费用失败");
   }
 }
 
@@ -71,4 +71,11 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   } catch (error: unknown) {
     return apiError(error, "撤回物流费用失败");
   }
+}
+
+function maskLogisticsReviewTimeoutError(error: unknown) {
+  const message = String((error as { message?: string })?.message || "");
+  if (!/expired transaction|Transaction API error|timeout|timed out|P2028/i.test(message)) return error;
+  logServerError("物流费用审核事务超时", error);
+  return codedError("审核失败：系统处理超时，请稍后重试。", 500, "LOGISTICS_REVIEW_TIMEOUT");
 }

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
+import { apiError, codedError, getActor, logServerError, ok, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,13 @@ export async function PATCH(request: NextRequest) {
       : "物流费用已审核，开票通知已按供应商合并发送");
     return ok({ ...result, success: result.success !== false, message });
   } catch (error: unknown) {
-    return apiError(error, "审核物流费用失败");
+    return apiError(maskLogisticsReviewTimeoutError(error), "审核物流费用失败");
   }
+}
+
+function maskLogisticsReviewTimeoutError(error: unknown) {
+  const message = String((error as { message?: string })?.message || "");
+  if (!/expired transaction|Transaction API error|timeout|timed out|P2028/i.test(message)) return error;
+  logServerError("物流费用审核事务超时", error);
+  return codedError("审核失败：系统处理超时，请稍后重试。", 500, "LOGISTICS_REVIEW_TIMEOUT");
 }

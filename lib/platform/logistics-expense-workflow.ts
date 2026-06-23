@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
+import { Prisma } from "../generated/prisma/client.js";
 import {
   amountCny,
   nonEmpty,
@@ -38,6 +39,7 @@ import { logisticsInvoiceGroupForCostType, logisticsInvoiceGroupForKey } from ".
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
+const LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 };
 
 export async function saveLogisticsExpenses(request, actor, input = {}) {
   assertCanWriteLogisticsExpense(actor);
@@ -206,30 +208,8 @@ export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
   const approvedBills = [];
   for (const bill of bills) {
     try {
-      const savedRows = await prisma.$transaction(async (tx) => {
-        const billSavedRows = [];
-        for (const before of bill.rows) {
-          const cost = await createOrUpdateCostFromLogisticsExpense(tx, before, actor);
-          const saved = await tx.logisticsExpense.update({
-            where: { id: before.id },
-            data: {
-              auditStatus: "审核通过",
-              reviewedById: actor.id,
-              reviewedAt: now,
-              reviewRemark,
-              rejectReason: null,
-              costId: cost.id,
-              invoiceStatus: ["已上传", "已确认"].includes(before.invoiceStatus) ? before.invoiceStatus : "未通知",
-              invoiceNotificationError: null,
-              paymentStatus: "待付款",
-              updatedById: actor.id,
-            },
-            include: includeLogisticsExpenseRelations(),
-          });
-          billSavedRows.push(saved);
-        }
-        return billSavedRows;
-      });
+      await approveLogisticsExpenseBillRowsInTransaction(bill.rows, actor, reviewRemark, now);
+      const savedRows = await loadLogisticsExpenseBillRowsForAction(bill.billId, actor);
       approvedBills.push({ ...bill, rows: savedRows });
       results.push(logisticsExpenseReviewResultFromRows(savedRows, {
         auditStatus: "审核通过",
@@ -237,10 +217,11 @@ export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
         errorMessage: "",
       }));
     } catch (error) {
+      const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
       results.push(logisticsExpenseReviewResultFromRows(bill.rows, {
         auditStatus: aggregateLogisticsExpenseStatus(bill.rows, "auditStatus"),
         notificationStatus: "not_sent",
-        errorMessage: error?.message || "数据库更新失败",
+        errorMessage: safeMessage || "数据库更新失败",
       }));
     }
   }
@@ -298,6 +279,66 @@ export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
     emailError,
     message: logisticsExpenseReviewSummaryMessage(successCount, failedCount, results, emailError),
   };
+}
+
+async function approveLogisticsExpenseBillRowsInTransaction(rows = [], actor, reviewRemark, now = new Date()) {
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return;
+  await prisma.$transaction(async (tx) => {
+    const costLinks = [];
+    for (const before of rows) {
+      const cost = await createOrUpdateCostFromLogisticsExpense(tx, before, actor);
+      costLinks.push({ expenseId: before.id, costId: cost.id });
+    }
+    await tx.logisticsExpense.updateMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+      },
+      data: {
+        auditStatus: "审核通过",
+        reviewedById: actor.id,
+        reviewedAt: now,
+        reviewRemark,
+        rejectReason: null,
+        invoiceNotificationError: null,
+        paymentStatus: "待付款",
+        updatedById: actor.id,
+      },
+    });
+    await tx.logisticsExpense.updateMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+        invoiceStatus: { notIn: ["已上传", "已确认"] },
+      },
+      data: {
+        invoiceStatus: "未通知",
+        updatedById: actor.id,
+      },
+    });
+    await updateLogisticsExpenseCostIds(tx, costLinks);
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+}
+
+async function updateLogisticsExpenseCostIds(tx, costLinks = []) {
+  const links = costLinks.filter((item) => item.expenseId && item.costId);
+  if (!links.length) return;
+  const cases = links.map((item) => Prisma.sql`WHEN ${item.expenseId} THEN ${item.costId}`);
+  const ids = links.map((item) => item.expenseId);
+  await tx.$executeRaw(Prisma.sql`
+    UPDATE "logistics_expenses"
+    SET "cost_id" = CASE "id" ${Prisma.join(cases, " ")} END
+    WHERE "id" IN (${Prisma.join(ids)})
+  `);
+}
+
+function logisticsExpenseReviewSafeErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (/expired transaction|Transaction API error|timeout|timed out|P2028/i.test(message)) {
+    return "审核失败：系统处理超时，请稍后重试。";
+  }
+  return message;
 }
 
 function logisticsExpenseReviewResultFromRows(rows = [], overrides = {}) {
