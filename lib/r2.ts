@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const R2_REGION = "auto";
@@ -186,6 +186,17 @@ export async function deleteR2Object(key: string) {
   } catch (error) {
     throw normalizeStorageError(error);
   }
+}
+
+export async function headR2Object(key: string) {
+  if (!key) throw storageError("R2 文件 key 缺失，无法读取文件。", 404, "R2_OBJECT_NOT_FOUND");
+  const bucket = r2BucketName();
+  try {
+    await r2Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
+  return true;
 }
 
 export async function signedDownloadUrl(key: string, fileName: string, expiresIn = 300) {

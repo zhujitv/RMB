@@ -7,6 +7,7 @@ export * from "./upload-validation";
 export * from "./shared-exchange";
 export * from "./company-profile";
 export * from "./commission-formula";
+export * from "./notification-templates";
 export * from "./shared-serialization";
 export * from "./shared-tax";
 export * from "./shared-order-summary";

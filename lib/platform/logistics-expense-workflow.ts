@@ -261,7 +261,9 @@ export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
       finalRows = approvedRows;
     }
   }
-  const emailErrors = emailResults.filter((result) => !result.sent).map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
+  const emailErrors = emailResults
+    .filter((result) => !result.sent && !result.skipped)
+    .map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
   const emailError = emailErrors.join("；");
   for (const bill of approvedBills) {
     const billRows = finalRows.filter((row) => logisticsExpenseBillId(row) === bill.billId);
@@ -270,7 +272,7 @@ export async function reviewLogisticsExpenseBills(request, actor, input = {}) {
       emailResults,
     }));
   }
-  for (const result of emailResults.filter((item) => !item.sent)) {
+  for (const result of emailResults.filter((item) => !item.sent && !item.skipped)) {
     await runNonCriticalTask("物流费用通知失败日志写入", () => writeAudit(request, actor, "物流费用开票通知失败", "logistics_expenses", result.supplierId || "supplier", null, {
       supplierName: result.supplierName,
       errorMessage: result.error,
@@ -341,6 +343,11 @@ function markLogisticsExpenseReviewNotificationResults(results = [], rows = [], 
     const result = resultByBillId.get(billId);
     if (!result || result.auditStatus !== "审核通过") continue;
     const rowEmailResults = emailResults.filter((item) => (item.expenseIds || []).includes(row.id));
+    if (rowEmailResults.some((item) => item.skipped)) {
+      result.notificationStatus = "skipped";
+      result.errorMessage = "";
+      continue;
+    }
     const failed = rowEmailResults.find((item) => !item.sent);
     if (failed) {
       result.notificationStatus = "failed";
@@ -381,13 +388,13 @@ async function applyLogisticsExpenseInvoiceNotificationResults(rows = [], emailR
     const isLockedInvoiceStatus = ["已上传", "已确认"].includes(row.invoiceStatus);
     const nextInvoiceStatus = isLockedInvoiceStatus
       ? row.invoiceStatus
-      : (result.sent ? "已通知开票" : "通知失败");
+      : (result.skipped ? row.invoiceStatus : (result.sent ? "已通知开票" : "通知失败"));
     const saved = await prisma.logisticsExpense.update({
       where: { id: row.id },
       data: {
         invoiceStatus: nextInvoiceStatus,
         invoiceNotifiedAt: result.sent ? now : row.invoiceNotifiedAt,
-        invoiceNotificationError: result.sent ? null : (result.error || "邮件发送失败"),
+        invoiceNotificationError: result.sent || result.skipped ? null : (result.error || "邮件发送失败"),
         paymentStatus: "待付款",
         updatedById: actor.id,
       },

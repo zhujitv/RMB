@@ -455,6 +455,14 @@ type PdfPreviewMetadataResponse = {
   message?: string;
 };
 
+type PdfPreviewState = "checking" | "ready" | "failed";
+
+function pdfPreviewStatusMessage(response: Response) {
+  if (response.status === 403) return "权限不足，无法预览该文件。";
+  if (response.status === 404) return "文件不存在或已删除。";
+  return "在线预览失败，请下载文件查看。";
+}
+
 function pdfPreviewFileName(document: PdfPreviewDocument | null, fallback = "") {
   return (
     document?.displayFileName
@@ -507,6 +515,8 @@ export function PdfPreviewDrawer({
 }) {
   const [fileName, setFileName] = useState(initialFileName || "PDF 文件");
   const [error, setError] = useState("");
+  const [previewState, setPreviewState] = useState<PdfPreviewState>("checking");
+  const [previewError, setPreviewError] = useState("");
   const encodedId = encodeURIComponent(documentId);
   const previewUrl = `/api/order-documents/${encodedId}/preview`;
   const downloadUrl = `/api/order-documents/${encodedId}/download`;
@@ -538,6 +548,37 @@ export function PdfPreviewDrawer({
     };
   }, [documentId, encodedId, initialFileName]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyPreviewStream() {
+      setPreviewState("checking");
+      setPreviewError("");
+      try {
+        const response = await fetch(previewUrl, {
+          method: "HEAD",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!response.ok) throw new Error(pdfPreviewStatusMessage(response));
+        if (!contentType.toLowerCase().includes("application/pdf")) {
+          throw new Error("预览接口未返回 PDF 文件流，请下载文件查看。");
+        }
+        if (!cancelled) setPreviewState("ready");
+      } catch (previewLoadError) {
+        if (cancelled) return;
+        setPreviewState("failed");
+        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "在线预览失败，请下载文件查看。");
+      }
+    }
+
+    void verifyPreviewStream();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUrl]);
+
   return (
     <SideDetailDrawer
       ariaLabel={`PDF 预览：${fileName}`}
@@ -552,18 +593,27 @@ export function PdfPreviewDrawer({
       )}
     >
       <div className={styles.pdfPreviewFrameWrap}>
-        <object
-          data={previewUrl}
-          type="application/pdf"
-          className={styles.pdfPreviewFrame}
-          aria-label={fileName}
-        >
+        {previewState === "checking" ? (
+          <div className={styles.pdfPreviewLoading}>正在加载 PDF 预览...</div>
+        ) : null}
+        {previewState === "ready" ? (
+          <iframe
+            src={previewUrl}
+            title={fileName}
+            className={styles.pdfPreviewFrame}
+            onError={() => {
+              setPreviewState("failed");
+              setPreviewError("在线预览失败，请下载文件查看。");
+            }}
+          />
+        ) : null}
+        {previewState === "failed" ? (
           <div className={styles.pdfPreviewFallback}>
             <strong>在线预览失败</strong>
-            <span>浏览器无法直接显示该 PDF，请下载文件查看。</span>
+            <span>{previewError || "请下载文件查看。"}</span>
             <a className={styles.primaryButtonCompact} href={downloadUrl}>下载文件</a>
           </div>
-        </object>
+        ) : null}
       </div>
     </SideDetailDrawer>
   );

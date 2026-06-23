@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
-import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
+import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, headR2Object, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { parseAndApplyCustomsDocument } from "./customs-recognition";
 import {
   canAccessDomesticLogisticsOrder,
@@ -399,6 +399,28 @@ export async function getOrderDocumentMetadata(request, actor, id) {
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限查看该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能预览", 400);
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
+  return serializeOrderDocument({ ...document, standardFilename });
+}
+
+export async function getOrderDocumentPreviewMetadata(request, actor, id) {
+  assertRead(actor, "documents");
+  const document = await prisma.orderDocument.findUnique({
+    where: { id },
+    include: orderDocumentFileInclude(),
+  });
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
+  if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
+  const mimeType = String(document.mimeType || "application/pdf").toLowerCase();
+  if (mimeType !== "application/pdf") {
+    throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
+  }
+  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  await headR2Object(document.storageKey).catch((error) => {
+    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+    throw error;
+  });
   const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
   return serializeOrderDocument({ ...document, standardFilename });
 }

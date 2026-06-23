@@ -18,11 +18,8 @@ import {
 } from "./shared";
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
 import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
+import { getLogisticsInvoiceNotificationSettings, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
-
-function appEntryUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net";
-}
 
 function logisticsExpenseCustomerShortName(expense = {}) {
   const order = expense.order || {};
@@ -129,75 +126,16 @@ export function resolveLogisticsSupplierInvoiceEmail(supplier = {}) {
   };
 }
 
-function logisticsExpenseInvoiceEmail(expense = {}) {
-  const order = expense.order || {};
-  const subject = `物流费用已审核通过，请开票并上传发票 - ${order.orderNo || "-"}/${order.blNo || "-"}`;
-  const body = [
-    `${expense.supplierNameSnapshot || expense.supplier?.supplierName || "供应商"}，您好：`,
-    "",
-    "以下物流费用已审核通过，请按开票要求开具发票并登录系统上传发票。",
-    "",
-    `订单号：${order.orderNo || "-"}`,
-    `提单号：${order.blNo || "-"}`,
-    `客户简称：${logisticsExpenseCustomerShortName(expense)}`,
-    "",
-    "费用明细：",
-    logisticsExpenseDetailText([expense]),
-    "",
-    `合计金额：¥${Number(expense.amountCny || 0).toFixed(2)}`,
-    "开票要求：请确保发票金额、抬头、税号与系统供应商资料一致。",
-    `发票上传入口链接：${appEntryUrl()}`,
-    "",
-    "NEXTWOOD 供应链协同平台",
-  ].join("\n");
-  return { subject, body };
-}
-
-function logisticsExpenseInvoiceBillsEmail(supplierName = "供应商", bills = []) {
-  const first = bills[0] || {};
-  const subject = bills.length === 1
-    ? `物流费用已审核通过，请开票并上传发票 - ${first.orderNo || "-"}/${first.blNo || "-"}`
-    : `待开票物流费用清单（${bills.length} 票）`;
-  const rows = bills.map((bill, index) => [
-    `${index + 1}. 订单号：${bill.orderNo || "-"}`,
-    `   提单号：${bill.blNo || "-"}`,
-    `   柜型/柜量：${bill.containerSummary || "未录入"}`,
-    `   客户简称：${bill.customerShortName || "-"}`,
-    `   费用合计：¥${Number(bill.amountCny || 0).toFixed(2)}`,
-    "   费用明细：",
-    ...String(bill.detailText || "-").split("\n").map((line) => `   - ${line}`),
-    "   请分别上传：",
-    ...((bill.invoiceGroups || []).length
-      ? bill.invoiceGroups.map((group) => `   - ${group.label}`)
-      : ["   - 对应物流费用发票"]),
-    `   备注：${bill.remark || "-"}`,
-  ].join("\n")).join("\n\n");
-  const body = [
-    `${supplierName || "供应商"}，您好：`,
-    "",
-    "以下物流费用已审核通过，请按开票要求开具发票，并登录系统在对应账单中上传发票。",
-    "",
-    "待开票费用清单：",
-    rows || "-",
-    "",
-    "开票要求：",
-    "1. 发票金额需与系统审核通过的费用合计一致。",
-    "2. 发票抬头、税号、供应商信息需与系统资料一致。",
-    "3. 报关费、港杂费、海运费必须分别开票上传。",
-    "4. 拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
-    "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
-    "",
-    `发票上传入口：${appEntryUrl()}`,
-    "",
-    "NEXTWOOD 供应链协同平台",
-  ].join("\n");
-  return { subject, body };
-}
-
 export async function notifyLogisticsSupplierInvoice(expense) {
+  const settings = await getLogisticsInvoiceNotificationSettings();
+  if (settings.autoSendOnApproval === false) return;
   const resolved = resolveLogisticsSupplierInvoiceEmail(expense.supplier || {});
   if (!resolved.email) throw codedError(`${resolved.error}未发送开票通知。`, 400, "LOGISTICS_SUPPLIER_EMAIL_REQUIRED");
-  const { subject, body } = logisticsExpenseInvoiceEmail(expense);
+  const bills = logisticsBillSummaryRows([expense]);
+  const { subject, body } = await renderLogisticsInvoiceNotificationEmail(
+    expense.supplierNameSnapshot || expense.supplier?.supplierName || "供应商",
+    bills,
+  );
   await sendShippingDocumentsEmail({
     recipientEmails: [resolved.email],
     ccEmails: [],
@@ -209,6 +147,7 @@ export async function notifyLogisticsSupplierInvoice(expense) {
 }
 
 export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
+  const settings = await getLogisticsInvoiceNotificationSettings();
   const bills = logisticsBillSummaryRows(expenses);
   const bySupplier = new Map();
   for (const bill of bills) {
@@ -227,6 +166,17 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
   }
   const results = [];
   for (const group of bySupplier.values()) {
+    if (settings.autoSendOnApproval === false) {
+      results.push({
+        supplierId: group.supplierId || "",
+        supplierName: group.supplierName || "供应商",
+        sent: false,
+        skipped: true,
+        error: "",
+        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+      });
+      continue;
+    }
     const resolved = resolveLogisticsSupplierInvoiceEmail(group.supplier || { email: group.supplierEmail });
     if (!resolved.email) {
       results.push({
@@ -238,7 +188,7 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
       });
       continue;
     }
-    const { subject, body } = logisticsExpenseInvoiceBillsEmail(group.supplierName, group.bills);
+    const { subject, body } = await renderLogisticsInvoiceNotificationEmail(group.supplierName, group.bills);
     try {
       await sendShippingDocumentsEmail({
         recipientEmails: [resolved.email],

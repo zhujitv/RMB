@@ -14,12 +14,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const { body, document } = await getOrderDocumentDownload(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);
-    const disposition = request.nextUrl.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
     return new Response(body, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Length": String(body.length),
-        "Content-Disposition": pdfContentDispositionHeader(disposition, fileName),
+        "Content-Disposition": pdfContentDispositionHeader("attachment", fileName),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },

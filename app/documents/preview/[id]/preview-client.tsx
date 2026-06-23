@@ -18,6 +18,8 @@ type MetadataResponse = {
   error?: string;
 };
 
+type PreviewState = "checking" | "ready" | "failed";
+
 function displayNameFromMetadata(document: DocumentMetadata | null) {
   return (
     document?.displayFileName
@@ -30,9 +32,17 @@ function displayNameFromMetadata(document: DocumentMetadata | null) {
   );
 }
 
+function previewStatusMessage(response: Response) {
+  if (response.status === 403) return "权限不足，无法预览该文件。";
+  if (response.status === 404) return "文件不存在或已删除。";
+  return "在线预览失败，请下载文件查看。";
+}
+
 export function DocumentPreviewClient({ documentId, initialFileName = "" }: { documentId: string; initialFileName?: string }) {
   const [fileName, setFileName] = useState(initialFileName);
   const [error, setError] = useState("");
+  const [previewState, setPreviewState] = useState<PreviewState>("checking");
+  const [previewError, setPreviewError] = useState("");
 
   const encodedId = useMemo(() => encodeURIComponent(documentId), [documentId]);
   const previewUrl = `/api/order-documents/${encodedId}/preview`;
@@ -68,7 +78,38 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
     return () => {
       cancelled = true;
     };
-  }, [encodedId]);
+  }, [encodedId, initialFileName]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyPreviewStream() {
+      setPreviewState("checking");
+      setPreviewError("");
+      try {
+        const response = await fetch(previewUrl, {
+          method: "HEAD",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!response.ok) throw new Error(previewStatusMessage(response));
+        if (!contentType.toLowerCase().includes("application/pdf")) {
+          throw new Error("预览接口未返回 PDF 文件流，请下载文件查看。");
+        }
+        if (!cancelled) setPreviewState("ready");
+      } catch (previewLoadError) {
+        if (cancelled) return;
+        setPreviewState("failed");
+        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "在线预览失败，请下载文件查看。");
+      }
+    }
+
+    void verifyPreviewStream();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUrl]);
 
   return (
     <main style={{
@@ -126,18 +167,7 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
           background: "#111827",
         }}
       >
-        <object
-          data={previewUrl}
-          type="application/pdf"
-          aria-label={fileName || "PDF 文件预览"}
-          style={{
-            display: "block",
-            width: "100%",
-            minHeight: "calc(100vh - 80px)",
-            border: 0,
-            background: "#111827",
-          }}
-        >
+        {previewState === "checking" ? (
           <div style={{
             display: "grid",
             minHeight: "calc(100vh - 80px)",
@@ -146,10 +176,42 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
             padding: 24,
             textAlign: "center",
           }}>
-            <p style={{ margin: 0 }}>在线预览失败</p>
-            <a href={downloadUrl} style={{ color: "#bfdbfe" }}>下载文件</a>
+            <p style={{ margin: 0 }}>正在加载 PDF 预览...</p>
           </div>
-        </object>
+        ) : null}
+        {previewState === "ready" ? (
+          <iframe
+            src={previewUrl}
+            title={fileName || "PDF 文件预览"}
+            style={{
+              display: "block",
+              width: "100%",
+              minHeight: "calc(100vh - 80px)",
+              border: 0,
+              background: "#111827",
+            }}
+            onError={() => {
+              setPreviewState("failed");
+              setPreviewError("在线预览失败，请下载文件查看。");
+            }}
+          />
+        ) : null}
+        {previewState === "failed" ? (
+          <div style={{
+            display: "grid",
+            minHeight: "calc(100vh - 80px)",
+            placeItems: "center",
+            color: "#f8fafc",
+            padding: 24,
+            textAlign: "center",
+          }}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <p style={{ margin: 0, fontWeight: 700 }}>在线预览失败</p>
+              <span style={{ color: "#cbd5e1", fontSize: 13 }}>{previewError || "请下载文件查看。"}</span>
+              <a href={downloadUrl} style={{ color: "#bfdbfe" }}>下载文件</a>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

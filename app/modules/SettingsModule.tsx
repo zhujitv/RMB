@@ -10,7 +10,7 @@ import styles from "../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../types";
 import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
 
-type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "auditLogs";
+type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
 type SettingsFilters = {
   customers: {
@@ -136,6 +136,7 @@ type AuditLogRow = {
 
 type ExchangeRateSettings = Record<string, unknown>;
 type CommissionFormulaSettings = Record<string, unknown>;
+type NotificationTemplateSettings = Record<string, unknown>;
 
 type ExchangeRateForm = {
   source: string;
@@ -152,6 +153,16 @@ type CommissionFormulaForm = {
   source: string;
   deductions: string[];
   floorAtZero: boolean;
+};
+
+type NotificationTemplateForm = {
+  autoSendOnApproval: boolean;
+  singleSubjectTemplate: string;
+  batchSubjectTemplate: string;
+  bodyTemplate: string;
+  invoiceRequirements: string;
+  uploadUrl: string;
+  signature: string;
 };
 
 type CompanyProfileForm = {
@@ -282,6 +293,51 @@ const COMMISSION_FORMULA_DEDUCTIONS = [
   { value: "CONFIRMED_TOTAL_COST_CNY", label: "已确认总成本", description: "只扣减已确认的成本" },
   { value: "PAID_CONFIRMED_COST_CNY", label: "已支付确认成本", description: "只扣减已支付且已确认的成本" },
 ];
+const NOTIFICATION_TEMPLATE_VARIABLES = [
+  ["{supplierName}", "供应商名称"],
+  ["{billCount}", "本次邮件包含票数"],
+  ["{orderNo}", "订单号"],
+  ["{blNo}", "提单号"],
+  ["{customerShortName}", "客户简称"],
+  ["{containerSummary}", "柜型 / 柜量"],
+  ["{amountCny}", "账单合计"],
+  ["{expenseDetails}", "费用明细"],
+  ["{invoiceGroups}", "应上传发票分组"],
+  ["{remark}", "备注"],
+  ["{billRows}", "待开票费用清单"],
+  ["{invoiceRequirements}", "开票要求"],
+  ["{uploadUrl}", "发票上传入口"],
+  ["{signature}", "邮件落款"],
+] as const;
+const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
+  autoSendOnApproval: true,
+  singleSubjectTemplate: "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}",
+  batchSubjectTemplate: "待开票物流费用清单（{billCount} 票）",
+  bodyTemplate: [
+    "{supplierName}，您好：",
+    "",
+    "以下物流费用已审核通过，请按开票要求开具发票，并登录系统在对应账单中上传发票。",
+    "",
+    "待开票费用清单：",
+    "{billRows}",
+    "",
+    "开票要求：",
+    "{invoiceRequirements}",
+    "",
+    "发票上传入口：{uploadUrl}",
+    "",
+    "{signature}",
+  ].join("\n"),
+  invoiceRequirements: [
+    "1. 发票金额需与系统审核通过的费用合计一致。",
+    "2. 发票抬头、税号、供应商信息需与系统资料一致。",
+    "3. 报关费、港杂费、海运费必须分别开票上传。",
+    "4. 拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
+    "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
+  ].join("\n"),
+  uploadUrl: "",
+  signature: "NEXTWOOD 供应链协同平台",
+};
 const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
@@ -296,6 +352,7 @@ const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }
   { key: "users", label: "用户与权限", description: "用户角色、账号状态和权限模式。" },
   { key: "exchangeRates", label: "汇率设置", description: "汇率来源、自动更新和管理员开关。" },
   { key: "commissionFormula", label: "提成公式", description: "按公司规则组合业务员提成基数。" },
+  { key: "notificationTemplates", label: "通知模板", description: "维护物流费用审核通过后的开票通知邮件文案。" },
   { key: "auditLogs", label: "操作日志", description: "关键操作追溯记录。" },
 ];
 
@@ -355,6 +412,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [exchangeForm, setExchangeForm] = useState<ExchangeRateForm | null>(null);
   const [commissionFormulaSettings, setCommissionFormulaSettings] = useState<CommissionFormulaSettings | null>(null);
   const [commissionFormulaForm, setCommissionFormulaForm] = useState<CommissionFormulaForm | null>(null);
+  const [notificationTemplateSettings, setNotificationTemplateSettings] = useState<NotificationTemplateSettings | null>(null);
+  const [notificationTemplateForm, setNotificationTemplateForm] = useState<NotificationTemplateForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
@@ -365,6 +424,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     users: emptyPagination(PAGE_SIZE),
     exchangeRates: emptyPagination(PAGE_SIZE),
     commissionFormula: emptyPagination(PAGE_SIZE),
+    notificationTemplates: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -385,6 +445,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [exchangeMessage, setExchangeMessage] = useState("");
   const [commissionFormulaSaving, setCommissionFormulaSaving] = useState(false);
   const [commissionFormulaMessage, setCommissionFormulaMessage] = useState("");
+  const [notificationTemplateSaving, setNotificationTemplateSaving] = useState(false);
+  const [notificationTemplateMessage, setNotificationTemplateMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -432,6 +494,14 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         const settings = result.settings || {};
         setCommissionFormulaSettings(settings);
         setCommissionFormulaForm(commissionFormulaFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "notificationTemplates") {
+        const result = await apiJson<{ settings: NotificationTemplateSettings }>("/api/settings/notification-templates");
+        const settings = result.settings || {};
+        setNotificationTemplateSettings(settings);
+        setNotificationTemplateForm(notificationTemplateFormFromSettings(settings));
         markLoaded(tab);
         return;
       }
@@ -484,6 +554,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setCompanyProfileMessage("");
     setExchangeMessage("");
     setCommissionFormulaMessage("");
+    setNotificationTemplateMessage("");
   }
 
   function submitSearch() {
@@ -853,6 +924,32 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     }
   }
 
+  async function saveNotificationTemplateSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!notificationTemplateForm) return;
+    setNotificationTemplateSaving(true);
+    setNotificationTemplateMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: NotificationTemplateSettings; message?: string }>(
+        "/api/settings/notification-templates",
+        {
+          method: "PATCH",
+          body: JSON.stringify(notificationTemplateForm),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "通知模板保存失败");
+      const nextSettings = result.settings || notificationTemplateForm;
+      setNotificationTemplateSettings(nextSettings);
+      setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings));
+      markLoaded("notificationTemplates");
+      setNotificationTemplateMessage(result.message || "通知模板已保存");
+    } catch (saveError) {
+      setNotificationTemplateMessage(saveError instanceof Error ? saveError.message : "通知模板保存失败");
+    } finally {
+      setNotificationTemplateSaving(false);
+    }
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -889,7 +986,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         ))}
       </div>
 
-      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" ? (
+      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -1037,6 +1134,24 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
             setCommissionFormulaMessage("");
           }}
           onSubmit={saveCommissionFormulaSettings}
+        />
+      ) : activeTab === "notificationTemplates" ? (
+        <NotificationTemplateSettingsCard
+          settings={notificationTemplateSettings}
+          form={notificationTemplateForm}
+          loading={loading && !notificationTemplateSettings}
+          saving={notificationTemplateSaving}
+          message={notificationTemplateMessage}
+          onChange={setNotificationTemplateForm}
+          onReset={() => {
+            setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings));
+            setNotificationTemplateMessage("");
+          }}
+          onRestoreDefault={() => {
+            setNotificationTemplateForm({ ...DEFAULT_NOTIFICATION_TEMPLATE_FORM });
+            setNotificationTemplateMessage("已恢复默认模板，请保存后生效");
+          }}
+          onSubmit={saveNotificationTemplateSettings}
         />
       ) : (
         <SettingsTable
@@ -1562,6 +1677,125 @@ function CommissionFormulaSettingsCard({
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存提成公式"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
+      </div>
+    </form>
+  );
+}
+
+function NotificationTemplateSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onRestoreDefault,
+  onSubmit,
+}: {
+  settings: NotificationTemplateSettings | null;
+  form: NotificationTemplateForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: NotificationTemplateForm) => void;
+  onReset: () => void;
+  onRestoreDefault: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载通知模板</div>;
+  const currentForm = form || notificationTemplateFormFromSettings(settings);
+  const preview = notificationTemplatePreview(currentForm);
+
+  function setField<K extends keyof NotificationTemplateForm>(key: K, value: NotificationTemplateForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  return (
+    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>物流费用开票通知模板</strong>
+          <span>审核通过后发送给物流供应商；批量审核仍按供应商合并，避免同一供应商收到多封重复邮件。</span>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <div className={styles.reportFilterGrid}>
+        <UiSwitch
+          label="审核通过后自动发送"
+          description="关闭后，审核仍会通过，但不会自动发开票通知，可在账单中手工重发。"
+          checked={currentForm.autoSendOnApproval}
+          onChange={(value) => setField("autoSendOnApproval", value)}
+        />
+        <label>
+          发票上传入口
+          <input
+            value={currentForm.uploadUrl}
+            onChange={(event) => setField("uploadUrl", event.target.value)}
+            placeholder="为空时使用系统访问地址"
+          />
+        </label>
+        <label>
+          单票邮件标题
+          <input
+            value={currentForm.singleSubjectTemplate}
+            onChange={(event) => setField("singleSubjectTemplate", event.target.value)}
+          />
+        </label>
+        <label>
+          批量邮件标题
+          <input
+            value={currentForm.batchSubjectTemplate}
+            onChange={(event) => setField("batchSubjectTemplate", event.target.value)}
+          />
+        </label>
+        <label>
+          邮件落款
+          <input value={currentForm.signature} onChange={(event) => setField("signature", event.target.value)} />
+        </label>
+        <label>
+          开票要求
+          <textarea
+            value={currentForm.invoiceRequirements}
+            onChange={(event) => setField("invoiceRequirements", event.target.value)}
+            rows={6}
+          />
+        </label>
+        <label>
+          邮件正文模板
+          <textarea
+            value={currentForm.bodyTemplate}
+            onChange={(event) => setField("bodyTemplate", event.target.value)}
+            rows={11}
+          />
+        </label>
+      </div>
+
+      <section className={styles.documentGroupCard}>
+        <strong>可用变量</strong>
+        <div className={styles.quickCreateMeta}>
+          {NOTIFICATION_TEMPLATE_VARIABLES.map(([token, label]) => (
+            <span key={token}>{token}：{label}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.documentGroupCard}>
+        <strong>模板预览</strong>
+        <textarea readOnly value={preview} rows={12} />
+      </section>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存通知模板"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
+        <button className={styles.secondaryButton} type="button" onClick={onRestoreDefault} disabled={saving}>恢复默认模板</button>
       </div>
     </form>
   );
@@ -2367,12 +2601,67 @@ function commissionFormulaFormFromSettings(settings: CommissionFormulaSettings |
   };
 }
 
+function notificationTemplateFormFromSettings(settings: NotificationTemplateSettings | null): NotificationTemplateForm {
+  return {
+    autoSendOnApproval: settings?.autoSendOnApproval !== false,
+    singleSubjectTemplate: stringSetting(settings, "singleSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.singleSubjectTemplate),
+    batchSubjectTemplate: stringSetting(settings, "batchSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.batchSubjectTemplate),
+    bodyTemplate: stringSetting(settings, "bodyTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.bodyTemplate),
+    invoiceRequirements: stringSetting(settings, "invoiceRequirements", DEFAULT_NOTIFICATION_TEMPLATE_FORM.invoiceRequirements),
+    uploadUrl: optionalStringSetting(settings, "uploadUrl"),
+    signature: stringSetting(settings, "signature", DEFAULT_NOTIFICATION_TEMPLATE_FORM.signature),
+  };
+}
+
 function commissionFormulaPreview(form: CommissionFormulaForm) {
   const sourceLabel = COMMISSION_FORMULA_SOURCES.find((item) => item.value === form.source)?.label || form.source;
   const deductionLabels = form.deductions
     .map((deduction) => COMMISSION_FORMULA_DEDUCTIONS.find((item) => item.value === deduction)?.label || deduction)
     .filter(Boolean);
   return [sourceLabel, ...deductionLabels.map((label) => `- ${label}`)].join(" ");
+}
+
+function notificationTemplatePreview(form: NotificationTemplateForm) {
+  const uploadUrl = form.uploadUrl || "https://www.nextwood.net";
+  const sampleBillRows = [
+    "1. 订单号：PV252",
+    "   提单号：STSHVS76979",
+    "   柜型/柜量：40HQ×1",
+    "   客户简称：TERRAVUD",
+    "   费用合计：¥10250.00",
+    "   费用明细：",
+    "   - 1. 拖车费，数量 1，CNY 2650.00，折人民币 ¥2650.00，备注：2650*1",
+    "   - 2. 港杂费，数量 1，CNY 800.00，折人民币 ¥800.00",
+    "   请分别上传：",
+    "   - 港杂费发票",
+    "   - 拖车及其他费用合并发票",
+    "   备注：2650*1",
+  ].join("\n");
+  const variables: Record<string, string> = {
+    supplierName: "浙江迈奇克国际货运代理有限公司",
+    billCount: "1",
+    orderNo: "PV252",
+    blNo: "STSHVS76979",
+    customerShortName: "TERRAVUD",
+    containerSummary: "40HQ×1",
+    amountCny: "¥10250.00",
+    expenseDetails: "1. 拖车费，数量 1，CNY 2650.00，折人民币 ¥2650.00",
+    invoiceGroups: "港杂费发票\n拖车及其他费用合并发票",
+    remark: "2650*1",
+    billRows: sampleBillRows,
+    invoiceRequirements: form.invoiceRequirements,
+    uploadUrl,
+    signature: form.signature,
+  };
+  const subject = applyNotificationTemplate(form.singleSubjectTemplate, variables);
+  const body = applyNotificationTemplate(form.bodyTemplate, variables);
+  return [`标题：${subject}`, "", body].join("\n");
+}
+
+function applyNotificationTemplate(template: string, variables: Record<string, string>) {
+  return String(template || "").replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (match, key) => (
+    Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match
+  ));
 }
 
 function stringSetting(settings: Record<string, unknown> | null | undefined, key: string, fallback: string) {

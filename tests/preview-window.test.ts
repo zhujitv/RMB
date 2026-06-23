@@ -24,6 +24,10 @@ test("preview route returns inline file streams with cache and nosniff headers",
   assert.match(previewRoute, /"Content-Type": "application\/pdf"/);
   assert.match(previewRoute, /preferredOrderDocumentFileName\(document\)/);
   assert.match(previewRoute, /pdfContentDispositionHeader\("inline", fileName\)/);
+  assert.match(previewRoute, /export async function HEAD/);
+  assert.match(previewRoute, /getOrderDocumentPreviewMetadata\(request, actor, id\)/);
+  assert.match(orderDocumentsService, /export async function getOrderDocumentPreviewMetadata/);
+  assert.match(orderDocumentsService, /headR2Object\(document\.storageKey\)/);
   assert.match(sharedConstants, /filename="[^`]*"; filename\*=UTF-8''\$\{encodeURIComponent\(safeFileName\)\}/);
   assert.match(sharedConstants, /document\.originalFileName,[\s\S]*document\.originalFilename,[\s\S]*document\.originalName,[\s\S]*document\.fileName,[\s\S]*generatedOrderDocumentFileName\(document\)/);
   assert.doesNotMatch(previewRoute, /attachment/);
@@ -36,8 +40,9 @@ test("download route returns attachment file streams", () => {
   assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
   assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
   assert.match(downloadRoute, /preferredOrderDocumentFileName\(document\)/);
-  assert.match(downloadRoute, /searchParams\.get\("disposition"\) === "inline" \? "inline" : "attachment"/);
-  assert.match(downloadRoute, /pdfContentDispositionHeader\(disposition, fileName\)/);
+  assert.match(downloadRoute, /pdfContentDispositionHeader\("attachment", fileName\)/);
+  assert.doesNotMatch(downloadRoute, /searchParams\.get\("disposition"\)/);
+  assert.doesNotMatch(downloadRoute, /pdfContentDispositionHeader\("inline"/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
 });
 
@@ -53,7 +58,12 @@ test("workspace modules use one PDF preview drawer instead of preview tabs", () 
   assert.match(sharedComponents, /export function PdfPreviewButton/);
   assert.match(sharedComponents, /export function PdfPreviewDrawer/);
   assert.match(sharedComponents, /const previewUrl = `\/api\/order-documents\/\$\{encodedId\}\/preview`/);
-  assert.match(sharedComponents, /<object[\s\S]*data=\{previewUrl\}[\s\S]*type="application\/pdf"/);
+  assert.match(sharedComponents, /method: "HEAD"/);
+  assert.match(sharedComponents, /Content-Type/);
+  assert.match(sharedComponents, /application\/pdf/);
+  assert.match(sharedComponents, /<iframe[\s\S]*src=\{previewUrl\}/);
+  assert.doesNotMatch(sharedComponents, /<object/);
+  assert.doesNotMatch(sharedComponents, /data=\{previewUrl\}/);
   assert.match(sharedComponents, /在线预览失败/);
   assert.match(sharedComponents, /下载文件/);
   assert.match(sharedComponents, /surfaceClassName=\{styles\.pdfPreviewDrawer\}/);
@@ -80,8 +90,12 @@ test("document preview page sets the browser title from document metadata", () =
   assert.match(documentPreviewClient, /document\.title = initialFileName/);
   assert.match(documentPreviewClient, /document\.title = nextFileName/);
   assert.match(documentPreviewClient, /\/preview`/);
-  assert.match(documentPreviewClient, /<object/);
-  assert.match(documentPreviewClient, /data=\{previewUrl\}/);
+  assert.match(documentPreviewClient, /method: "HEAD"/);
+  assert.match(documentPreviewClient, /Content-Type/);
+  assert.match(documentPreviewClient, /application\/pdf/);
+  assert.match(documentPreviewClient, /<iframe[\s\S]*src=\{previewUrl\}/);
+  assert.doesNotMatch(documentPreviewClient, /<object/);
+  assert.doesNotMatch(documentPreviewClient, /data=\{previewUrl\}/);
   assert.match(documentPreviewClient, /minHeight: "calc\(100vh - 80px\)"/);
   assert.match(documentPreviewClient, /在线预览失败/);
   assert.match(documentPreviewClient, /下载文件/);

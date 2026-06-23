@@ -456,6 +456,52 @@ export const COMMISSION_FORMULA_PRESETS = {
   },
 };
 export const DEFAULT_COMMISSION_FORMULA_SETTINGS = COMMISSION_FORMULA_PRESETS.ACTUAL_RECEIVED_MINUS_LOGISTICS;
+export const LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY = "logistics_invoice_notification_template";
+export const LOGISTICS_INVOICE_NOTIFICATION_VARIABLES = [
+  "supplierName",
+  "billCount",
+  "orderNo",
+  "blNo",
+  "customerShortName",
+  "containerSummary",
+  "amountCny",
+  "expenseDetails",
+  "invoiceGroups",
+  "remark",
+  "billRows",
+  "invoiceRequirements",
+  "uploadUrl",
+  "signature",
+];
+export const DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS = {
+  autoSendOnApproval: true,
+  singleSubjectTemplate: "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}",
+  batchSubjectTemplate: "待开票物流费用清单（{billCount} 票）",
+  bodyTemplate: [
+    "{supplierName}，您好：",
+    "",
+    "以下物流费用已审核通过，请按开票要求开具发票，并登录系统在对应账单中上传发票。",
+    "",
+    "待开票费用清单：",
+    "{billRows}",
+    "",
+    "开票要求：",
+    "{invoiceRequirements}",
+    "",
+    "发票上传入口：{uploadUrl}",
+    "",
+    "{signature}",
+  ].join("\n"),
+  invoiceRequirements: [
+    "1. 发票金额需与系统审核通过的费用合计一致。",
+    "2. 发票抬头、税号、供应商信息需与系统资料一致。",
+    "3. 报关费、港杂费、海运费必须分别开票上传。",
+    "4. 拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
+    "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
+  ].join("\n"),
+  uploadUrl: "",
+  signature: "NEXTWOOD 供应链协同平台",
+};
 export const AUTO_RATE_CURRENCIES = ["USD", "EUR", "GBP", "HKD"];
 export const BOC_CURRENCY_NAMES = {
   USD: "美元",

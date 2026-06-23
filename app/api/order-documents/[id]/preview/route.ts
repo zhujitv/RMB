@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getActor, getOrderDocumentPreview, pdfContentDispositionHeader, preferredOrderDocumentFileName } from "../../../../../lib/platform-db";
+import { getActor, getOrderDocumentPreview, getOrderDocumentPreviewMetadata, pdfContentDispositionHeader, preferredOrderDocumentFileName } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +37,25 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Length": String(body.length),
+        "Content-Disposition": pdfContentDispositionHeader("inline", fileName),
+        "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error: unknown) {
+    return previewErrorResponse((error || {}) as ErrorLike);
+  }
+}
+
+export async function HEAD(request: NextRequest, { params }: RouteContext) {
+  try {
+    const actor = await getActor(request);
+    const { id } = await params;
+    const document = await getOrderDocumentPreviewMetadata(request, actor, id);
+    const fileName = preferredOrderDocumentFileName(document);
+    return new Response(null, {
+      headers: {
+        "Content-Type": "application/pdf",
         "Content-Disposition": pdfContentDispositionHeader("inline", fileName),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",

@@ -4285,6 +4285,16 @@
   background: #111827;
 }
 
+.pdfPreviewLoading {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #cbd5e1;
+  font-size: 13px;
+  text-align: center;
+}
+
 .pdfPreviewFallback {
   min-height: calc(100vh - 72px);
   display: grid;

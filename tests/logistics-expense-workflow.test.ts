@@ -24,6 +24,7 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-shared.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
+  readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-queries.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow.ts", "utf8"),
@@ -48,6 +49,7 @@ const backendAggregateStatusSource = backend.match(/export function aggregateLog
 const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
 const logisticsInvoiceRoute = readFileSync("app/api/logistics-costs/[id]/invoice/route.ts", "utf8");
 const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
+const notificationTemplateRoute = readFileSync("app/api/settings/notification-templates/route.ts", "utf8");
 const logisticsExpenseDeleteRoute = readFileSync("app/api/logistics-expenses/[id]/route.ts", "utf8");
 const logisticsExpenseBatchRoute = readFileSync("app/api/logistics-expenses/batch-update/route.ts", "utf8");
 const logisticsExpenseBatchSaveRoute = readFileSync("app/api/logistics-expenses/batch-save/route.ts", "utf8");
@@ -167,6 +169,10 @@ test("logistics cost type dictionary includes advance and drop-off fees in busin
 test("approval sends invoice notification and preserves failure for audit", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);
+  assert.match(backend, /renderLogisticsInvoiceNotificationEmail/);
+  assert.match(backend, /getLogisticsInvoiceNotificationSettings/);
+  assert.match(backend, /autoSendOnApproval/);
+  assert.match(backend, /skipped/);
   assert.match(backend, /resolveLogisticsSupplierInvoiceEmail/);
   assert.match(backend, /supplier\.operatorUsers\.email/);
   assert.match(backend, /supplier\.contactEmail/);
@@ -176,8 +182,27 @@ test("approval sends invoice notification and preserves failure for audit", () =
   assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults/);
   assert.match(backend, /物流费用开票通知失败/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
-  assert.match(backend, /invoiceNotificationError: result\.sent \? null/);
+  assert.match(backend, /invoiceNotificationError: result\.sent \|\| result\.skipped \? null/);
   assert.match(backend, /通知失败/);
+});
+
+test("settings include configurable logistics invoice notification template", () => {
+  assert.match(backend, /LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY = "logistics_invoice_notification_template"/);
+  assert.match(backend, /DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS/);
+  assert.match(backend, /export async function readLogisticsInvoiceNotificationSettings/);
+  assert.match(backend, /export async function saveLogisticsInvoiceNotificationSettings/);
+  assert.match(backend, /applyTemplate\(settings\.bodyTemplate/);
+  assert.match(notificationTemplateRoute, /readLogisticsInvoiceNotificationSettings\(actor\)/);
+  assert.match(notificationTemplateRoute, /saveLogisticsInvoiceNotificationSettings\(request, actor, body\)/);
+  assert.match(settingsModule, /type SettingsTabKey = "companyProfile"[\s\S]*"notificationTemplates"/);
+  assert.match(settingsModule, /label: "通知模板"/);
+  assert.match(settingsModule, /\/api\/settings\/notification-templates/);
+  assert.match(settingsModule, /NotificationTemplateSettingsCard/);
+  assert.match(settingsModule, /物流费用开票通知模板/);
+  assert.match(settingsModule, /保存通知模板/);
+  assert.match(settingsModule, /可用变量/);
+  assert.match(settingsModule, /模板预览/);
+  assert.match(settingsModule, /审核通过后自动发送/);
 });
 
 test("logistics information page exposes per-order expense entry actions", () => {
