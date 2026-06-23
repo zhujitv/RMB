@@ -34,9 +34,9 @@ test("download route returns attachment file streams", () => {
   assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
   assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
   assert.match(downloadRoute, /preferredOrderDocumentFileName\(document\)/);
-  assert.match(downloadRoute, /pdfContentDispositionHeader\("attachment", fileName\)/);
+  assert.match(downloadRoute, /searchParams\.get\("disposition"\) === "inline" \? "inline" : "attachment"/);
+  assert.match(downloadRoute, /pdfContentDispositionHeader\(disposition, fileName\)/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
-  assert.doesNotMatch(downloadRoute, /inline/);
 });
 
 test("preview route returns structured JSON errors when stream fails", () => {
@@ -60,12 +60,20 @@ test("workspace modules use dynamic document preview pages instead of API previe
 });
 
 test("document preview page sets the browser title from document metadata", () => {
-  assert.match(documentPreviewPage, /<DocumentPreviewClient documentId=\{id\} \/>/);
+  assert.match(documentPreviewPage, /export async function generateMetadata/);
+  assert.match(documentPreviewPage, /getOrderDocumentMetadata\(request, actor, documentId\)/);
+  assert.match(documentPreviewPage, /return \{ title \}/);
+  assert.match(documentPreviewPage, /<DocumentPreviewClient documentId=\{id\} initialFileName=\{initialFileName\} \/>/);
   assert.match(documentPreviewClient, /fetch\(`\/api\/order-documents\/\$\{encodedId\}`/);
   assert.match(documentPreviewClient, /displayFileName/);
   assert.match(documentPreviewClient, /downloadFileName/);
+  assert.match(documentPreviewClient, /document\.title = initialFileName/);
   assert.match(documentPreviewClient, /document\.title = nextFileName/);
-  assert.match(documentPreviewClient, /src=\{previewUrl\}/);
+  assert.match(documentPreviewClient, /download\?disposition=inline/);
+  assert.match(documentPreviewClient, /<object/);
+  assert.match(documentPreviewClient, /data=\{previewUrl\}/);
+  assert.match(documentPreviewClient, /minHeight: "calc\(100vh - 80px\)"/);
+  assert.match(documentPreviewClient, /无法预览，请下载文件查看/);
   assert.match(orderDocumentRoute, /export async function GET/);
   assert.match(orderDocumentRoute, /getOrderDocumentMetadata\(request, actor, id\)/);
   assert.match(sharedSerialization, /displayFileName/);

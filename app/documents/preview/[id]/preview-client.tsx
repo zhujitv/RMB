@@ -30,16 +30,17 @@ function displayNameFromMetadata(document: DocumentMetadata | null) {
   );
 }
 
-export function DocumentPreviewClient({ documentId }: { documentId: string }) {
-  const [fileName, setFileName] = useState("");
+export function DocumentPreviewClient({ documentId, initialFileName = "" }: { documentId: string; initialFileName?: string }) {
+  const [fileName, setFileName] = useState(initialFileName);
   const [error, setError] = useState("");
 
   const encodedId = useMemo(() => encodeURIComponent(documentId), [documentId]);
-  const previewUrl = `/api/order-documents/${encodedId}/preview`;
+  const previewUrl = `/api/order-documents/${encodedId}/download?disposition=inline`;
   const downloadUrl = `/api/order-documents/${encodedId}/download`;
 
   useEffect(() => {
     let cancelled = false;
+    if (initialFileName) document.title = initialFileName;
 
     async function loadMetadata() {
       try {
@@ -117,16 +118,38 @@ export function DocumentPreviewClient({ documentId }: { documentId: string }) {
           下载
         </a>
       </header>
-      <iframe
-        src={previewUrl}
-        title={fileName || "文件"}
+      <section
         style={{
           flex: "1 1 auto",
           width: "100%",
-          border: 0,
+          minHeight: "calc(100vh - 80px)",
           background: "#111827",
         }}
-      />
+      >
+        <object
+          data={previewUrl}
+          type="application/pdf"
+          aria-label={fileName || "PDF 文件预览"}
+          style={{
+            display: "block",
+            width: "100%",
+            minHeight: "calc(100vh - 80px)",
+            border: 0,
+            background: "#111827",
+          }}
+        >
+          <div style={{
+            display: "grid",
+            minHeight: "calc(100vh - 80px)",
+            placeItems: "center",
+            color: "#f8fafc",
+            padding: 24,
+            textAlign: "center",
+          }}>
+            <p style={{ margin: 0 }}>无法预览，请下载文件查看</p>
+          </div>
+        </object>
+      </section>
     </main>
   );
 }
