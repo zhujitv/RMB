@@ -3054,6 +3054,55 @@
   font-weight: 800;
 }
 
+.logisticsCurrencySummary {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.logisticsCurrencySummaryRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.logisticsCurrencySummaryRow span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsCurrencySummaryRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.logisticsCurrencySummaryTotal strong {
+  color: #1d4ed8;
+}
+
+.logisticsCurrencySummaryCompact {
+  justify-items: start;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.logisticsCurrencySummaryCompact .logisticsCurrencySummaryRow {
+  justify-content: flex-start;
+}
+
+.logisticsCurrencySummaryCompact .logisticsCurrencySummaryRow span,
+.logisticsCurrencySummaryCompact .logisticsCurrencySummaryRow strong {
+  font-size: 12px;
+}
+
 .inlineFormMessage {
   color: #b91c1c;
   font-size: 13px;
@@ -6288,6 +6337,22 @@
   color: var(--text);
   font-size: 13px;
   font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryRow span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryTotal strong {
+  color: #1d4ed8;
 }
 
 .logisticsTypographyScope .primaryButton,

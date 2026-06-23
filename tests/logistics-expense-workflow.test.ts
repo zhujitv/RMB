@@ -706,6 +706,12 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.doesNotMatch(logisticsModule, /window\.location|location\.href|router\.refresh|reload\(/);
   assert.match(logisticsModule, /费用明细/);
   assert.match(logisticsModule, /账单合计/);
+  assert.match(logisticsModule, /人民币实际费用合计/);
+  assert.match(logisticsModule, /外币费用合计/);
+  assert.match(logisticsModule, /折人民币总合计/);
+  assert.match(logisticsModule, /logisticsExpenseCurrencySummaryFromItems/);
+  assert.match(logisticsModule, /logisticsExpenseFormCurrencySummary/);
+  assert.match(workspaceStyles, /\.logisticsCurrencySummary/);
   assert.match(logisticsModule, /logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /\.logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /border: 1px solid #fecaca/);

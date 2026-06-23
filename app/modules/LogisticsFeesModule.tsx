@@ -22,6 +22,7 @@ const COST_TYPES = [...LOGISTICS_COST_TYPES];
 const COST_TYPE_OPTIONS = [...LOGISTICS_COST_TYPE_OPTIONS];
 const DEFAULT_BILLING_METHOD = "按柜";
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
+const FOREIGN_CURRENCY_ORDER = ["USD", "EUR", "HKD", "GBP"];
 const LOGISTICS_FEE_SUPPLIER_TYPES = [
   "物流供应商",
   "报关供应商",
@@ -207,6 +208,17 @@ type LogisticsExpenseDraft = {
   unitAmount: string;
   appliedContainerCount: string;
   remark: string;
+};
+
+type LogisticsExpenseCurrencyTotal = {
+  currency: string;
+  amount: number;
+};
+
+type LogisticsExpenseCurrencySummary = {
+  cnyActual: number;
+  foreignTotals: LogisticsExpenseCurrencyTotal[];
+  totalCny: number;
 };
 
 type LogisticsExpenseBatchUpdateItem = {
@@ -1101,7 +1113,9 @@ function LogisticsExpenseRows({
   const hasPendingCreates = newExpenseRows.length > 0;
   const hasPendingDeletes = deletedExpenseIds.length > 0;
   const hasPendingChanges = hasDirtyChanges || hasPendingCreates || hasPendingDeletes;
-  const editedBillTotalCny = editingExpenseRows.reduce((sum, item) => sum + logisticsExpenseDraftAmountCny(item, drafts[item.id]), 0);
+  const billCurrencySummary = hasPendingChanges
+    ? logisticsExpenseCurrencySummaryFromDrafts(editingExpenseRows, drafts)
+    : logisticsExpenseCurrencySummaryFromItems(items);
   const canSubmitThisBill = canSubmitDraft && logisticsExpenseBillCanSubmit(expense);
   const shouldShowSubmitBill = canSubmitDraft && logisticsExpenseBillIsEditable(billAuditStatus);
   const invoiceGroups = expense.invoiceGroups?.length ? expense.invoiceGroups : logisticsInvoiceGroupsForBill(editingExpenseRows);
@@ -1322,7 +1336,7 @@ function LogisticsExpenseRows({
   const drawerSubtitle = [
     `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
     `柜型：${containerSummary.shortText}`,
-    `金额：${formatCnyAccounting(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}`,
+    `折人民币：${formatCnyAccounting(billCurrencySummary.totalCny)}`,
   ].join(" · ");
 
   return (
@@ -1373,8 +1387,11 @@ function LogisticsExpenseRows({
             <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
             <DetailField label="船名航次" value={expense.order?.vesselVoyage || expense.vesselVoyage || "-"} />
             <DetailField label="费用明细" value={`${editingExpenseRows.length} 项`} />
-            <DetailField label="账单合计" value={formatCnyAccounting(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))} />
             <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} hidden={!canShowSupplier || !supplierNames.length} wide />
+            <div className={`${styles.detailField} ${styles.detailFieldWide}`}>
+              <span>账单合计</span>
+              <LogisticsCurrencyTotalSummary summary={billCurrencySummary} />
+            </div>
           </div>
         </div>
       ) : null}
@@ -1383,7 +1400,8 @@ function LogisticsExpenseRows({
           <div className={styles.logisticsDrawerSectionHeader}>
             <div>
               <strong>费用明细</strong>
-              <span>{editingExpenseRows.length} 项 · 合计 {formatCnyAccounting(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))}</span>
+              <span>{editingExpenseRows.length} 项</span>
+              <LogisticsCurrencyTotalSummary summary={billCurrencySummary} compact />
             </div>
           </div>
           <LogisticsExpenseDetailsTable
@@ -1870,7 +1888,7 @@ export function LogisticsExpenseForm({
     ? selectedSupplier.allowedLogisticsCostTypes.map((type) => logisticsCostTypeLabel(type)).join(" / ")
     : "";
   const costTypeOptions = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
-  const totalAmountCny = form.items.reduce((sum, item) => sum + (lineSubtotal(item) * Number(item.exchangeRate || 0)), 0);
+  const formCurrencySummary = logisticsExpenseFormCurrencySummary(form.items);
 
   return (
     <form
@@ -2000,7 +2018,9 @@ export function LogisticsExpenseForm({
             </div>
           ))}
         </div>
-        <div className={styles.logisticsItemsTotal}>合计：{formatCny(totalAmountCny)}</div>
+        <div className={styles.logisticsItemsTotal}>
+          <LogisticsCurrencyTotalSummary summary={formCurrencySummary} />
+        </div>
       </div>
       {!isLockedSupplier ? (
       <div className={styles.quickCreateMeta}>
@@ -2276,6 +2296,16 @@ function lineSubtotal(item: ExpenseItemForm) {
   return unitPrice * (Number.isFinite(quantity) && quantity > 0 ? quantity : 1);
 }
 
+function logisticsExpenseFormCurrencySummary(items: ExpenseItemForm[]): LogisticsExpenseCurrencySummary {
+  return finalizeLogisticsCurrencySummary(items.reduce((summary, item) => {
+    const currency = normalizeCurrencyCode(item.currency);
+    const amount = lineSubtotal(item);
+    const exchangeRate = finiteNumber(item.exchangeRate, currency === "CNY" ? 1 : 0);
+    addLogisticsCurrencyAmount(summary, currency, amount, amount * exchangeRate);
+    return summary;
+  }, createLogisticsCurrencyAccumulator()));
+}
+
 function validBillingQuantity(value: unknown) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return false;
@@ -2372,6 +2402,144 @@ function expenseAmountText(expense: LogisticsExpense) {
 
 function formatCnyAccounting(value: unknown) {
   return `¥ ${formatAmount(value)}`;
+}
+
+function LogisticsCurrencyTotalSummary({
+  summary,
+  compact = false,
+}: {
+  summary: LogisticsExpenseCurrencySummary;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`${styles.logisticsCurrencySummary} ${compact ? styles.logisticsCurrencySummaryCompact : ""}`}>
+      {Math.abs(summary.cnyActual) > 0.000001 ? (
+        <div className={styles.logisticsCurrencySummaryRow}>
+          <span>人民币实际费用合计：</span>
+          <strong>{formatCnyAccounting(summary.cnyActual)}</strong>
+        </div>
+      ) : null}
+      {summary.foreignTotals.map((item) => (
+        <div className={styles.logisticsCurrencySummaryRow} key={item.currency}>
+          <span>{item.currency} 外币费用合计：</span>
+          <strong>{item.currency} {formatAmount(item.amount)}</strong>
+        </div>
+      ))}
+      <div className={`${styles.logisticsCurrencySummaryRow} ${styles.logisticsCurrencySummaryTotal}`}>
+        <span>折人民币总合计：</span>
+        <strong>{formatCnyAccounting(summary.totalCny)}</strong>
+      </div>
+    </div>
+  );
+}
+
+function logisticsExpenseCurrencySummaryFromItems(items: LogisticsExpense[]): LogisticsExpenseCurrencySummary {
+  return finalizeLogisticsCurrencySummary(items.reduce((summary, item) => {
+    const currency = normalizeCurrencyCode(item.currency);
+    const originalAmount = logisticsExpenseOriginalAmount(item);
+    const amountCny = logisticsExpenseAmountCny(item, originalAmount, currency);
+    addLogisticsCurrencyAmount(summary, currency, originalAmount, amountCny);
+    return summary;
+  }, createLogisticsCurrencyAccumulator()));
+}
+
+function logisticsExpenseCurrencySummaryFromDrafts(
+  items: LogisticsExpense[],
+  drafts: Record<string, LogisticsExpenseDraft>,
+): LogisticsExpenseCurrencySummary {
+  return finalizeLogisticsCurrencySummary(items.reduce((summary, item) => {
+    const currency = normalizeCurrencyCode(item.currency);
+    const draft = drafts[item.id];
+    const originalAmount = logisticsExpenseDraftOriginalAmount(item, draft);
+    const amountCny = originalAmount * finiteNumber(item.exchangeRate, currency === "CNY" ? 1 : 0);
+    addLogisticsCurrencyAmount(summary, currency, originalAmount, amountCny);
+    return summary;
+  }, createLogisticsCurrencyAccumulator()));
+}
+
+function createLogisticsCurrencyAccumulator() {
+  return {
+    cnyActual: 0,
+    foreignTotals: new Map<string, number>(),
+    totalCny: 0,
+  };
+}
+
+function addLogisticsCurrencyAmount(
+  summary: ReturnType<typeof createLogisticsCurrencyAccumulator>,
+  currency: string,
+  originalAmount: number,
+  amountCny: number,
+) {
+  if (currency === "CNY") {
+    summary.cnyActual += originalAmount;
+  } else {
+    summary.foreignTotals.set(currency, (summary.foreignTotals.get(currency) || 0) + originalAmount);
+  }
+  summary.totalCny += amountCny;
+}
+
+function finalizeLogisticsCurrencySummary(
+  summary: ReturnType<typeof createLogisticsCurrencyAccumulator>,
+): LogisticsExpenseCurrencySummary {
+  return {
+    cnyActual: roundCurrencyTotal(summary.cnyActual),
+    foreignTotals: [...summary.foreignTotals.entries()]
+      .map(([currency, amount]) => ({ currency, amount: roundCurrencyTotal(amount) }))
+      .filter((item) => Math.abs(item.amount) > 0.000001)
+      .sort((left, right) => logisticsCurrencyOrder(left.currency) - logisticsCurrencyOrder(right.currency)
+        || left.currency.localeCompare(right.currency)),
+    totalCny: roundCurrencyTotal(summary.totalCny),
+  };
+}
+
+function logisticsCurrencyOrder(currency: string) {
+  const index = FOREIGN_CURRENCY_ORDER.indexOf(currency);
+  return index >= 0 ? index : FOREIGN_CURRENCY_ORDER.length;
+}
+
+function logisticsExpenseOriginalAmount(expense: LogisticsExpense) {
+  const amount = finiteNumberOrNull(expense.amount);
+  if (amount !== null) return amount;
+  const amountCny = finiteNumber(expense.amountCny, 0);
+  const currency = normalizeCurrencyCode(expense.currency);
+  const exchangeRate = finiteNumber(expense.exchangeRate, currency === "CNY" ? 1 : 0);
+  if (currency === "CNY" || exchangeRate <= 0) return amountCny;
+  return amountCny / exchangeRate;
+}
+
+function logisticsExpenseAmountCny(expense: LogisticsExpense, originalAmount: number, currency: string) {
+  const amountCny = finiteNumberOrNull(expense.amountCny);
+  if (amountCny !== null) return amountCny;
+  return originalAmount * finiteNumber(expense.exchangeRate, currency === "CNY" ? 1 : 0);
+}
+
+function logisticsExpenseDraftOriginalAmount(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
+  if (!draft || (!validLogisticsExpenseDraft(draft, expense.isTemporary) && !draft.unitAmount.trim())) {
+    return logisticsExpenseOriginalAmount(expense);
+  }
+  return editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount);
+}
+
+function normalizeCurrencyCode(value: unknown) {
+  const currency = String(value || "CNY").trim().toUpperCase();
+  return currency || "CNY";
+}
+
+function finiteNumber(value: unknown, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function finiteNumberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function roundCurrencyTotal(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function compactStatusLabel(value: unknown, type: "audit" | "invoice" | "payment") {
