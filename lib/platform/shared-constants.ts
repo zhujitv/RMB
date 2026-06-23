@@ -52,7 +52,7 @@ export const DOMESTIC_LOGISTICS_TRANSPORT_LABELS = {
 export const COMMISSION_LOGISTICS_COST_TYPES = ["国内物流费", "国内拖车费", ...LOGISTICS_COST_TYPES]
   .filter((item, index, arr) => arr.indexOf(item) === index);
 export const FACTORY_SUPPLIER_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
-export const CNY_ONLY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "拖车费", "报关费", "港杂费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "银行手续费", "样品费", "其他费用"];
+export const CNY_ONLY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "拖车费", "报关费", "港杂费", "打单费", "ENS", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "银行手续费", "样品费", "其他费用"];
 export const FOREIGN_CURRENCY_COST_TYPES = ["海运费", "国外佣金", "国外代理费", "其他物流费用"];
 export const LEGACY_FOREIGN_CURRENCY_COST_TYPES = ["佣金"];
 export const COST_TYPES = [...CNY_ONLY_COST_TYPES, ...FOREIGN_CURRENCY_COST_TYPES, "保险费", ...LEGACY_FOREIGN_CURRENCY_COST_TYPES]
@@ -506,7 +506,7 @@ export const DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS = {
     "1. 发票金额需与系统审核通过的费用合计一致。",
     "2. 发票抬头、税号、供应商信息需与系统资料一致。",
     "3. 报关费、港杂费、海运费必须分别开票上传。",
-    "4. 拖车费、打单费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
+    "4. 拖车费、打单费、ENS、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
     "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
   ].join("\n"),
   uploadUrl: "",

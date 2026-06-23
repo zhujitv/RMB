@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import {
   amountCny,
+  CURRENCIES,
   nonEmpty,
   normalizedCostType,
   optional,
@@ -650,49 +651,50 @@ export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
   if (!updates.length && !creates.length && !deletes.length) {
     throw codedError("请提供需要保存的物流费用明细。", 400, "LOGISTICS_EXPENSE_BATCH_SAVE_EMPTY");
   }
+  const startedAt = Date.now();
+  const identifier = batchSaveLogisticsExpenseBillIdentifier(input, updates, deletes);
+  const billRows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
+  if (!billRows.length) throw codedError("未找到当前物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
+  const billId = logisticsExpenseBillId(billRows[0]);
+  const billStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
+  if (!["草稿", "已驳回"].includes(billStatus || "草稿")) {
+    throw codedError(`账单${billStatus || "当前状态"}，不能保存明细，请先撤回为草稿。`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
+  }
+  const billRowById = new Map(billRows.map((row) => [row.id, row]));
   const preparedUpdates = [];
   const preparedDeletes = [];
   for (let index = 0; index < updates.length; index += 1) {
     const item = updates[index] || {};
-    const before = await loadLogisticsExpenseForBatchItem(item.id, actor, index);
-    const billBlockReason = await logisticsExpenseBillEditBlockReason(before, actor);
-    if (billBlockReason) {
-      throw codedError(`第 ${index + 1} 行${before.costType || "物流费用"}保存失败：${billBlockReason}`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
-    }
+    const before = loadLogisticsExpenseBatchBillRow(billRowById, item.id, index, "保存");
     const data = logisticsExpenseBatchUpdateData(item, before, actor, index);
     preparedUpdates.push({ before, data });
   }
   for (let index = 0; index < deletes.length; index += 1) {
-    const before = await loadLogisticsExpenseForBatchItem(deletes[index], actor, index);
-    const billBlockReason = await logisticsExpenseBillEditBlockReason(before, actor);
-    if (billBlockReason) {
-      throw codedError(`第 ${index + 1} 行${before.costType || "物流费用"}删除失败：${billBlockReason.replace("修改", "删除")}`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
-    }
+    const before = loadLogisticsExpenseBatchBillRow(billRowById, deletes[index], index, "删除");
     const block = logisticsExpenseDeleteBlock(before);
     if (block) {
       throw codedError(`第 ${index + 1} 行${before.costType || "物流费用"}删除失败：${block.message}`, 400, block.code);
     }
     preparedDeletes.push(before);
   }
-  const baseExpense = preparedUpdates[0]?.before || preparedDeletes[0] || await loadBatchSaveBaseExpense(input, actor);
-  const order = await assertLogisticsExpenseOrder({ orderId: baseExpense.orderId }, actor);
-  const supplier = await assertLogisticsExpenseSupplier(actor, order, { supplierId: baseExpense.supplierId });
-  const createBillBlockReason = await logisticsExpenseBillEditBlockReason(baseExpense, actor);
-  if (createBillBlockReason) {
-    throw codedError(`新增费用明细失败：${createBillBlockReason}`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
+  const baseExpense = preparedUpdates[0]?.before || preparedDeletes[0] || billRows[0];
+  const order = baseExpense.order;
+  const supplier = baseExpense.supplier;
+  if (!order?.id || !supplier?.id) {
+    throw codedError("当前账单缺少订单或供应商信息，不能保存明细。", 400, "LOGISTICS_EXPENSE_BILL_CONTEXT_INVALID");
   }
   const preparedCreates = [];
   for (let index = 0; index < creates.length; index += 1) {
     const item = creates[index] || {};
-    const costType = nonEmpty(item.expenseType || item.costType);
+    const costType = nonEmpty(item.expenseType || item.costType || item.feeType);
     if (!costType) {
       throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_COST_TYPE_REQUIRED");
     }
-    const unitAmount = Number(item.amount);
+    const unitAmount = Number(item.unitAmount ?? item.unit_amount ?? item.amount);
     const billingMethod = normalizeBatchBillingMethod(item);
     const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
     const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
-	    if (!nonEmpty(item.amount)) {
+	    if (!nonEmpty(item.unitAmount ?? item.unit_amount ?? item.amount)) {
 	      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
 	    }
     if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
@@ -709,8 +711,8 @@ export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
 	      appliedContainerCount,
 	      billingMethod,
 	      billingQuantity,
-	      currency: baseExpense.currency || "CNY",
-      exchangeRate: baseExpense.exchangeRate || 1,
+	      currency: nonEmpty(item.currency || baseExpense.currency || "CNY").toUpperCase(),
+      exchangeRate: item.exchangeRate ?? item.exchange_rate ?? baseExpense.exchangeRate ?? 1,
       exchangeRateDate: baseExpense.exchangeRateDate,
       exchangeRateSource: baseExpense.exchangeRateSource,
       exchangeRateType: baseExpense.exchangeRateType,
@@ -720,45 +722,79 @@ export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
     });
     preparedCreates.push({ data });
   }
-  const savedRows = [];
-  for (const item of preparedUpdates) {
-    const saved = await prisma.logisticsExpense.update({
+  const deletedIds = preparedDeletes.map((row) => row.id);
+  const transactionOperations = [
+    ...preparedUpdates.map((item) => prisma.logisticsExpense.update({
       where: { id: item.before.id },
       data: item.data,
-      include: includeLogisticsExpenseRelations(),
-    });
-    savedRows.push(saved);
-    await runNonCriticalTask("物流费用批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
-  }
-  for (const item of preparedCreates) {
-    const saved = await prisma.logisticsExpense.create({
-      data: item.data,
-      include: includeLogisticsExpenseRelations(),
-    });
-    savedRows.push(saved);
-    await runNonCriticalTask("物流费用批量新增日志写入", () => writeAudit(request, actor, "批量新增物流费用明细", "logistics_expenses", saved.id, null, saved));
-  }
-  const deletedIds = [];
-  for (const before of preparedDeletes) {
-    const saved = await prisma.logisticsExpense.update({
-      where: { id: before.id },
+    })),
+    ...(preparedCreates.length ? [prisma.logisticsExpense.createMany({
+      data: preparedCreates.map((item) => item.data),
+    })] : []),
+    ...(deletedIds.length ? [prisma.logisticsExpense.updateMany({
+      where: {
+        id: { in: deletedIds },
+        deletedAt: null,
+        ...logisticsExpenseAccessWhere(actor),
+      },
       data: { deletedAt: new Date(), updatedById: actor.id },
-      include: includeLogisticsExpenseRelations(),
-    });
-    deletedIds.push(before.id);
-    await runNonCriticalTask("物流费用批量删除日志写入", () => writeAudit(request, actor, "批量删除物流费用明细", "logistics_expenses", before.id, before, saved));
-  }
+    })] : []),
+  ];
+  if (transactionOperations.length) await prisma.$transaction(transactionOperations);
+  const savedBillRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  const serializedItems = savedBillRows.map(serializeLogisticsExpense);
+  const serializedBill = savedBillRows.length ? serializeLogisticsExpenseBill(savedBillRows) : null;
   const affectedOrderIds = [
-    ...savedRows.map((row) => row.orderId),
+    ...savedBillRows.map((row) => row.orderId),
     ...preparedDeletes.map((row) => row.orderId),
   ].filter(Boolean);
   for (const orderId of [...new Set(affectedOrderIds)]) {
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+    void runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
   }
-  return {
-    items: savedRows.map(serializeLogisticsExpense),
+  void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", billId, {
+    bill: serializeLogisticsExpenseBill(billRows),
     deletedIds,
+  }, {
+    bill: serializedBill,
+    updateCount: preparedUpdates.length,
+    createCount: preparedCreates.length,
+    deleteCount: deletedIds.length,
+    durationMs: Date.now() - startedAt,
+  }));
+  console.info("[logistics-expense.batch-save]", {
+    billId,
+    updateCount: preparedUpdates.length,
+    createCount: preparedCreates.length,
+    deleteCount: deletedIds.length,
+    durationMs: Date.now() - startedAt,
+  });
+  return {
+    billId,
+    bill: serializedBill,
+    items: serializedItems,
+    details: serializedItems,
+    deletedIds,
+    totalAmount: serializedBill?.amount || 0,
+    totalAmountCny: serializedBill?.amountCny || 0,
+    updatedAt: serializedBill?.updatedAt || new Date().toISOString(),
   };
+}
+
+function batchSaveLogisticsExpenseBillIdentifier(input = {}, updates = [], deletes = []) {
+  const update = updates.find((item) => nonEmpty(item?.groupKey || item?.billId || item?.id)) || {};
+  return nonEmpty(input.groupKey || input.billId || input.id || update.groupKey || update.billId || update.id || deletes[0]);
+}
+
+function loadLogisticsExpenseBatchBillRow(rowById, id, index, actionLabel = "保存") {
+  const expenseId = nonEmpty(id);
+  if (!expenseId) {
+    throw codedError(`第 ${index + 1} 行${actionLabel}失败：缺少物流费用ID。`, 400, "LOGISTICS_EXPENSE_BATCH_ID_REQUIRED");
+  }
+  const row = rowById.get(expenseId);
+  if (!row) {
+    throw codedError(`第 ${index + 1} 行${actionLabel}失败：该费用明细不属于当前账单。`, 400, "LOGISTICS_EXPENSE_BATCH_ITEM_OUT_OF_BILL");
+  }
+  return row;
 }
 
 export async function deleteLogisticsExpense(request, actor, id) {
@@ -787,11 +823,15 @@ async function loadLogisticsExpenseForBatchItem(id, actor, index) {
 }
 
 function logisticsExpenseBatchUpdateData(item, before, actor, index) {
-  const costType = before.costType || "物流费用";
-  if (!nonEmpty(item.amount)) {
+  const costType = normalizedCostType(item.feeType || item.expenseType || item.costType || before.costType);
+  if (!LOGISTICS_COST_TYPES.includes(costType)) {
+    throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_COST_TYPE_INVALID");
+  }
+  const rawUnitAmount = item.unitAmount ?? item.unit_amount ?? item.amount;
+  if (!nonEmpty(rawUnitAmount)) {
     throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_REQUIRED");
   }
-  const unitAmount = Number(item.amount);
+  const unitAmount = Number(rawUnitAmount);
   const billingMethod = normalizeBatchBillingMethod(item, before);
   const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
   const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
@@ -805,9 +845,18 @@ function logisticsExpenseBatchUpdateData(item, before, actor, index) {
   const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
   const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
     || Object.prototype.hasOwnProperty.call(item, "container_type");
+  const currency = nonEmpty(item.currency || before.currency || "CNY").toUpperCase();
+  if (!CURRENCIES.includes(currency)) throw codedError(`第 ${index + 1} 行请选择有效币种。`, 400, "CURRENCY_REQUIRED");
+  const exchangeRate = Number(item.exchangeRate ?? item.exchange_rate ?? before.exchangeRate ?? 1);
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+    throw codedError(`第 ${index + 1} 行汇率必须大于 0。`, 400, "EXCHANGE_RATE_REQUIRED");
+  }
   return {
+    costType,
+    currency,
+    exchangeRate,
     amount,
-    amountCny: amountCny(amount, before.exchangeRate || 1),
+    amountCny: amountCny(amount, exchangeRate),
 	    ...(hasContainerType ? { containerType: optional(item.containerType ?? item.container_type) } : {}),
 	    appliedContainerCount,
 	    billingMethod,
@@ -970,7 +1019,14 @@ function integerBillingMethod(method) {
 }
 
 function normalizeBatchBillingQuantity(item = {}, billingMethod = DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD, costType = "物流费用", index = 0) {
-  const raw = item.billingQuantity ?? item.billing_quantity ?? item.appliedContainerCount ?? item.containerCount ?? item.applied_container_count ?? 1;
+  const raw = item.billingQuantity
+    ?? item.billing_quantity
+    ?? item.appliedQuantity
+    ?? item.applied_quantity
+    ?? item.appliedContainerCount
+    ?? item.containerCount
+    ?? item.applied_container_count
+    ?? 1;
   const quantity = Number(raw);
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw codedError(`第 ${index + 1} 行${costType}保存失败：适用数量/范围必须大于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_QUANTITY_INVALID");

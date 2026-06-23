@@ -63,6 +63,7 @@ type LogisticsExpense = {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  vesselVoyage?: string;
   supplierId?: string;
   supplierName?: string;
   supplierNames?: string[];
@@ -147,6 +148,7 @@ type ExpenseOrderOption = {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  vesselVoyage?: string;
   truckPlateNo?: string;
   cargoName?: string;
   containerCount?: number;
@@ -202,10 +204,13 @@ type LogisticsExpenseDraft = {
 
 type LogisticsExpenseBatchUpdateItem = {
   id: string;
+  costType?: string;
   amount: number;
   billingMethod: string;
   billingQuantity: number;
   appliedContainerCount: number;
+  currency?: string;
+  exchangeRate?: number;
   remark: string;
 };
 
@@ -215,6 +220,8 @@ type LogisticsExpenseBatchCreateItem = {
   billingMethod: string;
   billingQuantity: number;
   appliedContainerCount: number;
+  currency?: string;
+  exchangeRate?: number;
   remark: string;
 };
 
@@ -228,6 +235,7 @@ type LogisticsExpenseBatchSavePayload = {
 
 type LogisticsExpenseBatchSaveResult = {
   items: LogisticsExpense[];
+  bill?: LogisticsExpense;
   deletedIds: string[];
 };
 
@@ -475,6 +483,7 @@ export function LogisticsFeesModule({
   }
 
   async function saveBillDetails(expense: LogisticsExpense, payload: LogisticsExpenseBatchSavePayload): Promise<LogisticsExpenseBatchSaveResult | null> {
+    if (savingBillId === expense.id) return null;
     if (!payload.updates.length && !payload.creates.length && !payload.deletes.length) {
       setNotice("没有需要保存的修改");
       return null;
@@ -484,19 +493,25 @@ export function LogisticsFeesModule({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; items?: LogisticsExpense[]; rows?: LogisticsExpense[]; deletedIds?: string[]; message?: string }>("/api/logistics-expenses/batch-save", {
+      const result = await apiJson<{ success?: boolean; bill?: LogisticsExpense; items?: LogisticsExpense[]; details?: LogisticsExpense[]; rows?: LogisticsExpense[]; deletedIds?: string[]; message?: string }>("/api/logistics-expenses/batch-save", {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
       if (result.success !== true) throw new Error(result.message || "保存本账单明细失败");
-      const savedRows = Array.isArray(result.items) ? result.items : (Array.isArray(result.rows) ? result.rows : []);
+      const savedRows = result.bill?.items?.length
+        ? result.bill.items
+        : (Array.isArray(result.items) ? result.items : (Array.isArray(result.details) ? result.details : (Array.isArray(result.rows) ? result.rows : [])));
       const deletedIds = Array.isArray(result.deletedIds) ? result.deletedIds : payload.deletes;
-      const reconciliation = reconcileLogisticsExpenseRowsAfterBatchSave(rows, expense.id, savedRows, deletedIds);
-      setRows(reconciliation.rows);
-      if (reconciliation.removedBill) setTotal((current) => Math.max(0, current - 1));
-      await loadStatement(statementMonth);
+      let removedBill = false;
+      setRows((currentRows) => {
+        if (result.bill) return reconcileLogisticsExpenseMutationRows(currentRows, { bill: result.bill });
+        const reconciliation = reconcileLogisticsExpenseRowsAfterBatchSave(currentRows, expense.id, savedRows, deletedIds);
+        removedBill = reconciliation.removedBill;
+        return reconciliation.rows;
+      });
+      if (removedBill) setTotal((current) => Math.max(0, current - 1));
       setNotice(result.message || "✓ 已保存");
-      return { items: savedRows, deletedIds };
+      return { bill: result.bill, items: savedRows, deletedIds };
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "保存本账单明细失败");
       return null;
@@ -1334,11 +1349,11 @@ function LogisticsExpenseRows({
       />
       {activeTab === "basic" ? (
         <div className={styles.logisticsDrawerSection}>
-          <LogisticsBillContainerInfo summary={containerSummary} expense={expense} />
           <div className={styles.detailGrid}>
             <DetailField label="客户全称" value={customerLegalName(expense)} wide />
             <DetailField label="订单号" value={expense.orderNo || "-"} />
             <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
+            <DetailField label="船名航次" value={expense.order?.vesselVoyage || expense.vesselVoyage || "-"} />
             <DetailField label="费用明细" value={`${editingExpenseRows.length} 项`} />
             <DetailField label="账单合计" value={formatCnyAccounting(hasPendingChanges ? editedBillTotalCny : (expense.amountCny || 0))} />
             <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} hidden={!canShowSupplier || !supplierNames.length} wide />
@@ -1393,18 +1408,6 @@ function LogisticsExpenseRows({
         </div>
       ) : null}
     </SideDetailDrawer>
-  );
-}
-
-function LogisticsBillContainerInfo({ summary, expense }: { summary: LogisticsExpenseContainerSummary; expense: LogisticsExpense }) {
-  const loadingPort = logisticsExpenseLoadingPort(expense);
-  return (
-    <div className={styles.logisticsContainerInfoCard}>
-      <span><strong>柜型：</strong>{summary.typeLines.join("，") || "-"}</span>
-      <span><strong>柜号：</strong>{summary.containerNoLines.join(" / ") || "-"}</span>
-      <span><strong>装货港：</strong>{loadingPort || "-"}</span>
-      <span><strong>提单号：</strong>{expense.blNo || expense.billOfLadingNo || "-"}</span>
-    </div>
   );
 }
 
@@ -2324,16 +2327,6 @@ function compactStatusLabel(value: unknown, type: "audit" | "invoice" | "payment
   return "待付款";
 }
 
-function logisticsExpenseLoadingPort(expense: LogisticsExpense) {
-  const rows = [expense, ...(expense.items || [])];
-  for (const row of rows) {
-    const transportItems = row.order?.transportItems || [];
-    const departurePlace = transportItems.map((item) => item.departurePlace || "").find(Boolean);
-    if (departurePlace) return departurePlace;
-  }
-  return "";
-}
-
 function logisticsExpenseLineContainerType(expense: LogisticsExpense) {
   const types = uniqueContainerTypes([
     expense.containerType,
@@ -2409,10 +2402,13 @@ function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: Logisti
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
 	  return {
 	    id: expense.id,
+	    costType: safeDraft.costType,
 	    amount: Number(safeDraft.unitAmount),
 	    billingMethod: DEFAULT_BILLING_METHOD,
 	    billingQuantity: Number(safeDraft.appliedContainerCount),
 	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
+	    currency: expense.currency || "CNY",
+	    exchangeRate: Number(expense.exchangeRate || 1),
 	    remark: safeDraft.remark.trim(),
 	  };
 }
@@ -2425,6 +2421,8 @@ function logisticsExpenseDraftCreatePayload(expense: LogisticsExpense, draft?: L
 	    billingMethod: DEFAULT_BILLING_METHOD,
 	    billingQuantity: Number(safeDraft.appliedContainerCount),
 	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
+	    currency: expense.currency || "CNY",
+	    exchangeRate: Number(expense.exchangeRate || 1),
 	    remark: safeDraft.remark.trim(),
 	  };
 }

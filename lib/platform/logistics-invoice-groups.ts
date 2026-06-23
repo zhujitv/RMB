@@ -28,6 +28,7 @@ export const LOGISTICS_INVOICE_GROUPS: LogisticsInvoiceGroupDefinition[] = [
     costTypes: [
       "拖车费",
       "打单费",
+      "ENS",
       "进港费",
       "提箱费",
       "落箱费",

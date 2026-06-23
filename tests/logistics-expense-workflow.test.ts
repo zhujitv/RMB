@@ -42,6 +42,7 @@ const removeInvoiceManualFieldsMigration = readFileSync("prisma/migrations/20260
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
 const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
+const saveBillDetailsSource = logisticsModule.match(/async function saveBillDetails[\s\S]*?\n  async function deleteExpense/)?.[0] || "";
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
 const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction StatusPill/)?.[0] || "";
@@ -159,12 +160,14 @@ test("port charge logistics invoice filenames do not fall back to factory invoic
   assert.match(backend, /costType: document\.cost\?\.costType \|\| cost\.costType/);
 });
 
-test("logistics cost type dictionary includes document, advance and drop-off fees in business order", () => {
-  assert.match(backend, /"拖车费",\s*"报关费",\s*"港杂费",\s*"打单费",\s*"进港费",\s*"提箱费",\s*"落箱费",\s*"预提费",\s*"查验费",\s*"超重费",\s*"海运费",\s*"保险费",\s*"其他物流费用"/);
+test("logistics cost type dictionary includes document ENS advance and drop-off fees in business order", () => {
+  assert.match(backend, /"拖车费",\s*"报关费",\s*"港杂费",\s*"打单费",\s*"ENS",\s*"进港费",\s*"提箱费",\s*"落箱费",\s*"预提费",\s*"查验费",\s*"超重费",\s*"海运费",\s*"保险费",\s*"其他物流费用"/);
   assert.match(backend, /打单费: "Document Processing Fee"/);
+  assert.match(backend, /ENS: "ENS Fee"/);
   assert.match(backend, /预提费: "Advance Charge"/);
   assert.match(backend, /落箱费: "Container Drop-off Fee"/);
   assert.match(backend, /打单费: "Document-Processing-Fee-Invoice"/);
+  assert.match(backend, /ENS: "ENS-Fee-Invoice"/);
   assert.match(backend, /预提费: "Advance-Charge-Invoice"/);
   assert.match(backend, /落箱费: "Container-Drop-off-Fee-Invoice"/);
   assert.match(logisticsModule, /const COST_TYPES = \[\.\.\.LOGISTICS_COST_TYPES\]/);
@@ -313,13 +316,15 @@ test("logistics expense list groups bills by BL number and keeps item details", 
   assert.match(backend, /serializeLogisticsExpenseBill/);
   assert.match(backend, /aggregateLogisticsExpenseStatus/);
   assert.match(backend, /domesticLogisticsInfos[\s\S]*transportItems/);
+  assert.match(backend, /function resolveLogisticsExpenseVesselVoyage/);
+  assert.match(backend, /vesselVoyage: resolveLogisticsExpenseVesselVoyage\(order\)/);
   assert.match(logisticsModule, /items = expense\.items\?\.length \? expense\.items : \[expense\]/);
   assert.match(logisticsModule, /className=\{styles\.containerTypeColumn\}>柜型/);
   assert.match(logisticsModule, /logisticsExpenseContainerSummary/);
-  assert.match(logisticsModule, /LogisticsBillContainerInfo/);
-  assert.match(logisticsModule, /柜型：/);
-  assert.match(logisticsModule, /柜号：/);
-  assert.match(logisticsModule, /装货港：/);
+  assert.match(logisticsModule, /<DetailField label="船名航次" value=\{expense\.order\?\.vesselVoyage \|\| expense\.vesselVoyage \|\| "-"\}/);
+  assert.doesNotMatch(logisticsModule, /LogisticsBillContainerInfo/);
+  assert.doesNotMatch(logisticsModule, /柜号：/);
+  assert.doesNotMatch(logisticsModule, /装货港：/);
   assert.doesNotMatch(logisticsModule, /柜型汇总：/);
   assert.doesNotMatch(logisticsModule, /柜号列表：/);
   assert.match(logisticsModule, /费用明细/);
@@ -354,7 +359,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.doesNotMatch(backend, /备注：\$\{variables\.remark\}/);
   assert.doesNotMatch(settingsModule, /"   备注：2650\*1"/);
   assert.match(backend, /报关费、港杂费、海运费必须分别开票上传。/);
-  assert.match(backend, /拖车费、打单费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
+  assert.match(backend, /拖车费、打单费、ENS、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
   assert.match(backend, /发票上传入口/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
   assert.match(backend, /paymentStatus: "待付款"/);
@@ -619,10 +624,10 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(logisticsModule, /订单号[\s\S]*提单号[\s\S]*柜型[\s\S]*客户[\s\S]*金额[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
   assert.match(logisticsModule, /tabs=\{\[[\s\S]*基础信息[\s\S]*费用明细[\s\S]*发票管理[\s\S]*操作记录/);
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
-  assert.match(logisticsModule, /LogisticsBillContainerInfo summary=\{containerSummary\} expense=\{expense\}/);
-  assert.match(logisticsModule, /柜型：/);
-  assert.match(logisticsModule, /柜号：/);
-  assert.match(logisticsModule, /装货港：/);
+  assert.match(logisticsModule, /<DetailField label="提单号" value=\{expense\.blNo \|\| expense\.billOfLadingNo \|\| "-"\}/);
+  assert.match(logisticsModule, /<DetailField label="船名航次" value=\{expense\.order\?\.vesselVoyage \|\| expense\.vesselVoyage \|\| "-"\}/);
+  assert.doesNotMatch(logisticsModule, /LogisticsBillContainerInfo summary=\{containerSummary\} expense=\{expense\}/);
+  assert.doesNotMatch(logisticsModule, /装货港：/);
   assert.doesNotMatch(logisticsModule, /className=\{styles\.detailRow\}/);
   assert.doesNotMatch(logisticsModule, /<tr className=\{styles\.detailRow\}>/);
   assert.match(workspaceStyles, /\.logisticsCompactTable/);
@@ -630,7 +635,6 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(workspaceStyles, /\.logisticsCompactTable thead th[\s\S]*position: sticky/);
   assert.match(workspaceStyles, /\.logisticsExpenseDrawer[\s\S]*width: min\(1200px, 94vw\)/);
   assert.match(workspaceStyles, /\.logisticsDrawerSection/);
-  assert.match(workspaceStyles, /\.logisticsContainerInfoCard[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
 });
 
 test("logistics expense bill details can add create and delete rows through one local batch save", () => {
@@ -647,6 +651,9 @@ test("logistics expense bill details can add create and delete rows through one 
   assert.match(logisticsModule, /第 \$\{lineNo\} 行金额不能为空/);
   assert.match(logisticsModule, /第 \$\{lineNo\} 行请选择费用类型/);
   assert.match(logisticsModule, /reconcileLogisticsExpenseRowsAfterBatchSave/);
+  assert.match(saveBillDetailsSource, /savingBillId === expense\.id/);
+  assert.match(saveBillDetailsSource, /reconcileLogisticsExpenseMutationRows\(currentRows, \{ bill: result\.bill \}\)/);
+  assert.doesNotMatch(saveBillDetailsSource, /loadStatement\(statementMonth\)/);
   assert.match(logisticsExpenseBatchSaveRoute, /export async function PATCH/);
   assert.match(logisticsExpenseBatchSaveRoute, /batchSaveLogisticsExpenses/);
   assert.match(logisticsExpenseBatchSaveRoute, /message: "✓ 已保存"/);
@@ -654,6 +661,13 @@ test("logistics expense bill details can add create and delete rows through one 
   assert.match(backend, /const updates = Array\.isArray\(input\.updates\)/);
   assert.match(backend, /const creates = Array\.isArray\(input\.creates\)/);
   assert.match(backend, /const deletes = Array\.isArray\(input\.deletes\)/);
+  assert.match(backend, /batchSaveLogisticsExpenseBillIdentifier/);
+  assert.match(backend, /loadLogisticsExpenseBillRowsForAction\(identifier, actor\)/);
+  assert.match(backend, /prisma\.\$transaction\(transactionOperations\)/);
+  assert.match(backend, /prisma\.logisticsExpense\.createMany/);
+  assert.match(backend, /prisma\.logisticsExpense\.updateMany/);
+  assert.match(backend, /details: serializedItems/);
+  assert.doesNotMatch(backend.match(/export async function batchSaveLogisticsExpenses[\s\S]*?\nexport async function deleteLogisticsExpense/)?.[0] || "", /await loadStatement|notifyLogisticsSupplierInvoice|createOrUpdateCostFromLogisticsExpense|OCR|recognize/);
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED/);
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_CREATE_COST_TYPE_REQUIRED/);
   assert.match(backend, /parseLogisticsExpenseGroupKey/);

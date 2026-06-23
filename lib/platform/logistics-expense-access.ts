@@ -62,6 +62,28 @@ export function includeLogisticsExpenseRelations() {
   };
 }
 
+function resolveLogisticsExpenseVesselVoyage(order = {}) {
+  const info = (order.domesticLogisticsInfos || [])[0] || {};
+  const firstItem = (info.transportItems || [])[0] || {};
+  const shippingInfo = info.shippingInfo || order.shippingInfo || {};
+  const sailingSchedule = info.sailingSchedule || order.sailingSchedule || {};
+  const containerShipment = info.containerShipment || order.containerShipment || {};
+  return nonEmpty(
+    order.vesselVoyage ||
+    order.vessel_voyage ||
+    info.vesselVoyage ||
+    info.vessel_voyage ||
+    firstItem.vesselVoyage ||
+    firstItem.vessel_voyage ||
+    shippingInfo.vesselVoyage ||
+    shippingInfo.vessel_voyage ||
+    sailingSchedule.vesselVoyage ||
+    sailingSchedule.vessel_voyage ||
+    containerShipment.vesselVoyage ||
+    containerShipment.vessel_voyage
+  );
+}
+
 export function logisticsExpenseOrderSummary(order = {}) {
   const info = (order.domesticLogisticsInfos || [])[0] || {};
   const firstItem = (info.transportItems || [])[0] || {};
@@ -85,7 +107,7 @@ export function logisticsExpenseOrderSummary(order = {}) {
     billOfLadingNo: order.blNo || "",
     customerShortName: customerShortName(order.customer),
     customerName: customerBusinessName(order.customer, order.customerNameSnapshot),
-    vesselVoyage: "",
+    vesselVoyage: resolveLogisticsExpenseVesselVoyage(order),
     containerType: containerTypes.length === 1 ? containerTypes[0] : "",
     containerTypes,
     port: firstItem.arrivalPlace || info.destinationPlace || "",
@@ -238,6 +260,7 @@ export function serializeLogisticsExpenseBill(rows = []) {
     billOfLadingNo: first.billOfLadingNo || first.blNo || "",
     customerName: first.customerName || "",
     customerShortName: first.customerShortName || "",
+    vesselVoyage: first.order?.vesselVoyage || "",
     supplierName: "",
     supplierNames: [...new Set(items.map((item) => item.supplierName).filter(Boolean))],
     costType: items.length === 1 ? items[0].costType : `${items.length} 项费用`,
