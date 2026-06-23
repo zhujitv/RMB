@@ -1,19 +1,39 @@
-export const LOGISTICS_COST_TYPES = [
-  "拖车费",
-  "报关费",
-  "港杂费",
-  "打单费",
-  "ENS",
-  "进港费",
-  "提箱费",
-  "落箱费",
-  "预提费",
-  "查验费",
-  "超重费",
-  "海运费",
-  "保险费",
-  "其他物流费用",
+export const LOGISTICS_COST_TYPE_OPTIONS = [
+  { value: "拖车费", label: "拖车费" },
+  { value: "报关费", label: "报关费" },
+  { value: "港杂费", label: "港杂费" },
+  { value: "打单费", label: "打单费" },
+  { value: "ENS", label: "ENS费" },
+  { value: "进港费", label: "进港费" },
+  { value: "提箱费", label: "提箱费" },
+  { value: "落箱费", label: "落箱费" },
+  { value: "预提费", label: "预提费" },
+  { value: "查验费", label: "查验费" },
+  { value: "超重费", label: "超重费" },
+  { value: "海运费", label: "海运费" },
+  { value: "保险费", label: "保险费" },
+  { value: "其他物流费用", label: "其他物流费用" },
 ];
+
+export const LOGISTICS_COST_TYPES = LOGISTICS_COST_TYPE_OPTIONS.map((item) => item.value);
+
+export const LOGISTICS_COST_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
+);
+
+export const LOGISTICS_USD_COST_TYPES = ["海运费", "ENS", "保险费"];
+
+export function logisticsCostTypeLabel(costType = "") {
+  return LOGISTICS_COST_TYPE_LABELS[costType] || costType || "";
+}
+
+export function logisticsCostTypeDefaultCurrency(costType = "") {
+  return LOGISTICS_USD_COST_TYPES.includes(costType) ? "USD" : "CNY";
+}
+
+export function logisticsCostTypeLocksCurrency(costType = "") {
+  return LOGISTICS_USD_COST_TYPES.includes(costType);
+}
 
 export const LOGISTICS_COST_TYPE_ENGLISH_LABELS: Record<string, string> = {
   拖车费: "Trucking Fee",

@@ -8,11 +8,18 @@ import { preventEnterFormSubmit } from "../formGuards";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
-import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
+import {
+  LOGISTICS_COST_TYPE_OPTIONS,
+  LOGISTICS_COST_TYPES,
+  logisticsCostTypeDefaultCurrency,
+  logisticsCostTypeLabel,
+  logisticsCostTypeLocksCurrency,
+} from "../../lib/platform/logistics-cost-types";
 import { logisticsInvoiceGroupForCostType, logisticsInvoiceGroupsForCostTypes } from "../../lib/platform/logistics-invoice-groups";
 
 const PAGE_SIZE = 20;
 const COST_TYPES = [...LOGISTICS_COST_TYPES];
+const COST_TYPE_OPTIONS = [...LOGISTICS_COST_TYPE_OPTIONS];
 const DEFAULT_BILLING_METHOD = "按柜";
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const LOGISTICS_FEE_SUPPLIER_TYPES = [
@@ -260,6 +267,17 @@ type LogisticsExpenseReviewResult = {
   auditStatus?: string;
   notificationStatus?: string;
   errorMessage?: string;
+};
+
+type ExchangeRateResponse = {
+  rate?: {
+    rateToCny?: number;
+    exchangeRate?: number;
+    rate?: number;
+    source?: string;
+    rateType?: string;
+    rateDate?: string;
+  };
 };
 
 type LogisticsExpenseContainerSummary = {
@@ -533,7 +551,7 @@ export function LogisticsFeesModule({
       message: "确定删除这条费用明细吗？删除后不可恢复。",
       details: [
         `订单：${expense.orderNo || "-"}`,
-        `费用：${expense.costType || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`,
+        `费用：${logisticsCostTypeLabel(expense.costType || "") || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`,
       ],
       confirmLabel: "确认删除",
       cancelLabel: "取消",
@@ -840,7 +858,7 @@ export function LogisticsFeesModule({
         </select>
         <select value={costType} onChange={(event) => { setCostType(event.target.value); setNotice(""); void loadExpenses(1, submittedKeyword, status, event.target.value); }}>
           <option value="">全部费用类型</option>
-          {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+          {COST_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
@@ -1507,10 +1525,10 @@ function LogisticsExpenseDetailLine({
             onChange={(event) => onDraftChange(expense.id, "costType", event.target.value)}
             aria-label="费用类型"
           >
-            {COST_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+            {COST_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         ) : (
-          expense.costType || "-"
+          logisticsCostTypeLabel(expense.costType || "") || "-"
         )}
 	      </td>
       <td>{logisticsExpenseLineContainerType(expense)}</td>
@@ -1679,7 +1697,32 @@ export function LogisticsExpenseForm({
     }));
   }
 
-	  function setItemField<K extends keyof ExpenseItemForm>(index: number, key: K, value: ExpenseItemForm[K]) {
+  async function resolveExpenseItemExchangeRate(index: number, currency: string) {
+    const normalized = String(currency || "CNY").toUpperCase();
+    if (normalized === "CNY") {
+      setForm((current) => ({
+        ...current,
+        items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, currency: "CNY", exchangeRate: "1" } : item),
+      }));
+      return;
+    }
+    try {
+      const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?${new URLSearchParams({ currency: normalized })}`);
+      const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
+      if (rate > 0) {
+        setForm((current) => ({
+          ...current,
+          items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, currency: normalized, exchangeRate: String(rate) } : item),
+        }));
+      } else {
+        setMessage(`${normalized} 系统汇率未配置，请先刷新汇率。`);
+      }
+    } catch (rateError) {
+      setMessage(rateError instanceof Error ? rateError.message : `${normalized} 汇率获取失败，请先刷新汇率。`);
+    }
+  }
+
+  function setItemField<K extends keyof ExpenseItemForm>(index: number, key: K, value: ExpenseItemForm[K]) {
 	    setForm((current) => ({
 	      ...current,
 	      items: current.items.map((item, itemIndex) => (
@@ -1692,6 +1735,29 @@ export function LogisticsExpenseForm({
 	          : item
 	      )),
     }));
+  }
+
+  function handleItemCostTypeChange(index: number, costType: string) {
+    const defaultCurrency = logisticsCostTypeDefaultCurrency(costType);
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (
+        itemIndex === index
+          ? {
+              ...item,
+              costType,
+              currency: defaultCurrency,
+              exchangeRate: defaultCurrency === "CNY" ? "1" : "",
+            }
+          : item
+      )),
+    }));
+    if (defaultCurrency !== "CNY") void resolveExpenseItemExchangeRate(index, defaultCurrency);
+  }
+
+  function handleItemCurrencyChange(index: number, currency: string) {
+    setItemField(index, "currency", currency);
+    void resolveExpenseItemExchangeRate(index, currency);
   }
 
   function addExpenseItem(copyLast = false) {
@@ -1801,7 +1867,7 @@ export function LogisticsExpenseForm({
     ? supplierLabel(selectedSupplier)
     : (isLockedSupplier ? "加载供应商信息中..." : (selectedOrder ? "未选择" : "请先选择订单"));
   const supplierAllowedCostTypes = selectedSupplier?.allowedLogisticsCostTypes?.length
-    ? selectedSupplier.allowedLogisticsCostTypes.join(" / ")
+    ? selectedSupplier.allowedLogisticsCostTypes.map((type) => logisticsCostTypeLabel(type)).join(" / ")
     : "";
   const costTypeOptions = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
   const totalAmountCny = form.items.reduce((sum, item) => sum + (lineSubtotal(item) * Number(item.exchangeRate || 0)), 0);
@@ -1906,8 +1972,8 @@ export function LogisticsExpenseForm({
           </div>
           {form.items.map((item, index) => (
             <div className={styles.logisticsItemsRow} key={`${index}-${item.costType}`}>
-	              <select value={item.costType} onChange={(event) => setItemField(index, "costType", event.target.value)}>
-	                {costTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+	              <select value={item.costType} onChange={(event) => handleItemCostTypeChange(index, event.target.value)}>
+	                {costTypeOptions.map((type) => <option key={type} value={type}>{logisticsCostTypeLabel(type)}</option>)}
 	              </select>
 	              <input
 	                value={item.appliedContainerCount}
@@ -1919,10 +1985,15 @@ export function LogisticsExpenseForm({
 	                required
 	              />
               <input value={item.amount} onChange={(event) => setItemField(index, "amount", event.target.value)} inputMode="decimal" required />
-              <select value={item.currency} onChange={(event) => setItemField(index, "currency", event.target.value)}>
+              <select
+                value={item.currency}
+                onChange={(event) => handleItemCurrencyChange(index, event.target.value)}
+                disabled={logisticsCostTypeLocksCurrency(item.costType)}
+                title={logisticsCostTypeLocksCurrency(item.costType) ? "海运费、ENS费、保险费默认锁定 USD" : undefined}
+              >
                 {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
-              <input value={item.exchangeRate} onChange={(event) => setItemField(index, "exchangeRate", event.target.value)} readOnly={item.currency === "CNY"} inputMode="decimal" required />
+              <input value={item.exchangeRate} onChange={(event) => setItemField(index, "exchangeRate", event.target.value)} readOnly={item.currency === "CNY" || logisticsCostTypeLocksCurrency(item.costType)} inputMode="decimal" required />
               <strong>{formatCny(lineSubtotal(item) * Number(item.exchangeRate || 0))}</strong>
               <input value={item.remark} onChange={(event) => setItemField(index, "remark", event.target.value)} placeholder="可选" />
               <button className={styles.secondaryButton} type="button" disabled={form.items.length <= 1} onClick={() => removeExpenseItem(index)}>删除</button>
@@ -2026,7 +2097,7 @@ function LogisticsInvoiceGroupsPanel({
                 <StatusPill value={group.status || "待开票"} />
               </div>
               <div className={styles.logisticsInvoiceGroupMeta}>
-                <span>包含费用：{(group.costTypes || []).join(" / ") || "-"}</span>
+                <span>包含费用：{(group.costTypes || []).map((type) => logisticsCostTypeLabel(type)).join(" / ") || "-"}</span>
                 <span>分组合计：{formatCny(group.amountCny || groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0))}</span>
                 {group.invoiceNotificationError ? <span className={styles.logisticsInvoiceGroupError}>{group.invoiceNotificationError}</span> : null}
               </div>

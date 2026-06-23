@@ -81,8 +81,13 @@ export function normalizeLogisticsCostTypeList(value = []) {
 export function expandLegacyFullLogisticsCostTypeList(value = []) {
   const rows = normalizeLogisticsCostTypeList(value);
   const documentFeeType = "打单费";
-  const legacyFullRows = LOGISTICS_COST_TYPES.filter((item) => item !== documentFeeType);
+  const ensFeeType = "ENS";
+  const legacyFullRows = LOGISTICS_COST_TYPES.filter((item) => ![documentFeeType, ensFeeType].includes(item));
+  const preEnsFullRows = LOGISTICS_COST_TYPES.filter((item) => item !== ensFeeType);
   if (!rows.includes(documentFeeType) && legacyFullRows.every((item) => rows.includes(item))) {
+    return LOGISTICS_COST_TYPES;
+  }
+  if (!rows.includes(ensFeeType) && preEnsFullRows.every((item) => rows.includes(item))) {
     return LOGISTICS_COST_TYPES;
   }
   return rows;

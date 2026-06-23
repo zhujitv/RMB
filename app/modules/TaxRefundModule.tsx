@@ -10,6 +10,7 @@ import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
+import { logisticsCostTypeLabel } from "../../lib/platform/logistics-cost-types";
 
 type DocumentCompleteness = {
   completed?: number;
@@ -2124,7 +2125,7 @@ function FactoryCostUploadGroup({
   return (
     <div className={styles.documentGroupCard}>
       <strong>{supplierName}</strong>
-      <span className={styles.mutedText}>{cost.costType || "工厂成本"}</span>
+      <span className={styles.mutedText}>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本"}</span>
       {TAX_FACTORY_UPLOAD_TYPES.map((documentType) => (
         <TaxUploadItem
           key={`${cost.id}-${documentType.value}`}

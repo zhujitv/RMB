@@ -4,6 +4,8 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   amountCny,
   CURRENCIES,
+  dateFromInput,
+  getExchangeRateQuote,
   nonEmpty,
   normalizedCostType,
   optional,
@@ -11,6 +13,7 @@ import {
   refreshTaxRefundCompleteness,
   requireText,
   runNonCriticalTask,
+  todayInputInChina,
   validEmail,
   writeAudit,
   codedError,
@@ -37,6 +40,11 @@ import {
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
 } from "./logistics-expense-shared";
 import { logisticsInvoiceGroupForCostType, logisticsInvoiceGroupForKey } from "./logistics-invoice-groups";
+import {
+  LOGISTICS_COST_TYPES,
+  logisticsCostTypeDefaultCurrency,
+  logisticsCostTypeLocksCurrency,
+} from "./logistics-cost-types";
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
@@ -666,7 +674,7 @@ export async function batchSaveLogisticsExpenses(request, actor, input = {}) {
   for (let index = 0; index < updates.length; index += 1) {
     const item = updates[index] || {};
     const before = loadLogisticsExpenseBatchBillRow(billRowById, item.id, index, "保存");
-    const data = logisticsExpenseBatchUpdateData(item, before, actor, index);
+    const data = await logisticsExpenseBatchUpdateData(item, before, actor, index);
     preparedUpdates.push({ before, data });
   }
   for (let index = 0; index < deletes.length; index += 1) {
@@ -822,7 +830,7 @@ async function loadLogisticsExpenseForBatchItem(id, actor, index) {
   return loadLogisticsExpenseForAction(expenseId, actor);
 }
 
-function logisticsExpenseBatchUpdateData(item, before, actor, index) {
+async function logisticsExpenseBatchUpdateData(item, before, actor, index) {
   const costType = normalizedCostType(item.feeType || item.expenseType || item.costType || before.costType);
   if (!LOGISTICS_COST_TYPES.includes(costType)) {
     throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_COST_TYPE_INVALID");
@@ -845,16 +853,22 @@ function logisticsExpenseBatchUpdateData(item, before, actor, index) {
   const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
   const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
     || Object.prototype.hasOwnProperty.call(item, "container_type");
-  const currency = nonEmpty(item.currency || before.currency || "CNY").toUpperCase();
+  const currency = logisticsCostTypeDefaultCurrency(costType) === "USD"
+    ? "USD"
+    : nonEmpty(item.currency || before.currency || "CNY").toUpperCase();
   if (!CURRENCIES.includes(currency)) throw codedError(`第 ${index + 1} 行请选择有效币种。`, 400, "CURRENCY_REQUIRED");
-  const exchangeRate = Number(item.exchangeRate ?? item.exchange_rate ?? before.exchangeRate ?? 1);
+  const exchange = await resolveLogisticsExpenseBatchExchange(costType, item, before, actor, currency, index);
+  const exchangeRate = Number(exchange.exchangeRate);
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
     throw codedError(`第 ${index + 1} 行汇率必须大于 0。`, 400, "EXCHANGE_RATE_REQUIRED");
   }
   return {
     costType,
-    currency,
+    currency: exchange.currency,
     exchangeRate,
+    exchangeRateDate: exchange.exchangeRateDate,
+    exchangeRateSource: exchange.exchangeRateSource,
+    exchangeRateType: exchange.exchangeRateType,
     amount,
     amountCny: amountCny(amount, exchangeRate),
 	    ...(hasContainerType ? { containerType: optional(item.containerType ?? item.container_type) } : {}),
@@ -863,6 +877,33 @@ function logisticsExpenseBatchUpdateData(item, before, actor, index) {
 	    billingQuantity,
 	    remark: optional(item.remark),
     updatedById: actor?.id,
+  };
+}
+
+async function resolveLogisticsExpenseBatchExchange(costType, item, before, actor, currency, index) {
+  if (logisticsCostTypeLocksCurrency(costType)) {
+    const quote = await getExchangeRateQuote({
+      currency: "USD",
+      date: item.exchangeRateDate || item.rateDate || todayInputInChina(),
+    }, actor);
+    const exchangeRate = Number(quote.rateToCny ?? quote.exchangeRate ?? quote.rate ?? 0);
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      throw codedError(`第 ${index + 1} 行${costType}保存失败：未找到可用美元汇率，请先刷新系统汇率。`, 400, "EXCHANGE_RATE_REQUIRED");
+    }
+    return {
+      currency: "USD",
+      exchangeRate,
+      exchangeRateDate: dateFromInput(quote.rateDate || todayInputInChina()),
+      exchangeRateSource: quote.source || "系统",
+      exchangeRateType: quote.rateType || "",
+    };
+  }
+  return {
+    currency,
+    exchangeRate: Number(item.exchangeRate ?? item.exchange_rate ?? before.exchangeRate ?? 1),
+    exchangeRateDate: before.exchangeRateDate,
+    exchangeRateSource: before.exchangeRateSource,
+    exchangeRateType: before.exchangeRateType,
   };
 }
 

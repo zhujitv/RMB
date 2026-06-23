@@ -11,6 +11,7 @@ import {
   listOrders,
   listPayments,
 } from "./platform-db";
+import { logisticsCostTypeLabel } from "./platform/logistics-cost-types";
 
 export const REPORT_TYPES = {
   receivables: { label: "应收订单明细", area: "orders", filename: "receivable-orders" },
@@ -97,7 +98,7 @@ function filterRows(rows, filters = {}) {
     if (currency && row.currency !== currency) return false;
     if (orderStatus && row.status !== orderStatus && row.orderStatus !== orderStatus) return false;
     if (paymentStatus && row.paymentStatus !== paymentStatus && row.status !== paymentStatus) return false;
-    if (costType && row.costType !== costType) return false;
+    if (costType && row.costType !== costType && row.costTypeRaw !== costType) return false;
     if (taxRefundStatus && row.taxRefundStatus !== taxRefundStatus) return false;
     if (archiveScope === "current" && row.taxArchived === true) return false;
     if (archiveScope === "archive" && row.taxArchived !== true) return false;
@@ -292,6 +293,8 @@ function paymentToRow(payment) {
 function costToRow(cost) {
   return {
     ...cost,
+    costType: logisticsCostTypeLabel(cost.costType || "") || cost.costType,
+    costTypeRaw: cost.costType,
     customerName: displayCustomerName(cost.customerName || cost.customerShortName || cost.customer?.name || ""),
     customerFullName: displayCustomerName(cost.customerFullName || cost.customer?.name || ""),
     customerShortName: displayCustomerName(cost.customerShortName || ""),

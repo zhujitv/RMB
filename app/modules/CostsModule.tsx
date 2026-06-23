@@ -10,7 +10,12 @@ import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
-import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
+import {
+  LOGISTICS_COST_TYPE_OPTIONS,
+  LOGISTICS_COST_TYPES,
+  LOGISTICS_USD_COST_TYPES,
+  logisticsCostTypeLabel,
+} from "../../lib/platform/logistics-cost-types";
 
 const QUICK_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款", "银行手续费", "样品费", "国外佣金", "国外代理费", "佣金", "其他费用"];
 const COST_PAYMENT_STATUSES = ["待支付", "部分支付", "已支付", "已取消"];
@@ -20,11 +25,14 @@ const COST_CONFIRMATION_OPTIONS = [
   { label: "已确认", value: "true" },
 ];
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
-const FOREIGN_CURRENCY_COST_TYPES = ["国外佣金", "国外代理费", "佣金"];
+const FOREIGN_CURRENCY_COST_TYPES = ["国外佣金", "国外代理费", "佣金", ...LOGISTICS_USD_COST_TYPES];
 const FACTORY_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
 const LOGISTICS_INVOICE_COST_TYPES = [...LOGISTICS_COST_TYPES, "国内物流费", "国内拖车费"];
 const COST_FILTER_TYPES = [...QUICK_COST_TYPES, ...LOGISTICS_COST_TYPES]
   .filter((type, index, rows) => rows.indexOf(type) === index);
+const COST_FILTER_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
+);
 const FACTORY_DOCUMENT_TYPES = [
   { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", required: true },
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", required: true },
@@ -501,7 +509,7 @@ export function CostsModule({
           <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>
             <option value="">全部成本类型</option>
             {COST_FILTER_TYPES.map((type) => (
-              <option key={type} value={type}>{type}</option>
+              <option key={type} value={type}>{COST_FILTER_TYPE_LABELS[type] || type}</option>
             ))}
           </select>
         </label>
@@ -771,7 +779,7 @@ export function CostsModule({
       message: "删除后将重新计算利润和退税资料完整度。",
       details: [
         `订单：${cost.orderNo || "-"}`,
-        `成本：${cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`,
+        `成本：${logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`,
       ],
       confirmLabel: "删除成本",
       cancelLabel: "取消",
@@ -815,7 +823,7 @@ function CostFormDrawer({
     ? `${cost?.orderNo || "-"} · ${customerDisplayName(cost || {})}`
     : "登记成本";
   const subtitle = editMode
-    ? `成本类型：${cost?.costType || "-"} · 付款状态：${cost?.paymentStatus || "-"} · 供应商：${supplierName}`
+    ? `成本类型：${logisticsCostTypeLabel(cost?.costType || "") || cost?.costType || "-"} · 付款状态：${cost?.paymentStatus || "-"} · 供应商：${supplierName}`
     : "选择订单后登记供应商成本，保存后当前筛选和页码保持不变。";
 
   return (
@@ -1236,7 +1244,7 @@ function CostTableRows({
       <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
-        <td>{cost.costType || "-"}</td>
+        <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
         <td>{supplierName}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
@@ -1336,7 +1344,7 @@ function CostDetailDrawer({
       ariaLabel="成本详情"
       kicker="成本管理"
       title={`${cost.orderNo || "-"} · ${customerLegalName(cost)}`}
-      subtitle={`成本类型：${cost.costType || "-"} · 付款状态：${cost.paymentStatus || "-"} · 供应商：${supplierName}`}
+      subtitle={`成本类型：${logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} · 付款状态：${cost.paymentStatus || "-"} · 供应商：${supplierName}`}
       onClose={onClose}
       actions={
         <>
@@ -1368,7 +1376,7 @@ function CostDetailDrawer({
           <DetailField label="客户全称" value={customerLegalName(cost)} wide />
           <DetailField label="订单号" value={cost.orderNo || "-"} />
           <DetailField label="提单号" value={cost.blNo || cost.billOfLadingNo || "-"} />
-          <DetailField label="成本类型" value={cost.costType || "-"} />
+          <DetailField label="成本类型" value={logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} />
           <DetailField label="供应商" value={supplierName} />
           <DetailMoneyField label="成本金额" cost={cost} />
           <DetailField label="币种 / 汇率" value={`${cost.currency || "-"} / ${Number(cost.exchangeRate || 0).toFixed(4)}`} />
@@ -1388,7 +1396,7 @@ function CostDetailDrawer({
         <div className={styles.detailGrid}>
           <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
           <DetailField label="供应商" value={supplierName} />
-          <DetailField label="成本类型" value={cost.costType || "-"} />
+          <DetailField label="成本类型" value={logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} />
           <DetailField label="资料维护" value="点击上方“资料维护”查看或上传发票资料。" wide />
         </div>
       ) : null}
@@ -1497,7 +1505,7 @@ function CostDocumentsDrawer({
           <div className={styles.taxRefundDrawerTitle}>
             <span>供应商资料 / 发票资料</span>
             <strong>{cost.orderNo || "-"} · {supplierName}</strong>
-            <small>{cost.costType || "-"} · 提单号：{cost.blNo || cost.billOfLadingNo || "-"}</small>
+            <small>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} · 提单号：{cost.blNo || cost.billOfLadingNo || "-"}</small>
           </div>
           <div className={styles.taxRefundDrawerActions}>
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
@@ -1512,7 +1520,7 @@ function CostDocumentsDrawer({
               <div className={styles.detailGrid}>
                 <DetailField label="订单号" value={cost.orderNo || "-"} />
                 <DetailField label="供应商" value={supplierName} />
-                <DetailField label="成本类型" value={cost.costType || "-"} />
+                <DetailField label="成本类型" value={logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} />
                 <DetailField label="成本金额" value={moneyText(cost.currency, cost.amount, cost.amountCny)} />
                 <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
                 <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />

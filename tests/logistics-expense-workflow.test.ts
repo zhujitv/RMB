@@ -161,7 +161,10 @@ test("port charge logistics invoice filenames do not fall back to factory invoic
 });
 
 test("logistics cost type dictionary includes document ENS advance and drop-off fees in business order", () => {
-  assert.match(backend, /"拖车费",\s*"报关费",\s*"港杂费",\s*"打单费",\s*"ENS",\s*"进港费",\s*"提箱费",\s*"落箱费",\s*"预提费",\s*"查验费",\s*"超重费",\s*"海运费",\s*"保险费",\s*"其他物流费用"/);
+  assert.match(backend, /value: "拖车费"[\s\S]*value: "报关费"[\s\S]*value: "港杂费"[\s\S]*value: "打单费"[\s\S]*value: "ENS", label: "ENS费"[\s\S]*value: "进港费"[\s\S]*value: "提箱费"[\s\S]*value: "落箱费"[\s\S]*value: "预提费"[\s\S]*value: "查验费"[\s\S]*value: "超重费"[\s\S]*value: "海运费"[\s\S]*value: "保险费"[\s\S]*value: "其他物流费用"/);
+  assert.match(backend, /LOGISTICS_COST_TYPES = LOGISTICS_COST_TYPE_OPTIONS\.map/);
+  assert.match(backend, /LOGISTICS_USD_COST_TYPES = \["海运费", "ENS", "保险费"\]/);
+  assert.match(backend, /ENS费: "ENS"/);
   assert.match(backend, /打单费: "Document Processing Fee"/);
   assert.match(backend, /ENS: "ENS Fee"/);
   assert.match(backend, /预提费: "Advance Charge"/);
@@ -171,9 +174,14 @@ test("logistics cost type dictionary includes document ENS advance and drop-off 
   assert.match(backend, /预提费: "Advance-Charge-Invoice"/);
   assert.match(backend, /落箱费: "Container-Drop-off-Fee-Invoice"/);
   assert.match(logisticsModule, /const COST_TYPES = \[\.\.\.LOGISTICS_COST_TYPES\]/);
-  assert.match(settingsModule, /LOGISTICS_COST_TYPES/);
+  assert.match(logisticsModule, /COST_TYPE_OPTIONS\.map/);
+  assert.match(logisticsModule, /logisticsCostTypeLocksCurrency\(item\.costType\)/);
+  assert.match(logisticsModule, /apiJson<ExchangeRateResponse>\(`\/api\/exchange-rates\?\$\{new URLSearchParams\(\{ currency: normalized \}\)\}`\)/);
+  assert.match(settingsModule, /LOGISTICS_COST_TYPE_OPTIONS/);
   assert.match(costsModule, /COST_FILTER_TYPES = \[\.\.\.QUICK_COST_TYPES, \.\.\.LOGISTICS_COST_TYPES\]/);
+  assert.match(costsModule, /logisticsCostTypeLabel\(cost\.costType \|\| ""\)/);
   assert.match(reportsModule, /\.\.\.LOGISTICS_COST_TYPES/);
+  assert.match(reportsModule, /LOGISTICS_COST_TYPE_OPTIONS/);
 });
 
 test("logistics expense entry prevents Enter-triggered submit and row creation", () => {
@@ -359,7 +367,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.doesNotMatch(backend, /备注：\$\{variables\.remark\}/);
   assert.doesNotMatch(settingsModule, /"   备注：2650\*1"/);
   assert.match(backend, /报关费、港杂费、海运费必须分别开票上传。/);
-  assert.match(backend, /拖车费、打单费、ENS、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
+  assert.match(backend, /拖车费、打单费、ENS费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
   assert.match(backend, /发票上传入口/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
   assert.match(backend, /paymentStatus: "待付款"/);

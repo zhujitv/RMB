@@ -18,6 +18,7 @@ import {
 import { listCosts } from "./cost-records";
 import { listOrders } from "./orders-module";
 import { listPayments } from "./payments-module";
+import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { orderAccessWhere, scopeOrderForActor } from "./order-access";
 export { getAuditLogs } from "./audit-logs";
 
@@ -82,7 +83,7 @@ function serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings) {
   const costGroups = (scoped.costs || [])
     .filter(confirmedCost)
     .reduce((acc, cost) => {
-      const label = normalizedCostType(cost.costType);
+      const label = logisticsCostTypeLabel(normalizedCostType(cost.costType));
       acc[label] = (acc[label] || 0) + Number(cost.amountCny || 0);
       return acc;
     }, {});
@@ -247,7 +248,7 @@ export async function getOverview(query, actor) {
   return {
     totals: { ...total, orderCount: orders.length, paymentCount: payments.length, costCount: costs.length },
     orderProfits: activeOrders,
-    costStructure: groupBy(costs, (cost) => normalizedCostType(cost.costType), (cost) => cost.amountCny),
+    costStructure: groupBy(costs, (cost) => logisticsCostTypeLabel(normalizedCostType(cost.costType)), (cost) => cost.amountCny),
     reminders: await getReminders(query, actor),
     bySalesperson: groupBy(orders, (order) => order.salespersonName, (order) => order.summary.receivableCny),
     byCustomer: groupBy(orders, (order) => order.customerName, (order) => order.summary.receivableCny),

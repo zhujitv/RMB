@@ -15,8 +15,10 @@ import {
   codedError,
   customerBusinessName,
   customerShortName,
+  dateFromInput,
   dateToInput,
   expandLegacyFullLogisticsCostTypeList,
+  getExchangeRateQuote,
   nonEmpty,
   normalizedCostType,
   optional,
@@ -29,6 +31,10 @@ import {
   todayInputInChina,
 } from "./shared";
 import { assertSupplierActive } from "./supplier-masters";
+import {
+  logisticsCostTypeDefaultCurrency,
+  logisticsCostTypeLocksCurrency,
+} from "./logistics-cost-types";
 import {
   logisticsInvoiceGroupForCostType,
   logisticsInvoiceGroupsForCostTypes,
@@ -414,21 +420,47 @@ function assertSupplierCostTypeAllowed(actor, supplier, costType) {
   }
 }
 
-export async function buildLogisticsExpenseData(order, supplier, actor, input = {}, before = null) {
-  const inputCostType = normalizedCostType(input.costType);
-  const costType = LOGISTICS_COST_TYPES.includes(inputCostType) ? inputCostType : "";
-  if (!costType) throw codedError("请选择有效物流费用类型。", 400, "LOGISTICS_EXPENSE_COST_TYPE_REQUIRED");
-  assertSupplierCostTypeAllowed(actor, supplier, costType);
-  const amount = requirePositive(input.amount, "物流费用金额");
-  const currency = nonEmpty(input.currency || "CNY").toUpperCase();
+async function resolveLogisticsExpenseExchange(costType, input, actor, before = null) {
+  const currency = logisticsCostTypeLocksCurrency(costType)
+    ? "USD"
+    : nonEmpty(input.currency || "CNY").toUpperCase();
   if (!CURRENCIES.includes(currency)) throw codedError("请选择有效币种。", 400, "CURRENCY_REQUIRED");
-  const exchange = await resolveExchangeRateSnapshot(currency === "CNY"
+  if (logisticsCostTypeLocksCurrency(costType)) {
+    const quote = await getExchangeRateQuote({
+      currency,
+      date: input.exchangeRateDate || input.rateDate || todayInputInChina(),
+    }, actor);
+    const exchangeRate = Number(quote.rateToCny ?? quote.exchangeRate ?? quote.rate ?? 0);
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      throw codedError("未找到可用美元汇率，请先刷新系统汇率。", 400, "EXCHANGE_RATE_REQUIRED");
+    }
+    return {
+      currency,
+      exchangeRate,
+      exchangeRateDate: dateFromInput(quote.rateDate || input.exchangeRateDate || todayInputInChina()),
+      exchangeRateSource: quote.source || "系统",
+      exchangeRateType: quote.rateType || "",
+    };
+  }
+  return resolveExchangeRateSnapshot(currency === "CNY"
     ? { ...input, currency: "CNY", exchangeRate: 1, exchangeRateSource: "系统", exchangeRateDate: input.exchangeRateDate || todayInputInChina() }
     : input, actor, {
       currency,
       defaultDate: todayInputInChina(),
       allowHistoricalSource: before?.exchangeRateSource === "历史录入",
     });
+}
+
+export async function buildLogisticsExpenseData(order, supplier, actor, input = {}, before = null) {
+  const inputCostType = normalizedCostType(input.costType);
+  const costType = LOGISTICS_COST_TYPES.includes(inputCostType) ? inputCostType : "";
+  if (!costType) throw codedError("请选择有效物流费用类型。", 400, "LOGISTICS_EXPENSE_COST_TYPE_REQUIRED");
+  assertSupplierCostTypeAllowed(actor, supplier, costType);
+  const amount = requirePositive(input.amount, "物流费用金额");
+  const exchange = await resolveLogisticsExpenseExchange(costType, {
+    ...input,
+    currency: logisticsCostTypeDefaultCurrency(costType) === "USD" ? "USD" : input.currency,
+  }, actor, before);
   const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? before.auditStatus : (input.submit === false ? "草稿" : "待审核")));
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "待审核";
   if (before?.auditStatus === "审核通过" && actor?.role !== "管理员") {

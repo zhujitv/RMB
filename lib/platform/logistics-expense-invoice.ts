@@ -18,6 +18,7 @@ import {
   writeAudit,
 } from "./shared";
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
+import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
 import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
@@ -50,7 +51,7 @@ function logisticsExpenseDetailText(expenses = []) {
       ? Number(expense.appliedContainerCount || 1)
       : Number(expense.billingQuantity || 1);
     const remark = expense.remark ? `，备注：${expense.remark}` : "";
-    return `${index + 1}. ${normalizedCostType(expense.costType)}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
+    return `${index + 1}. ${logisticsCostTypeLabel(normalizedCostType(expense.costType))}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
   }).join("\n");
 }
 

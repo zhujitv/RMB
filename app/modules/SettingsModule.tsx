@@ -8,7 +8,9 @@ import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../types";
-import { LOGISTICS_COST_TYPES } from "../../lib/platform/logistics-cost-types";
+import {
+  LOGISTICS_COST_TYPE_OPTIONS,
+} from "../../lib/platform/logistics-cost-types";
 
 type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
@@ -360,7 +362,7 @@ const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
     "1. 发票金额需与系统审核通过的费用合计一致。",
     "2. 发票抬头、税号、供应商信息需与系统资料一致。",
     "3. 报关费、港杂费、海运费必须分别开票上传。",
-    "4. 拖车费、打单费、ENS、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
+    "4. 拖车费、打单费、ENS费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
     "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
   ].join("\n"),
   uploadUrl: "",
@@ -2201,11 +2203,11 @@ function SupplierEditPanel({
       <div className={styles.checkboxPanel}>
         <strong>允许录入的物流费用类型</strong>
         <div>
-          {LOGISTICS_COST_TYPES.map((costType) => (
+          {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => (
             <UiCheckbox
               key={costType}
               variant="compact"
-              label={costType}
+              label={label}
               checked={form.allowedLogisticsCostTypes.includes(costType)}
               disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
               onChange={() => toggleCostType(costType)}
