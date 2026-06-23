@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
 import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
@@ -240,6 +240,18 @@ type LogisticsExpenseMutationResult = {
   bills?: LogisticsExpense[];
   invoiceGroup?: string;
   emailError?: string;
+  successCount?: number;
+  failedCount?: number;
+  results?: LogisticsExpenseReviewResult[];
+};
+
+type LogisticsExpenseReviewResult = {
+  billId?: string;
+  orderNo?: string;
+  blNo?: string;
+  auditStatus?: string;
+  notificationStatus?: string;
+  errorMessage?: string;
 };
 
 type LogisticsExpenseContainerSummary = {
@@ -425,12 +437,14 @@ export function LogisticsFeesModule({
         method: "PATCH",
         body: JSON.stringify({ action: "approve", billIds: ids }),
       });
-      if (result.success !== true) throw new Error(result.message || "审核物流费用失败");
+      const failureMessage = logisticsExpenseReviewFailureMessage(result);
+      if (result.success !== true) throw new Error(failureMessage || result.message || "审核物流费用失败");
       applyLogisticsExpenseMutationResult(result);
       setSelectedBillIds((current) => current.filter((id) => !ids.includes(id)));
       if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
       await loadStatement(statementMonth);
-      setNotice(result.message || "物流费用已审核，开票通知已按供应商合并发送");
+      setNotice(logisticsExpenseReviewNotice(result));
+      if (failureMessage) setError(failureMessage);
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : "审核物流费用失败");
     } finally {
@@ -2020,7 +2034,10 @@ function LogisticsInvoiceGroupsPanel({
                     <span>上传人：{uploadedByName}</span>
                     <span>上传时间：{uploadedAt ? formatDateTime(uploadedAt) : "-"}</span>
                     {group.invoiceDocumentId ? (
-                      <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(group.invoiceDocumentId)}`} target="_blank" rel="noreferrer">预览</a>
+                      <PdfPreviewButton
+                        documentId={group.invoiceDocumentId}
+                        fileName={invoiceDocument?.fileName || invoiceDocument?.originalFilename || "物流发票.pdf"}
+                      />
                     ) : null}
                     {canDeleteGroup ? (
                       <button
@@ -2620,6 +2637,27 @@ function replaceLogisticsExpenseBillsInRows(rows: LogisticsExpense[], bills: Log
   if (!bills.length) return rows;
   const billById = new Map(bills.map((bill) => [bill.id, normalizeLogisticsExpenseBillRow(bill)]));
   return rows.map((row) => billById.get(row.id) || row);
+}
+
+function logisticsExpenseReviewResultLabel(result: LogisticsExpenseReviewResult) {
+  const orderNo = result.orderNo || "";
+  const blNo = result.blNo || "";
+  const identity = [orderNo, blNo].filter(Boolean).join(" / ");
+  return identity || result.billId || "账单";
+}
+
+function logisticsExpenseReviewFailureMessage(result: LogisticsExpenseMutationResult) {
+  const failures = (result.results || []).filter((item) => item.auditStatus !== "审核通过" && item.errorMessage);
+  if (!failures.length) return "";
+  return failures.map((item) => `${logisticsExpenseReviewResultLabel(item)}：${item.errorMessage}`).join("；");
+}
+
+function logisticsExpenseReviewNotice(result: LogisticsExpenseMutationResult) {
+  if (result.message) return result.message;
+  if (result.emailError) return `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`;
+  const successCount = Number(result.successCount || 0);
+  if (successCount > 0) return `已审核 ${successCount} 票物流费用，开票通知已按供应商合并发送`;
+  return "物流费用已审核，开票通知已按供应商合并发送";
 }
 
 function reconcileLogisticsExpenseMutationRows(rows: LogisticsExpense[], result: LogisticsExpenseMutationResult) {

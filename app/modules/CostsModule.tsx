@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
@@ -1598,7 +1598,7 @@ function CostDocumentUploadItem({
         )}
         {documents.map((document) => (
           <span key={document.id} className={styles.fileListItemActions}>
-            <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">预览</a>
+            <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
             <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
             {canWriteDocuments ? (
               <button

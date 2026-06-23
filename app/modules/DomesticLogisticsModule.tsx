@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
@@ -963,7 +963,7 @@ function CustomsDocumentPanel({
               <div>
                 {currentCustomsDeclaration && canPreviewOrDownload ? (
                   <>
-                    <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(currentCustomsDeclaration.id)}`} target="_blank" rel="noreferrer">预览</a>
+                    <PdfPreviewButton documentId={currentCustomsDeclaration.id} fileName={currentCustomsDeclaration.fileName || ""} />
                     <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/download`}>下载</a>
                   </>
                 ) : null}
@@ -1029,7 +1029,7 @@ function CustomsDocumentPanel({
                 <span key={document.id} className={styles.fileListItemActions}>
                   {canPreviewOrDownload ? (
                     <>
-                      <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">预览</a>
+                      <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
                       <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
                     </>
                   ) : null}

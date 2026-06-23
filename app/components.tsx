@@ -438,6 +438,137 @@ export function SideDetailDrawer({
   );
 }
 
+type PdfPreviewDocument = {
+  id: string;
+  fileName?: string;
+  displayFileName?: string;
+  downloadFileName?: string;
+  originalFileName?: string;
+  originalFilename?: string;
+  originalName?: string;
+};
+
+type PdfPreviewMetadataResponse = {
+  success?: boolean;
+  document?: PdfPreviewDocument;
+  error?: string;
+  message?: string;
+};
+
+function pdfPreviewFileName(document: PdfPreviewDocument | null, fallback = "") {
+  return (
+    document?.displayFileName
+    || document?.downloadFileName
+    || document?.originalFileName
+    || document?.originalFilename
+    || document?.originalName
+    || document?.fileName
+    || fallback
+    || "PDF 文件"
+  );
+}
+
+export function PdfPreviewButton({
+  documentId,
+  fileName = "",
+  className,
+  children = "预览",
+}: {
+  documentId: string;
+  fileName?: string;
+  className?: string;
+  children?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={mergeClassNames(styles.fileActionButton, className)} type="button" onClick={() => setOpen(true)}>
+        {children}
+      </button>
+      {open ? (
+        <PdfPreviewDrawer
+          documentId={documentId}
+          initialFileName={fileName}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function PdfPreviewDrawer({
+  documentId,
+  initialFileName = "",
+  onClose,
+}: {
+  documentId: string;
+  initialFileName?: string;
+  onClose: () => void;
+}) {
+  const [fileName, setFileName] = useState(initialFileName || "PDF 文件");
+  const [error, setError] = useState("");
+  const encodedId = encodeURIComponent(documentId);
+  const previewUrl = `/api/order-documents/${encodedId}/preview`;
+  const downloadUrl = `/api/order-documents/${encodedId}/download`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMetadata() {
+      try {
+        const response = await fetch(`/api/order-documents/${encodedId}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const result = await response.json().catch(() => ({} as PdfPreviewMetadataResponse));
+        if (!response.ok) throw new Error(result.error || result.message || "读取文件信息失败");
+        if (cancelled) return;
+        setFileName(pdfPreviewFileName(result.document || null, initialFileName));
+        setError("");
+      } catch (metadataError) {
+        if (cancelled) return;
+        setFileName(initialFileName || "PDF 文件");
+        setError(metadataError instanceof Error ? metadataError.message : "读取文件信息失败");
+      }
+    }
+
+    void loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, encodedId, initialFileName]);
+
+  return (
+    <SideDetailDrawer
+      ariaLabel={`PDF 预览：${fileName}`}
+      title={fileName}
+      subtitle={error || undefined}
+      surfaceClassName={styles.pdfPreviewDrawer}
+      onClose={onClose}
+      actions={(
+        <a className={styles.primaryButtonCompact} href={downloadUrl}>
+          下载文件
+        </a>
+      )}
+    >
+      <div className={styles.pdfPreviewFrameWrap}>
+        <object
+          data={previewUrl}
+          type="application/pdf"
+          className={styles.pdfPreviewFrame}
+          aria-label={fileName}
+        >
+          <div className={styles.pdfPreviewFallback}>
+            <strong>在线预览失败</strong>
+            <span>浏览器无法直接显示该 PDF，请下载文件查看。</span>
+            <a className={styles.primaryButtonCompact} href={downloadUrl}>下载文件</a>
+          </div>
+        </object>
+      </div>
+    </SideDetailDrawer>
+  );
+}
+
 export function DismissibleLayer({
   ariaLabel,
   overlayClassName,

@@ -35,7 +35,7 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
   const [error, setError] = useState("");
 
   const encodedId = useMemo(() => encodeURIComponent(documentId), [documentId]);
-  const previewUrl = `/api/order-documents/${encodedId}/download?disposition=inline`;
+  const previewUrl = `/api/order-documents/${encodedId}/preview`;
   const downloadUrl = `/api/order-documents/${encodedId}/download`;
 
   useEffect(() => {
@@ -146,7 +146,8 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
             padding: 24,
             textAlign: "center",
           }}>
-            <p style={{ margin: 0 }}>无法预览，请下载文件查看</p>
+            <p style={{ margin: 0 }}>在线预览失败</p>
+            <a href={downloadUrl} style={{ color: "#bfdbfe" }}>下载文件</a>
           </div>
         </object>
       </section>

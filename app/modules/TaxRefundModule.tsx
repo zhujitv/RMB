@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
@@ -1726,7 +1726,7 @@ function FileUploadCard({
             <span className={styles.fileUploadActionLabel}>操作：</span>
             {canPreviewOrDownload ? (
               <>
-                <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
+                <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
                 <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
               </>
             ) : null}
@@ -2006,7 +2006,7 @@ function DocumentFileTable({
                 <td><span className={styles.recognitionStatus}>{recognitionStatus}</span></td>
                 <td>
                   {canPreviewOrDownload ? (
-                    <button className={styles.fileActionButton} type="button" onClick={() => openDocumentPreview(document.id)}>预览</button>
+                    <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
                   ) : <span className={styles.mutedText}>-</span>}
                 </td>
                 <td>
@@ -2045,11 +2045,6 @@ function DocumentFileTable({
       </table>
     </div>
   );
-}
-
-function openDocumentPreview(documentId: string) {
-  if (!documentId) return;
-  window.open(`/documents/preview/${encodeURIComponent(documentId)}`, "_blank", "noopener,noreferrer");
 }
 
 function CustomsFilePickerDialog({

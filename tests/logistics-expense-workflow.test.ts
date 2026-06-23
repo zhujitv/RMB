@@ -288,7 +288,7 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
   assert.match(logisticsModule, /按费用类型分组上传，同一分组上传一次即可。/);
   assert.match(logisticsModule, /已上传文件列表/);
-  assert.match(logisticsModule, /documents\/preview/);
+  assert.match(logisticsModule, /PdfPreviewButton/);
   assert.match(logisticsInvoiceRoute, /export async function DELETE/);
   assert.match(backend, /export async function deleteLogisticsExpenseInvoice/);
   assert.match(backend, /invoiceDocumentId: null/);

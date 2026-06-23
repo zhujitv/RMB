@@ -7,10 +7,12 @@ const downloadRoute = readFileSync("app/api/order-documents/[id]/download/route.
 const orderDocumentRoute = readFileSync("app/api/order-documents/[id]/route.ts", "utf8");
 const documentPreviewPage = readFileSync("app/documents/preview/[id]/page.tsx", "utf8");
 const documentPreviewClient = readFileSync("app/documents/preview/[id]/preview-client.tsx", "utf8");
+const sharedComponents = readFileSync("app/components.tsx", "utf8");
 const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const uploadTexts = readFileSync("app/uploadTexts.ts", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
@@ -46,17 +48,25 @@ test("preview route returns structured JSON errors when stream fails", () => {
   assert.match(previewRoute, /PDF 预览失败，请下载原文件查看/);
 });
 
-test("workspace modules use dynamic document preview pages instead of API preview tabs", () => {
-  const previewHref = /href=\{`\/documents\/preview\/\$\{encodeURIComponent\(document\.id\)\}`\}/;
+test("workspace modules use one PDF preview drawer instead of preview tabs", () => {
   const downloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
-  assert.match(taxRefundModule, /window\.open\(`\/documents\/preview\/\$\{encodeURIComponent\(documentId\)\}`, "_blank"/);
-  assert.match(domesticLogisticsModule, previewHref);
-  assert.match(costsModule, previewHref);
+  assert.match(sharedComponents, /export function PdfPreviewButton/);
+  assert.match(sharedComponents, /export function PdfPreviewDrawer/);
+  assert.match(sharedComponents, /const previewUrl = `\/api\/order-documents\/\$\{encodedId\}\/preview`/);
+  assert.match(sharedComponents, /<object[\s\S]*data=\{previewUrl\}[\s\S]*type="application\/pdf"/);
+  assert.match(sharedComponents, /在线预览失败/);
+  assert.match(sharedComponents, /下载文件/);
+  assert.match(sharedComponents, /surfaceClassName=\{styles\.pdfPreviewDrawer\}/);
+  assert.match(taxRefundModule, /PdfPreviewButton/);
+  assert.match(domesticLogisticsModule, /PdfPreviewButton/);
+  assert.match(costsModule, /PdfPreviewButton/);
+  assert.match(logisticsModule, /PdfPreviewButton/);
   assert.match(taxRefundModule, downloadHref);
   assert.match(domesticLogisticsModule, downloadHref);
   assert.match(costsModule, downloadHref);
-  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}`, /\/api\/order-documents\/\$\{encodeURIComponent\([^}]+\)\}\/preview/);
-  assert.doesNotMatch(taxRefundModule, /\/download`} target="_blank"/);
+  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}\n${logisticsModule}`, /\/documents\/preview|window\.open\(/);
+  assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}\n${logisticsModule}`, /target="_blank"[^>]*>预览/);
+  assert.doesNotMatch(sharedComponents, /react-pdf|pdfjs-dist|GlobalWorkerOptions|workerSrc|DOMMatrix/);
 });
 
 test("document preview page sets the browser title from document metadata", () => {
@@ -69,11 +79,12 @@ test("document preview page sets the browser title from document metadata", () =
   assert.match(documentPreviewClient, /downloadFileName/);
   assert.match(documentPreviewClient, /document\.title = initialFileName/);
   assert.match(documentPreviewClient, /document\.title = nextFileName/);
-  assert.match(documentPreviewClient, /download\?disposition=inline/);
+  assert.match(documentPreviewClient, /\/preview`/);
   assert.match(documentPreviewClient, /<object/);
   assert.match(documentPreviewClient, /data=\{previewUrl\}/);
   assert.match(documentPreviewClient, /minHeight: "calc\(100vh - 80px\)"/);
-  assert.match(documentPreviewClient, /无法预览，请下载文件查看/);
+  assert.match(documentPreviewClient, /在线预览失败/);
+  assert.match(documentPreviewClient, /下载文件/);
   assert.match(orderDocumentRoute, /export async function GET/);
   assert.match(orderDocumentRoute, /getOrderDocumentMetadata\(request, actor, id\)/);
   assert.match(sharedSerialization, /displayFileName/);
@@ -85,7 +96,7 @@ test("document preview page sets the browser title from document metadata", () =
 test("tax refund detail uses one file table for preview download and delete", () => {
   assert.match(taxRefundModule, /function DocumentFileTable\(/);
   assert.match(taxRefundModule, /<th>文件名<\/th>[\s\S]*<th>上传人<\/th>[\s\S]*<th>上传时间<\/th>[\s\S]*<th>识别状态<\/th>[\s\S]*<th>预览<\/th>[\s\S]*<th>下载<\/th>[\s\S]*<th>删除<\/th>/);
-  assert.match(taxRefundModule, /onClick=\{\(\) => openDocumentPreview\(document\.id\)\}/);
+  assert.match(taxRefundModule, /<PdfPreviewButton documentId=\{document\.id\} fileName=\{document\.fileName \|\| ""\} \/>/);
   assert.match(taxRefundModule, /onClick=\{\(\) => onDelete\(orderId, document\)\}/);
   assert.match(taxRefundModule, /确定删除该文件？/);
   assert.match(taxRefundModule, /删除后需要重新上传。/);
