@@ -2148,7 +2148,9 @@
 }
 
 .billSaveButton,
-.billAddLineButton {
+.billAddLineButton,
+.billApproveButton,
+.billRejectButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2174,6 +2176,18 @@
   color: #1d4ed8;
 }
 
+.billApproveButton {
+  border-color: #16a34a;
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.billRejectButton {
+  border-color: #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+}
+
 .billSaveButton:hover:not(:disabled) {
   border-color: #1d4ed8;
   background: #1d4ed8;
@@ -2184,6 +2198,18 @@
   border-color: #93c5fd;
   background: #dbeafe;
   color: #1e40af;
+}
+
+.billApproveButton:hover:not(:disabled) {
+  border-color: #15803d;
+  background: #15803d;
+  color: #ffffff;
+}
+
+.billRejectButton:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .billSaveButton:active:not(:disabled) {
@@ -2198,10 +2224,26 @@
   color: #1e3a8a;
 }
 
+.billApproveButton:active:not(:disabled) {
+  border-color: #166534;
+  background: #166534;
+  color: #ffffff;
+}
+
+.billRejectButton:active:not(:disabled) {
+  border-color: #f87171;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
 .billSaveButton:focus,
 .billSaveButton:focus-visible,
 .billAddLineButton:focus,
-.billAddLineButton:focus-visible {
+.billAddLineButton:focus-visible,
+.billApproveButton:focus,
+.billApproveButton:focus-visible,
+.billRejectButton:focus,
+.billRejectButton:focus-visible {
   border-color: #2563eb;
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
@@ -2214,12 +2256,33 @@
 }
 
 .billSaveButton:disabled,
-.billAddLineButton:disabled {
+.billAddLineButton:disabled,
+.billApproveButton:disabled,
+.billRejectButton:disabled {
   border-color: #d1d5db;
   background: #e5e7eb;
   color: #6b7280;
   cursor: not-allowed;
   opacity: 1;
+}
+
+.logisticsBillRejectNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.logisticsBillRejectNotice strong {
+  flex: 0 0 auto;
+  color: #b91c1c;
+  font-weight: 700;
 }
 
 .logisticsDetailTableWrap {
@@ -5835,6 +5898,8 @@
 .logisticsTypographyScope .secondaryButton,
 .logisticsTypographyScope .dangerButton,
 .logisticsTypographyScope .ghostButton,
+.logisticsTypographyScope .billApproveButton,
+.logisticsTypographyScope .billRejectButton,
 .logisticsTypographyScope .rowDetailButton,
 .logisticsTypographyScope .fileActionButton,
 .logisticsTypographyScope .logisticsActionBtn,
@@ -5871,6 +5936,8 @@
 .logisticsTypographyScope .secondaryButton:disabled,
 .logisticsTypographyScope .billSaveButton:disabled,
 .logisticsTypographyScope .billAddLineButton:disabled,
+.logisticsTypographyScope .billApproveButton:disabled,
+.logisticsTypographyScope .billRejectButton:disabled,
 .logisticsTypographyScope .logisticsLineDeleteButton:disabled {
   border-color: #d1d5db;
   background: #e5e7eb;
@@ -5939,6 +6006,46 @@
   border-color: #60a5fa;
   background: #bfdbfe;
   color: #1e3a8a;
+}
+
+.logisticsTypographyScope .billApproveButton {
+  border-color: #16a34a;
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billApproveButton:hover:not(:disabled),
+.logisticsTypographyScope .billApproveButton:focus:not(:disabled),
+.logisticsTypographyScope .billApproveButton:focus-visible:not(:disabled) {
+  border-color: #15803d;
+  background: #15803d;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billApproveButton:active:not(:disabled) {
+  border-color: #166534;
+  background: #166534;
+  color: #ffffff;
+}
+
+.logisticsTypographyScope .billRejectButton {
+  border-color: #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+}
+
+.logisticsTypographyScope .billRejectButton:hover:not(:disabled),
+.logisticsTypographyScope .billRejectButton:focus:not(:disabled),
+.logisticsTypographyScope .billRejectButton:focus-visible:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.logisticsTypographyScope .billRejectButton:active:not(:disabled) {
+  border-color: #f87171;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
 .logisticsTypographyScope .logisticsLineDeleteButton {

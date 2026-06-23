@@ -132,6 +132,8 @@ export function serializeLogisticsExpense(expense = {}) {
     submittedAt: expense.submittedAt || null,
     reviewedBy: serializeUser(expense.reviewedBy),
     reviewedAt: expense.reviewedAt || null,
+    rejectedBy: expense.auditStatus === "已驳回" ? serializeUser(expense.reviewedBy) : null,
+    rejectedAt: expense.auditStatus === "已驳回" ? (expense.reviewedAt || null) : null,
     reviewRemark: expense.reviewRemark || "",
     rejectReason: expense.rejectReason || "",
     invoiceNo: expense.invoiceNo || "",

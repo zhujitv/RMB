@@ -85,6 +85,8 @@ type LogisticsExpense = {
   submittedAt?: string | null;
   reviewedBy?: UserLite;
   reviewedAt?: string | null;
+  rejectedBy?: UserLite | null;
+  rejectedAt?: string | null;
   reviewRemark?: string;
   rejectReason?: string;
   invoiceNo?: string;
@@ -589,18 +591,40 @@ export function LogisticsFeesModule({
 
   async function rejectExpense(expense: LogisticsExpense) {
     const confirmationResult = await requestConfirmation({
-      title: "驳回物流费用",
+      title: "驳回物流费用账单",
       message: "请填写驳回原因，供应商将看到该原因并补充修改。",
       requireInput: true,
       inputLabel: "驳回原因",
-      inputPlaceholder: "请输入驳回原因",
+      inputPlaceholder: "请输入需要供应商修改的内容",
       inputRequiredMessage: "请填写驳回原因。",
       confirmLabel: "确认驳回",
       cancelLabel: "取消",
-      variant: "warning",
+      variant: "danger",
     });
     if (!confirmationResult.confirmed) return;
-    await patchExpense(expense, { action: "reject", rejectReason: confirmationResult.inputValue || "" }, "驳回物流费用失败");
+    const rejectReason = confirmationResult.inputValue || "";
+    setBusyId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; expenses?: LogisticsExpense[]; bill?: LogisticsExpense }>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "reject", rejectReason }),
+      });
+      if (result.success !== true) throw new Error(result.message || "驳回物流费用账单失败");
+      const savedItems = Array.isArray(result.expenses) && result.expenses.length
+        ? result.expenses
+        : (result.bill?.items || []);
+      setRows((currentRows) => savedItems.length
+        ? replaceLogisticsExpenseItemsInRows(currentRows, savedItems)
+        : markLogisticsExpenseBillRejected(currentRows, expense.id, rejectReason));
+      setSelectedBillIds((current) => current.filter((id) => id !== expense.id));
+      setNotice(result.message || "物流费用账单已驳回");
+    } catch (rejectError) {
+      setError(rejectError instanceof Error ? rejectError.message : "驳回物流费用账单失败");
+    } finally {
+      setBusyId("");
+    }
   }
 
   async function confirmExpenseInvoice(expense: LogisticsExpense) {
@@ -935,8 +959,9 @@ function LogisticsExpenseRows({
   const paymentStatus = expense.paymentStatus || "待开票";
   const items = expense.items?.length ? expense.items : [expense];
   const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
+  const rejectReasons = [...new Set(items.map((item) => item.rejectReason || "").filter(Boolean))];
   const containerSummary = logisticsExpenseContainerSummary(expense, items);
-  const canApproveBill = canReview && logisticsExpenseBillCanApprove(expense);
+  const canReviewBill = canReview && logisticsExpenseBillCanApprove(expense);
   const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
   const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
@@ -1063,20 +1088,35 @@ function LogisticsExpenseRows({
   }
 
   function renderBillReviewControls() {
-    if (!canReview) return null;
+    if (!canReviewBill) return null;
+    const busy = busyId === expense.id;
     return (
-      <button
-        className={styles.primaryButtonCompact}
-        type="button"
-        disabled={!canApproveBill || busyId === expense.id || saving}
-        title={canApproveBill ? "审核当前提单账单并通知供应商开票" : "只有待审核账单可以审核通过"}
-        onClick={(event) => {
-          event.stopPropagation();
-          onApprove(expense);
-        }}
-      >
-        {busyId === expense.id ? "审核中..." : "审核通过并通知开票"}
-      </button>
+      <>
+        <button
+          className={styles.billApproveButton}
+          type="button"
+          disabled={busy || saving}
+          title="审核当前提单账单并通知供应商开票"
+          onClick={(event) => {
+            event.stopPropagation();
+            onApprove(expense);
+          }}
+        >
+          {busy ? "处理中..." : "审核通过并通知开票"}
+        </button>
+        <button
+          className={styles.billRejectButton}
+          type="button"
+          disabled={busy || saving}
+          title="驳回当前提单账单并要求供应商修改"
+          onClick={(event) => {
+            event.stopPropagation();
+            onReject(expense);
+          }}
+        >
+          {busy ? "处理中..." : "驳回"}
+        </button>
+      </>
     );
   }
 
@@ -1162,6 +1202,12 @@ function LogisticsExpenseRows({
                   {renderBillSaveControls()}
                 </div>
               </div>
+              {auditStatus.includes("驳回") && rejectReasons.length ? (
+                <div className={styles.logisticsBillRejectNotice}>
+                  <strong>驳回原因</strong>
+                  <span>{rejectReasons.join("；")}</span>
+                </div>
+              ) : null}
               <LogisticsBillContainerInfo summary={containerSummary} />
               <LogisticsExpenseDetailsTable
                 items={editingExpenseRows}
@@ -2300,6 +2346,26 @@ function markLogisticsExpenseBillSubmitted(rows: LogisticsExpense[], billId: str
         rejectReason: "",
       };
     });
+    return rebuildLogisticsExpenseBill(row, nextItems);
+  });
+}
+
+function markLogisticsExpenseBillRejected(rows: LogisticsExpense[], billId: string, rejectReason: string) {
+  const reviewedAt = new Date().toISOString();
+  return rows.map((row) => {
+    const items = row.items?.length ? row.items : [row];
+    const belongsToBill = row.id === billId;
+    if (!belongsToBill) return row;
+    const nextItems = items.map((item) => ({
+      ...item,
+      auditStatus: "已驳回",
+      invoiceStatus: "未通知",
+      paymentStatus: "待开票",
+      reviewedAt,
+      rejectedAt: reviewedAt,
+      rejectReason,
+      invoiceNotifiedAt: null,
+    }));
     return rebuildLogisticsExpenseBill(row, nextItems);
   });
 }

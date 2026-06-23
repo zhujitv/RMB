@@ -78,18 +78,20 @@ export async function reviewLogisticsExpense(request, actor, id, input = {}) {
       emailResults: result.emailResults,
     };
   }
+  if (action === "reject") {
+    const result = await rejectLogisticsExpenseBill(request, actor, id, input);
+    const firstExpense = result.expenses[0] || result.bill?.items?.[0] || null;
+    return {
+      expense: firstExpense || null,
+      bill: result.bill || null,
+      expenses: result.expenses,
+      emailNotified: false,
+      emailError: "",
+    };
+  }
   const before = await loadLogisticsExpenseForAction(id, actor);
   let saved;
-  const data = action === "reject"
-    ? {
-      auditStatus: "已驳回",
-      reviewedById: actor.id,
-      reviewedAt: new Date(),
-      rejectReason: requireText(input.rejectReason || input.reason, "驳回原因"),
-      reviewRemark: optional(input.reviewRemark || input.remark),
-      updatedById: actor.id,
-    }
-    : {
+  const data = {
       auditStatus: "待审核",
       reviewedById: null,
       reviewedAt: null,
@@ -98,8 +100,51 @@ export async function reviewLogisticsExpense(request, actor, id, input = {}) {
       updatedById: actor.id,
     };
   saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
-  await runNonCriticalTask("物流费用审核日志写入", () => writeAudit(request, actor, action === "reject" ? "驳回物流费用" : "重新打开物流费用", "logistics_expenses", id, before, saved));
+  await runNonCriticalTask("物流费用审核日志写入", () => writeAudit(request, actor, "重新打开物流费用", "logistics_expenses", id, before, saved));
   return { expense: serializeLogisticsExpense(saved), emailNotified: false, emailError: "" };
+}
+
+export async function rejectLogisticsExpenseBill(request, actor, identifier, input = {}) {
+  assertCanReviewLogisticsExpense(actor);
+  const rejectReason = requireText(input.rejectReason || input.reason, "驳回原因");
+  const reviewRemark = optional(input.reviewRemark || input.remark);
+  const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
+  if (!rows.length) throw codedError("未找到可驳回的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
+  for (const row of rows) {
+    if (row.auditStatus !== "待审核") {
+      throw codedError(`账单 ${row.order?.orderNo || row.orderId || ""}/${row.order?.blNo || "-"} 中存在非待审核费用，不能驳回。`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_INVALID");
+    }
+  }
+  const now = new Date();
+  const savedRows = [];
+  for (const before of rows) {
+    const saved = await prisma.logisticsExpense.update({
+      where: { id: before.id },
+      data: {
+        auditStatus: "已驳回",
+        invoiceStatus: "未通知",
+        paymentStatus: "待开票",
+        reviewedById: actor.id,
+        reviewedAt: now,
+        reviewRemark,
+        rejectReason,
+        invoiceNotifiedAt: null,
+        updatedById: actor.id,
+      },
+      include: includeLogisticsExpenseRelations(),
+    });
+    savedRows.push(saved);
+  }
+  await runNonCriticalTask("物流费用账单驳回日志写入", () => writeAudit(request, actor, "驳回物流费用账单", "logistics_expenses", logisticsExpenseBillId(rows[0]), rows.map(serializeLogisticsExpense), {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    rejectReason,
+    rejectedById: actor.id,
+    rejectedAt: now,
+  }));
+  return {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    expenses: savedRows.map(serializeLogisticsExpense),
+  };
 }
 
 export async function reviewLogisticsExpenseBills(request, actor, input = {}) {

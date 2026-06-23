@@ -21,7 +21,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const reviewAction = body.action || body.reviewAction || body.auditAction || "";
     if (["approve", "reject", "reopen"].includes(reviewAction)) {
       const result = await reviewLogisticsExpense(request, actor, id, body);
-      return ok({ success: true, ...result, message: result.emailError ? "物流费用已审核，开票通知发送失败" : "物流费用已审核" });
+      const message = reviewAction === "reject"
+        ? "物流费用账单已驳回"
+        : (result.emailError ? "物流费用已审核，开票通知发送失败" : "物流费用已审核");
+      return ok({ success: true, ...result, message });
     }
     if ((body.action || "") === "submitBill") {
       const result = await submitLogisticsExpenseBill(request, actor, id);

@@ -37,6 +37,7 @@ const containerCountMigration = readFileSync("prisma/migrations/20260622100000_l
 const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233000_logistics_expense_invoice_notification/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
+const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
 const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
 const logisticsExpenseDeleteRoute = readFileSync("app/api/logistics-expenses/[id]/route.ts", "utf8");
 const logisticsExpenseBatchRoute = readFileSync("app/api/logistics-expenses/batch-update/route.ts", "utf8");
@@ -244,6 +245,37 @@ test("logistics expense page supports single bill review and merged batch review
   assert.match(logisticsModule, /selectionEnabled=\{canReviewExpense\}/);
   assert.match(workspaceStyles, /\.dataTable th\.selectionColumn/);
   assert.doesNotMatch(logisticsModule, />通过<\/button>/);
+});
+
+test("pending logistics expense bills can be rejected with supplier-facing reason", () => {
+  assert.match(backend, /export async function rejectLogisticsExpenseBill/);
+  assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
+  assert.match(backend, /驳回物流费用必须填写原因/);
+  assert.match(backend, /未找到可驳回的物流费用账单/);
+  assert.match(backend, /中存在非待审核费用，不能驳回/);
+  assert.match(backend, /auditStatus: "已驳回"/);
+  assert.match(backend, /invoiceStatus: "未通知"/);
+  assert.match(backend, /paymentStatus: "待开票"/);
+  assert.match(backend, /reviewedById: actor\.id/);
+  assert.match(backend, /reviewedAt: now/);
+  assert.match(backend, /rejectReason/);
+  assert.match(logisticsCostRoute, /reviewAction === "reject"/);
+  assert.match(logisticsCostRoute, /物流费用账单已驳回/);
+  assert.match(logisticsModule, /title: "驳回物流费用账单"/);
+  assert.match(logisticsModule, /inputRequiredMessage: "请填写驳回原因。"/);
+  assert.match(logisticsModule, /className=\{styles\.billApproveButton\}/);
+  assert.match(logisticsModule, /className=\{styles\.billRejectButton\}/);
+  assert.match(logisticsModule, /审核通过并通知开票/);
+  assert.match(logisticsModule, /"驳回"/);
+  assert.match(logisticsModule, /replaceLogisticsExpenseItemsInRows/);
+  assert.match(logisticsModule, /markLogisticsExpenseBillRejected/);
+  assert.match(logisticsModule, /logisticsBillRejectNotice/);
+  assert.match(logisticsModule, /驳回原因/);
+  const rejectSource = logisticsModule.match(/async function rejectExpense[\s\S]*?\n  async function confirmExpenseInvoice/)?.[0] || "";
+  assert.doesNotMatch(rejectSource, /loadExpenses|loadStatement|setExpandedId\(""\)/);
+  assert.match(workspaceStyles, /\.billApproveButton[\s\S]*background: #16a34a/);
+  assert.match(workspaceStyles, /\.billRejectButton[\s\S]*color: #b91c1c/);
+  assert.match(workspaceStyles, /\.logisticsBillRejectNotice/);
 });
 
 test("draft logistics expense bills can be submitted for review", () => {
