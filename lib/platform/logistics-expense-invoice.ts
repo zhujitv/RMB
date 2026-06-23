@@ -17,6 +17,7 @@ import {
   writeAudit,
 } from "./shared";
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
+import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 
 function appEntryUrl() {
@@ -71,6 +72,7 @@ function logisticsBillSummaryRows(expenses = []) {
     return {
       supplierId: first.supplierId || "",
       supplierName: first.supplierNameSnapshot || first.supplier?.supplierName || "供应商",
+      supplier: first.supplier || null,
       supplierEmail: first.supplier?.email || "",
       orderNo: order.orderNo || "-",
       blNo: orderSummary.blNo || orderSummary.billOfLadingNo || "-",
@@ -78,10 +80,53 @@ function logisticsBillSummaryRows(expenses = []) {
       customerShortName: logisticsExpenseCustomerShortName(first),
       amountCny: rows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
       detailText: logisticsExpenseDetailText(rows),
+      invoiceGroups: logisticsInvoiceGroupsForCostTypes(rows.map((row) => row.costType)),
       remark: rows.map((row) => row.remark || "").filter(Boolean).join("；") || "-",
       expenses: rows,
     };
   });
+}
+
+function supplierOperatorEmailCandidates(supplier = {}) {
+  return (supplier.operatorUsers || [])
+    .filter((user) => user && user.isActive !== false)
+    .map((user) => ({
+      label: "绑定登录账号邮箱",
+      field: "supplier.operatorUsers.email",
+      value: user.email || "",
+    }));
+}
+
+export function resolveLogisticsSupplierInvoiceEmail(supplier = {}) {
+  const candidates = [
+    ...supplierOperatorEmailCandidates(supplier),
+    { label: "供应商联系邮箱", field: "supplier.contactEmail", value: supplier.contactEmail || "" },
+    { label: "供应商主邮箱", field: "supplier.email", value: supplier.email || "" },
+    { label: "供应商财务邮箱", field: "supplier.financeEmail", value: supplier.financeEmail || "" },
+  ];
+  const checkedFields = candidates.map((candidate) => candidate.field);
+  const checkedText = checkedFields.join("、");
+  for (const candidate of candidates) {
+    const email = normalizeEmail(candidate.value || "");
+    if (email && validEmail(email)) {
+      return {
+        email,
+        label: candidate.label,
+        field: candidate.field,
+        checkedFields,
+        checkedText,
+        error: "",
+      };
+    }
+  }
+  return {
+    email: "",
+    label: "",
+    field: "",
+    checkedFields,
+    checkedText,
+    error: `物流供应商未配置有效邮箱，已检查：${checkedText}。`,
+  };
 }
 
 function logisticsExpenseInvoiceEmail(expense = {}) {
@@ -121,6 +166,10 @@ function logisticsExpenseInvoiceBillsEmail(supplierName = "供应商", bills = [
     `   费用合计：¥${Number(bill.amountCny || 0).toFixed(2)}`,
     "   费用明细：",
     ...String(bill.detailText || "-").split("\n").map((line) => `   - ${line}`),
+    "   请分别上传：",
+    ...((bill.invoiceGroups || []).length
+      ? bill.invoiceGroups.map((group) => `   - ${group.label}`)
+      : ["   - 对应物流费用发票"]),
     `   备注：${bill.remark || "-"}`,
   ].join("\n")).join("\n\n");
   const body = [
@@ -134,7 +183,9 @@ function logisticsExpenseInvoiceBillsEmail(supplierName = "供应商", bills = [
     "开票要求：",
     "1. 发票金额需与系统审核通过的费用合计一致。",
     "2. 发票抬头、税号、供应商信息需与系统资料一致。",
-    "3. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
+    "3. 报关费、港杂费、海运费必须分别开票上传。",
+    "4. 拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并为“拖车及其他费用合并发票”上传。",
+    "5. 发票上传后必须在对应物流费用账单中提交，系统会绑定到该账单记录。",
     "",
     `发票上传入口：${appEntryUrl()}`,
     "",
@@ -144,11 +195,11 @@ function logisticsExpenseInvoiceBillsEmail(supplierName = "供应商", bills = [
 }
 
 export async function notifyLogisticsSupplierInvoice(expense) {
-  const email = normalizeEmail(expense.supplier?.email || "");
-  if (!email || !validEmail(email)) throw codedError("物流供应商未配置有效邮箱，未发送开票通知。", 400, "LOGISTICS_SUPPLIER_EMAIL_REQUIRED");
+  const resolved = resolveLogisticsSupplierInvoiceEmail(expense.supplier || {});
+  if (!resolved.email) throw codedError(`${resolved.error}未发送开票通知。`, 400, "LOGISTICS_SUPPLIER_EMAIL_REQUIRED");
   const { subject, body } = logisticsExpenseInvoiceEmail(expense);
   await sendShippingDocumentsEmail({
-    recipientEmails: [email],
+    recipientEmails: [resolved.email],
     ccEmails: [],
     attachments: [],
     subject,
@@ -166,6 +217,7 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
       supplierId: bill.supplierId,
       supplierName: bill.supplierName,
       supplierEmail: bill.supplierEmail,
+      supplier: bill.supplier,
       bills: [],
       expenses: [],
     });
@@ -175,13 +227,13 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
   }
   const results = [];
   for (const group of bySupplier.values()) {
-    const email = normalizeEmail(group.supplierEmail || "");
-    if (!email || !validEmail(email)) {
+    const resolved = resolveLogisticsSupplierInvoiceEmail(group.supplier || { email: group.supplierEmail });
+    if (!resolved.email) {
       results.push({
         supplierId: group.supplierId || "",
         supplierName: group.supplierName || "供应商",
         sent: false,
-        error: "物流供应商未配置有效邮箱，未发送开票通知。",
+        error: `${resolved.error}未发送开票通知。`,
         expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
       });
       continue;
@@ -189,12 +241,12 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
     const { subject, body } = logisticsExpenseInvoiceBillsEmail(group.supplierName, group.bills);
     try {
       await sendShippingDocumentsEmail({
-        recipientEmails: [email],
+        recipientEmails: [resolved.email],
         ccEmails: [],
         attachments: [],
         subject,
         body,
-        notificationId: `logistics-expense-invoice-${group.supplierId || email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
+        notificationId: `logistics-expense-invoice-${group.supplierId || resolved.email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
       });
       results.push({
         supplierId: group.supplierId || "",

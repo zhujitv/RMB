@@ -398,6 +398,7 @@ export function SideDetailDrawer({
   actions,
   children,
   onClose,
+  surfaceClassName,
 }: {
   ariaLabel: string;
   kicker?: string;
@@ -406,12 +407,13 @@ export function SideDetailDrawer({
   actions?: ReactNode;
   children: ReactNode;
   onClose: () => void;
+  surfaceClassName?: string;
 }) {
   return (
     <DismissibleLayer
       ariaLabel={ariaLabel}
       overlayClassName={styles.drawerOverlay}
-      surfaceClassName={styles.sideDrawer}
+      surfaceClassName={mergeClassNames(styles.sideDrawer, surfaceClassName)}
       onClose={onClose}
     >
       {({ requestClose }) => (

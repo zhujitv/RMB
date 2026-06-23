@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, confirmLogisticsExpenseInvoice, getActor, ok, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus } from "../../../../lib/platform-db";
+import { apiError, confirmLogisticsExpenseInvoice, getActor, ok, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,20 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         : (result.emailError ? "物流费用已审核，开票通知发送失败" : "物流费用已审核");
       return ok({ success: true, ...result, message });
     }
-    if ((body.action || "") === "submitBill") {
+    if ((body.action || "") === "submitBill" || (body.action || "") === "submit") {
       const result = await submitLogisticsExpenseBill(request, actor, id);
       return ok({ success: true, ...result, message: "物流费用已提交审核" });
+    }
+    if ((body.action || "") === "withdraw") {
+      const result = await withdrawLogisticsExpenseBill(request, actor, id);
+      return ok({ success: true, ...result, message: "物流费用账单已撤回为草稿" });
+    }
+    if ((body.action || "") === "resendInvoiceNotice") {
+      const result = await resendLogisticsExpenseInvoiceNotice(request, actor, id);
+      const message = result.emailError
+        ? `开票通知发送失败：${result.emailError}`
+        : "开票通知已重新发送";
+      return ok({ success: true, ...result, message });
     }
     if ((body.action || "") === "confirmInvoice") {
       const expense = await confirmLogisticsExpenseInvoice(request, actor, id, body);
@@ -55,8 +66,8 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await getActor(request);
-    const expense = await updateLogisticsExpense(request, actor, id, { action: "withdraw" });
-    return ok({ success: true, expense, message: "物流费用已撤回为草稿" });
+    const result = await withdrawLogisticsExpenseBill(request, actor, id);
+    return ok({ success: true, ...result, message: "物流费用账单已撤回为草稿" });
   } catch (error: unknown) {
     return apiError(error, "撤回物流费用失败");
   }

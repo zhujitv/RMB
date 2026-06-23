@@ -29,6 +29,10 @@ import {
   todayInputInChina,
 } from "./shared";
 import { assertSupplierActive } from "./supplier-masters";
+import {
+  logisticsInvoiceGroupForCostType,
+  logisticsInvoiceGroupsForCostTypes,
+} from "./logistics-invoice-groups";
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
@@ -47,7 +51,7 @@ export function includeLogisticsExpenseRelations() {
         },
       },
     },
-    supplier: true,
+    supplier: { include: { operatorUsers: true } },
     cost: { include: includeCostRelations() },
     createdBy: true,
     updatedBy: true,
@@ -141,6 +145,7 @@ export function serializeLogisticsExpense(expense = {}) {
     invoiceAmount: expense.invoiceAmount == null ? "" : Number(expense.invoiceAmount),
     invoiceRemark: expense.invoiceRemark || "",
     invoiceNotifiedAt: expense.invoiceNotifiedAt || null,
+    invoiceNotificationError: expense.invoiceNotificationError || "",
     invoiceDocument,
     invoiceDocumentId: expense.invoiceDocumentId || "",
     invoiceUploadedBy: serializeUser(expense.invoiceUploadedBy),
@@ -158,16 +163,11 @@ export function serializeLogisticsExpense(expense = {}) {
 }
 
 export function aggregateLogisticsExpenseStatus(rows = [], field = "") {
+  if (field === "auditStatus") return logisticsExpenseBillAuditStatus(rows);
   const values = rows.map((row) => row[field]).filter(Boolean);
   const unique = [...new Set(values)];
   if (!unique.length) return "-";
   if (unique.length === 1) return unique[0];
-  if (field === "auditStatus") {
-    if (unique.includes("草稿")) return "部分草稿";
-    if (unique.includes("待审核")) return "部分待审核";
-    if (unique.includes("已驳回")) return "部分驳回";
-    if (unique.includes("审核通过")) return "部分审核通过";
-  }
   if (field === "invoiceStatus") {
     if (unique.includes("已上传")) return "部分已上传";
     if (unique.includes("已确认")) return "部分已确认";
@@ -183,10 +183,57 @@ export function aggregateLogisticsExpenseStatus(rows = [], field = "") {
   return "混合状态";
 }
 
+export function logisticsExpenseBillAuditStatus(rows = []) {
+  const values = rows.map((row) => row.auditStatus || "草稿").filter(Boolean);
+  const unique = [...new Set(values)];
+  if (!unique.length) return "草稿";
+  if (unique.length === 1) return unique[0];
+  if (unique.includes("审核通过")) return "审核通过";
+  if (unique.includes("待审核")) return "待审核";
+  if (unique.includes("已驳回")) return "已驳回";
+  return "草稿";
+}
+
+export function logisticsExpenseInvoiceGroups(items = []) {
+  return logisticsInvoiceGroupsForCostTypes(items.map((item) => item.costType)).map((group) => {
+    const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
+    const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
+    const confirmed = groupItems.length > 0 && groupItems.every((item) => item.invoiceStatus === "已确认");
+    const failed = groupItems.some((item) => item.invoiceStatus === "通知失败");
+    const notified = groupItems.some((item) => item.invoiceStatus === "已通知开票");
+    return {
+      key: group.key,
+      label: group.label,
+      costTypes: group.costTypes,
+      amountCny: groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0),
+      itemIds: groupItems.map((item) => item.id).filter(Boolean),
+      status: confirmed ? "已确认" : (uploaded ? "已上传" : (failed ? "通知失败" : (notified ? "已通知开票" : "待开票"))),
+      uploaded,
+      confirmed,
+      failed,
+      notified,
+      invoiceDocumentId: groupItems.find((item) => item.invoiceDocumentId)?.invoiceDocumentId || "",
+      invoiceNo: groupItems.find((item) => item.invoiceNo)?.invoiceNo || "",
+      invoiceNotificationError: groupItems.map((item) => item.invoiceNotificationError || "").find(Boolean) || "",
+    };
+  });
+}
+
+export function aggregateLogisticsExpenseInvoiceStatus(items = []) {
+  const groups = logisticsExpenseInvoiceGroups(items);
+  if (!groups.length) return aggregateLogisticsExpenseStatus(items, "invoiceStatus");
+  if (groups.every((group) => group.confirmed)) return "已确认";
+  if (groups.every((group) => group.uploaded || group.confirmed)) return "已上传发票";
+  if (groups.some((group) => group.uploaded || group.confirmed)) return "部分上传发票";
+  if (groups.some((group) => group.failed)) return "待开票 / 通知失败";
+  return "待开票";
+}
+
 export function serializeLogisticsExpenseBill(rows = []) {
   const items = rows.map(serializeLogisticsExpense);
   const first = items[0] || {};
   const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
+  const invoiceGroups = logisticsExpenseInvoiceGroups(items);
   return {
     id: logisticsExpenseBillId(first),
     isBill: true,
@@ -203,9 +250,10 @@ export function serializeLogisticsExpenseBill(rows = []) {
     amount: amountCny,
     amountCny,
     auditStatus: aggregateLogisticsExpenseStatus(items, "auditStatus"),
-    invoiceStatus: aggregateLogisticsExpenseStatus(items, "invoiceStatus"),
+    invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(items),
     paymentStatus: aggregateLogisticsExpenseStatus(items, "paymentStatus"),
     itemCount: items.length,
+    invoiceGroups,
     items,
     order: first.order || {},
     updatedAt: rows.reduce((latest, row) => {

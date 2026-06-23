@@ -2064,13 +2064,33 @@
 
 .logisticsContainerInfoCard {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   margin: 0 0 10px;
-  padding: 10px 12px;
+  padding: 10px;
   border: 1px solid #dbeafe;
   border-radius: 9px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.logisticsContainerInfoCard span {
+  min-width: 0;
+  overflow: hidden;
+  padding: 7px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: #ffffff;
   color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsContainerInfoCard strong {
+  color: #64748b;
+  font-weight: 700;
 }
 
 .logisticsContainerInfoHeader {
@@ -2129,6 +2149,7 @@
 }
 
 @media (max-width: 860px) {
+  .logisticsContainerInfoCard,
   .logisticsContainerInfoGrid {
     grid-template-columns: 1fr;
   }
@@ -2285,6 +2306,160 @@
   font-weight: 700;
 }
 
+.logisticsBillInvoiceNoticeError {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.logisticsBillInvoiceNoticeError strong {
+  flex: 0 0 auto;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.logisticsExpenseDrawer {
+  width: min(1200px, 94vw);
+}
+
+.logisticsExpenseDrawer .sideDrawerHeader {
+  padding: 14px 18px;
+}
+
+.logisticsExpenseDrawer .sideDrawerBody {
+  padding: 14px 18px 18px;
+}
+
+.logisticsDrawerSection {
+  display: grid;
+  gap: 12px;
+}
+
+.logisticsDrawerSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.logisticsDrawerSectionHeader > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logisticsDrawerSectionHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsDrawerSectionHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceGroupsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logisticsInvoiceGroupsHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.logisticsInvoiceGroupsHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceGroupsHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.logisticsInvoiceGroupCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.logisticsInvoiceGroupTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logisticsInvoiceGroupTitle strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupMeta {
+  display: grid;
+  gap: 3px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.logisticsInvoiceGroupMeta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupError {
+  color: #b91c1c;
+}
+
+@media (max-width: 980px) {
+  .logisticsInvoiceGroupsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .logisticsDetailTableWrap {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -2295,7 +2470,7 @@
 
 .logisticsDetailTable {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1080px;
   border-collapse: collapse;
   table-layout: fixed;
   color: #0f172a;
@@ -2325,46 +2500,50 @@
 
 .logisticsDetailTable th:nth-child(1),
 .logisticsDetailTable td:nth-child(1) {
-  width: 48px;
+  width: 130px;
 }
 
 .logisticsDetailTable th:nth-child(2),
 .logisticsDetailTable td:nth-child(2) {
-  width: 120px;
+  width: 92px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(3),
 .logisticsDetailTable td:nth-child(3) {
-  width: 126px;
+  width: 96px;
   text-align: center;
   vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(4),
 .logisticsDetailTable td:nth-child(4) {
-  width: 160px;
+  width: 150px;
 }
 
 .logisticsDetailTable th:nth-child(5),
 .logisticsDetailTable td:nth-child(5) {
-  width: 130px;
+  width: 170px;
 }
 
 .logisticsDetailTable th:nth-child(6),
 .logisticsDetailTable td:nth-child(6) {
-  width: 160px;
+  width: 112px;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(7),
 .logisticsDetailTable td:nth-child(7) {
-  width: 150px;
+  width: 116px;
   text-align: center;
   vertical-align: middle;
 }
 
 .logisticsDetailTable th:nth-child(8),
 .logisticsDetailTable td:nth-child(8) {
-  width: 140px;
+  width: 120px;
   text-align: center;
   vertical-align: middle;
 }
@@ -2474,6 +2653,15 @@
   flex: 0 0 auto;
   color: #64748b;
   font-size: 11px;
+}
+
+.inlineAmountHint {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
 }
 
 .inlineQuantityInput {
@@ -3028,6 +3216,71 @@
   width: 160px;
   min-width: 160px;
   text-align: right;
+}
+
+.dataTable th.statusColumn,
+.dataTable td.statusColumn {
+  width: 92px;
+  min-width: 92px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.dataTable th.operationColumn,
+.dataTable td.operationColumn {
+  width: 96px;
+  min-width: 96px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsCompactTableWrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.logisticsCompactTable {
+  min-width: 1080px;
+  table-layout: fixed;
+}
+
+.logisticsCompactTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 40px;
+  padding: 0 12px;
+  background: #f8fafc;
+  vertical-align: middle;
+}
+
+.logisticsCompactTable tbody td {
+  height: 44px;
+  padding: 0 12px;
+  vertical-align: middle;
+}
+
+.logisticsCompactTable td.orderNoColumn,
+.logisticsCompactTable td.blNoColumn,
+.logisticsCompactTable td.customerColumn,
+.logisticsCompactTable td.containerTypeColumn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsCompactTable td.amountColumn {
+  color: #0f172a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.logisticsCompactRowActive {
+  background: #eff6ff;
+}
+
+.logisticsCompactRowActive:hover {
+  background: #dbeafe;
 }
 
 .tablePinnedTwoCols .dataTable th.orderNoColumn,
@@ -3942,6 +4195,18 @@
   flex: 1;
   overflow-y: auto;
   padding: 16px 18px 22px;
+}
+
+.sideDrawer.logisticsExpenseDrawer {
+  width: min(1200px, 94vw);
+}
+
+.sideDrawer.logisticsExpenseDrawer .sideDrawerHeader {
+  padding: 14px 18px;
+}
+
+.sideDrawer.logisticsExpenseDrawer .sideDrawerBody {
+  padding: 14px 18px 18px;
 }
 
 .taxRefundDrawer {

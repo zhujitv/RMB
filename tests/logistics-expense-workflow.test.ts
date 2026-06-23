@@ -24,6 +24,7 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-shared.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
+  readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-queries.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow.ts", "utf8"),
   readFileSync("lib/platform/profit-overview.ts", "utf8"),
@@ -35,8 +36,13 @@ const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
 const containerCountMigration = readFileSync("prisma/migrations/20260622100000_logistics_expense_container_count/migration.sql", "utf8");
 const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233000_logistics_expense_invoice_notification/migration.sql", "utf8");
+const invoiceGroupMigration = readFileSync("prisma/migrations/20260623073000_logistics_invoice_group_uploads/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
+const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
+const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
+const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
+const backendAggregateStatusSource = backend.match(/export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/)?.[0] || "";
 const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
 const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
 const logisticsExpenseDeleteRoute = readFileSync("app/api/logistics-expenses/[id]/route.ts", "utf8");
@@ -57,10 +63,16 @@ test("logistics expenses are stored outside official costs until approved", () =
   assert.match(schema, /billingMethod\s+String\?\s+@map\("billing_method"\)/);
   assert.match(schema, /billingQuantity\s+Decimal\?\s+@map\("billing_quantity"\)/);
   assert.match(schema, /invoiceNotifiedAt\s+DateTime\?\s+@map\("invoice_notified_at"\)/);
+  assert.match(schema, /invoiceNotificationError\s+String\?\s+@map\("invoice_notification_error"\)/);
+  assert.match(schema, /invoiceDocumentId\s+String\?\s+@map\("invoice_document_id"\)/);
+  assert.match(schema, /@@index\(\[invoiceDocumentId\]\)/);
   assert.match(schema, /model OrderCost[\s\S]*sourceType\s+String\s+@default\("MANUAL"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "logistics_expenses"/);
   assert.match(containerCountMigration, /ADD COLUMN IF NOT EXISTS "applied_container_count" INTEGER/);
   assert.match(invoiceNotificationMigration, /ADD COLUMN IF NOT EXISTS "invoice_notified_at"/);
+  assert.match(invoiceGroupMigration, /ADD COLUMN IF NOT EXISTS "invoice_notification_error"/);
+  assert.match(invoiceGroupMigration, /DROP INDEX IF EXISTS "logistics_expenses_invoice_document_id_key"/);
+  assert.match(invoiceGroupMigration, /logistics_expenses_invoice_document_id_idx/);
 });
 
 test("approval generates official costs with source tracking", () => {
@@ -69,7 +81,7 @@ test("approval generates official costs with source tracking", () => {
   assert.match(backend, /costConfirmed: true/);
   assert.match(backend, /审核通过物流费用/);
   assert.match(backend, /reviewLogisticsExpenseBills/);
-  assert.match(backend, /invoiceNotifiedAt: now/);
+  assert.match(backend, /invoiceNotifiedAt: result\.sent \? now : row\.invoiceNotifiedAt/);
   assert.match(costsModule, /label="来源" value=\{cost\.sourceLabel \|\| "人工录入"\}/);
 });
 
@@ -146,9 +158,18 @@ test("logistics cost type dictionary includes advance and drop-off fees in busin
 
 test("approval sends invoice notification and preserves failure for audit", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
+  assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);
+  assert.match(backend, /resolveLogisticsSupplierInvoiceEmail/);
+  assert.match(backend, /supplier\.operatorUsers\.email/);
+  assert.match(backend, /supplier\.contactEmail/);
+  assert.match(backend, /supplier\.financeEmail/);
+  assert.match(backend, /物流供应商未配置有效邮箱，已检查/);
   assert.match(backend, /物流费用已审核通过，请开票并上传发票/);
+  assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults/);
   assert.match(backend, /物流费用开票通知失败/);
-  assert.match(backend, /invoiceStatus: "已通知开票"/);
+  assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
+  assert.match(backend, /invoiceNotificationError: result\.sent \? null/);
+  assert.match(backend, /通知失败/);
 });
 
 test("logistics information page exposes per-order expense entry actions", () => {
@@ -193,13 +214,15 @@ test("logistics expense list groups bills by BL number and keeps item details", 
   assert.match(logisticsModule, /className=\{styles\.containerTypeColumn\}>柜型/);
   assert.match(logisticsModule, /logisticsExpenseContainerSummary/);
   assert.match(logisticsModule, /LogisticsBillContainerInfo/);
-  assert.match(logisticsModule, /柜型汇总：/);
-  assert.match(logisticsModule, /柜号列表：/);
-  assert.match(logisticsModule, /未录入集装箱信息/);
+  assert.match(logisticsModule, /柜型：/);
+  assert.match(logisticsModule, /柜号：/);
+  assert.match(logisticsModule, /装货港：/);
+  assert.doesNotMatch(logisticsModule, /柜型汇总：/);
+  assert.doesNotMatch(logisticsModule, /柜号列表：/);
   assert.match(logisticsModule, /费用明细/);
   assert.match(logisticsModule, /LogisticsExpenseDetailsTable/);
   assert.match(logisticsModule, /logisticsDetailTable/);
-  assert.match(logisticsModule, /同步成本状态/);
+  assert.match(logisticsModule, /成本同步/);
   assert.match(logisticsModule, /<th>操作<\/th>/);
   assert.doesNotMatch(logisticsModule, /<th>供应商<\/th>/);
 });
@@ -212,9 +235,10 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
   assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills\(approvedRows\)/);
+  assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults\(approvedRows, emailResults, actor, now\)/);
   assert.match(backend, /const bySupplier = new Map/);
   assert.match(backend, /group\.bills\.push\(bill\)/);
-  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: \[email\]/);
+  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: \[resolved\.email\]/);
   assert.match(backend, /待开票费用清单/);
   assert.match(backend, /订单号：/);
   assert.match(backend, /提单号：/);
@@ -222,13 +246,64 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /客户简称：/);
   assert.match(backend, /费用合计：/);
   assert.match(backend, /费用明细：/);
+  assert.match(backend, /请分别上传：/);
+  assert.match(backend, /报关费、港杂费、海运费必须分别开票上传。/);
+  assert.match(backend, /拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
   assert.match(backend, /发票上传入口/);
-  assert.match(backend, /invoiceStatus: \["已上传", "已确认"\]\.includes\(row\.invoiceStatus\) \? row\.invoiceStatus : "已通知开票"/);
+  assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
   assert.match(backend, /paymentStatus: "待付款"/);
   assert.match(backend, /reviewedById: actor\.id/);
   assert.match(backend, /reviewedAt: now/);
-  assert.match(backend, /invoiceNotifiedAt: now/);
+  assert.match(backend, /invoiceNotifiedAt: result\.sent \? now : row\.invoiceNotifiedAt/);
+  assert.match(backend, /logisticsExpenseBillAuditStatus/);
+  assert.match(backendAggregateStatusSource, /if \(field === "auditStatus"\) return logisticsExpenseBillAuditStatus\(rows\)/);
+  assert.doesNotMatch(backendAggregateStatusSource, /部分草稿|部分待审核|部分驳回|部分审核通过/);
+  assert.match(frontendAggregateStatusSource, /if \(field === "auditStatus"\) return logisticsExpenseBillAuditStatus\(items\)/);
+  assert.doesNotMatch(frontendAggregateStatusSource, /部分草稿|部分待审核|部分驳回|部分审核通过/);
   assert.doesNotMatch(backend, /for \(const bill[\s\S]*notifyLogisticsSupplierInvoice\(bill/);
+});
+
+test("logistics invoice upload is grouped by required invoice categories", () => {
+  assert.match(backend, /LOGISTICS_INVOICE_GROUPS/);
+  assert.match(backend, /报关费发票/);
+  assert.match(backend, /港杂费发票/);
+  assert.match(backend, /海运费发票/);
+  assert.match(backend, /拖车及其他费用合并发票/);
+  assert.match(backend, /logisticsInvoiceGroupsForCostTypes/);
+  assert.match(backend, /aggregateLogisticsExpenseInvoiceStatus/);
+  assert.match(backend, /logisticsInvoiceGroupForKey\(formData\.get\("invoiceGroup"\)/);
+  assert.match(backend, /const targetRows = rows\.filter\(\(row\) => invoiceGroup\.costTypes\.includes/);
+  assert.match(backend, /invoiceDocumentId: document\.id/);
+  assert.match(backend, /invoiceStatus: "已上传"/);
+  assert.match(backend, /paymentStatus: "已开票"/);
+  assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
+  assert.match(logisticsModule, /按费用类型分组上传，同一分组上传一次即可。/);
+  assert.match(logisticsModule, /body\.set\("invoiceGroup", group\.key\)/);
+  assert.match(logisticsModule, /onInvoiceUploaded=\{\(result\) =>/);
+  assert.match(logisticsModule, /applyLogisticsExpenseMutationResult\(result\)/);
+  assert.match(workspaceStyles, /\.logisticsInvoiceGroupsPanel/);
+  assert.match(workspaceStyles, /\.logisticsInvoiceGroupCard/);
+  assert.doesNotMatch(logisticsModule, /compactInvoiceUpload[\s\S]*InvoiceUploadForm/);
+});
+
+test("withdraw and invoice notification mutations keep current logistics bill expanded locally", () => {
+  assert.match(logisticsCostRoute, /withdrawLogisticsExpenseBill/);
+  assert.match(logisticsCostRoute, /resendLogisticsExpenseInvoiceNotice/);
+  assert.match(logisticsCostRoute, /message: "物流费用账单已撤回为草稿"/);
+  assert.match(logisticsCostRoute, /\(body\.action \|\| ""\) === "withdraw"/);
+  assert.match(withdrawExpenseSource, /applyLogisticsExpenseMutationResult\(result\)/);
+  assert.match(withdrawExpenseSource, /确认撤回该物流费用账单/);
+  assert.match(withdrawExpenseSource, /账单下所有费用明细将同步回草稿/);
+  assert.doesNotMatch(withdrawExpenseSource, /loadExpenses\(/);
+  assert.doesNotMatch(withdrawExpenseSource, /setExpandedId\(""\)/);
+  assert.match(logisticsModule, /renderBillWithdrawControls/);
+  assert.match(logisticsModule, /撤回账单/);
+  assert.match(logisticsModule, /async function resendInvoiceNotice/);
+  assert.match(logisticsModule, /action: "resendInvoiceNotice"/);
+  assert.match(logisticsModule, /重新发送开票通知/);
+  assert.match(logisticsModule, /reconcileLogisticsExpenseMutationRows/);
+  assert.match(logisticsModule, /replaceLogisticsExpenseBillsInRows/);
+  assert.match(workspaceStyles, /\.logisticsBillInvoiceNoticeError/);
 });
 
 test("logistics expense page supports single bill review and merged batch review", () => {
@@ -271,7 +346,7 @@ test("pending logistics expense bills can be rejected with supplier-facing reaso
   assert.match(logisticsModule, /markLogisticsExpenseBillRejected/);
   assert.match(logisticsModule, /logisticsBillRejectNotice/);
   assert.match(logisticsModule, /驳回原因/);
-  const rejectSource = logisticsModule.match(/async function rejectExpense[\s\S]*?\n  async function confirmExpenseInvoice/)?.[0] || "";
+  const rejectSource = logisticsModule.match(/async function rejectExpense[\s\S]*?\n  async function resendInvoiceNotice/)?.[0] || "";
   assert.doesNotMatch(rejectSource, /loadExpenses|loadStatement|setExpandedId\(""\)/);
   assert.match(workspaceStyles, /\.billApproveButton[\s\S]*background: #16a34a/);
   assert.match(workspaceStyles, /\.billRejectButton[\s\S]*color: #b91c1c/);
@@ -287,6 +362,8 @@ test("draft logistics expense bills can be submitted for review", () => {
   assert.match(backend, /submittedAt = new Date\(\)/);
   assert.match(backend, /rejectReason: null/);
   assert.match(backend, /void runNonCriticalTask\("物流费用提交审核日志写入"/);
+  assert.match(backend, /bill: serializeLogisticsExpenseBill\(savedRows\)/);
+  assert.match(backend, /expenses: savedRows\.map\(serializeLogisticsExpense\)/);
   assert.match(logisticsModule, /submitDraftExpenseBill/);
   assert.match(logisticsModule, /action: "submitBill"/);
   assert.match(logisticsModule, /timeoutMs: 10000/);
@@ -319,12 +396,16 @@ test("logistics expense form supports positive applied quantity", () => {
   assert.doesNotMatch(logisticsModule, /containerCountOptions/);
 });
 
-test("logistics suppliers can edit price and quantity before audit approval", () => {
+test("logistics suppliers can edit price and quantity only while bill is draft or rejected", () => {
   assert.match(backend, /before \? before\.auditStatus/);
-  assert.doesNotMatch(backend, /LOGISTICS_EXPENSE_PENDING_LOCKED/);
-  assert.doesNotMatch(backend, /待审核费用不能直接修改/);
+  assert.match(backend, /logisticsExpenseBillEditBlockReason/);
+  assert.match(backend, /待审核账单不能修改，请先撤回为草稿。/);
+  assert.match(backend, /待审核账单不能删除明细，请先撤回为草稿。/);
+  assert.match(backend, /LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_APPROVED_LOCKED/);
   assert.match(logisticsModule, /canEditAmount=\{isLogisticsSupplier\}/);
+  assert.match(logisticsModule, /canEditBillDetails/);
+  assert.match(logisticsModule, /logisticsExpenseBillIsEditable/);
   assert.match(logisticsModule, /logisticsExpenseEditBlockReason/);
   assert.match(logisticsModule, /editableLineSubtotal/);
   assert.match(logisticsModule, /LogisticsExpenseDraft/);
@@ -339,9 +420,14 @@ test("logistics suppliers can edit price and quantity before audit approval", ()
   assert.match(workspaceStyles, /\.logisticsContainerInfoCard/);
   assert.match(workspaceStyles, /\.dataTable th\.containerTypeColumn/);
   assert.doesNotMatch(logisticsModule, /<th>计费方式<\/th>/);
-  assert.match(logisticsModule, /<th>适用数量<\/th>/);
-  assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>单价\/金额<\/th>/);
+  assert.match(logisticsModule, /<th>数量<\/th>/);
+  assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>金额<\/th>/);
+  assert.match(logisticsModule, /<th>发票状态<\/th>/);
+  assert.match(logisticsModule, /<th>成本同步<\/th>/);
+  assert.doesNotMatch(logisticsExpenseDetailLineSource, /onWithdraw|onMarkPaid|onConfirmInvoice|确认发票|标记付款/);
+  assert.doesNotMatch(logisticsExpenseDetailLineSource, /提交审核|撤回账单|审核通过并通知开票|驳回/);
   assert.doesNotMatch(logisticsModule, /<th>集装箱柜型<\/th>/);
+  assert.doesNotMatch(logisticsModule, /<th>序号<\/th>/);
   assert.doesNotMatch(logisticsModule, /保存备注/);
   assert.doesNotMatch(logisticsModule, /保存金额/);
   assert.doesNotMatch(logisticsModule, /action: "updateAmount"/);
@@ -362,6 +448,7 @@ test("logistics suppliers can edit price and quantity before audit approval", ()
   assert.match(workspaceStyles, /\.logisticsTypographyScope \.logisticsLineDeleteButton:disabled[\s\S]*background: #e5e7eb;[\s\S]*color: #374151;/);
   assert.match(workspaceStyles, /\.inlineAmountEditor input[\s\S]*width: 100px/);
   assert.match(workspaceStyles, /th:nth-child\(3\)[\s\S]*text-align: center/);
+  assert.match(workspaceStyles, /th:nth-child\(6\)[\s\S]*text-align: center/);
   assert.match(workspaceStyles, /th:nth-child\(7\)[\s\S]*text-align: center/);
   assert.match(workspaceStyles, /th:nth-child\(8\)[\s\S]*text-align: center/);
   assert.match(workspaceStyles, /\.inlineQuantityInput[\s\S]*width: 90px/);
@@ -372,7 +459,8 @@ test("logistics suppliers can edit price and quantity before audit approval", ()
   assert.match(workspaceStyles, /\.inlineRemarkInput[\s\S]*width: 140px/);
   assert.match(workspaceStyles, /\.inlineCostTypeSelect/);
   assert.doesNotMatch(workspaceStyles, /\.inlineBillingMethodSelect/);
-  assert.match(workspaceStyles, /th:nth-child\(6\)[\s\S]*width: 160px/);
+  assert.match(workspaceStyles, /th:nth-child\(5\)[\s\S]*width: 170px/);
+  assert.match(workspaceStyles, /th:nth-child\(6\)[\s\S]*width: 112px/);
   assert.match(workspaceStyles, /\.costSyncCell[\s\S]*flex-direction: column/);
   assert.match(workspaceStyles, /\.costSyncCell[\s\S]*align-items: center/);
   assert.match(workspaceStyles, /\.compactDetailActions[\s\S]*align-items: center/);
@@ -384,6 +472,26 @@ test("logistics suppliers can edit price and quantity before audit approval", ()
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID/);
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_QUANTITY_INVALID/);
   assert.match(backend, /第 \$\{index \+ 1\} 行/);
+});
+
+test("logistics expense bills use compact table and drawer instead of nested table details", () => {
+  assert.match(logisticsModule, /function LogisticsExpenseCompactRow/);
+  assert.match(logisticsModule, /<SideDetailDrawer[\s\S]*surfaceClassName=\{styles\.logisticsExpenseDrawer\}/);
+  assert.match(logisticsModule, /订单号[\s\S]*提单号[\s\S]*柜型[\s\S]*客户[\s\S]*金额[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
+  assert.match(logisticsModule, /tabs=\{\[[\s\S]*基础信息[\s\S]*费用明细[\s\S]*发票管理[\s\S]*操作记录/);
+  assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
+  assert.match(logisticsModule, /LogisticsBillContainerInfo summary=\{containerSummary\} expense=\{expense\}/);
+  assert.match(logisticsModule, /柜型：/);
+  assert.match(logisticsModule, /柜号：/);
+  assert.match(logisticsModule, /装货港：/);
+  assert.doesNotMatch(logisticsModule, /className=\{styles\.detailRow\}/);
+  assert.doesNotMatch(logisticsModule, /<tr className=\{styles\.detailRow\}>/);
+  assert.match(workspaceStyles, /\.logisticsCompactTable/);
+  assert.match(workspaceStyles, /\.logisticsCompactTable tbody td[\s\S]*height: 44px/);
+  assert.match(workspaceStyles, /\.logisticsCompactTable thead th[\s\S]*position: sticky/);
+  assert.match(workspaceStyles, /\.logisticsExpenseDrawer[\s\S]*width: min\(1200px, 94vw\)/);
+  assert.match(workspaceStyles, /\.logisticsDrawerSection/);
+  assert.match(workspaceStyles, /\.logisticsContainerInfoCard[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
 });
 
 test("logistics expense bill details can add create and delete rows through one local batch save", () => {
