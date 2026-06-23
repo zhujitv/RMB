@@ -2737,7 +2737,6 @@ function notificationTemplatePreview(form: NotificationTemplateForm) {
     "   请分别上传：",
     "   - 港杂费发票",
     "   - 拖车及其他费用合并发票",
-    "   备注：2650*1",
   ].join("\n");
   const variables: Record<string, string> = {
     supplierName: "浙江迈奇克国际货运代理有限公司",

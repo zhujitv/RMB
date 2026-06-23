@@ -199,7 +199,6 @@ function defaultBillRows(bills = []) {
       detailLines,
       "   请分别上传：",
       invoiceGroups,
-      `   备注：${variables.remark}`,
     ].join("\n");
   }).join("\n\n");
 }

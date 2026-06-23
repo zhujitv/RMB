@@ -328,6 +328,8 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /费用合计：/);
   assert.match(backend, /费用明细：/);
   assert.match(backend, /请分别上传：/);
+  assert.doesNotMatch(backend, /备注：\$\{variables\.remark\}/);
+  assert.doesNotMatch(settingsModule, /"   备注：2650\*1"/);
   assert.match(backend, /报关费、港杂费、海运费必须分别开票上传。/);
   assert.match(backend, /拖车费、进港费、提箱费、落箱费、预提费、查验费、超重费、保险费和其他物流费用可合并/);
   assert.match(backend, /发票上传入口/);
