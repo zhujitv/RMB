@@ -140,10 +140,6 @@ export function serializeLogisticsExpense(expense = {}) {
     rejectedAt: expense.auditStatus === "已驳回" ? (expense.reviewedAt || null) : null,
     reviewRemark: expense.reviewRemark || "",
     rejectReason: expense.rejectReason || "",
-    invoiceNo: expense.invoiceNo || "",
-    invoiceDate: dateToInput(expense.invoiceDate),
-    invoiceAmount: expense.invoiceAmount == null ? "" : Number(expense.invoiceAmount),
-    invoiceRemark: expense.invoiceRemark || "",
     invoiceNotifiedAt: expense.invoiceNotifiedAt || null,
     invoiceNotificationError: expense.invoiceNotificationError || "",
     invoiceDocument,
@@ -213,7 +209,6 @@ export function logisticsExpenseInvoiceGroups(items = []) {
       failed,
       notified,
       invoiceDocumentId: groupItems.find((item) => item.invoiceDocumentId)?.invoiceDocumentId || "",
-      invoiceNo: groupItems.find((item) => item.invoiceNo)?.invoiceNo || "",
       invoiceNotificationError: groupItems.map((item) => item.invoiceNotificationError || "").find(Boolean) || "",
     };
   });

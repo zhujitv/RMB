@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const backend = [
@@ -37,13 +37,16 @@ const migration = readFileSync("prisma/migrations/20260612190000_logistics_expen
 const containerCountMigration = readFileSync("prisma/migrations/20260622100000_logistics_expense_container_count/migration.sql", "utf8");
 const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233000_logistics_expense_invoice_notification/migration.sql", "utf8");
 const invoiceGroupMigration = readFileSync("prisma/migrations/20260623073000_logistics_invoice_group_uploads/migration.sql", "utf8");
+const removeInvoiceManualFieldsMigration = readFileSync("prisma/migrations/20260623194500_remove_logistics_invoice_manual_fields/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
 const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
+const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction StatusPill/)?.[0] || "";
 const backendAggregateStatusSource = backend.match(/export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/)?.[0] || "";
 const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
+const logisticsInvoiceRoute = readFileSync("app/api/logistics-costs/[id]/invoice/route.ts", "utf8");
 const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
 const logisticsExpenseDeleteRoute = readFileSync("app/api/logistics-expenses/[id]/route.ts", "utf8");
 const logisticsExpenseBatchRoute = readFileSync("app/api/logistics-expenses/batch-update/route.ts", "utf8");
@@ -65,6 +68,7 @@ test("logistics expenses are stored outside official costs until approved", () =
   assert.match(schema, /invoiceNotifiedAt\s+DateTime\?\s+@map\("invoice_notified_at"\)/);
   assert.match(schema, /invoiceNotificationError\s+String\?\s+@map\("invoice_notification_error"\)/);
   assert.match(schema, /invoiceDocumentId\s+String\?\s+@map\("invoice_document_id"\)/);
+  assert.doesNotMatch(schema, /\binvoiceNo\b|\binvoiceDate\b|\binvoiceAmount\b|\binvoiceRemark\b|invoiceSellerName|invoiceBuyerName|invoiceRecognitionStatus|invoiceRecognitionMessage|invoiceRecognizedAt/);
   assert.match(schema, /@@index\(\[invoiceDocumentId\]\)/);
   assert.match(schema, /model OrderCost[\s\S]*sourceType\s+String\s+@default\("MANUAL"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "logistics_expenses"/);
@@ -73,6 +77,10 @@ test("logistics expenses are stored outside official costs until approved", () =
   assert.match(invoiceGroupMigration, /ADD COLUMN IF NOT EXISTS "invoice_notification_error"/);
   assert.match(invoiceGroupMigration, /DROP INDEX IF EXISTS "logistics_expenses_invoice_document_id_key"/);
   assert.match(invoiceGroupMigration, /logistics_expenses_invoice_document_id_idx/);
+  assert.match(removeInvoiceManualFieldsMigration, /DROP COLUMN IF EXISTS "invoice_no"/);
+  assert.match(removeInvoiceManualFieldsMigration, /DROP COLUMN IF EXISTS "invoice_recognition_status"/);
+  assert.equal(existsSync("lib/logistics-invoice-parser.ts"), false);
+  assert.equal(existsSync("prisma/migrations/20260623193000_logistics_invoice_recognition/migration.sql"), false);
 });
 
 test("approval generates official costs with source tracking", () => {
@@ -128,7 +136,7 @@ test("supplier settings include logistics expense and invoice permissions", () =
 test("invoice upload and confirmation workflow is present", () => {
   assert.match(backend, /uploadLogisticsExpenseInvoice/);
   assert.match(backend, /confirmLogisticsExpenseInvoice/);
-  assert.match(backend, /LOGISTICS_INVOICE_AMOUNT_EXCEEDS_APPROVED/);
+  assert.doesNotMatch(backend, /LOGISTICS_INVOICE_AMOUNT_EXCEEDS_APPROVED|LOGISTICS_INVOICE_FORCE_REASON_REQUIRED/);
   assert.match(logisticsModule, /invoiceStatus/);
   assert.match(logisticsModule, /已上传发票/);
   assert.match(logisticsModule, /已确认发票/);
@@ -276,9 +284,20 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(backend, /invoiceDocumentId: document\.id/);
   assert.match(backend, /invoiceStatus: "已上传"/);
   assert.match(backend, /paymentStatus: "已开票"/);
+  assert.doesNotMatch(backend, /recognizeLogisticsInvoicePdfBuffer|invoiceRecognition|invoiceSellerName|invoiceBuyerName|invoiceRecognizedAt/);
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
   assert.match(logisticsModule, /按费用类型分组上传，同一分组上传一次即可。/);
+  assert.match(logisticsModule, /已上传文件列表/);
+  assert.match(logisticsModule, /documents\/preview/);
+  assert.match(logisticsInvoiceRoute, /export async function DELETE/);
+  assert.match(backend, /export async function deleteLogisticsExpenseInvoice/);
+  assert.match(backend, /invoiceDocumentId: null/);
   assert.match(logisticsModule, /body\.set\("invoiceGroup", group\.key\)/);
+  assert.match(invoiceUploadFormSource, /type="file"/);
+  assert.match(invoiceUploadFormSource, /上传发票/);
+  assert.doesNotMatch(invoiceUploadFormSource, /body\.set\("invoiceNo"|body\.set\("invoiceDate"|body\.set\("invoiceAmount"|body\.set\("remark"/);
+  assert.doesNotMatch(logisticsModule, /发票号：|开票日期：|识别金额：|销售方：|购买方：|自动识别中|识别成功|识别失败/);
+  assert.doesNotMatch(backend, /requireText\(formData\.get\("invoiceNo"\)|requirePositive\(formData\.get\("invoiceAmount"\)|请选择开票日期/);
   assert.match(logisticsModule, /onInvoiceUploaded=\{\(result\) =>/);
   assert.match(logisticsModule, /applyLogisticsExpenseMutationResult\(result\)/);
   assert.match(workspaceStyles, /\.logisticsInvoiceGroupsPanel/);
@@ -476,6 +495,9 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
 
 test("logistics expense bills use compact table and drawer instead of nested table details", () => {
   assert.match(logisticsModule, /function LogisticsExpenseCompactRow/);
+  assert.match(logisticsModule, /defaultLogisticsExpenseDetailTab/);
+  assert.match(logisticsModule, /setActiveTab\(defaultTab\)/);
+  assert.match(logisticsModule, /if \(normalizedAuditStatus === "审核通过"\) return "invoice"/);
   assert.match(logisticsModule, /<SideDetailDrawer[\s\S]*surfaceClassName=\{styles\.logisticsExpenseDrawer\}/);
   assert.match(logisticsModule, /订单号[\s\S]*提单号[\s\S]*柜型[\s\S]*客户[\s\S]*金额[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
   assert.match(logisticsModule, /tabs=\{\[[\s\S]*基础信息[\s\S]*费用明细[\s\S]*发票管理[\s\S]*操作记录/);

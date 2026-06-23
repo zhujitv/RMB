@@ -317,7 +317,7 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
     });
     await runNonCriticalTask("物流发票上传日志写入", () => writeAudit(request, actor, "上传物流发票", "order_documents", document.id, null, {
       logisticsExpenseId: expense.id,
-      invoiceNo: metadata.invoiceNo || "",
+      invoiceGroup: metadata.invoiceGroup || "",
       fileName: standardFilename,
     }));
     return document;

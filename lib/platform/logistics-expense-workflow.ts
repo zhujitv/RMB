@@ -12,8 +12,6 @@ import {
   validEmail,
   writeAudit,
   codedError,
-  dateFromInput,
-  requirePositive,
 } from "./shared";
 import {
   assertCanConfirmLogisticsInvoice,
@@ -842,14 +840,9 @@ export async function uploadLogisticsExpenseInvoice(request, actor, id, formData
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用，不能上传该分组发票。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
   const blocked = targetRows.find((row) => row.auditStatus !== "审核通过" || !row.costId);
   if (blocked) throw codedError("该发票分组包含尚未审核生成正式成本的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_COST_MISSING");
-  const invoiceNo = requireText(formData.get("invoiceNo"), "发票号码");
-  const invoiceDate = dateFromInput(formData.get("invoiceDate"));
-  if (!invoiceDate) throw codedError("请选择开票日期。", 400, "INVOICE_DATE_REQUIRED");
-  const invoiceAmount = requirePositive(formData.get("invoiceAmount"), "发票金额");
   const file = formData.get("file");
   if (!file || typeof file.arrayBuffer !== "function") throw codedError("请上传发票 PDF。", 400, "INVOICE_FILE_REQUIRED");
   const document = await createLogisticsInvoiceDocument(request, actor, before, file, {
-    invoiceNo,
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
   });
@@ -859,10 +852,6 @@ export async function uploadLogisticsExpenseInvoice(request, actor, id, formData
     const saved = await prisma.logisticsExpense.update({
       where: { id: row.id },
       data: {
-        invoiceNo,
-        invoiceDate,
-        invoiceAmount: row.amount,
-        invoiceRemark: optional(formData.get("remark")),
         invoiceDocumentId: document.id,
         invoiceStatus: "已上传",
         paymentStatus: "已开票",
@@ -879,8 +868,6 @@ export async function uploadLogisticsExpenseInvoice(request, actor, id, formData
   await runNonCriticalTask("物流发票上传状态日志写入", () => writeAudit(request, actor, "提交物流分组发票", "logistics_expenses", logisticsExpenseBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
-    invoiceNo,
-    invoiceAmount,
     documentId: document.id,
     updatedIds: savedRows.map((row) => row.id),
   }));
@@ -894,20 +881,71 @@ export async function uploadLogisticsExpenseInvoice(request, actor, id, formData
   };
 }
 
+export async function deleteLogisticsExpenseInvoice(request, actor, id, input = {}) {
+  const before = await loadLogisticsExpenseForAction(id, actor);
+  if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限删除该物流费用发票", 403);
+  const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
+  const fallbackGroup = logisticsInvoiceGroupForCostType(before.costType);
+  const invoiceGroup = requestedGroup || fallbackGroup;
+  if (!invoiceGroup) throw codedError("请选择有效发票分组。", 400, "LOGISTICS_INVOICE_GROUP_INVALID");
+  const targetRows = rows.filter((row) => invoiceGroup.costTypes.includes(normalizedCostType(row.costType)));
+  if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
+  if (targetRows.some((row) => row.invoiceStatus === "已确认" || row.invoiceConfirmedAt)) {
+    throw codedError("已确认发票不能删除。", 400, "LOGISTICS_INVOICE_CONFIRMED_DELETE_BLOCKED");
+  }
+  const documentId = optional(input.documentId) || targetRows.find((row) => row.invoiceDocumentId)?.invoiceDocumentId || "";
+  if (!documentId) throw codedError("当前分组没有已上传发票。", 404, "LOGISTICS_INVOICE_DOCUMENT_NOT_FOUND");
+  const targetDocumentRows = targetRows.filter((row) => row.invoiceDocumentId === documentId);
+  if (!targetDocumentRows.length) throw codedError("该发票文件不属于当前账单分组。", 400, "LOGISTICS_INVOICE_DOCUMENT_SCOPE_INVALID");
+  const document = await prisma.orderDocument.findUnique({ where: { id: documentId } });
+  if (!document || document.deletedAt) throw codedError("发票文件不存在或已删除。", 404, "LOGISTICS_INVOICE_DOCUMENT_NOT_FOUND");
+  const uploadedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.orderDocument.update({
+      where: { id: documentId },
+      data: { deletedAt: uploadedAt },
+    });
+    for (const row of targetDocumentRows) {
+      await tx.logisticsExpense.update({
+        where: { id: row.id },
+        data: {
+          invoiceDocumentId: null,
+          invoiceUploadedById: null,
+          invoiceUploadedAt: null,
+          invoiceStatus: row.invoiceNotifiedAt ? "已通知开票" : "待开票",
+          paymentStatus: "待开票",
+          updatedById: actor.id,
+        },
+      });
+      if (row.costId) {
+        await tx.orderCost.update({ where: { id: row.costId }, data: { invoiceStatus: "未收到" } }).catch(() => null);
+      }
+    }
+  });
+  const savedRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  await runNonCriticalTask("物流发票删除状态日志写入", () => writeAudit(request, actor, "删除物流分组发票", "logistics_expenses", logisticsExpenseBillId(before), targetRows.map(serializeLogisticsExpense), {
+    invoiceGroup: invoiceGroup.key,
+    invoiceGroupLabel: invoiceGroup.label,
+    documentId,
+    updatedIds: targetDocumentRows.map((row) => row.id),
+  }));
+  for (const orderId of [...new Set(targetDocumentRows.map((row) => row.orderId).filter(Boolean))]) {
+    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+  }
+  return {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    expenses: savedRows.map(serializeLogisticsExpense),
+    invoiceGroup: invoiceGroup.key,
+  };
+}
+
 export async function confirmLogisticsExpenseInvoice(request, actor, id, input = {}) {
   assertCanConfirmLogisticsInvoice(actor);
   const before = await loadLogisticsExpenseForAction(id, actor);
   if (before.invoiceStatus !== "已上传") throw codedError("只有已上传发票的物流费用可以确认。", 400, "LOGISTICS_INVOICE_NOT_UPLOADED");
   if (!before.invoiceDocumentId) throw codedError("发票文件不能为空。", 400, "LOGISTICS_INVOICE_FILE_REQUIRED");
-  const invoiceAmount = Number(before.invoiceAmount || 0);
-  const approvedAmount = Number(before.amount || 0);
   const forceConfirmReason = optional(input.forceConfirmReason || input.reason);
-  if (invoiceAmount > approvedAmount && actor.role !== "管理员") {
-    throw codedError("发票金额不能大于审核通过金额，请联系管理员处理。", 400, "LOGISTICS_INVOICE_AMOUNT_EXCEEDS_APPROVED");
-  }
-  if (invoiceAmount > approvedAmount && !forceConfirmReason) {
-    throw codedError("发票金额大于审核通过金额，管理员强制确认必须填写原因。", 400, "LOGISTICS_INVOICE_FORCE_REASON_REQUIRED");
-  }
   const saved = await prisma.logisticsExpense.update({
     where: { id },
     data: {

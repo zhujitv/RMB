@@ -91,10 +91,6 @@ type LogisticsExpense = {
   rejectedAt?: string | null;
   reviewRemark?: string;
   rejectReason?: string;
-  invoiceNo?: string;
-  invoiceDate?: string;
-  invoiceAmount?: number | "";
-  invoiceRemark?: string;
   invoiceNotifiedAt?: string | null;
   invoiceNotificationError?: string;
   invoiceDocumentId?: string;
@@ -122,7 +118,6 @@ type LogisticsInvoiceGroupSummary = {
   failed?: boolean;
   notified?: boolean;
   invoiceDocumentId?: string;
-  invoiceNo?: string;
   invoiceNotificationError?: string;
 };
 
@@ -1033,19 +1028,24 @@ function LogisticsExpenseRows({
   const containerSummary = logisticsExpenseContainerSummary(expense, items);
   const canReviewBill = canReview && logisticsExpenseBillCanApprove(expense);
   const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
+  const defaultTab = defaultLogisticsExpenseDetailTab({
+    auditStatus,
+    invoiceStatus,
+    paymentStatus,
+  });
   const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
   const [deletedExpenseIds, setDeletedExpenseIds] = useState<string[]>([]);
   const [billSaved, setBillSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(defaultTab);
   useEffect(() => {
     setDrafts(logisticsExpenseDraftsFromItems(items));
     setNewExpenseRows([]);
     setDeletedExpenseIds([]);
   }, [itemsSignature]);
   useEffect(() => {
-    setActiveTab("details");
-  }, [expense.id]);
+    setActiveTab(defaultTab);
+  }, [expense.id, defaultTab]);
   const persistedEditingRows = items.filter((item) => !deletedExpenseIds.includes(item.id));
   const editingExpenseRows = [...persistedEditingRows, ...newExpenseRows];
   const changedItems = persistedEditingRows.filter((item) => logisticsExpenseDraftChanged(item, drafts[item.id]));
@@ -1943,9 +1943,35 @@ function LogisticsInvoiceGroupsPanel({
   canUploadInvoice: boolean;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
 }) {
+  const [deletingGroupKey, setDeletingGroupKey] = useState("");
+  const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
   const visibleGroups = groups.filter((group) => (group.itemIds?.length || 0) > 0 || Number(group.amountCny || 0) > 0);
   const approvedItems = items.filter((item) => item.auditStatus === "审核通过");
   if (!visibleGroups.length || !approvedItems.length) return null;
+
+  async function deleteInvoiceGroup(targetExpense: LogisticsExpense, group: LogisticsInvoiceGroupSummary) {
+    if (!group.invoiceDocumentId) return;
+    if (!window.confirm("确定删除该发票文件？删除后需要重新上传。")) return;
+    setDeletingGroupKey(group.key);
+    setGroupMessage((current) => ({ ...current, [group.key]: "" }));
+    try {
+      const response = await fetch(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}/invoice`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceGroup: group.key, documentId: group.invoiceDocumentId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success !== true) throw new Error(result.message || "删除发票失败");
+      setGroupMessage((current) => ({ ...current, [group.key]: "已删除发票" }));
+      onUploaded(result);
+    } catch (error) {
+      setGroupMessage((current) => ({ ...current, [group.key]: error instanceof Error ? error.message : "删除发票失败" }));
+    } finally {
+      setDeletingGroupKey("");
+    }
+  }
+
   return (
     <div className={styles.logisticsInvoiceGroupsPanel}>
       <div className={styles.logisticsInvoiceGroupsHeader}>
@@ -1960,11 +1986,19 @@ function LogisticsInvoiceGroupsPanel({
           const targetExpense = groupItems[0] || expense;
           const uploaded = Boolean(group.uploaded || group.status === "已上传" || group.status === "已确认");
           const confirmed = Boolean(group.confirmed || group.status === "已确认");
+          const invoiceDocument = groupItems.map((item) => item.invoiceDocument).find((document) => document?.id) || null;
+          const uploadedByName = invoiceDocument?.uploadedBy?.name
+            || groupItems.map((item) => item.invoiceUploadedBy?.name || "").find(Boolean)
+            || "-";
+          const uploadedAt = invoiceDocument?.uploadedAt
+            || groupItems.map((item) => item.invoiceUploadedAt || "").find(Boolean)
+            || "";
           const canUploadGroup = canUploadInvoice
             && groupItems.length > 0
             && groupItems.every((item) => item.auditStatus === "审核通过")
             && !uploaded
             && !confirmed;
+          const canDeleteGroup = canUploadInvoice && uploaded && !confirmed && Boolean(group.invoiceDocumentId);
           return (
             <div className={styles.logisticsInvoiceGroupCard} key={group.key}>
               <div className={styles.logisticsInvoiceGroupTitle}>
@@ -1974,12 +2008,37 @@ function LogisticsInvoiceGroupsPanel({
               <div className={styles.logisticsInvoiceGroupMeta}>
                 <span>包含费用：{(group.costTypes || []).join(" / ") || "-"}</span>
                 <span>分组合计：{formatCny(group.amountCny || groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0))}</span>
-                {group.invoiceNo ? <span>发票号：{group.invoiceNo}</span> : null}
                 {group.invoiceNotificationError ? <span className={styles.logisticsInvoiceGroupError}>{group.invoiceNotificationError}</span> : null}
               </div>
+              {uploaded ? (
+                <div className={styles.logisticsInvoiceFileList}>
+                  <strong>已上传文件列表</strong>
+                  <div className={styles.logisticsInvoiceFileRow}>
+                    <span className={styles.logisticsInvoiceFileName} title={invoiceDocument?.fileName || invoiceDocument?.originalFilename || "物流发票.pdf"}>
+                      {invoiceDocument?.fileName || invoiceDocument?.originalFilename || "物流发票.pdf"}
+                    </span>
+                    <span>上传人：{uploadedByName}</span>
+                    <span>上传时间：{uploadedAt ? formatDateTime(uploadedAt) : "-"}</span>
+                    {group.invoiceDocumentId ? (
+                      <a className={styles.fileActionButton} href={`/documents/preview/${encodeURIComponent(group.invoiceDocumentId)}`} target="_blank" rel="noreferrer">预览</a>
+                    ) : null}
+                    {canDeleteGroup ? (
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        disabled={deletingGroupKey === group.key}
+                        onClick={() => deleteInvoiceGroup(targetExpense, group)}
+                      >
+                        {deletingGroupKey === group.key ? "删除中..." : "删除"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
               {canUploadGroup ? (
                 <InvoiceUploadForm expense={targetExpense} group={group} onUploaded={onUploaded} />
               ) : null}
+              {groupMessage[group.key] ? <span className={styles.inlineFormMessage}>{groupMessage[group.key]}</span> : null}
             </div>
           );
         })}
@@ -1997,30 +2056,12 @@ function InvoiceUploadForm({
   group: LogisticsInvoiceGroupSummary;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
 }) {
-  const [invoiceNo, setInvoiceNo] = useState(expense.invoiceNo || "");
-  const [invoiceDate, setInvoiceDate] = useState(expense.invoiceDate || new Date().toISOString().slice(0, 10));
-  const [invoiceAmount, setInvoiceAmount] = useState(
-    editableNumberText(group.amountCny || expense.invoiceAmount || expense.amountCny || expense.amount || ""),
-  );
-  const [remark, setRemark] = useState(expense.invoiceRemark || "");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
   async function uploadInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!invoiceNo.trim()) {
-      setMessage("请填写发票号码");
-      return;
-    }
-    if (!invoiceDate) {
-      setMessage("请选择开票日期");
-      return;
-    }
-    if (!Number(invoiceAmount)) {
-      setMessage("请填写发票金额");
-      return;
-    }
     if (!file) {
       setMessage("请选择发票文件");
       return;
@@ -2033,11 +2074,7 @@ function InvoiceUploadForm({
     setMessage("");
     try {
       const body = new FormData();
-      body.set("invoiceNo", invoiceNo.trim());
-      body.set("invoiceDate", invoiceDate);
-      body.set("invoiceAmount", invoiceAmount);
       body.set("invoiceGroup", group.key);
-      body.set("remark", remark.trim());
       body.set("file", file);
       const response = await fetch(`/api/logistics-costs/${encodeURIComponent(expense.id)}/invoice`, {
         method: "POST",
@@ -2058,11 +2095,7 @@ function InvoiceUploadForm({
 
   return (
     <form className={styles.inlineInvoiceForm} onSubmit={uploadInvoice}>
-      <input value={invoiceNo} onChange={(event) => setInvoiceNo(event.target.value)} placeholder="发票号码" aria-label={`${group.label}发票号码`} />
-      <input value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} type="date" aria-label={`${group.label}开票日期`} />
-      <input value={invoiceAmount} onChange={(event) => setInvoiceAmount(event.target.value)} inputMode="decimal" placeholder="发票金额" aria-label={`${group.label}发票金额`} />
-      <input value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="发票备注" aria-label={`${group.label}发票备注`} />
-      <input type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+      <input type="file" accept="application/pdf,.pdf" aria-label={`${group.label}选择发票文件`} onChange={(event) => setFile(event.target.files?.[0] || null)} />
       <button className={styles.secondaryButton} type="submit" disabled={uploading}>{uploading ? "上传中..." : "上传发票"}</button>
       {message ? <span className={styles.inlineFormMessage}>{message}</span> : null}
     </form>
@@ -2482,7 +2515,6 @@ function logisticsInvoiceGroupsForBill(items: LogisticsExpense[]): LogisticsInvo
       failed,
       notified,
       invoiceDocumentId: groupItems.find((item) => item.invoiceDocumentId)?.invoiceDocumentId || "",
-      invoiceNo: groupItems.find((item) => item.invoiceNo)?.invoiceNo || "",
       invoiceNotificationError: groupItems.map((item) => item.invoiceNotificationError || "").find(Boolean) || "",
     };
   });
@@ -2500,6 +2532,26 @@ function aggregateClientLogisticsInvoiceStatus(items: LogisticsExpense[]) {
 
 function logisticsExpenseBillItems(expense: LogisticsExpense) {
   return expense.items?.length ? expense.items : [expense];
+}
+
+function defaultLogisticsExpenseDetailTab({
+  auditStatus,
+  invoiceStatus,
+  paymentStatus,
+}: {
+  auditStatus?: string;
+  invoiceStatus?: string;
+  paymentStatus?: string;
+}) {
+  const normalizedAuditStatus = auditStatus || "草稿";
+  const normalizedInvoiceStatus = invoiceStatus || "待开票";
+  const normalizedPaymentStatus = paymentStatus || "待开票";
+  if (["草稿", "已驳回"].includes(normalizedAuditStatus)) return "details";
+  if (normalizedAuditStatus === "待审核") return "basic";
+  if (normalizedAuditStatus === "审核通过") return "invoice";
+  if (["待开票", "已通知开票", "部分上传发票", "已上传发票", "已确认", "已确认发票", "待开票 / 通知失败"].includes(normalizedInvoiceStatus)) return "invoice";
+  if (["已付款", "部分付款"].includes(normalizedPaymentStatus)) return "invoice";
+  return "details";
 }
 
 function logisticsExpenseBillAuditStatus(items: LogisticsExpense[]) {

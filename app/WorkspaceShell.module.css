@@ -2454,6 +2454,41 @@
   color: #b91c1c;
 }
 
+.logisticsInvoiceFileList {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceFileList strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceFileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+
+.logisticsInvoiceFileName {
+  max-width: 220px;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 980px) {
   .logisticsInvoiceGroupsGrid {
     grid-template-columns: 1fr;
