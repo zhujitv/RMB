@@ -182,6 +182,18 @@ test("logistics expense entry prevents Enter-triggered submit and row creation",
   assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => void uploadInvoice\(\)\}/);
 });
 
+test("logistics expense entry grid keeps compact fixed columns", () => {
+  assert.match(workspaceStyles, /\.logisticsItemsTable \{[\s\S]*overflow-x: auto;[\s\S]*table-layout: fixed;/);
+  assert.match(workspaceStyles, /\.logisticsItemsHead,\n\.logisticsItemsRow \{[\s\S]*grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow input,\n\.logisticsItemsRow select \{[\s\S]*height: 32px;[\s\S]*max-width: 100%;[\s\S]*box-sizing: border-box;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > select:nth-of-type\(2\) \{[\s\S]*width: 72px;[\s\S]*min-width: 72px;[\s\S]*max-width: 72px;[\s\S]*padding-right: 22px;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(2\) \{[\s\S]*width: 80px;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(3\) \{[\s\S]*width: 110px;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(5\) \{[\s\S]*width: 80px;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > strong:nth-child\(6\) \{[\s\S]*width: 110px;[\s\S]*text-overflow: ellipsis;/);
+  assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(8\) \{[\s\S]*width: 80px;/);
+});
+
 test("approval sends invoice notification and preserves failure for audit", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);
@@ -411,7 +423,11 @@ test("withdraw and invoice notification mutations keep current logistics bill ex
   assert.match(logisticsCostRoute, /resendLogisticsExpenseInvoiceNotice/);
   assert.match(logisticsCostRoute, /message: "物流费用账单已撤回为草稿"/);
   assert.match(logisticsCostRoute, /\(body\.action \|\| ""\) === "withdraw"/);
+  assert.match(backend, /const billAuditStatus = aggregateLogisticsExpenseStatus\(rows, "auditStatus"\)/);
+  assert.doesNotMatch(backend.match(/export async function withdrawLogisticsExpenseBill[\s\S]*?\nexport async function submitLogisticsExpenseBill/)?.[0] || "", /rows\.find\(\(row\) => row\.auditStatus !== "待审核"\)/);
+  assert.match(backend, /\[logistics-expense\.withdraw\]/);
   assert.match(withdrawExpenseSource, /applyLogisticsExpenseMutationResult\(result\)/);
+  assert.match(withdrawExpenseSource, /action: "withdraw"/);
   assert.match(withdrawExpenseSource, /确认撤回该物流费用账单/);
   assert.match(withdrawExpenseSource, /账单下所有费用明细将同步回草稿/);
   assert.doesNotMatch(withdrawExpenseSource, /loadExpenses\(/);

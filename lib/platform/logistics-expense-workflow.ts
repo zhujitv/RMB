@@ -493,8 +493,24 @@ export async function withdrawLogisticsExpenseBill(request, actor, identifier) {
   assertCanWriteLogisticsExpense(actor);
   const rows = await loadLogisticsExpenseBillRowsForSubmit(identifier, actor);
   if (!rows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
-  const blocked = rows.find((row) => row.auditStatus !== "待审核");
-  if (blocked) throw codedError("只有待审核费用可以撤回。", 400, "LOGISTICS_EXPENSE_WITHDRAW_NOT_ALLOWED");
+  const billAuditStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
+  const billInvoiceStatus = aggregateLogisticsExpenseStatus(rows, "invoiceStatus");
+  const billId = logisticsExpenseBillId(rows[0]);
+  const canWithdraw = billAuditStatus === "待审核";
+  console.info("[logistics-expense.withdraw]", {
+    billId,
+    identifier,
+    status: billAuditStatus,
+    auditStatus: billAuditStatus,
+    invoiceStatus: billInvoiceStatus,
+    userId: actor?.id || "",
+    userRole: actor?.role || "",
+    canWithdraw,
+    reason: canWithdraw ? "账单主状态为待审核，允许撤回" : `账单主状态为${billAuditStatus || "未知"}，不能撤回`,
+  });
+  if (!canWithdraw) {
+    throw codedError(`只有待审核账单可以撤回。当前账单状态：${billAuditStatus || "未知"}。`, 400, "LOGISTICS_EXPENSE_WITHDRAW_NOT_ALLOWED");
+  }
   const ids = rows.map((row) => row.id).filter(Boolean);
   await prisma.logisticsExpense.updateMany({
     where: {
@@ -509,7 +525,7 @@ export async function withdrawLogisticsExpenseBill(request, actor, identifier) {
     },
   });
   const savedRows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
-  void runNonCriticalTask("物流费用账单撤回日志写入", () => writeAudit(request, actor, "撤回物流费用账单", "logistics_expenses", logisticsExpenseBillId(rows[0]), rows.map(serializeLogisticsExpense), {
+  void runNonCriticalTask("物流费用账单撤回日志写入", () => writeAudit(request, actor, "撤回物流费用账单", "logistics_expenses", billId, rows.map(serializeLogisticsExpense), {
     bill: serializeLogisticsExpenseBill(savedRows),
     updatedIds: ids,
   }));
@@ -853,6 +869,8 @@ function logisticsExpenseSubmitSelect() {
     orderId: true,
     supplierId: true,
     auditStatus: true,
+    invoiceStatus: true,
+    paymentStatus: true,
     submittedAt: true,
     order: {
       select: {

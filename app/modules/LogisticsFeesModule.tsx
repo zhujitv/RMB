@@ -568,7 +568,8 @@ export function LogisticsFeesModule({
     setNotice("");
     try {
       const result = await apiJson<LogisticsExpenseMutationResult>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
-        method: "DELETE",
+        method: "PATCH",
+        body: JSON.stringify({ action: "withdraw" }),
       });
       if (result.success !== true) throw new Error(result.message || "撤回物流费用账单失败");
       applyLogisticsExpenseMutationResult(result);

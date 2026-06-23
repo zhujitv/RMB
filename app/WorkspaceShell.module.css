@@ -6536,3 +6536,102 @@
   font-size: 13px;
   font-weight: var(--font-weight-body);
 }
+
+.logisticsItemsTable {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  table-layout: fixed;
+}
+
+.logisticsItemsHead,
+.logisticsItemsRow {
+  grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;
+  min-width: 936px;
+  box-sizing: border-box;
+}
+
+.logisticsItemsHead {
+  display: grid;
+  padding: 0 8px;
+}
+
+.logisticsItemsRow {
+  overflow: hidden;
+}
+
+.logisticsItemsRow > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.logisticsItemsRow input,
+.logisticsItemsRow select {
+  height: 32px;
+  min-height: 32px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.logisticsItemsRow > :nth-child(2) {
+  width: 80px;
+  justify-self: center;
+}
+
+.logisticsItemsRow > :nth-child(3) {
+  width: 110px;
+  justify-self: end;
+}
+
+.logisticsItemsRow > select:nth-of-type(2) {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  padding-right: 22px;
+  font-size: 13px;
+  justify-self: center;
+  background-position: right 6px center;
+  background-size: 14px 14px;
+}
+
+.logisticsTypographyScope .logisticsItemsRow > select:nth-of-type(2) {
+  padding: 0 8px;
+  padding-right: 22px;
+}
+
+.logisticsItemsRow > :nth-child(5) {
+  width: 80px;
+  justify-self: center;
+}
+
+.logisticsItemsRow > strong:nth-child(6) {
+  width: 110px;
+  justify-self: end;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.logisticsItemsRow > :nth-child(8) {
+  width: 80px;
+  justify-self: center;
+}
