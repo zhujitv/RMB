@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
-import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
+import { ConfirmationDialog, CurrencyTotalsDisplay, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import type { CurrencyTotals } from "../../lib/platform/currency-totals";
+import { formatCny, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
@@ -58,6 +59,8 @@ type PaymentsResponse = {
 type PaymentSummary = {
   arrivedAmountCny?: number;
   pendingAmountCny?: number;
+  arrivedCurrencyTotals?: CurrencyTotals;
+  pendingCurrencyTotals?: CurrencyTotals;
   currentMonthCount?: number;
 };
 
@@ -75,12 +78,14 @@ type PaymentOrderOption = {
   finalReceivableAmount?: number;
   finalReceivableAmountCny?: number;
   receivedAmountCny?: number;
+  receivedAmount?: number;
   outstandingAmount?: number;
   outstandingCny?: number;
   summary?: {
     receivableAmount?: number;
     receivableCny?: number;
     confirmedPaymentsCny?: number;
+    confirmedPaymentsAmount?: number;
     outstandingAmount?: number;
     outstandingCny?: number;
   };
@@ -180,13 +185,27 @@ export function PaymentsModule({
   const summaryCards = useMemo(() => ([
     {
       label: "已到账金额",
-      value: formatCny(Number(summary.arrivedAmountCny || 0)),
+      value: (
+        <CurrencyTotalsDisplay
+          summary={summary.arrivedCurrencyTotals || { cnyActual: Number(summary.arrivedAmountCny || 0), foreignTotals: [], totalCny: Number(summary.arrivedAmountCny || 0) }}
+          cnyLabel="人民币实际已到账"
+          foreignLabel={(currency) => `${currency} 实际已到账`}
+          totalLabel="折人民币到账总额"
+        />
+      ),
       note: "只统计已到账收款",
       tone: styles.metricGreen,
     },
     {
       label: "待确认金额",
-      value: formatCny(Number(summary.pendingAmountCny || 0)),
+      value: (
+        <CurrencyTotalsDisplay
+          summary={summary.pendingCurrencyTotals || { cnyActual: Number(summary.pendingAmountCny || 0), foreignTotals: [], totalCny: Number(summary.pendingAmountCny || 0) }}
+          cnyLabel="人民币实际待确认"
+          foreignLabel={(currency) => `${currency} 实际待确认`}
+          totalLabel="折人民币待确认总额"
+        />
+      ),
       note: "待确认不计入经营数据",
       tone: styles.metricOrange,
     },
@@ -344,7 +363,7 @@ export function PaymentsModule({
         {summaryCards.map((card) => (
           <article key={card.label} className={`${styles.metricCard} ${card.tone}`}>
             <span>{card.label}</span>
-            <strong>{card.value}</strong>
+            {typeof card.value === "string" ? <strong>{card.value}</strong> : <div className={styles.metricValue}>{card.value}</div>}
             <small>{card.note}</small>
           </article>
         ))}
@@ -595,6 +614,11 @@ function QuickCreatePaymentPanel({
   }
 
   async function handleCurrencyChange(currency: string) {
+    const selectedOrder = orders.find((order) => order.id === form.orderId);
+    if (selectedOrder?.currency) {
+      setMessage("收款币种必须与订单币种一致。");
+      return;
+    }
     const normalized = currency.toUpperCase();
     setForm((current) => ({ ...current, currency: normalized, exchangeRate: "" }));
     await resolveExchangeRate(normalized);
@@ -617,6 +641,12 @@ function QuickCreatePaymentPanel({
     }
     if (!form.currency) {
       setMessage("请选择币种");
+      return;
+    }
+    const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
+    const orderCurrency = selectedOrder?.currency?.toUpperCase();
+    if (orderCurrency && form.currency.toUpperCase() !== orderCurrency) {
+      setMessage("收款币种必须与订单币种一致。");
       return;
     }
     if (!Number(form.exchangeRate)) {
@@ -679,9 +709,24 @@ function QuickCreatePaymentPanel({
         selectedOrder.finalReceivableAmountCny ?? selectedOrder.receivableAmountCny ?? selectedOrder.summary?.receivableCny,
       ),
     },
-    { label: "已收金额", value: formatCny(selectedOrder.receivedAmountCny ?? selectedOrder.summary?.confirmedPaymentsCny ?? 0) },
-    { label: "未收金额", value: formatCny(selectedOrder.outstandingCny ?? selectedOrder.summary?.outstandingCny ?? 0) },
+    {
+      label: "已收金额",
+      value: moneyText(
+        selectedOrder.currency || "CNY",
+        selectedOrder.receivedAmount ?? selectedOrder.summary?.confirmedPaymentsAmount,
+        selectedOrder.receivedAmountCny ?? selectedOrder.summary?.confirmedPaymentsCny,
+      ),
+    },
+    {
+      label: "未收金额",
+      value: moneyText(
+        selectedOrder.currency || "CNY",
+        selectedOrder.outstandingAmount ?? selectedOrder.summary?.outstandingAmount,
+        selectedOrder.outstandingCny ?? selectedOrder.summary?.outstandingCny,
+      ),
+    },
   ] : [];
+  const currencyLocked = Boolean(selectedOrder?.currency);
 
   return (
     <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment}>
@@ -703,7 +748,7 @@ function QuickCreatePaymentPanel({
             emptyLabel="未找到应收订单"
             placeholder="输入订单号 / 提单号 / 客户简称"
             getLabel={orderLabel}
-            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}${order.outstandingCny != null ? ` · 未收 ${formatCny(order.outstandingCny)}` : ""}`}
+            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}${order.outstandingCny != null ? ` · 未收 ${moneyText(order.currency || "CNY", order.outstandingAmount, order.outstandingCny)}` : ""}`}
             search={searchOrders}
             onSelect={(order) => void handleOrderSelect(order)}
           />
@@ -724,7 +769,7 @@ function QuickCreatePaymentPanel({
         </label>
         <label>
           币种
-          <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)}>
+          <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)} disabled={currencyLocked}>
             <option value="">请选择币种</option>
             {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
           </select>
@@ -759,6 +804,7 @@ function QuickCreatePaymentPanel({
         {selectedOrderMeta.length ? selectedOrderMeta.map((item) => (
           <span key={item.label}>{item.label}：{item.value}</span>
         )) : <span>订单：-</span>}
+        {currencyLocked ? <span>收款币种已锁定为订单币种，不能混用其它币种。</span> : null}
         <span>{exchangeMeta || "汇率来源：待获取"}</span>
       </div>
 
@@ -848,7 +894,7 @@ function PaymentDetailDrawer({
         <DetailField label="客户全称" value={customerLegalName(payment)} wide />
         <DetailField label="客户简称" value={customerDisplayName(payment) || "-"} />
         <DetailField label="收款日期" value={payment.paymentDate || "-"} />
-        <DetailField label="收款金额" value={payment.amount == null ? "-" : formatAmount(payment.amount)} />
+        <DetailField label="收款金额" value={moneyText(payment.currency, payment.amount, payment.amountCny)} />
         <DetailField label="收款币种" value={payment.currency || "-"} />
         <DetailField label="收款类型" value={payment.paymentType || "-"} />
         <DetailField label="收款状态" value={payment.status || "-"} />

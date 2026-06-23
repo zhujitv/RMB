@@ -2,7 +2,8 @@
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
-import { formatAmount, formatCny } from "./formatters";
+import type { CurrencyTotals } from "../lib/platform/currency-totals";
+import { formatCurrencyAmount, formatCny } from "./formatters";
 import styles from "./WorkspaceShell.module.css";
 
 export type ConfirmationDialogState = {
@@ -124,16 +125,54 @@ export function MoneyAmount({
   if (!showForeignAmount) {
     return (
       <div className={mergeClassNames(styles.amountCell, styles.amountCellSingle, className)}>
-        <div className={styles.currencyAmount}>{prefix}{formatCny(cnyAmount)}</div>
+        <div className={styles.currencyAmount}>{prefix}CNY：{formatCurrencyAmount("CNY", cnyAmount)}</div>
       </div>
     );
   }
 
   return (
     <div className={mergeClassNames(styles.amountCell, className)}>
-      <div className={styles.currencyAmount}>{prefix}{normalizedCurrency} {formatAmount(primaryAmount)}</div>
+      <div className={styles.currencyAmount}>{prefix}{normalizedCurrency}：{formatCurrencyAmount(normalizedCurrency, primaryAmount)}</div>
       <div className={styles.cnyAmount}>≈ {formatCny(cnyAmount)}</div>
     </div>
+  );
+}
+
+export function CurrencyTotalsDisplay({
+  summary,
+  cnyLabel = "人民币实际金额",
+  foreignLabel,
+  totalLabel = "折人民币总额",
+  className,
+}: {
+  summary?: CurrencyTotals | null;
+  cnyLabel?: string;
+  foreignLabel?: (currency: string) => string;
+  totalLabel?: string;
+  className?: string;
+}) {
+  const totals = summary || { cnyActual: 0, foreignTotals: [], totalCny: 0 };
+  const foreignTotals = Array.isArray(totals.foreignTotals) ? totals.foreignTotals : [];
+  const showCny = Number(totals.cnyActual || 0) !== 0 || foreignTotals.length === 0;
+  return (
+    <span className={mergeClassNames(styles.currencyTotalsList, className)}>
+      {showCny ? (
+        <span className={styles.currencyTotalsRow}>
+          <span>{cnyLabel}</span>
+          <strong>{formatCurrencyAmount("CNY", totals.cnyActual)}</strong>
+        </span>
+      ) : null}
+      {foreignTotals.map((item) => (
+        <span key={item.currency} className={styles.currencyTotalsRow}>
+          <span>{foreignLabel ? foreignLabel(item.currency) : `${item.currency} 实际金额`}</span>
+          <strong>{formatCurrencyAmount(item.currency, item.amount)}</strong>
+        </span>
+      ))}
+      <span className={styles.currencyTotalsRow}>
+        <span>{totalLabel}</span>
+        <strong>{formatCny(Number(totals.totalCny || 0))}</strong>
+      </span>
+    </span>
   );
 }
 
@@ -285,11 +324,11 @@ export function DetailField({
   hidden = false,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   wide?: boolean;
   hidden?: boolean;
 }) {
-  if (hidden || !value || value === "-") return null;
+  if (hidden || value == null || value === "" || value === "-") return null;
   return (
     <div className={`${styles.detailField} ${wide ? styles.detailFieldWide : ""}`}>
       <span>{label}</span>

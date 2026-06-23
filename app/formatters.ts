@@ -7,10 +7,29 @@ export function formatAmount(value: unknown) {
   return new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: "¥",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  HKD: "HK$",
+};
+
+export function currencySymbol(currency = "CNY") {
+  const normalized = String(currency || "CNY").toUpperCase();
+  return CURRENCY_SYMBOLS[normalized] || normalized;
+}
+
+export function formatCurrencyAmount(currency = "CNY", value: unknown) {
+  const normalized = String(currency || "CNY").toUpperCase();
+  return `${currencySymbol(normalized)} ${formatAmount(value)}`;
+}
+
 export function moneyText(currency = "CNY", amount: unknown, amountCny: unknown) {
   if (amount === "" || amount == null) return "-";
-  if (currency === "CNY") return formatCny(Number(amountCny || amount || 0));
-  return `${currency || "-"} ${formatAmount(amount)} / 折人民币 ${formatCny(Number(amountCny || 0))}`;
+  const normalized = String(currency || "CNY").toUpperCase();
+  if (normalized === "CNY") return `CNY：${formatCurrencyAmount("CNY", Number(amountCny || amount || 0))}`;
+  return `${normalized}：${formatCurrencyAmount(normalized, amount)} / 折人民币：${formatCny(Number(amountCny || 0))}`;
 }
 
 export function formatPercent(value: unknown) {

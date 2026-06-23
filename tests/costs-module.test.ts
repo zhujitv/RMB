@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
+const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
 
 test("costs page renders only the table list and not duplicate cost cards", () => {
   assert.doesNotMatch(costsModule, /CostMobileCard/);
@@ -19,6 +21,15 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /<th>详情<\/th>/);
   assert.match(costsModule, /<MoneyAmount currency=\{cost\.currency\} amount=\{cost\.amount\} amountCny=\{cost\.amountCny\}/);
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
+});
+
+test("cost payable summaries keep original currency totals separate from CNY analysis totals", () => {
+  assert.match(costsModule, /应付汇总/);
+  assert.match(costsModule, /人民币实际应付/);
+  assert.match(costsModule, /折人民币应付总额/);
+  assert.match(costsModule, /CurrencyTotalsDisplay/);
+  assert.match(costsQueries, /summary: summarizeCurrencyTotals/);
+  assert.match(costsShared, /currencyTotals/);
 });
 
 test("cost order summary switches to detail table through keyword filter", () => {

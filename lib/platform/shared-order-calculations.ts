@@ -6,6 +6,8 @@ import { taxDocumentCompleteness } from "./shared-tax-completeness";
 type PaymentLike = {
   status?: string | null;
   deletedAt?: Date | string | null;
+  currency?: string | null;
+  amount?: number | string | null;
   amountCny?: number | string | null;
   paymentType?: string | null;
 };
@@ -168,18 +170,37 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const receivableCny = finalCny;
   const receivableAmount = finalAmount;
   const exchangeRate = Number(order.exchangeRate) || 1;
+  const orderCurrency = String((order as { currency?: string | null }).currency || "CNY").toUpperCase();
+  const paymentAmountForOrderCurrency = (payment: PaymentLike) => {
+    const paymentCurrency = String(payment.currency || orderCurrency).toUpperCase();
+    const paymentAmount = Number(payment.amount || 0);
+    if (paymentCurrency === orderCurrency) return paymentAmount;
+    return Number(payment.amountCny || 0) / exchangeRate;
+  };
   const confirmedPaymentsCny = (order.payments || [])
     .filter(confirmedPayment)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
+  const confirmedPaymentsAmount = (order.payments || [])
+    .filter(confirmedPayment)
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
   const arrivedPaymentsCny = (order.payments || [])
     .filter((payment) => payment.status === "已到账" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
+  const arrivedPaymentsAmount = (order.payments || [])
+    .filter((payment) => payment.status === "已到账" && !payment.deletedAt)
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
   const receivedDepositCny = (order.payments || [])
     .filter((payment) => payment.paymentType === "预付款" && payment.status === "已到账" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
+  const receivedDepositAmount = (order.payments || [])
+    .filter((payment) => payment.paymentType === "预付款" && payment.status === "已到账" && !payment.deletedAt)
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
   const pendingPaymentsCny = (order.payments || [])
     .filter((payment) => payment.status === "待确认" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
+  const pendingPaymentsAmount = (order.payments || [])
+    .filter((payment) => payment.status === "待确认" && !payment.deletedAt)
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
   const totalCostCny = (order.costs || [])
     .filter(validCost)
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
@@ -244,15 +265,19 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     finalReceivableAmount: finalAmount,
     finalReceivableAmountCny: finalCny,
     confirmedPaymentsCny,
+    confirmedPaymentsAmount,
     arrivedPaymentsCny,
+    arrivedPaymentsAmount,
     prepaidAmountCny: receivedDepositCny,
     receivedDepositCny,
+    receivedDepositAmount,
     requiredDepositAmount,
     requiredDepositAmountCny: requiredDepositAmount,
     depositGapCny,
     depositOverpaidCny,
     depositRatio,
     pendingPaymentsCny,
+    pendingPaymentsAmount,
     arrivedBalanceCny,
     arrivedOutstandingCny,
     balanceCny,

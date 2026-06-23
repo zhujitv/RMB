@@ -32,6 +32,7 @@ import {
   orderAccessWhere,
 } from "./order-access";
 import { syncOrderStatus } from "./orders-module";
+import { summarizeCurrencyTotals } from "./currency-totals";
 
 export async function listPayments(query, actor = null, options = {}) {
   assertRead(actor, "payments");
@@ -43,7 +44,7 @@ export async function listPayments(query, actor = null, options = {}) {
     const currentMonthStart = new Date(`${currentMonth}-01T00:00:00.000Z`);
     const currentMonthEnd = new Date(currentMonthStart);
     currentMonthEnd.setUTCMonth(currentMonthEnd.getUTCMonth() + 1);
-    const [total, rows, arrived, pending, currentMonthCount] = await Promise.all([
+    const [total, rows, arrivedRows, pendingRows, currentMonthCount] = await Promise.all([
       prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
@@ -52,13 +53,13 @@ export async function listPayments(query, actor = null, options = {}) {
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.payment.aggregate({
+      prisma.payment.findMany({
         where: withPaymentWhere(where, { status: "已到账" }),
-        _sum: { amountCny: true },
+        select: { currency: true, amount: true, amountCny: true },
       }),
-      prisma.payment.aggregate({
+      prisma.payment.findMany({
         where: withPaymentWhere(where, { status: "待确认" }),
-        _sum: { amountCny: true },
+        select: { currency: true, amount: true, amountCny: true },
       }),
       prisma.payment.count({
         where: withPaymentWhere(where, {
@@ -72,8 +73,10 @@ export async function listPayments(query, actor = null, options = {}) {
     return {
       ...pageResult(rows.map(serializePayment), total, page, pageSize),
       summary: {
-        arrivedAmountCny: Number(arrived._sum.amountCny || 0),
-        pendingAmountCny: Number(pending._sum.amountCny || 0),
+        arrivedAmountCny: summarizeCurrencyTotals(arrivedRows).totalCny,
+        pendingAmountCny: summarizeCurrencyTotals(pendingRows).totalCny,
+        arrivedCurrencyTotals: summarizeCurrencyTotals(arrivedRows),
+        pendingCurrencyTotals: summarizeCurrencyTotals(pendingRows),
         currentMonthCount,
       },
     };
@@ -140,9 +143,16 @@ export async function savePayment(request, actor, input, id = null) {
   }
   const amount = requirePositive(input.amount, "收款金额");
   const paymentDate = dateFromInput(input.paymentDate) || dateFromInput(todayInputInChina());
-  const currency = requireText(input.currency || order.currency, "币种");
-  const exchange = await resolveExchangeRateSnapshot(input, actor, {
-    currency,
+  const orderCurrency = requireText(order.currency, "订单币种").toUpperCase();
+  const requestedCurrency = requireText(input.currency || orderCurrency, "币种").toUpperCase();
+  if (requestedCurrency !== orderCurrency) {
+    const error = new Error("收款币种必须与订单币种一致。");
+    error.status = 400;
+    error.code = "PAYMENT_CURRENCY_MISMATCH";
+    throw error;
+  }
+  const exchange = await resolveExchangeRateSnapshot({ ...input, currency: orderCurrency }, actor, {
+    currency: orderCurrency,
     defaultDate: paymentDate,
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
   });

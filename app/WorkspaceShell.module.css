@@ -3432,6 +3432,31 @@
   white-space: nowrap;
 }
 
+.currencyTotalsList {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.currencyTotalsRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.currencyTotalsRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .detailAmountCell {
   justify-items: start;
 }
@@ -3464,6 +3489,20 @@
   color: #0f172a;
   font-size: 26px;
   line-height: 1.15;
+}
+
+.metricValue {
+  color: #0f172a;
+}
+
+.metricCard .currencyTotalsRow {
+  font-size: 12px;
+}
+
+.metricCard .currencyTotalsRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .metricCard small {

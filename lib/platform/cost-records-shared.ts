@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { prisma } from "../prisma";
+import { summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
   COST_IDEMPOTENCY_WINDOW_MS,
@@ -90,6 +91,7 @@ function costConfirmedProgress(costs = []) {
 export function serializeCostOrderSummary(order) {
   const costs = order.costs || [];
   const buckets = costAmountBuckets(costs);
+  const currencyTotals = summarizeCurrencyTotals(costs.filter(validCost));
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
   return {
@@ -106,6 +108,7 @@ export function serializeCostOrderSummary(order) {
     costConfirmProgress: costConfirmedProgress(costs),
     documentProgress: costDocumentProgress(costs),
     costCount: costs.filter(validCost).length,
+    currencyTotals,
     ...buckets,
   };
 }

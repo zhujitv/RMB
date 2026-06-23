@@ -56,6 +56,7 @@ import {
   syncOrderLogisticsSuppliers,
 } from "./masters-access";
 import { sortReceivableRowsByShipmentDate } from "./order-receivable-sort";
+import { summarizeCurrencyTotals } from "./currency-totals";
 
 export async function listOrders(query, actor, options = {}) {
   assertRead(actor, "orders");
@@ -72,7 +73,14 @@ export async function listOrders(query, actor, options = {}) {
   if (options.paginated) {
     const { page, pageSize } = pageParams(query, 20, 100);
     const start = (page - 1) * pageSize;
-    return pageResult(sortedRows.slice(start, start + pageSize), sortedRows.length, page, pageSize);
+    return {
+      ...pageResult(sortedRows.slice(start, start + pageSize), sortedRows.length, page, pageSize),
+      summary: summarizeCurrencyTotals(sortedRows.map((order) => ({
+        currency: order.currency,
+        amount: order.finalReceivableAmount,
+        amountCny: order.finalReceivableAmountCny,
+      }))),
+    };
   }
   return sortedRows;
 }
@@ -167,6 +175,7 @@ function serializeReceivableSearchOrder(order) {
     receivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
     finalReceivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
     finalReceivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
+    receivedAmount: Number(summary.confirmedPaymentsAmount || 0),
     receivedAmountCny: Number(summary.confirmedPaymentsCny || 0),
     outstandingAmount: Number(summary.outstandingAmount || 0),
     outstandingCny: Number(summary.outstandingCny || 0),
@@ -177,6 +186,7 @@ function serializeReceivableSearchOrder(order) {
     summary: {
       receivableAmount: Number(summary.receivableAmount || 0),
       receivableCny: Number(summary.receivableCny || 0),
+      confirmedPaymentsAmount: Number(summary.confirmedPaymentsAmount || 0),
       confirmedPaymentsCny: Number(summary.confirmedPaymentsCny || 0),
       outstandingAmount: Number(summary.outstandingAmount || 0),
       outstandingCny: Number(summary.outstandingCny || 0),

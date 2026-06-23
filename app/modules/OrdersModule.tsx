@@ -3,11 +3,12 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, CurrencyTotalsDisplay, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
 import { CustomerAutocomplete, type CustomerAutocompleteOption } from "../CustomerAutocomplete";
 import { formatCny, moneyText } from "../formatters";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName } from "../utils";
+import type { CurrencyTotals } from "../../lib/platform/currency-totals";
 import styles from "../WorkspaceShell.module.css";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
@@ -23,8 +24,10 @@ const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运�
 
 type OrderSummary = {
   arrivedPaymentsCny?: number;
+  arrivedPaymentsAmount?: number;
   arrivedOutstandingCny?: number;
   confirmedPaymentsCny?: number;
+  confirmedPaymentsAmount?: number;
   outstandingCny?: number;
   outstandingAmount?: number;
   overpaidCny?: number;
@@ -99,6 +102,7 @@ type OrdersResponse = {
     page?: number;
     pageSize?: number;
     totalPages?: number;
+    summary?: CurrencyTotals;
   };
 };
 
@@ -195,6 +199,7 @@ export function OrdersModule({
   initialOpenToken?: number;
 }) {
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [summary, setSummary] = useState<CurrencyTotals | null>(null);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
@@ -232,6 +237,7 @@ export function OrdersModule({
       const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
       const data = result.data || {};
       setOrders(Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : []);
+      setSummary(data.summary || null);
       setTotal(Number(data.total ?? result.orders?.length ?? 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
@@ -379,6 +385,21 @@ export function OrdersModule({
           }}
         />
       ) : null}
+
+      <div className={styles.metricGrid} aria-label="应收汇总统计">
+        <article className={`${styles.metricCard} ${styles.metricBlue}`}>
+          <span>应收汇总</span>
+          <div className={styles.metricValue}>
+            <CurrencyTotalsDisplay
+              summary={summary}
+              cnyLabel="人民币实际应收"
+              foreignLabel={(currency) => `${currency} 实际应收`}
+              totalLabel="折人民币应收总额"
+            />
+          </div>
+          <small>按当前筛选条件统计；结算看原币，财务分析看折人民币。</small>
+        </article>
+      </div>
 
       <div className={styles.listToolbar}>
         <input
@@ -924,6 +945,7 @@ function OrderTableRows({
   canWrite: boolean;
 }) {
   const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
+  const receivedAmount = Number(order.summary?.arrivedPaymentsAmount ?? order.summary?.confirmedPaymentsAmount ?? orderCurrencyAmount(order, receivedCny));
   const outstandingCny = Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0);
   const overpaidCny = Number(order.summary?.overpaidCny || 0);
   const displayedBalanceCny = overpaidCny > 0 ? overpaidCny : outstandingCny;
@@ -937,7 +959,7 @@ function OrderTableRows({
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={order.finalReceivableAmount} amountCny={order.finalReceivableAmountCny} /></td>
-        <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={orderCurrencyAmount(order, receivedCny)} amountCny={receivedCny} /></td>
+        <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={receivedAmount} amountCny={receivedCny} /></td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={displayedBalanceAmount} amountCny={displayedBalanceCny} prefix={overpaidCny > 0 ? "多收 " : ""} /></td>
         <td><span className={`${styles.statusPill} ${orderStatusClass(order.status)}`}>{order.status || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
@@ -991,8 +1013,22 @@ function OrderDetailDrawer({
         <DetailField label="预计应收" value={moneyText(order.currency, order.estimatedReceivableAmount, order.estimatedReceivableAmountCny)} />
         <DetailField label="实际发货金额" value={moneyText(order.currency, order.actualShipmentAmount, order.actualShipmentAmountCny)} />
         <DetailField label="最终应收" value={moneyText(order.currency, order.finalReceivableAmount, order.finalReceivableAmountCny)} />
-        <DetailField label="已收金额" value={formatCny(Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0))} />
-        <DetailField label="未收金额" value={formatCny(Number(order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny ?? 0))} />
+        <DetailField
+          label="已收金额"
+          value={moneyText(
+            order.currency,
+            order.summary?.arrivedPaymentsAmount ?? order.summary?.confirmedPaymentsAmount,
+            order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny,
+          )}
+        />
+        <DetailField
+          label="未收金额"
+          value={moneyText(
+            order.currency,
+            order.summary?.outstandingAmount,
+            order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny,
+          )}
+        />
         <DetailField label="预付款要求" value={formatCny(order.summary?.requiredDepositAmount)} />
         <DetailField label="已收预付款" value={formatCny(order.summary?.receivedDepositCny)} />
         <DetailField label="预付款差额" value={formatCny(order.summary?.depositGapCny)} />

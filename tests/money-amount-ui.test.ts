@@ -13,10 +13,10 @@ const logisticsFeesModule = readFileSync("app/modules/LogisticsFeesModule.tsx", 
 test("money amount component renders foreign currency on two lines and CNY on one line", () => {
   assert.match(components, /export function MoneyAmount/);
   assert.match(components, /normalizedCurrency !== "CNY"/);
-  assert.match(components, /<div className=\{styles\.currencyAmount\}>\{prefix\}\{normalizedCurrency\} \{formatAmount\(primaryAmount\)\}<\/div>/);
+  assert.match(components, /<div className=\{styles\.currencyAmount\}>\{prefix\}\{normalizedCurrency\}：\{formatCurrencyAmount\(normalizedCurrency, primaryAmount\)\}<\/div>/);
   assert.match(components, /<div className=\{styles\.cnyAmount\}>≈ \{formatCny\(cnyAmount\)\}<\/div>/);
   assert.match(components, /styles\.amountCellSingle/);
-  assert.doesNotMatch(components, /折人民币/);
+  assert.match(components, /CurrencyTotalsDisplay/);
 });
 
 test("amount table styles use fixed readable widths and numeric alignment", () => {

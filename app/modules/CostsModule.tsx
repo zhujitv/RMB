@@ -3,12 +3,13 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, CurrencyTotalsDisplay, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatCny, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
+import type { CurrencyTotals } from "../../lib/platform/currency-totals";
 import styles from "../WorkspaceShell.module.css";
 import {
   LOGISTICS_COST_TYPE_OPTIONS,
@@ -93,6 +94,7 @@ type CostsPage = {
   page: number;
   pageSize: number;
   totalPages?: number;
+  summary?: CurrencyTotals;
 };
 
 type CostsResponse = {
@@ -162,6 +164,7 @@ type CostOrderSummary = {
   logisticsCostCny?: number;
   portCostCny?: number;
   otherCostCny?: number;
+  currencyTotals?: CurrencyTotals;
   costCount?: number;
   costConfirmProgress?: {
     completed?: number;
@@ -251,6 +254,7 @@ export function CostsModule({
 }) {
   const [rows, setRows] = useState<CostRow[]>([]);
   const [orderRows, setOrderRows] = useState<CostOrderSummary[]>([]);
+  const [summary, setSummary] = useState<CurrencyTotals | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
@@ -327,6 +331,7 @@ export function CostsModule({
         setOrderRows([]);
       }
       setTotal(Number(data.total || 0));
+      setSummary(data.summary || null);
       setPage(Number(data.page || nextPage));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取成本数据失败");
@@ -483,6 +488,21 @@ export function CostsModule({
         >
           按订单汇总
         </button>
+      </div>
+
+      <div className={styles.metricGrid} aria-label="应付汇总统计">
+        <article className={`${styles.metricCard} ${styles.metricBlue}`}>
+          <span>{costView === "orders" ? "订单应付汇总" : "应付汇总"}</span>
+          <div className={styles.metricValue}>
+            <CurrencyTotalsDisplay
+              summary={summary}
+              cnyLabel="人民币实际应付"
+              foreignLabel={(currency) => `${currency} 实际应付`}
+              totalLabel="折人民币应付总额"
+            />
+          </div>
+          <small>按当前筛选条件统计；结算看原币，分析看折人民币。</small>
+        </article>
       </div>
 
       <div className={styles.listToolbar}>
@@ -1306,7 +1326,14 @@ function CostOrderSummaryRows({
         <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
-        <td className={styles.amountColumn}><MoneyAmount amountCny={order.totalCostCny || 0} /></td>
+        <td className={styles.amountColumn}>
+          <CurrencyTotalsDisplay
+            summary={order.currencyTotals || { cnyActual: Number(order.totalCostCny || 0), foreignTotals: [], totalCny: Number(order.totalCostCny || 0) }}
+            cnyLabel="CNY"
+            foreignLabel={(currency) => currency}
+            totalLabel="折人民币"
+          />
+        </td>
         <td><span className={styles.statusPill}>{confirmProgress}</span></td>
         <td><span className={styles.statusPill}>{documentProgress}</span></td>
         <td>{Number(order.costCount || 0)}</td>
@@ -1452,7 +1479,17 @@ function CostOrderSummaryDrawer({
         <DetailField label="订单号" value={order.orderNo || "-"} />
         <DetailField label="提单号" value={order.blNo || order.billOfLadingNo || "-"} />
         <DetailField label="最终应收" value={formatCny(Number(order.receivableAmountCny || 0))} />
-        <DetailField label="总成本" value={formatCny(Number(order.totalCostCny || 0))} />
+        <DetailField
+          label="总成本"
+          value={(
+            <CurrencyTotalsDisplay
+              summary={order.currencyTotals || { cnyActual: Number(order.totalCostCny || 0), foreignTotals: [], totalCny: Number(order.totalCostCny || 0) }}
+              cnyLabel="人民币实际应付"
+              foreignLabel={(currency) => `${currency} 实际应付`}
+              totalLabel="折人民币应付总额"
+            />
+          )}
+        />
         <DetailField label="工厂成本" value={formatCny(Number(order.factoryCostCny || 0))} />
         <DetailField label="物流成本" value={formatCny(Number(order.logisticsCostCny || 0))} />
         <DetailField label="港杂成本" value={formatCny(Number(order.portCostCny || 0))} />

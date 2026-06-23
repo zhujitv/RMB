@@ -19,8 +19,19 @@ test("payments page keeps summary cards and avoids duplicate recent payment list
 test("payments API returns paginated summary metrics", () => {
   assert.match(paymentsService, /arrivedAmountCny/);
   assert.match(paymentsService, /pendingAmountCny/);
+  assert.match(paymentsService, /arrivedCurrencyTotals/);
+  assert.match(paymentsService, /pendingCurrencyTotals/);
+  assert.match(paymentsService, /summarizeCurrencyTotals/);
   assert.match(paymentsService, /currentMonthCount/);
   assert.match(paymentsService, /withPaymentWhere/);
+});
+
+test("payment registration keeps receipt currency aligned with the receivable order currency", () => {
+  assert.match(paymentsModule, /currencyLocked/);
+  assert.match(paymentsModule, /disabled=\{currencyLocked\}/);
+  assert.match(paymentsModule, /收款币种必须与订单币种一致/);
+  assert.match(paymentsService, /PAYMENT_CURRENCY_MISMATCH/);
+  assert.match(paymentsService, /requestedCurrency !== orderCurrency/);
 });
 
 test("payment order search supports receivable summaries without runtime permission reference errors", () => {

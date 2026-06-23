@@ -22,8 +22,13 @@ test("orders page renders only the table list and not duplicate order cards", ()
   assert.match(ordersModule, /<th className=\{styles\.amountColumn\}>未收<\/th>/);
   assert.match(ordersModule, /<th>状态<\/th>/);
   assert.match(ordersModule, /<th>详情<\/th>/);
+  assert.match(ordersModule, /应收汇总/);
+  assert.match(ordersModule, /人民币实际应收/);
+  assert.match(ordersModule, /CurrencyTotalsDisplay/);
+  assert.match(ordersService, /summary: summarizeCurrencyTotals/);
   assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{order\.finalReceivableAmount\} amountCny=\{order\.finalReceivableAmountCny\}/);
-  assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{orderCurrencyAmount\(order, receivedCny\)\} amountCny=\{receivedCny\}/);
+  assert.match(ordersModule, /const receivedAmount = Number\(order\.summary\?\.arrivedPaymentsAmount \?\? order\.summary\?\.confirmedPaymentsAmount/);
+  assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{receivedAmount\} amountCny=\{receivedCny\}/);
   assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{displayedBalanceAmount\} amountCny=\{displayedBalanceCny\}/);
   assert.doesNotMatch(ordersModule, /function moneyCell/);
   assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{gotoPage\} \/>/);
