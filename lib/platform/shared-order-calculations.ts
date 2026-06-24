@@ -3,12 +3,14 @@ import { calculateCommissionFormulaBase } from "./commission-formula";
 import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES } from "./shared-constants";
 import { taxDocumentCompleteness } from "./shared-tax-completeness";
 
+type NumericLike = number | string | { toString(): string };
+
 type PaymentLike = {
   status?: string | null;
   deletedAt?: Date | string | null;
   currency?: string | null;
-  amount?: number | string | null;
-  amountCny?: number | string | null;
+  amount?: NumericLike | null;
+  amountCny?: NumericLike | null;
   paymentType?: string | null;
 };
 
@@ -17,7 +19,7 @@ type CostLike = {
   deletedAt?: Date | string | null;
   costType?: string | null;
   costConfirmed?: boolean | null;
-  amountCny?: number | string | null;
+  amountCny?: NumericLike | null;
   createdById?: string | null;
 };
 
@@ -29,39 +31,23 @@ type SalespersonLike = {
 type OrderLike = {
   salespersonUserId?: string | null;
   salesperson?: SalespersonLike | null;
-  salespersonCommissionRate?: number | string | null;
+  salespersonCommissionRate?: NumericLike | null;
   commissionStatus?: string | null;
   status?: string | null;
-  receivableAmount?: number | string | null;
-  receivableAmountCny?: number | string | null;
-  estimatedReceivableAmount?: number | string | null;
-  estimatedReceivableAmountCny?: number | string | null;
-  actualShipmentAmount?: number | string | null;
-  actualShipmentAmountCny?: number | string | null;
-  finalReceivableAmount?: number | string | null;
-  finalReceivableAmountCny?: number | string | null;
-  exchangeRate?: number | string | null;
-  depositRatio?: number | string | null;
+  receivableAmount?: NumericLike | null;
+  receivableAmountCny?: NumericLike | null;
+  estimatedReceivableAmount?: NumericLike | null;
+  estimatedReceivableAmountCny?: NumericLike | null;
+  actualShipmentAmount?: NumericLike | null;
+  actualShipmentAmountCny?: NumericLike | null;
+  finalReceivableAmount?: NumericLike | null;
+  finalReceivableAmountCny?: NumericLike | null;
+  exchangeRate?: NumericLike | null;
+  depositRatio?: NumericLike | null;
   dueDate?: Date | null;
-  reminderDays?: number | string | null;
+  reminderDays?: NumericLike | null;
   payments?: PaymentLike[] | null;
   costs?: CostLike[] | null;
-};
-
-type OrderSummary = {
-  commissionRate: number;
-  realSalespersonSet: boolean;
-  arrivedOutstandingCny: number;
-  taxLogisticsCostsComplete?: boolean;
-  allCostsConfirmed: boolean;
-  logisticsCostConfirmed: boolean;
-  settleableCommissionCny: number;
-  commissionStatus?: string;
-  commissionCanSettle?: boolean;
-  commissionAmountCny?: number;
-  reminderStatus?: string;
-  overdueDays?: number;
-  [key: string]: unknown;
 };
 
 type TaxLogisticsMissingItem = {
@@ -70,6 +56,74 @@ type TaxLogisticsMissingItem = {
   missingCostLabel?: string | null;
   costType?: string | null;
   [key: string]: unknown;
+};
+
+export type OrderSummary = {
+  receivableCny: number;
+  receivableAmount: number;
+  estimatedReceivableAmount: number;
+  estimatedReceivableAmountCny: number;
+  actualShipmentAmount: number | null;
+  actualShipmentAmountCny: number | null;
+  finalReceivableAmount: number;
+  finalReceivableAmountCny: number;
+  confirmedPaymentsCny: number;
+  confirmedPaymentsAmount: number;
+  arrivedPaymentsCny: number;
+  arrivedPaymentsAmount: number;
+  prepaidAmountCny: number;
+  receivedDepositCny: number;
+  receivedDepositAmount: number;
+  requiredDepositAmount: number;
+  requiredDepositAmountCny: number;
+  depositGapCny: number;
+  depositOverpaidCny: number;
+  depositRatio: number | null;
+  pendingPaymentsCny: number;
+  pendingPaymentsAmount: number;
+  arrivedBalanceCny: number;
+  arrivedOutstandingCny: number;
+  balanceCny: number;
+  balanceAmount: number;
+  outstandingCny: number;
+  outstandingAmount: number;
+  overpaidCny: number;
+  overpaidAmount: number;
+  isOverpaid: boolean;
+  isUnderpaid: boolean;
+  totalCostCny: number;
+  confirmedTotalCostCny: number;
+  paidConfirmedCostCny: number;
+  logisticsCostCny: number;
+  confirmedLogisticsCostCny: number;
+  taxLogisticsCostsComplete: boolean;
+  taxLogisticsMissing: TaxLogisticsMissingItem[];
+  taxLogisticsMissingLabels: string[];
+  allCostsConfirmed: boolean;
+  logisticsCostConfirmed: boolean;
+  realSalespersonSet: boolean;
+  commissionRate: number;
+  commissionFormulaMode: string;
+  commissionFormulaLabel: string;
+  commissionFormulaDescription: string;
+  commissionFormulaSource: string;
+  commissionFormulaDeductions: unknown;
+  commissionBaseCny: number;
+  estimatedCommissionBaseCny: number;
+  estimatedCommissionCny: number;
+  settleableCommissionBaseCny: number;
+  settleableCommissionCny: number;
+  expectedGrossProfit: number;
+  expectedGrossMargin: number | null;
+  realizedGrossProfit: number;
+  realizedGrossMargin: number | null;
+  actualGrossProfit: number;
+  grossMargin: number | null;
+  reminderStatus: string;
+  overdueDays: number;
+  commissionStatus?: string;
+  commissionCanSettle?: boolean;
+  commissionAmountCny?: number;
 };
 
 type ReminderResult = {
@@ -135,7 +189,7 @@ export function derivedCommissionStatus(order: OrderLike, summary: OrderSummary)
   return "可结算";
 }
 
-export function depositRatioForPaymentTerm(paymentTermType: string | null | undefined, before?: { depositRatio?: number | string | null } | null) {
+export function depositRatioForPaymentTerm(paymentTermType: string | null | undefined, before?: { depositRatio?: NumericLike | null } | null) {
   if (!paymentTermType && before) return before.depositRatio == null ? null : Number(before.depositRatio);
   return null;
 }
@@ -147,7 +201,7 @@ export function calcReminderStatus({
 }: {
   outstandingCny: number;
   dueDate?: Date | null;
-  reminderDays?: number | string | null;
+  reminderDays?: NumericLike | null;
 }): ReminderResult {
   if (outstandingCny <= 0) return { status: "已结清", overdueDays: 0 };
   if (!dueDate) return { status: "未到期", overdueDays: 0 };
@@ -160,7 +214,7 @@ export function calcReminderStatus({
   return { status: "未到期", overdueDays: 0 };
 }
 
-export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Record<string, unknown> | null) {
+export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Record<string, unknown> | null): OrderSummary {
   const estimatedAmount = Number(order.estimatedReceivableAmount ?? order.receivableAmount);
   const estimatedCny = Number(order.estimatedReceivableAmountCny ?? order.receivableAmountCny);
   const actualAmount = order.actualShipmentAmount == null ? null : Number(order.actualShipmentAmount);

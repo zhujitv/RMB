@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { dateToInput, logServerError } from "./shared-base-utils";
 import {
   CUSTOMS_PARSE_SOURCE_LABELS,
@@ -19,7 +18,258 @@ import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
 
 export { USER_PUBLIC_SELECT, publicUser, serializeUser };
 
-export function serializeCustomer(customer) {
+type OrderDocumentStatusLike = {
+  documentType?: string | null;
+  uploadStatus?: string | null;
+  deletedAt?: Date | string | null;
+};
+type ShippingNotificationCustomerLike = {
+  enableAutoShippingDocsNotification?: boolean | null;
+  autoSendDocumentTypes?: unknown;
+};
+type ShippingNotificationRowLike = {
+  id?: string | null;
+  orderId?: string | null;
+  customerId?: string | null;
+  invoiceId?: string | null;
+  sentById?: string | null;
+  sentBy?: { name?: string | null } | null;
+  recipientEmails?: unknown;
+  ccEmails?: unknown;
+  documentTypes?: unknown;
+  attachmentFileIds?: unknown;
+  sendStatus?: string | null;
+  sendMode?: string | null;
+  emailLanguage?: string | null;
+  emailSubject?: string | null;
+  emailBody?: string | null;
+  errorMessage?: string | null;
+  sentAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type ShippingNotificationOrderLike = {
+  id?: string | null;
+  customerId?: string | null;
+  documents?: unknown[] | null;
+  customer?: ShippingNotificationCustomerLike | null;
+};
+type CustomsRecognitionOrderLike = {
+  customsDeclarationNo?: string | null;
+  customsDeclarationDate?: Date | null;
+  customsParsedAt?: Date | string | null;
+  customsParseStatus?: string | null;
+  customsDeclarationParseSource?: string | null;
+  customsParseMessage?: string | null;
+};
+type OrderDocumentOrderOverride = Parameters<typeof standardFilenameForDocument>[1];
+type UserLike = {
+  id?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  phone?: string | null;
+  avatarInitials?: string | null;
+  defaultLanguage?: string | null;
+  customPermissions?: unknown;
+  supplierId?: string | null;
+  supplierOperator?: { supplierName?: string | null; supplierType?: string | null } | null;
+  mustChangePassword?: boolean | null;
+  approvalStatus?: string | null;
+  isActive?: boolean | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type CustomerLike = Record<string, unknown> & {
+  id?: string | null;
+  name?: string | null;
+  shortName?: string | null;
+  country?: string | null;
+  defaultCurrency?: string | null;
+  salespersonUserId?: string | null;
+  salesperson?: UserLike | null;
+  commissionRate?: unknown;
+  commissionStatus?: string | null;
+  contactPerson?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  enableAutoShippingDocsNotification?: boolean | null;
+  shippingDocsEmails?: unknown;
+  shippingDocsCcEmails?: unknown;
+  autoSendDocumentTypes?: unknown;
+  clearanceEmailLanguage?: string | null;
+  remark?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type SupplierLike = Record<string, unknown> & {
+  id?: string | null;
+  supplierName?: string | null;
+  supplierType?: string | null;
+  country?: string | null;
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  invoiceTitle?: string | null;
+  taxNumber?: string | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  remark?: string | null;
+  status?: string | null;
+  allowDomesticLogisticsEntry?: boolean | null;
+  allowLogisticsExpenseEntry?: boolean | null;
+  allowLogisticsInvoiceUpload?: boolean | null;
+  isDefaultLogisticsSupplier?: boolean | null;
+  allowedLogisticsCostTypes?: unknown;
+  createdBy?: UserLike | null;
+  updatedBy?: UserLike | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type PaymentOrderLike = Record<string, unknown> & {
+  orderNo?: string | null;
+  customer?: CustomerLike | null;
+  customerNameSnapshot?: string | null;
+  country?: string | null;
+  salesperson?: UserLike | null;
+  taxArchived?: boolean | null;
+  taxRefundStatus?: string | null;
+};
+type PaymentLike = Record<string, unknown> & {
+  id?: string | null;
+  orderId?: string | null;
+  order?: PaymentOrderLike | null;
+  paymentDate?: Date | string | null;
+  currency?: string | null;
+  exchangeRate?: unknown;
+  exchangeRateDate?: Date | string | null;
+  exchangeRateSource?: string | null;
+  exchangeRateType?: string | null;
+  amount?: unknown;
+  amountCny?: unknown;
+  paymentType?: string | null;
+  status?: string | null;
+  bankReference?: string | null;
+  remark?: string | null;
+  createdBy?: UserLike | null;
+  updatedBy?: UserLike | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type CostOrderLike = PaymentOrderLike & {
+  id?: string | null;
+  blNo?: string | null;
+  customerId?: string | null;
+  currency?: string | null;
+  exchangeRate?: unknown;
+  status?: string | null;
+};
+type CostDocumentLike = Record<string, unknown> & {
+  id?: string | null;
+  orderId?: string | null;
+  costId?: string | null;
+  supplierId?: string | null;
+  relatedModule?: string | null;
+  order?: CostOrderLike | null;
+  supplier?: SupplierLike | null;
+  cost?: CostLike | null;
+  costType?: string | null;
+  documentType?: string | null;
+  fileName?: string | null;
+  originalFilename?: string | null;
+  originalName?: string | null;
+  fileSize?: unknown;
+  mimeType?: string | null;
+  uploadStatus?: string | null;
+  uploadProgress?: unknown;
+  uploadedBy?: UserLike | null;
+  uploadedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type CostLike = Record<string, unknown> & {
+  id?: string | null;
+  orderId?: string | null;
+  orderNo?: string | null;
+  blNo?: string | null;
+  order?: CostOrderLike | null;
+  supplierId?: string | null;
+  supplier?: SupplierLike | null;
+  supplierNameSnapshot?: string | null;
+  vendorName?: string | null;
+  costType?: string | null;
+  currency?: string | null;
+  exchangeRate?: unknown;
+  exchangeRateDate?: Date | string | null;
+  exchangeRateSource?: string | null;
+  exchangeRateType?: string | null;
+  amount?: unknown;
+  amountCny?: unknown;
+  paymentStatus?: string | null;
+  costConfirmed?: boolean | null;
+  costConfirmedAt?: Date | string | null;
+  paymentDate?: Date | string | null;
+  invoiceStatus?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  remark?: string | null;
+  documents?: CostDocumentLike[] | null;
+  createdBy?: UserLike | null;
+  updatedBy?: UserLike | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type DomesticLogisticsTransportItemLike = Record<string, unknown> & {
+  id?: string | null;
+  logisticsInfoId?: string | null;
+  containerNo?: string | null;
+  containerType?: string | null;
+  sealNo?: string | null;
+  truckPlateNo?: string | null;
+  trailerPlateNo?: string | null;
+  departureDate?: Date | string | null;
+  departurePlace?: string | null;
+  arrivalPlace?: string | null;
+  cargoName?: string | null;
+  remark?: string | null;
+  sortOrder?: unknown;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type DomesticLogisticsInfoLike = Record<string, unknown> & {
+  id?: string | null;
+  orderId?: string | null;
+  transportType?: string | null;
+  truckPlateNo?: string | null;
+  trailerPlateNo?: string | null;
+  departurePlace?: string | null;
+  destinationPlace?: string | null;
+  departureDate?: Date | string | null;
+  expressTrackingNo?: string | null;
+  cargoDescription?: string | null;
+  transportItems?: DomesticLogisticsTransportItemLike[] | null;
+  remarkTextManualEdited?: boolean | null;
+  remarkText?: string | null;
+  submittedByUserId?: string | null;
+  submittedBy?: UserLike | null;
+  submittedAt?: Date | string | null;
+  submitterRole?: string | null;
+  unlockedByUserId?: string | null;
+  unlockedAt?: Date | string | null;
+  correctionRequested?: boolean | null;
+  correctionReason?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  deletedAt?: Date | string | null;
+};
+
+function asLooseRecord<T extends Record<string, unknown>>(value: unknown): T {
+  return (value && typeof value === "object" ? value : {}) as T;
+}
+
+export function serializeCustomer(customerInput: unknown = {}) {
+  const customer = asLooseRecord<CustomerLike>(customerInput);
   const fullName = normalizeCustomerName(customer.name);
   const shortName = normalizeCustomerName(customer.shortName || "");
   return {
@@ -42,26 +292,28 @@ export function serializeCustomer(customer) {
     shippingDocsCcEmails: Array.isArray(customer.shippingDocsCcEmails) ? customer.shippingDocsCcEmails : [],
     autoSendDocumentTypes: normalizeShippingDocumentTypes(customer.autoSendDocumentTypes),
     clearanceEmailLanguage: normalizeClearanceEmailLanguage(customer.clearanceEmailLanguage, customer.country),
-    clearanceEmailLanguageLabel: SHIPPING_EMAIL_LANGUAGE_LABELS[normalizeClearanceEmailLanguage(customer.clearanceEmailLanguage, customer.country)],
+    clearanceEmailLanguageLabel: (SHIPPING_EMAIL_LANGUAGE_LABELS as Record<string, string>)[normalizeClearanceEmailLanguage(customer.clearanceEmailLanguage, customer.country)],
     remark: customer.remark || "",
     createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
   };
 }
 
-export function customerFullName(customer, snapshot = "") {
-  return normalizeCustomerName(snapshot || customer?.name || "");
+export function customerFullName(customerInput: unknown, snapshot: unknown = "") {
+  const customer = asLooseRecord<CustomerLike>(customerInput);
+  return normalizeCustomerName(snapshot || customer.name || "");
 }
 
-export function customerShortName(customer) {
-  return normalizeCustomerName(customer?.shortName || "");
+export function customerShortName(customerInput: unknown) {
+  const customer = asLooseRecord<CustomerLike>(customerInput);
+  return normalizeCustomerName(customer.shortName || "");
 }
 
-export function customerBusinessName(customer, snapshot = "") {
+export function customerBusinessName(customer: unknown, snapshot: unknown = "") {
   return customerShortName(customer) || customerFullName(customer, snapshot);
 }
 
-export function normalizedStringArray(value = []) {
+export function normalizedStringArray(value: unknown = []) {
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
   if (typeof value === "string") {
     try {
@@ -73,12 +325,12 @@ export function normalizedStringArray(value = []) {
   return [];
 }
 
-export function normalizeLogisticsCostTypeList(value = []) {
+export function normalizeLogisticsCostTypeList(value: unknown = []) {
   const rows = normalizedStringArray(value).map(normalizedCostType).filter((item) => LOGISTICS_COST_TYPES.includes(item));
   return rows.filter((item, index, arr) => arr.indexOf(item) === index);
 }
 
-export function expandLegacyFullLogisticsCostTypeList(value = []) {
+export function expandLegacyFullLogisticsCostTypeList(value: unknown = []) {
   const rows = normalizeLogisticsCostTypeList(value);
   const documentFeeType = "打单费";
   const ensFeeType = "ENS";
@@ -93,7 +345,8 @@ export function expandLegacyFullLogisticsCostTypeList(value = []) {
   return rows;
 }
 
-export function serializeSupplier(supplier) {
+export function serializeSupplier(supplierInput: unknown = {}) {
+  const supplier = asLooseRecord<SupplierLike>(supplierInput);
   return {
     id: supplier.id,
     supplierName: supplier.supplierName,
@@ -121,7 +374,8 @@ export function serializeSupplier(supplier) {
   };
 }
 
-export function serializePayment(payment) {
+export function serializePayment(paymentInput: unknown) {
+  const payment = asLooseRecord<PaymentLike>(paymentInput);
   return {
     id: payment.id,
     orderId: payment.orderId,
@@ -152,7 +406,7 @@ export function serializePayment(payment) {
   };
 }
 
-export function invoiceStatusFromDocuments(documents = []) {
+export function invoiceStatusFromDocuments(documents: OrderDocumentStatusLike[] = []) {
   return documents.some((document) => (
     document.documentType === "SUPPLIER_INVOICE"
     && document.uploadStatus === "SUCCESS"
@@ -160,11 +414,12 @@ export function invoiceStatusFromDocuments(documents = []) {
   )) ? "已收到" : "未收到";
 }
 
-export function fallbackSerializedCost(cost) {
+export function fallbackSerializedCost(costInput: unknown = {}) {
+  const cost = asLooseRecord<CostLike>(costInput);
   return {
     id: cost.id,
     orderId: cost.orderId,
-    costType: normalizedCostType(cost.costType),
+    costType: normalizedCostType(String(cost.costType || "")),
     costTypeRaw: cost.costType,
     supplierId: cost.supplierId || "",
     supplierName: cost.supplierNameSnapshot || cost.vendorName || "",
@@ -190,7 +445,8 @@ export function fallbackSerializedCost(cost) {
   };
 }
 
-export function safeSerializeCost(cost) {
+export function safeSerializeCost(costInput: unknown = {}) {
+  const cost = asLooseRecord<CostLike>(costInput);
   try {
     return serializeCost(cost);
   } catch (error) {
@@ -199,7 +455,8 @@ export function safeSerializeCost(cost) {
   }
 }
 
-export function serializeCost(cost) {
+export function serializeCost(costInput: unknown) {
+  const cost = asLooseRecord<CostLike>(costInput);
   const costDocuments = (cost.documents || []).map((document) => ({
     ...document,
     cost: document.cost || cost,
@@ -226,7 +483,7 @@ export function serializeCost(cost) {
     supplierName: cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName || "",
     supplierNameSnapshot: cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName || "",
     supplierType: cost.supplier?.supplierType || "",
-    costType: normalizedCostType(cost.costType),
+    costType: normalizedCostType(String(cost.costType || "")),
     costTypeRaw: cost.costType,
     vendorName: cost.supplierNameSnapshot || cost.vendorName,
     currency: cost.currency,
@@ -261,13 +518,15 @@ export function serializeCost(cost) {
   };
 }
 
-export function serializeOrderDocument(document, orderOverride = null) {
+export function serializeOrderDocument(documentInput: unknown, orderOverride: unknown = null) {
+  const document = asLooseRecord<CostDocumentLike>(documentInput);
+  const orderContext = orderOverride as OrderDocumentOrderOverride;
   const originalFilename = document.originalFilename || document.originalName || document.fileName || "";
-  const standardFilename = standardFilenameForDocument(document, orderOverride);
+  const standardFilename = standardFilenameForDocument(document, orderContext);
   const displayFileName = preferredOrderDocumentFileName({
     ...document,
     standardFilename,
-    order: orderOverride || document.order,
+    order: orderContext || document.order,
   });
   return {
     id: document.id,
@@ -285,7 +544,7 @@ export function serializeOrderDocument(document, orderOverride = null) {
     supplierType: document.supplier?.supplierType || document.cost?.supplier?.supplierType || "",
     costType: normalizedCostType(document.cost?.costType || document.costType || ""),
     documentType: document.documentType,
-    documentTypeLabel: ORDER_DOCUMENT_LABELS[document.documentType] || document.documentType,
+    documentTypeLabel: (ORDER_DOCUMENT_LABELS as Record<string, string>)[String(document.documentType || "")] || document.documentType,
     fileName: standardFilename,
     displayFileName,
     downloadFileName: displayFileName,
@@ -306,21 +565,24 @@ export function serializeOrderDocument(document, orderOverride = null) {
   };
 }
 
-export function shippingNotificationStatus(row = null, customer = null) {
+export function shippingNotificationStatus(row: ShippingNotificationRowLike | null = null, customer: ShippingNotificationCustomerLike | null = null) {
   if (!customer?.enableAutoShippingDocsNotification && !row) return "NOT_ENABLED";
   if (!row) return "WAITING_DOCUMENTS";
-  if (["sent", "SUCCESS"].includes(row.sendStatus) && row.sendMode === "manual") return "MANUAL_SENT";
-  if (["sent", "SUCCESS"].includes(row.sendStatus)) return "AUTO_SENT";
-  if (["failed", "FAILED"].includes(row.sendStatus)) return "FAILED";
+  const sendStatus = String(row.sendStatus || "");
+  const sendMode = String(row.sendMode || "");
+  if (["sent", "SUCCESS"].includes(sendStatus) && sendMode === "manual") return "MANUAL_SENT";
+  if (["sent", "SUCCESS"].includes(sendStatus)) return "AUTO_SENT";
+  if (["failed", "FAILED"].includes(sendStatus)) return "FAILED";
   return "WAITING_DOCUMENTS";
 }
 
-export function serializeShippingDocumentNotification(row = null, order = {}) {
-  const documents = (order.documents || []).map((document) => serializeOrderDocument(document, order));
+export function serializeShippingDocumentNotification(row: ShippingNotificationRowLike | null = null, order: ShippingNotificationOrderLike = {}) {
+  const documents = (order.documents || []).map((document) => serializeOrderDocument(document, order as OrderDocumentOrderOverride));
   const documentById = new Map(documents.map((document) => [document.id, document]));
   const customer = order.customer || {};
   const status = shippingNotificationStatus(row, customer);
   const attachmentFileIds = Array.isArray(row?.attachmentFileIds) ? row.attachmentFileIds : [];
+  const emailLanguage = row?.emailLanguage || "";
   return {
     id: row?.id || "",
     orderId: row?.orderId || order.id || "",
@@ -332,13 +594,13 @@ export function serializeShippingDocumentNotification(row = null, order = {}) {
     ccEmails: Array.isArray(row?.ccEmails) ? row.ccEmails : [],
     documentTypes: normalizeShippingDocumentTypes(row?.documentTypes || customer.autoSendDocumentTypes),
     attachmentFileIds,
-    attachments: attachmentFileIds.map((id) => documentById.get(id)).filter(Boolean),
+    attachments: attachmentFileIds.map((id) => documentById.get(String(id))).filter(Boolean),
     sendStatus: row?.sendStatus || "pending",
     sendStatusLabel: SHIPPING_NOTIFICATION_STATUS_LABELS[status] || status,
     status,
     sendMode: row?.sendMode || "",
-    emailLanguage: row?.emailLanguage || "",
-    emailLanguageLabel: SHIPPING_EMAIL_LANGUAGE_LABELS[row?.emailLanguage] || row?.emailLanguage || "",
+    emailLanguage,
+    emailLanguageLabel: (SHIPPING_EMAIL_LANGUAGE_LABELS as Record<string, string>)[emailLanguage] || emailLanguage || "",
     emailSubject: row?.emailSubject || "",
     emailBody: row?.emailBody || "",
     errorMessage: row?.errorMessage || (!customer.enableAutoShippingDocsNotification ? "客户未启用清关资料自动通知。" : ""),
@@ -348,7 +610,8 @@ export function serializeShippingDocumentNotification(row = null, order = {}) {
   };
 }
 
-export function serializeCustomsRecognition(order = {}) {
+export function serializeCustomsRecognition(orderInput: unknown = {}) {
+  const order = asLooseRecord<CustomsRecognitionOrderLike>(orderInput);
   const status = order.customsParseStatus || "";
   const source = order.customsDeclarationParseSource || (status === "MANUAL" ? "MANUAL" : "");
   const message = order.customsParseMessage || "";
@@ -359,7 +622,7 @@ export function serializeCustomsRecognition(order = {}) {
     customsParseStatus: status,
     customsParseStatusLabel: customsParseStatusLabel(status),
     customsParseSource: source,
-    customsParseSourceLabel: CUSTOMS_PARSE_SOURCE_LABELS[source] || source || "",
+    customsParseSourceLabel: (CUSTOMS_PARSE_SOURCE_LABELS as Record<string, string>)[source] || source || "",
     customsParseMessage: message,
     customsDeclarationParseStatus: status,
     customsDeclarationParseSource: source,
@@ -367,8 +630,9 @@ export function serializeCustomsRecognition(order = {}) {
   };
 }
 
-export function serializeDomesticLogisticsTransportItem(item) {
-  if (!item) return null;
+export function serializeDomesticLogisticsTransportItem(itemInput: unknown) {
+  if (!itemInput) return null;
+  const item = asLooseRecord<DomesticLogisticsTransportItemLike>(itemInput);
   return {
 	    id: item.id,
 	    logisticsInfoId: item.logisticsInfoId,
@@ -388,14 +652,15 @@ export function serializeDomesticLogisticsTransportItem(item) {
   };
 }
 
-export function serializeDomesticLogisticsInfo(row) {
-  if (!row) return null;
+export function serializeDomesticLogisticsInfo(rowInput: unknown) {
+  if (!rowInput) return null;
+  const row = asLooseRecord<DomesticLogisticsInfoLike>(rowInput);
   const transportItems = (row.transportItems || []).map(serializeDomesticLogisticsTransportItem).filter(Boolean);
   return {
     id: row.id,
     orderId: row.orderId,
     transportType: row.transportType,
-    transportTypeLabel: DOMESTIC_LOGISTICS_TRANSPORT_LABELS[row.transportType] || row.transportType || "",
+    transportTypeLabel: (DOMESTIC_LOGISTICS_TRANSPORT_LABELS as Record<string, string>)[String(row.transportType || "")] || row.transportType || "",
     truckPlateNo: row.truckPlateNo || "",
     trailerPlateNo: row.trailerPlateNo || "",
     departurePlace: row.departurePlace || "",
@@ -424,15 +689,25 @@ export function serializeDomesticLogisticsInfo(row) {
   };
 }
 
-export function uploadStatusLabel(status) {
+export function uploadStatusLabel(status: string | null | undefined) {
   return {
     PENDING: "等待上传",
     UPLOADING: "上传中",
     SUCCESS: "上传成功",
     FAILED: "上传失败",
-  }[status] || status || "-";
+  }[String(status || "")] || status || "-";
 }
 
-export function customsParseStatusLabel(status) {
-  return CUSTOMS_PARSE_STATUS_LABELS[status] || status || "未识别";
+export function customsParseStatusLabel(status: string | null | undefined) {
+  return (CUSTOMS_PARSE_STATUS_LABELS as Record<string, string>)[String(status || "")] || status || "未识别";
 }
+
+export type CustomerDto = ReturnType<typeof serializeCustomer>;
+export type SupplierDto = ReturnType<typeof serializeSupplier>;
+export type PaymentDto = ReturnType<typeof serializePayment>;
+export type CostDto = ReturnType<typeof safeSerializeCost>;
+export type OrderDocumentDto = ReturnType<typeof serializeOrderDocument>;
+export type ShippingDocumentNotificationDto = ReturnType<typeof serializeShippingDocumentNotification>;
+export type CustomsRecognitionDto = ReturnType<typeof serializeCustomsRecognition>;
+export type DomesticLogisticsTransportItemDto = ReturnType<typeof serializeDomesticLogisticsTransportItem>;
+export type DomesticLogisticsInfoDto = ReturnType<typeof serializeDomesticLogisticsInfo>;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   dateToInput,
   parseEmailList,
@@ -27,7 +26,117 @@ import { serializeUser } from "./shared-users";
 import { paymentTermLabel } from "./shared-utils";
 import { summarizeOrder } from "./shared-order-calculations";
 
-function latestSuccessfulDocumentByType(order = {}, documentType = "") {
+type ShippingCustomerLike = {
+  country?: string | null;
+  clearanceEmailLanguage?: string | null;
+  shippingDocsEmails?: unknown;
+  shippingDocsCcEmails?: unknown;
+  autoSendDocumentTypes?: unknown;
+  shortName?: string | null;
+  name?: string | null;
+};
+type OrderDocumentLike = {
+  id?: string;
+  documentType?: string | null;
+  uploadStatus?: string | null;
+  deletedAt?: Date | string | null;
+  mimeType?: string | null;
+  uploadedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  originalFilename?: string | null;
+  originalName?: string | null;
+  fileName?: string | null;
+};
+type UserLike = {
+  id?: string | null;
+  name?: string | null;
+};
+type OrderPaymentInstallmentLike = {
+  condition?: unknown;
+  ratio?: unknown;
+  amount?: unknown;
+};
+type OrderCostLike = Record<string, unknown>;
+type ShippingNotificationLike = Record<string, unknown>;
+type ShippingOrderLike = Record<string, unknown> & {
+  id?: string | null;
+  documents?: OrderDocumentLike[] | null;
+  costs?: OrderCostLike[] | null;
+  paymentInstallments?: unknown;
+  customer?: ShippingCustomerLike | null;
+  country?: string | null;
+  currency?: string | null;
+  exchangeRate?: unknown;
+  exchangeRateDate?: Date | string | null;
+  exchangeRateSource?: string | null;
+  exchangeRateType?: string | null;
+  estimatedReceivableAmount?: unknown;
+  estimatedReceivableAmountCny?: unknown;
+  actualShipmentAmount?: unknown;
+  actualShipmentAmountCny?: unknown;
+  actualShipmentDate?: Date | string | null;
+  finalReceivableAmount?: unknown;
+  finalReceivableAmountCny?: unknown;
+  receivableAmount?: unknown;
+  receivableAmountCny?: unknown;
+  tradeTerm?: string | null;
+  paymentTerm?: string | null;
+  paymentTermType?: string | null;
+  depositRatio?: unknown;
+  expectedPaymentDate?: Date | string | null;
+  expectedArrivalDate?: Date | string | null;
+  expectedShipmentDate?: Date | string | null;
+  blDate?: Date | string | null;
+  blNo?: string | null;
+  billOfLadingNo?: string | null;
+  customsDeclarationDate?: Date | null;
+  orderNo?: string | null;
+  customerId?: string | null;
+  customerNameSnapshot?: string;
+  salespersonUserId?: string | null;
+  salesperson?: UserLike | null;
+  salespersonCommissionRate?: unknown;
+  commissionStatus?: string | null;
+  commissionSettledById?: string | null;
+  commissionSettledBy?: UserLike | null;
+  commissionSettledAt?: Date | string | null;
+  commissionSettlementRemark?: string | null;
+  taxArchived?: boolean | null;
+  taxRefundStatus?: string | null;
+  taxRefundArchivedAt?: Date | string | null;
+  taxRefundArchivedById?: string | null;
+  taxRefundArchivedBy?: UserLike | null;
+  taxRefundArchiveRemark?: string | null;
+  taxSubmittedById?: string | null;
+  taxSubmittedBy?: UserLike | null;
+  taxSubmittedAt?: Date | string | null;
+  domesticLogisticsInfos?: unknown[] | null;
+  logisticsSuppliers?: Array<{ supplierId?: string | null; supplier?: unknown }> | null;
+  shippingDocumentNotifications?: ShippingNotificationLike[] | null;
+  creditDays?: unknown;
+  dueDate?: Date | string | null;
+  reminderDays?: unknown;
+  status?: string | null;
+  remark?: string | null;
+  createdBy?: unknown;
+  updatedBy?: unknown;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+type ShippingDocumentBundleItem = {
+  typeKey: string;
+  label: string;
+  emailLabel: string;
+  documentType: string;
+  document: OrderDocumentLike | null;
+};
+type ShippingDocumentBundle = {
+  items: ShippingDocumentBundleItem[];
+  documents: OrderDocumentLike[];
+  missing: ShippingDocumentBundleItem[];
+};
+
+function latestSuccessfulDocumentByType(order: ShippingOrderLike = {}, documentType = "") {
   return (order.documents || [])
     .filter((document) => (
       document.documentType === documentType
@@ -35,25 +144,26 @@ function latestSuccessfulDocumentByType(order = {}, documentType = "") {
       && !document.deletedAt
       && String(document.mimeType || "").toLowerCase() === "application/pdf"
     ))
-    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0))[0] || null;
+    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime())[0] || null;
 }
 
-function shippingDocumentBundle(order = {}, options = {}) {
+function shippingDocumentBundle(order: ShippingOrderLike = {}, options: { documentTypes?: unknown } = {}): ShippingDocumentBundle {
   const customer = order.customer || {};
   const documentTypes = normalizeShippingDocumentTypes(options.documentTypes || customer.autoSendDocumentTypes || DEFAULT_SHIPPING_DOCUMENT_TYPES);
-  const items = documentTypes.map((typeKey) => {
-    const config = SHIPPING_DOCUMENT_TYPE_CONFIG[typeKey];
+  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingDocumentBundleItem, "typeKey" | "document">>;
+  const items = documentTypes.filter((typeKey) => Boolean(configMap[typeKey])).map((typeKey) => {
+    const config = configMap[typeKey];
     const document = latestSuccessfulDocumentByType(order, config.documentType);
     return { typeKey, ...config, document };
   });
   return {
     items,
-    documents: items.map((item) => item.document).filter(Boolean),
+    documents: items.map((item) => item.document).filter((document): document is OrderDocumentLike => Boolean(document)),
     missing: items.filter((item) => !item.document),
   };
 }
 
-function shippingDocumentEmailTemplate(order = {}, bundle = {}, language = "EN") {
+function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: ShippingDocumentBundle = shippingDocumentBundle(order), language = "EN") {
   const normalizedLanguage = normalizeClearanceEmailLanguage(language, order.customer?.country || order.country || "");
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
@@ -98,7 +208,7 @@ function shippingDocumentEmailTemplate(order = {}, bundle = {}, language = "EN")
   };
 }
 
-function shippingDocumentDraft(order = {}) {
+function shippingDocumentDraft(order: ShippingOrderLike = {}) {
   const customer = order.customer || {};
   const bundle = shippingDocumentBundle(order, { documentTypes: DEFAULT_SHIPPING_DOCUMENT_TYPES });
   const template = shippingDocumentEmailTemplate(order, bundle, customer.clearanceEmailLanguage || "EN");
@@ -113,7 +223,7 @@ function shippingDocumentDraft(order = {}) {
     recipientEmails,
     ccEmails,
     language: template.language,
-    languageLabel: SHIPPING_EMAIL_LANGUAGE_LABELS[template.language],
+    languageLabel: (SHIPPING_EMAIL_LANGUAGE_LABELS as Record<string, string>)[template.language],
     subject: template.subject,
     body: template.body,
     documents: bundle.items.map((item) => ({
@@ -121,7 +231,7 @@ function shippingDocumentDraft(order = {}) {
       label: item.label,
       emailLabel: item.emailLabel,
       documentId: item.document?.id || "",
-      fileName: item.document ? standardFilenameForDocument(item.document, order) : "",
+      fileName: item.document ? standardFilenameForDocument(item.document, order as Parameters<typeof standardFilenameForDocument>[1]) : "",
       originalFilename: item.document?.originalFilename || item.document?.originalName || item.document?.fileName || "",
       exists: Boolean(item.document),
     })),
@@ -132,17 +242,23 @@ function shippingDocumentDraft(order = {}) {
   };
 }
 
-export function serializeOrder(order) {
-  const summary = summarizeOrder(order);
-  const paymentInstallments = Array.isArray(order.paymentInstallments) ? order.paymentInstallments : [];
-  const paymentTermDisplay = paymentTermLabel(order.paymentTermType, order.paymentTerm);
+function asShippingOrder(value: unknown): ShippingOrderLike {
+  return (value && typeof value === "object" ? value : {}) as ShippingOrderLike;
+}
+
+export function serializeOrder(orderInput: unknown) {
+  const order = asShippingOrder(orderInput);
+  const summary = summarizeOrder(order as Parameters<typeof summarizeOrder>[0]);
+  const paymentInstallments = Array.isArray(order.paymentInstallments) ? order.paymentInstallments as OrderPaymentInstallmentLike[] : [];
+  const paymentTermDisplay = paymentTermLabel(order.paymentTermType || undefined, order.paymentTerm || undefined);
   const documents = (order.documents || []).map((document) => serializeOrderDocument(document, order));
   const costs = (order.costs || []).map(safeSerializeCost);
   const shippingNotifications = order.shippingDocumentNotifications || [];
   const latestShippingNotification = shippingNotifications[0] || null;
-  const completeness = taxDocumentCompleteness(order);
-  const taxRefundStatus = derivedTaxRefundStatus(order, order.documents || []);
-  const domesticLogisticsInfo = serializeDomesticLogisticsInfo((order.domesticLogisticsInfos || [])[0]);
+  const completeness = taxDocumentCompleteness(order as Parameters<typeof taxDocumentCompleteness>[0]);
+  const taxRefundStatus = derivedTaxRefundStatus(order as Parameters<typeof derivedTaxRefundStatus>[0], order.documents || []);
+  const domesticLogisticsRows = Array.isArray(order.domesticLogisticsInfos) ? order.domesticLogisticsInfos : [];
+  const domesticLogisticsInfo = serializeDomesticLogisticsInfo(domesticLogisticsRows[0]);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
   return {
@@ -196,7 +312,7 @@ export function serializeOrder(order) {
       `${item.condition || "-"}：${Number(item.ratio || 0)}% / ${Number(item.amount || 0).toFixed(2)}`
     )).join("；"),
     taxRefundStatus,
-    taxRefundStatusLabel: TAX_REFUND_STATUS_LABELS[taxRefundStatus] || taxRefundStatus,
+    taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[taxRefundStatus] || taxRefundStatus,
     taxArchived: Boolean(order.taxArchived || taxRefundStatus === "SUBMITTED" || order.taxRefundArchivedAt),
     taxRefundArchivedById: order.taxRefundArchivedById || "",
     taxRefundArchivedByName: order.taxRefundArchivedBy?.name || "",
@@ -227,3 +343,5 @@ export function serializeOrder(order) {
     summary,
   };
 }
+
+export type SerializedOrderDto = ReturnType<typeof serializeOrder>;

@@ -1,7 +1,8 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_TRANSPORT_TYPES,
+  assertJsonObject,
   assertRead,
   assertWrite,
   canWrite,
@@ -20,6 +21,7 @@ import {
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
   domesticLogisticsSubmitterRole,
+  type DomesticLogisticsOrderDto,
   normalizeDomesticTransportItems,
   orderArchiveWhereForScope,
   serializeDomesticLogisticsOrder,
@@ -33,13 +35,51 @@ import {
 } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
 
-export async function listDomesticLogisticsOrders(query, actor) {
-  assertRead(actor, "domesticLogistics");
+type DomesticLogisticsInput = Record<string, unknown>;
+type DomesticLogisticsQuery = {
+  get(key: string): string | null;
+};
+type DomesticLogisticsListFilters = {
+  keyword: string;
+  businessScope: ReturnType<typeof archiveScope>;
+};
+type DomesticLogisticsActorInput = {
+  id?: string | null;
+  role?: string | null;
+  customPermissions?: unknown;
+  supplierId?: string | null;
+} | null | undefined;
+type DomesticLogisticsActor = {
+  id: string;
+  role?: string;
+  customPermissions?: unknown;
+  supplierId?: string | null;
+};
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+
+function actorRole(actor: DomesticLogisticsActorInput) {
+  return String(actor?.role || "");
+}
+
+function requireDomesticLogisticsActor(actor: DomesticLogisticsActorInput): DomesticLogisticsActor {
+  if (!actor?.id) throw codedError("请先登录", 401, "AUTH_REQUIRED");
+  return {
+    id: actor.id,
+    role: actor.role || undefined,
+    customPermissions: actor.customPermissions,
+    supplierId: actor.supplierId || null,
+  };
+}
+
+function domesticLogisticsListFiltersFromQuery(query: DomesticLogisticsQuery): DomesticLogisticsListFilters {
   const keyword = nonEmpty(query.get("keyword"));
   const businessScope = archiveScope(query);
-  const andConditions = [];
-  if (keyword) {
-    andConditions.push({
+  return { keyword, businessScope };
+}
+
+function domesticLogisticsKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInput {
+  return keyword
+    ? {
       OR: [
         { orderNo: { contains: keyword, mode: "insensitive" } },
         { blNo: { contains: keyword, mode: "insensitive" } },
@@ -62,22 +102,35 @@ export async function listDomesticLogisticsOrders(query, actor) {
           ],
         } } },
       ],
-    });
-  }
-  if (actor?.role === "业务员") andConditions.push(orderAccessWhere(actor));
+    }
+    : {};
+}
+
+function domesticLogisticsListWhere(filters: DomesticLogisticsListFilters, actor: DomesticLogisticsActorInput): Prisma.ReceivableOrderWhereInput {
+  const andConditions: Prisma.ReceivableOrderWhereInput[] = [];
+  const keywordWhere = domesticLogisticsKeywordWhere(filters.keyword);
+  if (Object.keys(keywordWhere).length) andConditions.push(keywordWhere);
+  if (actorRole(actor) === "业务员") andConditions.push(orderAccessWhere(actor));
   if (isExternalLogisticsSupplierAccount(actor)) {
-    andConditions.push({ logisticsSuppliers: { some: { supplierId: actor.supplierId } } });
-  } else if (actor?.role === "物流供应商") {
+    const supplierId = nonEmpty(actor?.supplierId);
+    andConditions.push({ logisticsSuppliers: { some: { supplierId } } });
+  } else if (actorRole(actor) === "物流供应商") {
     andConditions.push({ id: "__no_supplier_bound__" });
   }
-  if (businessScope === "current") {
+  if (filters.businessScope === "current") {
     andConditions.push({ status: { notIn: ["已关闭", "已取消"] } });
   }
-  const where = {
+  return {
     deletedAt: null,
-    ...orderArchiveWhereForScope(businessScope),
+    ...orderArchiveWhereForScope(filters.businessScope),
     ...(andConditions.length ? { AND: andConditions } : {}),
   };
+}
+
+export async function listDomesticLogisticsOrders(query: DomesticLogisticsQuery, actor: DomesticLogisticsActorInput): Promise<DomesticLogisticsOrderDto[]> {
+  assertRead(actor, "domesticLogistics");
+  const filters = domesticLogisticsListFiltersFromQuery(query);
+  const where = domesticLogisticsListWhere(filters, actor);
   const orders = await prisma.receivableOrder.findMany({
     where,
     include: domesticLogisticsOrderInclude(),
@@ -89,7 +142,7 @@ export async function listDomesticLogisticsOrders(query, actor) {
     .map((order) => serializeDomesticLogisticsOrder(order, actor));
 }
 
-async function getDomesticLogisticsOrderForActor(orderId, actor, input = {}) {
+async function getDomesticLogisticsOrderForActor(orderId: string, actor: DomesticLogisticsActorInput, input: DomesticLogisticsInput = {}) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
     include: domesticLogisticsOrderInclude(),
@@ -101,37 +154,40 @@ async function getDomesticLogisticsOrderForActor(orderId, actor, input = {}) {
   return order;
 }
 
-export async function saveDomesticLogisticsInfo(request, actor, input, id = null) {
+export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor: DomesticLogisticsActorInput, input: unknown, id: string | null = null) {
   assertWrite(actor, "domesticLogistics");
-  if (actor.role === "财务") {
+  const currentActor = requireDomesticLogisticsActor(actor);
+  const body: DomesticLogisticsInput = assertJsonObject(input);
+  if (currentActor.role === "财务") {
     throw codedError("财务只负责查看、整理和下载物流资料，不能录入或修改。", 403, "FINANCE_CANNOT_EDIT_DOMESTIC_LOGISTICS");
   }
-  const orderId = requireText(input.orderId || input.order_id, "订单");
-  const order = await getDomesticLogisticsOrderForActor(orderId, actor, input);
+  const orderId = requireText(body.orderId || body.order_id, "订单");
+  const order = await getDomesticLogisticsOrderForActor(orderId, currentActor, body);
   const before = id
     ? await prisma.domesticLogisticsInfo.findFirst({ where: { id, deletedAt: null }, include: domesticLogisticsInclude() })
     : ((order.domesticLogisticsInfos || [])[0] || null);
   if (id && !before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
-  const transportType = DOMESTIC_LOGISTICS_TRANSPORT_TYPES.includes(input.transportType) ? input.transportType : "TRUCK";
-  const transportItems = normalizeDomesticTransportItems(input, transportType);
+  const requestedTransportType = String(body.transportType || "");
+  const transportType = DOMESTIC_LOGISTICS_TRANSPORT_TYPES.includes(requestedTransportType) ? requestedTransportType : "TRUCK";
+  const transportItems = normalizeDomesticTransportItems(body, transportType);
   const firstTransportItem = transportItems[0] || {};
-  const remarkTextManualEdited = input.remarkTextManualEdited === true || input.remarkTextManualEdited === "true";
-  const remarkText = remarkTextManualEdited ? optional(input.remarkText) : domesticLogisticsRemark({ ...input, transportType, transportItems });
+  const remarkTextManualEdited = body.remarkTextManualEdited === true || body.remarkTextManualEdited === "true";
+  const remarkText = remarkTextManualEdited ? optional(body.remarkText) : domesticLogisticsRemark({ ...body, transportType, transportItems });
   const data = {
     orderId: order.id,
     transportType,
     truckPlateNo: transportType === "EXPRESS" ? null : firstTransportItem.truckPlateNo || null,
     trailerPlateNo: transportType === "EXPRESS" ? null : firstTransportItem.trailerPlateNo || null,
     departurePlace: transportType === "EXPRESS" ? null : firstTransportItem.departurePlace || null,
-    destinationPlace: transportType === "EXPRESS" ? requireText(input.destinationPlace, "到达地") : firstTransportItem.arrivalPlace || null,
+    destinationPlace: transportType === "EXPRESS" ? requireText(body.destinationPlace, "到达地") : firstTransportItem.arrivalPlace || null,
     departureDate: transportType === "EXPRESS" ? null : firstTransportItem.departureDate || null,
-    expressTrackingNo: transportType === "EXPRESS" ? requireText(input.expressTrackingNo, "快递单号") : null,
-    cargoDescription: transportType === "EXPRESS" ? requireText(input.cargoDescription, "运输货物名称") : firstTransportItem.cargoName || null,
+    expressTrackingNo: transportType === "EXPRESS" ? requireText(body.expressTrackingNo, "快递单号") : null,
+    cargoDescription: transportType === "EXPRESS" ? requireText(body.cargoDescription, "运输货物名称") : firstTransportItem.cargoName || null,
     remarkTextManualEdited,
     remarkText,
-    submittedByUserId: actor.id,
+    submittedByUserId: currentActor.id,
     submittedAt: new Date(),
-    submitterRole: domesticLogisticsSubmitterRole(actor),
+    submitterRole: domesticLogisticsSubmitterRole(currentActor),
     financeStatus: "ARCHIVED",
     financeConfirmedById: null,
     financeConfirmedAt: null,
@@ -164,13 +220,15 @@ export async function saveDomesticLogisticsInfo(request, actor, input, id = null
     }
     return tx.domesticLogisticsInfo.findUnique({ where: { id: saved.id }, include: domesticLogisticsInclude() });
   });
-  await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, actor, before ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, before, row));
+  if (!row) throw codedError("物流信息保存失败，请重试。", 500, "DOMESTIC_LOGISTICS_SAVE_FAILED");
+  await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, currentActor, before ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, before, row));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
   return serializeDomesticLogisticsInfo(row);
 }
 
-export async function deleteDomesticLogisticsInfo(request, actor, id) {
-  if (actor?.role !== "管理员") throw codedError("只有管理员可以删除物流信息。", 403, "PERMISSION_DENIED");
+export async function deleteDomesticLogisticsInfo(request: AuditRequestLike, actor: DomesticLogisticsActorInput, id: string) {
+  const currentActor = requireDomesticLogisticsActor(actor);
+  if (currentActor.role !== "管理员") throw codedError("只有管理员可以删除物流信息。", 403, "PERMISSION_DENIED");
   const before = await prisma.domesticLogisticsInfo.findFirst({
     where: { id, deletedAt: null },
     include: domesticLogisticsInclude(),
@@ -181,11 +239,12 @@ export async function deleteDomesticLogisticsInfo(request, actor, id) {
     data: { deletedAt: new Date() },
     include: domesticLogisticsInclude(),
   });
-  await runNonCriticalTask("物流信息删除操作日志写入", () => writeAudit(request, actor, "删除物流信息", "domestic_logistics_infos", row.id, before, row));
+  await runNonCriticalTask("物流信息删除操作日志写入", () => writeAudit(request, currentActor, "删除物流信息", "domestic_logistics_infos", row.id, before, row));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
 }
 
-export async function requestDomesticLogisticsCorrection(request, actor, id, input = {}) {
+export async function requestDomesticLogisticsCorrection(request: AuditRequestLike, actor: DomesticLogisticsActorInput, id: string, input: unknown = {}) {
+  const body: DomesticLogisticsInput = assertJsonObject(input);
   const before = await prisma.domesticLogisticsInfo.findFirst({
     where: { id, deletedAt: null },
     include: domesticLogisticsInclude(),
@@ -198,7 +257,7 @@ export async function requestDomesticLogisticsCorrection(request, actor, id, inp
     where: { id },
     data: {
       correctionRequested: true,
-      correctionReason: requireText(input.correctionReason || input.reason, "更正原因"),
+      correctionReason: requireText(body.correctionReason || body.reason, "更正原因"),
     },
     include: domesticLogisticsInclude(),
   });
@@ -206,6 +265,6 @@ export async function requestDomesticLogisticsCorrection(request, actor, id, inp
   return serializeDomesticLogisticsInfo(row);
 }
 
-function assertCorrectionPermission(actor) {
+function assertCorrectionPermission(actor: DomesticLogisticsActorInput) {
   return canWrite(actor, "taxRefund") || canWrite(actor, "domesticLogistics");
 }

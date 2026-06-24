@@ -89,7 +89,7 @@ export async function writeAudit(
   });
 }
 
-export function applyCommonFilters(rows: FilterRow[], query: URLSearchParams) {
+export function applyCommonFilters<T extends FilterRow>(rows: T[], query: URLSearchParams): T[] {
   const monthValue = (value: Date | string | null | undefined) => {
     if (!value) return "";
     if (value instanceof Date) return value.toISOString().slice(0, 7);

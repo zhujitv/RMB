@@ -1,16 +1,18 @@
-// @ts-nocheck
 import JSZip from "jszip";
 import {
   apiError,
   assertRead,
   canRead,
+  codedError,
   getActor,
   getProfitAnalysis,
   getReminders,
   listCosts,
   listOrders,
   listPayments,
+  parseJsonBody,
 } from "./platform-db";
+import type { AccessUser } from "./platform/shared-access";
 import { logisticsCostTypeLabel } from "./platform/logistics-cost-types";
 
 export const REPORT_TYPES = {
@@ -23,30 +25,114 @@ export const REPORT_TYPES = {
   "tax-refunds": { label: "退税资料", area: "taxRefund", filename: "tax-refund-materials" },
 };
 
-function text(value) {
+type ReportType = keyof typeof REPORT_TYPES;
+type ReportRow = Record<string, unknown>;
+type ReportFilterKey =
+  | "keyword"
+  | "customerName"
+  | "customer"
+  | "orderNo"
+  | "blNo"
+  | "billOfLadingNo"
+  | "salespersonName"
+  | "salesperson"
+  | "supplierName"
+  | "supplier"
+  | "currency"
+  | "orderStatus"
+  | "paymentStatus"
+  | "costType"
+  | "taxRefundStatus"
+  | "archiveScope"
+  | "businessScope"
+  | "declarationMonth"
+  | "dateFrom"
+  | "dateTo";
+type ReportFilters = Partial<Record<ReportFilterKey, unknown>>;
+type ActorLike = AccessUser;
+type ReportColumn = { key: string; label: string };
+type ReportColumnTuple = [key: string, label: string];
+type ReportQueryOptions = {
+  filters?: ReportFilters;
+  page?: number | string;
+  pageSize?: number | string;
+  sortBy?: string;
+  sortDir?: string;
+  selectedIds?: string[];
+  noPagination?: boolean;
+};
+type DomesticLogisticsReportOrder = ReportRow & {
+  domesticLogisticsInfo?: ReportRow | null;
+  documentCompleteness?: {
+    domesticLogistics?: {
+      info?: ReportRow | null;
+    };
+  };
+};
+type MissingCostItem = {
+  costType?: string;
+  supplierName?: string;
+  currency?: string;
+  amount?: number | string;
+};
+type CompletenessReport = ReportRow & {
+  factory?: ReportRow;
+  supplier?: ReportRow;
+  logistics?: ReportRow;
+  customs?: ReportRow;
+  export?: ReportRow;
+  domesticLogistics?: ReportRow;
+  completed?: unknown;
+  total?: unknown;
+};
+type BusinessReportRow = DomesticLogisticsReportOrder & {
+  customer?: ReportRow;
+  summary?: ReportRow;
+  documentCompleteness?: CompletenessReport;
+};
+
+function reportTypeFrom(value: unknown): ReportType {
+  const type = text(value) as ReportType;
+  if (!REPORT_TYPES[type]) throw codedError("请选择有效报表类型", 400, "REPORT_TYPE_INVALID");
+  return type;
+}
+
+function recordFrom(value: unknown): ReportFilters {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as ReportFilters : {};
+}
+
+function reportRecord(value: unknown): ReportRow {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as ReportRow : {};
+}
+
+function stringArrayFrom(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [];
+}
+
+function text(value: unknown) {
   return String(value ?? "");
 }
 
-function lower(value) {
+function lower(value: unknown) {
   return text(value).trim().toLowerCase();
 }
 
-function displayCustomerName(value, fallback = "") {
+function displayCustomerName(value: unknown, fallback = "") {
   const textValue = text(value).trim();
   return textValue ? textValue.toUpperCase() : fallback;
 }
 
-function dateOnly(value) {
+function dateOnly(value: unknown) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   return text(value).slice(0, 10);
 }
 
-function toReportDate(value) {
+function toReportDate(value: unknown) {
   return dateOnly(value);
 }
 
-function inDateRange(row, from, to) {
+function inDateRange(row: ReportRow, from: string, to: string) {
   if (!from && !to) return true;
   const dates = [row.date, row.createdAt, row.updatedAt, row.paymentDate, row.dueDate, row.blDate, row.uploadedAt]
     .map(dateOnly)
@@ -55,7 +141,7 @@ function inDateRange(row, from, to) {
   return dates.some((date) => (!from || date >= from) && (!to || date <= to));
 }
 
-function filterRows(rows, filters = {}) {
+function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
   const keyword = lower(filters.keyword);
   const customer = lower(filters.customerName || filters.customer);
   const orderNo = lower(filters.orderNo);
@@ -107,7 +193,7 @@ function filterRows(rows, filters = {}) {
   });
 }
 
-function sortRows(rows, sortBy = "", sortDir = "asc") {
+function sortRows(rows: ReportRow[], sortBy = "", sortDir = "asc") {
   if (!sortBy) return rows;
   const dir = sortDir === "desc" ? -1 : 1;
   return [...rows].sort((a, b) => {
@@ -120,7 +206,7 @@ function sortRows(rows, sortBy = "", sortDir = "asc") {
   });
 }
 
-function pageRows(rows, page = 1, pageSize = 20) {
+function pageRows(rows: ReportRow[], page: number | string = 1, pageSize: number | string = 20) {
   const current = Math.max(1, Math.round(Number(page) || 1));
   const size = Math.min(200, Math.max(1, Math.round(Number(pageSize) || 20)));
   return {
@@ -134,7 +220,7 @@ function pageRows(rows, page = 1, pageSize = 20) {
   };
 }
 
-function moneyNumber(value) {
+function moneyNumber(value: unknown) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? Math.round(number * 100) / 100 : 0;
 }
@@ -161,13 +247,13 @@ const columnSets = {
   "tax-refunds": [
     ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户名称"], ["customsDeclarationNo", "报关单号"], ["customsDeclarationDate", "申报日期"], ["currency", "币种"], ["finalReceivableAmountCny", "最终应收人民币"], ["receivedAmountCny", "已收人民币"], ["customsCompleteness", "报关资料完整度"], ["exportCompleteness", "出口资料完整度"], ["domesticLogisticsCompleteness", "物流信息完整度"], ["factoryCompleteness", "工厂资料完整度"], ["logisticsInvoiceCompleteness", "物流资料完整度"], ["overallCompleteness", "总体完整度"], ["missingLogisticsInvoices", "缺失拖车费发票明细"], ["missingCustomsInvoices", "缺失报关费发票明细"], ["missingPortInvoices", "缺失港杂费发票明细"], ["taxRefundStatusLabel", "退税状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["exportInvoiceRemark", "出口发票备注"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
   ],
-};
+} satisfies Record<ReportType, ReportColumnTuple[]>;
 
-function columnsFor(type) {
+function columnsFor(type: ReportType): ReportColumn[] {
   return (columnSets[type] || columnSets.receivables).map(([key, label]) => ({ key, label }));
 }
 
-function domesticLogisticsColumns(order = {}) {
+function domesticLogisticsColumns(order: DomesticLogisticsReportOrder = {}) {
   const info = order.domesticLogisticsInfo || order.documentCompleteness?.domesticLogistics?.info || {};
   return {
     domesticTransportType: info.transportTypeLabel || "",
@@ -185,14 +271,15 @@ function domesticLogisticsColumns(order = {}) {
   };
 }
 
-function orderToReceivable(order) {
+function orderToReceivable(order: BusinessReportRow) {
+  const customer = reportRecord(order.customer);
   return {
     id: order.id,
     orderId: order.id,
     orderNo: order.orderNo,
     blNo: order.blNo || "待发货",
-    customerName: displayCustomerName(order.customerName || order.customerShortName || order.customerNameSnapshot || order.customer?.name || ""),
-    customerFullName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || order.customer?.name || ""),
+    customerName: displayCustomerName(order.customerName || order.customerShortName || order.customerNameSnapshot || customer.name || ""),
+    customerFullName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || customer.name || ""),
     customerShortName: displayCustomerName(order.customerShortName || ""),
     salespersonName: order.salespersonName,
     country: order.country,
@@ -216,7 +303,7 @@ function orderToReceivable(order) {
   };
 }
 
-function orderToProfit(order) {
+function orderToProfit(order: BusinessReportRow) {
   return {
     ...orderToReceivable(order),
     receivableCny: moneyNumber(order.summary?.receivableCny),
@@ -229,7 +316,7 @@ function orderToProfit(order) {
   };
 }
 
-function orderToCommission(order) {
+function orderToCommission(order: BusinessReportRow) {
   return {
     ...orderToReceivable(order),
     commissionRate: `${Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2)}%`,
@@ -242,7 +329,7 @@ function orderToCommission(order) {
   };
 }
 
-function orderToOverdue(order) {
+function orderToOverdue(order: BusinessReportRow) {
   return {
     ...orderToReceivable(order),
     reminderStatus: order.summary?.reminderStatus,
@@ -250,16 +337,21 @@ function orderToOverdue(order) {
   };
 }
 
-function orderToTaxRefund(order) {
+function missingCostItems(value: unknown): MissingCostItem[] {
+  return Array.isArray(value) ? value as MissingCostItem[] : [];
+}
+
+function orderToTaxRefund(order: BusinessReportRow) {
+  const customer = reportRecord(order.customer);
   const completeness = order.documentCompleteness || {};
-  const factory = completeness.factory || completeness.supplier || {};
-  const logistics = completeness.logistics || {};
-  const missingDetail = (items = []) => items.map((item) => (
+  const factory = (completeness.factory || completeness.supplier || {}) as ReportRow;
+  const logistics = (completeness.logistics || {}) as ReportRow;
+  const missingDetail = (items: MissingCostItem[] = []) => items.map((item) => (
     `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.currency || "CNY"} ${Number(item.amount || 0).toFixed(2)}`
   )).join("；");
   return {
     ...orderToReceivable(order),
-    customerName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || order.customer?.name || order.customerName || ""),
+    customerName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || customer.name || order.customerName || ""),
     taxRefundStatus: order.taxRefundStatus,
     taxRefundStatusLabel: order.taxRefundStatusLabel,
     taxArchived: Boolean(order.taxArchived || order.taxRefundStatus === "SUBMITTED"),
@@ -275,41 +367,41 @@ function orderToTaxRefund(order) {
       : `${factory.completed || 0}/${Math.max(2, Number(factory.total || 0))}`,
     logisticsInvoiceCompleteness: `${logistics.completed || 0}/${logistics.total || 0}`,
     domesticLogisticsCompleteness: `${completeness.domesticLogistics?.completed || 0}/${completeness.domesticLogistics?.total || 1}`,
-    missingLogisticsInvoices: missingDetail(logistics.missingLogisticsInvoices || []),
-    missingCustomsInvoices: missingDetail(logistics.missingCustomsInvoices || []),
-    missingPortInvoices: missingDetail(logistics.missingPortInvoices || []),
+    missingLogisticsInvoices: missingDetail(missingCostItems(logistics.missingLogisticsInvoices)),
+    missingCustomsInvoices: missingDetail(missingCostItems(logistics.missingCustomsInvoices)),
+    missingPortInvoices: missingDetail(missingCostItems(logistics.missingPortInvoices)),
     overallCompleteness: `${completeness.completed || 0}/${completeness.total || 0}`,
   };
 }
 
-function paymentToRow(payment) {
+function paymentToRow(payment: ReportRow) {
+  const customer = reportRecord(payment.customer);
   return {
     ...payment,
-    customerName: displayCustomerName(payment.customerName || payment.customerShortName || payment.customer?.name || ""),
-    customerFullName: displayCustomerName(payment.customerFullName || payment.customer?.name || ""),
+    customerName: displayCustomerName(payment.customerName || payment.customerShortName || customer.name || ""),
+    customerFullName: displayCustomerName(payment.customerFullName || customer.name || ""),
     customerShortName: displayCustomerName(payment.customerShortName || ""),
     date: payment.paymentDate,
     paymentStatus: payment.status,
   };
 }
 
-function costToRow(cost) {
+function costToRow(cost: ReportRow) {
+  const customer = reportRecord(cost.customer);
   return {
     ...cost,
-    costType: logisticsCostTypeLabel(cost.costType || "") || cost.costType,
+    costType: logisticsCostTypeLabel(String(cost.costType || "")) || cost.costType,
     costTypeRaw: cost.costType,
-    customerName: displayCustomerName(cost.customerName || cost.customerShortName || cost.customer?.name || ""),
-    customerFullName: displayCustomerName(cost.customerFullName || cost.customer?.name || ""),
+    customerName: displayCustomerName(cost.customerName || cost.customerShortName || customer.name || ""),
+    customerFullName: displayCustomerName(cost.customerFullName || customer.name || ""),
     customerShortName: displayCustomerName(cost.customerShortName || ""),
     date: cost.paymentDate || cost.createdAt,
   };
 }
 
-async function baseRows(type, query, actor) {
+async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLike): Promise<ReportRow[]> {
   if (!REPORT_TYPES[type]) {
-    const error = new Error("请选择有效报表类型");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效报表类型", 400, "REPORT_TYPE_INVALID");
   }
   assertRead(actor, "reports");
   const area = REPORT_TYPES[type].area;
@@ -323,7 +415,7 @@ async function baseRows(type, query, actor) {
   return (await listOrders(query, actor)).map(orderToReceivable);
 }
 
-function queryFilters(query) {
+function queryFilters(query: URLSearchParams) {
   return {
     dateFrom: query.get("dateFrom") || "",
     dateTo: query.get("dateTo") || "",
@@ -343,16 +435,17 @@ function queryFilters(query) {
   };
 }
 
-export async function queryReport(type, query, actor, options = {}) {
+export async function queryReport(typeInput: unknown, query: URLSearchParams, actor: ActorLike, options: ReportQueryOptions = {}) {
+  const type = reportTypeFrom(typeInput);
   const filters = options.filters || queryFilters(query);
   const page = options.page || query.get("page") || 1;
   const pageSize = options.pageSize || query.get("pageSize") || 20;
   const sortBy = options.sortBy || query.get("sortBy") || "";
   const sortDir = options.sortDir || query.get("sortDir") || "asc";
   const selectedIds = new Set(options.selectedIds || []);
-  let rows = await baseRows(type, query, actor);
+  let rows: ReportRow[] = await baseRows(type, query, actor);
   rows = filterRows(rows, filters);
-  if (selectedIds.size) rows = rows.filter((row) => selectedIds.has(row.id));
+  if (selectedIds.size) rows = rows.filter((row) => selectedIds.has(String(row.id || "")));
   rows = sortRows(rows, sortBy, sortDir);
   const paged = options.noPagination ? { rows, pagination: { page: 1, pageSize: rows.length, total: rows.length, totalPages: 1 } } : pageRows(rows, page, pageSize);
   return {
@@ -367,7 +460,7 @@ export async function queryReport(type, query, actor, options = {}) {
   };
 }
 
-function csvCell(value) {
+function csvCell(value: unknown) {
   let valueText = text(value);
   if (/^[=+\-@]/.test(valueText.trimStart())) {
     valueText = `'${valueText}`;
@@ -375,7 +468,7 @@ function csvCell(value) {
   return /[",\n]/.test(valueText) ? `"${valueText.replaceAll('"', '""')}"` : valueText;
 }
 
-function csvResponse(filename, columns, rows) {
+function csvResponse(filename: string, columns: ReportColumn[], rows: ReportRow[]) {
   const header = columns.map((column) => csvCell(column.label)).join(",");
   const body = rows.map((row) => columns.map((column) => csvCell(row[column.key])).join(",")).join("\n");
   return new Response(`\ufeff${header}\n${body}`, {
@@ -386,11 +479,11 @@ function csvResponse(filename, columns, rows) {
   });
 }
 
-function xmlCell(value) {
+function xmlCell(value: unknown) {
   return text(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
-function excelColumnName(index) {
+function excelColumnName(index: number) {
   let value = index + 1;
   let name = "";
   while (value > 0) {
@@ -401,7 +494,7 @@ function excelColumnName(index) {
   return name;
 }
 
-async function xlsxResponse(filename, columns, rows) {
+async function xlsxResponse(filename: string, columns: ReportColumn[], rows: ReportRow[]) {
   const values = [columns.map((column) => column.label), ...rows.map((row) => columns.map((column) => row[column.key]))];
   const sheetData = values.map((row, rowIndex) => `
     <row r="${rowIndex + 1}">
@@ -410,12 +503,12 @@ async function xlsxResponse(filename, columns, rows) {
   `).join("");
   const zip = new JSZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
-  zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
-  zip.folder("xl").file("workbook.xml", `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="报表" sheetId="1" r:id="rId1"/></sheets></workbook>`);
-  zip.folder("xl").folder("_rels").file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
-  zip.folder("xl").folder("worksheets").file("sheet1.xml", `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`);
+  zip.folder("_rels")!.file(".rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  zip.folder("xl")!.file("workbook.xml", `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="报表" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.folder("xl")!.folder("_rels")!.file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
+  zip.folder("xl")!.folder("worksheets")!.file("sheet1.xml", `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`);
   const body = await zip.generateAsync({ type: "uint8array" });
-  return new Response(body, {
+  return new Response(Buffer.from(body), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
@@ -423,36 +516,36 @@ async function xlsxResponse(filename, columns, rows) {
   });
 }
 
-export async function exportReport(request, actor) {
+export async function exportReport(request: Request, actor: ActorLike) {
   assertRead(actor, "reports");
-  const body = await request.json();
-  const type = body.reportType || "receivables";
-  const exportScope = body.exportScope || "allFiltered";
+  const body = await parseJsonBody(request);
+  const type = reportTypeFrom(body.reportType || "receivables");
+  const exportScope = text(body.exportScope) || "allFiltered";
   const format = body.format === "xlsx" ? "xlsx" : "csv";
   const query = new URLSearchParams();
-  const filters = body.filters || {};
+  const filters = recordFrom(body.filters);
   Object.entries(filters).forEach(([key, value]) => {
-    if (value) query.set(key, value);
+    if (value) query.set(key, String(value));
   });
   const result = await queryReport(type, query, actor, {
     filters,
-    selectedIds: exportScope === "selected" ? (body.selectedIds || []) : [],
-    page: exportScope === "currentPage" ? (body.page || 1) : 1,
-    pageSize: exportScope === "currentPage" ? (body.pageSize || 20) : 100000,
-    sortBy: body.sortBy || "",
-    sortDir: body.sortDir || "asc",
+    selectedIds: exportScope === "selected" ? stringArrayFrom(body.selectedIds) : [],
+    page: exportScope === "currentPage" ? (text(body.page) || 1) : 1,
+    pageSize: exportScope === "currentPage" ? (text(body.pageSize) || 20) : 100000,
+    sortBy: text(body.sortBy),
+    sortDir: text(body.sortDir) || "asc",
     noPagination: exportScope !== "currentPage",
   });
   if (format === "xlsx") return xlsxResponse(REPORT_TYPES[type].filename, result.columns, result.rows);
   return csvResponse(REPORT_TYPES[type].filename, result.columns, result.rows);
 }
 
-export async function reportGetHandler(request, type) {
+export async function reportGetHandler(request: Request, type: unknown) {
   try {
     const actor = await getActor(request);
     const query = new URL(request.url).searchParams;
     return Response.json(await queryReport(type, query, actor));
-  } catch (error) {
+  } catch (error: unknown) {
     return apiError(error, "查询报表失败");
   }
 }

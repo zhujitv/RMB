@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   COST_PAYMENT_STATUSES,
   COST_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
-  applyCommonFilters,
   assertRead,
   dateFromInput,
   equivalentCostTypes,
@@ -14,6 +13,7 @@ import {
   nonEmpty,
   permissionError,
   safeSerializeCost,
+  type CostDto,
   successDocument,
   validCost,
 } from "./shared";
@@ -28,12 +28,26 @@ import {
   serializeCostOrderSummary,
 } from "./cost-records-shared";
 
-function insensitiveContains(value) {
+type ActorLike = Record<string, unknown> | null;
+type CostQuery = URLSearchParams;
+type CostBusinessScope = ReturnType<typeof archiveScope>;
+type CostListFilters = {
+  keyword: Prisma.StringFilter | null;
+  costType: string;
+  paymentStatus: string;
+  costConfirmed: boolean | null;
+  invoiceStatus: string;
+  dateFrom: Date | null;
+  dateTo: Date | null;
+  businessScope: CostBusinessScope;
+};
+
+function insensitiveContains(value: unknown): Prisma.StringFilter | null {
   const text = nonEmpty(value);
   return text ? { contains: text, mode: "insensitive" } : null;
 }
 
-function costConfirmedFilter(value) {
+function costConfirmedFilter(value: unknown): boolean | null {
   const text = nonEmpty(value);
   if (!text) return null;
   if (["true", "1", "已确认"].includes(text)) return true;
@@ -41,14 +55,26 @@ function costConfirmedFilter(value) {
   return null;
 }
 
-function costDateRangeFilter(query) {
-  const from = dateFromInput(query.get("dateFrom"));
-  const to = dateFromInput(query.get("dateTo"));
-  if (!from && !to) return null;
-  const range = {};
-  if (from) range.gte = from;
-  if (to) {
-    const end = new Date(to);
+function costListFiltersFromQuery(query: CostQuery): CostListFilters {
+  const keyword = insensitiveContains(query.get("keyword"));
+  return {
+    keyword,
+    costType: nonEmpty(query.get("costType")),
+    paymentStatus: nonEmpty(query.get("paymentStatus")),
+    costConfirmed: costConfirmedFilter(query.get("costConfirmed")),
+    invoiceStatus: nonEmpty(query.get("invoiceStatus")),
+    dateFrom: dateFromInput(query.get("dateFrom")),
+    dateTo: dateFromInput(query.get("dateTo")),
+    businessScope: archiveScope(query),
+  };
+}
+
+function costDateRangeFilter(filters: CostListFilters): Prisma.OrderCostWhereInput | null {
+  if (!filters.dateFrom && !filters.dateTo) return null;
+  const range: Prisma.DateTimeFilter<"OrderCost"> = {};
+  if (filters.dateFrom) range.gte = filters.dateFrom;
+  if (filters.dateTo) {
+    const end = new Date(filters.dateTo);
     end.setDate(end.getDate() + 1);
     range.lt = end;
   }
@@ -61,29 +87,24 @@ function costDateRangeFilter(query) {
   };
 }
 
-function costInvoiceStatusFilter(value) {
-  const text = nonEmpty(value);
-  if (!text) return null;
-  const successInvoice = {
+function costInvoiceStatusFilter(invoiceStatus: string): Prisma.OrderCostWhereInput | null {
+  if (!invoiceStatus) return null;
+  const successInvoice: Prisma.OrderDocumentWhereInput = {
     documentType: "SUPPLIER_INVOICE",
     uploadStatus: "SUCCESS",
     deletedAt: null,
   };
-  if (text === "已收到") return { documents: { some: successInvoice } };
-  if (text === "未收到") return { documents: { none: successInvoice } };
+  if (invoiceStatus === "已收到") return { documents: { some: successInvoice } };
+  if (invoiceStatus === "未收到") return { documents: { none: successInvoice } };
   return null;
 }
 
-function costFilterClauses(query) {
-  const keyword = insensitiveContains(query.get("keyword"));
-  const costType = nonEmpty(query.get("costType"));
-  const paymentStatus = nonEmpty(query.get("paymentStatus"));
-  const costConfirmed = costConfirmedFilter(query.get("costConfirmed"));
-  const invoiceStatus = costInvoiceStatusFilter(query.get("invoiceStatus"));
-  const dateRange = costDateRangeFilter(query);
-  const businessScope = archiveScope(query);
-  return [
-    { order: { is: orderArchiveWhereForScope(businessScope) } },
+function costFilterClauses(filters: CostListFilters): Prisma.OrderCostWhereInput[] {
+  const keyword = filters.keyword;
+  const invoiceStatus = costInvoiceStatusFilter(filters.invoiceStatus);
+  const dateRange = costDateRangeFilter(filters);
+  const clauses: Array<Prisma.OrderCostWhereInput | null> = [
+    { order: { is: orderArchiveWhereForScope(filters.businessScope) } },
     keyword ? {
       OR: [
         { costType: keyword },
@@ -98,16 +119,17 @@ function costFilterClauses(query) {
         { supplier: { is: { supplierType: keyword } } },
       ],
     } : null,
-    costType && COST_TYPES.includes(costType) ? { costType: { in: equivalentCostTypes(costType) } } : null,
-    paymentStatus && COST_PAYMENT_STATUSES.includes(paymentStatus) ? { paymentStatus } : null,
-    costConfirmed == null ? null : { costConfirmed },
+    filters.costType && COST_TYPES.includes(filters.costType) ? { costType: { in: equivalentCostTypes(filters.costType) } } : null,
+    filters.paymentStatus && COST_PAYMENT_STATUSES.includes(filters.paymentStatus) ? { paymentStatus: filters.paymentStatus } : null,
+    filters.costConfirmed == null ? null : { costConfirmed: filters.costConfirmed },
     invoiceStatus,
     dateRange,
-  ].filter(Boolean);
+  ];
+  return clauses.filter((clause): clause is Prisma.OrderCostWhereInput => Boolean(clause));
 }
 
-function pagedCostWhere(query, actor) {
-  const clauses = costFilterClauses(query);
+function pagedCostWhere(filters: CostListFilters, actor: ActorLike): Prisma.OrderCostWhereInput {
+  const clauses = costFilterClauses(filters);
   return {
     deletedAt: null,
     ...costAccessWhere(actor),
@@ -115,23 +137,22 @@ function pagedCostWhere(query, actor) {
   };
 }
 
-export async function listCosts(query, actor = null) {
+export async function listCosts(query: CostQuery, actor: ActorLike = null): Promise<CostDto[]> {
   assertRead(actor, "costs");
+  const where = pagedCostWhere(costListFiltersFromQuery(query), actor);
   const rows = await prisma.orderCost.findMany({
-    where: {
-      deletedAt: null,
-      ...costAccessWhere(actor),
-    },
+    where,
     include: includeCostRelations(),
     orderBy: [{ createdAt: "desc" }],
   });
-  return applyCommonFilters(rows.map(safeSerializeCost), query);
+  return rows.map(safeSerializeCost);
 }
 
-export async function listCostsPage(query, actor = null) {
+export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
-  const where = pagedCostWhere(query, actor);
+  const filters = costListFiltersFromQuery(query);
+  const where = pagedCostWhere(filters, actor);
   const [total, rows, summaryRows] = await Promise.all([
     prisma.orderCost.count({ where }),
     prisma.orderCost.findMany({
@@ -149,14 +170,14 @@ export async function listCostsPage(query, actor = null) {
   return { rows: rows.map(safeSerializeCost), total, page, pageSize, summary: summarizeCurrencyTotals(summaryRows.filter(validCost)) };
 }
 
-export async function listCostOrderSummaries(query, actor = null) {
+export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike = null) {
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
-  const costWhere = pagedCostWhere(query, actor);
-  const businessScope = archiveScope(query);
-  const where = {
+  const filters = costListFiltersFromQuery(query);
+  const costWhere = pagedCostWhere(filters, actor);
+  const where: Prisma.ReceivableOrderWhereInput = {
     deletedAt: null,
-    ...orderArchiveWhereForScope(businessScope),
+    ...orderArchiveWhereForScope(filters.businessScope),
     ...orderAccessWhere(actor),
     costs: { some: costWhere },
   };
@@ -191,7 +212,7 @@ export async function listCostOrderSummaries(query, actor = null) {
   return { rows: orders.map(serializeCostOrderSummary), total, page, pageSize, summary: summarizeCurrencyTotals(summaryRows.filter(validCost)) };
 }
 
-export async function getCost(id, actor = null) {
+export async function getCost(id: string, actor: ActorLike = null) {
   assertRead(actor, "costs");
   const cost = await prisma.orderCost.findFirst({
     where: {

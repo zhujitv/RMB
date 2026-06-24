@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   assertRead,
   canRead,
@@ -8,29 +8,75 @@ import {
   customerShortName,
   getCommissionFormulaSettings,
   includeOrderRelations,
+  isPlainRecord,
   nonEmpty,
   normalizedCostType,
   pageParams,
   pageResult,
   requireAdminGlobal,
   summarizeOrder,
+  type CostDto,
 } from "./shared";
 import { listCosts } from "./cost-records";
-import { listOrders } from "./orders-module";
-import { listPayments } from "./payments-module";
+import { listOrders, type OrderListRow } from "./orders-module";
+import { listPayments, type PaymentListRow } from "./payments-module";
 import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { orderAccessWhere, scopeOrderForActor } from "./order-access";
 export { getAuditLogs } from "./audit-logs";
 
-function assertProfitAnalysisAccess(actor) {
+type AmountGroup = {
+  label: string;
+  amount: number;
+  count: number;
+};
+
+type ActorLike = ({
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} & Record<string, unknown>) | null | undefined;
+type QueryLike = URLSearchParams;
+type CommissionFormulaSettings = Awaited<ReturnType<typeof getCommissionFormulaSettings>>;
+type ProfitOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
+type ProfitCost = ProfitOrder["costs"][number];
+type CostListRow = CostDto;
+type ProfitListFilters = {
+  keyword: string;
+  month: string;
+  currency: string;
+  orderStatus: string;
+};
+
+type OverviewMetric = ReturnType<typeof overviewOrderMetrics>;
+
+type OverviewGroup = {
+  label: string;
+  count: number;
+  receivable: number;
+  paid: number;
+  unpaid: number;
+  expectedProfit: number;
+  commissionMonth: number;
+  commissionYear: number;
+  commissionPending: number;
+  commissionSettled: number;
+};
+
+function numericField(row: unknown, field: string) {
+  const value = isPlainRecord(row) ? row[field] : 0;
+  return Number(value || 0);
+}
+
+function assertProfitAnalysisAccess(actor: ActorLike) {
   assertRead(actor, "orders");
   assertRead(actor, "costs");
   assertRead(actor, "commissions");
 }
 
-export async function getProfitAnalysis(query, actor) {
+export async function getProfitAnalysis(query: QueryLike, actor: ActorLike): Promise<ProfitAnalysisRow[]> {
   assertProfitAnalysisAccess(actor);
-  const where = profitFilterWhere(query, actor);
+  const where = profitFilterWhere(profitListFiltersFromQuery(query), actor);
   const [orders, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.findMany({
       where,
@@ -42,7 +88,7 @@ export async function getProfitAnalysis(query, actor) {
   return orders.map((order) => serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings));
 }
 
-function profitKeywordWhere(keyword) {
+function profitKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInput {
   if (!keyword) return {};
   return {
     OR: [
@@ -55,18 +101,22 @@ function profitKeywordWhere(keyword) {
   };
 }
 
-function profitFilterWhere(query, actor) {
+function profitListFiltersFromQuery(query: QueryLike): ProfitListFilters {
   const keyword = nonEmpty(query.get("keyword"));
   const month = nonEmpty(query.get("month"));
   const currency = nonEmpty(query.get("currency"));
   const orderStatus = nonEmpty(query.get("orderStatus"));
-  const monthStart = month && /^\d{4}-\d{2}$/.test(month) ? new Date(`${month}-01T00:00:00.000Z`) : null;
+  return { keyword, month, currency, orderStatus };
+}
+
+function profitFilterWhere(filters: ProfitListFilters, actor: ActorLike): Prisma.ReceivableOrderWhereInput {
+  const monthStart = filters.month && /^\d{4}-\d{2}$/.test(filters.month) ? new Date(`${filters.month}-01T00:00:00.000Z`) : null;
   const monthEnd = monthStart ? new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1)) : null;
-  const clauses = [
+  const clauses: Prisma.ReceivableOrderWhereInput[] = [
     orderAccessWhere(actor),
-    profitKeywordWhere(keyword),
-    ...(currency ? [{ currency }] : []),
-    ...(orderStatus ? [{ status: orderStatus }] : []),
+    profitKeywordWhere(filters.keyword),
+    ...(filters.currency ? [{ currency: filters.currency }] : []),
+    ...(filters.orderStatus ? [{ status: filters.orderStatus }] : []),
     ...(monthStart && monthEnd ? [{ createdAt: { gte: monthStart, lt: monthEnd } }] : []),
   ].filter((item) => Object.keys(item).length);
   return {
@@ -75,14 +125,14 @@ function profitFilterWhere(query, actor) {
   };
 }
 
-function serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings) {
+function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, commissionFormulaSettings: CommissionFormulaSettings) {
   const scoped = scopeOrderForActor(order, actor);
   const summary = summarizeOrder(scoped, commissionFormulaSettings);
   const fullCustomerName = customerFullName(scoped.customer, scoped.customerNameSnapshot);
   const shortCustomerName = customerShortName(scoped.customer);
   const costGroups = (scoped.costs || [])
     .filter(confirmedCost)
-    .reduce((acc, cost) => {
+    .reduce<Record<string, number>>((acc, cost: ProfitCost) => {
       const label = logisticsCostTypeLabel(normalizedCostType(cost.costType));
       acc[label] = (acc[label] || 0) + Number(cost.amountCny || 0);
       return acc;
@@ -126,10 +176,12 @@ function serializeProfitAnalysisOrder(order, actor, commissionFormulaSettings) {
   };
 }
 
-export async function listProfitAnalysisPage(query, actor) {
+export type ProfitAnalysisRow = ReturnType<typeof serializeProfitAnalysisOrder>;
+
+export async function listProfitAnalysisPage(query: QueryLike, actor: ActorLike) {
   assertProfitAnalysisAccess(actor);
   const { page, pageSize } = pageParams(query, 20, 100);
-  const where = profitFilterWhere(query, actor);
+  const where = profitFilterWhere(profitListFiltersFromQuery(query), actor);
   const [total, orders, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
@@ -145,7 +197,7 @@ export async function listProfitAnalysisPage(query, actor) {
   return pageResult(rows, total, page, pageSize);
 }
 
-export async function getReminders(query, actor) {
+export async function getReminders(query: QueryLike, actor: ActorLike) {
   const orders = await listOrders(query, actor);
   return orders
     .filter((order) => !order.taxArchived && order.taxRefundStatus !== "SUBMITTED")
@@ -156,7 +208,7 @@ export async function getReminders(query, actor) {
     });
 }
 
-export async function getOverview(query, actor) {
+export async function getOverview(query: QueryLike, actor: ActorLike) {
   requireAdminGlobal(actor, "无权限访问经营总览");
   const trendQuery = new URLSearchParams(query);
   trendQuery.delete("month");
@@ -165,7 +217,7 @@ export async function getOverview(query, actor) {
     canRead(actor, "orders") ? listOrders(trendQuery, actor) : [],
     canRead(actor, "payments") ? listPayments(query, actor) : [],
     canRead(actor, "costs") ? listCosts(query, actor) : [],
-  ]);
+  ]) as [OrderListRow[], OrderListRow[], PaymentListRow[], CostListRow[]];
   const total = orders.reduce((acc, order) => {
     acc.receivable += order.summary.receivableCny;
     acc.confirmed += order.summary.confirmedPaymentsCny;
@@ -199,6 +251,9 @@ export async function getOverview(query, actor) {
     commissionAmount: 0,
     overdueOrders: 0,
     dueSoonOrders: 0,
+    expectedGrossMargin: null as number | null,
+    realizedGrossMargin: null as number | null,
+    grossMargin: null as number | null,
   });
   total.expectedGrossMargin = total.receivable > 0 ? total.expectedProfit / total.receivable : null;
   total.realizedGrossMargin = total.confirmed > 0 ? total.realizedProfit / total.confirmed : null;
@@ -209,11 +264,11 @@ export async function getOverview(query, actor) {
   const monthlyTrend = buildOverviewMonthlyTrend(trendOrders.map((order) => overviewOrderMetrics(order, query)));
   const overdueTop = activeOverviewRows
     .filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays < 0)
-    .sort((a, b) => Math.abs(b.remainingDays) - Math.abs(a.remainingDays) || b.unpaid - a.unpaid)
+    .sort((a, b) => Math.abs(Number(b.remainingDays)) - Math.abs(Number(a.remainingDays)) || b.unpaid - a.unpaid)
     .slice(0, 10);
   const dueSoonTop = activeOverviewRows
     .filter((row) => row.unpaid > 0 && row.remainingDays != null && row.remainingDays >= 0 && row.remainingDays <= 7)
-    .sort((a, b) => a.remainingDays - b.remainingDays || b.unpaid - a.unpaid)
+    .sort((a, b) => Number(a.remainingDays) - Number(b.remainingDays) || b.unpaid - a.unpaid)
     .slice(0, 10);
   const lowMarginOrders = activeOverviewRows
     .filter((row) => row.receivable > 0 || row.cost > 0)
@@ -223,13 +278,13 @@ export async function getOverview(query, actor) {
       return marginA - marginB || a.expectedGrossProfit - b.expectedGrossProfit;
     })
     .slice(0, 10);
-  const groupBy = (items, labelFn, valueFn) => Object.values(items.reduce((acc, item) => {
+  const groupBy = <T>(items: T[], labelFn: (item: T) => string | null | undefined, valueFn: (item: T) => number): AmountGroup[] => Object.values(items.reduce((acc, item) => {
     const label = labelFn(item) || "未填写";
     acc[label] ||= { label, amount: 0, count: 0 };
     acc[label].amount += valueFn(item);
     acc[label].count += 1;
     return acc;
-  }, {})).sort((a, b) => b.amount - a.amount);
+  }, {} as Record<string, AmountGroup>)).sort((a, b) => b.amount - a.amount);
   const salespersonGroups = groupOverviewRows(overviewRows, (row) => row.salespersonName || "未分配");
   const salespersonCollections = salespersonGroups
     .map((group) => ({ ...group, collectionRate: group.receivable > 0 ? group.paid / group.receivable : null }))
@@ -248,7 +303,7 @@ export async function getOverview(query, actor) {
   return {
     totals: { ...total, orderCount: orders.length, paymentCount: payments.length, costCount: costs.length },
     orderProfits: activeOrders,
-    costStructure: groupBy(costs, (cost) => logisticsCostTypeLabel(normalizedCostType(cost.costType)), (cost) => cost.amountCny),
+    costStructure: groupBy(costs, (cost) => logisticsCostTypeLabel(normalizedCostType(cost.costType || "")), (cost) => numericField(cost, "amountCny")),
     reminders: await getReminders(query, actor),
     bySalesperson: groupBy(orders, (order) => order.salespersonName, (order) => order.summary.receivableCny),
     byCustomer: groupBy(orders, (order) => order.customerName, (order) => order.summary.receivableCny),
@@ -263,7 +318,7 @@ export async function getOverview(query, actor) {
   };
 }
 
-function overviewDayNumber(value) {
+function overviewDayNumber(value: unknown) {
   if (!value) return null;
   const date = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
   const [year, month, day] = date.split("-").map(Number);
@@ -279,14 +334,16 @@ function lastOverviewMonthKeys(count = 12) {
   });
 }
 
-function overviewOrderMetrics(order, query = null) {
+function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null = null) {
   const summary = order.summary || {};
   const receivable = Number(summary.receivableCny || 0);
   const paid = Number(summary.arrivedPaymentsCny ?? summary.confirmedPaymentsCny ?? 0);
   const unpaid = Math.max(receivable - paid, 0);
   const cost = Number(summary.confirmedTotalCostCny ?? summary.totalCostCny ?? 0);
   const expectedGrossProfit = Number(summary.expectedGrossProfit ?? (receivable - cost));
-  const expectedGrossMargin = summary.expectedGrossMargin ?? (receivable > 0 ? expectedGrossProfit / receivable : null);
+  const expectedGrossMargin = summary.expectedGrossMargin == null
+    ? (receivable > 0 ? expectedGrossProfit / receivable : null)
+    : Number(summary.expectedGrossMargin);
   const realizedGrossProfit = Number(summary.realizedGrossProfit ?? summary.actualGrossProfit ?? 0);
   const todayNo = overviewDayNumber(new Date());
   const dueNo = overviewDayNumber(order.dueDate);
@@ -325,7 +382,7 @@ function overviewOrderMetrics(order, query = null) {
   };
 }
 
-function buildOverviewMonthlyTrend(rows) {
+function buildOverviewMonthlyTrend(rows: OverviewMetric[]) {
   const monthlyTrend = lastOverviewMonthKeys(12).map((label) => ({ label, receivable: 0, paid: 0, unpaid: 0 }));
   const byMonth = Object.fromEntries(monthlyTrend.map((item) => [item.label, item]));
   rows.forEach((row) => {
@@ -339,7 +396,7 @@ function buildOverviewMonthlyTrend(rows) {
   return monthlyTrend;
 }
 
-function groupOverviewRows(rows, labelFn) {
+function groupOverviewRows(rows: OverviewMetric[], labelFn: (row: OverviewMetric) => string): OverviewGroup[] {
   return Object.values(rows.reduce((acc, row) => {
     const label = labelFn(row) || "未填写";
     acc[label] ||= {
@@ -365,5 +422,5 @@ function groupOverviewRows(rows, labelFn) {
     group.commissionPending += row.commissionPending;
     group.commissionSettled += row.commissionSettled;
     return acc;
-  }, {}));
+  }, {} as Record<string, OverviewGroup>));
 }

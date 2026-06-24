@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   LOGISTICS_COST_TYPES,
   nonEmpty,
@@ -19,20 +19,67 @@ import {
   serializeLogisticsExpense,
   LOGISTICS_OPERATOR_ROLE,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
+  type LogisticsExpenseBillDto,
+  type LogisticsExpenseDto,
 } from "./logistics-expense-shared";
 
-export async function listLogisticsExpenses(query, actor) {
-  assertCanReadLogisticsExpenses(actor);
-  const view = nonEmpty(query.get("view") || "bills");
+type SupplierStatementRow = {
+  supplierId: string;
+  supplierName: string;
+  orderIds: Set<string>;
+  approvedAmountCny: number;
+  invoicedAmountCny: number;
+  pendingPaymentAmountCny: number;
+  paidAmountCny: number;
+};
+type QueryLike = {
+  get(name: string): string | null;
+};
+type LogisticsExpenseListView = "bills" | "items";
+type LogisticsExpenseListFilters = {
+  view: LogisticsExpenseListView;
+  keyword: Prisma.StringFilter | null;
+  supplierId: string;
+  costType: string;
+  status: string;
+};
+type LogisticsQueryActor = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+
+type PaginatedRows<T> = {
+  rows: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+type PaginatedLogisticsExpenseItems = PaginatedRows<LogisticsExpenseDto>;
+type PaginatedLogisticsExpenseBills = PaginatedRows<LogisticsExpenseBillDto>;
+
+function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpenseListFilters {
+  const view = nonEmpty(query.get("view") || "bills") === "items" ? "items" : "bills";
   const keyword = insensitiveContains(query.get("keyword") || query.get("q"));
-  const supplierId = nonEmpty(query.get("supplierId"));
-  const costType = String(query.get("costType") || "").trim();
-  const where = {
+  return {
+    view,
+    keyword,
+    supplierId: nonEmpty(query.get("supplierId")),
+    costType: String(query.get("costType") || "").trim(),
+    status: String(query.get("status") || ""),
+  };
+}
+
+function logisticsExpenseListWhere(filters: LogisticsExpenseListFilters, actor: LogisticsQueryActor): Prisma.LogisticsExpenseWhereInput {
+  const keyword = filters.keyword;
+  return {
     deletedAt: null,
     ...logisticsExpenseAccessWhere(actor),
-    ...logisticsExpenseStatusWhere(query.get("status")),
-    ...(supplierId && actor.role === "管理员" ? { supplierId } : {}),
-    ...(costType && LOGISTICS_COST_TYPES.includes(costType) ? { costType } : {}),
+    ...logisticsExpenseStatusWhere(filters.status),
+    ...(filters.supplierId && actor?.role === "管理员" ? { supplierId: filters.supplierId } : {}),
+    ...(filters.costType && LOGISTICS_COST_TYPES.includes(filters.costType) ? { costType: filters.costType } : {}),
     ...(keyword ? {
       OR: [
         { costType: keyword },
@@ -46,8 +93,14 @@ export async function listLogisticsExpenses(query, actor) {
       ],
     } : {}),
   };
+}
+
+export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQueryActor): Promise<PaginatedLogisticsExpenseItems | PaginatedLogisticsExpenseBills> {
+  assertCanReadLogisticsExpenses(actor);
+  const filters = logisticsExpenseListFiltersFromQuery(query);
+  const where = logisticsExpenseListWhere(filters, actor);
   const { page, pageSize } = pageParams(query, 20, 100);
-  if (view === "items") {
+  if (filters.view === "items") {
     const [total, rows] = await Promise.all([
       prisma.logisticsExpense.count({ where }),
       prisma.logisticsExpense.findMany({
@@ -70,17 +123,23 @@ export async function listLogisticsExpenses(query, actor) {
   return pageResult(bills.slice(start, start + pageSize), bills.length, page, pageSize);
 }
 
-export async function listLogisticsExpenseOrders(query, actor) {
+export async function listLogisticsExpenseOrders(query: QueryLike, actor: LogisticsQueryActor) {
   assertCanReadLogisticsExpenses(actor);
+  const role = nonEmpty(actor?.role);
+  const supplierId = nonEmpty(actor?.supplierId);
   const q = nonEmpty(query.get("keyword") || query.get("q") || query.get("orderNo"));
-  const filters = [
+  const filters: Prisma.ReceivableOrderWhereInput[] = [
     { deletedAt: null },
     { status: { notIn: ["已关闭", "已取消"] } },
-    actor?.role === "业务员" ? orderAccessWhere(actor) : {},
-    [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role) && actor.supplierId
-      ? { logisticsSuppliers: { some: { supplierId: actor.supplierId } } }
-      : (actor?.role === LOGISTICS_OPERATOR_ROLE ? { id: "__no_supplier_bound__" } : {}),
-    q ? {
+  ];
+  if (role === "业务员") filters.push(orderAccessWhere(actor));
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && supplierId) {
+    filters.push({ logisticsSuppliers: { some: { supplierId } } });
+  } else if (role === LOGISTICS_OPERATOR_ROLE) {
+    filters.push({ id: "__no_supplier_bound__" });
+  }
+  if (q) {
+    filters.push({
       OR: [
         { orderNo: { contains: q, mode: "insensitive" } },
         { blNo: { contains: q, mode: "insensitive" } },
@@ -88,8 +147,8 @@ export async function listLogisticsExpenseOrders(query, actor) {
         { customer: { is: { name: { contains: q, mode: "insensitive" } } } },
         { customer: { is: { shortName: { contains: q, mode: "insensitive" } } } },
       ],
-    } : {},
-  ].filter((item) => Object.keys(item).length);
+    });
+  }
   const rows = await prisma.receivableOrder.findMany({
     where: { AND: filters },
     include: {
@@ -111,10 +170,10 @@ export async function listLogisticsExpenseOrders(query, actor) {
   }));
 }
 
-export async function logisticsSupplierStatement(query, actor) {
+export async function logisticsSupplierStatement(query: QueryLike, actor: LogisticsQueryActor) {
   assertCanReadLogisticsExpenses(actor);
   const month = nonEmpty(query.get("month"));
-  const where = {
+  const where: Prisma.LogisticsExpenseWhereInput = {
     deletedAt: null,
     auditStatus: "审核通过",
     ...logisticsExpenseAccessWhere(actor),
@@ -126,7 +185,7 @@ export async function logisticsSupplierStatement(query, actor) {
     } : {}),
   };
   const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ reviewedAt: "desc" }] });
-  return Object.values(rows.reduce((acc, row) => {
+  return Object.values(rows.reduce<Record<string, SupplierStatementRow>>((acc, row) => {
     const key = row.supplierId;
     acc[key] ||= {
       supplierId: row.supplierId,

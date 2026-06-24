@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
@@ -20,29 +19,109 @@ import {
   isExternalLogisticsSupplierAccount,
   isInternalLogisticsOperator,
 } from "./masters-access";
+import { Prisma } from "../generated/prisma/client.js";
 
-export function archiveScope(query) {
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+  customPermissions?: unknown;
+  supplierId?: string | null;
+} | null | undefined;
+type QueryLike = {
+  get(key: string): string | null;
+} | null | undefined;
+type DomesticTransportInput = Record<string, unknown> & {
+  containerNo?: string | null;
+  containerType?: string | null;
+  sealNo?: string | null;
+  truckPlateNo?: string | null;
+  trailerPlateNo?: string | null;
+  departureDate?: unknown;
+  departurePlace?: string | null;
+  arrivalPlace?: string | null;
+  destinationPlace?: string | null;
+  cargoName?: string | null;
+  cargoDescription?: string | null;
+  remark?: string | null;
+  sortOrder?: unknown;
+};
+type DomesticLogisticsInput = DomesticTransportInput & {
+  transportItems?: DomesticTransportInput[];
+  transportType?: string;
+  expressTrackingNo?: string;
+  remarkText?: string;
+  remarkTextManualEdited?: boolean | string;
+};
+type NormalizedDomesticTransportItem = {
+  containerNo: string | null;
+  containerType: string | null;
+  sealNo: string | null;
+  truckPlateNo: string;
+  trailerPlateNo: string | null;
+  departureDate: Date;
+  departurePlace: string;
+  arrivalPlace: string;
+  cargoName: string;
+  remark: string | null;
+  sortOrder: number;
+};
+type DomesticLogisticsInfoLike = {
+  remarkText?: string | null;
+  submittedAt?: Date | string | null;
+};
+type LogisticsSupplierRowLike = {
+  supplierId?: string | null;
+  supplier?: unknown;
+};
+type LogisticsExpenseLike = {
+  id?: string | null;
+  orderId?: string | null;
+  supplierId?: string | null;
+  auditStatus?: string | null;
+  invoiceStatus?: string | null;
+  paymentStatus?: string | null;
+  updatedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+};
+type DomesticOrderLike = {
+  id?: string;
+  orderNo?: string | null;
+  blNo?: string | null;
+  customer?: { salespersonUserId?: string | null; country?: string | null } | null;
+  customerNameSnapshot?: string | null;
+  country?: string | null;
+  logisticsSuppliers?: LogisticsSupplierRowLike[] | null;
+  logisticsExpenses?: LogisticsExpenseLike[] | null;
+  domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
+  documents?: unknown[] | null;
+  taxArchived?: boolean | null;
+  taxRefundStatus?: string | null;
+  updatedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+};
+
+export function archiveScope(query: QueryLike) {
   const scope = nonEmpty(query?.get("archiveScope") || query?.get("businessScope") || query?.get("taxArchiveScope"));
   return ["current", "archive", "all"].includes(scope) ? scope : "current";
 }
 
-export function orderArchiveWhereForScope(scope = "current") {
+export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
   if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
   if (scope === "all") return {};
   return { taxArchived: false };
 }
 
 export function domesticLogisticsInclude() {
-  return {
+  return Prisma.validator<Prisma.DomesticLogisticsInfoInclude>()({
     order: { include: { customer: true, salesperson: true } },
     submittedBy: true,
     financeConfirmedBy: true,
     transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
-  };
+  });
 }
 
 export function domesticLogisticsOrderInclude() {
-  return {
+  return Prisma.validator<Prisma.ReceivableOrderInclude>()({
     customer: true,
     salesperson: true,
     domesticLogisticsInfos: {
@@ -77,33 +156,34 @@ export function domesticLogisticsOrderInclude() {
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     },
-  };
+  });
 }
 
-export function domesticLogisticsSubmitterRole(actor) {
+export function domesticLogisticsSubmitterRole(actor: ActorLike) {
   if (actor?.role === "管理员") return "ADMIN";
   if (actor?.role === "业务员") return "SALES";
-  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role)) return "LOGISTICS_OPERATOR";
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || ""))) return "LOGISTICS_OPERATOR";
   return "";
 }
 
-export function canReadDomesticLogisticsOrder(actor, order = {}) {
+export function canReadDomesticLogisticsOrder(actor: ActorLike, order: DomesticOrderLike = {}) {
   if (!canRead(actor, "domesticLogistics")) return false;
-  if (["管理员", "财务"].includes(actor?.role)) return true;
+  if (["管理员", "财务"].includes(String(actor?.role || ""))) return true;
   if (isInternalLogisticsOperator(actor)) return true;
   if (isExternalLogisticsSupplierAccount(actor)) {
-    return (order.logisticsSuppliers || []).some((row) => row.supplierId === actor.supplierId);
+    const supplierId = actor?.supplierId || "";
+    return (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId);
   }
   if (actor?.role === "业务员") return order?.customer?.salespersonUserId === actor.id;
   return false;
 }
 
-export function normalizeDomesticTransportItems(input = {}, transportType = "TRUCK") {
+export function normalizeDomesticTransportItems(input: DomesticLogisticsInput = {}, transportType = "TRUCK"): NormalizedDomesticTransportItem[] {
   if (transportType === "EXPRESS") return [];
   const labels = domesticTransportFieldLabels(transportType);
   const supportsContainerFields = transportType !== "BULK_WAREHOUSE";
   const rawItems = Array.isArray(input.transportItems) ? input.transportItems : [];
-  const fallback = {
+  const fallback: DomesticTransportInput = {
     containerNo: optional(input.containerNo),
     containerType: optional(input.containerType),
     sealNo: optional(input.sealNo),
@@ -127,7 +207,7 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
     item.cargoName || item.cargoDescription,
     item.remark,
   ].some((value) => nonEmpty(value)));
-  const items = meaningfulRawItems.length ? meaningfulRawItems : [fallback];
+  const items: DomesticTransportInput[] = meaningfulRawItems.length ? meaningfulRawItems : [fallback];
 	  const normalized = items.map((item, index) => {
 	    const containerNo = optional(item.containerNo);
 	    const containerType = supportsContainerFields ? normalizeDomesticContainerType(item.containerType, index) : null;
@@ -158,7 +238,7 @@ export function normalizeDomesticTransportItems(input = {}, transportType = "TRU
 	  return normalized;
 }
 
-function normalizeDomesticContainerType(value, index) {
+function normalizeDomesticContainerType(value: unknown, index: number) {
   const type = nonEmpty(value).toUpperCase();
   if (!type) return null;
   if (!["20GP", "40GP", "40HQ", "45HQ"].includes(type)) {
@@ -198,7 +278,7 @@ function domesticTransportFieldLabels(transportType = "TRUCK") {
   };
 }
 
-function domesticLogisticsRemarkFromItems(items = [], transportType = "TRUCK") {
+function domesticLogisticsRemarkFromItems(items: NormalizedDomesticTransportItem[] = [], transportType = "TRUCK") {
   const labels = domesticTransportFieldLabels(transportType);
 	  return items.map((item) => [
 	    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
@@ -213,7 +293,7 @@ function domesticLogisticsRemarkFromItems(items = [], transportType = "TRUCK") {
   ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
 }
 
-export function domesticLogisticsRemark(input = {}) {
+export function domesticLogisticsRemark(input: DomesticLogisticsInput = {}) {
   const type = input.transportType;
   if (type === "EXPRESS") {
     const trackingNo = requireText(input.expressTrackingNo, "快递单号");
@@ -226,12 +306,12 @@ export function domesticLogisticsRemark(input = {}) {
   return domesticLogisticsRemarkFromItems(normalizeDomesticTransportItems(input, type), type);
 }
 
-function domesticLogisticsStatusText(info = null) {
+function domesticLogisticsStatusText(info: DomesticLogisticsInfoLike | null = null) {
   if (!info) return "未提交";
   return info.remarkText ? "已提交" : "未完成";
 }
 
-const LOGISTICS_EXPENSE_STATUS_PRIORITY = {
+const LOGISTICS_EXPENSE_STATUS_PRIORITY: Record<string, number> = {
   已驳回: 10,
   草稿: 20,
   待审核: 30,
@@ -255,11 +335,11 @@ function normalizedDomesticExpenseStatus(value = "") {
   return text;
 }
 
-function domesticLogisticsExpenseBillId(order = {}, expense = {}) {
+function domesticLogisticsExpenseBillId(order: DomesticOrderLike = {}, expense: LogisticsExpenseLike = {}) {
   return `bill:${expense.orderId || order.id || "order"}:${order.blNo || order.orderNo || "no-bl"}`;
 }
 
-function domesticLogisticsExpenseDisplayStatus(expense = {}) {
+function domesticLogisticsExpenseDisplayStatus(expense: LogisticsExpenseLike = {}) {
   const auditStatus = normalizedDomesticExpenseStatus(expense.auditStatus || "草稿");
   if (["已驳回", "草稿", "待审核"].includes(auditStatus)) return auditStatus;
   const invoiceStatus = normalizedDomesticExpenseStatus(expense.invoiceStatus || "");
@@ -270,14 +350,14 @@ function domesticLogisticsExpenseDisplayStatus(expense = {}) {
   return auditStatus === "审核通过" ? "审核通过" : "待开票";
 }
 
-function logisticsExpenseUpdatedAtValue(expense = {}) {
+function logisticsExpenseUpdatedAtValue(expense: LogisticsExpenseLike = {}) {
   const time = new Date(expense.updatedAt || expense.createdAt || 0).getTime();
   return Number.isFinite(time) ? time : 0;
 }
 
-function domesticLogisticsExpenseStatusSummary(order = {}, actor = null) {
+function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
   const expenses = (order.logisticsExpenses || []).filter((expense) => {
-    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role) && actor?.supplierId) {
+    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
       return expense.supplierId === actor.supplierId;
     }
     return true;
@@ -309,7 +389,7 @@ function domesticLogisticsExpenseStatusSummary(order = {}, actor = null) {
   };
 }
 
-function domesticLogisticsSortRank(order = {}) {
+function domesticLogisticsSortRank(order: DomesticOrderLike = {}) {
   const info = (order.domesticLogisticsInfos || [])[0];
   if (!info) return 1;
   if (!info.remarkText) return 2;
@@ -317,12 +397,12 @@ function domesticLogisticsSortRank(order = {}) {
   return 3;
 }
 
-function dateSortValue(value) {
+function dateSortValue(value: Date | string | null | undefined) {
   const time = value ? new Date(value).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
 }
 
-export function sortDomesticLogisticsOrders(a = {}, b = {}) {
+export function sortDomesticLogisticsOrders(a: DomesticOrderLike = {}, b: DomesticOrderLike = {}) {
   const rankDiff = domesticLogisticsSortRank(a) - domesticLogisticsSortRank(b);
   if (rankDiff) return rankDiff;
   const updatedDiff = dateSortValue(b.updatedAt) - dateSortValue(a.updatedAt);
@@ -330,9 +410,9 @@ export function sortDomesticLogisticsOrders(a = {}, b = {}) {
   return dateSortValue(b.createdAt) - dateSortValue(a.createdAt);
 }
 
-export function serializeDomesticLogisticsOrder(order, actor = null) {
+export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, actor: ActorLike = null) {
   const info = serializeDomesticLogisticsInfo((order.domesticLogisticsInfos || [])[0]);
-  const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
+  const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot || "");
   const shortCustomerName = customerShortName(order.customer);
   const expenseStatus = domesticLogisticsExpenseStatusSummary(order, actor);
   return {
@@ -354,8 +434,10 @@ export function serializeDomesticLogisticsOrder(order, actor = null) {
     logisticsExpenseUpdatedAt: expenseStatus.updatedAt,
     submittedAt: info?.submittedAt || null,
     domesticLogisticsInfo: info,
-    documents: (order.documents || []).map((document) => serializeOrderDocument(document, order)),
+    documents: (order.documents || []).map((document) => serializeOrderDocument(document, order as Parameters<typeof serializeOrderDocument>[1])),
     logisticsSupplierIds: (order.logisticsSuppliers || []).map((row) => row.supplierId),
     logisticsSuppliers: (order.logisticsSuppliers || []).map((row) => serializeSupplier(row.supplier)).filter((item) => item.id),
   };
 }
+
+export type DomesticLogisticsOrderDto = ReturnType<typeof serializeDomesticLogisticsOrder>;

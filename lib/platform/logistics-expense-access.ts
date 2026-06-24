@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import { Prisma } from "../generated/prisma/client.js";
 import { includeCostRelations } from "./cost-records-shared";
 import {
   CURRENCIES,
@@ -42,7 +42,7 @@ import {
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
-const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY = {
+const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY: Record<string, number> = {
   草稿: 10,
   已驳回: 20,
   待审核: 30,
@@ -69,8 +69,156 @@ const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY = {
   审核通过: 100,
 };
 
+type UnknownRecord = Record<string, unknown>;
+type LogisticsTransportItemLike = {
+  id?: string;
+  containerNo?: string | null;
+  containerType?: string | null;
+  container_type?: string | null;
+  sealNo?: string | null;
+  seal_no?: string | null;
+  truckPlateNo?: string | null;
+  departureDate?: unknown;
+  departurePlace?: string | null;
+  arrivalPlace?: string | null;
+  cargoName?: string | null;
+  vesselVoyage?: string | null;
+  vessel_voyage?: string | null;
+} & UnknownRecord;
+type LogisticsInfoLike = {
+  transportItems?: LogisticsTransportItemLike[];
+  vesselVoyage?: string | null;
+  vessel_voyage?: string | null;
+  shippingInfo?: UnknownRecord | null;
+  sailingSchedule?: UnknownRecord | null;
+  containerShipment?: UnknownRecord | null;
+  destinationPlace?: string | null;
+  departurePlace?: string | null;
+  departureDate?: unknown;
+  truckPlateNo?: string | null;
+  cargoDescription?: string | null;
+} & UnknownRecord;
+type LogisticsOrderLike = {
+  id?: string;
+  orderNo?: string | null;
+  blNo?: string | null;
+  vesselVoyage?: string | null;
+  vessel_voyage?: string | null;
+  customer?: unknown;
+  customerNameSnapshot?: string | null;
+  domesticLogisticsInfos?: LogisticsInfoLike[];
+  shippingInfo?: UnknownRecord | null;
+  sailingSchedule?: UnknownRecord | null;
+  containerShipment?: UnknownRecord | null;
+  actualShipmentDate?: unknown;
+  blDate?: unknown;
+  expectedShipmentDate?: unknown;
+} & UnknownRecord;
+type LogisticsSupplierLike = {
+  id?: string;
+  supplierName?: string | null;
+  email?: string | null;
+  supplierType?: unknown;
+  allowLogisticsExpenseEntry?: unknown;
+  allowedLogisticsCostTypes?: unknown;
+  allowLogisticsInvoiceUpload?: unknown;
+} & UnknownRecord;
+type LogisticsExpenseLike = {
+  id?: string;
+  orderId?: string;
+  supplierId?: string;
+  costId?: string | null;
+  supplierNameSnapshot?: string | null;
+  supplier?: LogisticsSupplierLike | null;
+  costType?: string | null;
+  currency?: string | null;
+  exchangeRate?: unknown;
+  exchangeRateDate?: unknown;
+  exchangeRateSource?: string | null;
+  exchangeRateType?: string | null;
+  amount?: unknown;
+  amountCny?: unknown;
+  containerType?: string | null;
+  appliedContainerCount?: unknown;
+  billingMethod?: string | null;
+  billingQuantity?: unknown;
+  remark?: string | null;
+  auditStatus?: string | null;
+  invoiceStatus?: string | null;
+  paymentStatus?: string | null;
+  submittedAt?: unknown;
+  reviewedBy?: unknown;
+  reviewedAt?: unknown;
+  reviewRemark?: string | null;
+  rejectReason?: string | null;
+  invoiceNotifiedAt?: unknown;
+  invoiceNotificationError?: string | null;
+  invoiceDocument?: unknown;
+  invoiceDocumentId?: string | null;
+  invoiceUploadedBy?: unknown;
+  invoiceUploadedAt?: unknown;
+  invoiceConfirmedBy?: unknown;
+  invoiceConfirmedAt?: unknown;
+  forceConfirmReason?: string | null;
+  createdBy?: unknown;
+  updatedBy?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  order?: LogisticsOrderLike | null;
+} & UnknownRecord;
+type LogisticsActor = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+type LogisticsExpenseOrderForAccess = LogisticsOrderLike & {
+  id: string;
+  customer?: ({ salespersonUserId?: string | null } & UnknownRecord) | null;
+  logisticsSuppliers?: Array<{ supplierId?: string | null } & UnknownRecord> | null;
+};
+type LogisticsSupplierForExpense = LogisticsSupplierLike & {
+  id: string;
+  supplierName?: string | null;
+  supplierType: string;
+  allowLogisticsExpenseEntry?: boolean | null;
+  allowedLogisticsCostTypes?: unknown;
+};
+type LogisticsExpenseForCostSync = LogisticsExpenseLike & {
+  id: string;
+  orderId: string;
+  supplierId: string;
+  costType?: string | null;
+  currency?: string | null;
+  exchangeRate?: Prisma.Decimal | number | string | null;
+  exchangeRateDate?: Date | string | null;
+  amount?: Prisma.Decimal | number | string | null;
+  amountCny?: Prisma.Decimal | number | string | null;
+};
+
+function asRecord(value: unknown): UnknownRecord {
+  return value && typeof value === "object" ? value as UnknownRecord : {};
+}
+
+function actorRole(actor: LogisticsActor): string {
+  return nonEmpty(actor?.role);
+}
+
+function actorId(actor: LogisticsActor): string {
+  return nonEmpty(actor?.id);
+}
+
+function actorSupplierId(actor: LogisticsActor): string {
+  return nonEmpty(actor?.supplierId);
+}
+
+function exchangeActor(actor: LogisticsActor): { role?: string } | null {
+  const role = actorRole(actor);
+  return role ? { role } : null;
+}
+
 export function includeLogisticsExpenseRelations() {
-  return {
+  return Prisma.validator<Prisma.LogisticsExpenseInclude>()({
     order: {
       include: {
         customer: true,
@@ -91,15 +239,15 @@ export function includeLogisticsExpenseRelations() {
     invoiceDocument: { include: { uploadedBy: true, supplier: true, cost: true } },
     invoiceUploadedBy: true,
     invoiceConfirmedBy: true,
-  };
+  });
 }
 
-function resolveLogisticsExpenseVesselVoyage(order = {}) {
+function resolveLogisticsExpenseVesselVoyage(order: LogisticsOrderLike = {}) {
   const info = (order.domesticLogisticsInfos || [])[0] || {};
   const firstItem = (info.transportItems || [])[0] || {};
-  const shippingInfo = info.shippingInfo || order.shippingInfo || {};
-  const sailingSchedule = info.sailingSchedule || order.sailingSchedule || {};
-  const containerShipment = info.containerShipment || order.containerShipment || {};
+  const shippingInfo = asRecord(info.shippingInfo || order.shippingInfo);
+  const sailingSchedule = asRecord(info.sailingSchedule || order.sailingSchedule);
+  const containerShipment = asRecord(info.containerShipment || order.containerShipment);
   return nonEmpty(
     order.vesselVoyage ||
     order.vessel_voyage ||
@@ -116,7 +264,7 @@ function resolveLogisticsExpenseVesselVoyage(order = {}) {
   );
 }
 
-export function logisticsExpenseOrderSummary(order = {}) {
+export function logisticsExpenseOrderSummary(order: LogisticsOrderLike = {}) {
   const info = (order.domesticLogisticsInfos || [])[0] || {};
   const firstItem = (info.transportItems || [])[0] || {};
 	  const transportItems = (info.transportItems || []).map((item) => ({
@@ -125,7 +273,7 @@ export function logisticsExpenseOrderSummary(order = {}) {
 	    containerType: item.containerType || item.container_type || "",
 	    sealNo: item.sealNo || item.seal_no || "",
 	    truckPlateNo: item.truckPlateNo || "",
-    departureDate: dateToInput(item.departureDate),
+    departureDate: dateToInput(dateFromInput(item.departureDate)),
     departurePlace: item.departurePlace || "",
     arrivalPlace: item.arrivalPlace || "",
     cargoName: item.cargoName || "",
@@ -138,13 +286,13 @@ export function logisticsExpenseOrderSummary(order = {}) {
     blNo: order.blNo || "",
     billOfLadingNo: order.blNo || "",
     customerShortName: customerShortName(order.customer),
-    customerName: customerBusinessName(order.customer, order.customerNameSnapshot),
+    customerName: customerBusinessName(order.customer, nonEmpty(order.customerNameSnapshot)),
     vesselVoyage: resolveLogisticsExpenseVesselVoyage(order),
     containerType: containerTypes.length === 1 ? containerTypes[0] : "",
     containerTypes,
     port: firstItem.arrivalPlace || info.destinationPlace || "",
     loadingAddress: firstItem.departurePlace || info.departurePlace || "",
-    sailingDate: dateToInput(firstItem.departureDate || info.departureDate || order.actualShipmentDate || order.blDate || order.expectedShipmentDate),
+    sailingDate: dateToInput(dateFromInput(firstItem.departureDate || info.departureDate || order.actualShipmentDate || order.blDate || order.expectedShipmentDate)),
     truckPlateNo: firstItem.truckPlateNo || info.truckPlateNo || "",
     cargoName: firstItem.cargoName || info.cargoDescription || "",
     transportItems,
@@ -153,7 +301,7 @@ export function logisticsExpenseOrderSummary(order = {}) {
   };
 }
 
-export function serializeLogisticsExpense(expense = {}) {
+export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
   const orderSummary = logisticsExpenseOrderSummary(expense.order || {});
   const invoiceDocument = expense.invoiceDocument ? serializeOrderDocument(expense.invoiceDocument, expense.order) : null;
   return {
@@ -168,10 +316,10 @@ export function serializeLogisticsExpense(expense = {}) {
     supplierName: expense.supplierNameSnapshot || expense.supplier?.supplierName || "",
     supplierEmail: expense.supplier?.email || "",
     costId: expense.costId || "",
-    costType: normalizedCostType(expense.costType),
+    costType: normalizedCostType(nonEmpty(expense.costType)),
     currency: expense.currency || "CNY",
     exchangeRate: Number(expense.exchangeRate || 1),
-    exchangeRateDate: dateToInput(expense.exchangeRateDate),
+    exchangeRateDate: dateToInput(dateFromInput(expense.exchangeRateDate)),
     exchangeRateSource: expense.exchangeRateSource || "",
     exchangeRateType: expense.exchangeRateType || "",
 	    amount: Number(expense.amount || 0),
@@ -212,12 +360,14 @@ export function serializeLogisticsExpense(expense = {}) {
   };
 }
 
-export function aggregateLogisticsExpenseStatus(rows = [], field = "") {
+export type LogisticsExpenseDto = ReturnType<typeof serializeLogisticsExpense>;
+
+export function aggregateLogisticsExpenseStatus(rows: UnknownRecord[] = [], field = ""): string {
   if (field === "auditStatus") return logisticsExpenseBillAuditStatus(rows);
   const values = rows.map((row) => row[field]).filter(Boolean);
   const unique = [...new Set(values)];
   if (!unique.length) return "-";
-  if (unique.length === 1) return unique[0];
+  if (unique.length === 1) return nonEmpty(unique[0]);
   if (field === "invoiceStatus") {
     if (unique.includes("已上传")) return "部分已上传";
     if (unique.includes("已确认")) return "部分已确认";
@@ -233,18 +383,18 @@ export function aggregateLogisticsExpenseStatus(rows = [], field = "") {
   return "混合状态";
 }
 
-export function logisticsExpenseBillAuditStatus(rows = []) {
+export function logisticsExpenseBillAuditStatus(rows: LogisticsExpenseLike[] = []): string {
   const values = rows.map((row) => row.auditStatus || "草稿").filter(Boolean);
   const unique = [...new Set(values)];
   if (!unique.length) return "草稿";
-  if (unique.length === 1) return unique[0];
+  if (unique.length === 1) return nonEmpty(unique[0]);
   if (unique.includes("审核通过")) return "审核通过";
   if (unique.includes("待审核")) return "待审核";
   if (unique.includes("已驳回")) return "已驳回";
   return "草稿";
 }
 
-export function logisticsExpenseInvoiceGroups(items = []) {
+export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []) {
   return logisticsInvoiceGroupsForCostTypes(items.map((item) => item.costType)).map((group) => {
     const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
     const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
@@ -268,7 +418,7 @@ export function logisticsExpenseInvoiceGroups(items = []) {
   });
 }
 
-export function aggregateLogisticsExpenseInvoiceStatus(items = []) {
+export function aggregateLogisticsExpenseInvoiceStatus(items: LogisticsExpenseLike[] = []) {
   const groups = logisticsExpenseInvoiceGroups(items);
   if (!groups.length) return aggregateLogisticsExpenseStatus(items, "invoiceStatus");
   if (groups.every((group) => group.confirmed)) return "已确认";
@@ -278,7 +428,7 @@ export function aggregateLogisticsExpenseInvoiceStatus(items = []) {
   return "待开票";
 }
 
-export function serializeLogisticsExpenseBill(rows = []) {
+export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = []) {
   const items = rows.map(serializeLogisticsExpense);
   const first = items[0] || {};
   const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
@@ -307,41 +457,44 @@ export function serializeLogisticsExpenseBill(rows = []) {
     items,
     order: first.order || {},
     updatedAt: rows.reduce((latest, row) => {
-      const time = new Date(row.updatedAt || row.createdAt || 0).getTime();
+      const dateValue = row.updatedAt || row.createdAt || 0;
+      const time = new Date(dateValue instanceof Date || typeof dateValue === "string" || typeof dateValue === "number" ? dateValue : 0).getTime();
       return time > latest ? time : latest;
     }, 0),
   };
 }
 
-export function logisticsExpenseBillId(expense = {}) {
+export type LogisticsExpenseBillDto = ReturnType<typeof serializeLogisticsExpenseBill>;
+
+export function logisticsExpenseBillId(expense: LogisticsExpenseLike = {}) {
   const orderSummary = expense.order?.orderId ? expense.order : logisticsExpenseOrderSummary(expense.order || {});
   return `bill:${expense.orderId || orderSummary.orderId || "order"}:${orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "no-bl"}`;
 }
 
-export function groupLogisticsExpensesByBill(rows = []) {
-  const groups = new Map();
+export function groupLogisticsExpensesByBill(rows: LogisticsExpenseLike[] = []) {
+  const groups = new Map<string, LogisticsExpenseLike[]>();
   for (const row of rows) {
     const orderSummary = logisticsExpenseOrderSummary(row.order || {});
     const key = [row.orderId || orderSummary.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(row);
+    groups.get(key)!.push(row);
   }
   return Array.from(groups.values())
     .map(serializeLogisticsExpenseBill)
     .sort(compareLogisticsExpenseBillsForDisplay);
 }
 
-export function compareLogisticsExpenseBillsForDisplay(left = {}, right = {}) {
+export function compareLogisticsExpenseBillsForDisplay(left: UnknownRecord = {}, right: UnknownRecord = {}) {
   return logisticsExpenseBillSortRank(left) - logisticsExpenseBillSortRank(right)
     || logisticsExpenseBillUpdatedAtValue(right) - logisticsExpenseBillUpdatedAtValue(left);
 }
 
-export function logisticsExpenseBillSortRank(bill = {}) {
-  const auditStatus = normalizedLogisticsExpenseSortStatus(bill.auditStatus || "草稿");
+export function logisticsExpenseBillSortRank(bill: UnknownRecord = {}) {
+  const auditStatus = normalizedLogisticsExpenseSortStatus(nonEmpty(bill.auditStatus || "草稿"));
   if (["草稿", "已驳回", "待审核"].includes(auditStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus];
 
-  const invoiceStatus = normalizedLogisticsExpenseSortStatus(bill.invoiceStatus || "待开票");
-  const paymentStatus = normalizedLogisticsExpenseSortStatus(bill.paymentStatus || "待开票");
+  const invoiceStatus = normalizedLogisticsExpenseSortStatus(nonEmpty(bill.invoiceStatus || "待开票"));
+  const paymentStatus = normalizedLogisticsExpenseSortStatus(nonEmpty(bill.paymentStatus || "待开票"));
   const invoiceRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[invoiceStatus];
   if (Number.isFinite(invoiceRank) && invoiceRank < LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
   if (["部分付款", "部分已付款"].includes(paymentStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.部分付款;
@@ -360,46 +513,51 @@ function normalizedLogisticsExpenseSortStatus(value = "") {
   return text || "草稿";
 }
 
-function logisticsExpenseBillUpdatedAtValue(bill = {}) {
+function logisticsExpenseBillUpdatedAtValue(bill: UnknownRecord = {}) {
   const value = bill.updatedAt || bill.createdAt || 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const time = new Date(value).getTime();
+  const dateValue = value instanceof Date || typeof value === "string" || typeof value === "number" ? value : 0;
+  const time = new Date(dateValue).getTime();
   return Number.isFinite(time) ? time : 0;
 }
 
-export function logisticsExpenseAccessWhere(actor) {
-  if (actor?.role === "管理员") return {};
-  if (actor?.role === "财务") return { auditStatus: "审核通过" };
-  if (actor?.role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actor.id } } } } };
-  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role)) {
+export function logisticsExpenseAccessWhere(actor: LogisticsActor): Prisma.LogisticsExpenseWhereInput {
+  const role = actorRole(actor);
+  const id = actorId(actor);
+  if (role === "管理员") return {};
+  if (role === "财务") return { auditStatus: "审核通过" };
+  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: id } } } } };
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
+    if (!actor) return { supplierId: "__no_supplier_bound__" };
     if (actor.supplierId) return { supplierId: actor.supplierId };
     return { supplierId: "__no_supplier_bound__" };
   }
   return { id: "__no_logistics_expense_access__" };
 }
 
-export function assertCanReadLogisticsExpenses(actor) {
-  if (actor?.role === "管理员" || actor?.role === "财务") return;
+export function assertCanReadLogisticsExpenses(actor: LogisticsActor) {
+  const role = actorRole(actor);
+  if (role === "管理员" || role === "财务") return;
   if (canRead(actor, "domesticLogistics") || canRead(actor, "costs")) return;
   throw permissionError("无权限查看物流费用", 403);
 }
 
-export function assertCanWriteLogisticsExpense(actor) {
+export function assertCanWriteLogisticsExpense(actor: LogisticsActor) {
   if (canWrite(actor, "logistics")) return;
   throw permissionError("无权限录入物流费用", 403);
 }
 
-export function assertCanReviewLogisticsExpense(actor) {
-  if (actor?.role === "管理员") return;
+export function assertCanReviewLogisticsExpense(actor: LogisticsActor) {
+  if (actorRole(actor) === "管理员") return;
   throw permissionError("只有管理员可以审核物流费用", 403);
 }
 
-export function assertCanConfirmLogisticsInvoice(actor) {
-  if (["管理员", "财务"].includes(actor?.role)) return;
+export function assertCanConfirmLogisticsInvoice(actor: LogisticsActor) {
+  if (["管理员", "财务"].includes(actorRole(actor))) return;
   throw permissionError("只有管理员或财务可以确认物流发票", 403);
 }
 
-export function logisticsExpenseStatusWhere(status = "") {
+export function logisticsExpenseStatusWhere(status = ""): Prisma.LogisticsExpenseWhereInput {
   const text = nonEmpty(status);
   if (!text || text === "all") return {};
   if (text === "pending") return { auditStatus: "待审核" };
@@ -414,26 +572,29 @@ export function logisticsExpenseStatusWhere(status = "") {
   return {};
 }
 
-export function insensitiveContains(value) {
+export function insensitiveContains(value: unknown): Prisma.StringFilter | null {
   const text = nonEmpty(value);
   return text ? { contains: text, mode: "insensitive" } : null;
 }
 
-export async function assertLogisticsExpenseOrder(input = {}, actor) {
+export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, actor: LogisticsActor): Promise<LogisticsExpenseOrderForAccess> {
+  const role = actorRole(actor);
+  const id = actorId(actor);
+  const supplierId = actorSupplierId(actor);
   const orderId = nonEmpty(input.orderId || input.order_id);
   const orderNo = nonEmpty(input.orderNo || input.order_no);
   const blNo = nonEmpty(input.blNo || input.billOfLadingNo || input.bill_of_lading_no);
   if (!orderId && !orderNo && !blNo) {
     throw codedError("未找到对应发货订单，请先建立或完善发货订单后再录入费用。", 400, "LOGISTICS_EXPENSE_ORDER_REQUIRED");
   }
+  const orderFilters: Prisma.ReceivableOrderWhereInput[] = [];
+  if (orderId) orderFilters.push({ id: orderId });
+  if (orderNo) orderFilters.push({ orderNo: { equals: orderNo, mode: "insensitive" } });
+  if (blNo) orderFilters.push({ blNo: { equals: blNo, mode: "insensitive" } });
   const order = await prisma.receivableOrder.findFirst({
     where: {
       deletedAt: null,
-      OR: [
-        orderId ? { id: orderId } : null,
-        orderNo ? { orderNo: { equals: orderNo, mode: "insensitive" } } : null,
-        blNo ? { blNo: { equals: blNo, mode: "insensitive" } } : null,
-      ].filter(Boolean),
+      OR: orderFilters,
     },
     include: {
       customer: true,
@@ -447,25 +608,27 @@ export async function assertLogisticsExpenseOrder(input = {}, actor) {
     },
   });
   if (!order) throw codedError("未找到对应发货订单，请先建立或完善发货订单后再录入费用。", 404, "LOGISTICS_EXPENSE_ORDER_NOT_FOUND");
-  if (actor?.role === "管理员") return order;
-  if (actor?.role === "业务员" && order.customer?.salespersonUserId === actor.id) return order;
-  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role)) {
-    if (actor.supplierId && (order.logisticsSuppliers || []).some((row) => row.supplierId === actor.supplierId)) return order;
+  if (role === "管理员") return order;
+  if (role === "业务员" && order.customer?.salespersonUserId === id) return order;
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
+    if (supplierId && (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId)) return order;
   }
   throw permissionError("无权限访问该发货订单", 403);
 }
 
-export async function assertLogisticsExpenseSupplier(actor, order, input = {}) {
+export async function assertLogisticsExpenseSupplier(actor: LogisticsActor, order: LogisticsExpenseOrderForAccess, input: UnknownRecord = {}): Promise<LogisticsSupplierForExpense> {
+  const role = actorRole(actor);
+  const actorSupplier = actorSupplierId(actor);
   const requestedSupplierId = nonEmpty(input.supplierId || input.supplier_id);
-  const supplierId = [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role) && actor.supplierId
-    ? actor.supplierId
+  const supplierId = [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && actorSupplier
+    ? actorSupplier
     : requestedSupplierId;
   if (!supplierId) throw codedError("请选择物流供应商。", 400, "LOGISTICS_SUPPLIER_REQUIRED");
   const supplier = await assertSupplierActive(supplierId);
   if (!DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
     throw codedError("只有物流、报关、海运或港杂费用供应商可以提交物流费用。", 400, "LOGISTICS_SUPPLIER_TYPE_INVALID");
   }
-  if (actor?.role !== "管理员") {
+  if (role !== "管理员") {
     if (!supplier.allowLogisticsExpenseEntry) throw codedError("该供应商尚未开启物流费用录入权限。", 403, "LOGISTICS_EXPENSE_ENTRY_DISABLED");
     if (!(order.logisticsSuppliers || []).some((row) => row.supplierId === supplier.id)) {
       throw codedError("该订单未分配给当前物流供应商，不能录入费用。", 403, "LOGISTICS_SUPPLIER_NOT_ASSIGNED");
@@ -474,15 +637,15 @@ export async function assertLogisticsExpenseSupplier(actor, order, input = {}) {
   return supplier;
 }
 
-function assertSupplierCostTypeAllowed(actor, supplier, costType) {
-  if (actor?.role === "管理员") return;
+function assertSupplierCostTypeAllowed(actor: LogisticsActor, supplier: LogisticsSupplierForExpense, costType: string) {
+  if (actorRole(actor) === "管理员") return;
   const allowed = expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []);
   if (!allowed.includes(costType)) {
     throw codedError(`当前供应商不能录入${costType}。`, 403, "LOGISTICS_COST_TYPE_NOT_ALLOWED");
   }
 }
 
-async function resolveLogisticsExpenseExchange(costType, input, actor, before = null) {
+async function resolveLogisticsExpenseExchange(costType: string, input: UnknownRecord, actor: LogisticsActor, before: LogisticsExpenseLike | null = null) {
   const currency = logisticsCostTypeLocksCurrency(costType)
     ? "USD"
     : nonEmpty(input.currency || "CNY").toUpperCase();
@@ -491,7 +654,7 @@ async function resolveLogisticsExpenseExchange(costType, input, actor, before = 
     const quote = await getExchangeRateQuote({
       currency,
       date: input.exchangeRateDate || input.rateDate || todayInputInChina(),
-    }, actor);
+    }, exchangeActor(actor));
     const exchangeRate = Number(quote.rateToCny ?? quote.exchangeRate ?? quote.rate ?? 0);
     if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
       throw codedError("未找到可用美元汇率，请先刷新系统汇率。", 400, "EXCHANGE_RATE_REQUIRED");
@@ -506,15 +669,22 @@ async function resolveLogisticsExpenseExchange(costType, input, actor, before = 
   }
   return resolveExchangeRateSnapshot(currency === "CNY"
     ? { ...input, currency: "CNY", exchangeRate: 1, exchangeRateSource: "系统", exchangeRateDate: input.exchangeRateDate || todayInputInChina() }
-    : input, actor, {
+    : input, exchangeActor(actor), {
       currency,
       defaultDate: todayInputInChina(),
       allowHistoricalSource: before?.exchangeRateSource === "历史录入",
     });
 }
 
-export async function buildLogisticsExpenseData(order, supplier, actor, input = {}, before = null) {
-  const inputCostType = normalizedCostType(input.costType);
+export async function buildLogisticsExpenseData(
+  order: LogisticsExpenseOrderForAccess,
+  supplier: LogisticsSupplierForExpense,
+  actor: LogisticsActor,
+  input: UnknownRecord = {},
+  before: LogisticsExpenseLike | null = null
+) {
+  const currentActorId = actorId(actor);
+  const inputCostType = String(normalizedCostType(nonEmpty(input.costType)));
   const costType = LOGISTICS_COST_TYPES.includes(inputCostType) ? inputCostType : "";
   if (!costType) throw codedError("请选择有效物流费用类型。", 400, "LOGISTICS_EXPENSE_COST_TYPE_REQUIRED");
   assertSupplierCostTypeAllowed(actor, supplier, costType);
@@ -525,7 +695,7 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
   }, actor, before);
   const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? before.auditStatus : (input.submit === false ? "草稿" : "待审核")));
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "待审核";
-  if (before?.auditStatus === "审核通过" && actor?.role !== "管理员") {
+  if (before?.auditStatus === "审核通过" && actorRole(actor) !== "管理员") {
     throw codedError("已审核通过的费用金额不能修改。", 403, "LOGISTICS_EXPENSE_APPROVED_LOCKED");
   }
   const billingMethod = normalizeLogisticsExpenseBillingMethod(input, before);
@@ -535,7 +705,7 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
   return {
     orderId: order.id,
     supplierId: supplier.id,
-    supplierNameSnapshot: supplier.supplierName,
+    supplierNameSnapshot: nonEmpty(supplier.supplierName),
     costType,
     currency: exchange.currency,
     exchangeRate: exchange.exchangeRate,
@@ -550,25 +720,27 @@ export async function buildLogisticsExpenseData(order, supplier, actor, input = 
 	    billingQuantity,
 	    remark: optional(input.remark),
     auditStatus,
-    submittedAt: auditStatus === "待审核" ? (before?.submittedAt || new Date()) : before?.submittedAt || null,
+    submittedAt: auditStatus === "待审核"
+      ? (dateFromInput(before?.submittedAt) || new Date())
+      : dateFromInput(before?.submittedAt),
     invoiceStatus: before?.invoiceStatus || "未通知",
     paymentStatus: before?.paymentStatus || "待开票",
     rejectReason: auditStatus === "待审核" ? null : before?.rejectReason || null,
-    updatedById: actor.id,
-    ...(before ? {} : { createdById: actor.id }),
+    updatedById: currentActorId || null,
+    ...(before ? {} : { createdById: currentActorId || null }),
   };
 }
 
-function normalizeBillingMethodValue(value) {
+function normalizeBillingMethodValue(value: unknown): string {
   const text = nonEmpty(value || DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD);
   return LOGISTICS_EXPENSE_BILLING_METHODS.includes(text) ? text : DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD;
 }
 
-function integerBillingMethod(method) {
+function integerBillingMethod(method: unknown) {
   return ["按柜", "按票", "按次"].includes(normalizeBillingMethodValue(method));
 }
 
-function normalizeLogisticsExpenseBillingMethod(input = {}, before = null) {
+function normalizeLogisticsExpenseBillingMethod(input: UnknownRecord = {}, before: LogisticsExpenseLike | null = null): string {
   const hasBillingMethodInput = Object.prototype.hasOwnProperty.call(input, "billingMethod")
     || Object.prototype.hasOwnProperty.call(input, "billing_method");
   if (!hasBillingMethodInput && before) return normalizeBillingMethodValue(before.billingMethod);
@@ -579,7 +751,7 @@ function normalizeLogisticsExpenseBillingMethod(input = {}, before = null) {
   return requested;
 }
 
-function normalizeLogisticsExpenseBillingQuantity(input = {}, billingMethod = DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD, before = null) {
+function normalizeLogisticsExpenseBillingQuantity(input: UnknownRecord = {}, billingMethod = DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD, before: LogisticsExpenseLike | null = null): number {
   const hasQuantityInput = Object.prototype.hasOwnProperty.call(input, "billingQuantity")
     || Object.prototype.hasOwnProperty.call(input, "billing_quantity")
     || Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
@@ -599,7 +771,7 @@ function normalizeLogisticsExpenseBillingQuantity(input = {}, billingMethod = DE
   return quantity;
 }
 
-function normalizeLogisticsExpenseContainerType(input = {}, order = {}, before = null) {
+function normalizeLogisticsExpenseContainerType(input: UnknownRecord = {}, order: LogisticsOrderLike = {}, before: LogisticsExpenseLike | null = null): string | null {
   const hasContainerTypeInput = Object.prototype.hasOwnProperty.call(input, "containerType")
     || Object.prototype.hasOwnProperty.call(input, "container_type");
   if (!hasContainerTypeInput && before) return before.containerType || null;
@@ -613,11 +785,11 @@ function normalizeLogisticsExpenseContainerType(input = {}, order = {}, before =
   return requested;
 }
 
-function normalizeAppliedContainerCount(input = {}, order = {}, before = null, billingQuantity = 1) {
+function normalizeAppliedContainerCount(input: UnknownRecord = {}, order: LogisticsOrderLike = {}, before: LogisticsExpenseLike | null = null, billingQuantity = 1): number {
   const hasContainerCountInput = Object.prototype.hasOwnProperty.call(input, "appliedContainerCount")
 	    || Object.prototype.hasOwnProperty.call(input, "containerCount")
 	    || Object.prototype.hasOwnProperty.call(input, "applied_container_count");
-  if (!hasContainerCountInput && before) return before.appliedContainerCount ?? 1;
+  if (!hasContainerCountInput && before) return Number(before.appliedContainerCount ?? 1);
   const raw = input.appliedContainerCount ?? input.containerCount ?? input.applied_container_count;
   const text = nonEmpty(raw);
   if (!text || ["整票", "whole_shipment", "shipment", "all"].includes(text.toLowerCase())) return Math.max(1, Math.ceil(Number(billingQuantity || 1)));
@@ -628,7 +800,7 @@ function normalizeAppliedContainerCount(input = {}, order = {}, before = null, b
   return Math.max(1, Math.ceil(count));
 }
 
-export async function loadLogisticsExpenseForAction(id, actor) {
+export async function loadLogisticsExpenseForAction(id: string, actor: LogisticsActor) {
   const expense = await prisma.logisticsExpense.findFirst({
     where: {
       id,
@@ -641,8 +813,9 @@ export async function loadLogisticsExpenseForAction(id, actor) {
   return expense;
 }
 
-export async function createOrUpdateCostFromLogisticsExpense(tx, expense, actor) {
-  const costType = normalizedCostType(expense.costType);
+export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
+  const costType = String(normalizedCostType(nonEmpty(expense.costType)));
+  const currentActorId = actorId(actor);
   const duplicate = await tx.orderCost.findFirst({
     where: {
       orderId: expense.orderId,
@@ -660,13 +833,13 @@ export async function createOrUpdateCostFromLogisticsExpense(tx, expense, actor)
     supplierNameSnapshot: expense.supplierNameSnapshot || expense.supplier?.supplierName || "",
     vendorName: expense.supplierNameSnapshot || expense.supplier?.supplierName || "",
     costType,
-    currency: expense.currency,
-    exchangeRate: expense.exchangeRate,
-    exchangeRateDate: expense.exchangeRateDate,
+    currency: nonEmpty(expense.currency || "CNY"),
+    exchangeRate: expense.exchangeRate ?? 1,
+    exchangeRateDate: dateFromInput(expense.exchangeRateDate),
     exchangeRateSource: expense.exchangeRateSource,
     exchangeRateType: expense.exchangeRateType,
-    amount: expense.amount,
-    amountCny: expense.amountCny,
+    amount: expense.amount ?? 0,
+    amountCny: expense.amountCny ?? 0,
     paymentStatus: "待支付",
     costConfirmed: true,
     costConfirmedAt: new Date(),
@@ -675,13 +848,13 @@ export async function createOrUpdateCostFromLogisticsExpense(tx, expense, actor)
     sourceType: "LOGISTICS_EXPENSE",
     sourceId: expense.id,
     remark: expense.remark || "",
-    updatedById: actor.id,
+    updatedById: currentActorId || null,
   };
   const existing = expense.costId
     ? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null } })
     : await tx.orderCost.findFirst({ where: { sourceType: "LOGISTICS_EXPENSE", sourceId: expense.id, deletedAt: null } });
   if (existing) return tx.orderCost.update({ where: { id: existing.id }, data: costData });
-  return tx.orderCost.create({ data: { ...costData, createdById: actor.id } });
+  return tx.orderCost.create({ data: { ...costData, createdById: currentActorId || null } });
 }
 
 export {
