@@ -339,6 +339,16 @@ test("logistics expense list groups bills by BL number and keeps item details", 
   assert.match(backend, /groupLogisticsExpensesByBill/);
   assert.match(backend, /serializeLogisticsExpenseBill/);
   assert.match(backend, /aggregateLogisticsExpenseStatus/);
+  assert.match(backend, /LOGISTICS_EXPENSE_BILL_SORT_PRIORITY/);
+  assert.match(backend, /草稿: 10[\s\S]*已驳回: 20[\s\S]*待审核: 30[\s\S]*待开票: 40[\s\S]*部分上传发票: 50[\s\S]*已上传发票: 60[\s\S]*待付款: 70[\s\S]*部分付款: 80[\s\S]*已付款: 90[\s\S]*审核通过: 100/);
+  assert.match(backend, /\.sort\(compareLogisticsExpenseBillsForDisplay\)/);
+  assert.match(backend, /logisticsExpenseBillSortRank\(left\) - logisticsExpenseBillSortRank\(right\)/);
+  assert.match(backend, /logisticsExpenseBillUpdatedAtValue\(right\) - logisticsExpenseBillUpdatedAtValue\(left\)/);
+  assert.match(logisticsModule, /LOGISTICS_EXPENSE_BILL_SORT_PRIORITY/);
+  assert.match(logisticsModule, /sortLogisticsExpenseBillsForDisplay/);
+  assert.match(logisticsModule, /const nextRows = sortLogisticsExpenseBillsForDisplay/);
+  assert.match(logisticsModule, /setRows\(nextRows\)/);
+  assert.match(logisticsModule, /logisticsExpenseBillSortRank\(left\) - logisticsExpenseBillSortRank\(right\)/);
   assert.match(backend, /domesticLogisticsInfos[\s\S]*transportItems/);
   assert.match(backend, /function resolveLogisticsExpenseVesselVoyage/);
   assert.match(backend, /vesselVoyage: resolveLogisticsExpenseVesselVoyage\(order\)/);

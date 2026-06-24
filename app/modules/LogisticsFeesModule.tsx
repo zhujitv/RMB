@@ -27,6 +27,33 @@ const COST_TYPE_OPTIONS = [...LOGISTICS_COST_TYPE_OPTIONS];
 const DEFAULT_BILLING_METHOD = "按柜";
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const FOREIGN_CURRENCY_ORDER = ["USD", "EUR", "HKD", "GBP"];
+const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY: Record<string, number> = {
+  草稿: 10,
+  已驳回: 20,
+  待审核: 30,
+  待开票: 40,
+  未通知: 40,
+  已通知开票: 40,
+  通知失败: 40,
+  "待开票 / 通知失败": 40,
+  部分未通知: 40,
+  部分已通知: 40,
+  部分上传发票: 50,
+  部分上传: 50,
+  部分已上传: 50,
+  部分已确认: 50,
+  已上传发票: 60,
+  已上传: 60,
+  已确认发票: 60,
+  已确认: 60,
+  已开票: 60,
+  待付款: 70,
+  部分待付款: 70,
+  部分付款: 80,
+  部分已付款: 80,
+  已付款: 90,
+  审核通过: 100,
+};
 const LOGISTICS_FEE_SUPPLIER_TYPES = [
   "物流供应商",
   "报关供应商",
@@ -384,7 +411,7 @@ export function LogisticsFeesModule({
       if (nextStatus) params.set("status", nextStatus);
       if (nextCostType) params.set("costType", nextCostType);
       const result = await apiJson<LogisticsExpensesResponse>(`/api/logistics-costs?${params}`);
-      const nextRows = Array.isArray(result.rows) ? result.rows : [];
+      const nextRows = sortLogisticsExpenseBillsForDisplay(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
       setSelectedBillIds((current) => current.filter((id) => nextRows.some((row) => row.id === id && logisticsExpenseBillCanApprove(row))));
       setTotal(Number(result.total || 0));
@@ -2929,6 +2956,46 @@ function billSupplierIds(expense: LogisticsExpense) {
     .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
 }
 
+function sortLogisticsExpenseBillsForDisplay(rows: LogisticsExpense[]) {
+  return [...rows].sort((left, right) => {
+    return logisticsExpenseBillSortRank(left) - logisticsExpenseBillSortRank(right)
+      || logisticsExpenseBillUpdatedAtValue(right) - logisticsExpenseBillUpdatedAtValue(left);
+  });
+}
+
+function logisticsExpenseBillSortRank(expense: LogisticsExpense) {
+  const auditStatus = normalizeLogisticsExpenseSortStatus(expense.auditStatus || "草稿");
+  if (["草稿", "已驳回", "待审核"].includes(auditStatus)) {
+    return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus] ?? 999;
+  }
+
+  const invoiceStatus = normalizeLogisticsExpenseSortStatus(expense.invoiceStatus || "待开票");
+  const paymentStatus = normalizeLogisticsExpenseSortStatus(expense.paymentStatus || "待开票");
+  const invoiceRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[invoiceStatus];
+  if (Number.isFinite(invoiceRank) && invoiceRank < LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
+  if (["部分付款", "部分已付款"].includes(paymentStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.部分付款;
+  if (paymentStatus === "已付款") return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已付款;
+  if (Number.isFinite(invoiceRank) && invoiceRank === LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
+  const paymentRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[paymentStatus];
+  if (Number.isFinite(paymentRank)) return paymentRank;
+  return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus] ?? 999;
+}
+
+function normalizeLogisticsExpenseSortStatus(value: unknown) {
+  const text = String(value || "").trim();
+  if (text === "部分上传") return "部分上传发票";
+  if (text === "已确认发票") return "已确认";
+  if (text === "部分已付款") return "部分付款";
+  return text || "草稿";
+}
+
+function logisticsExpenseBillUpdatedAtValue(expense: LogisticsExpense) {
+  const value = expense.updatedAt || 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 function removeLogisticsExpenseFromRows(rows: LogisticsExpense[], expenseId: string) {
   let removedBill = false;
   let billId = "";
@@ -2943,17 +3010,17 @@ function removeLogisticsExpenseFromRows(rows: LogisticsExpense[], expenseId: str
     }
     return [rebuildLogisticsExpenseBill(row, nextItems)];
   });
-  return { rows: nextRows, removedBill, billId };
+  return { rows: sortLogisticsExpenseBillsForDisplay(nextRows), removedBill, billId };
 }
 
 function replaceLogisticsExpenseItemsInRows(rows: LogisticsExpense[], savedItems: LogisticsExpense[]) {
   const savedById = new Map(savedItems.map((item) => [item.id, item]));
-  return rows.map((row) => {
+  return sortLogisticsExpenseBillsForDisplay(rows.map((row) => {
     const items = row.items?.length ? row.items : [row];
     if (!items.some((item) => savedById.has(item.id))) return row;
     const nextItems = items.map((item) => savedById.get(item.id) || item);
     return rebuildLogisticsExpenseBill(row, nextItems);
-  });
+  }));
 }
 
 function normalizeLogisticsExpenseBillRow(bill: LogisticsExpense) {
@@ -2964,7 +3031,7 @@ function normalizeLogisticsExpenseBillRow(bill: LogisticsExpense) {
 function replaceLogisticsExpenseBillsInRows(rows: LogisticsExpense[], bills: LogisticsExpense[]) {
   if (!bills.length) return rows;
   const billById = new Map(bills.map((bill) => [bill.id, normalizeLogisticsExpenseBillRow(bill)]));
-  return rows.map((row) => billById.get(row.id) || row);
+  return sortLogisticsExpenseBillsForDisplay(rows.map((row) => billById.get(row.id) || row));
 }
 
 function logisticsExpenseReviewResultLabel(result: LogisticsExpenseReviewResult) {
@@ -3005,7 +3072,7 @@ function reconcileLogisticsExpenseMutationRows(rows: LogisticsExpense[], result:
 function markLogisticsExpenseBillSubmitted(rows: LogisticsExpense[], billId: string, updatedIds: string[], submittedAt?: string) {
   const updatedIdSet = new Set(updatedIds.filter(Boolean));
   const submittedAtValue = submittedAt || new Date().toISOString();
-  return rows.map((row) => {
+  return sortLogisticsExpenseBillsForDisplay(rows.map((row) => {
     const items = row.items?.length ? row.items : [row];
     const belongsToBill = row.id === billId || items.some((item) => updatedIdSet.has(item.id));
     if (!belongsToBill) return row;
@@ -3019,12 +3086,12 @@ function markLogisticsExpenseBillSubmitted(rows: LogisticsExpense[], billId: str
       };
     });
     return rebuildLogisticsExpenseBill(row, nextItems);
-  });
+  }));
 }
 
 function markLogisticsExpenseBillRejected(rows: LogisticsExpense[], billId: string, rejectReason: string) {
   const reviewedAt = new Date().toISOString();
-  return rows.map((row) => {
+  return sortLogisticsExpenseBillsForDisplay(rows.map((row) => {
     const items = row.items?.length ? row.items : [row];
     const belongsToBill = row.id === billId;
     if (!belongsToBill) return row;
@@ -3040,7 +3107,7 @@ function markLogisticsExpenseBillRejected(rows: LogisticsExpense[], billId: stri
       invoiceNotificationError: "",
     }));
     return rebuildLogisticsExpenseBill(row, nextItems);
-  });
+  }));
 }
 
 function reconcileLogisticsExpenseRowsAfterBatchSave(rows: LogisticsExpense[], billId: string, savedItems: LogisticsExpense[], deletedIds: string[]) {
@@ -3068,7 +3135,7 @@ function reconcileLogisticsExpenseRowsAfterBatchSave(rows: LogisticsExpense[], b
   if (!matchedBill && savedItems.length) {
     nextRows.unshift(buildLogisticsExpenseBillFromItems(savedItems));
   }
-  return { rows: nextRows, removedBill };
+  return { rows: sortLogisticsExpenseBillsForDisplay(nextRows), removedBill };
 }
 
 function buildLogisticsExpenseBillFromItems(items: LogisticsExpense[]) {

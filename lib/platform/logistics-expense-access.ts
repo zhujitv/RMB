@@ -42,6 +42,32 @@ import {
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
+const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY = {
+  草稿: 10,
+  已驳回: 20,
+  待审核: 30,
+  待开票: 40,
+  未通知: 40,
+  已通知开票: 40,
+  通知失败: 40,
+  "待开票 / 通知失败": 40,
+  部分未通知: 40,
+  部分已通知: 40,
+  部分上传发票: 50,
+  部分已上传: 50,
+  部分已确认: 50,
+  已上传发票: 60,
+  已上传: 60,
+  已确认发票: 60,
+  已确认: 60,
+  已开票: 60,
+  待付款: 70,
+  部分待付款: 70,
+  部分付款: 80,
+  部分已付款: 80,
+  已付款: 90,
+  审核通过: 100,
+};
 
 export function includeLogisticsExpenseRelations() {
   return {
@@ -302,7 +328,43 @@ export function groupLogisticsExpensesByBill(rows = []) {
   }
   return Array.from(groups.values())
     .map(serializeLogisticsExpenseBill)
-    .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
+    .sort(compareLogisticsExpenseBillsForDisplay);
+}
+
+export function compareLogisticsExpenseBillsForDisplay(left = {}, right = {}) {
+  return logisticsExpenseBillSortRank(left) - logisticsExpenseBillSortRank(right)
+    || logisticsExpenseBillUpdatedAtValue(right) - logisticsExpenseBillUpdatedAtValue(left);
+}
+
+export function logisticsExpenseBillSortRank(bill = {}) {
+  const auditStatus = normalizedLogisticsExpenseSortStatus(bill.auditStatus || "草稿");
+  if (["草稿", "已驳回", "待审核"].includes(auditStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus];
+
+  const invoiceStatus = normalizedLogisticsExpenseSortStatus(bill.invoiceStatus || "待开票");
+  const paymentStatus = normalizedLogisticsExpenseSortStatus(bill.paymentStatus || "待开票");
+  const invoiceRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[invoiceStatus];
+  if (Number.isFinite(invoiceRank) && invoiceRank < LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
+  if (["部分付款", "部分已付款"].includes(paymentStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.部分付款;
+  if (paymentStatus === "已付款") return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已付款;
+  if (Number.isFinite(invoiceRank) && invoiceRank === LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
+  const paymentRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[paymentStatus];
+  if (Number.isFinite(paymentRank)) return paymentRank;
+  return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus] || 999;
+}
+
+function normalizedLogisticsExpenseSortStatus(value = "") {
+  const text = String(value || "").trim();
+  if (text === "部分上传") return "部分上传发票";
+  if (text === "部分已付款") return "部分付款";
+  if (text === "已确认发票") return "已确认";
+  return text || "草稿";
+}
+
+function logisticsExpenseBillUpdatedAtValue(bill = {}) {
+  const value = bill.updatedAt || bill.createdAt || 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 export function logisticsExpenseAccessWhere(actor) {
