@@ -57,7 +57,11 @@ type Pdf2JsonParser = {
   destroy?(): void;
 };
 
-type Pdf2JsonParserConstructor = new (context?: unknown, needRawText?: boolean, password?: string) => Pdf2JsonParser;
+type Pdf2JsonParserConstructor = new (context?: null, needRawText?: boolean, password?: string) => Pdf2JsonParser;
+type Pdf2JsonModule = {
+  default?: Pdf2JsonParserConstructor;
+  PDFParser?: Pdf2JsonParserConstructor;
+};
 
 const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
@@ -151,8 +155,8 @@ function normalizeDateParts(year: string, month: string, day: string) {
 async function loadPdf2JsonParser(): Promise<Pdf2JsonParserConstructor> {
   if (!pdf2JsonParserClassPromise) {
     pdf2JsonParserClassPromise = import("pdf2json").then((module) => {
-      const moduleRecord = module as Record<string, unknown>;
-      const PDFParser = (moduleRecord.default || moduleRecord.PDFParser) as Pdf2JsonParserConstructor | undefined;
+      const typedModule: Pdf2JsonModule = module;
+      const PDFParser = typedModule.default || typedModule.PDFParser;
       if (typeof PDFParser !== "function") {
         throw new Error("pdf2json 未导出可用的 PDFParser 构造器。");
       }

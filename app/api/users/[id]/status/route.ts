@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, updateUserStatus } from "../../../../../lib/platform-db";
+import { apiError, getActor, ok, parseJsonBody, updateUserStatus } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await getActor(request);
-    const body = (await request.json()) as StatusBody;
+    const body = await parseJsonBody(request) as StatusBody;
     const user = await updateUserStatus(request, actor, id, body.status);
     return ok({ success: true, user, message: "用户状态已更新" });
   } catch (error: unknown) {

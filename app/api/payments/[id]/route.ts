@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, deletePayment, getActor, ok, savePayment } from "../../../../lib/platform-db";
+import { apiError, deletePayment, getActor, ok, parseJsonBody, savePayment } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const payment = await savePaymentTyped(request, actor, body, id);
     return ok({ success: true, payment, message: "收款已保存" });
   } catch (error: unknown) {

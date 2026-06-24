@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteLogisticsExpenseInvoice, getActor, uploadLogisticsExpenseInvoice } from "../../../../../lib/platform-db";
+import { apiError, deleteLogisticsExpenseInvoice, getActor, parseJsonBody, uploadLogisticsExpenseInvoice } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
+    const body = await parseJsonBody(request, { allowEmpty: true });
     const result = await deleteLogisticsExpenseInvoice(request, actor, id, body);
     return NextResponse.json({ success: true, ...result, message: "已删除发票" });
   } catch (error: unknown) {

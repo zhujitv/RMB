@@ -1,12 +1,12 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError, getActor, logServerError, ok, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
+import { apiError, codedError, getActor, logServerError, ok, parseJsonBody, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = await request.json();
+    const body = await parseJsonBody(request);
     const result = await reviewLogisticsExpenseBills(request, actor, body);
     const message = result.message || (result.emailError
       ? `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`

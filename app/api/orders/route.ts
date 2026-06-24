@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listOrders, ok, saveOrder } from "../../../lib/platform-db";
+import { apiError, getActor, listOrders, ok, parseJsonBody, saveOrder } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const order = await saveOrderTyped(request, actor, body);
     return NextResponse.json({
       success: true,

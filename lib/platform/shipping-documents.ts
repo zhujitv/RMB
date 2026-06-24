@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as customsDeclarationParser from "../customs-declaration-parser";
 import { prisma } from "../prisma";
 import { readR2Object } from "../r2";
@@ -11,6 +10,7 @@ import {
   customerShortName,
   dateToInput,
   includeOrderRelations,
+  isPlainRecord,
   logServerError,
   nonEmpty,
   normalizeClearanceEmailLanguage,
@@ -25,16 +25,112 @@ import {
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
 
-function selectedShippingDocumentTypes(customer = {}) {
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+} | null | undefined;
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type ShippingCustomerLike = {
+  country?: string | null;
+  contactEmail?: string | null;
+  shippingDocsEmails?: unknown;
+  shippingDocsCcEmails?: unknown;
+  autoSendDocumentTypes?: unknown;
+  clearanceEmailLanguage?: string | null;
+  enableAutoShippingDocsNotification?: boolean | null;
+  shortName?: string | null;
+  name?: string | null;
+};
+type ShippingDocumentLike = {
+  id?: string;
+  documentType?: string | null;
+  uploadStatus?: string | null;
+  deletedAt?: Date | string | null;
+  mimeType?: string | null;
+  uploadedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  storageKey?: string | null;
+  originalFilename?: string | null;
+  originalName?: string | null;
+  fileName?: string | null;
+};
+type ShippingNotificationLike = {
+  id?: string;
+  sendMode?: string | null;
+  sendStatus?: string | null;
+  createdAt?: Date | string | null;
+};
+type ShippingOrderLike = {
+  id?: string;
+  customerId?: string | null;
+  customer?: ShippingCustomerLike | null;
+  documents?: ShippingDocumentLike[] | null;
+  shippingDocumentNotifications?: ShippingNotificationLike[] | null;
+  country?: string | null;
+  blNo?: string | null;
+  billOfLadingNo?: string | null;
+  customsDeclarationDate?: Date | null;
+  orderNo?: string | null;
+  customerNameSnapshot?: string | null;
+  customsDeclarationParseSource?: string | null;
+  customsParseStatus?: string | null;
+};
+type ShippingBundleItem = {
+  typeKey: string;
+  label: string;
+  emailLabel: string;
+  documentType: string;
+  document: ShippingDocumentLike | null;
+};
+type ShippingBundle = {
+  documentTypes: string[];
+  items: ShippingBundleItem[];
+  documents: ShippingDocumentLike[];
+  missing: ShippingBundleItem[];
+};
+type EmailAttachment = {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+};
+type SendShippingDocumentsEmailInput = {
+  recipientEmails: string[];
+  ccEmails: string[];
+  attachments: EmailAttachment[];
+  subject: string;
+  body: string;
+  notificationId?: string | null;
+};
+type ManualShippingEmailInput = Record<string, unknown>;
+type NotificationRecordOptions = {
+  sentById?: string;
+  documentTypes?: string[];
+  emailLanguage?: string;
+  emailSubject?: string;
+  emailBody?: string;
+};
+type ShippingBundleItemWithDocument = ShippingBundleItem & {
+  document: ShippingDocumentLike & { storageKey: string };
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "";
+}
+
+function hasShippingDocument(item: ShippingBundleItem): item is ShippingBundleItemWithDocument {
+  return Boolean(item.document?.storageKey);
+}
+
+function selectedShippingDocumentTypes(customer: ShippingCustomerLike = {}) {
   return normalizeShippingDocumentTypes(customer.autoSendDocumentTypes);
 }
 
-function shippingRecipientEmails(customer = {}) {
+function shippingRecipientEmails(customer: ShippingCustomerLike = {}) {
   const configured = parseEmailList(customer.shippingDocsEmails || []);
   return configured.length ? configured : parseEmailList(customer.contactEmail || "");
 }
 
-function latestSuccessfulDocumentByType(order = {}, documentType = "") {
+function latestSuccessfulDocumentByType(order: ShippingOrderLike = {}, documentType = "") {
   return (order.documents || [])
     .filter((document) => (
       document.documentType === documentType
@@ -42,45 +138,46 @@ function latestSuccessfulDocumentByType(order = {}, documentType = "") {
       && !document.deletedAt
       && String(document.mimeType || "").toLowerCase() === "application/pdf"
     ))
-    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0))[0] || null;
+    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime())[0] || null;
 }
 
-function shippingDocumentBundle(order = {}, options = {}) {
+function shippingDocumentBundle(order: ShippingOrderLike = {}, options: { documentTypes?: unknown } = {}): ShippingBundle {
   const customer = order.customer || {};
   const documentTypes = normalizeShippingDocumentTypes(options.documentTypes || selectedShippingDocumentTypes(customer));
-  const items = documentTypes.map((typeKey) => {
-    const config = SHIPPING_DOCUMENT_TYPE_CONFIG[typeKey];
+  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingBundleItem, "typeKey" | "document">>;
+  const items = documentTypes.filter((typeKey) => Boolean(configMap[typeKey])).map((typeKey) => {
+    const config = configMap[typeKey];
     const document = latestSuccessfulDocumentByType(order, config.documentType);
     return { typeKey, ...config, document };
   });
   return {
     documentTypes,
     items,
-    documents: items.map((item) => item.document).filter(Boolean),
+    documents: items.map((item) => item.document).filter((document): document is ShippingDocumentLike => Boolean(document)),
     missing: items.filter((item) => !item.document),
   };
 }
 
-function shippingDocumentManualBundle(order = {}) {
+function shippingDocumentManualBundle(order: ShippingOrderLike = {}) {
   return shippingDocumentBundle(order, { documentTypes: DEFAULT_SHIPPING_DOCUMENT_TYPES });
 }
 
-function latestShippingNotification(order = {}) {
+function latestShippingNotification(order: ShippingOrderLike = {}) {
   return (order.shippingDocumentNotifications || [])
     .slice()
-    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0] || null;
 }
 
-function hasSentAutoShippingNotification(order = {}) {
+function hasSentAutoShippingNotification(order: ShippingOrderLike = {}) {
   return (order.shippingDocumentNotifications || []).some((item) => item.sendMode === "auto" && item.sendStatus === "sent");
 }
 
-function customsDocumentsConfirmed(order = {}) {
+function customsDocumentsConfirmed(order: ShippingOrderLike = {}) {
   return order.customsDeclarationParseSource === customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_MANUAL
     || order.customsParseStatus === "MANUAL";
 }
 
-async function loadOrderForShippingNotification(orderId, actor = null) {
+async function loadOrderForShippingNotification(orderId: string, actor: ActorLike = null) {
   const order = await prisma.receivableOrder.findFirst({
     where: {
       id: orderId,
@@ -93,13 +190,14 @@ async function loadOrderForShippingNotification(orderId, actor = null) {
   return order;
 }
 
-async function loadOrderForManualShippingNotification(orderId, actor = null) {
-  if (!["管理员", "业务员"].includes(actor?.role)) throw permissionError("没有权限手动发送清关资料", 403);
+async function loadOrderForManualShippingNotification(orderId: string, actor: ActorLike = null) {
+  const actorRole = String(actor?.role || "");
+  if (!["管理员", "业务员"].includes(actorRole)) throw permissionError("没有权限手动发送清关资料", 403);
   const order = await prisma.receivableOrder.findFirst({
     where: {
       id: orderId,
       deletedAt: null,
-      ...(actor.role === "业务员" ? orderAccessWhere(actor) : {}),
+      ...(actorRole === "业务员" ? orderAccessWhere(actor) : {}),
     },
     include: includeOrderRelations(),
   });
@@ -117,7 +215,7 @@ function resendMailConfig() {
   return { apiKey, from, endpoint };
 }
 
-function resendAttachmentPayload(attachments = []) {
+function resendAttachmentPayload(attachments: EmailAttachment[] = []) {
   return attachments.map((attachment) => ({
     filename: attachment.filename,
     content: Buffer.isBuffer(attachment.content)
@@ -126,7 +224,7 @@ function resendAttachmentPayload(attachments = []) {
   }));
 }
 
-function shippingDocumentEmailTemplate(order = {}, bundle = {}, language = "EN") {
+function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order), language = "EN") {
   const normalizedLanguage = normalizeClearanceEmailLanguage(language, order.customer?.country || order.country || "");
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
@@ -171,14 +269,14 @@ function shippingDocumentEmailTemplate(order = {}, bundle = {}, language = "EN")
   };
 }
 
-function shippingDocumentDraft(order = {}) {
+function shippingDocumentDraft(order: ShippingOrderLike = {}) {
   const customer = order.customer || {};
   const bundle = shippingDocumentManualBundle(order);
   const template = shippingDocumentEmailTemplate(order, bundle, customer.clearanceEmailLanguage || "EN");
   const recipientEmails = parseEmailList(customer.shippingDocsEmails || []);
   const ccEmails = parseEmailList(customer.shippingDocsCcEmails || []);
   return {
-    customerShortName: customerShortName(customer) || customerFullName(customer, order.customerNameSnapshot),
+    customerShortName: customerShortName(customer) || customerFullName(customer, order.customerNameSnapshot || ""),
     orderNo: order.orderNo || "",
     billOfLadingNo: order.blNo || order.billOfLadingNo || "-",
     blNo: order.blNo || order.billOfLadingNo || "-",
@@ -186,7 +284,7 @@ function shippingDocumentDraft(order = {}) {
     recipientEmails,
     ccEmails,
     language: template.language,
-    languageLabel: SHIPPING_EMAIL_LANGUAGE_LABELS[template.language],
+    languageLabel: (SHIPPING_EMAIL_LANGUAGE_LABELS as Record<string, string>)[template.language],
     subject: template.subject,
     body: template.body,
     documents: bundle.items.map((item) => ({
@@ -205,12 +303,12 @@ function shippingDocumentDraft(order = {}) {
   };
 }
 
-function normalizeShippingEmailLanguage(value = "", order = {}) {
-  return normalizeClearanceEmailLanguage(value, order.customer?.country || order.country || "");
+function normalizeShippingEmailLanguage(value = "", order: ShippingOrderLike = {}) {
+  return normalizeClearanceEmailLanguage(String(value || ""), order.customer?.country || order.country || "");
 }
 
-function normalizeManualShippingEmailInput(input = {}, order = {}, bundle = {}) {
-  const language = normalizeShippingEmailLanguage(input.emailLanguage || input.language || order.customer?.clearanceEmailLanguage || "EN", order);
+function normalizeManualShippingEmailInput(input: ManualShippingEmailInput = {}, order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order)) {
+  const language = normalizeShippingEmailLanguage(String(input.emailLanguage || input.language || order.customer?.clearanceEmailLanguage || "EN"), order);
   const template = shippingDocumentEmailTemplate(order, bundle, language);
   const recipientEmails = requireValidEmailList(input.recipientEmails, "收件邮箱");
   const ccEmails = requireValidEmailList(input.ccEmails, "抄送邮箱");
@@ -221,7 +319,7 @@ function normalizeManualShippingEmailInput(input = {}, order = {}, bundle = {}) 
   return { language, recipientEmails, ccEmails, subject, body };
 }
 
-export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, attachments, subject, body, notificationId }) {
+export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, attachments, subject, body, notificationId }: SendShippingDocumentsEmailInput) {
   const { apiKey, from, endpoint } = resendMailConfig();
   const response = await fetch(endpoint, {
     method: "POST",
@@ -240,23 +338,25 @@ export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, at
     }),
   });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const reason = data?.message || data?.error?.message || data?.error || `HTTP ${response.status}`;
+    const data = await response.json().catch(() => ({})) as unknown;
+    const errorData = isPlainRecord(data) ? data : {};
+    const nestedError = isPlainRecord(errorData.error) ? errorData.error : {};
+    const reason = errorData.message || nestedError.message || errorData.error || `HTTP ${response.status}`;
     throw codedError(`Resend 邮件发送失败：${reason}`, response.status, "RESEND_SEND_FAILED");
   }
 }
 
-async function notificationRecordData(order, bundle, recipientEmails, ccEmails, sendMode, sendStatus, errorMessage = "", options = {}) {
+async function notificationRecordData(order: ShippingOrderLike, bundle: ShippingBundle, recipientEmails: string[], ccEmails: string[], sendMode: string, sendStatus: string, errorMessage = "", options: NotificationRecordOptions = {}) {
   const commercialInvoice = bundle.items.find((item) => item.typeKey === "commercialInvoice")?.document || null;
   return {
-    orderId: order.id,
-    customerId: order.customerId,
+    orderId: order.id || "",
+    customerId: order.customerId || "",
     invoiceId: commercialInvoice?.id || null,
     sentById: options.sentById || null,
     recipientEmails,
     ccEmails,
     documentTypes: options.documentTypes || bundle.documentTypes,
-    attachmentFileIds: bundle.documents.map((document) => document.id),
+    attachmentFileIds: bundle.documents.flatMap((document) => (document.id ? [document.id] : [])),
     sendStatus,
     sendMode,
     emailLanguage: options.emailLanguage || null,
@@ -267,7 +367,7 @@ async function notificationRecordData(order, bundle, recipientEmails, ccEmails, 
   };
 }
 
-async function upsertAutoShippingNotification(order, data) {
+async function upsertAutoShippingNotification(order: ShippingOrderLike, data: Parameters<typeof prisma.shippingDocumentNotification.create>[0]["data"]) {
   const existing = latestShippingNotification({
     shippingDocumentNotifications: (order.shippingDocumentNotifications || []).filter((item) => item.sendMode === "auto" && item.sendStatus !== "sent"),
   });
@@ -280,14 +380,15 @@ async function upsertAutoShippingNotification(order, data) {
   return prisma.shippingDocumentNotification.create({ data });
 }
 
-function publicShippingError(error) {
-  const message = String(error?.message || "");
-  if (error?.code === "MAIL_SERVICE_NOT_CONFIGURED") return "Resend 邮件服务未配置，未发送。";
+function publicShippingError(error: unknown) {
+  const message = errorMessage(error);
+  const code = error && typeof error === "object" && "code" in error ? String(error.code || "") : "";
+  if (code === "MAIL_SERVICE_NOT_CONFIGURED") return "Resend 邮件服务未配置，未发送。";
   if (/Resend|mail|email|邮件|ECONN|ETIMEDOUT|EAUTH|ENOTFOUND|fetch/i.test(message)) return `邮件发送失败：${message.slice(0, 120)}`;
   return message || "邮件发送失败。";
 }
 
-async function attemptShippingDocumentsNotification(request, actor, orderId, sendMode = "auto") {
+async function attemptShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string, sendMode = "auto") {
   const manual = sendMode === "manual";
   const accessActor = manual ? actor : null;
   const order = await loadOrderForShippingNotification(orderId, accessActor);
@@ -325,11 +426,14 @@ async function attemptShippingDocumentsNotification(request, actor, orderId, sen
     ? await prisma.shippingDocumentNotification.create({ data: baseData })
     : await upsertAutoShippingNotification(order, baseData);
   try {
-    const attachments = await Promise.all(bundle.items.map(async (item) => ({
-      filename: standardFilenameForDocument(item.document, order),
-      content: await readR2Object(item.document.storageKey),
-      contentType: item.document.mimeType || "application/pdf",
-    })));
+    const attachments = await Promise.all(bundle.items.map(async (item) => {
+      if (!hasShippingDocument(item)) throw codedError("清关资料附件不存在或未上传成功。", 400, "SHIPPING_ATTACHMENT_MISSING");
+      return {
+        filename: standardFilenameForDocument(item.document, order),
+        content: await readR2Object(item.document.storageKey),
+        contentType: item.document.mimeType || "application/pdf",
+      };
+    }));
     const template = shippingDocumentEmailTemplate(order, bundle, customer.clearanceEmailLanguage || "EN");
     await sendShippingDocumentsEmail({
       recipientEmails,
@@ -344,7 +448,7 @@ async function attemptShippingDocumentsNotification(request, actor, orderId, sen
       data: { sendStatus: "sent", emailLanguage: template.language, emailSubject: template.subject, emailBody: template.body, errorMessage: null, sentAt: new Date() },
     });
     await runNonCriticalTask("清关资料通知发送日志写入", () => writeAudit(request, actor, manual ? "手动重发清关资料" : "自动发送清关资料", "shipping_document_notifications", sent.id, row, sent));
-  } catch (error) {
+  } catch (error: unknown) {
     const message = publicShippingError(error);
     const failed = await prisma.shippingDocumentNotification.update({
       where: { id: row.id },
@@ -352,33 +456,35 @@ async function attemptShippingDocumentsNotification(request, actor, orderId, sen
     });
     await runNonCriticalTask("清关资料通知失败日志写入", () => writeAudit(request, actor, "清关资料通知发送失败", "shipping_document_notifications", failed.id, row, {
       ...failed,
-      technicalError: error?.message || "",
+      technicalError: errorMessage(error),
     }));
   }
   return serializeOrder(await loadOrderForShippingNotification(orderId, accessActor));
 }
 
-export async function tryAutoShippingDocumentsNotification(request, actor, orderId) {
+export async function tryAutoShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string) {
   try {
     return await attemptShippingDocumentsNotification(request, actor, orderId, "auto");
-  } catch (error) {
+  } catch (error: unknown) {
     logServerError("清关资料自动通知异常", error, { orderId });
     return null;
   }
 }
 
-export async function resendShippingDocumentsNotification(request, actor, orderId) {
-  if (!["管理员", "业务员"].includes(actor?.role)) throw permissionError("没有权限手动发送清关资料", 403);
+export async function resendShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string) {
+  if (!["管理员", "业务员"].includes(String(actor?.role || ""))) throw permissionError("没有权限手动发送清关资料", 403);
   return attemptShippingDocumentsNotification(request, actor, orderId, "manual");
 }
 
-export async function prepareManualShippingDocumentsNotification(actor, orderId) {
+export async function prepareManualShippingDocumentsNotification(actor: ActorLike, orderId: string) {
   const order = await loadOrderForManualShippingNotification(orderId, actor);
   if (!order.customerId || !order.customer) throw codedError("订单未关联客户，不能发送清关资料。", 400, "SHIPPING_CUSTOMER_REQUIRED");
   return shippingDocumentDraft(order);
 }
 
-export async function sendManualShippingDocumentsNotification(request, actor, orderId, input = {}) {
+export async function sendManualShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string, input: ManualShippingEmailInput = {}) {
+  const actorId = nonEmpty(actor?.id);
+  if (!actorId) throw permissionError("请先登录", 401);
   const order = await loadOrderForManualShippingNotification(orderId, actor);
   if (!order.customerId || !order.customer) throw codedError("订单未关联客户，不能发送清关资料。", 400, "SHIPPING_CUSTOMER_REQUIRED");
   const bundle = shippingDocumentManualBundle(order);
@@ -405,7 +511,7 @@ export async function sendManualShippingDocumentsNotification(request, actor, or
     "pending",
     "",
     {
-      sentById: actor.id,
+      sentById: actorId,
       emailLanguage: emailInput.language,
       emailSubject: emailInput.subject,
       emailBody: emailInput.body,
@@ -414,7 +520,7 @@ export async function sendManualShippingDocumentsNotification(request, actor, or
   );
   const row = await prisma.shippingDocumentNotification.create({ data: baseData });
   try {
-    const attachments = await Promise.all(bundle.items.filter((item) => item.document).map(async (item) => ({
+    const attachments = await Promise.all(bundle.items.filter(hasShippingDocument).map(async (item) => ({
       filename: standardFilenameForDocument(item.document, order),
       content: await readR2Object(item.document.storageKey),
       contentType: item.document.mimeType || "application/pdf",
@@ -436,7 +542,7 @@ export async function sendManualShippingDocumentsNotification(request, actor, or
       ...sent,
       missingLabels,
     }));
-  } catch (error) {
+  } catch (error: unknown) {
     const message = publicShippingError(error);
     const failed = await prisma.shippingDocumentNotification.update({
       where: { id: row.id },
@@ -445,7 +551,7 @@ export async function sendManualShippingDocumentsNotification(request, actor, or
     });
     await runNonCriticalTask("手动发送清关资料失败日志写入", () => writeAudit(request, actor, "手动发送清关资料失败", "shipping_document_notifications", failed.id, row, {
       ...failed,
-      technicalError: error?.message || "",
+      technicalError: errorMessage(error),
     }));
     throw codedError("清关资料发送失败，请稍后重试或联系管理员。", 502, "SHIPPING_EMAIL_SEND_FAILED");
   }

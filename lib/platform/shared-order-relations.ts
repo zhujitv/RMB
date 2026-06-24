@@ -1,5 +1,7 @@
+import { Prisma } from "../generated/prisma/client.js";
+
 export function includeOrderRelations() {
-  return {
+  return Prisma.validator<Prisma.ReceivableOrderInclude>()({
     customer: true,
     salesperson: true,
     commissionSettledBy: true,
@@ -45,5 +47,5 @@ export function includeOrderRelations() {
       orderBy: [{ updatedAt: "desc" as const }],
       take: 1,
     },
-  };
+  });
 }

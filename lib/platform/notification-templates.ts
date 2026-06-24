@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
 import {
   DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
@@ -8,7 +7,7 @@ import {
   LOGISTICS_INVOICE_NOTIFICATION_VARIABLES,
   runNonCriticalTask,
 } from "./shared-constants";
-import { assertJsonObject, nonEmpty, normalizeEmail, parseEmailList, requireValidEmailList, validEmail } from "./shared-base-utils";
+import { assertJsonObject, isPlainRecord, nonEmpty, normalizeEmail, parseEmailList, requireValidEmailList, validEmail } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 
@@ -20,7 +19,43 @@ const TEXT_LIMITS = {
   signature: 180,
 };
 
-function cleanRecipientEmailFields(value) {
+type LogisticsInvoiceNotificationSettingsInput = {
+  autoSendOnApproval?: unknown;
+  recipientEmailFields?: unknown;
+  ccAdminEmails?: unknown;
+  ccEmails?: unknown;
+  singleSubjectTemplate?: unknown;
+  batchSubjectTemplate?: unknown;
+  bodyTemplate?: unknown;
+  invoiceRequirements?: unknown;
+  uploadUrl?: unknown;
+  signature?: unknown;
+  resetToDefault?: unknown;
+};
+
+type LogisticsInvoiceGroupLike = {
+  label?: string | null;
+};
+
+type LogisticsInvoiceNotificationBillLike = {
+  orderNo?: unknown;
+  blNo?: unknown;
+  customerShortName?: unknown;
+  containerSummary?: unknown;
+  amountCny?: unknown;
+  detailText?: unknown;
+  invoiceGroups?: LogisticsInvoiceGroupLike[] | null;
+  remark?: unknown;
+};
+
+type SettingsActor = Parameters<typeof assertRead>[0];
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type SystemSettingLike = {
+  value?: unknown;
+} | null | undefined;
+type TemplateVariables = Record<string, unknown>;
+
+function cleanRecipientEmailFields(value: unknown) {
   const allowed = new Set(LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS.map((item) => item.value));
   const input = Array.isArray(value) ? value : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS;
   const fields = input
@@ -29,7 +64,7 @@ function cleanRecipientEmailFields(value) {
   return fields.length ? fields : [...DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS];
 }
 
-function cleanTemplateText(value, fallback = "", limit = 1000) {
+function cleanTemplateText(value: unknown, fallback = "", limit = 1000) {
   if (value === undefined || value === null) return fallback;
   return String(value)
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
@@ -37,7 +72,7 @@ function cleanTemplateText(value, fallback = "", limit = 1000) {
     .trim();
 }
 
-function cleanOptionalUrl(value) {
+function cleanOptionalUrl(value: unknown) {
   const text = cleanTemplateText(value, "", TEXT_LIMITS.uploadUrl);
   if (!text) return "";
   try {
@@ -48,12 +83,12 @@ function cleanOptionalUrl(value) {
   }
 }
 
-export function logisticsInvoiceNotificationUploadUrl(settings = {}) {
-  return settings.uploadUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net";
+export function logisticsInvoiceNotificationUploadUrl(settings: LogisticsInvoiceNotificationSettingsInput = {}) {
+  return nonEmpty(settings.uploadUrl) || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net";
 }
 
-export function normalizeLogisticsInvoiceNotificationSettings(value = {}) {
-  const input = value && typeof value === "object" ? value : {};
+export function normalizeLogisticsInvoiceNotificationSettings(value: unknown = {}) {
+  const input: LogisticsInvoiceNotificationSettingsInput = isPlainRecord(value) ? value : {};
   return {
     ...DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS,
     autoSendOnApproval: input.autoSendOnApproval !== false,
@@ -91,7 +126,7 @@ export function normalizeLogisticsInvoiceNotificationSettings(value = {}) {
   };
 }
 
-export function serializeLogisticsInvoiceNotificationSetting(setting) {
+export function serializeLogisticsInvoiceNotificationSetting(setting: SystemSettingLike) {
   return normalizeLogisticsInvoiceNotificationSettings(setting?.value || setting || {});
 }
 
@@ -107,12 +142,12 @@ export async function getLogisticsInvoiceNotificationSettings() {
   return serializeLogisticsInvoiceNotificationSetting(created);
 }
 
-export async function readLogisticsInvoiceNotificationSettings(actor) {
+export async function readLogisticsInvoiceNotificationSettings(actor: SettingsActor) {
   assertRead(actor, "settings");
   return getLogisticsInvoiceNotificationSettings();
 }
 
-export async function saveLogisticsInvoiceNotificationSettings(request, actor, input = {}) {
+export async function saveLogisticsInvoiceNotificationSettings(request: AuditRequestLike, actor: SettingsActor, input: unknown = {}) {
   assertWrite(actor, "settings");
   const data = assertJsonObject(input);
   const value = data.resetToDefault === true
@@ -146,7 +181,7 @@ export async function logisticsInvoiceNotificationAdminEmails() {
     .filter((email, index, arr) => arr.indexOf(email) === index);
 }
 
-export async function logisticsInvoiceNotificationCcEmails(settings = {}, recipientEmails = []) {
+export async function logisticsInvoiceNotificationCcEmails(settings: unknown = {}, recipientEmails: unknown[] = []) {
   const normalizedSettings = normalizeLogisticsInvoiceNotificationSettings(settings);
   const recipients = new Set(parseEmailList(recipientEmails));
   const configured = parseEmailList(normalizedSettings.ccEmails || []);
@@ -157,21 +192,21 @@ export async function logisticsInvoiceNotificationCcEmails(settings = {}, recipi
     .filter((email, index, arr) => arr.indexOf(email) === index);
 }
 
-function formatCurrencyCny(value) {
+function formatCurrencyCny(value: unknown) {
   return `¥${Number(value || 0).toFixed(2)}`;
 }
 
-function templateValue(value) {
+function templateValue(value: unknown) {
   return nonEmpty(value) || "-";
 }
 
-function applyTemplate(template = "", variables = {}) {
+function applyTemplate(template = "", variables: TemplateVariables = {}) {
   return String(template || "").replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (match, key) => (
     Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key] ?? "") : match
   ));
 }
 
-function billVariables(bill = {}) {
+function billVariables(bill: LogisticsInvoiceNotificationBillLike = {}) {
   return {
     orderNo: templateValue(bill.orderNo),
     blNo: templateValue(bill.blNo),
@@ -184,7 +219,7 @@ function billVariables(bill = {}) {
   };
 }
 
-function defaultBillRows(bills = []) {
+function defaultBillRows(bills: LogisticsInvoiceNotificationBillLike[] = []) {
   return bills.map((bill, index) => {
     const variables = billVariables(bill);
     const invoiceGroups = variables.invoiceGroups.split("\n").map((line) => `   - ${line}`).join("\n");
@@ -203,7 +238,7 @@ function defaultBillRows(bills = []) {
   }).join("\n\n");
 }
 
-export async function renderLogisticsInvoiceNotificationEmail(supplierName = "供应商", bills = []) {
+export async function renderLogisticsInvoiceNotificationEmail(supplierName: unknown = "供应商", bills: LogisticsInvoiceNotificationBillLike[] = []) {
   const settings = await getLogisticsInvoiceNotificationSettings();
   const firstBill = bills[0] || {};
   const firstBillVariables = billVariables(firstBill);

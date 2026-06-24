@@ -1,25 +1,17 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, previewCustomsRecognition, requireText } from "../../../../../lib/platform-db";
+import { apiError, codedError, getActor, ok, parseJsonBody, previewCustomsRecognition, requireText } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
-
-type ErrorWithStatus = Error & {
-  status?: number;
-  code?: string;
-};
 
 export async function POST(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const orderId = requireText(body.orderId, "订单ID");
     const documentId = requireText(body.documentId, "报关单文件ID");
     const documentType = String(body.documentType || "CUSTOMS_ENTRY_FORM");
     if (!["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION", "报关单"].includes(documentType)) {
-      const error: ErrorWithStatus = new Error("仅支持报关单 PDF 识别");
-      error.status = 400;
-      error.code = "INVALID_DOCUMENT_TYPE";
-      throw error;
+      throw codedError("仅支持报关单 PDF 识别", 400, "INVALID_DOCUMENT_TYPE");
     }
 
     const result = await previewCustomsRecognition(actor, orderId, {

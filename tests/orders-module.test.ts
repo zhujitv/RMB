@@ -64,7 +64,7 @@ test("orders create form submits system exchange rate metadata", () => {
 test("orders create form supports actual shipment date", () => {
   assert.match(prismaSchema, /actualShipmentDate\s+DateTime\?\s+@map\("actual_shipment_date"\) @db\.Date/);
   assert.match(inputSchemas, /actualShipmentDate: \{ label: "发货时间", kind: "date" \}/);
-  assert.match(ordersService, /const actualShipmentDate = dateFromInput\(input\.actualShipmentDate\)/);
+  assert.match(ordersService, /const actualShipmentDate = dateFromInput\(input(?:Data)?\.actualShipmentDate\)/);
   assert.match(ordersService, /actualShipmentDate,/);
   assert.match(orderSerialization, /actualShipmentDate: dateToInput\(order\.actualShipmentDate\)/);
   assert.match(ordersModule, /actualShipmentDate\?: string;/);

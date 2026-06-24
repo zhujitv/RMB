@@ -1,5 +1,9 @@
-// @ts-nocheck
-export const WRITE_PERMISSIONS = {
+type PermissionInput = Record<string, unknown>;
+type QueryLike = {
+  get: (key: string) => string | null;
+};
+
+export const WRITE_PERMISSIONS: Record<string, string[]> = {
   users: ["管理员"],
   customers: ["管理员"],
   orders: ["管理员", "业务员"],
@@ -15,7 +19,7 @@ export const WRITE_PERMISSIONS = {
   exchangeRates: ["管理员", "财务"],
 };
 
-export const ROLE_MENUS = {
+export const ROLE_MENUS: Record<string, string[]> = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
@@ -23,7 +27,7 @@ export const ROLE_MENUS = {
   物流资料录入员: ["domesticLogistics", "manual"],
 };
 
-export const ROLE_SCOPE_TEXT = {
+export const ROLE_SCOPE_TEXT: Record<string, string> = {
   管理员: "可查看和管理全部数据",
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
@@ -31,7 +35,7 @@ export const ROLE_SCOPE_TEXT = {
   物流资料录入员: "可录入物流信息和报关资料",
 };
 
-export const READ_PERMISSIONS = {
+export const READ_PERMISSIONS: Record<string, string[]> = {
   users: ["管理员"],
   customers: ["管理员", "业务员"],
   suppliers: ["管理员"],
@@ -101,30 +105,31 @@ export const SETTINGS_PERMISSION_LABELS = {
   },
 };
 
-export function permissionMode(value) {
-  return PERMISSION_MODES.includes(value) ? value : "ROLE";
+export function permissionMode(value: unknown) {
+  const mode = String(value || "");
+  return PERMISSION_MODES.includes(mode) ? mode : "ROLE";
 }
 
-export function checkedPermissionList(values, allowed) {
+export function checkedPermissionList(values: unknown, allowed: string[]) {
   const rows = Array.isArray(values) ? values : [];
   return rows
     .map((item) => String(item || "").trim())
     .filter((item, index, arr) => allowed.includes(item) && arr.indexOf(item) === index);
 }
 
-export function permissionObject(keys, enabledKeys = []) {
+export function permissionObject(keys: string[], enabledKeys: string[] = []) {
   return Object.fromEntries(keys.map((key) => [key, enabledKeys.includes(key)]));
 }
 
-export function roleReadKeys(role) {
+export function roleReadKeys(role: string) {
   return READ_PERMISSION_KEYS.filter((area) => READ_PERMISSIONS[area]?.includes(role));
 }
 
-export function roleWriteKeys(role) {
+export function roleWriteKeys(role: string) {
   return WRITE_PERMISSION_KEYS.filter((area) => WRITE_PERMISSIONS[area]?.includes(role));
 }
 
-export function roleDataScope(role) {
+export function roleDataScope(role: string) {
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
   if (role === "物流供应商") return "OWN";
@@ -132,7 +137,7 @@ export function roleDataScope(role) {
   return "NONE";
 }
 
-export function customDataScopeFallback(role, writeKeys = []) {
+export function customDataScopeFallback(role: string, writeKeys: string[] = []) {
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
   if (role === "物流供应商") return "OWN";
@@ -140,14 +145,14 @@ export function customDataScopeFallback(role, writeKeys = []) {
   return writeKeys.length ? "OWN" : roleDataScope(role);
 }
 
-export function pageParams(query, defaultPageSize = 20, maxPageSize = 100) {
+export function pageParams(query: QueryLike | null | undefined, defaultPageSize = 20, maxPageSize = 100) {
   const page = Math.max(1, Number.parseInt(query?.get("page") || "1", 10) || 1);
   const rawPageSize = Number.parseInt(query?.get("pageSize") || String(defaultPageSize), 10) || defaultPageSize;
   const pageSize = Math.min(maxPageSize, Math.max(1, rawPageSize));
   return { page, pageSize };
 }
 
-export function pageResult(rows, total, page, pageSize) {
+export function pageResult<T>(rows: T[], total: number, page: number, pageSize: number) {
   return {
     rows,
     total,
@@ -157,19 +162,19 @@ export function pageResult(rows, total, page, pageSize) {
   };
 }
 
-export function optionList(keys, labels) {
+export function optionList(keys: string[], labels: Record<string, string>) {
   return keys.map((value) => ({ value, label: labels[value] || value }));
 }
 
-export function roleMenus(role) {
-  return ROLE_MENUS[role] || [];
+export function roleMenus(role?: string | null) {
+  return ROLE_MENUS[String(role || "")] || [];
 }
 
-export function roleScopeText(role) {
-  return ROLE_SCOPE_TEXT[role] || "未配置权限";
+export function roleScopeText(role?: string | null) {
+  return ROLE_SCOPE_TEXT[String(role || "")] || "未配置权限";
 }
 
-export function rolePermissionSnapshot(role) {
+export function rolePermissionSnapshot(role: string) {
   const menus = roleMenus(role);
   const readKeys = roleReadKeys(role);
   const writeKeys = roleWriteKeys(role);
@@ -185,16 +190,17 @@ export function rolePermissionSnapshot(role) {
   };
 }
 
-export function normalizedCustomPermissionInput(value, role) {
-  const input = value && typeof value === "object" ? value : {};
+export function normalizedCustomPermissionInput(value: unknown, role: string) {
+  const input: PermissionInput = value && typeof value === "object" ? value as PermissionInput : {};
   const mode = permissionMode(input.mode || input.permissionMode);
   if (mode !== "CUSTOM") return null;
   const fallback = rolePermissionSnapshot(role);
   const menus = checkedPermissionList(input.menus ?? fallback.menus, MENU_KEYS);
   const readKeys = checkedPermissionList(input.reads ?? input.readKeys ?? fallback.readKeys, READ_PERMISSION_KEYS);
   const writeKeys = checkedPermissionList(input.writes ?? input.writeKeys ?? fallback.writeKeys, WRITE_PERMISSION_KEYS);
-  const dataScope = DATA_SCOPES.includes(input.dataScope)
-    ? input.dataScope
+  const requestedDataScope = String(input.dataScope || "");
+  const dataScope = DATA_SCOPES.includes(requestedDataScope)
+    ? requestedDataScope
     : customDataScopeFallback(role, writeKeys);
   return {
     mode: "CUSTOM",
@@ -205,7 +211,7 @@ export function normalizedCustomPermissionInput(value, role) {
   };
 }
 
-export function effectivePermissions(user) {
+export function effectivePermissions(user: { role?: string | null; customPermissions?: unknown } | null | undefined) {
   const role = user?.role || "";
   const base = rolePermissionSnapshot(role);
   if (role === "管理员") return base;

@@ -1,7 +1,8 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   effectivePermissions,
+  isPlainRecord,
   nonEmpty,
   pageParams,
   pageResult,
@@ -9,7 +10,18 @@ import {
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
 
-async function auditLogAccessWhere(actor) {
+type AuditLogOptions = {
+  actor?: { id?: string; role?: string; customPermissions?: unknown } | null;
+  defaultPageSize?: number;
+  paginated?: boolean;
+};
+type PayloadLike = Record<string, unknown>;
+type AuditActor = NonNullable<AuditLogOptions["actor"]>;
+type AuditQuery = {
+  get: (key: string) => string | null;
+};
+
+async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promise<Prisma.AuditLogWhereInput> {
   if (!actor) return {};
   const scope = effectivePermissions(actor).dataScope;
   if (actor.role === "管理员" || scope === "ALL") return {};
@@ -32,23 +44,22 @@ async function auditLogAccessWhere(actor) {
       prisma.orderDocument.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
       prisma.domesticLogisticsInfo.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
     ]) : [[], [], [], []];
-    const entityFilters = [
-      customerIds.length ? { entityType: "customers", entityId: { in: customerIds } } : null,
-      orderIds.length ? { entityType: "receivable_orders", entityId: { in: orderIds } } : null,
-      payments.length ? { entityType: "payments", entityId: { in: payments.map((item) => item.id) } } : null,
-      costs.length ? { entityType: "order_costs", entityId: { in: costs.map((item) => item.id) } } : null,
-      documents.length ? { entityType: "order_documents", entityId: { in: documents.map((item) => item.id) } } : null,
-      domesticLogisticsInfos.length ? { entityType: "domestic_logistics_infos", entityId: { in: domesticLogisticsInfos.map((item) => item.id) } } : null,
-    ].filter(Boolean);
+    const entityFilters: Prisma.AuditLogWhereInput[] = [];
+    if (customerIds.length) entityFilters.push({ entityType: "customers", entityId: { in: customerIds } });
+    if (orderIds.length) entityFilters.push({ entityType: "receivable_orders", entityId: { in: orderIds } });
+    if (payments.length) entityFilters.push({ entityType: "payments", entityId: { in: payments.map((item) => item.id) } });
+    if (costs.length) entityFilters.push({ entityType: "order_costs", entityId: { in: costs.map((item) => item.id) } });
+    if (documents.length) entityFilters.push({ entityType: "order_documents", entityId: { in: documents.map((item) => item.id) } });
+    if (domesticLogisticsInfos.length) entityFilters.push({ entityType: "domestic_logistics_infos", entityId: { in: domesticLogisticsInfos.map((item) => item.id) } });
     return entityFilters.length ? { OR: entityFilters } : { entityId: "__no_audit_access__" };
   }
   return { entityId: "__no_audit_access__" };
 }
 
-export async function getAuditLogs(query, options = {}) {
+export async function getAuditLogs(query: AuditQuery | null | undefined, options: AuditLogOptions = {}) {
   const keyword = nonEmpty(query?.get("keyword") || query?.get("q") || query?.get("search"));
   const action = nonEmpty(query?.get("action"));
-  const filterWhere = {
+  const filterWhere: Prisma.AuditLogWhereInput = {
     entityType: { not: "shipping_document_notifications" },
     ...(action ? { action: { contains: action, mode: "insensitive" } } : {}),
     ...(keyword ? {
@@ -63,7 +74,7 @@ export async function getAuditLogs(query, options = {}) {
     } : {}),
   };
   const accessWhere = await auditLogAccessWhere(options.actor);
-  const where = Object.keys(accessWhere).length
+  const where: Prisma.AuditLogWhereInput = Object.keys(accessWhere).length
     ? { AND: [accessWhere, filterWhere] }
     : filterWhere;
   const { page, pageSize } = pageParams(query, options.defaultPageSize || 50, 200);
@@ -83,7 +94,7 @@ export async function getAuditLogs(query, options = {}) {
     take: Math.min(200, Math.max(20, Number(query?.get("limit") || 100))),
   })];
   const production = process.env.NODE_ENV === "production";
-  const entityTypeLabels = {
+  const entityTypeLabels: Record<string, string> = {
     receivable_orders: "订单",
     payments: "收款",
     order_costs: "成本",
@@ -96,9 +107,14 @@ export async function getAuditLogs(query, options = {}) {
     exchange_rates: "汇率",
     exchange_rate_settings: "汇率设置",
   };
-  const displayValue = (payload = {}) => [
+  const displayValue = (value: unknown = {}) => {
+    const payload: PayloadLike = isPlainRecord(value) ? value : {};
+    const order = isPlainRecord(payload.order) ? payload.order : undefined;
+    const supplier = isPlainRecord(payload.supplier) ? payload.supplier : undefined;
+    const customer = isPlainRecord(payload.customer) ? payload.customer : undefined;
+    return [
     payload.orderNo,
-    payload.order?.orderNo,
+    order?.orderNo,
     payload.fileName,
     payload.supplierName,
     payload.supplierNameSnapshot,
@@ -107,9 +123,10 @@ export async function getAuditLogs(query, options = {}) {
     payload.customerNameSnapshot,
     payload.name,
     payload.email,
-    payload.supplier?.supplierName,
-    payload.customer?.name,
-  ].map((value) => String(value || "").trim()).find(Boolean);
+    supplier?.supplierName,
+      customer?.name,
+    ].map((item) => String(item || "").trim()).find(Boolean);
+  };
   const rows = logs.map((log) => ({
     id: log.id,
     user: serializeUser(log.user),

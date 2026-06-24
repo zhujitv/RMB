@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, assertPdfUploadFileCandidate, getActor, listOrderDocuments, logServerError, ok, uploadOrderDocument } from "../../../lib/platform-db";
+import { apiError, assertPdfUploadFileCandidate, codedError, getActor, listOrderDocuments, logServerError, ok, uploadOrderDocument } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,10 +47,7 @@ export async function POST(request: NextRequest) {
     orderId = String(formData.get("orderId") || "").trim();
     documentType = String(formData.get("documentType") || "").trim();
     if (!orderId || !documentType) {
-      const error = new Error("缺少订单信息，不能上传文件，请刷新后重试。") as ErrorLike;
-      error.status = 400;
-      error.code = "UPLOAD_CONTEXT_MISSING";
-      throw error;
+      throw codedError("缺少订单信息，不能上传文件，请刷新后重试。", 400, "UPLOAD_CONTEXT_MISSING");
     }
     file = assertPdfUploadFileCandidate(candidate).file;
     const document = await uploadOrderDocument(request, actor, {

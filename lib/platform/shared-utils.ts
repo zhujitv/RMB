@@ -7,6 +7,7 @@ export {
   codedError,
   dateFromInput,
   dateToInput,
+  isPlainRecord,
   logSecurityEvent,
   logServerError,
   nonEmpty,
@@ -17,6 +18,7 @@ export {
   num,
   ok,
   optional,
+  parseJsonBody,
   parseEmailList,
   requirePositive,
   requireText,
@@ -28,7 +30,7 @@ export {
 } from "./shared-base-utils";
 export type { InputSchema } from "./shared-base-utils";
 import { PAYMENT_TERM_LABELS, PAYMENT_TERM_TYPES } from "./shared-constants";
-import { optional } from "./shared-base-utils";
+import { codedError, optional } from "./shared-base-utils";
 
 export const PAYMENT_TERM_TYPE_BY_LABEL = Object.fromEntries(
   Object.entries(PAYMENT_TERM_LABELS).map(([type, label]) => [label, type]),
@@ -64,7 +66,5 @@ export function resolvePaymentTerm(input: PaymentTermInput, before: PaymentTermS
       label: before.paymentTerm || paymentTermLabel(before.paymentTermType, "OA账期"),
     };
   }
-  const error = new Error("请选择有效付款条款") as Error & { status?: number };
-  error.status = 400;
-  throw error;
+  throw codedError("请选择有效付款条款", 400, "PAYMENT_TERM_REQUIRED");
 }

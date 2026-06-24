@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, canWrite, getActor, getExchangeRateSettings, ok, saveExchangeRateSettings } from "../../../../lib/platform-db";
+import { apiError, canWrite, getActor, getExchangeRateSettings, ok, parseJsonBody, saveExchangeRateSettings } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const settings = await saveExchangeRateSettings(request, actor, body);
     return ok({ success: true, settings, message: "汇率设置已保存" });
   } catch (error: unknown) {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, safeFileName, uploadToR2 } from "../r2";
 import {
@@ -10,6 +9,7 @@ import {
   customerBusinessName,
   customerShortName,
   nextStandardFilenameForUpload,
+  nonEmpty,
   normalizeEmail,
   normalizedCostType,
   readValidatedInvoiceUploadFile,
@@ -23,12 +23,106 @@ import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
 import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 
-function logisticsExpenseCustomerShortName(expense = {}) {
-  const order = expense.order || {};
-  return customerShortName(order.customer) || customerBusinessName(order.customer, order.customerNameSnapshot) || "-";
+type UnknownRecord = Record<string, unknown>;
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type LogisticsInvoiceActor = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+type SupplierUserLike = { email?: string | null; isActive?: boolean | null } & UnknownRecord;
+type SupplierLike = {
+  id?: string;
+  supplierName?: string | null;
+  email?: string | null;
+  contactEmail?: string | null;
+  financeEmail?: string | null;
+  operatorUsers?: SupplierUserLike[];
+} & UnknownRecord;
+type CostLike = {
+  id?: string | null;
+  costType?: string;
+} & UnknownRecord;
+type LogisticsExpenseLike = {
+  id?: string;
+  orderId?: string;
+  supplierId?: string;
+  supplierNameSnapshot?: string | null;
+  supplier?: SupplierLike | null;
+  supplierEmail?: string | null;
+  order?: UnknownRecord | null;
+  cost?: CostLike | null;
+  costId?: string | null;
+  costType?: string;
+  currency?: string | null;
+  amount?: unknown;
+  amountCny?: unknown;
+  billingQuantity?: unknown;
+  appliedContainerCount?: unknown;
+  remark?: string | null;
+} & UnknownRecord;
+type LogisticsBillSummary = {
+  supplierId: string;
+  supplierName: string;
+  supplierEmail: string;
+  supplier: SupplierLike | null;
+  orderNo: string;
+  blNo: string;
+  containerSummary: string;
+  customerShortName: string;
+  amountCny: number;
+  detailText: string;
+  invoiceGroups: ReturnType<typeof logisticsInvoiceGroupsForCostTypes>;
+  remark: string;
+  expenses: LogisticsExpenseLike[];
+};
+type EmailCandidate = {
+  key: string;
+  label: string;
+  field: string;
+  value: string;
+};
+type InvoiceRecipientResolution = {
+  email: string;
+  emails: string[];
+  label: string;
+  field: string;
+  checkedFields: string[];
+  checkedText: string;
+  error: string;
+};
+type InvoiceNotificationResult = {
+  supplierId: string;
+  supplierName: string;
+  sent: boolean;
+  skipped?: boolean;
+  error: string;
+  expenseIds: string[];
+};
+type SupplierNotificationGroup = {
+  supplierId: string;
+  supplierName: string;
+  supplierEmail: string;
+  supplier: SupplierLike | null;
+  bills: LogisticsBillSummary[];
+  expenses: LogisticsExpenseLike[];
+};
+
+function asRecord(value: unknown): UnknownRecord {
+  return value && typeof value === "object" ? value as UnknownRecord : {};
 }
 
-function logisticsExpenseContainerSummaryText(expense = {}) {
+function errorMessage(error: unknown, fallback = "") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function logisticsExpenseCustomerShortName(expense: LogisticsExpenseLike = {}) {
+  const order = expense.order || {};
+  return customerShortName(order.customer) || customerBusinessName(order.customer, nonEmpty(order.customerNameSnapshot)) || "-";
+}
+
+function logisticsExpenseContainerSummaryText(expense: LogisticsExpenseLike = {}) {
   const orderSummary = logisticsExpenseOrderSummary(expense.order || {});
   const items = orderSummary.transportItems || [];
   const counts = new Map();
@@ -43,7 +137,7 @@ function logisticsExpenseContainerSummaryText(expense = {}) {
   return "未录入";
 }
 
-function logisticsExpenseDetailText(expenses = []) {
+function logisticsExpenseDetailText(expenses: LogisticsExpenseLike[] = []) {
   return expenses.map((expense, index) => {
     const amount = Number(expense.amount || 0).toFixed(2);
     const amountCnyText = Number(expense.amountCny || 0).toFixed(2);
@@ -51,29 +145,29 @@ function logisticsExpenseDetailText(expenses = []) {
       ? Number(expense.appliedContainerCount || 1)
       : Number(expense.billingQuantity || 1);
     const remark = expense.remark ? `，备注：${expense.remark}` : "";
-    return `${index + 1}. ${logisticsCostTypeLabel(normalizedCostType(expense.costType))}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
+    return `${index + 1}. ${logisticsCostTypeLabel(normalizedCostType(nonEmpty(expense.costType)))}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
   }).join("\n");
 }
 
-function logisticsBillSummaryRows(expenses = []) {
-  const groups = new Map();
+function logisticsBillSummaryRows(expenses: LogisticsExpenseLike[] = []): LogisticsBillSummary[] {
+  const groups = new Map<string, LogisticsExpenseLike[]>();
   for (const expense of expenses) {
     const order = expense.order || {};
     const orderSummary = logisticsExpenseOrderSummary(order);
     const key = [expense.supplierId || "", expense.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(expense);
+    groups.get(key)!.push(expense);
   }
   return [...groups.values()].map((rows) => {
     const first = rows[0] || {};
-    const order = first.order || {};
+    const order = asRecord(first.order);
     const orderSummary = logisticsExpenseOrderSummary(order);
     return {
       supplierId: first.supplierId || "",
       supplierName: first.supplierNameSnapshot || first.supplier?.supplierName || "供应商",
       supplier: first.supplier || null,
       supplierEmail: first.supplier?.email || "",
-      orderNo: order.orderNo || "-",
+      orderNo: nonEmpty(order.orderNo) || "-",
       blNo: orderSummary.blNo || orderSummary.billOfLadingNo || "-",
       containerSummary: logisticsExpenseContainerSummaryText(first),
       customerShortName: logisticsExpenseCustomerShortName(first),
@@ -86,7 +180,7 @@ function logisticsBillSummaryRows(expenses = []) {
   });
 }
 
-function supplierOperatorEmailCandidates(supplier = {}) {
+function supplierOperatorEmailCandidates(supplier: SupplierLike = {}): EmailCandidate[] {
   return (supplier.operatorUsers || [])
     .filter((user) => user && user.isActive !== false)
     .map((user) => ({
@@ -97,7 +191,7 @@ function supplierOperatorEmailCandidates(supplier = {}) {
     }));
 }
 
-function logisticsSupplierEmailCandidates(supplier = {}) {
+function logisticsSupplierEmailCandidates(supplier: SupplierLike = {}): EmailCandidate[] {
   return [
     ...supplierOperatorEmailCandidates(supplier),
     { key: "contactEmail", label: "供应商联系邮箱", field: "supplier.contactEmail", value: supplier.contactEmail || "" },
@@ -106,7 +200,7 @@ function logisticsSupplierEmailCandidates(supplier = {}) {
   ];
 }
 
-export function resolveLogisticsSupplierInvoiceRecipients(supplier = {}, recipientEmailFields = DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS) {
+export function resolveLogisticsSupplierInvoiceRecipients(supplier: SupplierLike = {}, recipientEmailFields = DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS): InvoiceRecipientResolution {
   const selected = new Set((Array.isArray(recipientEmailFields) && recipientEmailFields.length
     ? recipientEmailFields
     : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS
@@ -117,7 +211,7 @@ export function resolveLogisticsSupplierInvoiceRecipients(supplier = {}, recipie
   const fallbackCandidates = candidates.length ? candidates : logisticsSupplierEmailCandidates(supplier);
   const checkedFields = candidates.map((candidate) => candidate.field);
   const checkedText = checkedFields.join("、");
-  const emails = [];
+  const emails: string[] = [];
   for (const candidate of candidates) {
     const email = normalizeEmail(candidate.value || "");
     if (email && validEmail(email)) {
@@ -148,11 +242,11 @@ export function resolveLogisticsSupplierInvoiceRecipients(supplier = {}, recipie
   };
 }
 
-export function resolveLogisticsSupplierInvoiceEmail(supplier = {}) {
+export function resolveLogisticsSupplierInvoiceEmail(supplier: SupplierLike = {}) {
   return resolveLogisticsSupplierInvoiceRecipients(supplier);
 }
 
-export async function notifyLogisticsSupplierInvoice(expense) {
+export async function notifyLogisticsSupplierInvoice(expense: LogisticsExpenseLike) {
   const settings = await getLogisticsInvoiceNotificationSettings();
   if (settings.autoSendOnApproval === false) return;
   const resolved = resolveLogisticsSupplierInvoiceRecipients(expense.supplier || {}, settings.recipientEmailFields);
@@ -173,10 +267,10 @@ export async function notifyLogisticsSupplierInvoice(expense) {
   });
 }
 
-export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
+export async function notifyLogisticsSupplierInvoiceBills(expenses: LogisticsExpenseLike[] = []): Promise<InvoiceNotificationResult[]> {
   const settings = await getLogisticsInvoiceNotificationSettings();
   const bills = logisticsBillSummaryRows(expenses);
-  const bySupplier = new Map();
+  const bySupplier = new Map<string, SupplierNotificationGroup>();
   for (const bill of bills) {
     const key = bill.supplierId || bill.supplierEmail || bill.supplierName;
     if (!bySupplier.has(key)) bySupplier.set(key, {
@@ -187,11 +281,11 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
       bills: [],
       expenses: [],
     });
-    const group = bySupplier.get(key);
+    const group = bySupplier.get(key)!;
     group.bills.push(bill);
     group.expenses.push(...bill.expenses);
   }
-  const results = [];
+  const results: InvoiceNotificationResult[] = [];
   for (const group of bySupplier.values()) {
     if (settings.autoSendOnApproval === false) {
       results.push({
@@ -200,7 +294,7 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
         sent: false,
         skipped: true,
         error: "",
-        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+        expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
       });
       continue;
     }
@@ -211,7 +305,7 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
         supplierName: group.supplierName || "供应商",
         sent: false,
         error: `${resolved.error}未发送开票通知。`,
-        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+        expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
       });
       continue;
     }
@@ -231,39 +325,47 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
         supplierName: group.supplierName || "供应商",
         sent: true,
         error: "",
-        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+        expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
       });
-    } catch (error) {
+    } catch (error: unknown) {
       results.push({
         supplierId: group.supplierId || "",
         supplierName: group.supplierName || "供应商",
         sent: false,
-        error: error?.message || "邮件发送失败",
-        expenseIds: group.expenses.map((expense) => expense.id).filter(Boolean),
+        error: errorMessage(error, "邮件发送失败"),
+        expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
       });
     }
   }
   return results;
 }
 
-export async function createLogisticsInvoiceDocument(request, actor, expense, file, metadata = {}) {
+export async function createLogisticsInvoiceDocument(
+  request: AuditRequestLike,
+  actor: LogisticsInvoiceActor,
+  expense: LogisticsExpenseLike,
+  file: unknown,
+  metadata: UnknownRecord = {}
+) {
   const { originalFileName, mimeType, body, fileSize } = await readValidatedInvoiceUploadFile(file, "invoice.pdf");
-  const order = expense.order;
+  const order = asRecord(expense.order);
+  const cost = asRecord(expense.cost);
   const logisticsCostType = normalizedCostType(expense.cost?.costType || expense.costType);
   const extension = invoiceFileExtension(mimeType, originalFileName);
-  const costContext = { ...(expense.cost || { id: expense.costId }), costType: logisticsCostType };
+  const costContext = { ...(expense.cost ? cost : { id: expense.costId }), costType: logisticsCostType };
+  const orderId = nonEmpty(order.id);
   const baseStandardFilename = await nextStandardFilenameForUpload(order, "SUPPLIER_INVOICE", {
     cost: costContext,
-    costId: expense.costId,
+    costId: nonEmpty(expense.costId),
     costType: logisticsCostType,
-    supplierId: expense.supplierId,
+    supplierId: nonEmpty(expense.supplierId),
     relatedModule: "SUPPLIER",
   });
   const standardFilename = baseStandardFilename.replace(/\.pdf$/i, extension);
   const { bucket: r2Bucket } = ensureR2Configured();
-  const storageFileName = safeFileName(`${order.orderNo || order.id}_LOGISTICS_INVOICE_${Date.now()}_${crypto.randomUUID().slice(0, 8)}${extension}`);
+  const storageFileName = safeFileName(`${nonEmpty(order.orderNo) || orderId}_LOGISTICS_INVOICE_${Date.now()}_${crypto.randomUUID().slice(0, 8)}${extension}`);
   const storageKey = buildOrderDocumentKey({
-    orderId: order.id,
+    orderId,
     documentType: "SUPPLIER_INVOICE",
     fileName: storageFileName,
     relatedModule: "SUPPLIER",
@@ -273,7 +375,7 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
   try {
     const document = await prisma.orderDocument.create({
       data: {
-        orderId: order.id,
+        orderId,
         costId: expense.costId || null,
         supplierId: expense.supplierId,
         relatedModule: "SUPPLIER",
@@ -289,7 +391,7 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
         fileUrl: null,
         uploadStatus: "SUCCESS",
         uploadProgress: 100,
-        uploadedById: actor.id,
+        uploadedById: actor?.id || null,
         uploadedAt: new Date(),
       },
       include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
@@ -300,7 +402,7 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
       fileName: standardFilename,
     }));
     return document;
-  } catch (error) {
+  } catch (error: unknown) {
     await deleteR2Object(storageKey).catch(() => null);
     throw error;
   }
@@ -313,9 +415,11 @@ function invoiceFileExtension(mimeType = "", fileName = "") {
   return ".pdf";
 }
 
-export function canUploadLogisticsExpenseInvoice(actor, expense) {
-  if (["管理员", "财务"].includes(actor?.role)) return true;
-  if (![LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role)) return false;
+export function canUploadLogisticsExpenseInvoice(actor: LogisticsInvoiceActor, expense: LogisticsExpenseLike) {
+  const role = nonEmpty(actor?.role);
+  if (["管理员", "财务"].includes(role)) return true;
+  if (![LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) return false;
+  if (!actor) return false;
   if (!actor.supplierId || actor.supplierId !== expense.supplierId) return false;
   return Boolean(expense.supplier?.allowLogisticsInvoiceUpload);
 }

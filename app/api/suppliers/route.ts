@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listSuppliers, ok, saveSupplier } from "../../../lib/platform-db";
+import { apiError, getActor, listSuppliers, ok, parseJsonBody, saveSupplier } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const supplier = await saveSupplierTyped(request, actor, body);
     return NextResponse.json({ success: true, supplier, message: "供应商已保存" }, { status: 201 });
   } catch (error: unknown) {

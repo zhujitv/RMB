@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import { Prisma } from "../generated/prisma/client.js";
 import { summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
@@ -10,6 +10,7 @@ import {
   TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
   customerFullName,
   customerShortName,
+  isPlainRecord,
   isLogisticsCostType,
   isTaxRefundFactoryCost,
   isTaxRefundLogisticsInvoiceCost,
@@ -20,7 +21,51 @@ import {
   validCost,
 } from "./shared";
 
-export function costPageParams(query) {
+type CostDocumentLike = {
+  documentType?: string | null;
+  uploadStatus?: string | null;
+  deletedAt?: Date | string | null;
+};
+type NumericLike = number | string | { toString(): string };
+type SupplierLike = {
+  supplierName?: string | null;
+  supplierType?: string | null;
+};
+type CostLike = {
+  orderId?: string | null;
+  supplierId?: string | null;
+  supplier?: SupplierLike | null;
+  supplierNameSnapshot?: string | null;
+  costType?: string | null;
+  currency?: string | null;
+  amount?: NumericLike | null;
+  amountCny?: NumericLike | null;
+  paymentStatus?: string | null;
+  costConfirmed?: boolean | null;
+  documents?: CostDocumentLike[] | null;
+  createdById?: string | null;
+  deletedAt?: Date | string | null;
+};
+type CostSummaryOrderLike = {
+  id: string;
+  orderNo: string;
+  blNo?: string | null;
+  customerId: string;
+  customer?: unknown;
+  customerNameSnapshot?: string | null;
+  receivableAmountCny?: NumericLike | null;
+  finalReceivableAmountCny?: NumericLike | null;
+  costs?: CostLike[] | null;
+};
+type DuplicateCostOptions = {
+  sameCreator?: boolean;
+};
+type CostQuery = {
+  get(key: string): string | null;
+};
+type CostCreateData = Prisma.OrderCostUncheckedCreateInput;
+
+export function costPageParams(query: CostQuery) {
   const page = Math.max(1, Number.parseInt(query.get("page") || "1", 10) || 1);
   const requestedPageSize = Number.parseInt(query.get("pageSize") || "20", 10) || 20;
   const allowedPageSizes = [20, 50, 100];
@@ -28,25 +73,26 @@ export function costPageParams(query) {
   return { page, pageSize };
 }
 
-export function archiveScope(query) {
+export function archiveScope(query: CostQuery | null | undefined) {
   const scope = query ? String(query.get("archiveScope") || query.get("businessScope") || query.get("taxArchiveScope") || "").trim() : "";
   return ["current", "archive", "all"].includes(scope) ? scope : "current";
 }
 
-export function orderArchiveWhereForScope(scope = "current") {
+export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
   if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
   if (scope === "all") return {};
   return { taxArchived: false };
 }
 
-function costAmountBuckets(costs = []) {
+function costAmountBuckets(costs: CostLike[] = []) {
   return costs.filter(validCost).reduce((acc, cost) => {
     const amount = Number(cost.amountCny || 0);
     acc.totalCostCny += amount;
-    const displayCostType = normalizedCostType(cost.costType);
-    if (FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType)) acc.factoryCostCny += amount;
+    const rawCostType = String(cost.costType || "");
+    const displayCostType = normalizedCostType(rawCostType);
+    if (FACTORY_SUPPLIER_COST_TYPES.includes(rawCostType)) acc.factoryCostCny += amount;
     else if (displayCostType === "港杂费" || supplierTypeForCost(cost) === "港杂费用供应商") acc.portCostCny += amount;
-    else if (isLogisticsCostType(cost.costType) || TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType)) acc.logisticsCostCny += amount;
+    else if (isLogisticsCostType(rawCostType) || TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES.includes(rawCostType)) acc.logisticsCostCny += amount;
     else acc.otherCostCny += amount;
     return acc;
   }, {
@@ -58,7 +104,7 @@ function costAmountBuckets(costs = []) {
   });
 }
 
-function costDocumentProgress(costs = []) {
+function costDocumentProgress(costs: CostLike[] = []) {
   const progress = costs.filter(validCost).reduce((acc, cost) => {
     const successDocs = (cost.documents || []).filter(successDocument);
     if (isTaxRefundFactoryCost(cost)) {
@@ -78,7 +124,7 @@ function costDocumentProgress(costs = []) {
   };
 }
 
-function costConfirmedProgress(costs = []) {
+function costConfirmedProgress(costs: CostLike[] = []) {
   const rows = costs.filter(validCost);
   const completed = rows.filter((cost) => cost.costConfirmed).length;
   return {
@@ -88,11 +134,11 @@ function costConfirmedProgress(costs = []) {
   };
 }
 
-export function serializeCostOrderSummary(order) {
+export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
   const costs = order.costs || [];
   const buckets = costAmountBuckets(costs);
   const currencyTotals = summarizeCurrencyTotals(costs.filter(validCost));
-  const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
+  const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot || "");
   const shortCustomerName = customerShortName(order.customer);
   return {
     id: order.id,
@@ -114,7 +160,7 @@ export function serializeCostOrderSummary(order) {
 }
 
 export function includeCostRelations() {
-  return {
+  return Prisma.validator<Prisma.OrderCostInclude>()({
     order: { include: { customer: true, salesperson: true } },
     supplier: true,
     createdBy: true,
@@ -124,10 +170,12 @@ export function includeCostRelations() {
       include: { uploadedBy: true, supplier: true },
       orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
     },
-  };
+  });
 }
 
-function duplicateCostWhere(data, windowMs, { sameCreator = false } = {}) {
+type CostWithRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostRelations> }>;
+
+function duplicateCostWhere(data: CostCreateData, windowMs: number, { sameCreator = false }: DuplicateCostOptions = {}): Prisma.OrderCostWhereInput {
   return {
     deletedAt: null,
     orderId: data.orderId,
@@ -139,7 +187,7 @@ function duplicateCostWhere(data, windowMs, { sameCreator = false } = {}) {
   };
 }
 
-export function duplicateCostFingerprint(data) {
+export function duplicateCostFingerprint(data: Pick<CostCreateData, "orderId" | "supplierId" | "costType" | "amount">) {
   return [
     data.orderId || "",
     data.supplierId || "",
@@ -148,7 +196,7 @@ export function duplicateCostFingerprint(data) {
   ].join("|");
 }
 
-async function findDuplicateCost(data, windowMs, options = {}) {
+async function findDuplicateCost(data: CostCreateData, windowMs: number, options: DuplicateCostOptions = {}) {
   return prisma.orderCost.findFirst({
     where: duplicateCostWhere(data, windowMs, options),
     include: includeCostRelations(),
@@ -156,11 +204,11 @@ async function findDuplicateCost(data, windowMs, options = {}) {
   });
 }
 
-function isUniqueConstraintError(error) {
-  return error?.code === "P2002";
+function isUniqueConstraintError(error: unknown) {
+  return isPlainRecord(error) && error.code === "P2002";
 }
 
-export async function createCostIdempotently(data) {
+export async function createCostIdempotently(data: CostCreateData): Promise<{ cost: CostWithRelations; reused: boolean }> {
   const recentDuplicate = await findDuplicateCost(data, COST_IDEMPOTENCY_WINDOW_MS);
   if (recentDuplicate) return { cost: recentDuplicate, reused: true };
   try {
@@ -175,6 +223,6 @@ export async function createCostIdempotently(data) {
   }
 }
 
-export function serializeCosts(rows = []) {
+export function serializeCosts(rows: unknown[] = []) {
   return rows.map(safeSerializeCost);
 }

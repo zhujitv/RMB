@@ -2584,7 +2584,8 @@ function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow |
 
 function valueFor(row: CustomerRow | SupplierRow | UserRow | AuditLogRow, column: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>) {
   if (column.render) return column.render(row);
-  return String((row as Record<string, unknown>)[String(column.key)] ?? "-");
+  const key = String(column.key) as keyof typeof row;
+  return String(row[key] ?? "-");
 }
 
 function placeholderFor(tab: SettingsTabKey) {

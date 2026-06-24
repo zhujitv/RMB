@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
 import {
   COMPANY_PROFILE_SETTING_KEY,
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   runNonCriticalTask,
 } from "./shared-constants";
-import { assertJsonObject, codedError, nonEmpty, normalizeEmail, validEmail } from "./shared-base-utils";
+import { assertJsonObject, codedError, isPlainRecord, nonEmpty, normalizeEmail, validEmail } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 
@@ -23,7 +22,31 @@ const TEXT_LIMITS = {
   footerText: 180,
 };
 
-function cleanText(value, fallback = "", limit = 120) {
+type CompanyProfileInput = {
+  brandName?: unknown;
+  systemName?: unknown;
+  companyNameZh?: unknown;
+  companyNameEn?: unknown;
+  shortName?: unknown;
+  website?: unknown;
+  contactEmail?: unknown;
+  contactPhone?: unknown;
+  address?: unknown;
+  logoUrl?: unknown;
+  footerText?: unknown;
+};
+
+type ErrorWithStatus = {
+  status?: number;
+};
+
+type SettingsActor = Parameters<typeof assertRead>[0];
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type SystemSettingLike = {
+  value?: unknown;
+} | null | undefined;
+
+function cleanText(value: unknown, fallback = "", limit = 120) {
   const text = nonEmpty(value)
     .replace(/[\u0000-\u001f\u007f<>]/g, "")
     .slice(0, limit)
@@ -31,11 +54,11 @@ function cleanText(value, fallback = "", limit = 120) {
   return text || fallback;
 }
 
-function cleanOptionalText(value, limit = 120) {
+function cleanOptionalText(value: unknown, limit = 120) {
   return cleanText(value, "", limit);
 }
 
-function optionalHttpUrl(value, label) {
+function optionalHttpUrl(value: unknown, label: string) {
   const text = cleanOptionalText(value, TEXT_LIMITS.website);
   if (!text) return "";
   try {
@@ -45,20 +68,20 @@ function optionalHttpUrl(value, label) {
     }
     return url.toString();
   } catch (error) {
-    if (error?.status) throw error;
+    if ((error as ErrorWithStatus | null)?.status) throw error;
     throw codedError(`${label}格式错误`, 400, "VALIDATION_INVALID_URL");
   }
 }
 
-function optionalEmail(value) {
+function optionalEmail(value: unknown) {
   const email = normalizeEmail(value);
   if (!email) return "";
   if (!validEmail(email)) throw codedError("联系邮箱格式错误", 400, "VALIDATION_INVALID_EMAIL");
   return email;
 }
 
-export function normalizeCompanyProfileSettings(value = {}) {
-  const input = value && typeof value === "object" ? value : {};
+export function normalizeCompanyProfileSettings(value: unknown = {}) {
+  const input: CompanyProfileInput = isPlainRecord(value) ? value : {};
   return {
     brandName: cleanText(input.brandName, DEFAULT_COMPANY_PROFILE_SETTINGS.brandName, TEXT_LIMITS.brandName),
     systemName: cleanText(input.systemName, DEFAULT_COMPANY_PROFILE_SETTINGS.systemName, TEXT_LIMITS.systemName),
@@ -74,7 +97,7 @@ export function normalizeCompanyProfileSettings(value = {}) {
   };
 }
 
-export function serializeCompanyProfileSetting(setting) {
+export function serializeCompanyProfileSetting(setting: SystemSettingLike) {
   return normalizeCompanyProfileSettings(setting?.value || setting || {});
 }
 
@@ -90,12 +113,12 @@ export async function getCompanyProfileSettings() {
   return serializeCompanyProfileSetting(created);
 }
 
-export async function readCompanyProfileSettings(actor) {
+export async function readCompanyProfileSettings(actor: SettingsActor) {
   assertRead(actor, "settings");
   return getCompanyProfileSettings();
 }
 
-export async function saveCompanyProfileSettings(request, actor, input = {}) {
+export async function saveCompanyProfileSettings(request: AuditRequestLike, actor: SettingsActor, input: unknown = {}) {
   assertWrite(actor, "settings");
   const value = normalizeCompanyProfileSettings(assertJsonObject(input));
   const before = await prisma.systemSetting.findUnique({ where: { key: COMPANY_PROFILE_SETTING_KEY } });

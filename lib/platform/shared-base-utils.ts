@@ -7,6 +7,15 @@ type AppError = Error & {
   details?: unknown;
 };
 
+type JsonBodyRequest = {
+  json(): Promise<unknown>;
+};
+
+type ParseJsonBodyOptions = {
+  allowEmpty?: boolean;
+  label?: string;
+};
+
 type InstallmentInput = {
   ratio?: unknown;
   condition?: unknown;
@@ -22,7 +31,7 @@ export function codedError(message: string, status: number, code: string): AppEr
 
 const SENSITIVE_LOG_KEY_PATTERN = /(password|passwd|pwd|token|secret|authorization|cookie|database_url|databaseurl|smtp|r2_|access_key|secret_key|file(name)?|original(name|filename)|email|url)$/i;
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
+export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -139,9 +148,9 @@ export function dateFromInput(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function dateToInput(value: Date | null | undefined) {
+export function dateToInput(value: unknown) {
   if (!value) return "";
-  const date = value instanceof Date ? value : new Date(value);
+  const date = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
@@ -197,6 +206,22 @@ export function assertJsonObject(value: unknown, label = "请求参数") {
     throw codedError(`${label}格式错误`, 400, "INVALID_REQUEST_BODY");
   }
   return value;
+}
+
+function isEmptyJsonBodyError(error: unknown) {
+  const message = String((error as { message?: string } | null | undefined)?.message || "");
+  return /unexpected end of json input/i.test(message);
+}
+
+export async function parseJsonBody(request: JsonBodyRequest, options: ParseJsonBodyOptions = {}) {
+  const label = options.label || "请求参数";
+  try {
+    return assertJsonObject(await request.json(), label);
+  } catch (error: unknown) {
+    if (options.allowEmpty && isEmptyJsonBodyError(error)) return {};
+    if ((error as AppError | null | undefined)?.code === "INVALID_REQUEST_BODY") throw error;
+    throw codedError(`${label}JSON格式错误`, 400, "INVALID_JSON_BODY");
+  }
 }
 
 export function assertInputSchema(input: Record<string, unknown>, schema: InputSchema) {

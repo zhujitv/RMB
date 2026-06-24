@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   canRead,
   canWrite,
@@ -7,10 +7,87 @@ import {
   effectivePermissions,
   nonEmpty,
   permissionError,
-  requireText,
 } from "./shared";
 
-export function validateDuplicateOrder(orderNo, id = null) {
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+
+type OrderCostLike = {
+  id?: string | null;
+  createdById?: string | null;
+  deletedAt?: unknown;
+} & Record<string, unknown>;
+
+type OrderDocumentLike = {
+  relatedModule?: string | null;
+  costId?: string | null;
+  cost?: { createdById?: string | null } | null;
+} & Record<string, unknown>;
+
+type OrderLike = {
+  id?: string | null;
+  status?: string | null;
+  customer?: { salespersonUserId?: string | null } | null;
+  costs?: OrderCostLike[] | null;
+  documents?: OrderDocumentLike[] | null;
+  payments?: unknown[] | null;
+  finalReceivableAmountCny?: unknown;
+  receivableAmountCny?: unknown;
+} & Record<string, unknown>;
+
+function actorId(actor: ActorLike) {
+  return nonEmpty(actor?.id);
+}
+
+function actorRole(actor: ActorLike) {
+  return nonEmpty(actor?.role);
+}
+
+export function orderAccessWhere(actor: ActorLike): Prisma.ReceivableOrderWhereInput {
+  if (!canRead(actor, "orders")) return { id: "__no_order_access__" };
+  const scope = effectivePermissions(actor).dataScope;
+  if (scope === "ALL") return {};
+  if (scope === "OWN") {
+    const currentActorId = actorId(actor);
+    return currentActorId ? { customer: { is: { salespersonUserId: currentActorId } } } : { id: "__no_order_access__" };
+  }
+  if (scope === "OWN_COST") {
+    const currentActorId = actorId(actor);
+    return currentActorId ? { costs: { some: { createdById: currentActorId, deletedAt: null } } } : { id: "__no_order_access__" };
+  }
+  return { id: "__no_order_access__" };
+}
+
+export function scopeOrderForActor<T extends OrderLike | null | undefined>(order: T, actor: ActorLike): T {
+  if (effectivePermissions(actor).dataScope !== "OWN_COST" || !order) return order;
+  const currentActorId = actorId(actor);
+  return {
+    ...order,
+    payments: [],
+    costs: (order.costs || []).filter((cost) => !cost.deletedAt && cost.createdById === currentActorId),
+    documents: (order.documents || []).filter((document) => (
+      document.relatedModule === "SUPPLIER"
+      && (document.cost?.createdById === currentActorId || (order.costs || []).some((cost) => cost.id === document.costId && cost.createdById === currentActorId))
+    )),
+  } as T;
+}
+
+export function canAccessOrder(actor: ActorLike, order: OrderLike | null | undefined) {
+  if (!canRead(actor, "orders")) return false;
+  const scope = effectivePermissions(actor).dataScope;
+  if (scope === "ALL") return true;
+  if (scope === "OWN") return order?.customer?.salespersonUserId === actorId(actor);
+  if (scope === "OWN_COST") {
+    const currentActorId = actorId(actor);
+    return (order?.costs || []).some((cost) => !cost.deletedAt && cost.createdById === currentActorId);
+  }
+  return false;
+}
+
+export function validateDuplicateOrder(orderNo: string, id: string | null = null) {
   return prisma.receivableOrder.findFirst({
     where: {
       orderNo: { equals: orderNo, mode: "insensitive" },
@@ -20,65 +97,28 @@ export function validateDuplicateOrder(orderNo, id = null) {
   });
 }
 
-export function orderAccessWhere(actor) {
-  if (!canRead(actor, "orders")) return { id: "__no_order_access__" };
-  const scope = effectivePermissions(actor).dataScope;
-  if (scope === "ALL") return {};
-  if (scope === "OWN") return { customer: { is: { salespersonUserId: actor.id } } };
-  if (scope === "OWN_COST") {
-    return { costs: { some: { createdById: actor.id, deletedAt: null } } };
-  }
-  return { id: "__no_order_access__" };
-}
-
-export function scopeOrderForActor(order, actor) {
-  if (effectivePermissions(actor).dataScope !== "OWN_COST" || !order) return order;
-  return {
-    ...order,
-    payments: [],
-    costs: (order.costs || []).filter((cost) => !cost.deletedAt && cost.createdById === actor.id),
-    documents: (order.documents || []).filter((document) => (
-      document.relatedModule === "SUPPLIER"
-      && (document.cost?.createdById === actor.id || (order.costs || []).some((cost) => cost.id === document.costId && cost.createdById === actor.id))
-    )),
-  };
-}
-
-export function canAccessOrder(actor, order) {
-  if (!canRead(actor, "orders")) return false;
-  const scope = effectivePermissions(actor).dataScope;
-  if (scope === "ALL") return true;
-  if (scope === "OWN") return order?.customer?.salespersonUserId === actor.id;
-  if (scope === "OWN_COST") {
-    return (order.costs || []).some((cost) => !cost.deletedAt && cost.createdById === actor.id);
-  }
-  return false;
-}
-
-export async function assertOrderOpen(orderId, actor) {
+export async function assertOrderOpen(orderId: string, actor: ActorLike) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
     include: { customer: true, costs: { where: { deletedAt: null }, select: { createdById: true, deletedAt: true } } },
   });
   if (!order) {
-    const error = new Error("请选择有效应收订单");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效应收订单", 400, "ORDER_REQUIRED");
   }
   if (!canAccessOrder(actor, order)) {
-    const error = new Error("无权限访问该应收订单");
-    error.status = 403;
-    throw error;
+    throw codedError("无权限访问该应收订单", 403, "ORDER_PERMISSION_DENIED");
   }
-  if (["已关闭", "已取消"].includes(order.status) && actor.role !== "管理员") {
-    const error = new Error("已关闭或已取消订单不能继续新增收款或成本");
-    error.status = 400;
-    throw error;
+  if (["已关闭", "已取消"].includes(order.status) && actorRole(actor) !== "管理员") {
+    throw codedError("已关闭或已取消订单不能继续新增收款或成本", 400, "ORDER_CLOSED");
   }
   return order;
 }
 
-export async function assertCostWritableOrder(orderId, actor, before = null) {
+export async function assertCostWritableOrder(
+  orderId: string,
+  actor: ActorLike,
+  before: { createdById?: string | null; orderId?: string | null } | null = null,
+) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
     include: { customer: true },
@@ -86,16 +126,14 @@ export async function assertCostWritableOrder(orderId, actor, before = null) {
   if (!order) {
     throw codedError("请选择有效应收订单", 404, "ORDER_NOT_FOUND");
   }
-  if (["已关闭", "已取消"].includes(order.status) && actor.role !== "管理员") {
-    const error = new Error("已关闭或已取消订单不能继续新增收款或成本");
-    error.status = 400;
-    throw error;
+  if (["已关闭", "已取消"].includes(order.status) && actorRole(actor) !== "管理员") {
+    throw codedError("已关闭或已取消订单不能继续新增收款或成本", 400, "ORDER_CLOSED");
   }
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "OWN_COST") {
     if (!canWrite(actor, "costs")) throw permissionError("没有权限执行该操作");
     if (before) {
-      if (before.createdById !== actor.id) throw permissionError("只能维护自己录入的成本记录");
+      if (before.createdById !== actorId(actor)) throw permissionError("只能维护自己录入的成本记录");
       if (before.orderId !== order.id) throw permissionError("不能转移历史成本到其他订单");
       return order;
     }
@@ -107,25 +145,23 @@ export async function assertCostWritableOrder(orderId, actor, before = null) {
   return order;
 }
 
-export async function assertOrderCanReceivePayment(order) {
-  if (["已关闭", "已取消"].includes(order.status)) {
-    const error = new Error("已关闭或已取消订单不能新增收款");
-    error.status = 400;
-    throw error;
+export async function assertOrderCanReceivePayment(order: OrderLike) {
+  const orderId = nonEmpty(order.id);
+  if (!orderId) throw codedError("请选择有效应收订单", 400, "ORDER_REQUIRED");
+  if (["已关闭", "已取消"].includes(nonEmpty(order.status))) {
+    throw codedError("已关闭或已取消订单不能新增收款", 400, "ORDER_CLOSED");
   }
   const confirmed = await prisma.payment.aggregate({
     where: {
-      orderId: order.id,
+      orderId,
       deletedAt: null,
       status: "已到账",
     },
     _sum: { amountCny: true },
   });
   const finalReceivableCny = Number(order.finalReceivableAmountCny ?? order.receivableAmountCny);
-  const outstandingCny = finalReceivableCny - Number(confirmed._sum.amountCny || 0);
+  const outstandingCny = finalReceivableCny - Number(confirmed._sum?.amountCny || 0);
   if (outstandingCny <= 0) {
-    const error = new Error("订单已收齐，不能新增收款");
-    error.status = 400;
-    throw error;
+    throw codedError("订单已收齐，不能新增收款", 400, "ORDER_FULLY_PAID");
   }
 }

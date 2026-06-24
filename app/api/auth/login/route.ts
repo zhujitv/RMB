@@ -10,6 +10,7 @@ import {
   logSecurityEvent,
   logServerError,
   normalizeEmail,
+  parseJsonBody,
   passwordHashNeedsUpgrade,
   publicUser,
   recordLoginAttempt,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
   try {
     assertSameOriginRequest(request);
     await ensureDefaultUsers();
-    const body = (await request.json()) as LoginRequestBody;
+    const body = await parseJsonBody(request) as LoginRequestBody;
     const email = normalizeEmail(body.email);
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {

@@ -49,7 +49,7 @@ test("global dashboard APIs require admin global scope before returning data", (
 });
 
 test("profit and commission reports require financial commission read permission", () => {
-  assert.match(backend, /function assertProfitAnalysisAccess\(actor\)[\s\S]*assertRead\(actor, "commissions"\)/);
+  assert.match(backend, /function assertProfitAnalysisAccess\(actor(?::[^)]*)?\)[\s\S]*assertRead\(actor, "commissions"\)/);
   assert.match(backend, /commissions: \["管理员", "财务"\]/);
   assert.match(reportService, /profits: \{ label: "利润分析", area: "commissions"/);
   assert.match(reportsModule, /\{ key: "profits", label: "利润分析", area: "commissions" \}/);

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, prepareManualShippingDocumentsNotification, previewCustomsRecognition, reparseCustomsRecognition, requireText, resendShippingDocumentsNotification, sendManualShippingDocumentsNotification, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
+import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, parseJsonBody, prepareManualShippingDocumentsNotification, previewCustomsRecognition, reparseCustomsRecognition, requireText, resendShippingDocumentsNotification, sendManualShippingDocumentsNotification, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { orderId } = await params;
-    const body = (await request.json()) as TaxRefundPatchBody;
+    const body = await parseJsonBody(request) as TaxRefundPatchBody;
     if (body.cancelArchive === true) {
       const order = await cancelTaxRefundArchive(request, actor, orderId, body.status || "NOT_READY", body);
       return ok({ success: true, order, message: "退税资料已取消归档" });

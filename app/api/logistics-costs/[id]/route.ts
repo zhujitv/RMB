@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError, confirmLogisticsExpenseInvoice, getActor, logServerError, ok, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
+import { apiError, codedError, confirmLogisticsExpenseInvoice, getActor, logServerError, ok, parseJsonBody, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const body = (await request.json()) as LogisticsExpenseBody;
+    const body = await parseJsonBody(request) as LogisticsExpenseBody;
     const reviewAction = body.action || body.reviewAction || body.auditAction || "";
     if (["approve", "reject", "reopen"].includes(reviewAction)) {
       const result = await reviewLogisticsExpense(request, actor, id, body);

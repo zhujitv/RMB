@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteOrder, getActor, getOrder, ok, saveOrder } from "../../../../lib/platform-db";
+import { apiError, deleteOrder, getActor, getOrder, ok, parseJsonBody, saveOrder } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const order = await saveOrderTyped(request, actor, body, id);
     return NextResponse.json({
       success: true,

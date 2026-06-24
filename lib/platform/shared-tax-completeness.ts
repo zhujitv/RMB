@@ -1,5 +1,5 @@
-// @ts-nocheck
-import { canRead, canWrite } from "./shared-access";
+import { canRead, canWrite, type AccessUser } from "./shared-access";
+import { isPlainRecord } from "./shared-base-utils";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
   FACTORY_SUPPLIER_COST_TYPES,
@@ -16,56 +16,120 @@ import {
 } from "./shared-constants";
 import { serializeDomesticLogisticsInfo } from "./shared-serialization";
 
-export function documentCompleteness(documents = []) {
+type NumericLike = number | string | { toString(): string };
+type OrderDocumentLike = {
+  documentType?: string | null;
+  uploadStatus?: string | null;
+  deletedAt?: Date | string | null;
+  costId?: string | null;
+  relatedModule?: string | null;
+  supplierId?: string | null;
+  supplier?: { supplierType?: string | null } | null;
+  cost?: CostLike | null;
+};
+type CostLike = {
+  id?: string | null;
+  supplierId?: string | null;
+  supplierNameSnapshot?: string | null;
+  vendorName?: string | null;
+  supplierType?: string | null;
+  supplier?: { supplierName?: string | null; supplierType?: string | null } | null;
+  costType?: string | null;
+  amount?: NumericLike | null;
+  amountCny?: NumericLike | null;
+  currency?: string | null;
+  createdAt?: Date | string | null;
+  deletedAt?: Date | string | null;
+};
+type DomesticLogisticsInfoLike = {
+  destinationPlace?: string | null;
+  cargoDescription?: string | null;
+  remarkText?: string | null;
+};
+type TaxOrderLike = {
+  documents?: OrderDocumentLike[] | null;
+  costs?: CostLike[] | null;
+  domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
+  domesticLogisticsInfo?: DomesticLogisticsInfoLike | null;
+  taxRefundCompleteness?: unknown;
+  tradeTerm?: string | null;
+  taxRefundStatus?: string | null;
+};
+type SupplierEntry = {
+  key: string;
+  supplierId: string;
+  supplierName: string;
+  costIds: string[];
+  earliestCostCreatedAt: Date | string | null | undefined;
+  missingFactoryCost?: boolean;
+};
+type MissingEntry = Record<string, unknown> & {
+  label: string;
+  documentType?: string;
+  reminderDue?: boolean;
+  missingBucket?: string;
+};
+type TaxRefundCompletenessSummary = Record<string, unknown> & {
+  complete?: boolean;
+  total?: number;
+  completed?: number;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isPlainRecord(value) ? value : {};
+}
+
+export function documentCompleteness(documents: OrderDocumentLike[] = []) {
   return taxDocumentCompleteness({ documents });
 }
 
-export function successDocument(doc) {
-  return doc && !doc.deletedAt && doc.uploadStatus === "SUCCESS";
+export function successDocument(doc: OrderDocumentLike | null | undefined): doc is OrderDocumentLike {
+  return Boolean(doc && !doc.deletedAt && doc.uploadStatus === "SUCCESS");
 }
 
-export function displayDocumentLabel(value) {
-  return ORDER_DOCUMENT_LABELS[value] || value || "";
+export function displayDocumentLabel(value: unknown) {
+  const key = String(value || "");
+  return (ORDER_DOCUMENT_LABELS as Record<string, string>)[key] || key || "";
 }
 
-export function supplierKey(cost) {
+export function supplierKey(cost: CostLike) {
   return cost.supplierId || `vendor:${cost.supplierNameSnapshot || cost.vendorName || cost.id}`;
 }
 
-export function supplierNameForCost(cost) {
+export function supplierNameForCost(cost: CostLike) {
   return cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName || "未命名供应商";
 }
 
-export function supplierTypeForCost(cost) {
+export function supplierTypeForCost(cost: CostLike) {
   return cost.supplierType || cost.supplier?.supplierType || "";
 }
 
-export function isTaxRefundFactoryCost(cost) {
-  return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType) && TAX_REFUND_SUPPLIER_TYPES.includes(supplierTypeForCost(cost));
+export function isTaxRefundFactoryCost(cost: CostLike) {
+  return FACTORY_SUPPLIER_COST_TYPES.includes(String(cost.costType || "")) && TAX_REFUND_SUPPLIER_TYPES.includes(supplierTypeForCost(cost));
 }
 
-export function isTaxRefundLogisticsInvoiceCost(cost) {
+export function isTaxRefundLogisticsInvoiceCost(cost: CostLike | null | undefined) {
   return Boolean(cost?.supplierId && logisticsInvoiceRequirementForCost(cost));
 }
 
-export function logisticsInvoiceRequirementForCost(cost = {}) {
-  return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.find((item) => item.costTypes.includes(cost.costType)) || null;
+export function logisticsInvoiceRequirementForCost(cost: CostLike = {}) {
+  return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.find((item) => item.costTypes.includes(String(cost.costType || ""))) || null;
 }
 
 export function normalizedTradeTerm(value = "") {
   return String(value || "").trim().toUpperCase();
 }
 
-export function isSeaFreightRequirement(requirement = {}) {
+export function isSeaFreightRequirement(requirement: { key?: string } = {}) {
   return requirement.key === SEA_FREIGHT_REQUIREMENT_KEY;
 }
 
-export function isSeaFreightRequiredByTradeTerm(order = {}) {
-  return SEA_FREIGHT_REQUIRED_TRADE_TERMS.includes(normalizedTradeTerm(order.tradeTerm));
+export function isSeaFreightRequiredByTradeTerm(order: TaxOrderLike = {}) {
+  return SEA_FREIGHT_REQUIRED_TRADE_TERMS.includes(normalizedTradeTerm(order.tradeTerm || ""));
 }
 
-export function taxRefundLogisticsInvoiceRequirementsForOrder(order = {}, logisticsInvoiceCosts = []) {
-  const hasSeaFreightCost = logisticsInvoiceCosts.some((cost) => normalizedCostType(cost.costType) === "海运费");
+export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLike = {}, logisticsInvoiceCosts: CostLike[] = []) {
+  const hasSeaFreightCost = logisticsInvoiceCosts.some((cost) => normalizedCostType(String(cost.costType || "")) === "海运费");
   return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.filter((requirement) => (
     !isSeaFreightRequirement(requirement)
     || isSeaFreightRequiredByTradeTerm(order)
@@ -73,50 +137,50 @@ export function taxRefundLogisticsInvoiceRequirementsForOrder(order = {}, logist
   ));
 }
 
-export function logisticsInvoiceLabelForCost(cost = {}) {
+export function logisticsInvoiceLabelForCost(cost: CostLike = {}) {
   return logisticsInvoiceRequirementForCost(cost)?.label || "物流资料";
 }
 
-export function isTaxRefundFactoryDocument(document) {
+export function isTaxRefundFactoryDocument(document: OrderDocumentLike) {
   const supplierType = document.supplier?.supplierType || document.cost?.supplier?.supplierType || "";
   return TAX_REFUND_SUPPLIER_TYPES.includes(supplierType);
 }
 
-export function isTaxRefundLogisticsInvoiceDocument(document) {
+export function isTaxRefundLogisticsInvoiceDocument(document: OrderDocumentLike) {
   return document.documentType === "SUPPLIER_INVOICE" && isTaxRefundLogisticsInvoiceCost(document.cost);
 }
 
-export function isTaxRefundSupplierDocument(document) {
+export function isTaxRefundSupplierDocument(document: OrderDocumentLike) {
   if (document.documentType === "SUPPLIER_PURCHASE_CONTRACT") return isTaxRefundFactoryDocument(document);
   if (document.documentType === "SUPPLIER_INVOICE") return isTaxRefundFactoryDocument(document) || isTaxRefundLogisticsInvoiceDocument(document);
   return false;
 }
 
-export function confirmedFactorySupplierMismatch(input = {}) {
+export function confirmedFactorySupplierMismatch(input: Record<string, unknown> = {}) {
   return input.factorySupplierMismatchConfirmed === true || input.factorySupplierMismatchConfirmed === "true";
 }
 
-export function booleanInput(value, fallback = false) {
+export function booleanInput(value: unknown, fallback = false) {
   if (value === true || value === "true" || value === "已确认") return true;
   if (value === false || value === "false" || value === "未确认") return false;
   return Boolean(fallback);
 }
 
-export function inputHasOwn(input, key) {
+export function inputHasOwn(input: Record<string, unknown> | null | undefined, key: string) {
   return Object.prototype.hasOwnProperty.call(input || {}, key);
 }
 
-export function canConfirmLogisticsCost(actor) {
-  return ["管理员", "财务"].includes(actor?.role) || (canWrite(actor, "commissions") && canRead(actor, "payments"));
+export function canConfirmLogisticsCost(actor: AccessUser) {
+  return ["管理员", "财务"].includes(String(actor?.role || "")) || (canWrite(actor, "commissions") && canRead(actor, "payments"));
 }
 
-export function taxDocumentCompleteness(order = {}) {
+export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const documents = order.documents || [];
   const activeCosts = (order.costs || []).filter((cost) => !cost.deletedAt && cost.supplierId);
   const factoryCosts = activeCosts.filter(isTaxRefundFactoryCost);
   const logisticsInvoiceCosts = activeCosts.filter((cost) => !isTaxRefundFactoryCost(cost) && isTaxRefundLogisticsInvoiceCost(cost));
   const successDocs = documents.filter(successDocument);
-  const hasOrderType = (type) => successDocs.some((doc) => doc.documentType === type && !doc.costId && doc.relatedModule !== "SUPPLIER");
+  const hasOrderType = (type: string) => successDocs.some((doc) => doc.documentType === type && !doc.costId && doc.relatedModule !== "SUPPLIER");
   const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
   const customsMissing = DOMESTIC_LOGISTICS_DOCUMENT_TYPES.filter((type) => !hasOrderType(type));
   const exportMissing = TAX_EXPORT_DOCUMENT_TYPES.filter((type) => !hasOrderType(type));
@@ -130,21 +194,21 @@ export function taxDocumentCompleteness(order = {}) {
     documentType: "DOMESTIC_LOGISTICS_INFO",
     label: "物流信息",
   }];
-  const supplierEntries = Object.values(factoryCosts.reduce((acc, cost) => {
+  const supplierEntries: SupplierEntry[] = Object.values(factoryCosts.reduce((acc, cost) => {
     const key = supplierKey(cost);
     acc[key] ||= {
       key,
-      supplierId: cost.supplierId,
+      supplierId: cost.supplierId || "",
       supplierName: supplierNameForCost(cost),
       costIds: [],
       earliestCostCreatedAt: cost.createdAt,
     };
-    acc[key].costIds.push(cost.id);
+    if (cost.id) acc[key].costIds.push(cost.id);
     if (cost.createdAt && (!acc[key].earliestCostCreatedAt || cost.createdAt < acc[key].earliestCostCreatedAt)) {
       acc[key].earliestCostCreatedAt = cost.createdAt;
     }
     return acc;
-  }, {}));
+  }, {} as Record<string, SupplierEntry>));
   const hasFactorySupplierCost = supplierEntries.length > 0;
   const supplierRequirementEntries = hasFactorySupplierCost
     ? supplierEntries
@@ -156,7 +220,7 @@ export function taxDocumentCompleteness(order = {}) {
         earliestCostCreatedAt: null,
         missingFactoryCost: true,
       }];
-  const supplierMissing = [];
+  const supplierMissing: MissingEntry[] = [];
   supplierRequirementEntries.forEach((entry) => {
     const costCreatedAt = entry.earliestCostCreatedAt ? new Date(entry.earliestCostCreatedAt) : null;
     const daysSinceCostCreated = costCreatedAt ? Math.floor((Date.now() - costCreatedAt.getTime()) / 86400000) : 0;
@@ -164,7 +228,7 @@ export function taxDocumentCompleteness(order = {}) {
       const exists = entry.missingFactoryCost ? false : successDocs.some((doc) => (
         doc.documentType === type
         && doc.relatedModule === "SUPPLIER"
-        && (doc.supplierId === entry.supplierId || entry.costIds.includes(doc.costId))
+        && (doc.supplierId === entry.supplierId || entry.costIds.includes(String(doc.costId || "")))
       ));
       if (!exists) {
         supplierMissing.push({
@@ -184,10 +248,10 @@ export function taxDocumentCompleteness(order = {}) {
   const exportCompleted = TAX_EXPORT_DOCUMENT_TYPES.length - exportMissing.length;
   const supplierTotal = Math.max(SUPPLIER_DOCUMENT_TYPES.length, supplierRequirementEntries.length * SUPPLIER_DOCUMENT_TYPES.length);
   const supplierCompleted = supplierTotal - supplierMissing.length;
-  const logisticsMissing = [];
+  const logisticsMissing: MissingEntry[] = [];
   const logisticsRequirements = taxRefundLogisticsInvoiceRequirementsForOrder(order, logisticsInvoiceCosts);
   const logisticsRequirementRows = logisticsRequirements.map((requirement) => {
-    const costs = logisticsInvoiceCosts.filter((cost) => requirement.costTypes.includes(cost.costType));
+    const costs = logisticsInvoiceCosts.filter((cost) => requirement.costTypes.includes(String(cost.costType || "")));
     const completed = costs.some((cost) => successDocs.some((doc) => (
       doc.documentType === "SUPPLIER_INVOICE"
       && doc.relatedModule === "SUPPLIER"
@@ -212,7 +276,7 @@ export function taxDocumentCompleteness(order = {}) {
         supplierId: cost.supplierId,
         supplierName: supplierNameForCost(cost),
         supplierType: supplierTypeForCost(cost),
-        costType: normalizedCostType(cost.costType),
+        costType: normalizedCostType(String(cost.costType || "")),
         costTypeRaw: cost.costType,
         amount: Number(cost.amount || 0),
         amountCny: Number(cost.amountCny || 0),
@@ -236,7 +300,7 @@ export function taxDocumentCompleteness(order = {}) {
         supplierId: cost.supplierId,
         supplierName: supplierNameForCost(cost),
         supplierType: supplierTypeForCost(cost),
-        costType: normalizedCostType(cost.costType),
+        costType: normalizedCostType(String(cost.costType || "")),
         costTypeRaw: cost.costType,
         amount: Number(cost.amount || 0),
         amountCny: Number(cost.amountCny || 0),
@@ -248,8 +312,8 @@ export function taxDocumentCompleteness(order = {}) {
   const logisticsTotal = logisticsRequirements.length;
   const logisticsCompleted = logisticsTotal - logisticsMissing.length;
   const missingLabels = [
-    ...customsMissing.map((type) => ORDER_DOCUMENT_LABELS[type] || type),
-    ...exportMissing.map((type) => ORDER_DOCUMENT_LABELS[type] || type),
+    ...customsMissing.map((type) => (ORDER_DOCUMENT_LABELS as Record<string, string>)[type] || type),
+    ...exportMissing.map((type) => (ORDER_DOCUMENT_LABELS as Record<string, string>)[type] || type),
     ...domesticLogisticsMissing.map((item) => item.label),
     ...supplierMissing.map((item) => item.label),
     ...logisticsMissing.map((item) => item.label),
@@ -314,20 +378,21 @@ export function taxDocumentCompleteness(order = {}) {
   };
 }
 
-export function derivedTaxRefundStatus(order, documents = order?.documents || []) {
+export function derivedTaxRefundStatus(order: TaxOrderLike | null | undefined, documents: OrderDocumentLike[] = order?.documents || []) {
   const status = order?.taxRefundStatus || "NOT_READY";
   if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
   if (["SUBMITTED", "PROBLEM"].includes(status)) return status;
   return taxDocumentCompleteness({ ...order, documents }).complete ? "READY" : "NOT_READY";
 }
 
-export function taxRefundStatusFromCompleteness(currentStatus, completeness) {
-  if (["COMPLETED", "ARCHIVED"].includes(currentStatus)) return "SUBMITTED";
-  if (["SUBMITTED", "PROBLEM"].includes(currentStatus)) return currentStatus;
+export function taxRefundStatusFromCompleteness(currentStatus: unknown, completeness: TaxRefundCompletenessSummary | null | undefined) {
+  const status = String(currentStatus || "");
+  if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
+  if (["SUBMITTED", "PROBLEM"].includes(status)) return status;
   return completeness?.complete ? "READY" : "NOT_READY";
 }
 
-export function emptyTaxRefundCompleteness() {
+export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
   const supplierTotal = SUPPLIER_DOCUMENT_TYPES.length;
   const factory = {
     completed: 0,
@@ -377,29 +442,37 @@ export function emptyTaxRefundCompleteness() {
   };
 }
 
-export function cachedTaxRefundCompleteness(order = {}) {
+export function cachedTaxRefundCompleteness(order: TaxOrderLike = {}): TaxRefundCompletenessSummary {
   const cached = order.taxRefundCompleteness;
-  if (cached && typeof cached === "object" && !Array.isArray(cached)) return cached;
+  if (cached && typeof cached === "object" && !Array.isArray(cached)) return cached as TaxRefundCompletenessSummary;
   return emptyTaxRefundCompleteness();
 }
 
-export function needsTaxRefundCompletenessRefresh(order = {}) {
-  const cached = order.taxRefundCompleteness;
+export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
+  const cachedValue = order.taxRefundCompleteness;
+  const cached = asRecord(cachedValue);
+  if (!cachedValue || typeof cachedValue !== "object" || Array.isArray(cachedValue)) return true;
+  const supplier = asRecord(cached.supplier);
+  const factory = asRecord(cached.factory);
+  const logistics = asRecord(cached.logistics);
+  const exportSection = asRecord(cached.export);
+  const customs = asRecord(cached.customs);
+  const domesticLogistics = asRecord(cached.domesticLogistics);
   if (!cached || typeof cached !== "object" || Array.isArray(cached)) return true;
-  if (Number(cached?.supplier?.total || 0) < SUPPLIER_DOCUMENT_TYPES.length) return true;
-  if (typeof cached?.supplier?.missingFactoryCost === "undefined") return true;
-  if (!cached.factory) return true;
-  if (!cached.logistics || !Array.isArray(cached.logistics.missing)) return true;
-  if (cached.logistics?.ruleVersion !== TAX_REFUND_LOGISTICS_RULE_VERSION) return true;
-  if (Number(cached?.export?.total || 0) < TAX_EXPORT_DOCUMENT_TYPES.length) return true;
-  if (!cached.customs || Number(cached?.customs?.total || 0) !== DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length) return true;
-  if (!cached.domesticLogistics || Number(cached?.domesticLogistics?.total || 0) !== 1) return true;
-  const cachedLogisticsRequirements = Array.isArray(cached?.logistics?.requirements) ? cached.logistics.requirements : [];
+  if (Number(supplier.total || 0) < SUPPLIER_DOCUMENT_TYPES.length) return true;
+  if (typeof supplier.missingFactoryCost === "undefined") return true;
+  if (!Object.keys(factory).length) return true;
+  if (!Object.keys(logistics).length || !Array.isArray(logistics.missing)) return true;
+  if (logistics.ruleVersion !== TAX_REFUND_LOGISTICS_RULE_VERSION) return true;
+  if (Number(exportSection.total || 0) < TAX_EXPORT_DOCUMENT_TYPES.length) return true;
+  if (!Object.keys(customs).length || Number(customs.total || 0) !== DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length) return true;
+  if (!Object.keys(domesticLogistics).length || Number(domesticLogistics.total || 0) !== 1) return true;
+  const cachedLogisticsRequirements = Array.isArray(logistics.requirements) ? logistics.requirements as Array<Record<string, unknown>> : [];
   const hasCachedSeaRequirement = cachedLogisticsRequirements.some((item) => item?.key === SEA_FREIGHT_REQUIREMENT_KEY);
   if (!isSeaFreightRequiredByTradeTerm(order) && hasCachedSeaRequirement) return true;
   if (isSeaFreightRequiredByTradeTerm(order) && !hasCachedSeaRequirement) return true;
-  if (Number(cached?.logistics?.total || 0) < 3) return true;
-  if (!Array.isArray(cached?.logistics?.requirements)) return true;
-  if ((cached.missingLabels || []).some((label) => ORDER_DOCUMENT_TYPES.includes(label))) return true;
+  if (Number(logistics.total || 0) < 3) return true;
+  if (!Array.isArray(logistics.requirements)) return true;
+  if (Array.isArray(cached.missingLabels) && cached.missingLabels.some((label) => (ORDER_DOCUMENT_TYPES as readonly string[]).includes(String(label)))) return true;
   return false;
 }

@@ -1,8 +1,9 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   CURRENCIES,
   CUSTOMER_COMMISSION_STATUSES,
+  assertJsonObject,
   assertRead,
   assertWrite,
   booleanInput,
@@ -28,10 +29,36 @@ import {
 } from "./shared";
 import { resolveCustomerSalespersonUserId } from "./shared-admin";
 
-export async function listCustomers(query, actor = null, options = {}) {
+type ListOptions = { paginated?: boolean };
+type CustomerInput = Record<string, unknown>;
+type CustomerQuery = {
+  get(key: string): string | null;
+};
+type CustomerActorInput = {
+  id?: string | null;
+  role?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+type CustomerActor = {
+  id: string;
+  role?: string | null;
+  customPermissions?: unknown;
+};
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+
+function requireCustomerActor(actor: CustomerActorInput): CustomerActor {
+  if (!actor?.id) throw codedError("请先登录", 401, "AUTH_REQUIRED");
+  return {
+    id: actor.id,
+    role: actor.role,
+    customPermissions: actor.customPermissions,
+  };
+}
+
+export async function listCustomers(query: CustomerQuery | null | undefined, actor: CustomerActorInput = null, options: ListOptions = {}) {
   assertRead(actor, "customers");
   const keyword = (query?.get("keyword") || query?.get("q") || query?.get("party") || "").trim();
-  const where = {
+  const where: Prisma.CustomerWhereInput = {
     deletedAt: null,
     ...customerAccessWhere(actor),
     ...(keyword
@@ -69,12 +96,12 @@ export async function listCustomers(query, actor = null, options = {}) {
   return customers.map(serializeCustomer);
 }
 
-export async function listAvailableCustomers(query, actor) {
+export async function listAvailableCustomers(query: CustomerQuery, actor: CustomerActorInput) {
   if (!canWrite(actor, "orders")) return [];
   return listCustomers(query, actor);
 }
 
-export async function listCustomerSalespeople(actor) {
+export async function listCustomerSalespeople(actor: CustomerActorInput) {
   assertRead(actor, "customers");
   const users = await prisma.user.findMany({
     where: {
@@ -93,24 +120,22 @@ export async function listCustomerSalespeople(actor) {
   }));
 }
 
-export async function saveCustomer(request, actor, input, id = null) {
+export async function saveCustomer(request: AuditRequestLike, actor: CustomerActorInput, input: unknown, id: string | null = null) {
   assertWrite(actor, "customers");
-  const name = normalizeCustomerName(requireText(input.name, "客户"));
-  const shortName = normalizeCustomerName(optional(input.shortName));
+  const currentActor = requireCustomerActor(actor);
+  const body: CustomerInput = assertJsonObject(input);
+  const name = normalizeCustomerName(requireText(body.name, "客户"));
+  const shortName = normalizeCustomerName(optional(body.shortName) || undefined);
   const before = id
     ? await prisma.customer.findFirst({ where: { id, deletedAt: null }, include: { salesperson: true } })
     : null;
   if (id && !before) {
-    const error = new Error("客户不存在或已删除");
-    error.status = 404;
-    throw error;
+    throw codedError("客户不存在或已删除", 404, "CUSTOMER_NOT_FOUND");
   }
-  if (before && !canViewAllCustomers(actor) && before.salespersonUserId !== actor.id) {
-    const error = new Error("无权限维护该客户");
-    error.status = 403;
-    throw error;
+  if (before && !canViewAllCustomers(currentActor) && before.salespersonUserId !== currentActor.id) {
+    throw codedError("无权限维护该客户", 403, "CUSTOMER_PERMISSION_DENIED");
   }
-  const salespersonUserId = await resolveCustomerSalespersonUserId(input, actor, before);
+  const salespersonUserId = await resolveCustomerSalespersonUserId(body, currentActor, before || null);
   const duplicate = await prisma.customer.findFirst({
     where: {
       name: { equals: name, mode: "insensitive" },
@@ -119,65 +144,63 @@ export async function saveCustomer(request, actor, input, id = null) {
     },
   });
   if (duplicate) {
-    const error = new Error("客户名称已存在，不能重复创建");
-    error.status = 409;
-    throw error;
+    throw codedError("客户名称已存在，不能重复创建", 409, "CUSTOMER_DUPLICATE");
   }
-  const defaultCurrency = optional(input.defaultCurrency);
+  const defaultCurrency = optional(body.defaultCurrency);
   if (defaultCurrency && !CURRENCIES.includes(defaultCurrency)) {
-    const error = new Error("请选择有效默认币种");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效默认币种", 400, "CUSTOMER_DEFAULT_CURRENCY_INVALID");
   }
-  const contactEmail = optional(input.contactEmail);
+  const contactEmail = optional(body.contactEmail);
   if (contactEmail && !validEmail(normalizeEmail(contactEmail))) {
     throw codedError(`联系邮箱格式错误：${contactEmail}`, 400, "INVALID_EMAIL_FORMAT");
   }
-  const shippingDocsEmails = requireValidEmailList(input.shippingDocsEmails, "清关资料接收邮箱");
-  const shippingDocsCcEmails = requireValidEmailList(input.shippingDocsCcEmails, "清关资料抄送邮箱");
-  const autoSendDocumentTypes = normalizeShippingDocumentTypes(input.autoSendDocumentTypes);
-  const clearanceEmailLanguage = input.clearanceEmailLanguage
-    ? normalizeClearanceEmailLanguage(input.clearanceEmailLanguage, input.country)
-    : (before?.clearanceEmailLanguage || defaultClearanceEmailLanguage(input.country));
+  const shippingDocsEmails = requireValidEmailList(body.shippingDocsEmails, "清关资料接收邮箱");
+  const shippingDocsCcEmails = requireValidEmailList(body.shippingDocsCcEmails, "清关资料抄送邮箱");
+  const autoSendDocumentTypes = normalizeShippingDocumentTypes(body.autoSendDocumentTypes);
+  const country = optional(body.country);
+  const clearanceEmailLanguage = body.clearanceEmailLanguage
+    ? normalizeClearanceEmailLanguage(optional(body.clearanceEmailLanguage) || "", country || undefined)
+    : (before?.clearanceEmailLanguage || defaultClearanceEmailLanguage(country || undefined));
+  const commissionStatus = optional(body.commissionStatus) || "";
   const data = {
     name,
     shortName: shortName || null,
-    country: optional(input.country),
+    country,
     defaultCurrency,
     salespersonUserId,
-    commissionRate: Math.max(0, Math.round(num(input.commissionRate, before?.commissionRate || 0) * 100) / 100),
-    commissionStatus: CUSTOMER_COMMISSION_STATUSES.includes(input.commissionStatus) ? input.commissionStatus : (before?.commissionStatus || "启用"),
-    contactPerson: optional(input.contactPerson),
+    commissionRate: Math.max(0, Math.round(num(body.commissionRate, Number(before?.commissionRate || 0)) * 100) / 100),
+    commissionStatus: CUSTOMER_COMMISSION_STATUSES.includes(commissionStatus) ? commissionStatus : (before?.commissionStatus || "启用"),
+    contactPerson: optional(body.contactPerson),
     contactEmail,
-    contactPhone: optional(input.contactPhone),
-    enableAutoShippingDocsNotification: booleanInput(input.enableAutoShippingDocsNotification, before?.enableAutoShippingDocsNotification || false),
+    contactPhone: optional(body.contactPhone),
+    enableAutoShippingDocsNotification: booleanInput(body.enableAutoShippingDocsNotification, before?.enableAutoShippingDocsNotification || false),
     shippingDocsEmails,
     shippingDocsCcEmails,
     autoSendDocumentTypes,
     clearanceEmailLanguage,
-    remark: optional(input.remark),
+    remark: optional(body.remark),
   };
   const customer = id
     ? await prisma.customer.update({ where: { id }, data, include: { salesperson: true } })
     : await prisma.customer.create({ data, include: { salesperson: true } });
-  await runNonCriticalTask("客户操作日志写入", () => writeAudit(request, actor, id ? "更新客户" : "新增客户", "customers", customer.id, before, customer));
+  await runNonCriticalTask("客户操作日志写入", () => writeAudit(request, currentActor, id ? "更新客户" : "新增客户", "customers", customer.id, before, customer));
   return serializeCustomer(customer);
 }
 
-export async function deleteCustomer(request, actor, id) {
+export async function deleteCustomer(request: AuditRequestLike, actor: CustomerActorInput, id: string) {
   assertWrite(actor, "customers");
+  const currentActor = requireCustomerActor(actor);
   const before = await prisma.customer.findUnique({ where: { id } });
-  if (before && !canViewAllCustomers(actor) && before.salespersonUserId !== actor.id) {
-    const error = new Error("无权限删除该客户");
-    error.status = 403;
-    throw error;
+  if (!before || before.deletedAt) {
+    throw codedError("客户不存在或已删除", 404, "CUSTOMER_NOT_FOUND");
+  }
+  if (!canViewAllCustomers(currentActor) && before.salespersonUserId !== currentActor.id) {
+    throw codedError("无权限删除该客户", 403, "CUSTOMER_DELETE_PERMISSION_DENIED");
   }
   const orderCount = await prisma.receivableOrder.count({ where: { customerId: id, deletedAt: null } });
   if (orderCount > 0) {
-    const error = new Error("客户存在关联订单，不能删除，只能保留或修改客户资料");
-    error.status = 400;
-    throw error;
+    throw codedError("客户存在关联订单，不能删除，只能保留或修改客户资料", 400, "CUSTOMER_HAS_ORDERS");
   }
   const row = await prisma.customer.update({ where: { id }, data: { deletedAt: new Date() } });
-  await runNonCriticalTask("客户删除操作日志写入", () => writeAudit(request, actor, "删除客户", "customers", id, before, row));
+  await runNonCriticalTask("客户删除操作日志写入", () => writeAudit(request, currentActor, "删除客户", "customers", id, before, row));
 }

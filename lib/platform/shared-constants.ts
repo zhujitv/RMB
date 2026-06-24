@@ -1,11 +1,67 @@
-// @ts-nocheck
 import { logServerError, nonEmpty } from "./shared-base-utils";
+import type { OrderDocumentType } from "../generated/prisma/client.js";
 import {
   LOGISTICS_COST_TYPE_ENGLISH_LABELS,
   LOGISTICS_COST_TYPES,
   LOGISTICS_INVOICE_ENGLISH_LABELS,
   LOGISTICS_USD_COST_TYPES,
 } from "./logistics-cost-types";
+
+type CostLike = {
+  costType?: string | null;
+  [key: string]: unknown;
+};
+
+type TransportItemLike = {
+  containerNo?: string | null;
+  [key: string]: unknown;
+};
+
+type DomesticLogisticsInfoLike = {
+  transportItems?: TransportItemLike[] | null;
+  [key: string]: unknown;
+};
+
+type OrderDocumentLike = {
+  id?: string | null;
+  documentType?: string | null;
+  relatedModule?: string | null;
+  supplierId?: string | null;
+  costId?: string | null;
+  costType?: string | null;
+  cost?: CostLike | null;
+  createdAt?: string | number | Date | null;
+  deletedAt?: string | number | Date | null;
+  order?: OrderLike | null;
+  documentNo?: string | null;
+  customsDeclarationNo?: string | null;
+  customsDeclarationNumber?: string | null;
+  blNo?: string | null;
+  billOfLadingNo?: string | null;
+  orderNo?: string | null;
+  originalFileName?: string | null;
+  originalFilename?: string | null;
+  originalName?: string | null;
+  fileName?: string | null;
+  standardFilename?: string | null;
+};
+
+type OrderLike = {
+  id?: string | null;
+  orderNo?: string | null;
+  blNo?: string | null;
+  billOfLadingNo?: string | null;
+  documents?: OrderDocumentLike[] | null;
+  domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
+};
+
+type DocumentContextLike = {
+  relatedModule?: string | null;
+  supplierId?: string | null;
+  costId?: string | null;
+  costType?: string | null;
+  cost?: CostLike | null;
+};
 
 export {
   LOGISTICS_COST_TYPE_ENGLISH_LABELS,
@@ -27,7 +83,7 @@ export const LEGACY_COST_TYPE_LABELS = {
   文件费: "港杂费",
   订舱费: "港杂费",
   ENS费: "ENS",
-};
+} satisfies Record<string, string>;
 export const NON_PARTICIPATING_COST_TYPES = ["目的港费用"];
 export const LOGISTICS_EXPENSE_AUDIT_STATUSES = ["草稿", "待审核", "审核通过", "已驳回"];
 export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["未通知", "已通知开票", "已上传", "已确认"];
@@ -71,30 +127,30 @@ export const PAYMENT_TERM_LABELS = {
   INSTALLMENT: "分批付款",
 };
 
-export function costTypeAllowsForeignCurrency(costType) {
+export function costTypeAllowsForeignCurrency(costType: string = "") {
   return FOREIGN_CURRENCY_COST_TYPES.includes(costType)
     || LEGACY_FOREIGN_CURRENCY_COST_TYPES.includes(costType);
 }
 
-export function normalizeCustomerName(value = "") {
+export function normalizeCustomerName(value: unknown = "") {
   return String(value || "").trim().toUpperCase();
 }
 
-export function normalizedCostType(costType = "") {
-  return LEGACY_COST_TYPE_LABELS[costType] || costType || "";
+export function normalizedCostType(costType: string = "") {
+  return (LEGACY_COST_TYPE_LABELS as Record<string, string>)[costType] || costType || "";
 }
 
-export function equivalentCostTypes(costType = "") {
+export function equivalentCostTypes(costType: string = "") {
   if (costType === "拖车费") return ["拖车费", "国内物流费", "国内拖车费"];
   if (costType === "港杂费") return ["港杂费", "文件费", "订舱费"];
   return [costType];
 }
 
-export function isLogisticsCostType(costType = "") {
+export function isLogisticsCostType(costType: string = "") {
   return LOGISTICS_COST_TYPES.includes(normalizedCostType(costType));
 }
 
-export async function runNonCriticalTask(label, task) {
+export async function runNonCriticalTask<T>(label: string, task: () => T | Promise<T>): Promise<T | null> {
   try {
     return await task();
   } catch (error) {
@@ -132,15 +188,15 @@ export const ORDER_DOCUMENT_ENGLISH_LABELS = {
   SUPPLIER_PURCHASE_CONTRACT: "Factory-Contract",
   SUPPLIER_INVOICE: "Factory-Invoice",
 };
-export const EXPORT_DOCUMENT_TYPES = ["CUSTOMS_ENTRY_FORM", "RELEASE_NOTICE", "CUSTOMS_POWER_OF_ATTORNEY", "BILL_OF_LADING", "COMMERCIAL_INVOICE", "PACKING_LIST", "EXPORT_INVOICE"];
-export const SALES_DOCUMENT_TYPES = ["SALES_CONTRACT"];
-export const DOMESTIC_LOGISTICS_DOCUMENT_TYPES = ["CUSTOMS_ENTRY_FORM", "RELEASE_NOTICE", "CUSTOMS_POWER_OF_ATTORNEY"];
+export const EXPORT_DOCUMENT_TYPES: OrderDocumentType[] = ["CUSTOMS_ENTRY_FORM", "RELEASE_NOTICE", "CUSTOMS_POWER_OF_ATTORNEY", "BILL_OF_LADING", "COMMERCIAL_INVOICE", "PACKING_LIST", "EXPORT_INVOICE"];
+export const SALES_DOCUMENT_TYPES: OrderDocumentType[] = ["SALES_CONTRACT"];
+export const DOMESTIC_LOGISTICS_DOCUMENT_TYPES: OrderDocumentType[] = ["CUSTOMS_ENTRY_FORM", "RELEASE_NOTICE", "CUSTOMS_POWER_OF_ATTORNEY"];
 export const TAX_EXPORT_DOCUMENT_TYPES = [
   ...EXPORT_DOCUMENT_TYPES.filter((type) => !DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(type)),
   ...SALES_DOCUMENT_TYPES,
 ];
-export const SUPPLIER_DOCUMENT_TYPES = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
-export const ORDER_DOCUMENT_TYPES = [...EXPORT_DOCUMENT_TYPES, ...SALES_DOCUMENT_TYPES, ...SUPPLIER_DOCUMENT_TYPES];
+export const SUPPLIER_DOCUMENT_TYPES: OrderDocumentType[] = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
+export const ORDER_DOCUMENT_TYPES: OrderDocumentType[] = [...EXPORT_DOCUMENT_TYPES, ...SALES_DOCUMENT_TYPES, ...SUPPLIER_DOCUMENT_TYPES];
 export const CUSTOMS_DECLARATION_DOCUMENT_TYPE_ALIASES = new Set(["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION", "报关单"]);
 export const TAX_REFUND_SUPPLIER_TYPES = ["工厂供应商"];
 export const UPLOAD_STATUSES = ["PENDING", "UPLOADING", "SUCCESS", "FAILED"];
@@ -186,26 +242,26 @@ export const SHIPPING_EMAIL_LANGUAGE_LABELS = {
   ru: "Русский",
 };
 
-export function defaultClearanceEmailLanguage(country = "") {
+export function defaultClearanceEmailLanguage(country: unknown = "") {
   return /俄罗斯|russia|рф/i.test(String(country || "")) ? "RU" : "EN";
 }
 
-export function normalizeClearanceEmailLanguage(value = "", country = "") {
+export function normalizeClearanceEmailLanguage(value: unknown = "", country: unknown = "") {
   const normalized = String(value || "").trim().toUpperCase();
   if (["EN", "RU"].includes(normalized)) return normalized;
   return defaultClearanceEmailLanguage(country);
 }
 
-export function normalizeOrderDocumentType(documentType = "") {
+export function normalizeOrderDocumentType(documentType: unknown = "") {
   const value = String(documentType || "").trim();
   return CUSTOMS_DECLARATION_DOCUMENT_TYPE_ALIASES.has(value) ? "CUSTOMS_ENTRY_FORM" : value;
 }
 
-export function isCustomsDeclarationDocumentType(documentType = "") {
+export function isCustomsDeclarationDocumentType(documentType: unknown = "") {
   return normalizeOrderDocumentType(documentType) === "CUSTOMS_ENTRY_FORM";
 }
 
-export function sanitizeFilenamePart(value = "", fallback = "Document") {
+export function sanitizeFilenamePart(value: unknown = "", fallback = "Document") {
   const cleaned = String(value || "")
     .normalize("NFKD")
     .replace(/[\\/\s]+/g, "-")
@@ -216,29 +272,29 @@ export function sanitizeFilenamePart(value = "", fallback = "Document") {
   return cleaned || fallback;
 }
 
-export function baseOrderDocumentNo(order = {}) {
+export function baseOrderDocumentNo(order: OrderLike = {}) {
   return sanitizeFilenamePart(order.blNo || order.billOfLadingNo || order.orderNo || order.id || "Order", "Order");
 }
 
-export function englishDocumentTypeLabel(documentType = "", context = {}) {
+export function englishDocumentTypeLabel(documentType: string = "", context: DocumentContextLike = {}) {
   const normalizedType = normalizeOrderDocumentType(documentType);
   if (normalizedType === "SUPPLIER_INVOICE") {
     const costType = normalizedCostType(context.cost?.costType || context.costType || "");
     if (LOGISTICS_INVOICE_ENGLISH_LABELS[costType]) return LOGISTICS_INVOICE_ENGLISH_LABELS[costType];
     if (context.relatedModule === "SUPPLIER" || context.supplierId || context.costId) return "Factory-Invoice";
   }
-  return ORDER_DOCUMENT_ENGLISH_LABELS[normalizedType] || "Other-Document";
+  return (ORDER_DOCUMENT_ENGLISH_LABELS as Record<string, string>)[normalizedType] || "Other-Document";
 }
 
-export function generateStandardFilename(order = {}, documentType = "", index = 1, context = {}) {
+export function generateStandardFilename(order: OrderLike = {}, documentType = "", index = 1, context: DocumentContextLike = {}) {
   const baseNo = baseOrderDocumentNo(order);
   const englishType = sanitizeFilenamePart(englishDocumentTypeLabel(documentType, context), "Other-Document");
   const suffix = Number(index || 1) > 1 ? `-${Number(index)}` : "";
   return `${baseNo}_${englishType}${suffix}.pdf`;
 }
 
-export function documentStandardTypeKey(document = {}) {
-  return englishDocumentTypeLabel(document.documentType, {
+export function documentStandardTypeKey(document: OrderDocumentLike = {}) {
+  return englishDocumentTypeLabel(document.documentType || "", {
     relatedModule: document.relatedModule,
     supplierId: document.supplierId,
     costId: document.costId,
@@ -247,27 +303,27 @@ export function documentStandardTypeKey(document = {}) {
   });
 }
 
-export function orderDocumentsForStandardNaming(order = {}) {
+export function orderDocumentsForStandardNaming(order: OrderLike = {}) {
   return (order.documents || [])
     .filter((document) => !document.deletedAt)
     .slice()
     .sort((left, right) => {
       const typeCompare = String(documentStandardTypeKey(left)).localeCompare(String(documentStandardTypeKey(right)));
       if (typeCompare !== 0) return typeCompare;
-      return new Date(left.createdAt || 0) - new Date(right.createdAt || 0);
+      return new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime();
     });
 }
 
-export function standardFilenameIndexForDocument(order = {}, document = {}) {
+export function standardFilenameIndexForDocument(order: OrderLike = {}, document: OrderDocumentLike = {}) {
   const list = orderDocumentsForStandardNaming(order);
   const sameType = list.filter((item) => documentStandardTypeKey(item) === documentStandardTypeKey(document));
   const index = sameType.findIndex((item) => item.id === document.id);
   return index >= 0 ? index + 1 : sameType.length + 1;
 }
 
-export function standardFilenameForDocument(document = {}, orderOverride = null) {
+export function standardFilenameForDocument(document: OrderDocumentLike = {}, orderOverride: OrderLike | null = null) {
   const order = orderOverride || document.order || {};
-  return generateStandardFilename(order, document.documentType, standardFilenameIndexForDocument(order, document), {
+  return generateStandardFilename(order, document.documentType || "", standardFilenameIndexForDocument(order, document), {
     relatedModule: document.relatedModule,
     supplierId: document.supplierId,
     costId: document.costId,
@@ -276,11 +332,11 @@ export function standardFilenameForDocument(document = {}, orderOverride = null)
   });
 }
 
-function firstNonEmptyText(...values) {
+function firstNonEmptyText(...values: unknown[]) {
   return values.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
 
-function documentReferenceNo(document = {}) {
+function documentReferenceNo(document: OrderDocumentLike = {}) {
   const order = document.order || {};
   const transportItems = (order.domesticLogisticsInfos || [])
     .flatMap((info) => Array.isArray(info.transportItems) ? info.transportItems : []);
@@ -311,13 +367,13 @@ export function ensurePdfFileName(fileName = "document.pdf") {
   return /\.pdf$/i.test(normalized) ? normalized : `${normalized}.pdf`;
 }
 
-export function generatedOrderDocumentFileName(document = {}) {
+export function generatedOrderDocumentFileName(document: OrderDocumentLike = {}) {
   const documentType = normalizeOrderDocumentType(document.documentType || "");
-  const label = ORDER_DOCUMENT_LABELS[documentType] || documentType || "单证";
+  const label = (ORDER_DOCUMENT_LABELS as Record<string, string>)[documentType] || documentType || "单证";
   return ensurePdfFileName(`${label}-${documentReferenceNo(document)}`);
 }
 
-export function preferredOrderDocumentFileName(document = {}) {
+export function preferredOrderDocumentFileName(document: OrderDocumentLike = {}) {
   return ensurePdfFileName(firstNonEmptyText(
     document.originalFileName,
     document.originalFilename,
@@ -344,7 +400,7 @@ export function pdfContentDispositionHeader(disposition = "inline", fileName = "
   return `${normalizedDisposition}; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(safeFileName)}`;
 }
 
-export async function nextStandardFilenameForUpload(order = {}, documentType = "", context = {}) {
+export async function nextStandardFilenameForUpload(order: OrderLike = {}, documentType = "", context: DocumentContextLike = {}) {
   const existing = orderDocumentsForStandardNaming(order);
   const probe = {
     id: `__new__${Date.now()}`,
@@ -359,7 +415,7 @@ export async function nextStandardFilenameForUpload(order = {}, documentType = "
   return generateStandardFilename(order, documentType, sameTypeCount + 1, context);
 }
 
-export async function resolveStandardFilenameForPersistedDocument(document = {}) {
+export async function resolveStandardFilenameForPersistedDocument(document: OrderDocumentLike = {}) {
   if (!document) return "";
   const order = document.order || {};
   return standardFilenameForDocument(document, {
@@ -368,13 +424,13 @@ export async function resolveStandardFilenameForPersistedDocument(document = {})
   });
 }
 
-export function normalizeUploadSource(uploadSource = "", relatedModule = "") {
+export function normalizeUploadSource(uploadSource: unknown = "", relatedModule: unknown = "") {
   const value = String(uploadSource || "").trim().toUpperCase();
   if (["SCAN", "EMAIL", "MANUAL", "API"].includes(value)) return value;
   return relatedModule === "SUPPLIER" ? "MANUAL" : "SCAN";
 }
 
-export function normalizeShippingDocumentTypes(value) {
+export function normalizeShippingDocumentTypes(value: unknown) {
   const rows = Array.isArray(value) ? value : String(value || "").split(/[,\n;；，]+/);
   return rows.map((item) => String(item || "").trim()).filter((item, index, arr) => SHIPPING_DOCUMENT_TYPE_KEYS.includes(item) && arr.indexOf(item) === index);
 }

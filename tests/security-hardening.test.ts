@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
 
 const nextConfig = readFileSync("next.config.mjs", "utf8");
@@ -23,6 +23,18 @@ const registerRoute = readFileSync("app/api/auth/register/route.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const runWithEnvScript = readFileSync("scripts/run-with-env.mjs", "utf8");
+
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir)
+    .flatMap((entry) => {
+      const path = `${dir}/${entry}`;
+      return statSync(path).isDirectory() ? filesUnder(path) : [path];
+    });
+}
+
+const apiRouteSources = filesUnder("app/api")
+  .filter((file) => file.endsWith("/route.ts"))
+  .map((file) => [file, readFileSync(file, "utf8")] as const);
 
 function cspFor(isDevelopment: boolean) {
   return execFileSync(process.execPath, [
@@ -115,13 +127,28 @@ test("api errors explain logistics expense billing schema mismatches", () => {
 
 test("anonymous auth posts require same-origin checks before processing input", () => {
   assert.match(loginRoute, /assertSameOriginRequest\(request\);[\s\S]*await ensureDefaultUsers\(\)/);
-  assert.match(registerRoute, /assertSameOriginRequest\(request\);[\s\S]*await request\.json\(\)/);
+  assert.match(registerRoute, /assertSameOriginRequest\(request\);[\s\S]*parseJsonBody\(request\)/);
+});
+
+test("api routes parse JSON bodies through the shared helper", () => {
+  assert.match(sharedBaseUtils, /export async function parseJsonBody/);
+  assert.match(sharedBaseUtils, /assertJsonObject\(await request\.json\(\), label\)/);
+  for (const [file, source] of apiRouteSources) {
+    assert.doesNotMatch(source, /request\.json\(/, `${file} should call parseJsonBody instead of request.json directly`);
+  }
+  assert.match(loginRoute, /parseJsonBody\(request\)/);
+  assert.match(registerRoute, /parseJsonBody\(request\)/);
 });
 
 test("all active PDF upload services reuse shared PDF validation", () => {
+  assert.match(uploadValidation, /type ValidatedUploadFile = \{/);
+  assert.match(uploadValidation, /type InvoiceMimeType = "application\/pdf" \| "image\/jpeg" \| "image\/png"/);
   assert.match(uploadValidation, /export function assertPdfUploadFileCandidate/);
+  assert.match(uploadValidation, /assertPdfUploadFileCandidate\(candidate: unknown\)/);
   assert.match(uploadValidation, /export async function readValidatedPdfUploadFile/);
+  assert.match(uploadValidation, /readValidatedPdfUploadFile\(candidate: unknown, fallbackName = "document\.pdf"\): Promise<ValidatedUploadFile>/);
   assert.match(uploadValidation, /export async function readValidatedInvoiceUploadFile/);
+  assert.match(uploadValidation, /readValidatedInvoiceUploadFile\(candidate: unknown, fallbackName = "invoice\.pdf"\): Promise<ValidatedUploadFile>/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
   assert.match(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
   assert.match(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
@@ -136,7 +163,8 @@ test("shared PDF validation rejects active content actions", () => {
   assert.match(uploadValidation, /\/OpenAction\\b/);
   assert.match(uploadValidation, /\/EmbeddedFile\\b/);
   assert.match(uploadValidation, /\/Launch\\b/);
-  assert.match(uploadValidation, /function assertPdfDoesNotContainActiveContent/);
+  assert.match(uploadValidation, /function assertPdfDoesNotContainActiveContent\(body: Buffer\)/);
+  assert.match(uploadValidation, /INVOICE_IMAGE_SIGNATURES: Record<Exclude<InvoiceMimeType, "application\/pdf">, \(body: Buffer\) => boolean>/);
   assert.match(uploadValidation, /assertPdfDoesNotContainActiveContent\(body\);[\s\S]*return \{/);
 });
 

@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import { Prisma } from "../generated/prisma/client.js";
 import {
   codedError,
   nonEmpty,
@@ -17,7 +17,7 @@ import {
   USER_APPROVAL_STATUSES,
   runNonCriticalTask,
 } from "./shared-constants";
-import { assertRead, assertWrite, permissionError } from "./shared-access";
+import { assertRead, assertWrite, permissionError, type AccessUser } from "./shared-access";
 import {
   normalizedCustomPermissionInput,
   pageParams,
@@ -29,6 +29,33 @@ import {
   revokeUserSessions,
   timingSafeEqualText,
 } from "./shared-auth";
+
+type UserInput = Record<string, unknown>;
+type UserListQuery = { get(name: string): string | null } | null;
+type UserListOptions = { paginated?: boolean };
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type ActorLike = AccessUser;
+type AvatarUserLike = {
+  avatarInitials?: string | null;
+  name?: string | null;
+};
+type UserRowLike = Record<string, unknown> & {
+  id?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  phone?: string | null;
+  avatarInitials?: string | null;
+  defaultLanguage?: string | null;
+  customPermissions?: unknown;
+  supplierId?: string | null;
+  supplierOperator?: { supplierName?: string | null; supplierType?: string | null } | null;
+  mustChangePassword?: boolean | null;
+  approvalStatus?: string | null;
+  isActive?: boolean | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
 
 export const USER_AUTH_SELECT = {
   id: true,
@@ -68,29 +95,29 @@ export const USER_PUBLIC_SELECT = {
 
 let missingAvatarInitialsBackfilled = false;
 
-export function avatarInitialFromName(name = "") {
+export function avatarInitialFromName(name: unknown = "") {
   const text = nonEmpty(name);
   if (!text) return "";
   return text.slice(0, 1).toUpperCase();
 }
 
-export function cleanAvatarInitials(value = "") {
+export function cleanAvatarInitials(value: unknown = "") {
   return nonEmpty(value).slice(0, 3).toUpperCase();
 }
 
-export function autoAvatarInitialsFor(name = "") {
+export function autoAvatarInitialsFor(name: unknown = "") {
   return avatarInitialFromName(name) || "N";
 }
 
-export function avatarWasAutomatic(user) {
+export function avatarWasAutomatic(user: AvatarUserLike | null | undefined) {
   const current = cleanAvatarInitials(user?.avatarInitials || "");
   if (!current) return true;
   return current === autoAvatarInitialsFor(user?.name || "");
 }
 
-export function resolveAvatarInitials(input = {}, name, before = null) {
+export function resolveAvatarInitials(input: UserInput = {}, name: unknown, before: AvatarUserLike | null = null) {
   if (Object.prototype.hasOwnProperty.call(input, "avatarInitials")) {
-    const requested = cleanAvatarInitials(input.avatarInitials);
+    const requested = cleanAvatarInitials(String(input.avatarInitials || ""));
     if (!requested) return autoAvatarInitialsFor(name);
     const beforeInitials = cleanAvatarInitials(before?.avatarInitials || "");
     if (before && avatarWasAutomatic(before) && requested === beforeInitials && name !== before.name) {
@@ -99,7 +126,7 @@ export function resolveAvatarInitials(input = {}, name, before = null) {
     return requested;
   }
   if (!before || avatarWasAutomatic(before)) return autoAvatarInitialsFor(name);
-  return cleanAvatarInitials(before.avatarInitials);
+  return cleanAvatarInitials(before.avatarInitials || "");
 }
 
 export async function backfillMissingAvatarInitials() {
@@ -144,7 +171,7 @@ export async function ensureDefaultUsers() {
   return null;
 }
 
-export function isInitialAdminPasswordLogin(user, password) {
+export function isInitialAdminPasswordLogin(user: { role?: string | null; email?: string | null } | null | undefined, password: unknown) {
   return Boolean(
     INITIAL_ADMIN_EMAIL
     && INITIAL_ADMIN_PASSWORD
@@ -154,9 +181,14 @@ export function isInitialAdminPasswordLogin(user, password) {
   );
 }
 
-export function publicUser(user) {
-  if (!user) return null;
-  const customPermissions = normalizedCustomPermissionInput(user.customPermissions, user.role);
+function asUserRow(value: unknown): UserRowLike {
+  return (value && typeof value === "object" ? value : {}) as UserRowLike;
+}
+
+export function publicUser(userInput: unknown) {
+  if (!userInput) return null;
+  const user = asUserRow(userInput);
+  const customPermissions = normalizedCustomPermissionInput(user.customPermissions, String(user.role || ""));
   return {
     id: user.id,
     name: user.name,
@@ -178,17 +210,19 @@ export function publicUser(user) {
   };
 }
 
-export function serializeUser(user) {
+export function serializeUser(user: unknown) {
   return publicUser(user);
 }
 
-export async function updateOwnProfile(request, actor, input = {}) {
-  const user = await prisma.user.findUnique({ where: { id: actor.id } });
+export async function updateOwnProfile(request: AuditRequestLike, actor: ActorLike, input: UserInput = {}) {
+  const actorId = requireText(actor?.id, "当前用户");
+  const user = await prisma.user.findUnique({ where: { id: actorId } });
   if (!user || !user.isActive) throw permissionError("请先登录", 401);
   const name = requireText(input.name, "姓名");
   const phone = String(input.phone || "").trim();
   const avatarInitials = resolveAvatarInitials(input, name, user);
-  const defaultLanguage = ["zh-CN", "en-US"].includes(input.defaultLanguage) ? input.defaultLanguage : null;
+  const requestedDefaultLanguage = String(input.defaultLanguage || "");
+  const defaultLanguage = ["zh-CN", "en-US"].includes(requestedDefaultLanguage) ? requestedDefaultLanguage : null;
   const before = publicUser(user);
   const updated = await prisma.user.update({
     where: { id: user.id },
@@ -203,7 +237,7 @@ export async function updateOwnProfile(request, actor, input = {}) {
   return publicUser(updated);
 }
 
-export async function listUsers(actor, query = null, options = {}) {
+export async function listUsers(actor: ActorLike, query: UserListQuery = null, options: UserListOptions = {}) {
   assertRead(actor, "users");
   await ensureDefaultUsers();
   const keyword = nonEmpty(query?.get("keyword") || query?.get("q") || query?.get("search"));
@@ -223,11 +257,11 @@ export async function listUsers(actor, query = null, options = {}) {
     "已拒绝": "REJECTED",
     "停用": "DISABLED",
     "已停用": "DISABLED",
-  };
+  } satisfies Record<string, string>;
   const approvalStatus = statusText
-    ? (USER_APPROVAL_STATUSES.includes(statusText) ? statusText : statusMap[statusText.toLowerCase()] || statusMap[statusText] || "")
+    ? (USER_APPROVAL_STATUSES.includes(statusText) ? statusText : (statusMap as Record<string, string>)[statusText.toLowerCase()] || (statusMap as Record<string, string>)[statusText] || "")
     : "";
-  const where = {
+  const where: Prisma.UserWhereInput = {
     ...(keyword ? {
       OR: [
         { name: { contains: keyword, mode: "insensitive" } },
@@ -259,24 +293,20 @@ export async function listUsers(actor, query = null, options = {}) {
   return users.map(serializeUser);
 }
 
-export async function registerUser(request, input = {}) {
+export async function registerUser(request: AuditRequestLike, input: UserInput = {}) {
   await ensureDefaultUsers();
   const name = requireText(input.name, "姓名");
   const email = requireValidEmail(input.email, "邮箱");
   const password = String(input.password || "");
   const confirmPassword = String(input.confirmPassword || input.passwordConfirm || "");
   if (confirmPassword && confirmPassword !== password) {
-    const error = new Error("两次输入的密码不一致");
-    error.status = 400;
-    throw error;
+    throw codedError("两次输入的密码不一致", 400, "PASSWORD_CONFIRM_MISMATCH");
   }
   const duplicate = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
   });
   if (duplicate) {
-    const error = new Error("该邮箱已提交注册或已存在账号，请联系管理员。");
-    error.status = 409;
-    throw error;
+    throw codedError("该邮箱已提交注册或已存在账号，请联系管理员。", 409, "EMAIL_ALREADY_EXISTS");
   }
   const user = await prisma.user.create({
     data: {
@@ -285,7 +315,7 @@ export async function registerUser(request, input = {}) {
       passwordHash: hashPassword(password),
       role: "业务员",
       avatarInitials: resolveAvatarInitials(input, name),
-      customPermissions: null,
+      customPermissions: Prisma.JsonNull,
       mustChangePassword: false,
       approvalStatus: "PENDING",
       isActive: false,
@@ -300,19 +330,22 @@ export async function registerUser(request, input = {}) {
   return { id: user.id, email: user.email, name: user.name, approvalStatus: user.approvalStatus };
 }
 
-export async function saveUser(request, actor, input, id = null) {
+export async function saveUser(request: AuditRequestLike, actor: ActorLike, input: UserInput, id: string | null = null) {
   assertWrite(actor, "users");
-  const role = ROLES.includes(input.role) ? input.role : "业务员";
+  const requestedRole = String(input.role || "");
+  const role = ROLES.includes(requestedRole) ? requestedRole : "业务员";
   const customPermissions = normalizedCustomPermissionInput(input.customPermissions || input.permissions, role);
   const before = id ? await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT }) : null;
   if (id && !before) throw permissionError("用户不存在", 404);
   const name = requireText(input.name, "姓名");
-  const approvalStatus = USER_APPROVAL_STATUSES.includes(input.approvalStatus)
-    ? input.approvalStatus
+  const email = requireValidEmail(input.email, "邮箱");
+  const requestedApprovalStatus = String(input.approvalStatus || "");
+  const approvalStatus = USER_APPROVAL_STATUSES.includes(requestedApprovalStatus)
+    ? requestedApprovalStatus
     : (id
       ? (before?.approvalStatus || (before?.isActive ? "APPROVED" : "DISABLED"))
       : (input.isActive === false ? "DISABLED" : "APPROVED"));
-  const data = {
+  const data: Record<string, unknown> = {
     name,
     email: requireValidEmail(input.email, "邮箱"),
     role,
@@ -333,44 +366,39 @@ export async function saveUser(request, actor, input, id = null) {
     data.supplierId = supplier.id;
   }
   if (input.password) {
-    data.passwordHash = hashPassword(input.password);
+    data.passwordHash = hashPassword(String(input.password));
     data.mustChangePassword = true;
   }
   if (!id && !data.passwordHash) {
-    const error = new Error("新建用户必须设置初始密码，禁止使用固定默认密码。");
-    error.status = 400;
-    throw error;
+    throw codedError("新建用户必须设置初始密码，禁止使用固定默认密码。", 400, "INITIAL_PASSWORD_REQUIRED");
   }
 
   const duplicate = await prisma.user.findFirst({
     where: {
-      email: { equals: data.email, mode: "insensitive" },
+      email: { equals: email, mode: "insensitive" },
       ...(id ? { NOT: { id } } : {}),
     },
   });
   if (duplicate) {
-    const error = new Error("邮箱已存在，不能重复创建");
-    error.status = 409;
-    throw error;
+    throw codedError("邮箱已存在，不能重复创建", 409, "EMAIL_ALREADY_EXISTS");
   }
   const user = id
-    ? await prisma.user.update({ where: { id }, data, select: USER_PUBLIC_SELECT })
-    : await prisma.user.create({ data, select: USER_PUBLIC_SELECT });
+    ? await prisma.user.update({ where: { id }, data: data as Prisma.UserUncheckedUpdateInput, select: USER_PUBLIC_SELECT })
+    : await prisma.user.create({ data: data as Prisma.UserUncheckedCreateInput, select: USER_PUBLIC_SELECT });
   if (id && (data.passwordHash || data.approvalStatus !== "APPROVED")) await revokeUserSessions(id);
   runNonCriticalTask("用户操作日志写入", () => writeAudit(request, actor, id ? "更新用户" : "新增用户", "users", user.id, before, user));
   return serializeUser(user);
 }
 
-export async function updateUserStatus(request, actor, id, status) {
+export async function updateUserStatus(request: AuditRequestLike, actor: ActorLike, id: string, status: unknown) {
   assertWrite(actor, "users");
-  if (!USER_APPROVAL_STATUSES.includes(status)) {
-    const error = new Error("请选择有效用户状态");
-    error.status = 400;
-    throw error;
+  const nextStatus = String(status || "");
+  if (!USER_APPROVAL_STATUSES.includes(nextStatus)) {
+    throw codedError("请选择有效用户状态", 400, "USER_STATUS_INVALID");
   }
   const before = await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
   if (!before) throw permissionError("用户不存在", 404);
-  if (status === "APPROVED" && before.role === LOGISTICS_OPERATOR_ROLE) {
+  if (nextStatus === "APPROVED" && before.role === LOGISTICS_OPERATOR_ROLE) {
     if (!before.supplierId) throw codedError("物流供应商账号必须绑定一个供应商后才能启用。", 400, "LOGISTICS_USER_SUPPLIER_REQUIRED");
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(before.supplierId);
@@ -381,12 +409,12 @@ export async function updateUserStatus(request, actor, id, status) {
   const user = await prisma.user.update({
     where: { id },
     data: {
-      approvalStatus: status,
-      isActive: status === "APPROVED",
+      approvalStatus: nextStatus,
+      isActive: nextStatus === "APPROVED",
     },
     select: USER_PUBLIC_SELECT,
   });
-  if (status !== "APPROVED") await revokeUserSessions(id);
+  if (nextStatus !== "APPROVED") await revokeUserSessions(id);
   runNonCriticalTask("用户状态操作日志写入", () => writeAudit(request, actor, "更新用户状态", "users", id, before, user));
   return serializeUser(user);
 }

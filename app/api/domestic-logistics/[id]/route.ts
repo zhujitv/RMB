@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteDomesticLogisticsInfo, getActor, ok, saveDomesticLogisticsInfo } from "../../../../lib/platform-db";
+import { apiError, deleteDomesticLogisticsInfo, getActor, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const info = await saveDomesticLogisticsInfoTyped(request, actor, body, id);
     return ok({ success: true, info, message: "物流信息已更新" });
   } catch (error: unknown) {

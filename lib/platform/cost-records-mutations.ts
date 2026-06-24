@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   COST_PAYMENT_STATUSES,
   COST_BATCH_INPUT_SCHEMA,
@@ -45,18 +45,45 @@ import {
   includeCostRelations,
 } from "./cost-records-shared";
 
-function isOwnCostScope(actor) {
+type CostWithOrder = Prisma.OrderCostGetPayload<{ include: { order: { include: { customer: true } } } }>;
+type CostActorInput = {
+  id?: string | null;
+  role?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+type CostActor = {
+  id: string;
+  role?: string;
+  customPermissions?: unknown;
+};
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type CostInput = Record<string, unknown>;
+type CostOrderLike = {
+  id: string;
+  currency?: string | null;
+};
+
+function requireCostActor(actor: CostActorInput): CostActor {
+  if (!actor?.id) throw permissionError("请先登录", 401);
+  return {
+    id: actor.id,
+    role: actor.role || undefined,
+    customPermissions: actor.customPermissions,
+  };
+}
+
+function isOwnCostScope(actor: CostActor) {
   return effectivePermissions(actor).dataScope === "OWN_COST";
 }
 
-async function buildCostData(order, actor, input, id = null, before = null) {
+async function buildCostData(order: CostOrderLike, actor: CostActor, input: CostInput, id: string | null = null, before: CostWithOrder | null = null) {
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
   if (!supplierId) throw codedError("请选择供应商", 400, "SUPPLIER_REQUIRED");
   const supplier = await assertSupplierActive(supplierId);
   if (!nonEmpty(input.amount)) throw codedError("请填写供应商成本金额", 400, "COST_AMOUNT_REQUIRED");
   const amount = num(input.amount);
   if (!(amount > 0)) throw codedError("供应商成本金额必须大于 0", 400, "COST_AMOUNT_REQUIRED");
-  const inputCostType = normalizedCostType(input.costType);
+  const inputCostType = normalizedCostType(nonEmpty(input.costType));
   const costType = COST_TYPES.includes(inputCostType) ? inputCostType : "其他费用";
   const sourceType = nonEmpty(input.sourceType || before?.sourceType || "MANUAL");
   const sourceId = nonEmpty(input.sourceId || before?.sourceId || "");
@@ -67,9 +94,7 @@ async function buildCostData(order, actor, input, id = null, before = null) {
   const allowsForeignCurrency = costTypeAllowsForeignCurrency(costType);
   if (allowsForeignCurrency && !requestedCurrency) throw codedError("请选择成本币种", 400, "CURRENCY_REQUIRED");
   if (allowsForeignCurrency && !CURRENCIES.includes(requestedCurrency)) {
-    const error = new Error("请选择有效成本币种");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效成本币种", 400, "CURRENCY_REQUIRED");
   }
   const currency = allowsForeignCurrency ? requestedCurrency : "CNY";
   const exchangeRateInput = currency === "CNY" ? 1 : input.exchangeRate;
@@ -91,12 +116,10 @@ async function buildCostData(order, actor, input, id = null, before = null) {
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
   });
   if (FACTORY_SUPPLIER_COST_TYPES.includes(costType) && supplier.supplierType !== "工厂供应商" && !confirmedFactorySupplierMismatch(input)) {
-    const error = new Error("当前成本类型为工厂货款，但供应商类型不是工厂供应商，请确认是否修改供应商资料。");
-    error.status = 409;
-    throw error;
+    throw codedError("当前成本类型为工厂货款，但供应商类型不是工厂供应商，请确认是否修改供应商资料。", 409, "FACTORY_SUPPLIER_MISMATCH");
   }
   const requestedCostConfirmed = booleanInput(input.costConfirmed, before?.costConfirmed || false);
-  const canConfirmOrdinaryCost = ["管理员", "业务员"].includes(actor?.role);
+  const canConfirmOrdinaryCost = ["管理员", "业务员"].includes(actor.role || "");
   if (isOwnCostScope(actor) && before?.costConfirmed) {
     throw codedError("已确认成本不能继续修改，请联系管理员处理。", 403, "CONFIRMED_COST_LOCKED");
   }
@@ -104,7 +127,8 @@ async function buildCostData(order, actor, input, id = null, before = null) {
     throw codedError("当前角色无权限确认成本。", 403, "COST_CONFIRMATION_REQUIRES_REVIEWER");
   }
   const costConfirmed = canConfirmOrdinaryCost ? requestedCostConfirmed : Boolean(before?.costConfirmed);
-  const paymentStatus = COST_PAYMENT_STATUSES.includes(input.paymentStatus) ? input.paymentStatus : "待支付";
+  const paymentStatusInput = nonEmpty(input.paymentStatus);
+  const paymentStatus = COST_PAYMENT_STATUSES.includes(paymentStatusInput) ? paymentStatusInput : "待支付";
   const paymentDate = dateFromInput(input.paymentDate);
   if (paymentStatus === "已支付" && !paymentDate) {
     throw codedError("已支付成本必须填写付款日期", 400, "PAYMENT_DATE_REQUIRED");
@@ -135,16 +159,14 @@ async function buildCostData(order, actor, input, id = null, before = null) {
   };
 }
 
-async function buildLogisticsCostData(order, actor, input, id = null, before = null) {
+async function buildLogisticsCostData(order: CostOrderLike, actor: CostActor, input: CostInput, id: string | null = null, before: CostWithOrder | null = null) {
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
   const supplier = supplierId ? await assertSupplierActive(supplierId) : null;
   const supplierName = supplier?.supplierName || requireText(input.supplierName || input.vendorName, "供应商名称");
   const amount = requirePositive(input.amount, "物流费用金额");
   const currency = requireText(input.currency || order.currency || "CNY", "币种");
   if (!CURRENCIES.includes(currency)) {
-    const error = new Error("请选择有效币种");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效币种", 400, "CURRENCY_REQUIRED");
   }
   const exchange = await resolveExchangeRateSnapshot(input, actor, {
     currency,
@@ -174,7 +196,7 @@ async function buildLogisticsCostData(order, actor, input, id = null, before = n
     amountCny: amountCny(amount, exchange.exchangeRate),
     paymentStatus: input.isPaid === true || input.isPaid === "true"
       ? "已支付"
-      : (COST_PAYMENT_STATUSES.includes(input.paymentStatus) ? input.paymentStatus : "待支付"),
+      : (COST_PAYMENT_STATUSES.includes(nonEmpty(input.paymentStatus)) ? nonEmpty(input.paymentStatus) : "待支付"),
     costConfirmed,
     costConfirmedAt: costConfirmed ? (before?.costConfirmedAt || new Date()) : null,
     paymentDate: dateFromInput(input.paymentDate),
@@ -185,16 +207,17 @@ async function buildLogisticsCostData(order, actor, input, id = null, before = n
   };
 }
 
-export async function saveCost(request, actor, input, id = null) {
+export async function saveCost(request: AuditRequestLike, actor: CostActorInput, input: unknown, id: string | null = null) {
   assertWrite(actor, "costs");
-  input = assertInputSchema(assertJsonObject(input), COST_INPUT_SCHEMA);
+  const currentActor = requireCostActor(actor);
+  const body = assertInputSchema(assertJsonObject(input), COST_INPUT_SCHEMA);
   const before = id ? await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } }) : null;
   if (id && (!before || before.deletedAt)) throw permissionError("成本记录不存在或已删除", 404);
-  const ownCostScope = isOwnCostScope(actor);
-  if (before && ownCostScope && before.createdById !== actor.id) throw permissionError("只能维护自己录入的成本记录");
-  if (before && !ownCostScope && !canAccessOrder(actor, before.order)) throw permissionError("无权限修改该成本记录");
-  const order = await assertCostWritableOrder(requireText(input.orderId || input.receivableOrderId || input.order_id, "关联订单"), actor, before);
-  const data = await buildCostData(order, actor, input, id, before);
+  const ownCostScope = isOwnCostScope(currentActor);
+  if (before && ownCostScope && before.createdById !== currentActor.id) throw permissionError("只能维护自己录入的成本记录");
+  if (before && !ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
+  const order = await assertCostWritableOrder(requireText(body.orderId || body.receivableOrderId || body.order_id, "关联订单"), currentActor, before);
+  const data = await buildCostData(order, currentActor, body, id, before);
   const result = id
     ? { cost: await prisma.orderCost.update({ where: { id }, data, include: includeCostRelations() }), reused: false }
     : await createCostIdempotently(data);
@@ -206,96 +229,96 @@ export async function saveCost(request, actor, input, id = null) {
     const action = id
       ? (isConfirmed !== wasConfirmed && isConfirmed ? "确认成本" : "更新成本")
       : "新增成本";
-    await runNonCriticalTask("成本操作日志写入", () => writeAudit(request, actor, action, "order_costs", cost.id, before, cost));
+    await runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, action, "order_costs", cost.id, before, cost));
   }
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(cost.orderId));
   return safeSerializeCost(cost);
 }
 
-export async function saveCosts(request, actor, input) {
+export async function saveCosts(request: AuditRequestLike, actor: CostActorInput, input: unknown) {
   assertWrite(actor, "costs");
-  input = assertInputSchema(assertJsonObject(input), COST_BATCH_INPUT_SCHEMA);
-  const order = await assertCostWritableOrder(requireText(input.orderId || input.receivableOrderId || input.order_id, "关联订单"), actor);
-  const items = Array.isArray(input.items) ? input.items : [];
+  const currentActor = requireCostActor(actor);
+  const body = assertInputSchema(assertJsonObject(input), COST_BATCH_INPUT_SCHEMA);
+  const order = await assertCostWritableOrder(requireText(body.orderId || body.receivableOrderId || body.order_id, "关联订单"), currentActor);
+  const items = Array.isArray(body.items)
+    ? body.items.map((item, index) => assertInputSchema({ ...body, ...assertJsonObject(item, `第 ${index + 1} 行成本明细`) }, COST_INPUT_SCHEMA))
+    : [];
   if (!items.length) {
-    const error = new Error("请至少录入一条供应商成本");
-    error.status = 400;
-    throw error;
+    throw codedError("请至少录入一条供应商成本", 400, "COST_ITEMS_REQUIRED");
   }
-  items.forEach((item, index) => {
-    const itemInput = assertJsonObject(item, `第 ${index + 1} 行成本明细`);
-    assertInputSchema({ ...input, ...itemInput }, COST_INPUT_SCHEMA);
-  });
-  const rows = await Promise.all(items.map((item) => buildCostData(order, actor, {
-    ...input,
+  const rows = await Promise.all(items.map((item) => buildCostData(order, currentActor, {
+    ...body,
     ...item,
-    costType: item.costType || input.costType,
-    paymentStatus: item.paymentStatus || input.paymentStatus,
-    paymentDate: item.paymentDate ?? input.paymentDate,
-    invoiceStatus: item.invoiceStatus || input.invoiceStatus,
-    remark: item.remark ?? input.remark,
+    costType: item.costType || body.costType,
+    paymentStatus: item.paymentStatus || body.paymentStatus,
+    paymentDate: item.paymentDate ?? body.paymentDate,
+    invoiceStatus: item.invoiceStatus || body.invoiceStatus,
+    remark: item.remark ?? body.remark,
   })));
-  const uniqueRows = [];
-  const seen = new Set();
+  const uniqueRows: Awaited<ReturnType<typeof buildCostData>>[] = [];
+  const seen = new Set<string>();
   rows.forEach((data) => {
     const key = duplicateCostFingerprint(data);
     if (seen.has(key)) return;
     seen.add(key);
     uniqueRows.push(data);
   });
-  const results = [];
+  const results: Awaited<ReturnType<typeof createCostIdempotently>>[] = [];
   for (const data of uniqueRows) {
     results.push(await createCostIdempotently(data));
   }
   const costs = results.map((result) => result.cost);
   const createdCosts = results.filter((result) => !result.reused).map((result) => result.cost);
-  await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, actor, "新增成本", "order_costs", cost.id, null, cost))));
+  await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost))));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
   return costs.map(safeSerializeCost);
 }
 
-export async function deleteCost(request, actor, id) {
+export async function deleteCost(request: AuditRequestLike, actor: CostActorInput, id: string) {
   assertWrite(actor, "costs");
+  const currentActor = requireCostActor(actor);
   const before = await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } });
   if (!before || before.deletedAt) throw permissionError("成本记录不存在或已删除", 404);
-  const ownCostScope = isOwnCostScope(actor);
-  if (ownCostScope && before.createdById !== actor.id) throw permissionError("只能删除自己录入的成本记录");
-  if (!ownCostScope && !canAccessOrder(actor, before.order)) throw permissionError("无权限删除该成本记录");
+  const ownCostScope = isOwnCostScope(currentActor);
+  if (ownCostScope && before.createdById !== currentActor.id) throw permissionError("只能删除自己录入的成本记录");
+  if (!ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限删除该成本记录");
   const cost = await prisma.orderCost.update({
     where: { id },
-    data: { deletedAt: new Date(), updatedById: actor.id },
+    data: { deletedAt: new Date(), updatedById: currentActor.id },
   });
-  await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(request, actor, "删除成本", "order_costs", id, before, cost));
+  await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(request, currentActor, "删除成本", "order_costs", id, before, cost));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
 }
 
-export async function saveLogisticsCost(request, actor, input, id = null) {
+export async function saveLogisticsCost(request: AuditRequestLike, actor: CostActorInput, input: CostInput, id: string | null = null) {
   assertWrite(actor, "logistics");
-  const order = await assertOrderOpen(requireText(input.orderId || input.order_id, "关联订单"), actor);
+  const currentActor = requireCostActor(actor);
+  const order = await assertOrderOpen(requireText(input.orderId || input.order_id, "关联订单"), currentActor);
   const before = id ? await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } }) : null;
   if (id && (!before || before.deletedAt || !validCost(before) || !isLogisticsCostType(before.costType))) {
     throw permissionError("物流费用记录不存在或已删除", 404);
   }
-  if (before && !canAccessOrder(actor, before.order)) throw permissionError("无权限修改该物流费用");
-  const data = await buildLogisticsCostData(order, actor, input, id, before);
+  if (before && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该物流费用");
+  const data = await buildLogisticsCostData(order, currentActor, input, id, before);
   const cost = id
     ? await prisma.orderCost.update({ where: { id }, data, include: includeCostRelations() })
     : await prisma.orderCost.create({ data, include: includeCostRelations() });
   await runNonCriticalTask("物流费用发票状态同步", () => syncCostInvoiceStatus(cost.id));
-  await runNonCriticalTask("物流费用操作日志写入", () => writeAudit(request, actor, id ? "修改物流费用" : "新增物流费用", "order_costs", cost.id, before, cost));
+  await runNonCriticalTask("物流费用操作日志写入", () => writeAudit(request, currentActor, id ? "修改物流费用" : "新增物流费用", "order_costs", cost.id, before, cost));
   return safeSerializeCost(cost);
 }
 
-export async function deleteLogisticsCost(request, actor, id) {
+export async function deleteLogisticsCost(request: AuditRequestLike, actor: CostActorInput, id: string) {
   assertWrite(actor, "logistics");
+  const currentActor = requireCostActor(actor);
   const before = await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } });
   if (!before || before.deletedAt || !isLogisticsCostType(before.costType)) {
     throw permissionError("物流费用记录不存在或已删除", 404);
   }
-  if (!canAccessOrder(actor, before.order)) throw permissionError("无权限删除该物流费用");
+  if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限删除该物流费用");
   const cost = await prisma.orderCost.update({
     where: { id },
-    data: { deletedAt: new Date(), updatedById: actor.id },
+    data: { deletedAt: new Date(), updatedById: currentActor.id },
   });
-  await runNonCriticalTask("物流费用删除操作日志写入", () => writeAudit(request, actor, "删除物流费用", "order_costs", id, before, cost));
+  await runNonCriticalTask("物流费用删除操作日志写入", () => writeAudit(request, currentActor, "删除物流费用", "order_costs", id, before, cost));
 }

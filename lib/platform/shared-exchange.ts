@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   AUTO_RATE_CURRENCIES,
   BOC_CURRENCY_NAMES,
@@ -11,6 +11,7 @@ import {
   runNonCriticalTask,
 } from "./shared-constants";
 import {
+  codedError,
   dateFromInput,
   dateToInput,
   normalizeDateText,
@@ -22,21 +23,74 @@ import {
 import { assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 
-export function normalizeExchangeRateSettings(value = {}) {
+type ExchangeRateSettingsInput = Record<string, unknown>;
+type ExchangeRateRowInput = {
+  currency: string;
+  rateToCny: number;
+  rateDate: string;
+  source: string;
+  rateType: string;
+};
+type RefreshExchangeRateOptions = {
+  source?: unknown;
+  rateType?: unknown;
+};
+type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type ExchangeSnapshotOptions = {
+  currency?: unknown;
+  defaultDate?: unknown;
+  allowHistoricalSource?: boolean;
+};
+type ExchangeRateSettings = ReturnType<typeof normalizeExchangeRateSettings>;
+type SerializedExchangeRate = {
+  id: string;
+  currency: string;
+  rateToCny: number;
+  exchangeRate: number;
+  rate: number;
+  rateDate: string;
+  source: string;
+  rateType: string;
+  isFallbackDate: boolean;
+  message: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+type ExchangeRateQuote = SerializedExchangeRate & {
+  settings: ExchangeRateSettings;
+};
+type ExchangeRateSnapshot = {
+  currency: string;
+  exchangeRate: number;
+  exchangeRateDate: Date | null;
+  exchangeRateSource: string;
+  exchangeRateType: string;
+};
+
+function errorMessage(error: unknown, fallback = "") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export function normalizeExchangeRateSettings(value: unknown = {}) {
+  const input: ExchangeRateSettingsInput = value && typeof value === "object" ? value as ExchangeRateSettingsInput : {};
   return {
     ...DEFAULT_EXCHANGE_RATE_SETTINGS,
-    ...(value && typeof value === "object" ? value : {}),
-    source: EXCHANGE_RATE_SOURCES.includes(value?.source) ? value.source : DEFAULT_EXCHANGE_RATE_SETTINGS.source,
-    rateType: EXCHANGE_RATE_TYPES.includes(value?.rateType) ? value.rateType : DEFAULT_EXCHANGE_RATE_SETTINGS.rateType,
-    autoUpdate: value?.autoUpdate !== false,
-    allowManualEdit: value?.allowManualEdit !== false,
-    allowAdminIncompleteTaxSubmit: value?.allowAdminIncompleteTaxSubmit === true,
-    allowMultipleOrderLogisticsSuppliers: value?.allowMultipleOrderLogisticsSuppliers === true,
+    ...input,
+    source: EXCHANGE_RATE_SOURCES.includes(String(input.source || "")) ? String(input.source) : DEFAULT_EXCHANGE_RATE_SETTINGS.source,
+    rateType: EXCHANGE_RATE_TYPES.includes(String(input.rateType || "")) ? String(input.rateType) : DEFAULT_EXCHANGE_RATE_SETTINGS.rateType,
+    autoUpdate: input.autoUpdate !== false,
+    allowManualEdit: input.allowManualEdit !== false,
+    allowAdminIncompleteTaxSubmit: input.allowAdminIncompleteTaxSubmit === true,
+    allowMultipleOrderLogisticsSuppliers: input.allowMultipleOrderLogisticsSuppliers === true,
   };
 }
 
-export function serializeExchangeRateSetting(setting) {
-  return normalizeExchangeRateSettings(setting?.value || setting || {});
+export function serializeExchangeRateSetting(setting: unknown) {
+  const value = setting && typeof setting === "object" && "value" in setting
+    ? (setting as { value?: unknown }).value
+    : setting;
+  return normalizeExchangeRateSettings(value || {});
 }
 
 export async function getExchangeRateSettings() {
@@ -51,7 +105,7 @@ export async function getExchangeRateSettings() {
   return serializeExchangeRateSetting(created);
 }
 
-export async function saveExchangeRateSettings(request, actor, input = {}) {
+export async function saveExchangeRateSettings(request: AuditRequestLike, actor: ActorLike, input: ExchangeRateSettingsInput = {}) {
   assertWrite(actor, "settings");
   const value = normalizeExchangeRateSettings({
     source: input.source,
@@ -71,7 +125,7 @@ export async function saveExchangeRateSettings(request, actor, input = {}) {
   return serializeExchangeRateSetting(setting);
 }
 
-export function htmlText(value = "") {
+export function htmlText(value: unknown = "") {
   return String(value)
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
@@ -79,18 +133,19 @@ export function htmlText(value = "") {
     .trim();
 }
 
-export function parseBocRate(value) {
+export function parseBocRate(value: unknown) {
   const number = Number(String(value || "").replace(/[^\d.]/g, ""));
   return Number.isFinite(number) && number > 0 ? Math.round((number / 100) * 1000000) / 1000000 : null;
 }
 
-export function exchangeSourceOrder(preferred) {
+export function exchangeSourceOrder(preferred: unknown) {
   const priority = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
-  if (!preferred || !priority.includes(preferred)) return priority;
-  return [preferred, ...priority.filter((source) => source !== preferred)];
+  const preferredSource = String(preferred || "");
+  if (!preferredSource || !priority.includes(preferredSource)) return priority;
+  return [preferredSource, ...priority.filter((source) => source !== preferredSource)];
 }
 
-export async function fetchBocRates(rateDate, rateType) {
+export async function fetchBocRates(rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
   const response = await fetch("https://www.boc.cn/sourcedb/whpj/", { cache: "no-store" });
   if (!response.ok) return [];
   const html = await response.text();
@@ -104,7 +159,7 @@ export async function fetchBocRates(rateDate, rateType) {
     const buy = parseBocRate(cells[1]);
     const sell = parseBocRate(cells[3]);
     const middle = parseBocRate(cells[5]) || (buy && sell ? Math.round(((buy + sell) / 2) * 1000000) / 1000000 : null);
-    const rateMap = {
+    const rateMap: Record<string, number | null> = {
       "现汇买入价": buy,
       "现汇卖出价": sell,
       "中间价": middle,
@@ -114,13 +169,13 @@ export async function fetchBocRates(rateDate, rateType) {
   });
 }
 
-export function addDaysText(dateText, days) {
+export function addDaysText(dateText: unknown, days: number) {
   const date = dateFromInput(dateText);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  date!.setUTCDate(date!.getUTCDate() + days);
+  return date!.toISOString().slice(0, 10);
 }
 
-export async function fetchOfficialFallbackRates(source, rateDate, rateType) {
+export async function fetchOfficialFallbackRates(source: string, rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
   if (rateType !== "中间价") return [];
   const body = new URLSearchParams({
     startDate: addDaysText(rateDate, -10),
@@ -153,7 +208,7 @@ export async function fetchOfficialFallbackRates(source, rateDate, rateType) {
   });
 }
 
-export async function fetchThirdPartyRates(rateDate, rateType) {
+export async function fetchThirdPartyRates(rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
   const response = await fetch(`https://api.frankfurter.app/${encodeURIComponent(rateDate)}?from=CNY&to=${AUTO_RATE_CURRENCIES.join(",")}`, { cache: "no-store" });
   if (!response.ok) return [];
   const data = await response.json();
@@ -171,15 +226,15 @@ export async function fetchThirdPartyRates(rateDate, rateType) {
   });
 }
 
-export async function fetchRatesBySource(source, rateDate, rateType) {
+export async function fetchRatesBySource(source: string, rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
   if (source === "中国银行") return fetchBocRates(rateDate, rateType);
   if (source === "中国外汇交易中心" || source === "国家外汇管理局") return fetchOfficialFallbackRates(source, rateDate, rateType);
   if (source === "第三方API") return fetchThirdPartyRates(rateDate, rateType);
   return [];
 }
 
-export async function saveExchangeRateRows(rows) {
-  const saved = [];
+export async function saveExchangeRateRows(rows: ExchangeRateRowInput[]) {
+  const saved: Prisma.ExchangeRateGetPayload<{}>[] = [];
   for (const row of rows) {
     const rateDate = dateFromInput(row.rateDate);
     if (!row.currency || !rateDate || !(Number(row.rateToCny) > 0)) continue;
@@ -206,13 +261,16 @@ export async function saveExchangeRateRows(rows) {
   return saved;
 }
 
-export function serializeExchangeRate(row, requestedDate = "") {
+export function serializeExchangeRate(row: Prisma.ExchangeRateGetPayload<{}> | null, requestedDate = ""): SerializedExchangeRate | null {
   if (!row) return null;
   const rateDate = dateToInput(row.rateDate);
+  const rateToCny = Number(row.rateToCny);
   return {
     id: row.id,
     currency: row.currency,
-    rateToCny: Number(row.rateToCny),
+    rateToCny,
+    exchangeRate: rateToCny,
+    rate: rateToCny,
     rateDate,
     source: row.source,
     rateType: row.rateType,
@@ -223,9 +281,10 @@ export function serializeExchangeRate(row, requestedDate = "") {
   };
 }
 
-export async function findCachedExchangeRate(currency, rateDate, rateType, source = "", exact = false) {
+export async function findCachedExchangeRate(currency: string, rateDate: string, rateType: string, source = "", exact = false) {
   const date = dateFromInput(rateDate);
-  const where = {
+  if (!date) return null;
+  const where: Prisma.ExchangeRateWhereInput = {
     currency,
     rateType,
     ...(source ? { source } : {}),
@@ -237,12 +296,13 @@ export async function findCachedExchangeRate(currency, rateDate, rateType, sourc
   });
 }
 
-export async function refreshExchangeRatesForDate(rateDateInput = todayInputInChina(), options = {}) {
+export async function refreshExchangeRatesForDate(rateDateInput = todayInputInChina(), options: RefreshExchangeRateOptions = {}) {
   const settings = await getExchangeRateSettings();
   const rateDate = normalizeDateText(rateDateInput);
-  const rateType = EXCHANGE_RATE_TYPES.includes(options.rateType) ? options.rateType : settings.rateType;
-  const sourceOrder = exchangeSourceOrder(options.source || settings.source);
-  let lastError = null;
+  const requestedRateType = String(options.rateType || "");
+  const rateType = EXCHANGE_RATE_TYPES.includes(requestedRateType) ? requestedRateType : settings.rateType;
+  const sourceOrder = exchangeSourceOrder(String(options.source || settings.source));
+  let lastError: unknown = null;
   for (const source of sourceOrder) {
     try {
       const rows = await fetchRatesBySource(source, rateDate, rateType);
@@ -257,7 +317,7 @@ export async function refreshExchangeRatesForDate(rateDateInput = todayInputInCh
           rates: saved.map((row) => serializeExchangeRate(row, rateDate)),
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       lastError = error;
     }
   }
@@ -268,13 +328,13 @@ export async function refreshExchangeRatesForDate(rateDateInput = todayInputInCh
     rateDate,
     rates: [],
     message: "今日汇率获取失败，已使用最近可用汇率。",
-    error: lastError?.message || "未能获取汇率",
+    error: errorMessage(lastError, "未能获取汇率"),
   };
 }
 
-export async function refreshExchangeRates(request, actor, input = {}) {
+export async function refreshExchangeRates(request: AuditRequestLike, actor: ActorLike, input: ExchangeRateSettingsInput = {}) {
   assertWrite(actor, "exchangeRates");
-  const result = await refreshExchangeRatesForDate(input.rateDate || input.date, {
+  const result = await refreshExchangeRatesForDate(String(input.rateDate || input.date || todayInputInChina()), {
     source: input.source,
     rateType: input.rateType,
   });
@@ -282,33 +342,39 @@ export async function refreshExchangeRates(request, actor, input = {}) {
   return result;
 }
 
-export async function getExchangeRateQuote(input = {}, actor = null) {
+export async function getExchangeRateQuote(input: ExchangeRateSettingsInput = {}, actor: ActorLike = null): Promise<ExchangeRateQuote> {
   const settings = await getExchangeRateSettings();
   const currency = requireText(input.currency || "CNY", "币种").toUpperCase();
   if (!CURRENCIES.includes(currency)) {
-    const error = new Error("请选择有效币种");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效币种", 400, "CURRENCY_REQUIRED");
   }
   const rateDate = normalizeDateText(input.rateDate || input.date);
-  const rateType = EXCHANGE_RATE_TYPES.includes(input.rateType) ? input.rateType : settings.rateType;
-  const source = EXCHANGE_RATE_SOURCES.includes(input.source) ? input.source : settings.source;
+  const requestedRateType = String(input.rateType || "");
+  const requestedSource = String(input.source || "");
+  const rateType = EXCHANGE_RATE_TYPES.includes(requestedRateType) ? requestedRateType : settings.rateType;
+  const source = EXCHANGE_RATE_SOURCES.includes(requestedSource) ? requestedSource : settings.source;
   if (currency === "CNY") {
     return {
+      id: "CNY",
       currency,
       rateToCny: 1,
+      exchangeRate: 1,
+      rate: 1,
       rateDate,
       source: "系统",
       rateType,
       isFallbackDate: false,
       message: "",
+      createdAt: dateFromInput(rateDate) || new Date(),
+      updatedAt: dateFromInput(rateDate) || new Date(),
       settings,
     };
   }
   const exact = await findCachedExchangeRate(currency, rateDate, rateType, source, true)
     || await findCachedExchangeRate(currency, rateDate, rateType, "", true);
   if (exact && !input.forceRefresh) {
-    return { ...serializeExchangeRate(exact, rateDate), settings };
+    const serialized = serializeExchangeRate(exact, rateDate);
+    if (serialized) return { ...serialized, settings };
   }
   if (settings.autoUpdate || input.forceRefresh) {
     await refreshExchangeRatesForDate(rateDate, { source, rateType });
@@ -316,60 +382,47 @@ export async function getExchangeRateQuote(input = {}, actor = null) {
   const cached = await findCachedExchangeRate(currency, rateDate, rateType, source)
     || await findCachedExchangeRate(currency, rateDate, rateType, "");
   if (cached) {
-    return { ...serializeExchangeRate(cached, rateDate), settings };
+    const serialized = serializeExchangeRate(cached, rateDate);
+    if (serialized) return { ...serialized, settings };
   }
-  const error = new Error("未找到可用汇率，请财务手动刷新汇率后再保存。");
-  error.status = 404;
-  throw error;
+  throw codedError("未找到可用汇率，请财务手动刷新汇率后再保存。", 404, "EXCHANGE_RATE_NOT_FOUND");
 }
 
-export async function resolveExchangeRateSnapshot(input, actor, { currency, defaultDate, allowHistoricalSource = false } = {}) {
+export async function resolveExchangeRateSnapshot(input: ExchangeRateSettingsInput, actor: ActorLike, { currency, defaultDate, allowHistoricalSource = false }: ExchangeSnapshotOptions = {}): Promise<ExchangeRateSnapshot> {
   const settings = await getExchangeRateSettings();
   const finalCurrency = requireText(currency || input.currency, "币种").toUpperCase();
   if (!CURRENCIES.includes(finalCurrency)) {
-    const error = new Error("请选择有效币种");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效币种", 400, "CURRENCY_REQUIRED");
   }
   const exchangeRate = requirePositive(input.exchangeRate, "汇率");
   const exchangeRateDate = normalizeDateText(input.exchangeRateDate || input.rateDate || defaultDate);
   const exchangeRateSource = optional(input.exchangeRateSource) || (finalCurrency === "CNY" ? "系统" : "手动");
-  const exchangeRateType = EXCHANGE_RATE_TYPES.includes(input.exchangeRateType)
-    ? input.exchangeRateType
-    : (allowHistoricalSource && input.exchangeRateType === "历史录入" ? "历史录入" : settings.rateType);
+  const requestedExchangeRateType = String(input.exchangeRateType || "");
+  const exchangeRateType = EXCHANGE_RATE_TYPES.includes(requestedExchangeRateType)
+    ? requestedExchangeRateType
+    : (allowHistoricalSource && requestedExchangeRateType === "历史录入" ? "历史录入" : settings.rateType);
   if (finalCurrency === "CNY" && Math.abs(exchangeRate - 1) > 0.000001) {
-    const error = new Error("人民币汇率必须等于 1");
-    error.status = 400;
-    throw error;
+    throw codedError("人民币汇率必须等于 1", 400, "CNY_RATE_MUST_BE_ONE");
   }
   if (finalCurrency !== "CNY" && Math.abs(exchangeRate - 1) <= 0.000001 && !(actor?.role === "管理员" && input.manualRateConfirmed === true)) {
-    const error = new Error("非人民币汇率不能保存为 1，除非管理员手动确认");
-    error.status = 400;
-    throw error;
+    throw codedError("非人民币汇率不能保存为 1，除非管理员手动确认", 400, "FOREIGN_RATE_CONFIRM_REQUIRED");
   }
   if (exchangeRateSource === "历史录入" && !allowHistoricalSource) {
-    const error = new Error("不能为新记录伪造历史录入汇率来源");
-    error.status = 403;
-    throw error;
+    throw codedError("不能为新记录伪造历史录入汇率来源", 403, "HISTORICAL_RATE_FORBIDDEN");
   }
   if (finalCurrency !== "CNY" && EXCHANGE_RATE_SOURCES.includes(exchangeRateSource)) {
     const cached = await findCachedExchangeRate(finalCurrency, exchangeRateDate, exchangeRateType, exchangeRateSource, true);
     const cachedRate = Number(cached?.rateToCny || 0);
     if (!cached || Math.abs(cachedRate - exchangeRate) > 0.000001) {
-      const error = new Error("官方汇率必须来自系统缓存，请先刷新汇率后再保存。");
-      error.status = 400;
-      throw error;
+      throw codedError("官方汇率必须来自系统缓存，请先刷新汇率后再保存。", 400, "OFFICIAL_RATE_CACHE_REQUIRED");
     }
   }
-  if (finalCurrency !== "CNY" && exchangeRateSource === "手动" && !["管理员", "财务"].includes(actor?.role)) {
-    const error = new Error("当前用户只能使用系统自动汇率");
-    error.status = 403;
-    throw error;
+  const actorRole = actor?.role || "";
+  if (finalCurrency !== "CNY" && exchangeRateSource === "手动" && !["管理员", "财务"].includes(actorRole)) {
+    throw codedError("当前用户只能使用系统自动汇率", 403, "MANUAL_RATE_FORBIDDEN");
   }
-  if (finalCurrency !== "CNY" && !settings.allowManualEdit && exchangeRateSource === "手动" && actor?.role !== "管理员") {
-    const error = new Error("系统设置不允许手动修改汇率，请使用系统自动汇率");
-    error.status = 403;
-    throw error;
+  if (finalCurrency !== "CNY" && !settings.allowManualEdit && exchangeRateSource === "手动" && actorRole !== "管理员") {
+    throw codedError("系统设置不允许手动修改汇率，请使用系统自动汇率", 403, "MANUAL_RATE_DISABLED");
   }
   return {
     currency: finalCurrency,

@@ -47,6 +47,7 @@ const frontendAggregateStatusSource = logisticsModule.match(/function aggregateC
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
 const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction parseXhrJson/)?.[0] || "";
 const backendAggregateStatusSource = backend.match(/export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/)?.[0] || "";
+const submitLogisticsExpenseBillSource = backend.match(/export async function submitLogisticsExpenseBill[\s\S]*?\n}\n\nexport async function batchUpdateLogisticsExpenses/)?.[0] || "";
 const reviewLogisticsExpenseBillsSource = backend.match(/export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n\nasync function approveLogisticsExpenseBillRowsInTransaction/)?.[0] || "";
 const approveLogisticsExpenseBillRowsSource = backend.match(/async function approveLogisticsExpenseBillRowsInTransaction[\s\S]*?\n}\n\nasync function updateLogisticsExpenseCostIds/)?.[0] || "";
 const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
@@ -537,8 +538,11 @@ test("draft logistics expense bills can be submitted for review", () => {
   assert.match(backend, /submittedAt = new Date\(\)/);
   assert.match(backend, /rejectReason: null/);
   assert.match(backend, /void runNonCriticalTask\("物流费用提交审核日志写入"/);
-  assert.match(backend, /bill: serializeLogisticsExpenseBill\(savedRows\)/);
-  assert.match(backend, /expenses: savedRows\.map\(serializeLogisticsExpense\)/);
+  assert.match(submitLogisticsExpenseBillSource, /updatedIds: ids/);
+  assert.match(submitLogisticsExpenseBillSource, /console\.warn\("submit-audit-slow-log"/);
+  assert.match(submitLogisticsExpenseBillSource, /durationMs/);
+  assert.doesNotMatch(submitLogisticsExpenseBillSource, /loadLogisticsExpenseBillRowsForAction/);
+  assert.doesNotMatch(submitLogisticsExpenseBillSource, /serializeLogisticsExpenseBill\(savedRows\)|savedRows\.map\(serializeLogisticsExpense\)/);
   assert.match(logisticsModule, /submitDraftExpenseBill/);
   assert.match(logisticsModule, /action: "submitBill"/);
   assert.match(logisticsModule, /timeoutMs: 10000/);

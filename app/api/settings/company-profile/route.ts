@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, readCompanyProfileSettings, saveCompanyProfileSettings } from "../../../../lib/platform-db";
+import { apiError, getActor, ok, parseJsonBody, readCompanyProfileSettings, saveCompanyProfileSettings } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const settings = await saveCompanyProfileSettings(request, actor, body);
     return ok({ success: true, settings, message: "公司资料已保存" });
   } catch (error: unknown) {

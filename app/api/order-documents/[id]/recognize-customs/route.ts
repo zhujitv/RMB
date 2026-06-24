@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, recognizeUploadedCustomsDocument } from "../../../../../lib/platform-db";
+import { apiError, getActor, ok, parseJsonBody, recognizeUploadedCustomsDocument } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await parseJsonBody(request, { allowEmpty: true });
     const result = await recognizeUploadedCustomsDocument(request, actor, id, {
       confirmOverride: body.confirmOverride === true,
     }) as CustomsRecognitionRouteResult;

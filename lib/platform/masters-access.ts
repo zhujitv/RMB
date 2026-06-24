@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from "../prisma";
+import type { OrderDocumentType, Prisma } from "../generated/prisma/client.js";
 import {
   CUSTOMER_VIEW_ALL_ROLES,
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
@@ -14,7 +14,33 @@ import {
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
 
-export async function assertDomesticLogisticsSupplier(supplierId) {
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+
+type ClaimInput = Record<string, unknown>;
+type SalespersonInput = Record<string, unknown>;
+type CustomerLike = { salespersonUserId?: string | null } | null | undefined;
+type DomesticOrderLike = {
+  orderNo?: string | null;
+  blNo?: string | null;
+  customer?: CustomerLike;
+  logisticsSuppliers?: Array<{ supplierId?: string | null } | null> | null;
+};
+type ExternalLogisticsActor = Exclude<ActorLike, null | undefined> & { supplierId: string };
+
+function actorId(actor: ActorLike) {
+  return nonEmpty(actor?.id);
+}
+
+function actorRole(actor: ActorLike) {
+  return nonEmpty(actor?.role);
+}
+
+export async function assertDomesticLogisticsSupplier(supplierId: string) {
   const { assertSupplierActive } = await import("./supplier-masters");
   const supplier = await assertSupplierActive(supplierId);
   if (!DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
@@ -38,7 +64,7 @@ export async function defaultOrderLogisticsSupplier() {
   });
 }
 
-export async function syncOrderLogisticsSuppliers(orderId, supplierIds = [], actor = null) {
+export async function syncOrderLogisticsSuppliers(orderId: string, supplierIds: unknown[] = [], actor: ActorLike = null) {
   const { getExchangeRateSettings } = await import("./shared-exchange");
   const { normalizedStringArray } = await import("./shared-serialization");
   const settings = await getExchangeRateSettings();
@@ -71,26 +97,26 @@ export async function syncOrderLogisticsSuppliers(orderId, supplierIds = [], act
   ]);
 }
 
-export function isInternalLogisticsOperator(actor) {
-  return actor?.role === LEGACY_LOGISTICS_OPERATOR_ROLE && !actor.supplierId;
+export function isInternalLogisticsOperator(actor: ActorLike) {
+  return actorRole(actor) === LEGACY_LOGISTICS_OPERATOR_ROLE && !actor?.supplierId;
 }
 
-export function isExternalLogisticsSupplierAccount(actor) {
-  return [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role) && Boolean(actor.supplierId);
+export function isExternalLogisticsSupplierAccount(actor: ActorLike): actor is ExternalLogisticsActor {
+  return [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actorRole(actor)) && Boolean(actor?.supplierId);
 }
 
-export function canAccessDomesticLogisticsOrder(actor, order) {
+export function canAccessDomesticLogisticsOrder(actor: ActorLike, order: DomesticOrderLike | null | undefined) {
   if (!canRead(actor, "domesticLogistics")) return false;
-  if (["管理员", "财务"].includes(actor?.role)) return true;
+  if (["管理员", "财务"].includes(actorRole(actor))) return true;
   if (isInternalLogisticsOperator(actor)) return true;
   if (isExternalLogisticsSupplierAccount(actor)) {
-    return (order.logisticsSuppliers || []).some((row) => row.supplierId === actor.supplierId);
+    return (order?.logisticsSuppliers || []).some((row) => row?.supplierId === actor.supplierId);
   }
-  if (actor?.role === "业务员") return order?.customer?.salespersonUserId === actor.id;
+  if (actor?.role === "业务员") return order?.customer?.salespersonUserId === actorId(actor);
   return false;
 }
 
-export function canClaimDomesticLogisticsOrder(actor, order = {}, input = {}) {
+export function canClaimDomesticLogisticsOrder(actor: ActorLike, order: DomesticOrderLike = {}, input: ClaimInput = {}) {
   if (!isInternalLogisticsOperator(actor)) return false;
   const inputOrderNo = nonEmpty(input.orderNo || input.order_no);
   const inputBlNo = nonEmpty(input.blNo || input.billOfLadingNo || input.bill_of_lading_no);
@@ -100,81 +126,87 @@ export function canClaimDomesticLogisticsOrder(actor, order = {}, input = {}) {
   );
 }
 
-export function canUseDomesticLogisticsDocumentScope(actor, documentType) {
-  return canRead(actor, "domesticLogistics") && DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(documentType);
+export function canUseDomesticLogisticsDocumentScope(actor: ActorLike, documentType: string) {
+  return canRead(actor, "domesticLogistics") && DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(documentType as OrderDocumentType);
 }
 
-export function canViewAllCustomers(actor) {
+export function canViewAllCustomers(actor: ActorLike) {
   const permissions = effectivePermissions(actor);
-  return CUSTOMER_VIEW_ALL_ROLES.includes(actor?.role) || (canRead(actor, "customers") && permissions.dataScope === "ALL");
+  return CUSTOMER_VIEW_ALL_ROLES.includes(actorRole(actor)) || (canRead(actor, "customers") && permissions.dataScope === "ALL");
 }
 
-export function customerAccessWhere(actor) {
+export function customerAccessWhere(actor: ActorLike): Prisma.CustomerWhereInput {
   if (!actor) return {};
   if (canViewAllCustomers(actor)) return {};
   if (actor.role === "业务员") return { salespersonUserId: actor.id };
   return { id: "__no_customer_access__" };
 }
 
-export async function assertCustomerScope(actor, customerId) {
+export async function assertCustomerScope(actor: ActorLike, customerId: string) {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, deletedAt: null },
     include: { salesperson: true },
   });
   if (!customer) {
-    const error = new Error("请选择有效客户");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效客户", 400, "CUSTOMER_REQUIRED");
   }
-  if (!canViewAllCustomers(actor) && customer.salespersonUserId !== actor.id) {
-    const error = new Error("无权限使用该客户");
-    error.status = 403;
-    throw error;
+  if (!canViewAllCustomers(actor) && customer.salespersonUserId !== actorId(actor)) {
+    throw codedError("无权限使用该客户", 403, "CUSTOMER_PERMISSION_DENIED");
   }
   return customer;
 }
 
-export async function resolveSalespersonUserId(input, actor, customer, before = null) {
-  if (actor.role === "业务员") return actor.id;
+export async function resolveSalespersonUserId(
+  input: SalespersonInput,
+  actor: ActorLike,
+  customer: CustomerLike,
+  before: { salespersonUserId?: string | null } | null = null,
+) {
+  if (actor?.role === "业务员") return actorId(actor);
   const requestedId = String(input.salespersonUserId || input.salespersonId || "").trim();
   if (requestedId) {
     const user = await prisma.user.findFirst({ where: { id: requestedId, isActive: true } });
     if (!user) {
-      const error = new Error("请选择有效业务员");
-      error.status = 400;
-      throw error;
+      throw codedError("请选择有效业务员", 400, "SALESPERSON_REQUIRED");
     }
     return user.id;
   }
-  return before?.salespersonUserId || customer.salespersonUserId || actor.id;
+  return before?.salespersonUserId || customer?.salespersonUserId || actorId(actor);
 }
 
-export async function resolveCustomerSalespersonUserId(input, actor, before = null) {
-  if (actor.role === "业务员") return actor.id;
+export async function resolveCustomerSalespersonUserId(
+  input: SalespersonInput,
+  actor: ActorLike,
+  before: { salespersonUserId?: string | null } | null = null,
+) {
+  if (actor?.role === "业务员") return actorId(actor);
   if (!canWrite(actor, "customers")) return before?.salespersonUserId || null;
   const requestedId = String(input.salespersonUserId || "").trim();
   if (!requestedId) return null;
   const user = await prisma.user.findFirst({ where: { id: requestedId, isActive: true } });
   if (!user) {
-    const error = new Error("请选择有效负责业务员");
-    error.status = 400;
-    throw error;
+    throw codedError("请选择有效负责业务员", 400, "SALESPERSON_REQUIRED");
   }
   return user.id;
 }
 
-export function costAccessWhere(actor) {
+export function costAccessWhere(actor: ActorLike): Prisma.OrderCostWhereInput {
   if (!canRead(actor, "costs")) return { id: "__no_cost_access__" };
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "ALL") return {};
   if (scope === "OWN") {
-    return { order: { is: { customer: { is: { salespersonUserId: actor.id } } } } };
+    const currentActorId = actorId(actor);
+    if (!currentActorId) return { id: "__no_cost_access__" };
+    return { order: { is: { customer: { is: { salespersonUserId: currentActorId } } } } };
   }
-  if (scope === "OWN_COST") return { createdById: actor.id };
+  if (scope === "OWN_COST") {
+    const currentActorId = actorId(actor);
+    return currentActorId ? { createdById: currentActorId } : { id: "__no_cost_access__" };
+  }
   return { id: "__no_cost_access__" };
 }
 
-export function documentOrderListAccessWhere(actor, documentType) {
+export function documentOrderListAccessWhere(actor: ActorLike, documentType: string): Prisma.OrderDocumentWhereInput {
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "ALL") return {};
   if (scope === "OWN_COST") return { order: { is: orderAccessWhere(actor) } };

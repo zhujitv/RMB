@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, listCostOrderSummaries, listCostsPage, ok, saveCost, saveCosts } from "../../../lib/platform-db";
+import { apiError, getActor, listCostOrderSummaries, listCostsPage, ok, parseJsonBody, saveCost, saveCosts } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await getActor(request);
-    const body = (await request.json()) as { items?: unknown[] } & Record<string, unknown>;
+    const body = await parseJsonBody(request) as { items?: unknown[] } & Record<string, unknown>;
     if (Array.isArray(body.items)) {
       return ok({ success: true, costs: await saveCostsTyped(request, actor, body) });
     }
