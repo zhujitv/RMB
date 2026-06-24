@@ -86,7 +86,7 @@ export async function listDomesticLogisticsOrders(query, actor) {
   });
   return orders.filter((order) => canAccessDomesticLogisticsOrder(actor, order))
     .sort(sortDomesticLogisticsOrders)
-    .map(serializeDomesticLogisticsOrder);
+    .map((order) => serializeDomesticLogisticsOrder(order, actor));
 }
 
 async function getDomesticLogisticsOrderForActor(orderId, actor, input = {}) {

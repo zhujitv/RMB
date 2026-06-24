@@ -350,6 +350,10 @@ export function LogisticsFeesModule({
   embedded = false,
   title = "物流费用录入",
   initialStatus = "",
+  sectionId = "",
+  focusBillId = "",
+  focusKeyword = "",
+  focusToken = 0,
   hideCreateAction = false,
   refreshToken = 0,
   currentUserRole = "",
@@ -359,6 +363,10 @@ export function LogisticsFeesModule({
   embedded?: boolean;
   title?: string;
   initialStatus?: string;
+  sectionId?: string;
+  focusBillId?: string;
+  focusKeyword?: string;
+  focusToken?: number;
   hideCreateAction?: boolean;
   refreshToken?: number;
   currentUserRole?: string;
@@ -416,8 +424,10 @@ export function LogisticsFeesModule({
       setSelectedBillIds((current) => current.filter((id) => nextRows.some((row) => row.id === id && logisticsExpenseBillCanApprove(row))));
       setTotal(Number(result.total || 0));
       setPage(Number(result.page || nextPage));
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取物流费用失败");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -433,6 +443,34 @@ export function LogisticsFeesModule({
     void loadExpenses(1, submittedKeyword, status, costType);
     void loadStatement(statementMonth);
   }, [refreshToken]);
+
+  useEffect(() => {
+    if (!focusToken) return;
+    const nextKeyword = focusKeyword.trim();
+    setKeyword(nextKeyword);
+    setSubmittedKeyword(nextKeyword);
+    setStatus("");
+    setCostType("");
+    setCreateOpen(false);
+    setNotice("");
+    void loadExpenses(1, nextKeyword, "", "").then((nextRows) => {
+      const matched = nextRows.find((row) => row.id === focusBillId)
+        || nextRows.find((row) => (
+          row.orderNo === nextKeyword
+          || row.blNo === nextKeyword
+          || row.billOfLadingNo === nextKeyword
+          || row.orderId === nextKeyword
+        ))
+        || nextRows[0];
+      if (!matched) {
+        setExpandedId("");
+        setNotice("未找到对应物流费用账单，可在本区新增物流费用。");
+        return;
+      }
+      setExpandedId(matched.id);
+      setNotice("已打开对应物流费用账单。");
+    });
+  }, [focusToken]);
 
   useEffect(() => {
     const value = keyword.trim();
@@ -797,7 +835,7 @@ export function LogisticsFeesModule({
   }, { approved: 0, invoiced: 0, pending: 0, paid: 0 });
 
   return (
-    <section className={`${embedded ? styles.subModuleCard : styles.moduleCard} ${styles.logisticsTypographyScope}`}>
+    <section id={sectionId || undefined} className={`${embedded ? styles.subModuleCard : styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
         <div>
           <h2>{title}</h2>

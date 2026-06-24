@@ -1969,6 +1969,81 @@
   color: #64748b;
 }
 
+.logisticsFeeStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.logisticsFeeStatusBadge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.logisticsFeeStatusMuted {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.logisticsFeeStatusDraft {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.logisticsFeeStatusPending {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.logisticsFeeStatusApproved,
+.logisticsFeeStatusPaid {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.logisticsFeeStatusRejected {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.logisticsFeeStatusInvoice {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.logisticsFeeStatusUploaded {
+  border-color: #a5f3fc;
+  background: #ecfeff;
+  color: #0e7490;
+}
+
+.logisticsFeeStatusPayment {
+  border-color: #fde68a;
+  background: #fefce8;
+  color: #a16207;
+}
+
+.logisticsFeeStatusPartialPayment {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #854d0e;
+}
+
 .rowDetailButton {
   height: 32px;
   border: 1px solid #dbe1ea;

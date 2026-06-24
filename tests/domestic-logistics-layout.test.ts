@@ -10,10 +10,12 @@ const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8")
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
-  for (const label of ["订单号", "客户简称", "到达地", "运输货物名称", "物流状态", "详情"]) {
+  for (const label of ["订单号", "客户简称", "到达地", "运输货物名称", "物流状态", "费用录入状态", "详情"]) {
     assert.match(moduleSource, new RegExp(`<th>${label}</th>`));
   }
-  assert.match(moduleSource, /<td colSpan=\{6\}>/);
+  assert.match(moduleSource, /<td colSpan=\{7\}>/);
+  assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
+  assert.match(moduleSource, /focusBillId=\{expenseFocus\.billId\}/);
 });
 
 test("domestic logistics detail keeps per-order fee entry and customs uploads", () => {
@@ -22,6 +24,14 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
   assert.match(moduleSource, /集装箱运输明细/);
   assert.match(moduleSource, /集装箱管理/);
   assert.match(moduleSource, /出口发票备注/);
+});
+
+test("domestic logistics list exposes logistics fee entry status from backend", () => {
+  assert.match(domesticLogisticsOps, /logisticsExpenses: \{/);
+  assert.match(domesticLogisticsOps, /LOGISTICS_EXPENSE_STATUS_PRIORITY/);
+  assert.match(domesticLogisticsOps, /domesticLogisticsExpenseStatusSummary/);
+  assert.match(domesticLogisticsOps, /logisticsExpenseStatus: expenseStatus\.status/);
+  assert.match(domesticLogisticsOps, /logisticsExpenseBillId: expenseStatus\.billId/);
 });
 
 test("domestic logistics transport detail keeps multi-container fields", () => {

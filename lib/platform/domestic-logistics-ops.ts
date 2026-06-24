@@ -63,6 +63,20 @@ export function domesticLogisticsOrderInclude() {
       include: { supplier: true },
       orderBy: [{ assignedAt: "desc" }],
     },
+    logisticsExpenses: {
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        orderId: true,
+        supplierId: true,
+        auditStatus: true,
+        invoiceStatus: true,
+        paymentStatus: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    },
   };
 }
 
@@ -217,6 +231,84 @@ function domesticLogisticsStatusText(info = null) {
   return info.remarkText ? "已提交" : "未完成";
 }
 
+const LOGISTICS_EXPENSE_STATUS_PRIORITY = {
+  已驳回: 10,
+  草稿: 20,
+  待审核: 30,
+  待开票: 40,
+  已上传发票: 50,
+  待付款: 60,
+  部分付款: 70,
+  已付款: 80,
+  审核通过: 90,
+  未录入: 100,
+};
+
+function normalizedDomesticExpenseStatus(value = "") {
+  const text = String(value || "").trim();
+  if (["未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分上传发票", "部分上传", "部分已上传", "部分已确认"].includes(text)) {
+    return "待开票";
+  }
+  if (["已上传", "已上传发票"].includes(text)) return "已上传发票";
+  if (["部分已付款"].includes(text)) return "部分付款";
+  if (["部分待付款"].includes(text)) return "待付款";
+  return text;
+}
+
+function domesticLogisticsExpenseBillId(order = {}, expense = {}) {
+  return `bill:${expense.orderId || order.id || "order"}:${order.blNo || order.orderNo || "no-bl"}`;
+}
+
+function domesticLogisticsExpenseDisplayStatus(expense = {}) {
+  const auditStatus = normalizedDomesticExpenseStatus(expense.auditStatus || "草稿");
+  if (["已驳回", "草稿", "待审核"].includes(auditStatus)) return auditStatus;
+  const invoiceStatus = normalizedDomesticExpenseStatus(expense.invoiceStatus || "");
+  if (invoiceStatus === "待开票") return "待开票";
+  if (invoiceStatus === "已上传发票") return "已上传发票";
+  const paymentStatus = normalizedDomesticExpenseStatus(expense.paymentStatus || "");
+  if (["待付款", "部分付款", "已付款"].includes(paymentStatus)) return paymentStatus;
+  return auditStatus === "审核通过" ? "审核通过" : "待开票";
+}
+
+function logisticsExpenseUpdatedAtValue(expense = {}) {
+  const time = new Date(expense.updatedAt || expense.createdAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function domesticLogisticsExpenseStatusSummary(order = {}, actor = null) {
+  const expenses = (order.logisticsExpenses || []).filter((expense) => {
+    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actor?.role) && actor?.supplierId) {
+      return expense.supplierId === actor.supplierId;
+    }
+    return true;
+  });
+  if (!expenses.length) {
+    return {
+      status: "未录入",
+      billId: "",
+      updatedAt: null,
+      count: 0,
+    };
+  }
+  const ranked = expenses.map((expense) => {
+    const status = domesticLogisticsExpenseDisplayStatus(expense);
+    return {
+      status,
+      billId: domesticLogisticsExpenseBillId(order, expense),
+      updatedAt: expense.updatedAt || expense.createdAt || null,
+      count: expenses.length,
+      rank: LOGISTICS_EXPENSE_STATUS_PRIORITY[status] || 999,
+      updatedAtValue: logisticsExpenseUpdatedAtValue(expense),
+    };
+  }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
+  return ranked[0] || {
+    status: "未录入",
+    billId: "",
+    updatedAt: null,
+    count: 0,
+  };
+}
+
 function domesticLogisticsSortRank(order = {}) {
   const info = (order.domesticLogisticsInfos || [])[0];
   if (!info) return 1;
@@ -238,10 +330,11 @@ export function sortDomesticLogisticsOrders(a = {}, b = {}) {
   return dateSortValue(b.createdAt) - dateSortValue(a.createdAt);
 }
 
-export function serializeDomesticLogisticsOrder(order) {
+export function serializeDomesticLogisticsOrder(order, actor = null) {
   const info = serializeDomesticLogisticsInfo((order.domesticLogisticsInfos || [])[0]);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
+  const expenseStatus = domesticLogisticsExpenseStatusSummary(order, actor);
   return {
     id: order.id,
     orderId: order.id,
@@ -254,6 +347,11 @@ export function serializeDomesticLogisticsOrder(order) {
     destinationCountry: order.customer?.country || order.country || "",
     destinationPort: "",
     logisticsStatus: domesticLogisticsStatusText(info),
+    logisticsExpenseStatus: expenseStatus.status,
+    logisticsExpenseStatusLabel: expenseStatus.status,
+    logisticsExpenseBillId: expenseStatus.billId,
+    logisticsExpenseCount: expenseStatus.count,
+    logisticsExpenseUpdatedAt: expenseStatus.updatedAt,
     submittedAt: info?.submittedAt || null,
     domesticLogisticsInfo: info,
     documents: (order.documents || []).map((document) => serializeOrderDocument(document, order)),

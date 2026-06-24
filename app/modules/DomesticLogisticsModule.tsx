@@ -101,6 +101,10 @@ type DomesticLogisticsRow = {
   customerFullName?: string;
   customerShortName?: string;
   logisticsStatus?: string;
+  logisticsExpenseStatus?: string;
+  logisticsExpenseStatusLabel?: string;
+  logisticsExpenseBillId?: string;
+  logisticsExpenseCount?: number;
   submittedAt?: string | null;
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   documents?: DomesticLogisticsDocument[];
@@ -195,6 +199,7 @@ export function DomesticLogisticsModule({
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
+  const [expenseFocus, setExpenseFocus] = useState({ token: 0, billId: "", keyword: "" });
   const [uploadingKey, setUploadingKey] = useState("");
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const {
@@ -311,6 +316,27 @@ export function DomesticLogisticsModule({
     setFeeEntryOrderId("");
     setNotice("");
     void loadRows(submittedKeyword, nextBusinessScope);
+  }
+
+  function openLogisticsExpenseStatus(row: DomesticLogisticsRow) {
+    const status = row.logisticsExpenseStatus || "未录入";
+    setExpandedId(row.id);
+    setEditingOrderId("");
+    if (status === "未录入" || !row.logisticsExpenseBillId) {
+      setFeeEntryOrderId(row.id);
+      setNotice("该订单暂未创建物流费用账单，可在此录入费用。");
+      return;
+    }
+    setFeeEntryOrderId("");
+    setNotice("已定位到对应物流费用账单。");
+    setExpenseFocus((current) => ({
+      token: current.token + 1,
+      billId: row.logisticsExpenseBillId || "",
+      keyword: row.blNo || row.billOfLadingNo || row.orderNo || "",
+    }));
+    window.setTimeout(() => {
+      document.getElementById("domestic-logistics-fees")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null) {
@@ -456,13 +482,14 @@ export function DomesticLogisticsModule({
               <th>到达地</th>
               <th>运输货物名称</th>
               <th>物流状态</th>
+              <th>费用录入状态</th>
               <th>详情</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : pageRows.length ? pageRows.map((row) => (
               <DomesticLogisticsRows
@@ -490,6 +517,7 @@ export function DomesticLogisticsModule({
                 canCreateLogisticsExpense={canCreateLogisticsExpense}
                 currentUserRole={currentUser.role}
                 currentUserSupplierId={currentUser.supplierId || ""}
+                onOpenExpenseStatus={() => openLogisticsExpenseStatus(row)}
                 onOpenFeeEntry={() => {
                   setExpandedId(row.id);
                   setEditingOrderId("");
@@ -513,7 +541,7 @@ export function DomesticLogisticsModule({
               />
             )) : (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的物流信息订单</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的物流信息订单</div></td>
               </tr>
             )}
           </tbody>
@@ -523,8 +551,12 @@ export function DomesticLogisticsModule({
       <PaginationBar total={rows.length} page={page} totalPages={totalPages} onPage={setPage} />
     </section>
     <LogisticsFeesModule
+      sectionId="domestic-logistics-fees"
       embedded
       refreshToken={expenseRefreshToken}
+      focusBillId={expenseFocus.billId}
+      focusKeyword={expenseFocus.keyword}
+      focusToken={expenseFocus.token}
       currentUserRole={currentUser.role}
       currentUserSupplierId={currentUser.supplierId || ""}
       canCreateExpense={canCreateLogisticsExpense}
@@ -554,6 +586,7 @@ function DomesticLogisticsRows({
   canCreateLogisticsExpense,
   currentUserRole,
   currentUserSupplierId,
+  onOpenExpenseStatus,
   onOpenFeeEntry,
   onCloseFeeEntry,
   onSaved,
@@ -577,6 +610,7 @@ function DomesticLogisticsRows({
   canCreateLogisticsExpense: boolean;
   currentUserRole: string;
   currentUserSupplierId: string;
+  onOpenExpenseStatus: () => void;
   onOpenFeeEntry: () => void;
   onCloseFeeEntry: () => void;
   onSaved: () => void;
@@ -597,11 +631,12 @@ function DomesticLogisticsRows({
         <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
         <td>{info?.cargoDescription || firstItemValue(info, "cargoName") || "-"}</td>
         <td><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
+        <td><DomesticLogisticsExpenseStatusButton row={row} onOpen={onOpenExpenseStatus} /></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
         <tr className={styles.detailRow}>
-          <td colSpan={6}>
+          <td colSpan={7}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
                 {canCreateLogisticsExpense ? (
@@ -1052,6 +1087,43 @@ function CustomsDocumentPanel({
       })}
     </div>
   );
+}
+
+function DomesticLogisticsExpenseStatusButton({
+  row,
+  onOpen,
+}: {
+  row: DomesticLogisticsRow;
+  onOpen: () => void;
+}) {
+  const status = row.logisticsExpenseStatusLabel || row.logisticsExpenseStatus || "未录入";
+  return (
+    <button
+      className={`${styles.logisticsFeeStatusBadge} ${domesticLogisticsExpenseStatusClass(status)}`}
+      type="button"
+      title={status === "未录入" ? "点击录入物流费用" : "点击打开对应物流费用账单"}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen();
+      }}
+    >
+      {status}
+    </button>
+  );
+}
+
+function domesticLogisticsExpenseStatusClass(status = "") {
+  if (status === "未录入") return styles.logisticsFeeStatusMuted;
+  if (status === "草稿") return styles.logisticsFeeStatusDraft;
+  if (status === "待审核") return styles.logisticsFeeStatusPending;
+  if (status === "审核通过") return styles.logisticsFeeStatusApproved;
+  if (status === "已驳回") return styles.logisticsFeeStatusRejected;
+  if (status === "待开票") return styles.logisticsFeeStatusInvoice;
+  if (status === "已上传发票") return styles.logisticsFeeStatusUploaded;
+  if (status === "待付款") return styles.logisticsFeeStatusPayment;
+  if (status === "部分付款") return styles.logisticsFeeStatusPartialPayment;
+  if (status === "已付款") return styles.logisticsFeeStatusPaid;
+  return styles.logisticsFeeStatusMuted;
 }
 
 function firstItemValue(info: DomesticLogisticsInfo | null | undefined, key: keyof TransportItem) {
