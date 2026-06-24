@@ -12,7 +12,7 @@ import {
   nextStandardFilenameForUpload,
   normalizeEmail,
   normalizedCostType,
-  readValidatedPdfUploadFile,
+  readValidatedInvoiceUploadFile,
   runNonCriticalTask,
   validEmail,
   writeAudit,
@@ -247,9 +247,10 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses = []) {
 }
 
 export async function createLogisticsInvoiceDocument(request, actor, expense, file, metadata = {}) {
-  const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "invoice.pdf");
+  const { originalFileName, mimeType, body, fileSize } = await readValidatedInvoiceUploadFile(file, "invoice.pdf");
   const order = expense.order;
   const logisticsCostType = normalizedCostType(expense.cost?.costType || expense.costType);
+  const extension = invoiceFileExtension(mimeType, originalFileName);
   const costContext = { ...(expense.cost || { id: expense.costId }), costType: logisticsCostType };
   const baseStandardFilename = await nextStandardFilenameForUpload(order, "SUPPLIER_INVOICE", {
     cost: costContext,
@@ -258,9 +259,9 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
     supplierId: expense.supplierId,
     relatedModule: "SUPPLIER",
   });
-  const standardFilename = baseStandardFilename.replace(/\.pdf$/i, ".pdf");
+  const standardFilename = baseStandardFilename.replace(/\.pdf$/i, extension);
   const { bucket: r2Bucket } = ensureR2Configured();
-  const storageFileName = safeFileName(`${order.orderNo || order.id}_LOGISTICS_INVOICE_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
+  const storageFileName = safeFileName(`${order.orderNo || order.id}_LOGISTICS_INVOICE_${Date.now()}_${crypto.randomUUID().slice(0, 8)}${extension}`);
   const storageKey = buildOrderDocumentKey({
     orderId: order.id,
     documentType: "SUPPLIER_INVOICE",
@@ -303,6 +304,13 @@ export async function createLogisticsInvoiceDocument(request, actor, expense, fi
     await deleteR2Object(storageKey).catch(() => null);
     throw error;
   }
+}
+
+function invoiceFileExtension(mimeType = "", fileName = "") {
+  const lowerName = String(fileName || "").toLowerCase();
+  if (String(mimeType).toLowerCase() === "image/png" || lowerName.endsWith(".png")) return ".png";
+  if (String(mimeType).toLowerCase() === "image/jpeg" || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return ".jpg";
+  return ".pdf";
 }
 
 export function canUploadLogisticsExpenseInvoice(actor, expense) {

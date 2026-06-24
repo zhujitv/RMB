@@ -495,6 +495,7 @@ type PdfPreviewMetadataResponse = {
 };
 
 type PdfPreviewState = "checking" | "ready" | "failed";
+type PreviewContentKind = "pdf" | "image";
 
 function pdfPreviewStatusMessage(response: Response) {
   if (response.status === 403) return "权限不足，无法预览该文件。";
@@ -511,7 +512,7 @@ function pdfPreviewFileName(document: PdfPreviewDocument | null, fallback = "") 
     || document?.originalName
     || document?.fileName
     || fallback
-    || "PDF 文件"
+    || "文件"
   );
 }
 
@@ -552,10 +553,11 @@ export function PdfPreviewDrawer({
   initialFileName?: string;
   onClose: () => void;
 }) {
-  const [fileName, setFileName] = useState(initialFileName || "PDF 文件");
+  const [fileName, setFileName] = useState(initialFileName || "文件");
   const [error, setError] = useState("");
   const [previewState, setPreviewState] = useState<PdfPreviewState>("checking");
   const [previewError, setPreviewError] = useState("");
+  const [previewKind, setPreviewKind] = useState<PreviewContentKind>("pdf");
   const encodedId = encodeURIComponent(documentId);
   const previewUrl = `/api/order-documents/${encodedId}/preview`;
   const downloadUrl = `/api/order-documents/${encodedId}/download`;
@@ -576,7 +578,7 @@ export function PdfPreviewDrawer({
         setError("");
       } catch (metadataError) {
         if (cancelled) return;
-        setFileName(initialFileName || "PDF 文件");
+        setFileName(initialFileName || "文件");
         setError(metadataError instanceof Error ? metadataError.message : "读取文件信息失败");
       }
     }
@@ -601,8 +603,13 @@ export function PdfPreviewDrawer({
         });
         const contentType = response.headers.get("Content-Type") || "";
         if (!response.ok) throw new Error(pdfPreviewStatusMessage(response));
-        if (!contentType.toLowerCase().includes("application/pdf")) {
-          throw new Error("预览接口未返回 PDF 文件流，请下载文件查看。");
+        const normalizedContentType = contentType.toLowerCase();
+        if (normalizedContentType.includes("application/pdf")) {
+          if (!cancelled) setPreviewKind("pdf");
+        } else if (normalizedContentType.includes("image/jpeg") || normalizedContentType.includes("image/png")) {
+          if (!cancelled) setPreviewKind("image");
+        } else {
+          throw new Error("预览接口未返回可预览的文件流，请下载文件查看。");
         }
         if (!cancelled) setPreviewState("ready");
       } catch (previewLoadError) {
@@ -620,7 +627,7 @@ export function PdfPreviewDrawer({
 
   return (
     <SideDetailDrawer
-      ariaLabel={`PDF 预览：${fileName}`}
+      ariaLabel={`文件预览：${fileName}`}
       title={fileName}
       subtitle={error || undefined}
       surfaceClassName={styles.pdfPreviewDrawer}
@@ -633,18 +640,31 @@ export function PdfPreviewDrawer({
     >
       <div className={styles.pdfPreviewFrameWrap}>
         {previewState === "checking" ? (
-          <div className={styles.pdfPreviewLoading}>正在加载 PDF 预览...</div>
+          <div className={styles.pdfPreviewLoading}>正在加载文件预览...</div>
         ) : null}
         {previewState === "ready" ? (
-          <iframe
-            src={previewUrl}
-            title={fileName}
-            className={styles.pdfPreviewFrame}
-            onError={() => {
-              setPreviewState("failed");
-              setPreviewError("在线预览失败，请下载文件查看。");
-            }}
-          />
+          previewKind === "image" ? (
+            <div className={styles.imagePreviewFrame}>
+              <img
+                src={previewUrl}
+                alt={fileName}
+                onError={() => {
+                  setPreviewState("failed");
+                  setPreviewError("在线预览失败，请下载文件查看。");
+                }}
+              />
+            </div>
+          ) : (
+            <iframe
+              src={previewUrl}
+              title={fileName}
+              className={styles.pdfPreviewFrame}
+              onError={() => {
+                setPreviewState("failed");
+                setPreviewError("在线预览失败，请下载文件查看。");
+              }}
+            />
+          )
         ) : null}
         {previewState === "failed" ? (
           <div className={styles.pdfPreviewFallback}>

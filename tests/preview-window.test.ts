@@ -21,7 +21,7 @@ const sharedSerialization = readFileSync("lib/platform/shared-serialization.ts",
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
-  assert.match(previewRoute, /"Content-Type": "application\/pdf"/);
+  assert.match(previewRoute, /"Content-Type": mimeType \|\| "application\/pdf"/);
   assert.match(previewRoute, /preferredOrderDocumentFileName\(document\)/);
   assert.match(previewRoute, /pdfContentDispositionHeader\("inline", fileName\)/);
   assert.match(previewRoute, /export async function HEAD/);
@@ -38,7 +38,7 @@ test("preview route returns inline file streams with cache and nosniff headers",
 
 test("download route returns attachment file streams", () => {
   assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
-  assert.match(downloadRoute, /"Content-Type": "application\/pdf"/);
+  assert.match(downloadRoute, /"Content-Type": mimeType \|\| "application\/pdf"/);
   assert.match(downloadRoute, /preferredOrderDocumentFileName\(document\)/);
   assert.match(downloadRoute, /pdfContentDispositionHeader\("attachment", fileName\)/);
   assert.doesNotMatch(downloadRoute, /searchParams\.get\("disposition"\)/);
@@ -50,7 +50,7 @@ test("preview route returns structured JSON errors when stream fails", () => {
   assert.match(previewRoute, /function previewErrorResponse\(error(?:: ErrorLike)?\)/);
   assert.match(previewRoute, /Response\.json\(\{ error: message, code \}/);
   assert.match(previewRoute, /X-Preview-Error-Code/);
-  assert.match(previewRoute, /PDF 预览失败，请下载原文件查看/);
+  assert.match(previewRoute, /文件预览失败，请下载原文件查看/);
 });
 
 test("workspace modules use one PDF preview drawer instead of preview tabs", () => {
@@ -61,7 +61,10 @@ test("workspace modules use one PDF preview drawer instead of preview tabs", () 
   assert.match(sharedComponents, /method: "HEAD"/);
   assert.match(sharedComponents, /Content-Type/);
   assert.match(sharedComponents, /application\/pdf/);
+  assert.match(sharedComponents, /image\/jpeg/);
+  assert.match(sharedComponents, /image\/png/);
   assert.match(sharedComponents, /<iframe[\s\S]*src=\{previewUrl\}/);
+  assert.match(sharedComponents, /styles\.imagePreviewFrame/);
   assert.doesNotMatch(sharedComponents, /<object/);
   assert.doesNotMatch(sharedComponents, /data=\{previewUrl\}/);
   assert.match(sharedComponents, /在线预览失败/);

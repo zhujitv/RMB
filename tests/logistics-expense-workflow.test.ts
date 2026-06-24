@@ -45,7 +45,7 @@ const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpe
 const saveBillDetailsSource = logisticsModule.match(/async function saveBillDetails[\s\S]*?\n  async function deleteExpense/)?.[0] || "";
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
-const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction StatusPill/)?.[0] || "";
+const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction parseXhrJson/)?.[0] || "";
 const backendAggregateStatusSource = backend.match(/export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/)?.[0] || "";
 const reviewLogisticsExpenseBillsSource = backend.match(/export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n\nasync function approveLogisticsExpenseBillRowsInTransaction/)?.[0] || "";
 const approveLogisticsExpenseBillRowsSource = backend.match(/async function approveLogisticsExpenseBillRowsInTransaction[\s\S]*?\n}\n\nasync function updateLogisticsExpenseCostIds/)?.[0] || "";
@@ -144,6 +144,7 @@ test("supplier settings include logistics expense and invoice permissions", () =
 test("invoice upload and confirmation workflow is present", () => {
   assert.match(backend, /uploadLogisticsExpenseInvoice/);
   assert.match(backend, /confirmLogisticsExpenseInvoice/);
+  assert.match(backend, /readValidatedInvoiceUploadFile/);
   assert.doesNotMatch(backend, /LOGISTICS_INVOICE_AMOUNT_EXCEEDS_APPROVED|LOGISTICS_INVOICE_FORCE_REASON_REQUIRED/);
   assert.match(logisticsModule, /invoiceStatus/);
   assert.match(logisticsModule, /已上传发票/);
@@ -190,7 +191,22 @@ test("logistics expense entry prevents Enter-triggered submit and row creation",
   assert.match(logisticsModule, /className=\{styles\.logisticsDetailTableWrap\} onKeyDown=\{preventEnterFormSubmit\}/);
   assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => addExpenseItem\(false\)\}/);
   assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => addExpenseItem\(true\)\}/);
-  assert.match(logisticsModule, /onKeyDown=\{preventEnterFormSubmit\} onClick=\{\(\) => void uploadInvoice\(\)\}/);
+  assert.match(invoiceUploadFormSource, /onKeyDown=\{preventEnterFormSubmit\}/);
+});
+
+test("logistics invoice upload starts on file selection and shows upload progress", () => {
+  assert.match(invoiceUploadFormSource, /onChange=\{handleFileChange\}/);
+  assert.match(invoiceUploadFormSource, /uploadInvoice\(selectedFile\)/);
+  assert.match(invoiceUploadFormSource, /new XMLHttpRequest\(\)/);
+  assert.match(invoiceUploadFormSource, /xhr\.upload\.onprogress/);
+  assert.match(invoiceUploadFormSource, /上传中 \$\{nextProgress\}%/);
+  assert.match(invoiceUploadFormSource, /styles\.invoiceUploadProgressBar/);
+  assert.match(invoiceUploadFormSource, /INVOICE_UPLOAD_ACCEPT/);
+  assert.match(invoiceUploadFormSource, /支持 PDF \/ JPG \/ PNG，最大 20MB。选择文件后自动上传。/);
+  assert.doesNotMatch(invoiceUploadFormSource, /apiJson|fetch\(/);
+  assert.doesNotMatch(invoiceUploadFormSource, />上传发票</);
+  assert.match(workspaceStyles, /\.invoiceUploadStatus\[data-status="uploading"\]/);
+  assert.match(workspaceStyles, /\.invoiceUploadProgressBar span/);
 });
 
 test("logistics expense entry grid keeps compact fixed columns", () => {
@@ -420,7 +436,7 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(backend, /invoiceDocumentId: null/);
   assert.match(logisticsModule, /body\.set\("invoiceGroup", group\.key\)/);
   assert.match(invoiceUploadFormSource, /type="file"/);
-  assert.match(invoiceUploadFormSource, /上传发票/);
+  assert.match(invoiceUploadFormSource, /选择文件后自动上传/);
   assert.doesNotMatch(invoiceUploadFormSource, /body\.set\("invoiceNo"|body\.set\("invoiceDate"|body\.set\("invoiceAmount"|body\.set\("remark"/);
   assert.doesNotMatch(logisticsModule, /发票号：|开票日期：|识别金额：|销售方：|购买方：|自动识别中|识别成功|识别失败/);
   assert.doesNotMatch(backend, /requireText\(formData\.get\("invoiceNo"\)|requirePositive\(formData\.get\("invoiceAmount"\)|请选择开票日期/);

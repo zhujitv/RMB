@@ -121,12 +121,14 @@ test("anonymous auth posts require same-origin checks before processing input", 
 test("all active PDF upload services reuse shared PDF validation", () => {
   assert.match(uploadValidation, /export function assertPdfUploadFileCandidate/);
   assert.match(uploadValidation, /export async function readValidatedPdfUploadFile/);
+  assert.match(uploadValidation, /export async function readValidatedInvoiceUploadFile/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
   assert.match(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
   assert.match(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
   assert.match(orderDocumentsRoute, /assertPdfUploadFileCandidate\(candidate\)/);
   assert.match(orderDocumentsService, /readValidatedPdfUploadFile\(file, "document\.pdf"\)/);
-  assert.match(logisticsInvoiceService, /readValidatedPdfUploadFile\(file, "invoice\.pdf"\)/);
+  assert.match(logisticsInvoiceService, /readValidatedInvoiceUploadFile\(file, "invoice\.pdf"\)/);
+  assert.match(uploadValidation, /if \(mimeType === "application\/pdf"\) return readValidatedPdfUploadFile\(candidate, fallbackName\)/);
 });
 
 test("shared PDF validation rejects active content actions", () => {

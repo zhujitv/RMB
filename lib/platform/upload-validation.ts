@@ -61,3 +61,64 @@ export async function readValidatedPdfUploadFile(candidate, fallbackName = "docu
     fileSize: Number(file.size || body.byteLength || 0),
   };
 }
+
+const INVOICE_IMAGE_SIGNATURES = {
+  "image/png": (body) => body.length >= 8
+    && body[0] === 0x89
+    && body[1] === 0x50
+    && body[2] === 0x4e
+    && body[3] === 0x47
+    && body[4] === 0x0d
+    && body[5] === 0x0a
+    && body[6] === 0x1a
+    && body[7] === 0x0a,
+  "image/jpeg": (body) => body.length >= 4
+    && body[0] === 0xff
+    && body[1] === 0xd8
+    && body[2] === 0xff,
+};
+
+const INVOICE_UPLOAD_EXTENSIONS = new Map([
+  ["application/pdf", ".pdf"],
+  ["image/jpeg", ".jpg"],
+  ["image/png", ".png"],
+]);
+
+export async function readValidatedInvoiceUploadFile(candidate, fallbackName = "invoice.pdf") {
+  if (!(candidate instanceof File)) {
+    throw codedError("请选择发票文件", 400, "FILE_REQUIRED");
+  }
+  const safeOriginalName = safeFileName(candidate.name || fallbackName);
+  const lowerName = safeOriginalName.toLowerCase();
+  const mimeType = String(candidate.type || "").toLowerCase() || invoiceMimeTypeFromName(lowerName);
+  const expectedExtension = INVOICE_UPLOAD_EXTENSIONS.get(mimeType);
+  if (!expectedExtension || ![".pdf", ".jpg", ".jpeg", ".png"].some((suffix) => lowerName.endsWith(suffix))) {
+    throw codedError("文件类型不允许，只能上传 PDF、JPG 或 PNG 发票文件", 400, "FILE_TYPE_NOT_ALLOWED");
+  }
+  if (Number(candidate.size || 0) > MAX_PDF_UPLOAD_BYTES) {
+    throw codedError("文件超过大小限制，最大支持 20MB。", 413, "FILE_TOO_LARGE");
+  }
+  if (mimeType === "application/pdf") return readValidatedPdfUploadFile(candidate, fallbackName);
+
+  const arrayBuffer = await candidate.arrayBuffer();
+  const body = Buffer.from(arrayBuffer);
+  if (body.byteLength > MAX_PDF_UPLOAD_BYTES) {
+    throw codedError("文件超过大小限制，最大支持 20MB。", 413, "FILE_TOO_LARGE");
+  }
+  if (!INVOICE_IMAGE_SIGNATURES[mimeType]?.(body)) {
+    throw codedError("文件格式错误，只能上传有效 JPG 或 PNG 图片", 400, "FILE_SIGNATURE_INVALID");
+  }
+  return {
+    originalFileName: safeOriginalName || safeFileName(fallbackName),
+    mimeType,
+    body,
+    fileSize: Number(candidate.size || body.byteLength || 0),
+  };
+}
+
+function invoiceMimeTypeFromName(fileName) {
+  if (fileName.endsWith(".pdf")) return "application/pdf";
+  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
+  if (fileName.endsWith(".png")) return "image/png";
+  return "";
+}

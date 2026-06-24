@@ -12,11 +12,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await getActor(request);
     const { id } = await params;
-    const { body, document } = await getOrderDocumentDownload(request, actor, id);
+    const { body, document, mimeType } = await getOrderDocumentDownload(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);
     return new Response(body, {
       headers: {
-        "Content-Type": "application/pdf",
+        "Content-Type": mimeType || "application/pdf",
         "Content-Length": String(body.length),
         "Content-Disposition": pdfContentDispositionHeader("attachment", fileName),
         "Cache-Control": "private, max-age=300",

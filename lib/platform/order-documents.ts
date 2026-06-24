@@ -387,7 +387,7 @@ export async function getOrderDocumentDownload(request, actor, id) {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
   }));
-  return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType: previewableOrderDocumentMimeType(document), document: serializeOrderDocument({ ...document, standardFilename }) };
 }
 
 export async function getOrderDocumentMetadata(request, actor, id) {
@@ -412,8 +412,8 @@ export async function getOrderDocumentPreviewMetadata(request, actor, id) {
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
-  const mimeType = String(document.mimeType || "application/pdf").toLowerCase();
-  if (mimeType !== "application/pdf") {
+  const mimeType = previewableOrderDocumentMimeType(document);
+  if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
   if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
@@ -434,8 +434,8 @@ export async function getOrderDocumentPreview(request, actor, id) {
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
-  const mimeType = String(document.mimeType || "application/pdf").toLowerCase();
-  if (mimeType !== "application/pdf") {
+  const mimeType = previewableOrderDocumentMimeType(document);
+  if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
   if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
@@ -448,5 +448,13 @@ export async function getOrderDocumentPreview(request, actor, id) {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
   }));
-  return { body, mimeType: "application/pdf", document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType, document: serializeOrderDocument({ ...document, standardFilename }) };
+}
+
+function previewableOrderDocumentMimeType(document) {
+  return String(document?.mimeType || "application/pdf").toLowerCase();
+}
+
+function isPreviewableOrderDocumentMimeType(mimeType) {
+  return ["application/pdf", "image/jpeg", "image/png"].includes(String(mimeType || "").toLowerCase());
 }

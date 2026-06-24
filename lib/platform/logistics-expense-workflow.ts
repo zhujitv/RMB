@@ -1123,7 +1123,7 @@ export async function uploadLogisticsExpenseInvoice(request, actor, id, formData
   const blocked = targetRows.find((row) => row.auditStatus !== "审核通过" || !row.costId);
   if (blocked) throw codedError("该发票分组包含尚未审核生成正式成本的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_COST_MISSING");
   const file = formData.get("file");
-  if (!file || typeof file.arrayBuffer !== "function") throw codedError("请上传发票 PDF。", 400, "INVOICE_FILE_REQUIRED");
+  if (!file || typeof file.arrayBuffer !== "function") throw codedError("请上传发票文件。", 400, "INVOICE_FILE_REQUIRED");
   const document = await createLogisticsInvoiceDocument(request, actor, before, file, {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
