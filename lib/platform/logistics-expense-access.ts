@@ -125,8 +125,10 @@ type LogisticsSupplierLike = {
 } & UnknownRecord;
 type LogisticsExpenseLike = {
   id?: string;
+  billId?: string | null;
   orderId?: string;
   supplierId?: string;
+  bill?: LogisticsBillLike | null;
   costId?: string | null;
   supplierNameSnapshot?: string | null;
   supplier?: LogisticsSupplierLike | null;
@@ -165,6 +167,28 @@ type LogisticsExpenseLike = {
   createdAt?: unknown;
   updatedAt?: unknown;
   order?: LogisticsOrderLike | null;
+} & UnknownRecord;
+type LogisticsBillLike = {
+  id?: string;
+  billKey?: string | null;
+  orderId?: string | null;
+  supplierId?: string | null;
+  billOfLadingNo?: string | null;
+  auditStatus?: string | null;
+  invoiceStatus?: string | null;
+  paymentStatus?: string | null;
+  submittedBy?: unknown;
+  submittedAt?: unknown;
+  reviewedBy?: unknown;
+  reviewedAt?: unknown;
+  reviewRemark?: string | null;
+  rejectReason?: string | null;
+  invoiceNotifiedAt?: unknown;
+  invoiceNotificationError?: string | null;
+  createdBy?: unknown;
+  updatedBy?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 } & UnknownRecord;
 type LogisticsActor = {
   id?: string | null;
@@ -219,6 +243,14 @@ function exchangeActor(actor: LogisticsActor): { role?: string } | null {
 
 export function includeLogisticsExpenseRelations() {
   return Prisma.validator<Prisma.LogisticsExpenseInclude>()({
+    bill: {
+      include: {
+        submittedBy: true,
+        reviewedBy: true,
+        createdBy: true,
+        updatedBy: true,
+      },
+    },
     order: {
       include: {
         customer: true,
@@ -240,6 +272,29 @@ export function includeLogisticsExpenseRelations() {
     invoiceUploadedBy: true,
     invoiceConfirmedBy: true,
   });
+}
+
+export function logisticsExpenseBillOfLadingNo(order: LogisticsOrderLike = {}) {
+  return nonEmpty(order.blNo || order.orderNo || "no-bl");
+}
+
+export function logisticsExpenseBillKey(orderId: unknown, billOfLadingNo: unknown) {
+  const id = nonEmpty(orderId);
+  const blNo = nonEmpty(billOfLadingNo || "no-bl").toLowerCase();
+  return id ? `${id}::${blNo}` : "";
+}
+
+export function logisticsExpenseBillKeyForOrder(order: LogisticsOrderLike = {}) {
+  return logisticsExpenseBillKey(order.id, logisticsExpenseBillOfLadingNo(order));
+}
+
+function logisticsExpenseBillRecord(expense: LogisticsExpenseLike = {}): LogisticsBillLike {
+  return asRecord(expense.bill) as LogisticsBillLike;
+}
+
+function logisticsExpenseBillField(expense: LogisticsExpenseLike = {}, field: keyof LogisticsBillLike, fallback: unknown = "") {
+  const bill = logisticsExpenseBillRecord(expense);
+  return bill[field] ?? fallback;
 }
 
 function resolveLogisticsExpenseVesselVoyage(order: LogisticsOrderLike = {}) {
@@ -304,8 +359,11 @@ export function logisticsExpenseOrderSummary(order: LogisticsOrderLike = {}) {
 export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
   const orderSummary = logisticsExpenseOrderSummary(expense.order || {});
   const invoiceDocument = expense.invoiceDocument ? serializeOrderDocument(expense.invoiceDocument, expense.order) : null;
+  const bill = logisticsExpenseBillRecord(expense);
+  const auditStatus = nonEmpty(bill.auditStatus || expense.auditStatus || "草稿");
   return {
     id: expense.id,
+    billId: expense.billId || bill.id || "",
     orderId: expense.orderId || "",
     orderNo: orderSummary.orderNo,
     blNo: orderSummary.blNo,
@@ -332,18 +390,21 @@ export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
 	      : Number(expense.billingQuantity || 1),
 	    containerScope: `${expense.billingQuantity == null ? Number(expense.appliedContainerCount || 1) : Number(expense.billingQuantity || 1)}`,
 	    remark: expense.remark || "",
-    auditStatus: expense.auditStatus || "草稿",
+    auditStatus,
     invoiceStatus: expense.invoiceStatus || "未通知",
     paymentStatus: expense.paymentStatus || "待开票",
-    submittedAt: expense.submittedAt || null,
-    reviewedBy: serializeUser(expense.reviewedBy),
-    reviewedAt: expense.reviewedAt || null,
-    rejectedBy: expense.auditStatus === "已驳回" ? serializeUser(expense.reviewedBy) : null,
-    rejectedAt: expense.auditStatus === "已驳回" ? (expense.reviewedAt || null) : null,
-    reviewRemark: expense.reviewRemark || "",
-    rejectReason: expense.rejectReason || "",
-    invoiceNotifiedAt: expense.invoiceNotifiedAt || null,
-    invoiceNotificationError: expense.invoiceNotificationError || "",
+    billInvoiceStatus: bill.invoiceStatus || "",
+    billPaymentStatus: bill.paymentStatus || "",
+    submittedAt: logisticsExpenseBillField(expense, "submittedAt", expense.submittedAt) || null,
+    submittedBy: serializeUser(bill.submittedBy),
+    reviewedBy: serializeUser(bill.reviewedBy || expense.reviewedBy),
+    reviewedAt: logisticsExpenseBillField(expense, "reviewedAt", expense.reviewedAt) || null,
+    rejectedBy: auditStatus === "已驳回" ? serializeUser(bill.reviewedBy || expense.reviewedBy) : null,
+    rejectedAt: auditStatus === "已驳回" ? (logisticsExpenseBillField(expense, "reviewedAt", expense.reviewedAt) || null) : null,
+    reviewRemark: bill.reviewRemark || expense.reviewRemark || "",
+    rejectReason: bill.rejectReason || expense.rejectReason || "",
+    invoiceNotifiedAt: bill.invoiceNotifiedAt || expense.invoiceNotifiedAt || null,
+    invoiceNotificationError: bill.invoiceNotificationError || expense.invoiceNotificationError || "",
     invoiceDocument,
     invoiceDocumentId: expense.invoiceDocumentId || "",
     invoiceUploadedBy: serializeUser(expense.invoiceUploadedBy),
@@ -384,6 +445,9 @@ export function aggregateLogisticsExpenseStatus(rows: UnknownRecord[] = [], fiel
 }
 
 export function logisticsExpenseBillAuditStatus(rows: LogisticsExpenseLike[] = []): string {
+  const billStatuses = rows.map((row) => logisticsExpenseBillRecord(row).auditStatus).filter(Boolean);
+  const uniqueBillStatuses = [...new Set(billStatuses)];
+  if (uniqueBillStatuses.length === 1) return nonEmpty(uniqueBillStatuses[0]);
   const values = rows.map((row) => row.auditStatus || "草稿").filter(Boolean);
   const unique = [...new Set(values)];
   if (!unique.length) return "草稿";
@@ -431,10 +495,13 @@ export function aggregateLogisticsExpenseInvoiceStatus(items: LogisticsExpenseLi
 export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = []) {
   const items = rows.map(serializeLogisticsExpense);
   const first = items[0] || {};
+  const firstRaw = rows[0] || {};
+  const bill = logisticsExpenseBillRecord(firstRaw);
   const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
   const invoiceGroups = logisticsExpenseInvoiceGroups(items);
   return {
-    id: logisticsExpenseBillId(first),
+    id: logisticsExpenseBillId(firstRaw || first),
+    billId: logisticsExpenseBillId(firstRaw || first),
     isBill: true,
     orderId: first.orderId || "",
     orderNo: first.orderNo || "",
@@ -449,15 +516,25 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
     currency: "CNY",
     amount: amountCny,
     amountCny,
-    auditStatus: aggregateLogisticsExpenseStatus(items, "auditStatus"),
-    invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(items),
-    paymentStatus: aggregateLogisticsExpenseStatus(items, "paymentStatus"),
+    auditStatus: bill.auditStatus || aggregateLogisticsExpenseStatus(items, "auditStatus"),
+    invoiceStatus: bill.invoiceStatus || aggregateLogisticsExpenseInvoiceStatus(items),
+    paymentStatus: bill.paymentStatus || aggregateLogisticsExpenseStatus(items, "paymentStatus"),
+    submittedAt: bill.submittedAt || first.submittedAt || null,
+    submittedBy: serializeUser(bill.submittedBy),
+    reviewedBy: serializeUser(bill.reviewedBy),
+    reviewedAt: bill.reviewedAt || first.reviewedAt || null,
+    rejectedBy: (bill.auditStatus || first.auditStatus) === "已驳回" ? serializeUser(bill.reviewedBy) : null,
+    rejectedAt: (bill.auditStatus || first.auditStatus) === "已驳回" ? (bill.reviewedAt || first.reviewedAt || null) : null,
+    reviewRemark: bill.reviewRemark || first.reviewRemark || "",
+    rejectReason: bill.rejectReason || first.rejectReason || "",
+    invoiceNotifiedAt: bill.invoiceNotifiedAt || first.invoiceNotifiedAt || null,
+    invoiceNotificationError: bill.invoiceNotificationError || first.invoiceNotificationError || "",
     itemCount: items.length,
     invoiceGroups,
     items,
     order: first.order || {},
     updatedAt: rows.reduce((latest, row) => {
-      const dateValue = row.updatedAt || row.createdAt || 0;
+      const dateValue = logisticsExpenseBillRecord(row).updatedAt || row.updatedAt || row.createdAt || 0;
       const time = new Date(dateValue instanceof Date || typeof dateValue === "string" || typeof dateValue === "number" ? dateValue : 0).getTime();
       return time > latest ? time : latest;
     }, 0),
@@ -467,6 +544,8 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
 export type LogisticsExpenseBillDto = ReturnType<typeof serializeLogisticsExpenseBill>;
 
 export function logisticsExpenseBillId(expense: LogisticsExpenseLike = {}) {
+  const directBillId = nonEmpty(expense.billId || logisticsExpenseBillRecord(expense).id);
+  if (directBillId) return directBillId;
   const orderSummary = expense.order?.orderId ? expense.order : logisticsExpenseOrderSummary(expense.order || {});
   return `bill:${expense.orderId || orderSummary.orderId || "order"}:${orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "no-bl"}`;
 }
@@ -475,7 +554,7 @@ export function groupLogisticsExpensesByBill(rows: LogisticsExpenseLike[] = []) 
   const groups = new Map<string, LogisticsExpenseLike[]>();
   for (const row of rows) {
     const orderSummary = logisticsExpenseOrderSummary(row.order || {});
-    const key = [row.orderId || orderSummary.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
+    const key = row.billId || logisticsExpenseBillRecord(row).id || [row.orderId || orderSummary.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(row);
   }
@@ -525,7 +604,12 @@ export function logisticsExpenseAccessWhere(actor: LogisticsActor): Prisma.Logis
   const role = actorRole(actor);
   const id = actorId(actor);
   if (role === "管理员") return {};
-  if (role === "财务") return { auditStatus: "审核通过" };
+  if (role === "财务") return {
+    OR: [
+      { bill: { is: { auditStatus: "审核通过" } } },
+      { billId: null, auditStatus: "审核通过" },
+    ],
+  };
   if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: id } } } } };
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
     if (!actor) return { supplierId: "__no_supplier_bound__" };
@@ -560,15 +644,35 @@ export function assertCanConfirmLogisticsInvoice(actor: LogisticsActor) {
 export function logisticsExpenseStatusWhere(status = ""): Prisma.LogisticsExpenseWhereInput {
   const text = nonEmpty(status);
   if (!text || text === "all") return {};
-  if (text === "pending") return { auditStatus: "待审核" };
-  if (text === "approved") return { auditStatus: "审核通过" };
-  if (text === "rejected") return { auditStatus: "已驳回" };
-  if (text === "draft") return { auditStatus: "草稿" };
-  if (text === "toInvoice") return { auditStatus: "审核通过", invoiceStatus: { in: ["未通知", "已通知开票"] } };
-  if (text === "uploaded") return { invoiceStatus: "已上传" };
-  if (text === "confirmedInvoice") return { invoiceStatus: "已确认" };
-  if (LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(text)) return { auditStatus: text };
-  if (LOGISTICS_EXPENSE_INVOICE_STATUSES.includes(text)) return { invoiceStatus: text };
+  const auditWhere = (value: string): Prisma.LogisticsExpenseWhereInput => ({
+    OR: [
+      { bill: { is: { auditStatus: value } } },
+      { billId: null, auditStatus: value },
+    ],
+  });
+  const invoiceWhere = (value: string): Prisma.LogisticsExpenseWhereInput => {
+    const billValue = value === "已上传" ? "已上传发票" : value;
+    return {
+      OR: [
+        { bill: { is: { invoiceStatus: billValue } } },
+        { billId: null, invoiceStatus: value },
+      ],
+    };
+  };
+  if (text === "pending") return auditWhere("待审核");
+  if (text === "approved") return auditWhere("审核通过");
+  if (text === "rejected") return auditWhere("已驳回");
+  if (text === "draft") return auditWhere("草稿");
+  if (text === "toInvoice") return {
+    AND: [
+      auditWhere("审核通过"),
+      { OR: [{ bill: { is: { invoiceStatus: { in: ["未通知", "已通知开票", "待开票", "通知失败", "待开票 / 通知失败"] } } } }, { billId: null, invoiceStatus: { in: ["未通知", "已通知开票"] } }] },
+    ],
+  };
+  if (text === "uploaded") return invoiceWhere("已上传发票");
+  if (text === "confirmedInvoice") return invoiceWhere("已确认");
+  if (LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(text)) return auditWhere(text);
+  if (LOGISTICS_EXPENSE_INVOICE_STATUSES.includes(text)) return invoiceWhere(text);
   return {};
 }
 
@@ -693,9 +797,10 @@ export async function buildLogisticsExpenseData(
     ...input,
     currency: logisticsCostTypeDefaultCurrency(costType) === "USD" ? "USD" : input.currency,
   }, actor, before);
-  const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? before.auditStatus : (input.submit === false ? "草稿" : "待审核")));
+  const beforeAuditStatus = before ? nonEmpty(logisticsExpenseBillRecord(before).auditStatus || before.auditStatus) : "";
+  const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? beforeAuditStatus : (input.submit === false ? "草稿" : "待审核")));
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "待审核";
-  if (before?.auditStatus === "审核通过" && actorRole(actor) !== "管理员") {
+  if (beforeAuditStatus === "审核通过" && actorRole(actor) !== "管理员") {
     throw codedError("已审核通过的费用金额不能修改。", 403, "LOGISTICS_EXPENSE_APPROVED_LOCKED");
   }
   const billingMethod = normalizeLogisticsExpenseBillingMethod(input, before);
@@ -721,14 +826,54 @@ export async function buildLogisticsExpenseData(
 	    remark: optional(input.remark),
     auditStatus,
     submittedAt: auditStatus === "待审核"
-      ? (dateFromInput(before?.submittedAt) || new Date())
-      : dateFromInput(before?.submittedAt),
+      ? (dateFromInput(logisticsExpenseBillRecord(before || {}).submittedAt || before?.submittedAt) || new Date())
+      : dateFromInput(logisticsExpenseBillRecord(before || {}).submittedAt || before?.submittedAt),
     invoiceStatus: before?.invoiceStatus || "未通知",
     paymentStatus: before?.paymentStatus || "待开票",
     rejectReason: auditStatus === "待审核" ? null : before?.rejectReason || null,
     updatedById: currentActorId || null,
     ...(before ? {} : { createdById: currentActorId || null }),
   };
+}
+
+export async function ensureLogisticsExpenseBill(
+  order: LogisticsExpenseOrderForAccess,
+  supplier: LogisticsSupplierForExpense | null,
+  actor: LogisticsActor,
+  input: UnknownRecord = {}
+) {
+  const billOfLadingNo = logisticsExpenseBillOfLadingNo(order);
+  const billKey = logisticsExpenseBillKey(order.id, billOfLadingNo);
+  if (!billKey) throw codedError("物流费用账单编号无效。", 400, "LOGISTICS_EXPENSE_BILL_KEY_INVALID");
+  const requestedStatus = nonEmpty(input.auditStatus || input.status || "草稿");
+  const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "草稿";
+  const now = new Date();
+  return prisma.logisticsBill.upsert({
+    where: { billKey },
+    update: {
+      updatedById: actorId(actor) || null,
+      ...(auditStatus === "待审核" ? {
+        auditStatus,
+        submittedAt: dateFromInput(input.submittedAt) || now,
+        submittedById: actorId(actor) || null,
+        rejectReason: null,
+        invoiceNotificationError: null,
+      } : {}),
+    },
+    create: {
+      billKey,
+      orderId: order.id,
+      supplierId: supplier?.id || null,
+      billOfLadingNo,
+      auditStatus,
+      invoiceStatus: "未通知",
+      paymentStatus: "待开票",
+      submittedAt: auditStatus === "待审核" ? (dateFromInput(input.submittedAt) || now) : null,
+      submittedById: auditStatus === "待审核" ? (actorId(actor) || null) : null,
+      createdById: actorId(actor) || null,
+      updatedById: actorId(actor) || null,
+    },
+  });
 }
 
 function normalizeBillingMethodValue(value: unknown): string {
@@ -813,7 +958,7 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
   return expense;
 }
 
-export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
+export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient | typeof prisma, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
   const costType = String(normalizedCostType(nonEmpty(expense.costType)));
   const currentActorId = actorId(actor);
   const duplicate = await tx.orderCost.findFirst({

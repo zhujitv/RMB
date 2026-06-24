@@ -89,6 +89,10 @@ model User {
   reviewedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseReviewedBy")
   invoiceUploadedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceUploadedBy")
   invoiceConfirmedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceConfirmedBy")
+  submittedLogisticsBills LogisticsBill[] @relation("LogisticsBillSubmittedBy")
+  reviewedLogisticsBills LogisticsBill[] @relation("LogisticsBillReviewedBy")
+  createdLogisticsBills LogisticsBill[] @relation("LogisticsBillCreatedBy")
+  updatedLogisticsBills LogisticsBill[] @relation("LogisticsBillUpdatedBy")
   assignedOrderLogisticsSuppliers OrderLogisticsSupplier[] @relation("OrderLogisticsSupplierAssignedBy")
 
   @@index([supplierId])
@@ -198,6 +202,7 @@ model Supplier {
   documents OrderDocument[]
   operatorUsers User[] @relation("SupplierOperators")
   logisticsExpenses LogisticsExpense[]
+  logisticsBills LogisticsBill[]
   assignedOrders OrderLogisticsSupplier[]
 
   @@index([supplierName])
@@ -288,6 +293,7 @@ model ReceivableOrder {
   commissionSettlementRecords CommissionSettlement[]
   shippingDocumentNotifications ShippingDocumentNotification[]
   logisticsExpenses LogisticsExpense[]
+  logisticsBills LogisticsBill[]
   logisticsSuppliers OrderLogisticsSupplier[]
 
   @@index([orderNo])
@@ -582,8 +588,52 @@ model OrderCost {
   @@map("order_costs")
 }
 
+model LogisticsBill {
+  id            String    @id @default(cuid())
+  billKey       String    @unique @map("bill_key")
+  orderId       String    @map("order_id")
+  supplierId    String?   @map("supplier_id")
+  billOfLadingNo String   @default("") @map("bill_of_lading_no")
+  auditStatus   String    @default("草稿") @map("audit_status")
+  invoiceStatus String    @default("未通知") @map("invoice_status")
+  paymentStatus String    @default("待开票") @map("payment_status")
+  submittedById String?   @map("submitted_by")
+  submittedAt   DateTime? @map("submitted_at")
+  reviewedById  String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewRemark  String?   @map("review_remark")
+  rejectReason  String?   @map("reject_reason")
+  invoiceNotifiedAt DateTime? @map("invoice_notified_at")
+  invoiceNotificationError String? @map("invoice_notification_error")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  order       ReceivableOrder @relation(fields: [orderId], references: [id])
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id])
+  submittedBy User?           @relation("LogisticsBillSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy  User?           @relation("LogisticsBillReviewedBy", fields: [reviewedById], references: [id])
+  createdBy   User?           @relation("LogisticsBillCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?           @relation("LogisticsBillUpdatedBy", fields: [updatedById], references: [id])
+  expenses    LogisticsExpense[]
+
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([billOfLadingNo])
+  @@index([auditStatus])
+  @@index([invoiceStatus])
+  @@index([paymentStatus])
+  @@index([submittedById])
+  @@index([reviewedById])
+  @@index([deletedAt])
+  @@map("logistics_bills")
+}
+
 model LogisticsExpense {
   id            String    @id @default(cuid())
+  billId        String?   @map("bill_id")
   orderId       String    @map("order_id")
   supplierId    String    @map("supplier_id")
   costId        String?   @unique @map("cost_id")
@@ -623,6 +673,7 @@ model LogisticsExpense {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
+  bill      LogisticsBill? @relation(fields: [billId], references: [id])
   order     ReceivableOrder @relation(fields: [orderId], references: [id])
   supplier  Supplier        @relation(fields: [supplierId], references: [id])
   cost      OrderCost?      @relation("LogisticsExpenseGeneratedCost", fields: [costId], references: [id])
@@ -633,6 +684,7 @@ model LogisticsExpense {
   invoiceUploadedBy User?   @relation("LogisticsExpenseInvoiceUploadedBy", fields: [invoiceUploadedById], references: [id])
   invoiceConfirmedBy User?  @relation("LogisticsExpenseInvoiceConfirmedBy", fields: [invoiceConfirmedById], references: [id])
 
+  @@index([billId])
   @@index([orderId])
   @@index([supplierId])
   @@index([costId])

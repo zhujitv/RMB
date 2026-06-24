@@ -74,13 +74,15 @@ function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpens
 
 function logisticsExpenseListWhere(filters: LogisticsExpenseListFilters, actor: LogisticsQueryActor): Prisma.LogisticsExpenseWhereInput {
   const keyword = filters.keyword;
-  return {
-    deletedAt: null,
-    ...logisticsExpenseAccessWhere(actor),
-    ...logisticsExpenseStatusWhere(filters.status),
-    ...(filters.supplierId && actor?.role === "管理员" ? { supplierId: filters.supplierId } : {}),
-    ...(filters.costType && LOGISTICS_COST_TYPES.includes(filters.costType) ? { costType: filters.costType } : {}),
-    ...(keyword ? {
+  const conditions: Prisma.LogisticsExpenseWhereInput[] = [
+    { deletedAt: null },
+    logisticsExpenseAccessWhere(actor),
+    logisticsExpenseStatusWhere(filters.status),
+  ];
+  if (filters.supplierId && actor?.role === "管理员") conditions.push({ supplierId: filters.supplierId });
+  if (filters.costType && LOGISTICS_COST_TYPES.includes(filters.costType)) conditions.push({ costType: filters.costType });
+  if (keyword) {
+    conditions.push({
       OR: [
         { costType: keyword },
         { supplierNameSnapshot: keyword },
@@ -91,8 +93,9 @@ function logisticsExpenseListWhere(filters: LogisticsExpenseListFilters, actor: 
         { order: { is: { customer: { is: { shortName: keyword } } } } },
         { supplier: { is: { supplierName: keyword } } },
       ],
-    } : {}),
-  };
+    });
+  }
+  return { AND: conditions };
 }
 
 export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQueryActor): Promise<PaginatedLogisticsExpenseItems | PaginatedLogisticsExpenseBills> {
@@ -173,16 +176,39 @@ export async function listLogisticsExpenseOrders(query: QueryLike, actor: Logist
 export async function logisticsSupplierStatement(query: QueryLike, actor: LogisticsQueryActor) {
   assertCanReadLogisticsExpenses(actor);
   const month = nonEmpty(query.get("month"));
+  const reviewedMonthWhere: Prisma.LogisticsExpenseWhereInput = month ? {
+    OR: [
+      {
+        bill: {
+          is: {
+            reviewedAt: {
+              gte: new Date(`${month}-01T00:00:00.000Z`),
+              lt: new Date(new Date(`${month}-01T00:00:00.000Z`).setUTCMonth(new Date(`${month}-01T00:00:00.000Z`).getUTCMonth() + 1)),
+            },
+          },
+        },
+      },
+      {
+        billId: null,
+        reviewedAt: {
+          gte: new Date(`${month}-01T00:00:00.000Z`),
+          lt: new Date(new Date(`${month}-01T00:00:00.000Z`).setUTCMonth(new Date(`${month}-01T00:00:00.000Z`).getUTCMonth() + 1)),
+        },
+      },
+    ],
+  } : {};
   const where: Prisma.LogisticsExpenseWhereInput = {
     deletedAt: null,
-    auditStatus: "审核通过",
-    ...logisticsExpenseAccessWhere(actor),
-    ...(month ? {
-      reviewedAt: {
-        gte: new Date(`${month}-01T00:00:00.000Z`),
-        lt: new Date(new Date(`${month}-01T00:00:00.000Z`).setUTCMonth(new Date(`${month}-01T00:00:00.000Z`).getUTCMonth() + 1)),
+    AND: [
+      {
+        OR: [
+          { bill: { is: { auditStatus: "审核通过" } } },
+          { billId: null, auditStatus: "审核通过" },
+        ],
       },
-    } : {}),
+      reviewedMonthWhere,
+    ],
+    ...logisticsExpenseAccessWhere(actor),
   };
   const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ reviewedAt: "desc" }] });
   return Object.values(rows.reduce<Record<string, SupplierStatementRow>>((acc, row) => {
