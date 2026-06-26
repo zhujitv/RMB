@@ -27,6 +27,7 @@ import {
   serializeDomesticLogisticsOrder,
   sortDomesticLogisticsOrders,
 } from "./domestic-logistics-ops";
+import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark } from "./export-invoice-remark";
 import {
   canAccessDomesticLogisticsOrder,
   canClaimDomesticLogisticsOrder,
@@ -172,7 +173,12 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
   const transportItems = normalizeDomesticTransportItems(body, transportType);
   const firstTransportItem = transportItems[0] || {};
   const remarkTextManualEdited = body.remarkTextManualEdited === true || body.remarkTextManualEdited === "true";
-  const remarkText = remarkTextManualEdited ? optional(body.remarkText) : domesticLogisticsRemark({ ...body, transportType, transportItems });
+  const customsExportInvoiceRemark = transportType === "EXPRESS"
+    ? { containers: [] }
+    : buildExportInvoiceRemarkFromTransportItems(transportItems);
+  const remarkText = remarkTextManualEdited
+    ? optional(body.remarkText)
+    : (formatExportInvoiceRemark(customsExportInvoiceRemark) || domesticLogisticsRemark({ ...body, transportType, transportItems }));
   const data = {
     orderId: order.id,
     transportType,
@@ -185,6 +191,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
     cargoDescription: transportType === "EXPRESS" ? requireText(body.cargoDescription, "运输货物名称") : firstTransportItem.cargoName || null,
     remarkTextManualEdited,
     remarkText,
+    exportInvoice: { remark: customsExportInvoiceRemark } as Prisma.InputJsonValue,
     submittedByUserId: currentActor.id,
     submittedAt: new Date(),
     submitterRole: domesticLogisticsSubmitterRole(currentActor),

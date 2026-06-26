@@ -15,6 +15,7 @@ import {
   standardFilenameForDocument,
 } from "./shared-constants";
 import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
+import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark, normalizeExportInvoiceRemark } from "./export-invoice-remark";
 
 export { USER_PUBLIC_SELECT, publicUser, serializeUser };
 
@@ -251,6 +252,7 @@ type DomesticLogisticsInfoLike = Record<string, unknown> & {
   transportItems?: DomesticLogisticsTransportItemLike[] | null;
   remarkTextManualEdited?: boolean | null;
   remarkText?: string | null;
+  exportInvoice?: unknown;
   submittedByUserId?: string | null;
   submittedBy?: UserLike | null;
   submittedAt?: Date | string | null;
@@ -655,7 +657,15 @@ export function serializeDomesticLogisticsTransportItem(itemInput: unknown) {
 export function serializeDomesticLogisticsInfo(rowInput: unknown) {
   if (!rowInput) return null;
   const row = asLooseRecord<DomesticLogisticsInfoLike>(rowInput);
-  const transportItems = (row.transportItems || []).map(serializeDomesticLogisticsTransportItem).filter(Boolean);
+  const transportItems = (row.transportItems || [])
+    .map(serializeDomesticLogisticsTransportItem)
+    .filter((item): item is NonNullable<ReturnType<typeof serializeDomesticLogisticsTransportItem>> => Boolean(item));
+  const exportInvoiceRecord = row.exportInvoice && typeof row.exportInvoice === "object" ? row.exportInvoice as Record<string, unknown> : {};
+  const storedExportInvoice = normalizeExportInvoiceRemark(exportInvoiceRecord.remark);
+  const exportInvoice = storedExportInvoice.containers.length
+    ? storedExportInvoice
+    : buildExportInvoiceRemarkFromTransportItems(transportItems);
+  const exportInvoiceText = formatExportInvoiceRemark(exportInvoice) || row.remarkText || "";
   return {
     id: row.id,
     orderId: row.orderId,
@@ -671,14 +681,14 @@ export function serializeDomesticLogisticsInfo(rowInput: unknown) {
     transportItems,
     remarkTextManualEdited: Boolean(row.remarkTextManualEdited),
     remarkText: row.remarkText || "",
-    exportInvoiceRemark: row.remarkText || "",
-    invoiceRemark: row.remarkText || "",
+    exportInvoice: { remark: exportInvoice },
+    invoiceRemark: exportInvoiceText,
     submittedByUserId: row.submittedByUserId || "",
     submittedByName: row.submittedBy?.name || "",
     submittedAt: row.submittedAt,
     submitterRole: row.submitterRole || "",
-    archiveStatus: row.remarkText ? "ARCHIVED" : "NOT_UPLOADED",
-    archiveStatusLabel: row.remarkText ? "已归档" : "未上传",
+    archiveStatus: exportInvoiceText ? "ARCHIVED" : "NOT_UPLOADED",
+    archiveStatusLabel: exportInvoiceText ? "已归档" : "未上传",
     unlockedByUserId: row.unlockedByUserId || "",
     unlockedAt: row.unlockedAt,
     correctionRequested: Boolean(row.correctionRequested),

@@ -26,6 +26,21 @@ export type ConfirmationResult = {
   inputValue?: string;
 };
 
+export type ExportInvoiceRemarkContainer = {
+  containerNo?: string;
+  type?: string;
+  truckNo?: string;
+  trailerNo?: string;
+  shipDate?: string;
+  origin?: string;
+  destination?: string;
+  goods?: string;
+};
+
+export type ExportInvoiceRemark = {
+  containers?: ExportInvoiceRemarkContainer[];
+};
+
 export function useConfirmationDialog() {
   const resolverRef = useRef<((result: ConfirmationResult) => void) | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogState | null>(null);
@@ -101,6 +116,48 @@ export function UiButton({
         : styles.secondaryButton;
 
   return <button {...props} className={mergeClassNames(variantClass, className)} />;
+}
+
+function normalizeExportInvoiceRemark(value?: ExportInvoiceRemark | null) {
+  return Array.isArray(value?.containers)
+    ? value.containers.filter((item) => item && Object.values(item).some(Boolean))
+    : [];
+}
+
+export function ExportInvoiceRemarkView({
+  remark,
+  fallbackText = "",
+  emptyText = "暂无出口发票备注，请前往物流信息维护。",
+}: {
+  remark?: ExportInvoiceRemark | null;
+  fallbackText?: string;
+  emptyText?: string;
+}) {
+  const containers = normalizeExportInvoiceRemark(remark);
+  if (!containers.length) {
+    return (
+      <div className={styles.exportInvoiceRemarkText}>
+        {fallbackText || emptyText}
+      </div>
+    );
+  }
+  return (
+    <div className={styles.exportInvoiceRemarkBlocks}>
+      {containers.map((item, index) => (
+        <div className={styles.exportInvoiceRemarkBlock} key={`${item.containerNo || item.truckNo || "container"}-${index}`}>
+          <strong>Container: {item.containerNo || "-"}</strong>
+          <div className={styles.exportInvoiceRemarkBlockGrid}>
+            <span>柜型：{item.type || "-"}</span>
+            <span>车牌：{item.truckNo || "-"}</span>
+            <span>挂车：{item.trailerNo || "-"}</span>
+            <span>起运：{item.shipDate || "-"}</span>
+            <span>路线：{item.origin || "-"} → {item.destination || "-"}</span>
+            <span>货物：{item.goods || "-"}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function MoneyAmount({

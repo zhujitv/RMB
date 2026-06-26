@@ -4969,6 +4969,52 @@
   overflow-wrap: anywhere;
 }
 
+.exportInvoiceRemarkSection {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.exportInvoiceRemarkSection > strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlocks {
+  display: grid;
+  gap: 10px;
+}
+
+.exportInvoiceRemarkBlock {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+  padding: 10px 12px;
+}
+
+.exportInvoiceRemarkBlock > strong {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlockGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.exportInvoiceRemarkBlockGrid span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .taxTargetHighlight {
   position: relative;
   outline: 2px solid #2563eb;

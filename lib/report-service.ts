@@ -227,7 +227,7 @@ function moneyNumber(value: unknown) {
 
 const columnSets = {
   receivables: [
-    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["exportInvoiceRemark", "出口发票备注"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
+    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
   ],
   payments: [
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["paymentDate", "收款日期"], ["paymentType", "收款类型"], ["currency", "币种"], ["amount", "原币收款金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["status", "收款状态"], ["bankReference", "银行流水号"],
@@ -264,7 +264,7 @@ function domesticLogisticsColumns(order: DomesticLogisticsReportOrder = {}) {
     departureDate: info.departureDate || "",
     cargoDescription: info.cargoDescription || "",
     expressTrackingNo: info.expressTrackingNo || "",
-    exportInvoiceRemark: info.remarkText || "",
+    exportInvoiceRemark: info.invoiceRemark || info.remarkText || "",
     domesticSubmitterRole: info.submitterRole || "",
     domesticSubmittedBy: info.submittedByName || "",
     domesticSubmittedAt: info.submittedAt || "",

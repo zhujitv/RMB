@@ -7,7 +7,6 @@ import {
   customerFullName,
   customerShortName,
   dateFromInput,
-  dateToInput,
   nonEmpty,
   optional,
   requireText,
@@ -20,6 +19,7 @@ import {
   isInternalLogisticsOperator,
 } from "./masters-access";
 import { Prisma } from "../generated/prisma/client.js";
+import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark } from "./export-invoice-remark";
 
 type ActorLike = {
   id?: string | null;
@@ -302,18 +302,7 @@ function domesticTransportFieldLabels(transportType = "TRUCK") {
 }
 
 function domesticLogisticsRemarkFromItems(items: NormalizedDomesticTransportItem[] = [], transportType = "TRUCK") {
-  const labels = domesticTransportFieldLabels(transportType);
-	  return items.map((item) => [
-	    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
-	    item.containerType ? `柜型：${item.containerType}` : "",
-	    item.sealNo ? `封号：${item.sealNo}` : "",
-	    item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
-    item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
-    item.departureDate ? `${labels.departureDate}：${dateToInput(item.departureDate)}` : "",
-    item.departurePlace ? `${labels.departurePlace}：${item.departurePlace}` : "",
-    item.arrivalPlace ? `${labels.arrivalPlace}：${item.arrivalPlace}` : "",
-    item.cargoName ? `${labels.cargoName}：${item.cargoName}` : "",
-  ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
+  return formatExportInvoiceRemark(buildExportInvoiceRemarkFromTransportItems(items));
 }
 
 export function domesticLogisticsRemark(input: DomesticLogisticsInput = {}) {

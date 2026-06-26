@@ -3,9 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const moduleSource = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const taxModuleSource = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const css = readFileSync("app/WorkspaceShell.module.css", "utf8");
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
+const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
+const exportInvoiceRemarkFormatter = readFileSync("lib/platform/export-invoice-remark.ts", "utf8");
+const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const reportService = readFileSync("lib/report-service.ts", "utf8");
+const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
 const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
@@ -23,7 +29,28 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
   assert.match(moduleSource, /CustomsDocumentPanel/);
   assert.match(moduleSource, /集装箱运输明细/);
   assert.match(moduleSource, /集装箱管理/);
-  assert.match(moduleSource, /出口发票备注/);
+  assert.doesNotMatch(moduleSource, /出口发票备注/);
+  assert.doesNotMatch(moduleSource, /ExportInvoiceRemarkView/);
+});
+
+test("export invoice remark is structured and hidden from logistics views", () => {
+  assert.match(prismaSchema, /exportInvoice\s+Json\?\s+@map\("customs_export_invoice"\)/);
+  assert.match(exportInvoiceRemarkFormatter, /export type ExportInvoiceRemark/);
+  assert.match(exportInvoiceRemarkFormatter, /containers: ExportInvoiceRemarkContainer\[\]/);
+  assert.match(exportInvoiceRemarkFormatter, /formatExportInvoiceRemark/);
+  assert.match(domesticLogisticsApi, /exportInvoice: \{ remark: customsExportInvoiceRemark \} as Prisma\.InputJsonValue/);
+  assert.match(domesticLogisticsOps, /formatExportInvoiceRemark\(buildExportInvoiceRemarkFromTransportItems\(items\)\)/);
+  assert.match(moduleSource, /ALLOWED_LOGISTICS_FIELDS/);
+  assert.match(moduleSource, /sanitizeDomesticLogisticsRowsForRender/);
+  assert.doesNotMatch(moduleSource, /exportInvoiceRemark|exportInvoiceRemarkText|ExportInvoiceRemarkView|出口发票备注/);
+  assert.match(taxModuleSource, /出口发票备注/);
+  assert.match(taxModuleSource, /domesticLogisticsInfo\?\.exportInvoice\?\.remark/);
+  assert.doesNotMatch(reportService.match(/receivables:\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
+  assert.match(reportService.match(/"tax-refunds":\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
+  assert.doesNotMatch(manualModule, /出口发票备注/);
+  for (const cssClass of ["exportInvoiceRemarkBlocks", "exportInvoiceRemarkBlock", "exportInvoiceRemarkBlockGrid"]) {
+    assert.match(css, new RegExp(`\\.${cssClass}`));
+  }
 });
 
 test("domestic logistics list exposes logistics fee entry status from backend", () => {

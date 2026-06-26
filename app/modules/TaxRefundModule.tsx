@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -105,7 +105,7 @@ type UploadScope = {
 type DomesticLogisticsInfo = {
   archiveStatusLabel?: string;
   remarkText?: string;
-  exportInvoiceRemark?: string;
+  exportInvoice?: { remark?: ExportInvoiceRemark | null };
   submittedByName?: string;
   submittedAt?: string;
 };
@@ -1335,7 +1335,8 @@ function TaxRefundDetailPanel({
   if (!detail) return <div className={styles.emptyState}>点击查看资料后加载详情</div>;
 
   const groups = groupDocuments(detail.documents || []);
-  const domesticRemark = detail.domesticLogisticsInfo?.exportInvoiceRemark || detail.domesticLogisticsInfo?.remarkText || "";
+  const domesticExportInvoiceRemark = detail.domesticLogisticsInfo?.exportInvoice?.remark || null;
+  const domesticRemarkText = detail.domesticLogisticsInfo?.remarkText || "";
   const factoryCosts = factorySupplierCosts(detail.costs || []);
   const canRecognizeCustoms = canRecognizeTaxCustoms(currentUserRole, canWriteDocuments, readOnly);
   const showTaxArchiveRecord = Boolean(
@@ -1370,14 +1371,16 @@ function TaxRefundDetailPanel({
             <DetailField label="提单号" value={detail.blNo || fallback.blNo || "-"} />
             <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
             <DetailField label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
-            <DetailField label="物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemark ? "已提交" : "未提交")} />
+            <DetailField label="物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemarkText ? "已提交" : "未提交")} />
           </div>
         </div>
         <div className={styles.documentGroupCard} id={taxTargetDomId("domestic-logistics")}>
           <strong>出口发票备注</strong>
-          <div className={styles.exportInvoiceRemarkText}>
-            {domesticRemark || "暂无出口发票备注，请前往物流信息维护。"}
-          </div>
+          <ExportInvoiceRemarkView
+            remark={domesticExportInvoiceRemark}
+            fallbackText={domesticRemarkText}
+            emptyText="暂无出口发票备注，请前往物流信息维护。"
+          />
           {onOpenDomesticLogistics ? (
             <button className={styles.secondaryButton} type="button" onClick={onOpenDomesticLogistics}>
               去维护物流信息

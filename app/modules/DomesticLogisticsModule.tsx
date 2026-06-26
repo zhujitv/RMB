@@ -38,9 +38,6 @@ type DomesticLogisticsInfo = {
   expressTrackingNo?: string;
   cargoDescription?: string;
   transportItems?: TransportItem[];
-  remarkTextManualEdited?: boolean;
-  remarkText?: string;
-  exportInvoiceRemark?: string;
   submittedByName?: string;
   submittedAt?: string;
   submitterRole?: string;
@@ -125,6 +122,62 @@ type DomesticLogisticsForm = {
   remarkTextManualEdited: boolean;
   transportItems: TransportItem[];
 };
+type StructuredTransportRemark = {
+  containers: Array<{
+    containerNo: string;
+    type: string;
+    truckNo: string;
+    trailerNo: string;
+    shipDate: string;
+    origin: string;
+    destination: string;
+    goods: string;
+  }>;
+};
+
+const ALLOWED_LOGISTICS_FIELDS = [
+  "orderNo",
+  "customer",
+  "route",
+  "container",
+  "status",
+  "costStatus",
+] as const;
+const ALLOWED_LOGISTICS_INFO_KEYS = [
+  "id",
+  "transportType",
+  "transportTypeLabel",
+  "truckPlateNo",
+  "trailerPlateNo",
+  "departurePlace",
+  "destinationPlace",
+  "departureDate",
+  "expressTrackingNo",
+  "cargoDescription",
+  "transportItems",
+  "submittedByName",
+  "submittedAt",
+  "submitterRole",
+  "archiveStatusLabel",
+] satisfies Array<keyof DomesticLogisticsInfo>;
+const ALLOWED_LOGISTICS_ROW_KEYS = [
+  "id",
+  "orderId",
+  "orderNo",
+  "blNo",
+  "billOfLadingNo",
+  "customerName",
+  "customerFullName",
+  "customerShortName",
+  "logisticsStatus",
+  "logisticsExpenseStatus",
+  "logisticsExpenseStatusLabel",
+  "logisticsExpenseBillId",
+  "logisticsExpenseCount",
+  "submittedAt",
+  "documents",
+  "logisticsSuppliers",
+] satisfies Array<keyof DomesticLogisticsRow>;
 
 const PAGE_SIZE = 20;
 const TRANSPORT_TYPES = [
@@ -176,6 +229,29 @@ function customsRecognitionNotice(result?: CustomsRecognitionResult | null) {
   return "未识别成功，请手工填写报关单号和申报日期";
 }
 
+function sanitizeDomesticLogisticsInfoForRender(info?: DomesticLogisticsInfo | null): DomesticLogisticsInfo | null {
+  if (!info) return null;
+  const allowedInfo: Partial<DomesticLogisticsInfo> = {};
+  for (const key of ALLOWED_LOGISTICS_INFO_KEYS) {
+    if (info[key] !== undefined) allowedInfo[key] = info[key] as never;
+  }
+  return allowedInfo;
+}
+
+function sanitizeDomesticLogisticsRowsForRender(rows: DomesticLogisticsRow[] = []) {
+  return rows.map((row) => {
+    const allowedRow: Partial<DomesticLogisticsRow> = {};
+    for (const key of ALLOWED_LOGISTICS_ROW_KEYS) {
+      if (row[key] !== undefined) allowedRow[key] = row[key] as never;
+    }
+    return {
+      ...allowedRow,
+      id: row.id,
+      domesticLogisticsInfo: sanitizeDomesticLogisticsInfoForRender(row.domesticLogisticsInfo),
+    };
+  });
+}
+
 export function DomesticLogisticsModule({
   currentUser,
   permissions,
@@ -223,7 +299,7 @@ export function DomesticLogisticsModule({
       const params = new URLSearchParams({ businessScope: nextBusinessScope });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
-      const nextRows = Array.isArray(result.rows) ? result.rows : [];
+      const nextRows = sanitizeDomesticLogisticsRowsForRender(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
       return nextRows;
     } catch (loadError) {
@@ -690,7 +766,6 @@ function DomesticLogisticsRows({
                 <DetailField label="运输货物名称" value={info?.cargoDescription || firstItemValue(info, "cargoName") || "-"} />
                 <DetailField label="录入人" value={info?.submittedByName || "-"} />
                 <DetailField label="录入时间" value={formatDateTime(info?.submittedAt || row.submittedAt)} />
-                <DetailField label="出口发票备注" value={info?.exportInvoiceRemark || info?.remarkText || "暂无出口发票备注"} wide />
               </div>
               {info?.transportItems?.length ? (
                 <div className={styles.subList}>
@@ -738,19 +813,13 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
   const [form, setForm] = useState<DomesticLogisticsForm>(() => formFromRow(row));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const {
-    confirmation,
-    requestConfirmation,
-    cancelConfirmation,
-    confirmConfirmation,
-    updateConfirmationInput,
-  } = useConfirmationDialog();
 
   function setFormValue<K extends keyof DomesticLogisticsForm>(key: K, value: DomesticLogisticsForm[K]) {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      if (key !== "remarkText" && next.remarkTextManualEdited !== true) {
+      if (key !== "remarkText") {
         next.remarkText = generateRemark(next);
+        next.remarkTextManualEdited = false;
       }
       return next;
     });
@@ -762,7 +831,8 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
         itemIndex === index ? { ...item, [key]: value } : item
       ));
       const next = { ...current, transportItems };
-      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      next.remarkText = generateRemark(next);
+      next.remarkTextManualEdited = false;
       return next;
     });
   }
@@ -772,7 +842,8 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
       const previous = current.transportItems[current.transportItems.length - 1] || emptyTransportItem();
       const transportItems = [...current.transportItems, copyPrevious ? { ...previous, containerNo: "" } : emptyTransportItem()];
       const next = { ...current, transportItems };
-      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      next.remarkText = generateRemark(next);
+      next.remarkTextManualEdited = false;
       return next;
     });
   }
@@ -781,22 +852,13 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
     setForm((current) => {
       const transportItems = current.transportItems.filter((_, itemIndex) => itemIndex !== index);
       const next = { ...current, transportItems: transportItems.length ? transportItems : [emptyTransportItem()] };
-      if (!next.remarkTextManualEdited) next.remarkText = generateRemark(next);
+      next.remarkText = generateRemark(next);
+      next.remarkTextManualEdited = false;
       return next;
     });
   }
 
   async function regenerateRemark() {
-    if (form.remarkTextManualEdited) {
-      const confirmationResult = await requestConfirmation({
-        title: "重新生成出口发票备注？",
-        message: "当前备注已手工修改，重新生成将覆盖现有内容。",
-        confirmLabel: "重新生成",
-        cancelLabel: "取消",
-        variant: "warning",
-      });
-      if (!confirmationResult.confirmed) return;
-    }
     setForm((current) => ({ ...current, remarkText: generateRemark(current), remarkTextManualEdited: false }));
   }
 
@@ -815,7 +877,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
       const isExpressPayload = form.transportType === "EXPRESS";
       const transportItems = isExpressPayload ? [] : normalizeFormTransportItems(form.transportItems);
       const firstItem = transportItems[0] || {};
-      const remarkText = form.remarkTextManualEdited ? form.remarkText.trim() : generateRemark({ ...form, transportItems });
+      const remarkText = generateRemark({ ...form, transportItems });
       const result = await apiJson<{ success?: boolean; message?: string }>(path, {
         method: infoId ? "PATCH" : "POST",
         body: JSON.stringify({
@@ -830,7 +892,7 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
           cargoDescription: isExpressPayload ? form.cargoDescription.trim() : (firstItem.cargoName || ""),
           transportItems,
           remarkText,
-          remarkTextManualEdited: form.remarkTextManualEdited,
+          remarkTextManualEdited: false,
         }),
       });
       if (result.success !== true) throw new Error(result.message || "物流信息保存失败");
@@ -922,30 +984,11 @@ function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticL
         </div>
       ) : null}
 
-      <label className={styles.remarkCard}>
-        <span>出口发票备注</span>
-        <textarea
-          value={form.remarkText}
-          onChange={(event) => setForm((current) => ({ ...current, remarkText: event.target.value, remarkTextManualEdited: true }))}
-          rows={7}
-        />
-        <small className={styles.mutedText}>{form.remarkTextManualEdited ? "已手工修改，不再自动覆盖。" : "字段变更后将自动更新备注。"}</small>
-        <button className={styles.secondaryButton} type="button" onClick={() => void regenerateRemark()}>重新生成备注</button>
-      </label>
-
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "提交中..." : "提交物流信息"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>
-    {confirmation ? (
-      <ConfirmationDialog
-        state={confirmation}
-        onCancel={cancelConfirmation}
-        onConfirm={confirmConfirmation}
-        onInputChange={updateConfirmationInput}
-      />
-    ) : null}
     </>
   );
 }
@@ -1180,8 +1223,8 @@ function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
     expressTrackingNo: info?.expressTrackingNo || "",
     destinationPlace: info?.destinationPlace || "",
     cargoDescription: info?.cargoDescription || "",
-    remarkText: info?.exportInvoiceRemark || info?.remarkText || "",
-    remarkTextManualEdited: Boolean(info?.remarkTextManualEdited),
+    remarkText: "",
+    remarkTextManualEdited: false,
     transportItems,
   };
   return { ...form, remarkText: form.remarkText || generateRemark(form) };
@@ -1241,18 +1284,35 @@ function generateRemark(form: DomesticLogisticsForm) {
       form.cargoDescription ? `运输货物名称：${form.cargoDescription}` : "",
     ].filter(Boolean).join("\n");
   }
-  const labels = transportFieldLabels(form.transportType);
-  return form.transportItems.map((item) => [
-    item.containerNo ? `${labels.containerNo}：${item.containerNo}` : "",
-    showContainerManagementFields(form.transportType) && item.containerType ? `柜型：${item.containerType}` : "",
-    showContainerManagementFields(form.transportType) && item.sealNo ? `封号：${item.sealNo}` : "",
-    item.truckPlateNo ? `${labels.truckPlateNo}：${item.truckPlateNo}` : "",
-    item.trailerPlateNo ? `挂车车牌：${item.trailerPlateNo}` : "",
-    item.departureDate ? `${labels.departureDate}：${item.departureDate}` : "",
-    item.departurePlace ? `${labels.departurePlace}：${item.departurePlace}` : "",
-    item.arrivalPlace ? `${labels.arrivalPlace}：${item.arrivalPlace}` : "",
-    item.cargoName ? `${labels.cargoName}：${item.cargoName}` : "",
-  ].filter(Boolean).join("\n")).filter(Boolean).join("\n\n");
+  return formatStructuredTransportRemarkText(buildStructuredTransportRemarkFromForm(form));
+}
+
+function buildStructuredTransportRemarkFromForm(form: Pick<DomesticLogisticsForm, "transportType" | "transportItems">): StructuredTransportRemark {
+  if (form.transportType === "EXPRESS") return { containers: [] };
+  return {
+    containers: normalizeFormTransportItems(form.transportItems).map((item) => ({
+      containerNo: item.containerNo,
+      type: showContainerManagementFields(form.transportType) ? item.containerType : "",
+      truckNo: item.truckPlateNo,
+      trailerNo: item.trailerPlateNo,
+      shipDate: item.departureDate,
+      origin: item.departurePlace,
+      destination: item.arrivalPlace,
+      goods: item.cargoName,
+    })),
+  };
+}
+
+function formatStructuredTransportRemarkText(remark: StructuredTransportRemark) {
+  return (remark.containers || []).map((item) => [
+    `Container: ${item.containerNo || "-"}`,
+    `柜型：${item.type || "-"}`,
+    `车牌：${item.truckNo || "-"}`,
+    `挂车：${item.trailerNo || "-"}`,
+    `起运：${item.shipDate || "-"}`,
+    `路线：${item.origin || "-"} → ${item.destination || "-"}`,
+    `货物：${item.goods || "-"}`,
+  ].join("\n")).join("\n\n");
 }
 
 function normalizeFormTransportItems(items: TransportItem[]) {
