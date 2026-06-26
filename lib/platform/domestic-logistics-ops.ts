@@ -75,11 +75,20 @@ type LogisticsSupplierRowLike = {
 };
 type LogisticsExpenseLike = {
   id?: string | null;
+  billId?: string | null;
   orderId?: string | null;
   supplierId?: string | null;
   auditStatus?: string | null;
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
+  updatedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+};
+type LogisticsBillLike = {
+  id?: string | null;
+  orderId?: string | null;
+  supplierId?: string | null;
+  auditStatus?: string | null;
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
 };
@@ -92,6 +101,7 @@ type DomesticOrderLike = {
   country?: string | null;
   logisticsSuppliers?: LogisticsSupplierRowLike[] | null;
   logisticsExpenses?: LogisticsExpenseLike[] | null;
+  logisticsBills?: LogisticsBillLike[] | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
   documents?: unknown[] | null;
   taxArchived?: boolean | null;
@@ -142,10 +152,23 @@ export function domesticLogisticsOrderInclude() {
       include: { supplier: true },
       orderBy: [{ assignedAt: "desc" }],
     },
+    logisticsBills: {
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        orderId: true,
+        supplierId: true,
+        auditStatus: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    },
     logisticsExpenses: {
       where: { deletedAt: null },
       select: {
         id: true,
+        billId: true,
         orderId: true,
         supplierId: true,
         auditStatus: true,
@@ -336,26 +359,50 @@ function normalizedDomesticExpenseStatus(value = "") {
 }
 
 function domesticLogisticsExpenseBillId(order: DomesticOrderLike = {}, expense: LogisticsExpenseLike = {}) {
+  if (expense.billId) return expense.billId;
   return `bill:${expense.orderId || order.id || "order"}:${order.blNo || order.orderNo || "no-bl"}`;
 }
 
-function domesticLogisticsExpenseDisplayStatus(expense: LogisticsExpenseLike = {}) {
-  const auditStatus = normalizedDomesticExpenseStatus(expense.auditStatus || "草稿");
-  if (["已驳回", "草稿", "待审核"].includes(auditStatus)) return auditStatus;
-  const invoiceStatus = normalizedDomesticExpenseStatus(expense.invoiceStatus || "");
-  if (invoiceStatus === "待开票") return "待开票";
-  if (invoiceStatus === "已上传发票") return "已上传发票";
-  const paymentStatus = normalizedDomesticExpenseStatus(expense.paymentStatus || "");
-  if (["待付款", "部分付款", "已付款"].includes(paymentStatus)) return paymentStatus;
-  return auditStatus === "审核通过" ? "审核通过" : "待开票";
+function domesticLogisticsBillDisplayStatus(bill: LogisticsBillLike = {}) {
+  return normalizedDomesticExpenseStatus(bill.auditStatus || "草稿") || "草稿";
 }
 
-function logisticsExpenseUpdatedAtValue(expense: LogisticsExpenseLike = {}) {
-  const time = new Date(expense.updatedAt || expense.createdAt || 0).getTime();
+function domesticLogisticsExpenseDisplayStatus(expense: LogisticsExpenseLike = {}) {
+  return normalizedDomesticExpenseStatus(expense.auditStatus || "草稿") || "草稿";
+}
+
+function logisticsStatusUpdatedAtValue(row: LogisticsBillLike | LogisticsExpenseLike = {}) {
+  const time = new Date(row.updatedAt || row.createdAt || 0).getTime();
   return Number.isFinite(time) ? time : 0;
 }
 
 function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+  const bills = (order.logisticsBills || []).filter((bill) => {
+    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
+      return bill.supplierId === actor.supplierId;
+    }
+    return true;
+  });
+  if (bills.length) {
+    const rankedBills = bills.map((bill) => {
+      const status = domesticLogisticsBillDisplayStatus(bill);
+      return {
+        status,
+        billId: bill.id || "",
+        updatedAt: bill.updatedAt || bill.createdAt || null,
+        count: bills.length,
+        rank: LOGISTICS_EXPENSE_STATUS_PRIORITY[status] || 999,
+        updatedAtValue: logisticsStatusUpdatedAtValue(bill),
+      };
+    }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
+    return rankedBills[0] || {
+      status: "未录入",
+      billId: "",
+      updatedAt: null,
+      count: 0,
+    };
+  }
+
   const expenses = (order.logisticsExpenses || []).filter((expense) => {
     if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
       return expense.supplierId === actor.supplierId;
@@ -378,7 +425,7 @@ function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, ac
       updatedAt: expense.updatedAt || expense.createdAt || null,
       count: expenses.length,
       rank: LOGISTICS_EXPENSE_STATUS_PRIORITY[status] || 999,
-      updatedAtValue: logisticsExpenseUpdatedAtValue(expense),
+      updatedAtValue: logisticsStatusUpdatedAtValue(expense),
     };
   }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
   return ranked[0] || {

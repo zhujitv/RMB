@@ -261,6 +261,17 @@ export async function reviewLogisticsExpense(request: AuditRequestLike, actor: A
         updatedById: actorId(actor),
       },
     });
+    await prisma.logisticsExpense.updateMany({
+      where: { billId, deletedAt: null },
+      data: {
+        auditStatus: "待审核",
+        reviewedById: null,
+        reviewedAt: null,
+        rejectReason: null,
+        reviewRemark,
+        updatedById: actorId(actor),
+      },
+    });
   } else {
     const ids = rows.map((row) => row.id).filter(Boolean);
     await prisma.logisticsExpense.updateMany({
@@ -309,6 +320,21 @@ export async function rejectLogisticsExpenseBill(request: AuditRequestLike, acto
   if (rows[0]?.billId) {
     await prisma.logisticsBill.update({
       where: { id: billId },
+      data: {
+        auditStatus: "已驳回",
+        invoiceStatus: "未通知",
+        paymentStatus: "待开票",
+        reviewedById: actor.id,
+        reviewedAt: now,
+        reviewRemark,
+        rejectReason,
+        invoiceNotifiedAt: null,
+        invoiceNotificationError: null,
+        updatedById: actorId(actor),
+      },
+    });
+    await prisma.logisticsExpense.updateMany({
+      where: { billId, deletedAt: null },
       data: {
         auditStatus: "已驳回",
         invoiceStatus: "未通知",
@@ -500,6 +526,22 @@ async function approveLogisticsExpenseBillsInTransaction(billIds: string[] = [],
         updatedById: actorId(actor),
       },
     }),
+    prisma.logisticsExpense.updateMany({
+      where: {
+        billId: { in: ids },
+        deletedAt: null,
+      },
+      data: {
+        auditStatus: "审核通过",
+        reviewedById: actor.id,
+        reviewedAt: now,
+        reviewRemark,
+        rejectReason: null,
+        invoiceNotificationError: null,
+        paymentStatus: "待付款",
+        updatedById: actorId(actor),
+      },
+    }),
   ], LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
@@ -567,6 +609,19 @@ async function approveLogisticsExpenseBillRowsInTransaction(rows: LogisticsExpen
           invoiceNotificationError: null,
           paymentStatus: "待付款",
           invoiceStatus: "未通知",
+          updatedById: actorId(actor),
+        },
+      });
+      await tx.logisticsExpense.updateMany({
+        where: { billId, deletedAt: null },
+        data: {
+          auditStatus: "审核通过",
+          reviewedById: actor.id,
+          reviewedAt: now,
+          reviewRemark,
+          rejectReason: null,
+          invoiceNotificationError: null,
+          paymentStatus: "待付款",
           updatedById: actorId(actor),
         },
       });
@@ -803,6 +858,14 @@ export async function withdrawLogisticsExpenseBill(request: AuditRequestLike, ac
         updatedById: actorId(actor),
       },
     });
+    await prisma.logisticsExpense.updateMany({
+      where: { billId, deletedAt: null },
+      data: {
+        auditStatus: "草稿",
+        submittedAt: null,
+        updatedById: actorId(actor),
+      },
+    });
   } else {
     await prisma.logisticsExpense.updateMany({
       where: {
@@ -852,6 +915,16 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
           auditStatus: "待审核",
           submittedAt,
           submittedById: actorId(actor) || null,
+          rejectReason: null,
+          invoiceNotificationError: null,
+          updatedById: actorId(actor),
+        },
+      });
+      await prisma.logisticsExpense.updateMany({
+        where: { billId, deletedAt: null },
+        data: {
+          auditStatus: "待审核",
+          submittedAt,
           rejectReason: null,
           invoiceNotificationError: null,
           updatedById: actorId(actor),

@@ -27,11 +27,18 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
 });
 
 test("domestic logistics list exposes logistics fee entry status from backend", () => {
+  assert.match(domesticLogisticsOps, /logisticsBills: \{/);
   assert.match(domesticLogisticsOps, /logisticsExpenses: \{/);
   assert.match(domesticLogisticsOps, /LOGISTICS_EXPENSE_STATUS_PRIORITY/);
   assert.match(domesticLogisticsOps, /domesticLogisticsExpenseStatusSummary/);
+  assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus/);
+  assert.match(domesticLogisticsOps, /const bills = \(order\.logisticsBills \|\| \[\]\)/);
   assert.match(domesticLogisticsOps, /logisticsExpenseStatus: expenseStatus\.status/);
   assert.match(domesticLogisticsOps, /logisticsExpenseBillId: expenseStatus\.billId/);
+  assert.doesNotMatch(
+    domesticLogisticsOps.match(/function domesticLogisticsExpenseDisplayStatus[\s\S]*?\n}/)?.[0] || "",
+    /invoiceStatus|paymentStatus/,
+  );
 });
 
 test("domestic logistics transport detail keeps multi-container fields", () => {

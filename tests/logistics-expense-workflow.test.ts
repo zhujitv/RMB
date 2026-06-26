@@ -40,6 +40,7 @@ const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233
 const invoiceGroupMigration = readFileSync("prisma/migrations/20260623073000_logistics_invoice_group_uploads/migration.sql", "utf8");
 const removeInvoiceManualFieldsMigration = readFileSync("prisma/migrations/20260623194500_remove_logistics_invoice_manual_fields/migration.sql", "utf8");
 const logisticsBillMigration = readFileSync("prisma/migrations/20260624103000_logistics_bills/migration.sql", "utf8");
+const logisticsAuditStatusSyncMigration = readFileSync("prisma/migrations/20260626232000_sync_logistics_expense_audit_status/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
 const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
@@ -423,9 +424,12 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(logisticsBillMigration, /CREATE TABLE IF NOT EXISTS "logistics_bills"/);
   assert.match(logisticsBillMigration, /UPDATE "logistics_expenses" le[\s\S]*SET "bill_id" = lb\."id"/);
   assert.match(approveLogisticsExpenseBillRowsSource, /tx\.logisticsBill\.update/);
+  assert.match(approveLogisticsExpenseBillRowsSource, /tx\.logisticsExpense\.updateMany\(\{[\s\S]*where: \{ billId, deletedAt: null \}[\s\S]*auditStatus: "审核通过"/);
   assert.match(approveLogisticsExpenseBillRowsSource, /createOrUpdateCostFromLogisticsExpense\(prisma, before, actor\)/);
   assert.match(approveLogisticsExpenseBillRowsSource, /updateLogisticsExpenseCostIds\(prisma, costLinks\)/);
-  assert.doesNotMatch(approveLogisticsExpenseBillRowsSource, /tx\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"[\s\S]*rows\[0\]\?\.billId/);
+  assert.match(backend, /prisma\.logisticsExpense\.updateMany\(\{[\s\S]*billId: \{ in: ids \}[\s\S]*auditStatus: "审核通过"/);
+  assert.match(logisticsAuditStatusSyncMigration, /UPDATE "logistics_expenses" le/);
+  assert.match(logisticsAuditStatusSyncMigration, /le\."audit_status" IS DISTINCT FROM lb\."audit_status"/);
   assert.match(backend, /UPDATE "logistics_expenses"[\s\S]*CASE "id"/);
   assert.match(reviewLogisticsExpenseBillsSource, /await approveLogisticsExpenseBillRowsInTransaction\(bill\.rows, actor, reviewRemark, now\)/);
   assert.match(reviewLogisticsExpenseBillsSource, /const savedRows = await loadLogisticsExpenseBillRowsForAction\(bill\.billId, actor\)/);
