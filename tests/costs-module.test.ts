@@ -13,8 +13,10 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.doesNotMatch(costsModule, /CostOrderMobileCard/);
   assert.doesNotMatch(costsModule, /mobileCardList/);
   assert.doesNotMatch(costsModule, /desktopOnly/);
-  assert.match(costsModule, /useState<"details" \| "orders">\("orders"\)/);
+  assert.match(costsModule, /type CostView = "details" \| "orders" \| "invoiceExceptions"/);
+  assert.match(costsModule, /useState<CostView>\("orders"\)/);
   assert.match(costsModule, /按订单 \/ Shipment 汇总/);
+  assert.match(costsModule, /发票异常清单/);
   assert.doesNotMatch(costsModule, />成本明细<\/button>/);
   assert.match(costsModule, /<th className=\{styles\.orderNoColumn\}>订单号 \/ Shipment<\/th>/);
   assert.match(costsModule, /<th className=\{styles\.customerColumn\}>客户简称<\/th>/);
@@ -23,6 +25,23 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /function CostOrderItemsTable/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
+});
+
+test("cost management exposes paginated invoice exception list", () => {
+  assert.match(costsModule, /changeCostView\("invoiceExceptions"\)/);
+  assert.match(costsModule, /view: nextView/);
+  assert.match(costsModule, /CostInvoiceExceptionTableHead/);
+  assert.match(costsModule, /CostInvoiceExceptionRows/);
+  assert.match(costsModule, /invoiceExceptionLabel/);
+  assert.match(costsModule, /已付款未收票/);
+  assert.match(costsModule, /已收票未付款/);
+  assert.match(costsModule, /资料维护/);
+  assert.match(costsQueries, /export async function listCostInvoiceExceptions/);
+  assert.match(costsQueries, /function costInvoiceExceptionWhere/);
+  assert.match(costsQueries, /paymentStatus: "已支付"[\s\S]*costEffectiveInvoiceMissingWhere/);
+  assert.match(costsQueries, /paymentStatus: \{ in: \["待支付", "部分支付"\] \}[\s\S]*costEffectiveInvoiceReceivedWhere/);
+  assert.match(costsQueries, /documents: \{ some: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
+  assert.match(costsQueries, /documents: \{ none: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
 });
 
 test("cost management page is centered and constrained to readable table width", () => {

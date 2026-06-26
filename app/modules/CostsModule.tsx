@@ -81,6 +81,8 @@ type CostRow = {
   updatedAt?: string;
   supplierType?: string;
   documents?: CostDocument[];
+  invoiceExceptionType?: string;
+  invoiceExceptionLabel?: string;
 };
 
 type CostDocument = {
@@ -216,6 +218,7 @@ type CostFormDrawerState = {
   mode: "create" | "edit";
   cost: CostRow | null;
 };
+type CostView = "details" | "orders" | "invoiceExceptions";
 
 const PAGE_SIZE = 20;
 
@@ -265,7 +268,7 @@ export function CostsModule({
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
   const [submittedFilters, setSubmittedFilters] = useState<CostFilters>({ ...emptyCostFilters });
-  const [costView, setCostView] = useState<"details" | "orders">("orders");
+  const [costView, setCostView] = useState<CostView>("orders");
   const [archiveScope, setArchiveScope] = useState("current");
   const [detailCost, setDetailCost] = useState<CostRow | null>(null);
   const [detailOrderSummary, setDetailOrderSummary] = useState<CostOrderSummary | null>(null);
@@ -311,7 +314,7 @@ export function CostsModule({
     nextPage = page,
     nextFilters = submittedFilters,
     nextArchiveScope = archiveScope,
-    nextView = costView,
+    nextView: CostView = costView,
   ) {
     setLoading(true);
     setError("");
@@ -440,7 +443,7 @@ export function CostsModule({
     void loadCosts(1, submittedFilters, nextArchiveScope, costView);
   }
 
-  function changeCostView(nextView: "details" | "orders") {
+  function changeCostView(nextView: CostView) {
     setCostView(nextView);
     setDetailCost(null);
     setDetailOrderSummary(null);
@@ -480,12 +483,20 @@ export function CostsModule({
 
       <div className={styles.listToolbar}>
         <button
-          className={styles.primaryButtonCompact}
+          className={costView === "orders" ? styles.primaryButtonCompact : styles.secondaryButton}
           type="button"
           disabled={loading}
           onClick={() => changeCostView("orders")}
         >
           按订单 / Shipment 汇总
+        </button>
+        <button
+          className={costView === "invoiceExceptions" ? styles.primaryButtonCompact : styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => changeCostView("invoiceExceptions")}
+        >
+          发票异常清单
         </button>
       </div>
 
@@ -570,11 +581,11 @@ export function CostsModule({
       */}
       <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.costTableWrap}`}>
         <table className={styles.dataTable}>
-          {costView === "orders" ? <CostOrderTableHead /> : <CostDetailTableHead />}
+          {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceExceptions" ? <CostInvoiceExceptionTableHead /> : <CostDetailTableHead />}
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={costView === "orders" ? 6 : 8}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={costViewColSpan(costView)}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : activeRows.length ? (costView === "orders"
               ? orderRows.map((order) => (
@@ -584,6 +595,15 @@ export function CostsModule({
                   onViewDetail={() => setDetailOrderSummary(order)}
                 />
               ))
+              : costView === "invoiceExceptions"
+                ? rows.map((cost) => (
+                  <CostInvoiceExceptionRows
+                    key={cost.id}
+                    cost={cost}
+                    onViewDetail={() => setDetailCost(cost)}
+                    onOpenDocuments={() => void openCostDocuments(cost.id)}
+                  />
+                ))
               : rows.map((cost) => (
                 <CostTableRows
                   key={cost.id}
@@ -597,7 +617,7 @@ export function CostsModule({
               ))
             ) : (
               <tr>
-                <td colSpan={costView === "orders" ? 6 : 8}><div className={styles.emptyState}>未找到匹配的{costView === "orders" ? "订单成本汇总" : "成本明细"}</div></td>
+                <td colSpan={costViewColSpan(costView)}><div className={styles.emptyState}>未找到匹配的{costViewLabel(costView)}</div></td>
               </tr>
             )}
           </tbody>
@@ -743,6 +763,7 @@ export function CostsModule({
         setUploadProgressByKey((current) => ({ ...current, [key]: progress }));
       });
       await refreshDocumentCost(cost.id);
+      if (costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice("资料已上传");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
@@ -774,6 +795,7 @@ export function CostsModule({
       });
       if (result.success === false) throw new Error(result.message || "删除资料失败");
       await refreshDocumentCost(cost.id);
+      if (costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice("资料已删除");
     } catch (deleteError) {
       setDocumentError(deleteError instanceof Error ? deleteError.message : "删除资料失败");
@@ -1282,6 +1304,57 @@ function CostDetailTableHead() {
   );
 }
 
+function CostInvoiceExceptionTableHead() {
+  return (
+    <thead>
+      <tr>
+        <th className={styles.orderNoColumn}>订单号</th>
+        <th className={styles.customerColumn}>客户简称</th>
+        <th>成本类型</th>
+        <th>供应商</th>
+        <th className={styles.amountColumn}>成本金额</th>
+        <th>付款状态</th>
+        <th>发票状态</th>
+        <th className={styles.statusColumn}>异常类型</th>
+        <th className={styles.costInvoiceActionColumn}>操作</th>
+      </tr>
+    </thead>
+  );
+}
+
+function CostInvoiceExceptionRows({
+  cost,
+  onViewDetail,
+  onOpenDocuments,
+}: {
+  cost: CostRow;
+  onViewDetail: () => void;
+  onOpenDocuments: () => void;
+}) {
+  const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
+  const exceptionLabel = cost.invoiceExceptionLabel || costInvoiceExceptionLabel(cost);
+  return (
+    <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
+      <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
+      <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
+      <td>{supplierName}</td>
+      <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
+      <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
+      <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
+      <td className={styles.statusColumn}>
+        <span className={`${styles.statusPill} ${exceptionLabel === "已付款未收票" ? styles.statusWarning : ""}`}>{exceptionLabel}</span>
+      </td>
+      <td className={styles.costInvoiceActionColumn}>
+        <div className={styles.costInvoiceActions}>
+          <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button>
+          <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>资料维护</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function CostOrderTableHead() {
   return (
     <thead>
@@ -1295,6 +1368,24 @@ function CostOrderTableHead() {
       </tr>
     </thead>
   );
+}
+
+function costViewColSpan(costView: CostView) {
+  if (costView === "orders") return 6;
+  if (costView === "invoiceExceptions") return 9;
+  return 8;
+}
+
+function costViewLabel(costView: CostView) {
+  if (costView === "orders") return "订单成本汇总";
+  if (costView === "invoiceExceptions") return "发票异常记录";
+  return "成本明细";
+}
+
+function costInvoiceExceptionLabel(cost: CostRow) {
+  if (cost.paymentStatus === "已支付" && cost.invoiceStatus !== "已收到") return "已付款未收票";
+  if (["待支付", "部分支付"].includes(cost.paymentStatus || "") && cost.invoiceStatus === "已收到") return "已收票未付款";
+  return "发票异常";
 }
 
 function CostOrderSummaryRows({

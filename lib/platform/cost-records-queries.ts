@@ -40,6 +40,12 @@ type CostListFilters = {
   businessScope: CostBusinessScope;
 };
 
+const SUCCESS_SUPPLIER_INVOICE_FILTER: Prisma.OrderDocumentWhereInput = {
+  documentType: "SUPPLIER_INVOICE",
+  uploadStatus: "SUCCESS",
+  deletedAt: null,
+};
+
 function insensitiveContains(value: unknown): Prisma.StringFilter | null {
   const text = nonEmpty(value);
   return text ? { contains: text, mode: "insensitive" } : null;
@@ -87,14 +93,47 @@ function costDateRangeFilter(filters: CostListFilters): Prisma.OrderCostWhereInp
 
 function costInvoiceStatusFilter(invoiceStatus: string): Prisma.OrderCostWhereInput | null {
   if (!invoiceStatus) return null;
-  const successInvoice: Prisma.OrderDocumentWhereInput = {
-    documentType: "SUPPLIER_INVOICE",
-    uploadStatus: "SUCCESS",
-    deletedAt: null,
-  };
-  if (invoiceStatus === "已收到") return { documents: { some: successInvoice } };
-  if (invoiceStatus === "未收到") return { documents: { none: successInvoice } };
+  if (invoiceStatus === "已收到") return costEffectiveInvoiceReceivedWhere();
+  if (invoiceStatus === "未收到") return costEffectiveInvoiceMissingWhere();
   return null;
+}
+
+function costEffectiveInvoiceReceivedWhere(): Prisma.OrderCostWhereInput {
+  return {
+    OR: [
+      { documents: { some: SUCCESS_SUPPLIER_INVOICE_FILTER } },
+      { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: "已收到" },
+    ],
+  };
+}
+
+function costEffectiveInvoiceMissingWhere(): Prisma.OrderCostWhereInput {
+  return {
+    AND: [
+      { documents: { none: SUCCESS_SUPPLIER_INVOICE_FILTER } },
+      {
+        OR: [
+          { sourceType: { not: "LOGISTICS_EXPENSE" } },
+          { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: { not: "已收到" } },
+        ],
+      },
+    ],
+  };
+}
+
+function costInvoiceExceptionWhere(): Prisma.OrderCostWhereInput {
+  return {
+    OR: [
+      {
+        paymentStatus: "已支付",
+        ...costEffectiveInvoiceMissingWhere(),
+      },
+      {
+        paymentStatus: { in: ["待支付", "部分支付"] },
+        ...costEffectiveInvoiceReceivedWhere(),
+      },
+    ],
+  };
 }
 
 function costFilterClauses(filters: CostListFilters): Prisma.OrderCostWhereInput[] {
@@ -163,6 +202,57 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   ]);
   return {
     rows: rows.map(safeSerializeCost),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+function invoiceExceptionType(cost: CostDto) {
+  if (cost.paymentStatus === "已支付" && cost.invoiceStatus !== "已收到") return "PAID_WITHOUT_INVOICE";
+  if (["待支付", "部分支付"].includes(cost.paymentStatus || "") && cost.invoiceStatus === "已收到") return "INVOICE_WITH_UNPAID";
+  return "UNKNOWN";
+}
+
+function invoiceExceptionLabel(type: string) {
+  if (type === "PAID_WITHOUT_INVOICE") return "已付款未收票";
+  if (type === "INVOICE_WITH_UNPAID") return "已收票未付款";
+  return "发票异常";
+}
+
+export async function listCostInvoiceExceptions(query: CostQuery, actor: ActorLike = null) {
+  assertRead(actor, "costs");
+  const { page, pageSize } = costPageParams(query);
+  const filters = costListFiltersFromQuery(query);
+  const baseWhere = pagedCostWhere(filters, actor);
+  const baseAnd = Array.isArray(baseWhere.AND) ? baseWhere.AND : (baseWhere.AND ? [baseWhere.AND] : []);
+  const where: Prisma.OrderCostWhereInput = {
+    ...baseWhere,
+    AND: [
+      ...baseAnd,
+      costInvoiceExceptionWhere(),
+    ],
+  };
+  const [total, rows] = await Promise.all([
+    prisma.orderCost.count({ where }),
+    prisma.orderCost.findMany({
+      where,
+      include: includeCostRelations(),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  const serializedRows = rows.map(safeSerializeCost).map((cost) => {
+    const type = invoiceExceptionType(cost);
+    return {
+      ...cost,
+      invoiceExceptionType: type,
+      invoiceExceptionLabel: invoiceExceptionLabel(type),
+    };
+  });
+  return {
+    rows: serializedRows,
     total,
     page,
     pageSize,
