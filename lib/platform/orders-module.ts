@@ -107,6 +107,39 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
   assertRead(actor, "orders");
   const filters = orderListFiltersFromQuery(query);
   const where = orderListWhere(filters, actor);
+  if (options.paginated) {
+    const { page, pageSize } = pageParams(query, 20, 20);
+    const [total, orders, summaryRows] = await Promise.all([
+      prisma.receivableOrder.count({ where }),
+      prisma.receivableOrder.findMany({
+        where,
+        include: includeOrderRelations(),
+        orderBy: [{ actualShipmentDate: "desc" }, { blDate: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.receivableOrder.findMany({
+        where,
+        select: {
+          currency: true,
+          finalReceivableAmount: true,
+          finalReceivableAmountCny: true,
+          receivableAmount: true,
+          receivableAmountCny: true,
+        },
+      }),
+    ]);
+    const rows = sortReceivableRowsByShipmentDate(orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))));
+    return {
+      ...pageResult(rows, total, page, pageSize),
+      summary: summarizeCurrencyTotals(summaryRows.map((order) => ({
+        currency: order.currency,
+        amount: order.finalReceivableAmount ?? order.receivableAmount,
+        amountCny: order.finalReceivableAmountCny ?? order.receivableAmountCny,
+      }))),
+    };
+  }
+
   const orders = await prisma.receivableOrder.findMany({
     where,
     include: includeOrderRelations(),
@@ -116,18 +149,6 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
     orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),
     query,
   ));
-  if (options.paginated) {
-    const { page, pageSize } = pageParams(query, 20, 100);
-    const start = (page - 1) * pageSize;
-    return {
-      ...pageResult(sortedRows.slice(start, start + pageSize), sortedRows.length, page, pageSize),
-      summary: summarizeCurrencyTotals(sortedRows.map((order) => ({
-        currency: order.currency,
-        amount: order.finalReceivableAmount,
-        amountCny: order.finalReceivableAmountCny,
-      }))),
-    };
-  }
   return sortedRows;
 }
 

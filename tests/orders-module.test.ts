@@ -45,7 +45,10 @@ test("orders api sorts receivable orders by shipment date", () => {
 
   assert.deepEqual(sorted.map((row) => row.orderNo), ["PV263", "MG40", "PV252", "PV260", "DM22 23"]);
   assert.match(ordersService, /sortReceivableRowsByShipmentDate/);
-  assert.match(ordersService, /pageResult\(sortedRows\.slice\(start, start \+ pageSize\), sortedRows\.length, page, pageSize\)/);
+  assert.match(ordersService, /pageParams\(query, 20, 20\)/);
+  assert.match(ordersService, /skip: \(page - 1\) \* pageSize/);
+  assert.match(ordersService, /take: pageSize/);
+  assert.doesNotMatch(ordersService, /sortedRows\.slice\(start, start \+ pageSize\)/);
 });
 
 test("orders create form submits system exchange rate metadata", () => {

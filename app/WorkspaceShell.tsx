@@ -2,22 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import dynamic from "next/dynamic";
 import { ApiRequestError, apiJson } from "./api";
 import { AccountSettings } from "./AccountSettings";
 import { availableMenus } from "./menu";
 import { LoadingPanel } from "./LoadingPanel";
 import { LoginPanel } from "./LoginPanel";
-import { CostsModule } from "./modules/CostsModule";
-import { DashboardModule } from "./modules/DashboardModule";
-import { DomesticLogisticsModule } from "./modules/DomesticLogisticsModule";
-import { LogisticsFeesModule } from "./modules/LogisticsFeesModule";
-import { ManualModule } from "./modules/ManualModule";
-import { OrdersModule } from "./modules/OrdersModule";
-import { PaymentsModule } from "./modules/PaymentsModule";
-import { ProfitModule } from "./modules/ProfitModule";
-import { ReportsModule } from "./modules/ReportsModule";
-import { SettingsModule } from "./modules/SettingsModule";
-import { TaxRefundModule } from "./modules/TaxRefundModule";
 import { PasswordChangePanel } from "./PasswordChangePanel";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
@@ -29,6 +19,59 @@ import { WorkspaceLayout } from "./WorkspaceLayout";
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 const AUTH_BOOT_TIMEOUT_MS = 15000;
 const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
+
+const OrdersModule = dynamic(() => import("./modules/OrdersModule").then((module) => module.OrdersModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const DashboardModule = dynamic(() => import("./modules/DashboardModule").then((module) => module.DashboardModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const PaymentsModule = dynamic(() => import("./modules/PaymentsModule").then((module) => module.PaymentsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const CostsModule = dynamic(() => import("./modules/CostsModule").then((module) => module.CostsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogisticsModule").then((module) => module.DomesticLogisticsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const ProfitModule = dynamic(() => import("./modules/ProfitModule").then((module) => module.ProfitModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const TaxRefundModule = dynamic(() => import("./modules/TaxRefundModule").then((module) => module.TaxRefundModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const ReportsModule = dynamic(() => import("./modules/ReportsModule").then((module) => module.ReportsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const SettingsModule = dynamic(() => import("./modules/SettingsModule").then((module) => module.SettingsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const ManualModule = dynamic(() => import("./modules/ManualModule").then((module) => module.ManualModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+
+function BusinessModuleLoading() {
+  return (
+    <section className={styles.moduleCard}>
+      <div className={styles.emptyState}>正在加载模块...</div>
+    </section>
+  );
+}
 
 function clearClientAuthState() {
   if (typeof window === "undefined") return;
@@ -114,8 +157,11 @@ export function WorkspaceShell() {
 
   useEffect(() => {
     void loadCurrentUser();
-    void loadPublicCompanyProfile();
   }, []);
+
+  useEffect(() => {
+    if (auth.status === "guest") void loadPublicCompanyProfile();
+  }, [auth.status]);
 
   async function loadPublicCompanyProfile() {
     try {
