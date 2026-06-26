@@ -10,6 +10,7 @@ import {
 import { assertJsonObject, isPlainRecord, nonEmpty, normalizeEmail, parseEmailList, requireValidEmailList, validEmail } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
+import type { CurrencyTotals } from "./currency-totals";
 
 const TEXT_LIMITS = {
   subject: 220,
@@ -43,6 +44,7 @@ type LogisticsInvoiceNotificationBillLike = {
   customerShortName?: unknown;
   containerSummary?: unknown;
   amountCny?: unknown;
+  currencyTotals?: CurrencyTotals | null;
   detailText?: unknown;
   invoiceGroups?: LogisticsInvoiceGroupLike[] | null;
   remark?: unknown;
@@ -192,8 +194,29 @@ export async function logisticsInvoiceNotificationCcEmails(settings: unknown = {
     .filter((email, index, arr) => arr.indexOf(email) === index);
 }
 
-function formatCurrencyCny(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+const LOGISTICS_CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: "¥",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  HKD: "HK$",
+};
+
+function formatOriginalCurrency(currency = "CNY", value: unknown) {
+  const normalized = String(currency || "CNY").trim().toUpperCase() || "CNY";
+  const symbol = LOGISTICS_CURRENCY_SYMBOLS[normalized] || normalized;
+  return `${normalized} ${symbol}${Number(value || 0).toFixed(2)}`;
+}
+
+function formatLogisticsCurrencyTotals(totals?: CurrencyTotals | null, fallbackAmountCny?: unknown) {
+  const rows: string[] = [];
+  if (Number(totals?.cnyActual || 0) !== 0 || !(totals?.foreignTotals || []).length) {
+    rows.push(formatOriginalCurrency("CNY", totals?.cnyActual ?? fallbackAmountCny ?? 0));
+  }
+  for (const item of totals?.foreignTotals || []) {
+    rows.push(formatOriginalCurrency(item.currency, item.amount));
+  }
+  return rows.join(" / ");
 }
 
 function templateValue(value: unknown) {
@@ -212,7 +235,8 @@ function billVariables(bill: LogisticsInvoiceNotificationBillLike = {}) {
     blNo: templateValue(bill.blNo),
     customerShortName: templateValue(bill.customerShortName),
     containerSummary: templateValue(bill.containerSummary || "未录入"),
-    amountCny: formatCurrencyCny(bill.amountCny),
+    amountCny: formatLogisticsCurrencyTotals(bill.currencyTotals, bill.amountCny),
+    amountText: formatLogisticsCurrencyTotals(bill.currencyTotals, bill.amountCny),
     expenseDetails: templateValue(bill.detailText),
     invoiceGroups: (bill.invoiceGroups || []).map((group) => group.label).filter(Boolean).join("\n") || "对应物流费用发票",
     remark: templateValue(bill.remark),
@@ -229,7 +253,7 @@ function defaultBillRows(bills: LogisticsInvoiceNotificationBillLike[] = []) {
       `   提单号：${variables.blNo}`,
       `   柜型/柜量：${variables.containerSummary}`,
       `   客户简称：${variables.customerShortName}`,
-      `   费用合计：${variables.amountCny}`,
+      `   费用合计：${variables.amountText}`,
       "   费用明细：",
       detailLines,
       "   请分别上传：",

@@ -22,6 +22,7 @@ import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
 import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
+import { summarizeCurrencyTotals, type CurrencyTotals } from "./currency-totals";
 
 type UnknownRecord = Record<string, unknown>;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -72,6 +73,7 @@ type LogisticsBillSummary = {
   containerSummary: string;
   customerShortName: string;
   amountCny: number;
+  currencyTotals: CurrencyTotals;
   detailText: string;
   invoiceGroups: ReturnType<typeof logisticsInvoiceGroupsForCostTypes>;
   remark: string;
@@ -140,12 +142,11 @@ function logisticsExpenseContainerSummaryText(expense: LogisticsExpenseLike = {}
 function logisticsExpenseDetailText(expenses: LogisticsExpenseLike[] = []) {
   return expenses.map((expense, index) => {
     const amount = Number(expense.amount || 0).toFixed(2);
-    const amountCnyText = Number(expense.amountCny || 0).toFixed(2);
     const quantity = expense.billingQuantity == null
       ? Number(expense.appliedContainerCount || 1)
       : Number(expense.billingQuantity || 1);
     const remark = expense.remark ? `，备注：${expense.remark}` : "";
-    return `${index + 1}. ${logisticsCostTypeLabel(normalizedCostType(nonEmpty(expense.costType)))}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}，折人民币 ¥${amountCnyText}${remark}`;
+    return `${index + 1}. ${logisticsCostTypeLabel(normalizedCostType(nonEmpty(expense.costType)))}，数量 ${quantity || 1}，${expense.currency || "CNY"} ${amount}${remark}`;
   }).join("\n");
 }
 
@@ -172,6 +173,7 @@ function logisticsBillSummaryRows(expenses: LogisticsExpenseLike[] = []): Logist
       containerSummary: logisticsExpenseContainerSummaryText(first),
       customerShortName: logisticsExpenseCustomerShortName(first),
       amountCny: rows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
+      currencyTotals: summarizeCurrencyTotals(rows),
       detailText: logisticsExpenseDetailText(rows),
       invoiceGroups: logisticsInvoiceGroupsForCostTypes(rows.map((row) => row.costType)),
       remark: rows.map((row) => row.remark || "").filter(Boolean).join("；") || "-",

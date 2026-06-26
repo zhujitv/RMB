@@ -7,6 +7,7 @@ import {
   pageResult,
   serializeSupplier,
 } from "./shared";
+import { summarizeCurrencyTotals, type CurrencyTotalInput } from "./currency-totals";
 import { orderAccessWhere } from "./order-access";
 import {
   assertCanReadLogisticsExpenses,
@@ -27,8 +28,9 @@ type SupplierStatementRow = {
   supplierId: string;
   supplierName: string;
   orderIds: Set<string>;
+  approvedRows: CurrencyTotalInput[];
+  paidRows: CurrencyTotalInput[];
   approvedAmountCny: number;
-  invoicedAmountCny: number;
   pendingPaymentAmountCny: number;
   paidAmountCny: number;
 };
@@ -217,17 +219,59 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
       supplierId: row.supplierId,
       supplierName: row.supplierNameSnapshot || row.supplier?.supplierName || "",
       orderIds: new Set(),
+      approvedRows: [],
+      paidRows: [],
       approvedAmountCny: 0,
-      invoicedAmountCny: 0,
       pendingPaymentAmountCny: 0,
       paidAmountCny: 0,
     };
     acc[key].orderIds.add(row.orderId);
-    const amount = Number(row.amountCny || 0);
-    acc[key].approvedAmountCny += amount;
-    if (["已上传", "已确认"].includes(row.invoiceStatus)) acc[key].invoicedAmountCny += amount;
-    if (row.paymentStatus === "待付款") acc[key].pendingPaymentAmountCny += amount;
-    if (row.paymentStatus === "已付款") acc[key].paidAmountCny += amount;
+    const currencyRow = { currency: row.currency, amount: row.amount, amountCny: row.amountCny };
+    acc[key].approvedRows.push(currencyRow);
+    const paidRow = logisticsPaymentLedgerRow(row);
+    if (paidRow) acc[key].paidRows.push(paidRow);
     return acc;
-  }, {})).map((item) => ({ ...item, orderCount: item.orderIds.size, orderIds: undefined }));
+  }, {})).map((item) => {
+    const approvedCurrencyTotals = summarizeCurrencyTotals(item.approvedRows);
+    const paidCurrencyTotals = summarizeCurrencyTotals(item.paidRows);
+    const pendingPaymentCurrencyTotals = subtractCurrencyTotals(approvedCurrencyTotals, paidCurrencyTotals);
+    return {
+      supplierId: item.supplierId,
+      supplierName: item.supplierName,
+      orderCount: item.orderIds.size,
+      approvedCurrencyTotals,
+      pendingPaymentCurrencyTotals,
+      paidCurrencyTotals,
+      approvedAmountCny: approvedCurrencyTotals.cnyActual,
+      pendingPaymentAmountCny: pendingPaymentCurrencyTotals.cnyActual,
+      paidAmountCny: paidCurrencyTotals.cnyActual,
+    };
+  });
+}
+
+function logisticsPaymentLedgerRow(row: {
+  cost?: {
+    paymentDate?: Date | string | null;
+    deletedAt?: Date | string | null;
+    currency?: unknown;
+    amount?: unknown;
+    amountCny?: unknown;
+  } | null;
+}): CurrencyTotalInput | null {
+  const cost = row.cost;
+  if (!cost || cost.deletedAt || !cost.paymentDate) return null;
+  return { currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny };
+}
+
+function subtractCurrencyTotals(
+  payable: ReturnType<typeof summarizeCurrencyTotals>,
+  paid: ReturnType<typeof summarizeCurrencyTotals>,
+) {
+  const rows: CurrencyTotalInput[] = [
+    { currency: "CNY", amount: payable.cnyActual, amountCny: payable.cnyActual },
+    ...payable.foreignTotals.map((item) => ({ currency: item.currency, amount: item.amount, amountCny: 0 })),
+    { currency: "CNY", amount: -paid.cnyActual, amountCny: -paid.cnyActual },
+    ...paid.foreignTotals.map((item) => ({ currency: item.currency, amount: -item.amount, amountCny: 0 })),
+  ];
+  return summarizeCurrencyTotals(rows);
 }

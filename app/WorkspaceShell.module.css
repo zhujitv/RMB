@@ -3322,6 +3322,53 @@
   font-size: 18px;
 }
 
+.monthlySummaryCard {
+  overflow-x: auto;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.monthlySummaryTable {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.monthlySummaryTable th,
+.monthlySummaryTable td {
+  height: 36px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.monthlySummaryTable th {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  text-align: right;
+}
+
+.monthlySummaryTable th:first-child {
+  text-align: left;
+}
+
+.monthlySummaryTable td:first-child {
+  color: #475569;
+  font-weight: 700;
+  text-align: left;
+}
+
+.monthlySummaryTable td:not(:first-child) {
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .statementList {
   display: grid;
   gap: 8px;
@@ -3329,7 +3376,7 @@
 
 .statementRow {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(90px, auto));
+  grid-template-columns: minmax(180px, 1fr) minmax(70px, auto) minmax(90px, auto) minmax(220px, 2fr);
   gap: 10px;
   align-items: center;
   border: 1px solid #e2e8f0;

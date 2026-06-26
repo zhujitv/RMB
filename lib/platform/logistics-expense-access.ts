@@ -39,6 +39,7 @@ import {
   logisticsInvoiceGroupForCostType,
   logisticsInvoiceGroupsForCostTypes,
 } from "./logistics-invoice-groups";
+import { summarizeCurrencyTotals } from "./currency-totals";
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
@@ -461,6 +462,7 @@ export function logisticsExpenseBillAuditStatus(rows: LogisticsExpenseLike[] = [
 export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []) {
   return logisticsInvoiceGroupsForCostTypes(items.map((item) => item.costType)).map((group) => {
     const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
+    const currencyTotals = summarizeCurrencyTotals(groupItems);
     const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
     const confirmed = groupItems.length > 0 && groupItems.every((item) => item.invoiceStatus === "已确认");
     const failed = groupItems.some((item) => item.invoiceStatus === "通知失败");
@@ -470,6 +472,7 @@ export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []
       label: group.label,
       costTypes: group.costTypes,
       amountCny: groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0),
+      currencyTotals,
       itemIds: groupItems.map((item) => item.id).filter(Boolean),
       status: confirmed ? "已确认" : (uploaded ? "已上传" : (failed ? "通知失败" : (notified ? "已通知开票" : "待开票"))),
       uploaded,
@@ -498,6 +501,7 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
   const firstRaw = rows[0] || {};
   const bill = logisticsExpenseBillRecord(firstRaw);
   const amountCny = items.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
+  const currencyTotals = summarizeCurrencyTotals(items);
   const invoiceGroups = logisticsExpenseInvoiceGroups(items);
   return {
     id: logisticsExpenseBillId(firstRaw || first),
@@ -514,8 +518,9 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
     supplierNames: [...new Set(items.map((item) => item.supplierName).filter(Boolean))],
     costType: items.length === 1 ? items[0].costType : `${items.length} 项费用`,
     currency: "CNY",
-    amount: amountCny,
+    amount: currencyTotals.cnyActual,
     amountCny,
+    currencyTotals,
     auditStatus: bill.auditStatus || aggregateLogisticsExpenseStatus(items, "auditStatus"),
     invoiceStatus: bill.invoiceStatus || aggregateLogisticsExpenseInvoiceStatus(items),
     paymentStatus: bill.paymentStatus || aggregateLogisticsExpenseStatus(items, "paymentStatus"),

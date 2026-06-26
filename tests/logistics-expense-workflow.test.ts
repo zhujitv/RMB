@@ -47,6 +47,9 @@ const saveBillDetailsSource = logisticsModule.match(/async function saveBillDeta
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
 const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction parseXhrJson/)?.[0] || "";
+const monthlySummaryComponentSource = logisticsModule.match(/function MonthlySummaryComponent[\s\S]*?\n}\n\nfunction buildMonthlySummary/)?.[0] || "";
+const supplierSectionComponentSource = logisticsModule.match(/function SupplierSectionComponent[\s\S]*?\n}\n\nfunction LogisticsExpenseBillTable/)?.[0] || "";
+const billTableComponentSource = logisticsModule.match(/function LogisticsExpenseBillTable[\s\S]*?\n}\n\nfunction LogisticsExpenseCompactRow/)?.[0] || "";
 const backendAggregateStatusSource = backend.match(/export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/)?.[0] || "";
 const submitLogisticsExpenseBillSource = backend.match(/export async function submitLogisticsExpenseBill[\s\S]*?\n}\n\nexport async function batchUpdateLogisticsExpenses/)?.[0] || "";
 const reviewLogisticsExpenseBillsSource = backend.match(/export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n\nasync function approveLogisticsExpenseBillRowsInTransaction/)?.[0] || "";
@@ -67,6 +70,8 @@ const notificationTemplateFormSource = settingsModule.match(/function notificati
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const logisticsExpenseQueries = readFileSync("lib/platform/logistics-expense-queries.ts", "utf8");
+const logisticsSupplierStatementSource = logisticsExpenseQueries.match(/export async function logisticsSupplierStatement[\s\S]*?\n}\n\nfunction logisticsPaymentLedgerRow/)?.[0] || "";
 
 test("logistics expenses are stored outside official costs until approved", () => {
   assert.match(schema, /model LogisticsExpense/);
@@ -608,9 +613,8 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.doesNotMatch(logisticsModule, /<th>计费方式<\/th>/);
   assert.match(logisticsModule, /<th>数量<\/th>/);
   assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>金额<\/th>/);
-  assert.match(logisticsModule, /<th className=\{styles\.numericCell\}>折人民币<\/th>/);
+  assert.doesNotMatch(logisticsModule, /<th className=\{styles\.numericCell\}>折人民币<\/th>/);
   assert.match(logisticsModule, /formatOriginalCurrencyAccounting\(originalCurrency, originalAmount\)/);
-  assert.match(logisticsModule, /logisticsExpenseAmountCny\(expense, originalAmount, originalCurrency\)/);
   assert.doesNotMatch(logisticsExpenseDetailLineSource, /formatCnyAccounting\(expense\.amountCny \|\| expense\.amount \|\| 0\)[\s\S]*<span>\{expense\.currency/);
   assert.match(logisticsModule, /<th>发票状态<\/th>/);
   assert.match(logisticsModule, /<th>成本同步<\/th>/);
@@ -747,11 +751,27 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.doesNotMatch(logisticsModule, /window\.location|location\.href|router\.refresh|reload\(/);
   assert.match(logisticsModule, /费用明细/);
   assert.match(logisticsModule, /账单合计/);
-  assert.match(logisticsModule, /人民币实际费用合计/);
-  assert.match(logisticsModule, /外币费用合计/);
-  assert.match(logisticsModule, /折人民币总合计/);
+  assert.match(logisticsModule, /function MonthlySummaryComponent/);
+  assert.match(logisticsModule, /const monthlySummary = buildMonthlySummary\(rows\)/);
+  assert.match(monthlySummaryComponentSource, /\{currency\} 合计/);
+  assert.match(logisticsModule, /function SupplierSectionComponent/);
+  assert.match(logisticsModule, /function LogisticsExpenseBillTable/);
+  assert.doesNotMatch(supplierSectionComponentSource, /LogisticsCurrencyAmountList|合计：|statementRowSummary/);
+  assert.doesNotMatch(billTableComponentSource, /statementRowSummary|buildMonthlySummary|合计：/);
+  assert.doesNotMatch(logisticsModule, /折人民币总合计/);
+  assert.match(logisticsModule, /approvedCurrencyTotals/);
+  assert.match(logisticsModule, /pendingPaymentCurrencyTotals/);
+  assert.match(logisticsModule, /{ key: "pendingPayment", label: "待付款" }/);
+  assert.doesNotMatch(logisticsModule, /{ key: "invoiced", label: "已开票" }/);
   assert.match(logisticsModule, /logisticsExpenseCurrencySummaryFromItems/);
   assert.match(logisticsModule, /logisticsExpenseFormCurrencySummary/);
+  assert.match(backend, /approvedCurrencyTotals/);
+  assert.match(backend, /logisticsPaymentLedgerRow/);
+  assert.match(backend, /subtractCurrencyTotals\(approvedCurrencyTotals, paidCurrencyTotals\)/);
+  assert.match(backend, /summarizeCurrencyTotals/);
+  assert.match(logisticsSupplierStatementSource, /const paidRow = logisticsPaymentLedgerRow\(row\)/);
+  assert.doesNotMatch(logisticsSupplierStatementSource, /row\.paymentStatus|row\.invoiceStatus/);
+  assert.match(logisticsExpenseQueries, /!cost\.paymentDate/);
   assert.match(workspaceStyles, /\.logisticsCurrencySummary/);
   assert.match(logisticsModule, /logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /\.logisticsLineDeleteButton/);

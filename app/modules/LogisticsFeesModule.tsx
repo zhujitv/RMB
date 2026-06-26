@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
-import { formatAmount, formatCny, formatDateTime, moneyText } from "../formatters";
+import { formatAmount, formatDateTime } from "../formatters";
 import { preventEnterFormSubmit } from "../formGuards";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob } from "../utils";
@@ -113,6 +113,7 @@ type LogisticsExpense = {
   exchangeRate?: number;
   amount?: number;
   amountCny?: number;
+  currencyTotals?: LogisticsExpenseCurrencySummary;
   containerType?: string;
   appliedContainerCount?: number | null;
   billingMethod?: string;
@@ -151,6 +152,7 @@ type LogisticsInvoiceGroupSummary = {
   label: string;
   costTypes?: readonly string[];
   amountCny?: number;
+  currencyTotals?: LogisticsExpenseCurrencySummary;
   itemIds?: string[];
   status?: string;
   uploaded?: boolean;
@@ -173,8 +175,10 @@ type LogisticsStatementRow = {
   supplierId?: string;
   supplierName?: string;
   orderCount?: number;
+  approvedCurrencyTotals?: LogisticsExpenseCurrencySummary;
+  pendingPaymentCurrencyTotals?: LogisticsExpenseCurrencySummary;
+  paidCurrencyTotals?: LogisticsExpenseCurrencySummary;
   approvedAmountCny?: number;
-  invoicedAmountCny?: number;
   pendingPaymentAmountCny?: number;
   paidAmountCny?: number;
 };
@@ -632,7 +636,7 @@ export function LogisticsFeesModule({
       message: "确定删除这条费用明细吗？删除后不可恢复。",
       details: [
         `订单：${expense.orderNo || "-"}`,
-        `费用：${logisticsCostTypeLabel(expense.costType || "") || "-"} ${moneyText(expense.currency, expense.amount, expense.amountCny)}`,
+        `费用：${logisticsCostTypeLabel(expense.costType || "") || "-"} ${formatOriginalCurrencyAccounting(expense.currency || "CNY", expense.amount || 0)}`,
       ],
       confirmLabel: "确认删除",
       cancelLabel: "取消",
@@ -670,7 +674,7 @@ export function LogisticsFeesModule({
         `订单：${expense.orderNo || "-"}`,
         `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
         `明细：${items.length} 项`,
-        `账单合计：${formatCnyAccounting(expense.amountCny || 0)}`,
+        `账单合计：${logisticsCurrencySummaryPlainText(logisticsExpenseCurrencySummaryFromItems(items))}`,
       ],
       confirmLabel: "撤回账单",
       cancelLabel: "取消",
@@ -810,29 +814,20 @@ export function LogisticsFeesModule({
   }
 
   function exportStatementCsv() {
-    const header = ["月结月份", "供应商", "订单数", "审核通过金额", "已开票金额", "待付款金额", "已付款金额"];
+    const header = ["月结月份", "供应商", "订单数", "应付金额", "待付款金额", "已付款金额"];
     const body = statementRows.map((row) => [
       statementMonth,
       row.supplierName || "-",
       String(row.orderCount || 0),
-      String(Number(row.approvedAmountCny || 0).toFixed(2)),
-      String(Number(row.invoicedAmountCny || 0).toFixed(2)),
-      String(Number(row.pendingPaymentAmountCny || 0).toFixed(2)),
-      String(Number(row.paidAmountCny || 0).toFixed(2)),
+      logisticsCurrencySummaryPlainText(statementRowSummary(row, "approved")),
+      logisticsCurrencySummaryPlainText(statementRowSummary(row, "pendingPayment")),
+      logisticsCurrencySummaryPlainText(statementRowSummary(row, "paid")),
     ]);
     const csv = [header, ...body].map((line) => line.map(csvCell).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, `物流费用月结_${statementMonth || "全部"}.csv`);
     setNotice("物流费用月结对账单已开始导出");
   }
-
-  const statementTotals = statementRows.reduce((acc, row) => {
-    acc.approved += Number(row.approvedAmountCny || 0);
-    acc.invoiced += Number(row.invoicedAmountCny || 0);
-    acc.pending += Number(row.pendingPaymentAmountCny || 0);
-    acc.paid += Number(row.paidAmountCny || 0);
-    return acc;
-  }, { approved: 0, invoiced: 0, pending: 0, paid: 0 });
 
   return (
     <section id={sectionId || undefined} className={`${embedded ? styles.subModuleCard : styles.moduleCard} ${styles.logisticsTypographyScope}`}>
@@ -902,27 +897,8 @@ export function LogisticsFeesModule({
             </button>
           </div>
         </div>
-        <div className={styles.statementMetrics}>
-          <div><span>应付总额</span><strong>{formatCny(statementTotals.approved)}</strong></div>
-          <div><span>已开票</span><strong>{formatCny(statementTotals.invoiced)}</strong></div>
-          <div><span>待付款</span><strong>{formatCny(statementTotals.pending)}</strong></div>
-          <div><span>已付款</span><strong>{formatCny(statementTotals.paid)}</strong></div>
-        </div>
-        {statementRows.length ? (
-          <div className={styles.statementList}>
-            {statementRows.map((row) => (
-              <div key={row.supplierId || row.supplierName || "-"} className={styles.statementRow}>
-                <strong>{row.supplierName || "-"}</strong>
-                <span>{row.orderCount || 0} 票</span>
-                <span>应付 {formatCny(row.approvedAmountCny || 0)}</span>
-                <span>待付 {formatCny(row.pendingPaymentAmountCny || 0)}</span>
-                <span>已付 {formatCny(row.paidAmountCny || 0)}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className={styles.mutedText}>{statementLoading ? "月结汇总加载中..." : "当前月份暂无已审核物流费用。"}</p>
-        )}
+        <MonthlySummaryComponent rows={statementRows} />
+        <SupplierSectionComponent rows={statementRows} loading={statementLoading} />
       </div>
 
       <div className={styles.listToolbar}>
@@ -958,51 +934,18 @@ export function LogisticsFeesModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
-        <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
-          <thead>
-            <tr>
-              {canReviewExpense ? (
-                <th className={styles.selectionColumn}>
-                  <UiCheckbox
-                    variant="table"
-                    label="选择本页待审核账单"
-                    checked={allReviewableSelected}
-                    disabled={!reviewableRows.length}
-                    onChange={(event) => toggleAllReviewableBills(event.target.checked)}
-                  />
-                </th>
-              ) : null}
-              <th className={styles.orderNoColumn}>订单号</th>
-              <th className={styles.blNoColumn}>提单号</th>
-              <th className={styles.containerTypeColumn}>柜型</th>
-              <th className={styles.customerColumn}>客户</th>
-              <th className={styles.amountColumn}>金额</th>
-              <th className={styles.statusColumn}>审核</th>
-              <th className={styles.statusColumn}>发票</th>
-              <th className={styles.statusColumn}>付款</th>
-              <th className={styles.operationColumn}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={canReviewExpense ? 10 : 9}><div className={styles.emptyState}>数据加载中...</div></td></tr>
-            ) : rows.length ? rows.map((expense) => (
-              <LogisticsExpenseCompactRow
-                key={expense.id}
-                expense={expense}
-                active={expandedId === expense.id}
-                selectionEnabled={canReviewExpense}
-                selected={selectedBillIds.includes(expense.id)}
-                onOpen={() => setExpandedId(expense.id)}
-                onSelect={(checked) => toggleBillSelection(expense, checked)}
-              />
-            )) : (
-              <tr><td colSpan={canReviewExpense ? 10 : 9}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <LogisticsExpenseBillTable
+        rows={rows}
+        loading={loading}
+        canReviewExpense={canReviewExpense}
+        hasReviewableRows={Boolean(reviewableRows.length)}
+        allReviewableSelected={allReviewableSelected}
+        selectedBillIds={selectedBillIds}
+        expandedId={expandedId}
+        onToggleAllReviewableBills={toggleAllReviewableBills}
+        onOpen={(expense) => setExpandedId(expense.id)}
+        onSelectBill={toggleBillSelection}
+      />
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={(nextPage) => {
         setExpandedId("");
@@ -1053,6 +996,103 @@ export function LogisticsFeesModule({
   );
 }
 
+function SupplierSectionComponent({
+  rows,
+  loading,
+}: {
+  rows: LogisticsStatementRow[];
+  loading: boolean;
+}) {
+  if (!rows.length) {
+    return <p className={styles.mutedText}>{loading ? "月结汇总加载中..." : "当前月份暂无已审核物流费用。"}</p>;
+  }
+  return (
+    <div className={styles.statementList}>
+      {rows.map((row) => (
+        <div key={row.supplierId || row.supplierName || "-"} className={styles.statementRow}>
+          <strong>{row.supplierName || "-"}</strong>
+          <span>{row.orderCount || 0} 票</span>
+          <span>供应商明细</span>
+          <span>金额以上方月结汇总为准</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LogisticsExpenseBillTable({
+  rows,
+  loading,
+  canReviewExpense,
+  hasReviewableRows,
+  allReviewableSelected,
+  selectedBillIds,
+  expandedId,
+  onToggleAllReviewableBills,
+  onOpen,
+  onSelectBill,
+}: {
+  rows: LogisticsExpense[];
+  loading: boolean;
+  canReviewExpense: boolean;
+  hasReviewableRows: boolean;
+  allReviewableSelected: boolean;
+  selectedBillIds: string[];
+  expandedId: string;
+  onToggleAllReviewableBills: (checked: boolean) => void;
+  onOpen: (expense: LogisticsExpense) => void;
+  onSelectBill: (expense: LogisticsExpense, checked: boolean) => void;
+}) {
+  const colSpan = canReviewExpense ? 10 : 9;
+  return (
+    <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
+      <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
+        <thead>
+          <tr>
+            {canReviewExpense ? (
+              <th className={styles.selectionColumn}>
+                <UiCheckbox
+                  variant="table"
+                  label="选择本页待审核账单"
+                  checked={allReviewableSelected}
+                  disabled={!hasReviewableRows}
+                  onChange={(event) => onToggleAllReviewableBills(event.target.checked)}
+                />
+              </th>
+            ) : null}
+            <th className={styles.orderNoColumn}>订单号</th>
+            <th className={styles.blNoColumn}>提单号</th>
+            <th className={styles.containerTypeColumn}>柜型</th>
+            <th className={styles.customerColumn}>客户</th>
+            <th className={styles.amountColumn}>金额</th>
+            <th className={styles.statusColumn}>审核</th>
+            <th className={styles.statusColumn}>发票</th>
+            <th className={styles.statusColumn}>付款</th>
+            <th className={styles.operationColumn}>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            <tr><td colSpan={colSpan}><div className={styles.emptyState}>数据加载中...</div></td></tr>
+          ) : rows.length ? rows.map((expense) => (
+            <LogisticsExpenseCompactRow
+              key={expense.id}
+              expense={expense}
+              active={expandedId === expense.id}
+              selectionEnabled={canReviewExpense}
+              selected={selectedBillIds.includes(expense.id)}
+              onOpen={() => onOpen(expense)}
+              onSelect={(checked) => onSelectBill(expense, checked)}
+            />
+          )) : (
+            <tr><td colSpan={colSpan}><div className={styles.emptyState}>未找到匹配的物流费用</div></td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function LogisticsExpenseCompactRow({
   expense,
   active,
@@ -1090,7 +1130,9 @@ function LogisticsExpenseCompactRow({
       <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
       <td className={styles.containerTypeColumn}>{containerSummary.shortText}</td>
       <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
-      <td className={styles.amountColumn}>{formatCnyAccounting(expense.amountCny || 0)}</td>
+      <td className={styles.amountColumn}>
+        <LogisticsCurrencyAmountList summary={expense.currencyTotals || currencySummaryFromSingleExpense(expense)} compact />
+      </td>
       <td className={styles.statusColumn}><StatusPill value={auditStatus} /></td>
       <td className={styles.statusColumn}><StatusPill value={invoiceStatus} /></td>
       <td className={styles.statusColumn}><StatusPill value={paymentStatus} /></td>
@@ -1405,7 +1447,7 @@ function LogisticsExpenseRows({
   const drawerSubtitle = [
     `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
     `柜型：${containerSummary.shortText}`,
-    `折人民币：${formatCnyAccounting(billCurrencySummary.totalCny)}`,
+    `账单合计：${logisticsCurrencySummaryPlainText(billCurrencySummary)}`,
   ].join(" · ");
 
   return (
@@ -1459,7 +1501,7 @@ function LogisticsExpenseRows({
             <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} hidden={!canShowSupplier || !supplierNames.length} wide />
             <div className={`${styles.detailField} ${styles.detailFieldWide}`}>
               <span>账单合计</span>
-              <LogisticsCurrencyTotalSummary summary={billCurrencySummary} />
+              <LogisticsCurrencyAmountList summary={billCurrencySummary} />
             </div>
           </div>
         </div>
@@ -1470,7 +1512,7 @@ function LogisticsExpenseRows({
             <div>
               <strong>费用明细</strong>
               <span>{editingExpenseRows.length} 项</span>
-              <LogisticsCurrencyTotalSummary summary={billCurrencySummary} compact />
+              <LogisticsCurrencyAmountList summary={billCurrencySummary} compact />
             </div>
           </div>
           <LogisticsExpenseDetailsTable
@@ -1546,7 +1588,6 @@ function LogisticsExpenseDetailsTable({
             <th>柜型</th>
             <th>数量</th>
             <th className={styles.numericCell}>金额</th>
-            <th className={styles.numericCell}>折人民币</th>
             <th>备注</th>
             <th>发票状态</th>
             <th>成本同步</th>
@@ -1600,11 +1641,8 @@ function LogisticsExpenseDetailLine({
   const editBlockReason = billEditable ? logisticsExpenseEditBlockReason(expense) : `账单${billAuditStatus}，不能修改`;
   const canEditThisAmount = canEditAmount && billEditable && !editBlockReason;
   const shouldRenderRemarkInput = canEditThisAmount;
-  const editedSubtotal = editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount);
-  const editedAmountCny = editedSubtotal * Number(expense.exchangeRate || 1);
   const originalAmount = logisticsExpenseOriginalAmount(expense);
-  const originalCurrency = normalizeCurrencyCode(expense.currency);
-  const amountCny = logisticsExpenseAmountCny(expense, originalAmount, originalCurrency);
+  const originalCurrency = logisticsExpenseDisplayCurrency(expense, draft);
   const deleteBlockReason = billEditable ? logisticsExpenseDeleteBlockReason(expense) : `账单${billAuditStatus}，不能删除明细`;
   return (
     <tr>
@@ -1652,9 +1690,6 @@ function LogisticsExpenseDetailLine({
           )}
           {canEditThisAmount ? <span>{originalCurrency}</span> : null}
         </div>
-      </td>
-      <td className={styles.numericCell}>
-        <strong>{formatCnyAccounting(canEditThisAmount ? editedAmountCny : amountCny)}</strong>
       </td>
       <td className={styles.remarkCell} title={draft.remark || expense.remark || ""}>
         {shouldRenderRemarkInput ? (
@@ -2087,14 +2122,14 @@ export function LogisticsExpenseForm({
                 {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
               <input value={item.exchangeRate} onChange={(event) => setItemField(index, "exchangeRate", event.target.value)} readOnly={item.currency === "CNY" || logisticsCostTypeLocksCurrency(item.costType)} inputMode="decimal" required />
-              <strong>{formatCny(lineSubtotal(item) * Number(item.exchangeRate || 0))}</strong>
+              <strong>{formatOriginalCurrencyAccounting(item.currency, lineSubtotal(item))}</strong>
               <input value={item.remark} onChange={(event) => setItemField(index, "remark", event.target.value)} placeholder="可选" />
               <button className={styles.secondaryButton} type="button" disabled={form.items.length <= 1} onClick={() => removeExpenseItem(index)}>删除</button>
             </div>
           ))}
         </div>
         <div className={styles.logisticsItemsTotal}>
-          <LogisticsCurrencyTotalSummary summary={formCurrencySummary} />
+          <LogisticsCurrencyAmountList summary={formCurrencySummary} />
         </div>
       </div>
       {!isLockedSupplier ? (
@@ -2131,7 +2166,7 @@ function LogisticsInvoiceGroupsPanel({
 }) {
   const [deletingGroupKey, setDeletingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
-  const visibleGroups = groups.filter((group) => (group.itemIds?.length || 0) > 0 || Number(group.amountCny || 0) > 0);
+  const visibleGroups = groups.filter((group) => (group.itemIds?.length || 0) > 0 || !logisticsCurrencySummaryIsZero(group.currencyTotals));
   const approvedItems = items.filter((item) => item.auditStatus === "审核通过");
   if (!visibleGroups.length || !approvedItems.length) return null;
 
@@ -2193,7 +2228,7 @@ function LogisticsInvoiceGroupsPanel({
               </div>
               <div className={styles.logisticsInvoiceGroupMeta}>
                 <span>包含费用：{(group.costTypes || []).map((type) => logisticsCostTypeLabel(type)).join(" / ") || "-"}</span>
-                <span>分组合计：{formatCny(group.amountCny || groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0))}</span>
+                <span>分组合计：<LogisticsCurrencyAmountList summary={group.currencyTotals || currencySummaryFromSingleExpense(targetExpense)} compact /></span>
                 {group.invoiceNotificationError ? <span className={styles.logisticsInvoiceGroupError}>{group.invoiceNotificationError}</span> : null}
               </div>
               {uploaded ? (
@@ -2542,23 +2577,109 @@ function containerSummaryText(order?: ExpenseOrderOption | null) {
   return `${count} 个柜${nos}`;
 }
 
-function expenseAmountText(expense: LogisticsExpense) {
-  const currency = expense.currency || "CNY";
-  if (currency === "CNY") return formatCny(expense.amount || expense.amountCny || 0);
-  return `${currency} ${formatAmount(expense.amount || 0)}`;
-}
-
 function formatCnyAccounting(value: unknown) {
   return `¥ ${formatAmount(value)}`;
 }
 
+const LOGISTICS_CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: "¥",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  HKD: "HK$",
+};
+
 function formatOriginalCurrencyAccounting(currency: string, value: unknown) {
   const normalized = normalizeCurrencyCode(currency);
   if (normalized === "CNY") return formatCnyAccounting(value);
-  return `${normalized} ${formatAmount(value)}`;
+  const symbol = LOGISTICS_CURRENCY_SYMBOLS[normalized] || normalized;
+  return `${normalized} ${symbol}${formatAmount(value)}`;
 }
 
-function LogisticsCurrencyTotalSummary({
+function formatOriginalCurrencyValue(currency: string, value: unknown) {
+  const normalized = normalizeCurrencyCode(currency);
+  if (normalized === "CNY") return formatCnyAccounting(value);
+  const symbol = LOGISTICS_CURRENCY_SYMBOLS[normalized] || normalized;
+  return `${symbol}${formatAmount(value)}`;
+}
+
+const MONTHLY_SUMMARY_STATUS_ROWS: Array<{
+  key: "approved" | "pendingPayment" | "paid";
+  label: string;
+}> = [
+  { key: "approved", label: "应付总额" },
+  { key: "pendingPayment", label: "待付款" },
+  { key: "paid", label: "已付款" },
+];
+
+function MonthlySummaryComponent({ rows }: { rows: LogisticsStatementRow[] }) {
+  const monthlySummary = buildMonthlySummary(rows);
+  return (
+    <div className={styles.monthlySummaryCard}>
+      <table className={styles.monthlySummaryTable}>
+        <thead>
+          <tr>
+            <th>状态</th>
+            {monthlySummary.currencies.map((currency) => (
+              <th key={currency}>{currency} 合计</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {monthlySummary.statusRows.map((row) => (
+            <tr key={row.key}>
+              <td>{row.label}</td>
+              {monthlySummary.currencies.map((currency) => (
+                <td key={`${row.key}-${currency}`}>{formatOriginalCurrencyValue(currency, row.amounts[currency] || 0)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function buildMonthlySummary(rows: LogisticsStatementRow[]) {
+  const totals = rows.reduce((acc, row) => {
+    acc.approved = mergeLogisticsCurrencySummaries(acc.approved, statementRowSummary(row, "approved"));
+    acc.pendingPayment = mergeLogisticsCurrencySummaries(acc.pendingPayment, statementRowSummary(row, "pendingPayment"));
+    acc.paid = mergeLogisticsCurrencySummaries(acc.paid, statementRowSummary(row, "paid"));
+    return acc;
+  }, {
+    approved: emptyLogisticsCurrencySummary(),
+    pendingPayment: emptyLogisticsCurrencySummary(),
+    paid: emptyLogisticsCurrencySummary(),
+  });
+  const currencies = monthlySummaryCurrencies(Object.values(totals));
+  const statusRows = MONTHLY_SUMMARY_STATUS_ROWS.map((item) => ({
+    ...item,
+    amounts: monthlySummaryAmountsByCurrency(totals[item.key], currencies),
+  }));
+  return { currencies, statusRows };
+}
+
+function monthlySummaryCurrencies(summaries: LogisticsExpenseCurrencySummary[]) {
+  const currencies = new Set<string>();
+  for (const summary of summaries) {
+    if (Math.abs(Number(summary.cnyActual || 0)) > 0.000001) currencies.add("CNY");
+    for (const item of summary.foreignTotals || []) currencies.add(item.currency);
+  }
+  if (!currencies.size) currencies.add("CNY");
+  return [...currencies].sort((left, right) => logisticsCurrencyOrder(left) - logisticsCurrencyOrder(right) || left.localeCompare(right));
+}
+
+function monthlySummaryAmountsByCurrency(summary: LogisticsExpenseCurrencySummary, currencies: string[]) {
+  const amounts: Record<string, number> = {};
+  for (const currency of currencies) {
+    amounts[currency] = currency === "CNY"
+      ? Number(summary.cnyActual || 0)
+      : Number((summary.foreignTotals || []).find((item) => item.currency === currency)?.amount || 0);
+  }
+  return amounts;
+}
+
+function LogisticsCurrencyAmountList({
   summary,
   compact = false,
 }: {
@@ -2567,24 +2688,29 @@ function LogisticsCurrencyTotalSummary({
 }) {
   return (
     <div className={`${styles.logisticsCurrencySummary} ${compact ? styles.logisticsCurrencySummaryCompact : ""}`}>
-      {Math.abs(summary.cnyActual) > 0.000001 ? (
+      {Math.abs(summary.cnyActual) > 0.000001 || !summary.foreignTotals.length ? (
         <div className={styles.logisticsCurrencySummaryRow}>
-          <span>人民币实际费用合计：</span>
-          <strong>{formatCnyAccounting(summary.cnyActual)}</strong>
+          <span>CNY：</span>
+          <strong>{formatOriginalCurrencyValue("CNY", summary.cnyActual)}</strong>
         </div>
       ) : null}
       {summary.foreignTotals.map((item) => (
         <div className={styles.logisticsCurrencySummaryRow} key={item.currency}>
-          <span>{item.currency} 外币费用合计：</span>
-          <strong>{item.currency} {formatAmount(item.amount)}</strong>
+          <span>{item.currency}：</span>
+          <strong>{formatOriginalCurrencyValue(item.currency, item.amount)}</strong>
         </div>
       ))}
-      <div className={`${styles.logisticsCurrencySummaryRow} ${styles.logisticsCurrencySummaryTotal}`}>
-        <span>折人民币总合计：</span>
-        <strong>{formatCnyAccounting(summary.totalCny)}</strong>
-      </div>
     </div>
   );
+}
+
+function currencySummaryFromSingleExpense(expense: LogisticsExpense): LogisticsExpenseCurrencySummary {
+  const currency = normalizeCurrencyCode(expense.currency);
+  const amount = logisticsExpenseOriginalAmount(expense);
+  const amountCny = logisticsExpenseAmountCny(expense, amount, currency);
+  const accumulator = createLogisticsCurrencyAccumulator();
+  addLogisticsCurrencyAmount(accumulator, currency, amount, amountCny);
+  return finalizeLogisticsCurrencySummary(accumulator);
 }
 
 function logisticsExpenseCurrencySummaryFromItems(items: LogisticsExpense[]): LogisticsExpenseCurrencySummary {
@@ -2602,13 +2728,65 @@ function logisticsExpenseCurrencySummaryFromDrafts(
   drafts: Record<string, LogisticsExpenseDraft>,
 ): LogisticsExpenseCurrencySummary {
   return finalizeLogisticsCurrencySummary(items.reduce((summary, item) => {
-    const currency = normalizeCurrencyCode(item.currency);
     const draft = drafts[item.id];
+    const currency = logisticsExpenseDisplayCurrency(item, draft);
     const originalAmount = logisticsExpenseDraftOriginalAmount(item, draft);
     const amountCny = originalAmount * finiteNumber(item.exchangeRate, currency === "CNY" ? 1 : 0);
     addLogisticsCurrencyAmount(summary, currency, originalAmount, amountCny);
     return summary;
   }, createLogisticsCurrencyAccumulator()));
+}
+
+function emptyLogisticsCurrencySummary(): LogisticsExpenseCurrencySummary {
+  return { cnyActual: 0, foreignTotals: [], totalCny: 0 };
+}
+
+function logisticsCurrencySummaryIsZero(summary?: LogisticsExpenseCurrencySummary | null) {
+  if (!summary) return true;
+  return Math.abs(Number(summary.cnyActual || 0)) < 0.000001
+    && !(summary.foreignTotals || []).some((item) => Math.abs(Number(item.amount || 0)) >= 0.000001);
+}
+
+function mergeLogisticsCurrencySummaries(
+  left: LogisticsExpenseCurrencySummary = emptyLogisticsCurrencySummary(),
+  right: LogisticsExpenseCurrencySummary = emptyLogisticsCurrencySummary(),
+): LogisticsExpenseCurrencySummary {
+  const accumulator = createLogisticsCurrencyAccumulator();
+  addLogisticsCurrencyAmount(accumulator, "CNY", left.cnyActual, left.cnyActual);
+  for (const item of left.foreignTotals || []) addLogisticsCurrencyAmount(accumulator, item.currency, item.amount, 0);
+  addLogisticsCurrencyAmount(accumulator, "CNY", right.cnyActual, right.cnyActual);
+  for (const item of right.foreignTotals || []) addLogisticsCurrencyAmount(accumulator, item.currency, item.amount, 0);
+  return finalizeLogisticsCurrencySummary(accumulator);
+}
+
+function logisticsCurrencySummaryPlainText(summary?: LogisticsExpenseCurrencySummary | null) {
+  const safeSummary = summary || emptyLogisticsCurrencySummary();
+  const lines: string[] = [];
+  if (Math.abs(Number(safeSummary.cnyActual || 0)) > 0.000001 || !(safeSummary.foreignTotals || []).length) {
+    lines.push(`CNY：${formatOriginalCurrencyAccounting("CNY", safeSummary.cnyActual)}`);
+  }
+  for (const item of safeSummary.foreignTotals || []) {
+    lines.push(`${item.currency}：${formatOriginalCurrencyAccounting(item.currency, item.amount)}`);
+  }
+  return lines.join(" / ");
+}
+
+function statementRowSummary(
+  row: LogisticsStatementRow,
+  key: "approved" | "pendingPayment" | "paid",
+): LogisticsExpenseCurrencySummary {
+  const summary = key === "approved"
+    ? row.approvedCurrencyTotals
+    : key === "pendingPayment"
+      ? row.pendingPaymentCurrencyTotals
+      : row.paidCurrencyTotals;
+  if (summary) return summary;
+  const fallback = key === "approved"
+    ? row.approvedAmountCny
+    : key === "pendingPayment"
+      ? row.pendingPaymentAmountCny
+      : row.paidAmountCny;
+  return { cnyActual: Number(fallback || 0), foreignTotals: [], totalCny: Number(fallback || 0) };
 }
 
 function createLogisticsCurrencyAccumulator() {
@@ -2660,6 +2838,12 @@ function logisticsExpenseOriginalAmount(expense: LogisticsExpense) {
   const exchangeRate = finiteNumber(expense.exchangeRate, currency === "CNY" ? 1 : 0);
   if (currency === "CNY" || exchangeRate <= 0) return amountCny;
   return amountCny / exchangeRate;
+}
+
+function logisticsExpenseDisplayCurrency(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
+  const costType = draft?.costType || expense.costType || "";
+  if (logisticsCostTypeDefaultCurrency(costType) === "USD") return "USD";
+  return normalizeCurrencyCode(expense.currency);
 }
 
 function logisticsExpenseAmountCny(expense: LogisticsExpense, originalAmount: number, currency: string) {
@@ -2793,6 +2977,7 @@ function validLogisticsExpenseDraft(draft?: LogisticsExpenseDraft, isCreate = fa
 
 function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchUpdateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
+  const currency = logisticsCostTypeDefaultCurrency(safeDraft.costType) === "USD" ? "USD" : (expense.currency || "CNY");
 	  return {
 	    id: expense.id,
 	    costType: safeDraft.costType,
@@ -2800,7 +2985,7 @@ function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: Logisti
 	    billingMethod: DEFAULT_BILLING_METHOD,
 	    billingQuantity: Number(safeDraft.appliedContainerCount),
 	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
-	    currency: expense.currency || "CNY",
+	    currency,
 	    exchangeRate: Number(expense.exchangeRate || 1),
 	    remark: safeDraft.remark.trim(),
 	  };
@@ -2808,13 +2993,14 @@ function logisticsExpenseDraftPayload(expense: LogisticsExpense, draft?: Logisti
 
 function logisticsExpenseDraftCreatePayload(expense: LogisticsExpense, draft?: LogisticsExpenseDraft): LogisticsExpenseBatchCreateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
+  const currency = logisticsCostTypeDefaultCurrency(safeDraft.costType) === "USD" ? "USD" : (expense.currency || "CNY");
 	  return {
 	    expenseType: safeDraft.costType,
 	    amount: Number(safeDraft.unitAmount),
 	    billingMethod: DEFAULT_BILLING_METHOD,
 	    billingQuantity: Number(safeDraft.appliedContainerCount),
 	    appliedContainerCount: billingQuantityLegacyInteger(safeDraft.appliedContainerCount),
-	    currency: expense.currency || "CNY",
+	    currency,
 	    exchangeRate: Number(expense.exchangeRate || 1),
 	    remark: safeDraft.remark.trim(),
 	  };
@@ -2829,11 +3015,6 @@ function logisticsExpenseDraftValidationMessage(expense: LogisticsExpense, draft
 	  if (expense.isTemporary && unitAmount <= 0) return `第 ${lineNo} 行金额必须大于 0`;
 	  if (!validBillingQuantity(draft.appliedContainerCount)) return `第 ${lineNo} 行适用数量必须为正整数`;
 	  return `第 ${lineNo} 行填写不完整`;
-}
-
-function logisticsExpenseDraftAmountCny(expense: LogisticsExpense, draft?: LogisticsExpenseDraft) {
-  if (!draft || (!validLogisticsExpenseDraft(draft, expense.isTemporary) && !draft.unitAmount.trim())) return Number(expense.amountCny || 0);
-  return editableLineSubtotal(draft.unitAmount, draft.appliedContainerCount) * Number(expense.exchangeRate || 1);
 }
 
 function editableNumberText(value: unknown) {
@@ -2918,6 +3099,7 @@ function logisticsInvoiceGroupsForBill(items: LogisticsExpense[]): LogisticsInvo
       label: group.label,
       costTypes: group.costTypes,
       amountCny: groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0),
+      currencyTotals: logisticsExpenseCurrencySummaryFromItems(groupItems),
       itemIds: groupItems.map((item) => item.id).filter(Boolean),
       status: confirmed ? "已确认" : (uploaded ? "已上传" : (failed ? "通知失败" : (notified ? "已通知开票" : "待开票"))),
       uploaded,
@@ -3198,6 +3380,7 @@ function logisticsExpenseBillIdFromItem(item: Partial<LogisticsExpense>) {
 function rebuildLogisticsExpenseBill(row: LogisticsExpense, nextItems: LogisticsExpense[]) {
   const amountCny = nextItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0);
   const amount = nextItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const currencyTotals = logisticsExpenseCurrencySummaryFromItems(nextItems);
   const first = nextItems[0] || {};
   return {
     ...row,
@@ -3211,10 +3394,11 @@ function rebuildLogisticsExpenseBill(row: LogisticsExpense, nextItems: Logistics
           }
         : {
             costType: `${nextItems.length} 项费用`,
-            amount: amountCny,
+            amount: currencyTotals.cnyActual,
           }
     ),
     amountCny,
+    currencyTotals,
     auditStatus: aggregateClientLogisticsExpenseStatus(nextItems, "auditStatus"),
     invoiceStatus: aggregateClientLogisticsInvoiceStatus(nextItems),
     paymentStatus: aggregateClientLogisticsExpenseStatus(nextItems, "paymentStatus"),
