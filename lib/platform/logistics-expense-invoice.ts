@@ -19,7 +19,7 @@ import {
 } from "./shared";
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
 import { logisticsCostTypeLabel } from "./logistics-cost-types";
-import { logisticsInvoiceGroupsForCostTypes } from "./logistics-invoice-groups";
+import { logisticsInvoiceGroupForExpense, logisticsInvoiceGroupsForExpenses } from "./logistics-invoice-groups";
 import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 import { summarizeCurrencyTotals, type CurrencyTotals } from "./currency-totals";
@@ -75,7 +75,7 @@ type LogisticsBillSummary = {
   amountCny: number;
   currencyTotals: CurrencyTotals;
   detailText: string;
-  invoiceGroups: ReturnType<typeof logisticsInvoiceGroupsForCostTypes>;
+  invoiceGroups: ReturnType<typeof logisticsInvoiceGroupsWithTotals>;
   remark: string;
   expenses: LogisticsExpenseLike[];
 };
@@ -150,6 +150,18 @@ function logisticsExpenseDetailText(expenses: LogisticsExpenseLike[] = []) {
   }).join("\n");
 }
 
+function logisticsInvoiceGroupsWithTotals(expenses: LogisticsExpenseLike[] = []) {
+  return logisticsInvoiceGroupsForExpenses(expenses).map((group) => {
+    const groupRows = expenses.filter((expense) => logisticsInvoiceGroupForExpense(expense)?.key === group.key);
+    return {
+      ...group,
+      amountCny: groupRows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
+      currencyTotals: summarizeCurrencyTotals(groupRows),
+      itemIds: groupRows.map((row) => row.id).filter(Boolean),
+    };
+  });
+}
+
 function logisticsBillSummaryRows(expenses: LogisticsExpenseLike[] = []): LogisticsBillSummary[] {
   const groups = new Map<string, LogisticsExpenseLike[]>();
   for (const expense of expenses) {
@@ -175,7 +187,7 @@ function logisticsBillSummaryRows(expenses: LogisticsExpenseLike[] = []): Logist
       amountCny: rows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
       currencyTotals: summarizeCurrencyTotals(rows),
       detailText: logisticsExpenseDetailText(rows),
-      invoiceGroups: logisticsInvoiceGroupsForCostTypes(rows.map((row) => row.costType)),
+      invoiceGroups: logisticsInvoiceGroupsWithTotals(rows),
       remark: rows.map((row) => row.remark || "").filter(Boolean).join("；") || "-",
       expenses: rows,
     };

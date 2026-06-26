@@ -36,8 +36,8 @@ import {
   logisticsCostTypeLocksCurrency,
 } from "./logistics-cost-types";
 import {
-  logisticsInvoiceGroupForCostType,
-  logisticsInvoiceGroupsForCostTypes,
+  logisticsInvoiceGroupForExpense,
+  logisticsInvoiceGroupsForExpenses,
 } from "./logistics-invoice-groups";
 import { summarizeCurrencyTotals } from "./currency-totals";
 
@@ -460,8 +460,8 @@ export function logisticsExpenseBillAuditStatus(rows: LogisticsExpenseLike[] = [
 }
 
 export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []) {
-  return logisticsInvoiceGroupsForCostTypes(items.map((item) => item.costType)).map((group) => {
-    const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
+  return logisticsInvoiceGroupsForExpenses(items).map((group) => {
+    const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
     const currencyTotals = summarizeCurrencyTotals(groupItems);
     const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
     const confirmed = groupItems.length > 0 && groupItems.every((item) => item.invoiceStatus === "已确认");

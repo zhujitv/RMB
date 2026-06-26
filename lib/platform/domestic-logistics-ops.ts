@@ -347,6 +347,22 @@ const LOGISTICS_EXPENSE_STATUS_PRIORITY: Record<string, number> = {
   未录入: 100,
 };
 
+const DOMESTIC_LOGISTICS_PROGRESS_WEIGHT: Record<string, number> = {
+  已驳回: 1,
+  草稿: 1,
+  未提交: 1,
+  未完成: 1,
+  未录入: 2,
+  待审核: 3,
+  已提交: 4,
+  审核通过: 5,
+  待开票: 5,
+  已上传发票: 5,
+  待付款: 5,
+  部分付款: 5,
+  已付款: 5,
+};
+
 function normalizedDomesticExpenseStatus(value = "") {
   const text = String(value || "").trim();
   if (["未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分上传发票", "部分上传", "部分已上传", "部分已确认"].includes(text)) {
@@ -438,10 +454,12 @@ function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, ac
 
 function domesticLogisticsSortRank(order: DomesticOrderLike = {}) {
   const info = (order.domesticLogisticsInfos || [])[0];
-  if (!info) return 1;
-  if (!info.remarkText) return 2;
-  if (order.taxArchived || order.taxRefundStatus === "SUBMITTED") return 4;
-  return 3;
+  const logisticsStatus = domesticLogisticsStatusText(info);
+  const feeStatus = domesticLogisticsExpenseStatusSummary(order).status;
+  return Math.max(
+    DOMESTIC_LOGISTICS_PROGRESS_WEIGHT[logisticsStatus] ?? 0,
+    DOMESTIC_LOGISTICS_PROGRESS_WEIGHT[feeStatus] ?? 0,
+  );
 }
 
 function dateSortValue(value: Date | string | null | undefined) {

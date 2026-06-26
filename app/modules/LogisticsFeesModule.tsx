@@ -16,7 +16,7 @@ import {
   logisticsCostTypeLabel,
   logisticsCostTypeLocksCurrency,
 } from "../../lib/platform/logistics-cost-types";
-import { logisticsInvoiceGroupForCostType, logisticsInvoiceGroupsForCostTypes } from "../../lib/platform/logistics-invoice-groups";
+import { logisticsInvoiceGroupForExpense, logisticsInvoiceGroupsForExpenses } from "../../lib/platform/logistics-invoice-groups";
 
 const PAGE_SIZE = 20;
 const INVOICE_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
@@ -2208,7 +2208,8 @@ function LogisticsInvoiceGroupsPanel({
       </div>
       <div className={styles.logisticsInvoiceGroupsGrid}>
         {visibleGroups.map((group) => {
-          const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
+          const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
+          const groupCostTypes = [...new Set(groupItems.map((item) => item.costType).filter(Boolean))];
           const targetExpense = groupItems[0] || expense;
           const uploaded = Boolean(group.uploaded || group.status === "已上传" || group.status === "已确认");
           const confirmed = Boolean(group.confirmed || group.status === "已确认");
@@ -2232,7 +2233,7 @@ function LogisticsInvoiceGroupsPanel({
                 <StatusPill value={group.status || "待开票"} />
               </div>
               <div className={styles.logisticsInvoiceGroupMeta}>
-                <span>包含费用：{(group.costTypes || []).map((type) => logisticsCostTypeLabel(type)).join(" / ") || "-"}</span>
+                <span>包含费用：{(groupCostTypes.length ? groupCostTypes : (group.costTypes || [])).map((type) => logisticsCostTypeLabel(type)).join(" / ") || "-"}</span>
                 <span>分组合计：<LogisticsCurrencyAmountList summary={group.currencyTotals || currencySummaryFromSingleExpense(targetExpense)} compact /></span>
                 {group.invoiceNotificationError ? <span className={styles.logisticsInvoiceGroupError}>{group.invoiceNotificationError}</span> : null}
               </div>
@@ -3099,8 +3100,8 @@ function aggregateClientLogisticsExpenseStatus(items: LogisticsExpense[], field:
 }
 
 function logisticsInvoiceGroupsForBill(items: LogisticsExpense[]): LogisticsInvoiceGroupSummary[] {
-  return logisticsInvoiceGroupsForCostTypes(items.map((item) => item.costType)).map((group) => {
-    const groupItems = items.filter((item) => logisticsInvoiceGroupForCostType(item.costType)?.key === group.key);
+  return logisticsInvoiceGroupsForExpenses(items).map((group) => {
+    const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
     const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
     const confirmed = groupItems.length > 0 && groupItems.every((item) => item.invoiceStatus === "已确认");
     const failed = groupItems.some((item) => item.invoiceStatus === "通知失败");

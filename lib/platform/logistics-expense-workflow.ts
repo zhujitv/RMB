@@ -40,7 +40,12 @@ import {
   serializeLogisticsExpenseBill,
   LOGISTICS_EXPENSE_PAYMENT_STATUSES,
 } from "./logistics-expense-shared";
-import { logisticsInvoiceGroupForCostType, logisticsInvoiceGroupForKey } from "./logistics-invoice-groups";
+import {
+  logisticsInvoiceExpenseMatchesGroup,
+  logisticsInvoiceGroupCurrencyViolation,
+  logisticsInvoiceGroupForExpense,
+  logisticsInvoiceGroupForKey,
+} from "./logistics-invoice-groups";
 import {
   LOGISTICS_COST_TYPES,
   logisticsCostTypeDefaultCurrency,
@@ -1582,10 +1587,12 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限上传该物流费用发票", 403);
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   const requestedGroup = logisticsInvoiceGroupForKey(formData.get("invoiceGroup") || formData.get("invoiceGroupKey"));
-  const fallbackGroup = logisticsInvoiceGroupForCostType(before.costType);
+  const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
   if (!invoiceGroup) throw codedError("请选择有效发票分组。", 400, "LOGISTICS_INVOICE_GROUP_INVALID");
-  const targetRows = rows.filter((row) => invoiceGroup.costTypes.includes(normalizedCostType(row.costType)));
+  const targetRows = rows.filter((row) => logisticsInvoiceExpenseMatchesGroup(row, invoiceGroup));
+  const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
+  if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用，不能上传该分组发票。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
   const blocked = targetRows.find((row) => rowAuditStatus(row) !== "审核通过" || !row.costId);
   if (blocked) throw codedError("该发票分组包含尚未审核生成正式成本的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_COST_MISSING");
@@ -1640,10 +1647,12 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
   if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限删除该物流费用发票", 403);
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
-  const fallbackGroup = logisticsInvoiceGroupForCostType(before.costType);
+  const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
   if (!invoiceGroup) throw codedError("请选择有效发票分组。", 400, "LOGISTICS_INVOICE_GROUP_INVALID");
-  const targetRows = rows.filter((row) => invoiceGroup.costTypes.includes(normalizedCostType(row.costType)));
+  const targetRows = rows.filter((row) => logisticsInvoiceExpenseMatchesGroup(row, invoiceGroup));
+  const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
+  if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
   if (targetRows.some((row) => row.invoiceStatus === "已确认" || row.invoiceConfirmedAt)) {
     throw codedError("已确认发票不能删除。", 400, "LOGISTICS_INVOICE_CONFIRMED_DELETE_BLOCKED");

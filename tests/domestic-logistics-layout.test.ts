@@ -41,6 +41,15 @@ test("domestic logistics list exposes logistics fee entry status from backend", 
   );
 });
 
+test("domestic logistics list sorts by unified numeric progress score", () => {
+  assert.match(domesticLogisticsOps, /DOMESTIC_LOGISTICS_PROGRESS_WEIGHT/);
+  assert.match(domesticLogisticsOps, /const logisticsStatus = domesticLogisticsStatusText\(info\);/);
+  assert.match(domesticLogisticsOps, /const feeStatus = domesticLogisticsExpenseStatusSummary\(order\)\.status;/);
+  assert.match(domesticLogisticsOps, /Math\.max\(\s*DOMESTIC_LOGISTICS_PROGRESS_WEIGHT\[logisticsStatus\] \?\? 0,\s*DOMESTIC_LOGISTICS_PROGRESS_WEIGHT\[feeStatus\] \?\? 0,\s*\)/);
+  assert.match(domesticLogisticsOps, /domesticLogisticsSortRank\(a\) - domesticLogisticsSortRank\(b\)/);
+  assert.doesNotMatch(domesticLogisticsOps, /logisticsStatus\.localeCompare|feeStatus\.localeCompare|logisticsExpenseStatus\.localeCompare/);
+});
+
 test("domestic logistics transport detail keeps multi-container fields", () => {
   for (const field of ["containerNo", "containerType", "sealNo", "truckPlateNo", "trailerPlateNo", "departurePlace", "arrivalPlace", "cargoName"]) {
     assert.match(moduleSource, new RegExp(field));
