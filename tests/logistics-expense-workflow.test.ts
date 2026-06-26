@@ -73,6 +73,7 @@ const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 const logisticsExpenseQueries = readFileSync("lib/platform/logistics-expense-queries.ts", "utf8");
+const listLogisticsExpensesSource = logisticsExpenseQueries.match(/export async function listLogisticsExpenses[\s\S]*?\n}\n\nfunction logisticsExpenseBillListWhere/)?.[0] || "";
 const logisticsSupplierStatementSource = logisticsExpenseQueries.match(/export async function logisticsSupplierStatement[\s\S]*?\n}\n\nfunction logisticsPaymentLedgerRow/)?.[0] || "";
 
 test("logistics expenses are stored outside official costs until approved", () => {
@@ -385,6 +386,12 @@ test("logistics expense list groups rows by shipment and keeps item details", ()
   assert.match(logisticsModule, /成本同步/);
   assert.match(logisticsModule, /<th>操作<\/th>/);
   assert.doesNotMatch(logisticsModule, /<th>供应商<\/th>/);
+});
+
+test("logistics expense list reads avoid transactions for count and pagination", () => {
+  assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.count/);
+  assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.findMany/);
+  assert.doesNotMatch(listLogisticsExpensesSource, /prisma\.\$transaction/);
 });
 
 test("logistics expense approval works at bill level and groups invoice emails by supplier", () => {

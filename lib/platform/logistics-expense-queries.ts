@@ -123,16 +123,17 @@ export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQu
   const filters = logisticsExpenseListFiltersFromQuery(query);
   const { page, pageSize } = pageParams(query, 20, LOGISTICS_EXPENSE_LIST_PAGE_SIZE_MAX);
   const billWhere = logisticsExpenseBillListWhere(filters, actor);
-  const [total, bills] = await prisma.$transaction([
-    prisma.logisticsBill.count({ where: billWhere }),
-    prisma.logisticsBill.findMany({
-      where: billWhere,
-      select: { id: true },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
+  // This list endpoint is read-only. Avoid wrapping count + page reads in a
+  // transaction because Prisma must reserve a transaction connection first;
+  // under pool pressure that can fail before either query starts.
+  const total = await prisma.logisticsBill.count({ where: billWhere });
+  const bills = await prisma.logisticsBill.findMany({
+    where: billWhere,
+    select: { id: true },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
   const billIds = bills.map((bill) => bill.id);
   if (!billIds.length) return pageResult([], total, page, pageSize);
 
