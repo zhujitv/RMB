@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { summarizeCurrencyTotals } from "./currency-totals";
+import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
   COST_IDEMPOTENCY_WINDOW_MS,
@@ -64,6 +64,15 @@ type CostQuery = {
   get(key: string): string | null;
 };
 type CostCreateData = Prisma.OrderCostUncheckedCreateInput;
+type CostBreakdownKey = "factory" | "logistics" | "other";
+
+const FACTORY_SUMMARY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "样品费"];
+const LOGISTICS_SUMMARY_COST_TYPES = [
+  ...LOGISTICS_COST_TYPES,
+  ...TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
+  "国内物流费",
+  "国内拖车费",
+].filter((item, index, rows) => rows.indexOf(item) === index);
 
 export function costPageParams(query: CostQuery) {
   const page = Math.max(1, Number.parseInt(query.get("page") || "1", 10) || 1);
@@ -84,24 +93,61 @@ export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableO
   return { taxArchived: false };
 }
 
-function costAmountBuckets(costs: CostLike[] = []) {
-  return costs.filter(validCost).reduce((acc, cost) => {
-    const amount = Number(cost.amountCny || 0);
-    acc.totalCostCny += amount;
-    const rawCostType = String(cost.costType || "");
-    const displayCostType = normalizedCostType(rawCostType);
-    if (FACTORY_SUPPLIER_COST_TYPES.includes(rawCostType)) acc.factoryCostCny += amount;
-    else if (displayCostType === "港杂费" || supplierTypeForCost(cost) === "港杂费用供应商") acc.portCostCny += amount;
-    else if (isLogisticsCostType(rawCostType) || TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES.includes(rawCostType)) acc.logisticsCostCny += amount;
-    else acc.otherCostCny += amount;
-    return acc;
-  }, {
-    totalCostCny: 0,
-    factoryCostCny: 0,
-    logisticsCostCny: 0,
-    portCostCny: 0,
-    otherCostCny: 0,
+export function costSummaryCategory(costType = ""): CostBreakdownKey {
+  const normalized = normalizedCostType(costType);
+  if (FACTORY_SUMMARY_COST_TYPES.includes(normalized)) return "factory";
+  if (LOGISTICS_SUMMARY_COST_TYPES.includes(normalized) || isLogisticsCostType(normalized)) return "logistics";
+  return "other";
+}
+
+function isFactorySummaryCostType(costType = "") {
+  return FACTORY_SUMMARY_COST_TYPES.includes(normalizedCostType(costType));
+}
+
+function hasInvalidFactoryCurrency(cost: CostLike) {
+  return isFactorySummaryCostType(String(cost.costType || "")) && normalizeCurrencyCode(cost.currency) !== "CNY";
+}
+
+function warnInvalidFactoryCurrency(cost: CostLike) {
+  console.warn("cost-summary-invalid-factory-currency", {
+    orderId: cost.orderId || undefined,
+    supplierId: cost.supplierId || undefined,
+    costType: normalizedCostType(String(cost.costType || "")),
+    currency: normalizeCurrencyCode(cost.currency),
   });
+}
+
+function summaryDisplayCosts(costs: CostLike[] = []) {
+  const rows = costs.filter(validCost);
+  rows.filter(hasInvalidFactoryCurrency).forEach(warnInvalidFactoryCurrency);
+  return rows.filter((cost) => !hasInvalidFactoryCurrency(cost));
+}
+
+function costAmountBuckets(costs: CostLike[] = []) {
+  const rows = costs.filter(validCost);
+  const categorized = rows.reduce<Record<CostBreakdownKey, CostLike[]>>((acc, cost) => {
+    acc[costSummaryCategory(String(cost.costType || ""))].push(cost);
+    return acc;
+  }, { factory: [], logistics: [], other: [] });
+  const factoryTotals = summarizeCurrencyTotals(categorized.factory);
+  const logisticsTotals = summarizeCurrencyTotals(categorized.logistics);
+  const otherTotals = summarizeCurrencyTotals(categorized.other);
+  const totalCostCny = Number((factoryTotals.totalCny + logisticsTotals.totalCny + otherTotals.totalCny).toFixed(2));
+  const portCostCny = rows
+    .filter((cost) => normalizedCostType(String(cost.costType || "")) === "港杂费" || supplierTypeForCost(cost) === "港杂费用供应商")
+    .reduce((sum, cost) => sum + Number(cost.amountCny || 0), 0);
+  return {
+    totalCostCny,
+    factoryCostCny: factoryTotals.totalCny,
+    logisticsCostCny: logisticsTotals.totalCny,
+    portCostCny,
+    otherCostCny: otherTotals.totalCny,
+    costBreakdown: {
+      factory: factoryTotals,
+      logistics: logisticsTotals,
+      other: otherTotals,
+    },
+  };
 }
 
 function costDocumentProgress(costs: CostLike[] = []) {
@@ -136,8 +182,9 @@ function costConfirmedProgress(costs: CostLike[] = []) {
 
 export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
   const costs = order.costs || [];
-  const buckets = costAmountBuckets(costs);
-  const currencyTotals = summarizeCurrencyTotals(costs.filter(validCost));
+  const summaryCosts = summaryDisplayCosts(costs);
+  const buckets = costAmountBuckets(summaryCosts);
+  const currencyTotals = summarizeCurrencyTotals(summaryCosts);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot || "");
   const shortCustomerName = customerShortName(order.customer);
   return {
@@ -151,10 +198,11 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
     receivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny ?? 0),
-    costConfirmProgress: costConfirmedProgress(costs),
-    documentProgress: costDocumentProgress(costs),
-    costCount: costs.filter(validCost).length,
+    costConfirmProgress: costConfirmedProgress(summaryCosts),
+    documentProgress: costDocumentProgress(summaryCosts),
+    costCount: summaryCosts.length,
     currencyTotals,
+    costs: summaryCosts.map(safeSerializeCost),
     ...buckets,
   };
 }

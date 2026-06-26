@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, CurrencyTotalsDisplay, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
-import { formatCny, formatDate, moneyText } from "../formatters";
+import { formatCny, formatCurrencyAmount, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
@@ -34,6 +34,11 @@ const COST_FILTER_TYPES = [...QUICK_COST_TYPES, ...LOGISTICS_COST_TYPES]
 const COST_FILTER_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
 );
+const COST_BREAKDOWN_ROWS = [
+  { key: "factory", label: "Factory Cost", cnLabel: "工厂货款" },
+  { key: "logistics", label: "Logistics Cost", cnLabel: "物流费用" },
+  { key: "other", label: "Other Cost", cnLabel: "其他费用" },
+] as const;
 const FACTORY_DOCUMENT_TYPES = [
   { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", required: true },
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", required: true },
@@ -165,7 +170,13 @@ type CostOrderSummary = {
   portCostCny?: number;
   otherCostCny?: number;
   currencyTotals?: CurrencyTotals;
+  costBreakdown?: {
+    factory?: CurrencyTotals;
+    logistics?: CurrencyTotals;
+    other?: CurrencyTotals;
+  };
   costCount?: number;
+  costs?: CostRow[];
   costConfirmProgress?: {
     completed?: number;
     total?: number;
@@ -259,7 +270,7 @@ export function CostsModule({
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
   const [submittedFilters, setSubmittedFilters] = useState<CostFilters>({ ...emptyCostFilters });
-  const [costView, setCostView] = useState<"details" | "orders">("details");
+  const [costView, setCostView] = useState<"details" | "orders">("orders");
   const [archiveScope, setArchiveScope] = useState("current");
   const [detailCost, setDetailCost] = useState<CostRow | null>(null);
   const [detailOrderSummary, setDetailOrderSummary] = useState<CostOrderSummary | null>(null);
@@ -350,7 +361,7 @@ export function CostsModule({
     setDetailOrderSummary(null);
     setCostFormDrawer(null);
     setNotice("");
-    void loadCosts(1, nextFilters, archiveScope, "details");
+    void loadCosts(1, nextFilters, archiveScope, "orders");
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
@@ -473,26 +484,18 @@ export function CostsModule({
 
       <div className={styles.listToolbar}>
         <button
-          className={costView === "details" ? styles.primaryButtonCompact : styles.secondaryButton}
-          type="button"
-          disabled={loading}
-          onClick={() => changeCostView("details")}
-        >
-          成本明细
-        </button>
-        <button
-          className={costView === "orders" ? styles.primaryButtonCompact : styles.secondaryButton}
+          className={styles.primaryButtonCompact}
           type="button"
           disabled={loading}
           onClick={() => changeCostView("orders")}
         >
-          按订单汇总
+          按订单 / Shipment 汇总
         </button>
       </div>
 
       <div className={styles.metricGrid} aria-label="应付汇总统计">
         <article className={`${styles.metricCard} ${styles.metricBlue}`}>
-          <span>{costView === "orders" ? "订单应付汇总" : "应付汇总"}</span>
+          <span>订单应付汇总</span>
           <div className={styles.metricValue}>
             <CurrencyTotalsDisplay
               summary={summary}
@@ -505,75 +508,92 @@ export function CostsModule({
         </article>
       </div>
 
-      <div className={styles.listToolbar}>
-        <input
-          value={filters.keyword}
-          onChange={(event) => setFilter("keyword", event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") submitSearch();
-          }}
-          placeholder="搜索订单号 / 客户简称 / 客户全称 / 成本类型 / 供应商 / 备注"
-        />
-        <select value={archiveScope} onChange={(event) => changeArchiveScope(event.target.value)} disabled={loading}>
-          <option value="current">当前业务</option>
-          <option value="archive">已归档业务</option>
-          <option value="all">全部业务</option>
-        </select>
-        <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
-        <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
-      </div>
+      <div className={styles.costFilterPanel}>
+        <div className={styles.costFilterSearchRow}>
+          <label>
+            关键词
+            <input
+              value={filters.keyword}
+              onChange={(event) => setFilter("keyword", event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitSearch();
+              }}
+              placeholder="搜索订单号 / 客户简称 / 客户全称 / 成本类型 / 供应商 / 备注"
+            />
+          </label>
+          <label>
+            业务范围
+            <select value={archiveScope} onChange={(event) => changeArchiveScope(event.target.value)} disabled={loading}>
+              <option value="current">当前业务</option>
+              <option value="archive">已归档业务</option>
+              <option value="all">全部业务</option>
+            </select>
+          </label>
+        </div>
 
-      <div className={styles.reportFilterGrid}>
-        <label>
-          成本类型
-          <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>
-            <option value="">全部成本类型</option>
-            {COST_FILTER_TYPES.map((type) => (
-              <option key={type} value={type}>{COST_FILTER_TYPE_LABELS[type] || type}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          付款状态
-          <select value={filters.paymentStatus} onChange={(event) => setFilter("paymentStatus", event.target.value)}>
-            <option value="">全部付款状态</option>
-            {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </label>
-        <label>
-          成本确认
-          <select value={filters.costConfirmed} onChange={(event) => setFilter("costConfirmed", event.target.value)}>
-            <option value="">全部确认状态</option>
-            {COST_CONFIRMATION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        <label>
-          发票状态
-          <select value={filters.invoiceStatus} onChange={(event) => setFilter("invoiceStatus", event.target.value)}>
-            <option value="">全部发票状态</option>
-            {COST_INVOICE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </label>
-        <label>
-          开始日期
-          <input type="date" value={filters.dateFrom} onChange={(event) => setFilter("dateFrom", event.target.value)} />
-        </label>
-        <label>
-          结束日期
-          <input type="date" value={filters.dateTo} onChange={(event) => setFilter("dateTo", event.target.value)} />
-        </label>
+        <div className={styles.costFilterPrimaryRow}>
+          <label>
+            成本类型
+            <select value={filters.costType} onChange={(event) => setFilter("costType", event.target.value)}>
+              <option value="">全部成本类型</option>
+              {COST_FILTER_TYPES.map((type) => (
+                <option key={type} value={type}>{COST_FILTER_TYPE_LABELS[type] || type}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            付款状态
+            <select value={filters.paymentStatus} onChange={(event) => setFilter("paymentStatus", event.target.value)}>
+              <option value="">全部付款状态</option>
+              {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+          <div className={styles.costFilterActions}>
+            <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
+            <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
+          </div>
+        </div>
+
+        <div className={styles.costFilterSecondaryRow}>
+          <label>
+            成本确认
+            <select value={filters.costConfirmed} onChange={(event) => setFilter("costConfirmed", event.target.value)}>
+              <option value="">全部确认状态</option>
+              {COST_CONFIRMATION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+          <label>
+            发票状态
+            <select value={filters.invoiceStatus} onChange={(event) => setFilter("invoiceStatus", event.target.value)}>
+              <option value="">全部发票状态</option>
+              {COST_INVOICE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+          <label>
+            开始日期
+            <input type="date" value={filters.dateFrom} onChange={(event) => setFilter("dateFrom", event.target.value)} />
+          </label>
+          <label>
+            结束日期
+            <input type="date" value={filters.dateTo} onChange={(event) => setFilter("dateTo", event.target.value)} />
+          </label>
+        </div>
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
+      {/*
+        重要：成本管理主列表按订单 / shipment 聚合展示。
+        费用明细只在订单详情抽屉中展示，避免一票业务在主列表被拆成多行。
+      */}
       <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
         <table className={styles.dataTable}>
           {costView === "orders" ? <CostOrderTableHead /> : <CostDetailTableHead />}
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={costView === "orders" ? 6 : 8}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : activeRows.length ? (costView === "orders"
               ? orderRows.map((order) => (
@@ -581,14 +601,6 @@ export function CostsModule({
                   key={order.id}
                   order={order}
                   onViewDetail={() => setDetailOrderSummary(order)}
-                  onViewDetails={() => {
-                    const nextFilters = { ...emptyCostFilters, keyword: order.orderNo || "" };
-                    setCostView("details");
-                    setFilters(nextFilters);
-                    setSubmittedFilters(nextFilters);
-                    setDetailOrderSummary(null);
-                    void loadCosts(1, nextFilters, archiveScope, "details");
-                  }}
                 />
               ))
               : rows.map((cost) => (
@@ -604,7 +616,7 @@ export function CostsModule({
               ))
             ) : (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的{costView === "orders" ? "订单成本汇总" : "成本明细"}</div></td>
+                <td colSpan={costView === "orders" ? 6 : 8}><div className={styles.emptyState}>未找到匹配的{costView === "orders" ? "订单成本汇总" : "成本明细"}</div></td>
               </tr>
             )}
           </tbody>
@@ -644,14 +656,6 @@ export function CostsModule({
       {detailOrderSummary ? (
         <CostOrderSummaryDrawer
           order={detailOrderSummary}
-          onViewDetails={() => {
-            const nextFilters = { ...emptyCostFilters, keyword: detailOrderSummary.orderNo || "" };
-            setCostView("details");
-            setFilters(nextFilters);
-            setSubmittedFilters(nextFilters);
-            setDetailOrderSummary(null);
-            void loadCosts(1, nextFilters, archiveScope, "details");
-          }}
           onClose={() => setDetailOrderSummary(null)}
         />
       ) : null}
@@ -1296,13 +1300,11 @@ function CostOrderTableHead() {
   return (
     <thead>
       <tr>
-        <th className={styles.orderNoColumn}>订单号</th>
+        <th className={styles.orderNoColumn}>订单号 / Shipment</th>
         <th className={styles.customerColumn}>客户简称</th>
-        <th className={styles.blNoColumn}>提单号</th>
-        <th className={styles.amountColumn}>总成本</th>
-        <th>成本确认</th>
-        <th>资料状态</th>
-        <th>成本条数</th>
+        <th className={styles.amountColumn}>CNY 合计</th>
+        <th className={styles.amountColumn}>USD 合计</th>
+        <th>状态</th>
         <th>详情</th>
       </tr>
     </thead>
@@ -1312,34 +1314,80 @@ function CostOrderTableHead() {
 function CostOrderSummaryRows({
   order,
   onViewDetail,
-  onViewDetails,
 }: {
   order: CostOrderSummary;
   onViewDetail: () => void;
-  onViewDetails: () => void;
 }) {
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
-  const documentProgress = order.documentProgress?.text || "无需资料";
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
-        <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td className={styles.amountColumn}>
-          <CurrencyTotalsDisplay
-            summary={order.currencyTotals || { cnyActual: Number(order.totalCostCny || 0), foreignTotals: [], totalCny: Number(order.totalCostCny || 0) }}
-            cnyLabel="CNY"
-            foreignLabel={(currency) => currency}
-            totalLabel="折人民币"
-          />
+          <CostOrderAmountCell order={order} currency="CNY" fallback={order.totalCostCny} />
+        </td>
+        <td className={styles.amountColumn}>
+          <CostOrderAmountCell order={order} currency="USD" />
         </td>
         <td><span className={styles.statusPill}>{confirmProgress}</span></td>
-        <td><span className={styles.statusPill}>{documentProgress}</span></td>
-        <td>{Number(order.costCount || 0)}</td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
     </>
+  );
+}
+
+function CostOrderAmountCell({
+  order,
+  currency,
+  fallback = 0,
+}: {
+  order: CostOrderSummary;
+  currency: "CNY" | "USD";
+  fallback?: number;
+}) {
+  return (
+    <div className={styles.costAmountStack}>
+      <strong className={styles.costAmountTotal}>
+        {formatCurrencyAmount(currency, currencyTotalAmount(order.currencyTotals, currency, fallback))}
+      </strong>
+      <span className={styles.costAmountBreakdown}>
+        {COST_BREAKDOWN_ROWS.map((row) => {
+          const summary = order.costBreakdown?.[row.key];
+          return (
+            <span key={row.key}>
+              <span className={styles.costBreakdownLabelText}>{row.cnLabel}</span>
+              <strong>{formatCurrencyAmount(currency, currencyTotalAmount(summary, currency))}</strong>
+            </span>
+          );
+        })}
+      </span>
+    </div>
+  );
+}
+
+function CostBreakdownTable({ order }: { order: CostOrderSummary }) {
+  return (
+    <div className={styles.costBreakdownTable}>
+      <div className={styles.costBreakdownHeader}>
+        <span>类别</span>
+        <span>CNY</span>
+        <span>USD</span>
+      </div>
+      {COST_BREAKDOWN_ROWS.map((row) => {
+        const summary = order.costBreakdown?.[row.key];
+        return (
+          <div className={styles.costBreakdownRow} key={row.key}>
+            <span>
+              <strong className={styles.costBreakdownLabelText}>{row.cnLabel}</strong>
+              <small>{row.label}</small>
+            </span>
+            <span>{formatCurrencyAmount("CNY", currencyTotalAmount(summary, "CNY"))}</span>
+            <span>{formatCurrencyAmount("USD", currencyTotalAmount(summary, "USD"))}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1456,11 +1504,9 @@ function DetailMoneyField({ label, cost }: { label: string; cost: CostRow }) {
 
 function CostOrderSummaryDrawer({
   order,
-  onViewDetails,
   onClose,
 }: {
   order: CostOrderSummary;
-  onViewDetails: () => void;
   onClose: () => void;
 }) {
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
@@ -1472,7 +1518,6 @@ function CostOrderSummaryDrawer({
       title={`${order.orderNo || "-"} · ${customerLegalName(order)}`}
       subtitle={`提单号：${order.blNo || order.billOfLadingNo || "-"}`}
       onClose={onClose}
-      actions={<button className={styles.primaryButtonCompact} type="button" onClick={onViewDetails}>查看成本明细</button>}
     >
       <div className={styles.detailGrid}>
         <DetailField label="客户全称" value={customerLegalName(order)} wide />
@@ -1490,15 +1535,54 @@ function CostOrderSummaryDrawer({
             />
           )}
         />
-        <DetailField label="工厂成本" value={formatCny(Number(order.factoryCostCny || 0))} />
-        <DetailField label="物流成本" value={formatCny(Number(order.logisticsCostCny || 0))} />
-        <DetailField label="港杂成本" value={formatCny(Number(order.portCostCny || 0))} />
-        <DetailField label="其他成本" value={formatCny(Number(order.otherCostCny || 0))} />
+        <DetailField label="成本结构" value={<CostBreakdownTable order={order} />} wide />
         <DetailField label="成本确认" value={confirmProgress} />
         <DetailField label="资料状态" value={documentProgress} />
         <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
       </div>
+      <CostOrderItemsTable costs={order.costs || []} />
     </SideDetailDrawer>
+  );
+}
+
+function CostOrderItemsTable({ costs }: { costs: CostRow[] }) {
+  return (
+    <div className={styles.logisticsDrawerSection}>
+      <div className={styles.logisticsDrawerSectionHeader}>
+        <div>
+          <strong>费用明细</strong>
+          <span>{costs.length} 项</span>
+        </div>
+      </div>
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead>
+            <tr>
+              <th>成本类型</th>
+              <th>供应商</th>
+              <th>币种</th>
+              <th className={styles.amountColumn}>原币金额</th>
+              <th>付款状态</th>
+              <th>发票状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {costs.length ? costs.map((cost) => (
+              <tr key={cost.id}>
+                <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
+                <td>{cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-"}</td>
+                <td>{String(cost.currency || "CNY").toUpperCase()}</td>
+                <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
+                <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
+                <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
+              </tr>
+            )) : (
+              <tr><td colSpan={6}><div className={styles.emptyState}>暂无成本明细</div></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -1734,6 +1818,12 @@ function initialSupplierFromCost(cost?: CostRow | null): SupplierOption | null {
 
 function exchangeRateMeta(currency?: string) {
   return (currency || "CNY").toUpperCase() === "CNY" ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" : "汇率来源：待获取";
+}
+
+function currencyTotalAmount(summary: CurrencyTotals | null | undefined, currency: string, fallback = 0) {
+  const normalized = String(currency || "CNY").toUpperCase();
+  if (normalized === "CNY") return Number(summary?.cnyActual ?? fallback ?? 0);
+  return Number((summary?.foreignTotals || []).find((item) => item.currency === normalized)?.amount || 0);
 }
 
 function orderLabel(order: CostOrderOption) {

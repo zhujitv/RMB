@@ -93,9 +93,15 @@ type DocumentLite = {
 type LogisticsExpense = {
   id: string;
   isBill?: boolean;
+  isShipment?: boolean;
   isTemporary?: boolean;
   itemCount?: number;
+  billCount?: number;
   items?: LogisticsExpense[];
+  shipmentNo?: string;
+  customer?: string;
+  shipmentBillIds?: string[];
+  billId?: string;
   orderId?: string;
   orderNo?: string;
   blNo?: string;
@@ -113,6 +119,8 @@ type LogisticsExpense = {
   exchangeRate?: number;
   amount?: number;
   amountCny?: number;
+  totalCNY?: number;
+  totalUSD?: number;
   currencyTotals?: LogisticsExpenseCurrencySummary;
   containerType?: string;
   appliedContainerCount?: number | null;
@@ -408,8 +416,8 @@ export function LogisticsFeesModule({
   const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
   const isLogisticsSupplier = currentUserRole === "物流供应商";
   const reviewableRows = rows.filter(logisticsExpenseBillCanApprove);
-  const selectedReviewableRows = rows.filter((row) => selectedBillIds.includes(row.id) && logisticsExpenseBillCanApprove(row));
-  const allReviewableSelected = reviewableRows.length > 0 && reviewableRows.every((row) => selectedBillIds.includes(row.id));
+  const selectedReviewableRows = rows.filter((row) => logisticsExpenseSelectionSelected(row, selectedBillIds) && logisticsExpenseBillCanApprove(row));
+  const allReviewableSelected = reviewableRows.length > 0 && reviewableRows.every((row) => logisticsExpenseSelectionSelected(row, selectedBillIds));
 
   async function loadExpenses(nextPage = page, nextKeyword = submittedKeyword, nextStatus = status, nextCostType = costType) {
     setLoading(true);
@@ -517,16 +525,17 @@ export function LogisticsFeesModule({
 
   function toggleBillSelection(expense: LogisticsExpense, checked: boolean) {
     if (!logisticsExpenseBillCanApprove(expense)) return;
+    const ids = logisticsExpenseShipmentBillIds(expense);
     setSelectedBillIds((current) => (
       checked
-        ? (current.includes(expense.id) ? current : [...current, expense.id])
-        : current.filter((id) => id !== expense.id)
+        ? [...new Set([...current, ...ids])]
+        : current.filter((id) => !ids.includes(id))
     ));
   }
 
   function toggleAllReviewableBills(checked: boolean) {
     setSelectedBillIds((current) => {
-      const reviewableIds = reviewableRows.map((row) => row.id);
+      const reviewableIds = reviewableRows.flatMap(logisticsExpenseShipmentBillIds);
       if (!checked) return current.filter((id) => !reviewableIds.includes(id));
       return [...new Set([...current, ...reviewableIds])];
     });
@@ -550,10 +559,10 @@ export function LogisticsFeesModule({
       });
       const failureMessage = logisticsExpenseReviewFailureMessage(result);
       if (result.success !== true) throw new Error(failureMessage || result.message || "审核物流费用失败");
-      applyLogisticsExpenseMutationResult(result);
+      await loadExpenses(page, submittedKeyword, status, costType);
       setSelectedBillIds((current) => current.filter((id) => !ids.includes(id)));
       if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
-      await loadStatement(statementMonth);
+      void loadStatement(statementMonth);
       setNotice(logisticsExpenseReviewNotice(result));
       if (failureMessage) setError(failureMessage);
     } catch (reviewError) {
@@ -582,7 +591,7 @@ export function LogisticsFeesModule({
       variant: "warning",
     });
     if (!confirmationResult.confirmed) return;
-    await reviewExpenseBills(selectedReviewableRows.map((row) => row.id));
+    await reviewExpenseBills(selectedReviewableRows.flatMap(logisticsExpenseShipmentBillIds));
   }
 
   async function saveBillDetails(expense: LogisticsExpense, payload: LogisticsExpenseBatchSavePayload): Promise<LogisticsExpenseBatchSaveResult | null> {
@@ -967,7 +976,7 @@ export function LogisticsFeesModule({
           canSubmitDraft={canCreateExpense}
           canDeleteExpense={canCreateExpense}
           canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
-          onApprove={(item) => void reviewExpenseBills([item.id], item)}
+          onApprove={(item) => void reviewExpenseBills(logisticsExpenseShipmentBillIds(item), item)}
           onReject={(item) => void rejectExpense(item)}
           onWithdraw={(item) => void withdrawExpense(item)}
           onResendInvoiceNotice={(item) => void resendInvoiceNotice(item)}
@@ -1043,7 +1052,7 @@ function LogisticsExpenseBillTable({
   onOpen: (expense: LogisticsExpense) => void;
   onSelectBill: (expense: LogisticsExpense, checked: boolean) => void;
 }) {
-  const colSpan = canReviewExpense ? 10 : 9;
+  const colSpan = canReviewExpense ? 9 : 8;
   return (
     <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
       <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
@@ -1060,11 +1069,10 @@ function LogisticsExpenseBillTable({
                 />
               </th>
             ) : null}
-            <th className={styles.orderNoColumn}>订单号</th>
-            <th className={styles.blNoColumn}>提单号</th>
-            <th className={styles.containerTypeColumn}>柜型</th>
+            <th className={styles.orderNoColumn}>订单号 / Shipment</th>
             <th className={styles.customerColumn}>客户</th>
-            <th className={styles.amountColumn}>金额</th>
+            <th className={styles.amountColumn}>CNY 合计</th>
+            <th className={styles.amountColumn}>USD 合计</th>
             <th className={styles.statusColumn}>审核</th>
             <th className={styles.statusColumn}>发票</th>
             <th className={styles.statusColumn}>付款</th>
@@ -1080,7 +1088,7 @@ function LogisticsExpenseBillTable({
               expense={expense}
               active={expandedId === expense.id}
               selectionEnabled={canReviewExpense}
-              selected={selectedBillIds.includes(expense.id)}
+              selected={logisticsExpenseSelectionSelected(expense, selectedBillIds)}
               onOpen={() => onOpen(expense)}
               onSelect={(checked) => onSelectBill(expense, checked)}
             />
@@ -1112,7 +1120,7 @@ function LogisticsExpenseCompactRow({
   const invoiceStatus = compactStatusLabel(expense.invoiceStatus || "待开票", "invoice");
   const paymentStatus = compactStatusLabel(expense.paymentStatus || "待付款", "payment");
   const items = expense.items?.length ? expense.items : [expense];
-  const containerSummary = logisticsExpenseContainerSummary(expense, items);
+  const currencyTotals = expense.currencyTotals || logisticsExpenseCurrencySummaryFromItems(items);
   return (
     <tr className={`${styles.clickableRow} ${active ? styles.logisticsCompactRowActive : ""}`} onClick={onOpen}>
       {selectionEnabled ? (
@@ -1126,13 +1134,10 @@ function LogisticsExpenseCompactRow({
           />
         </td>
       ) : null}
-      <td className={styles.orderNoColumn}><strong>{expense.orderNo || "-"}</strong></td>
-      <td className={styles.blNoColumn}>{expense.blNo || expense.billOfLadingNo || "-"}</td>
-      <td className={styles.containerTypeColumn}>{containerSummary.shortText}</td>
-      <td className={styles.customerColumn} title={customerLegalName(expense)}>{customerDisplayName(expense)}</td>
-      <td className={styles.amountColumn}>
-        <LogisticsCurrencyAmountList summary={expense.currencyTotals || currencySummaryFromSingleExpense(expense)} compact />
-      </td>
+      <td className={styles.orderNoColumn}><strong>{expense.shipmentNo || expense.orderNo || "-"}</strong></td>
+      <td className={styles.customerColumn} title={customerLegalName(expense)}>{expense.customer || customerDisplayName(expense)}</td>
+      <td className={styles.amountColumn}>{formatOriginalCurrencyValue("CNY", logisticsCurrencyAmountByCode(currencyTotals, "CNY"))}</td>
+      <td className={styles.amountColumn}>{formatOriginalCurrencyValue("USD", logisticsCurrencyAmountByCode(currencyTotals, "USD"))}</td>
       <td className={styles.statusColumn}><StatusPill value={auditStatus} /></td>
       <td className={styles.statusColumn}><StatusPill value={invoiceStatus} /></td>
       <td className={styles.statusColumn}><StatusPill value={paymentStatus} /></td>
@@ -2679,6 +2684,12 @@ function monthlySummaryAmountsByCurrency(summary: LogisticsExpenseCurrencySummar
   return amounts;
 }
 
+function logisticsCurrencyAmountByCode(summary: LogisticsExpenseCurrencySummary, currency: string) {
+  const normalized = normalizeCurrencyCode(currency);
+  if (normalized === "CNY") return Number(summary.cnyActual || 0);
+  return Number((summary.foreignTotals || []).find((item) => item.currency === normalized)?.amount || 0);
+}
+
 function LogisticsCurrencyAmountList({
   summary,
   compact = false,
@@ -3126,6 +3137,18 @@ function logisticsExpenseBillItems(expense: LogisticsExpense) {
   return expense.items?.length ? expense.items : [expense];
 }
 
+function logisticsExpenseShipmentBillIds(expense: LogisticsExpense) {
+  const ids = expense.shipmentBillIds?.length
+    ? expense.shipmentBillIds
+    : [expense.billId || expense.id];
+  return [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))];
+}
+
+function logisticsExpenseSelectionSelected(expense: LogisticsExpense, selectedIds: string[]) {
+  const ids = logisticsExpenseShipmentBillIds(expense);
+  return ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+}
+
 function defaultLogisticsExpenseDetailTab({
   auditStatus,
   invoiceStatus,
@@ -3162,7 +3185,8 @@ function logisticsExpenseBillIsEditable(status: string) {
 
 function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
   const items = logisticsExpenseBillItems(expense);
-  return items.length > 0 && logisticsExpenseBillAuditStatus(items) === "待审核";
+  return items.some((item) => String(item.auditStatus || "") === "待审核")
+    || (items.length > 0 && logisticsExpenseBillAuditStatus(items) === "待审核");
 }
 
 function logisticsExpenseBillCanSubmit(expense: LogisticsExpense) {

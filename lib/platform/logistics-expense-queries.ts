@@ -16,12 +16,11 @@ import {
   logisticsExpenseAccessWhere,
   logisticsExpenseOrderSummary,
   logisticsExpenseStatusWhere,
-  groupLogisticsExpensesByBill,
-  serializeLogisticsExpense,
+  groupLogisticsExpensesByShipment,
   LOGISTICS_OPERATOR_ROLE,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   type LogisticsExpenseBillDto,
-  type LogisticsExpenseDto,
+  type LogisticsExpenseShipmentDto,
 } from "./logistics-expense-shared";
 
 type SupplierStatementRow = {
@@ -34,12 +33,33 @@ type SupplierStatementRow = {
   pendingPaymentAmountCny: number;
   paidAmountCny: number;
 };
+type LogisticsStatementExpenseRow = {
+  supplierId: string;
+  supplierNameSnapshot?: string | null;
+  supplier?: { supplierName?: string | null } | null;
+  orderId: string;
+  currency?: unknown;
+  amount?: unknown;
+  amountCny?: unknown;
+  cost?: {
+    paymentDate?: Date | string | null;
+    deletedAt?: Date | string | null;
+    currency?: unknown;
+    amount?: unknown;
+    amountCny?: unknown;
+  } | null;
+};
+type ShipmentStatementRow = {
+  supplierId: string;
+  supplierName: string;
+  orderId: string;
+  approvedRows: CurrencyTotalInput[];
+  paidRows: CurrencyTotalInput[];
+};
 type QueryLike = {
   get(name: string): string | null;
 };
-type LogisticsExpenseListView = "bills" | "items";
 type LogisticsExpenseListFilters = {
-  view: LogisticsExpenseListView;
   keyword: Prisma.StringFilter | null;
   supplierId: string;
   costType: string;
@@ -59,14 +79,12 @@ type PaginatedRows<T> = {
   pageSize: number;
   totalPages: number;
 };
-type PaginatedLogisticsExpenseItems = PaginatedRows<LogisticsExpenseDto>;
-type PaginatedLogisticsExpenseBills = PaginatedRows<LogisticsExpenseBillDto>;
+type PaginatedLogisticsExpenseShipments = PaginatedRows<LogisticsExpenseBillDto | LogisticsExpenseShipmentDto>;
+const LOGISTICS_EXPENSE_LIST_PAGE_SIZE_MAX = 20;
 
 function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpenseListFilters {
-  const view = nonEmpty(query.get("view") || "bills") === "items" ? "items" : "bills";
   const keyword = insensitiveContains(query.get("keyword") || query.get("q"));
   return {
-    view,
     keyword,
     supplierId: nonEmpty(query.get("supplierId")),
     costType: String(query.get("costType") || "").trim(),
@@ -100,32 +118,111 @@ function logisticsExpenseListWhere(filters: LogisticsExpenseListFilters, actor: 
   return { AND: conditions };
 }
 
-export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQueryActor): Promise<PaginatedLogisticsExpenseItems | PaginatedLogisticsExpenseBills> {
+export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQueryActor): Promise<PaginatedLogisticsExpenseShipments> {
   assertCanReadLogisticsExpenses(actor);
   const filters = logisticsExpenseListFiltersFromQuery(query);
-  const where = logisticsExpenseListWhere(filters, actor);
-  const { page, pageSize } = pageParams(query, 20, 100);
-  if (filters.view === "items") {
-    const [total, rows] = await Promise.all([
-      prisma.logisticsExpense.count({ where }),
-      prisma.logisticsExpense.findMany({
-        where,
-        include: includeLogisticsExpenseRelations(),
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
-    return pageResult(rows.map(serializeLogisticsExpense), total, page, pageSize);
-  }
+  const { page, pageSize } = pageParams(query, 20, LOGISTICS_EXPENSE_LIST_PAGE_SIZE_MAX);
+  const billWhere = logisticsExpenseBillListWhere(filters, actor);
+  const [total, bills] = await prisma.$transaction([
+    prisma.logisticsBill.count({ where: billWhere }),
+    prisma.logisticsBill.findMany({
+      where: billWhere,
+      select: { id: true },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  const billIds = bills.map((bill) => bill.id);
+  if (!billIds.length) return pageResult([], total, page, pageSize);
+
   const rows = await prisma.logisticsExpense.findMany({
-    where,
+    where: {
+      billId: { in: billIds },
+      deletedAt: null,
+      ...logisticsExpenseAccessWhere(actor),
+    },
     include: includeLogisticsExpenseRelations(),
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "asc" }],
   });
-  const bills = groupLogisticsExpensesByBill(rows);
-  const start = (page - 1) * pageSize;
-  return pageResult(bills.slice(start, start + pageSize), bills.length, page, pageSize);
+  const rowsByBillId = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const billId = row.billId || "";
+    if (!billId) continue;
+    if (!rowsByBillId.has(billId)) rowsByBillId.set(billId, []);
+    rowsByBillId.get(billId)!.push(row);
+  }
+  const pageRows = billIds
+    .map((billId) => rowsByBillId.get(billId) || [])
+    .filter((billRows) => billRows.length > 0)
+    .map((billRows) => groupLogisticsExpensesByShipment(billRows)[0])
+    .filter(Boolean);
+  return pageResult(pageRows, total, page, pageSize);
+}
+
+function logisticsExpenseBillListWhere(filters: LogisticsExpenseListFilters, actor: LogisticsQueryActor): Prisma.LogisticsBillWhereInput {
+  const keyword = filters.keyword;
+  const expenseWhere: Prisma.LogisticsExpenseWhereInput = {
+    deletedAt: null,
+    ...logisticsExpenseAccessWhere(actor),
+  };
+  const conditions: Prisma.LogisticsBillWhereInput[] = [
+    { deletedAt: null },
+    logisticsExpenseBillAccessWhere(actor),
+    { expenses: { some: expenseWhere } },
+    logisticsExpenseBillStatusWhere(filters.status),
+  ];
+  if (filters.supplierId && actor?.role === "管理员") conditions.push({ supplierId: filters.supplierId });
+  if (filters.costType && LOGISTICS_COST_TYPES.includes(filters.costType)) {
+    conditions.push({ expenses: { some: { ...expenseWhere, costType: filters.costType } } });
+  }
+  if (keyword) {
+    conditions.push({
+      OR: [
+        { billOfLadingNo: keyword },
+        { order: { is: { orderNo: keyword } } },
+        { order: { is: { blNo: keyword } } },
+        { order: { is: { customerNameSnapshot: keyword } } },
+        { order: { is: { customer: { is: { shortName: keyword } } } } },
+        { order: { is: { customer: { is: { name: keyword } } } } },
+        { supplier: { is: { supplierName: keyword } } },
+        { expenses: { some: { ...expenseWhere, OR: [{ costType: keyword }, { supplierNameSnapshot: keyword }, { remark: keyword }] } } },
+      ],
+    });
+  }
+  return { AND: conditions };
+}
+
+function logisticsExpenseBillAccessWhere(actor: LogisticsQueryActor): Prisma.LogisticsBillWhereInput {
+  const role = nonEmpty(actor?.role);
+  const actorId = nonEmpty(actor?.id);
+  const supplierId = nonEmpty(actor?.supplierId);
+  if (role === "管理员") return {};
+  if (role === "财务") return { auditStatus: "审核通过" };
+  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId } } } } };
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) return supplierId ? { supplierId } : { id: "__no_supplier_bound__" };
+  return { id: "__no_logistics_bill_access__" };
+}
+
+function logisticsExpenseBillStatusWhere(status = ""): Prisma.LogisticsBillWhereInput {
+  const text = nonEmpty(status);
+  if (!text || text === "all") return {};
+  if (text === "pending") return { auditStatus: "待审核" };
+  if (text === "approved") return { auditStatus: "审核通过" };
+  if (text === "rejected") return { auditStatus: "已驳回" };
+  if (text === "draft") return { auditStatus: "草稿" };
+  if (text === "toInvoice") return {
+    auditStatus: "审核通过",
+    invoiceStatus: { in: ["未通知", "已通知开票", "待开票", "通知失败", "待开票 / 通知失败"] },
+  };
+  if (text === "uploaded") return { invoiceStatus: "已上传发票" };
+  if (text === "confirmedInvoice") return { invoiceStatus: { in: ["已确认", "已确认发票"] } };
+  if (["草稿", "待审核", "审核通过", "已驳回"].includes(text)) return { auditStatus: text };
+  if (["未通知", "已通知开票", "待开票", "通知失败", "待开票 / 通知失败", "部分上传发票", "已上传发票", "已确认", "已确认发票"].includes(text)) {
+    return { invoiceStatus: text === "已上传" ? "已上传发票" : text };
+  }
+  if (["待付款", "部分付款", "已付款", "待开票"].includes(text)) return { paymentStatus: text };
+  return {};
 }
 
 export async function listLogisticsExpenseOrders(query: QueryLike, actor: LogisticsQueryActor) {
@@ -213,11 +310,12 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
     ...logisticsExpenseAccessWhere(actor),
   };
   const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ reviewedAt: "desc" }] });
-  return Object.values(rows.reduce<Record<string, SupplierStatementRow>>((acc, row) => {
-    const key = row.supplierId;
+  const shipmentRows = groupLogisticsStatementRowsByShipment(rows);
+  return Object.values(shipmentRows.reduce<Record<string, SupplierStatementRow>>((acc, shipment) => {
+    const key = shipment.supplierId;
     acc[key] ||= {
-      supplierId: row.supplierId,
-      supplierName: row.supplierNameSnapshot || row.supplier?.supplierName || "",
+      supplierId: shipment.supplierId,
+      supplierName: shipment.supplierName,
       orderIds: new Set(),
       approvedRows: [],
       paidRows: [],
@@ -225,11 +323,9 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
       pendingPaymentAmountCny: 0,
       paidAmountCny: 0,
     };
-    acc[key].orderIds.add(row.orderId);
-    const currencyRow = { currency: row.currency, amount: row.amount, amountCny: row.amountCny };
-    acc[key].approvedRows.push(currencyRow);
-    const paidRow = logisticsPaymentLedgerRow(row);
-    if (paidRow) acc[key].paidRows.push(paidRow);
+    acc[key].orderIds.add(shipment.orderId);
+    acc[key].approvedRows.push(...shipment.approvedRows);
+    acc[key].paidRows.push(...shipment.paidRows);
     return acc;
   }, {})).map((item) => {
     const approvedCurrencyTotals = summarizeCurrencyTotals(item.approvedRows);
@@ -249,15 +345,28 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
   });
 }
 
-function logisticsPaymentLedgerRow(row: {
-  cost?: {
-    paymentDate?: Date | string | null;
-    deletedAt?: Date | string | null;
-    currency?: unknown;
-    amount?: unknown;
-    amountCny?: unknown;
-  } | null;
-}): CurrencyTotalInput | null {
+function groupLogisticsStatementRowsByShipment(rows: LogisticsStatementExpenseRow[] = []): ShipmentStatementRow[] {
+  const groups = new Map<string, ShipmentStatementRow>();
+  for (const row of rows) {
+    const shipmentKey = [row.supplierId, row.orderId].join("::");
+    if (!groups.has(shipmentKey)) {
+      groups.set(shipmentKey, {
+        supplierId: row.supplierId,
+        supplierName: row.supplierNameSnapshot || row.supplier?.supplierName || "",
+        orderId: row.orderId,
+        approvedRows: [],
+        paidRows: [],
+      });
+    }
+    const shipment = groups.get(shipmentKey)!;
+    shipment.approvedRows.push({ currency: row.currency, amount: row.amount, amountCny: row.amountCny });
+    const paidRow = logisticsPaymentLedgerRow(row);
+    if (paidRow) shipment.paidRows.push(paidRow);
+  }
+  return [...groups.values()];
+}
+
+function logisticsPaymentLedgerRow(row: LogisticsStatementExpenseRow): CurrencyTotalInput | null {
   const cost = row.cost;
   if (!cost || cost.deletedAt || !cost.paymentDate) return null;
   return { currency: cost.currency, amount: cost.amount, amountCny: cost.amountCny };

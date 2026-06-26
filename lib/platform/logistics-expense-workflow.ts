@@ -148,10 +148,34 @@ async function refreshLogisticsBillWorkflowStatus(rows: LogisticsExpenseRow[] = 
 
 async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [], actor: ActorContext) {
   const rows: LogisticsExpenseRow[] = [];
-  for (const billId of [...new Set(billIds.map(nonEmpty).filter(Boolean))]) {
-    rows.push(...await loadLogisticsExpenseBillRowsForAction(billId, actor));
+  const uniqueBillIds = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
+  const directBillIds = uniqueBillIds.filter((billId) => !billId.startsWith("bill:"));
+  if (directBillIds.length) {
+    rows.push(...await prisma.logisticsExpense.findMany({
+      where: {
+        billId: { in: directBillIds },
+        deletedAt: null,
+        ...logisticsExpenseAccessWhere(actor),
+      },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ billId: "asc" }, { createdAt: "asc" }],
+    }));
+  }
+  for (const legacyBillId of uniqueBillIds.filter((billId) => billId.startsWith("bill:"))) {
+    rows.push(...await loadLogisticsExpenseBillRowsForAction(legacyBillId, actor));
   }
   return rows;
+}
+
+function groupLogisticsExpenseRowsByBillId(rows: LogisticsExpenseRow[] = []) {
+  const groups = new Map<string, LogisticsExpenseRow[]>();
+  for (const row of rows) {
+    const billId = rowBillId(row);
+    if (!billId) continue;
+    if (!groups.has(billId)) groups.set(billId, []);
+    groups.get(billId)!.push(row);
+  }
+  return groups;
 }
 
 function exchangeActor(actor: ActorContext): { role?: string } | null {
@@ -336,38 +360,43 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
   if (!identifiers.length) {
     throw codedError("请选择需要审核的物流费用账单。", 400, "LOGISTICS_EXPENSE_BATCH_REVIEW_EMPTY");
   }
-  const bills: ReviewBill[] = [];
-  const results: ReviewResult[] = [];
-  const seenBillIds = new Set();
-  for (const identifier of identifiers) {
-    try {
-      const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
-      if (!rows.length) throw codedError("未找到可审核的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
-      const billId = rowBillId(rows[0]);
-      if (seenBillIds.has(billId)) continue;
-      seenBillIds.add(billId);
-      const billAuditStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
-      if (billAuditStatus !== "待审核") {
-        results.push(logisticsExpenseReviewResultFromRows(rows, {
-          auditStatus: billAuditStatus,
-          notificationStatus: "not_sent",
-          errorMessage: `账单状态不是待审核，当前状态：${billAuditStatus || "未知"}`,
-        }));
-        continue;
-      }
-      bills.push({ billId, rows });
-    } catch (error: unknown) {
-      results.push(logisticsExpenseReviewResultFromError(identifier, error));
-    }
-  }
+  const { bills, results } = await loadLogisticsExpenseReviewBills(identifiers, actor);
   const reviewRemark = optional(input.reviewRemark || input.remark);
   const now = new Date();
-  const approvedBills: ReviewBill[] = [];
-  for (const bill of bills) {
+  const directBills = bills.filter((bill) => bill.rows.some((row) => row.billId) && !bill.billId.startsWith("bill:"));
+  const legacyBills = bills.filter((bill) => !directBills.some((item) => item.billId === bill.billId));
+  let finalRows: LogisticsExpenseRow[] = [];
+  if (directBills.length) {
+    try {
+      const billIds = directBills.map((bill) => bill.billId);
+      await approveLogisticsExpenseBillsInTransaction(billIds, actor, reviewRemark, now);
+      finalRows.push(...await reloadLogisticsExpenseRowsForBillIds(billIds, actor));
+      const rowsByBillId = groupLogisticsExpenseRowsByBillId(finalRows);
+      for (const bill of directBills) {
+        const savedRows = rowsByBillId.get(bill.billId) || bill.rows;
+        const auditStatus = aggregateLogisticsExpenseStatus(savedRows, "auditStatus");
+        results.push(logisticsExpenseReviewResultFromRows(savedRows, {
+          auditStatus,
+          notificationStatus: auditStatus === "审核通过" ? "pending" : "not_sent",
+          errorMessage: auditStatus === "审核通过" ? "" : "账单状态已变化，请刷新后重试",
+        }));
+      }
+    } catch (error: unknown) {
+      const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
+      for (const bill of directBills) {
+        results.push(logisticsExpenseReviewResultFromRows(bill.rows, {
+          auditStatus: aggregateLogisticsExpenseStatus(bill.rows, "auditStatus"),
+          notificationStatus: "not_sent",
+          errorMessage: safeMessage || "数据库更新失败",
+        }));
+      }
+    }
+  }
+  for (const bill of legacyBills) {
     try {
       await approveLogisticsExpenseBillRowsInTransaction(bill.rows, actor, reviewRemark, now);
       const savedRows = await loadLogisticsExpenseBillRowsForAction(bill.billId, actor);
-      approvedBills.push({ ...bill, rows: savedRows });
+      finalRows.push(...savedRows);
       results.push(logisticsExpenseReviewResultFromRows(savedRows, {
         auditStatus: "审核通过",
         notificationStatus: "pending",
@@ -382,48 +411,12 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       }));
     }
   }
-  const approvedRows = approvedBills.flatMap((bill) => bill.rows);
-  let emailResults: EmailResult[] = [];
-  let finalRows = approvedRows;
-  if (approvedRows.length) {
-    try {
-      emailResults = await notifyLogisticsSupplierInvoiceBills(approvedRows);
-    } catch (error: unknown) {
-      emailResults = [logisticsExpenseNotificationFailureResult(approvedRows, errorMessage(error, "邮件发送失败"))];
-    }
-    try {
-      finalRows = await applyLogisticsExpenseInvoiceNotificationResults(approvedRows, emailResults, actor, now);
-    } catch (error: unknown) {
-      const message = errorMessage(error, "开票通知状态记录失败");
-      emailResults = emailResults.length ? emailResults.map((result) => result.sent ? { ...result, sent: false, error: message } : result) : [logisticsExpenseNotificationFailureResult(approvedRows, message)];
-      finalRows = approvedRows;
-    }
-    const reloadedRows = await reloadLogisticsExpenseRowsForBillIds(approvedBills.map((bill) => bill.billId), actor);
-    if (reloadedRows.length) finalRows = reloadedRows;
-  }
-  const emailErrors = emailResults
-    .filter((result) => !result.sent && !result.skipped)
-    .map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
-  const emailError = emailErrors.join("；");
-  for (const bill of approvedBills) {
-    const billRows = finalRows.filter((row) => rowBillId(row) === bill.billId);
-    await runNonCriticalTask("物流费用批量审核日志写入", () => writeAudit(request, actor, "审核通过物流费用账单", "logistics_expenses", bill.billId, bill.rows.map(serializeLogisticsExpense), {
-      bill: serializeLogisticsExpenseBill(billRows),
-      emailResults,
-    }));
-  }
-  for (const result of emailResults.filter((item) => !item.sent && !item.skipped)) {
-    await runNonCriticalTask("物流费用通知失败日志写入", () => writeAudit(request, actor, "物流费用开票通知失败", "logistics_expenses", result.supplierId || "supplier", null, {
-      supplierName: result.supplierName,
-      errorMessage: result.error,
-      expenseIds: result.expenseIds,
-    }));
-  }
-  for (const orderId of [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))]) {
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(String(orderId)));
-  }
-  markLogisticsExpenseReviewNotificationResults(results, finalRows, emailResults);
-  const serializedBills = approvedBills.map((bill) => serializeLogisticsExpenseBill(finalRows.filter((row) => rowBillId(row) === bill.billId)));
+  const approvedBillIds = [...new Set(results.filter((result) => result.auditStatus === "审核通过").map((result) => result.billId).filter(Boolean))];
+  const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
+  scheduleLogisticsExpenseReviewSideEffects(request, actor, approvedRows, now);
+  const serializedBills = approvedBillIds
+    .map((billId) => serializeLogisticsExpenseBill(finalRows.filter((row) => rowBillId(row) === billId)))
+    .filter((bill) => bill.items.length > 0);
   const successCount = results.filter((result) => result.auditStatus === "审核通过").length;
   const failedCount = results.length - successCount;
   return {
@@ -433,11 +426,127 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
     results,
     bills: serializedBills,
     expenses: finalRows.map(serializeLogisticsExpense),
-    emailResults,
-    emailNotified: emailResults.some((result) => result.sent),
-    emailError,
-    message: logisticsExpenseReviewSummaryMessage(successCount, failedCount, results, emailError),
+    emailResults: [],
+    emailNotified: false,
+    emailError: "",
+    message: logisticsExpenseReviewSummaryMessage(successCount, failedCount, results, ""),
   };
+}
+
+async function loadLogisticsExpenseReviewBills(identifiers: string[] = [], actor: ActorContext) {
+  const results: ReviewResult[] = [];
+  const bills: ReviewBill[] = [];
+  const seenBillIds = new Set<string>();
+  const directIdentifiers = identifiers.filter((identifier) => !identifier.startsWith("bill:"));
+  const legacyIdentifiers = identifiers.filter((identifier) => identifier.startsWith("bill:"));
+  const directRows = await reloadLogisticsExpenseRowsForBillIds(directIdentifiers, actor);
+  const directRowsByBillId = groupLogisticsExpenseRowsByBillId(directRows);
+  const unresolved: string[] = [];
+  for (const identifier of directIdentifiers) {
+    const rows = directRowsByBillId.get(identifier);
+    if (rows?.length) {
+      collectLogisticsExpenseReviewBill(rows, bills, results, seenBillIds);
+    } else {
+      unresolved.push(identifier);
+    }
+  }
+  for (const identifier of [...legacyIdentifiers, ...unresolved]) {
+    try {
+      collectLogisticsExpenseReviewBill(await loadLogisticsExpenseBillRowsForAction(identifier, actor), bills, results, seenBillIds);
+    } catch (error: unknown) {
+      results.push(logisticsExpenseReviewResultFromError(identifier, error));
+    }
+  }
+  return { bills, results };
+}
+
+function collectLogisticsExpenseReviewBill(rows: LogisticsExpenseRow[] = [], bills: ReviewBill[], results: ReviewResult[], seenBillIds: Set<string>) {
+  if (!rows.length) throw codedError("未找到可审核的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
+  const billId = rowBillId(rows[0]);
+  if (seenBillIds.has(billId)) return;
+  seenBillIds.add(billId);
+  const billAuditStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
+  if (billAuditStatus !== "待审核") {
+    results.push(logisticsExpenseReviewResultFromRows(rows, {
+      auditStatus: billAuditStatus,
+      notificationStatus: "not_sent",
+      errorMessage: `账单状态不是待审核，当前状态：${billAuditStatus || "未知"}`,
+    }));
+    return;
+  }
+  bills.push({ billId, rows });
+}
+
+async function approveLogisticsExpenseBillsInTransaction(billIds: string[] = [], actor: ActorContext, reviewRemark: string | null | undefined, now = new Date()) {
+  assertWorkflowActor(actor);
+  const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
+  if (!ids.length) return;
+  await prisma.$transaction([
+    prisma.logisticsBill.updateMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+        auditStatus: "待审核",
+      },
+      data: {
+        auditStatus: "审核通过",
+        reviewedById: actor.id,
+        reviewedAt: now,
+        reviewRemark,
+        rejectReason: null,
+        invoiceNotificationError: null,
+        paymentStatus: "待付款",
+        invoiceStatus: "待开票",
+        updatedById: actorId(actor),
+      },
+    }),
+  ], LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+}
+
+function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestLike, actor: ActorContext, approvedRows: LogisticsExpenseRow[] = [], now = new Date()) {
+  if (!approvedRows.length) return;
+  void runNonCriticalTask("物流费用批量审核后续处理", async () => {
+    const costLinks: CostLink[] = [];
+    for (const row of approvedRows) {
+      const cost = await createOrUpdateCostFromLogisticsExpense(prisma, row, actor);
+      costLinks.push({ expenseId: row.id, costId: cost.id });
+    }
+    await updateLogisticsExpenseCostIds(prisma, costLinks);
+    let emailResults: EmailResult[] = [];
+    let finalRows = approvedRows;
+    try {
+      emailResults = await notifyLogisticsSupplierInvoiceBills(approvedRows);
+    } catch (error: unknown) {
+      emailResults = [logisticsExpenseNotificationFailureResult(approvedRows, errorMessage(error, "邮件发送失败"))];
+    }
+    try {
+      finalRows = await applyLogisticsExpenseInvoiceNotificationResults(approvedRows, emailResults, actor, now);
+    } catch (error: unknown) {
+      const message = errorMessage(error, "开票通知状态记录失败");
+      emailResults = emailResults.length
+        ? emailResults.map((result) => result.sent ? { ...result, sent: false, error: message } : result)
+        : [logisticsExpenseNotificationFailureResult(approvedRows, message)];
+      finalRows = approvedRows;
+    }
+    const reloadedRows = await reloadLogisticsExpenseRowsForBillIds([...new Set(approvedRows.map(rowBillId).filter(Boolean))], actor);
+    if (reloadedRows.length) finalRows = reloadedRows;
+    for (const [billId, billRows] of groupLogisticsExpenseRowsByBillId(finalRows)) {
+      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, approvedRows.filter((row) => rowBillId(row) === billId).map(serializeLogisticsExpense), {
+        bill: serializeLogisticsExpenseBill(billRows),
+        emailResults,
+      });
+    }
+    for (const result of emailResults.filter((item) => !item.sent && !item.skipped)) {
+      await writeAudit(request, actor, "物流费用开票通知失败", "logistics_bills", result.supplierId || "supplier", null, {
+        supplierName: result.supplierName,
+        errorMessage: result.error,
+        expenseIds: result.expenseIds,
+      });
+    }
+    for (const orderId of [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))]) {
+      await refreshTaxRefundCompleteness(String(orderId));
+    }
+  });
 }
 
 async function approveLogisticsExpenseBillRowsInTransaction(rows: LogisticsExpenseRow[] = [], actor: ActorContext, reviewRemark: string | null | undefined, now = new Date()) {

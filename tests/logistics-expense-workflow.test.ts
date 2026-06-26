@@ -342,8 +342,14 @@ test("logistics supplier login locks supplier field to current supplier", () => 
   assert.match(logisticsModule, /!isLockedSupplier \? \(/);
 });
 
-test("logistics expense list groups bills by BL number and keeps item details", () => {
-  assert.match(backend, /groupLogisticsExpensesByBill/);
+test("logistics expense list groups rows by shipment and keeps item details", () => {
+  assert.match(backend, /groupLogisticsExpensesByShipment/);
+  assert.match(backend, /serializeLogisticsExpenseShipment/);
+  assert.doesNotMatch(backend, /filters\.view === "items"/);
+  assert.match(backend, /shipmentNo/);
+  assert.match(backend, /totalCNY/);
+  assert.match(backend, /totalUSD/);
+  assert.match(backend, /shipmentBillIds/);
   assert.match(backend, /serializeLogisticsExpenseBill/);
   assert.match(backend, /aggregateLogisticsExpenseStatus/);
   assert.match(backend, /LOGISTICS_EXPENSE_BILL_SORT_PRIORITY/);
@@ -355,12 +361,15 @@ test("logistics expense list groups bills by BL number and keeps item details", 
   assert.match(logisticsModule, /sortLogisticsExpenseBillsForDisplay/);
   assert.match(logisticsModule, /const nextRows = sortLogisticsExpenseBillsForDisplay/);
   assert.match(logisticsModule, /setRows\(nextRows\)/);
+  assert.match(logisticsModule, /logisticsExpenseShipmentBillIds/);
+  assert.match(logisticsModule, /logisticsExpenseSelectionSelected/);
   assert.match(logisticsModule, /logisticsExpenseBillSortRank\(left\) - logisticsExpenseBillSortRank\(right\)/);
   assert.match(backend, /domesticLogisticsInfos[\s\S]*transportItems/);
   assert.match(backend, /function resolveLogisticsExpenseVesselVoyage/);
   assert.match(backend, /vesselVoyage: resolveLogisticsExpenseVesselVoyage\(order\)/);
   assert.match(logisticsModule, /items = expense\.items\?\.length \? expense\.items : \[expense\]/);
-  assert.match(logisticsModule, /className=\{styles\.containerTypeColumn\}>柜型/);
+  assert.match(logisticsModule, /className=\{styles\.amountColumn\}>CNY 合计/);
+  assert.match(logisticsModule, /className=\{styles\.amountColumn\}>USD 合计/);
   assert.match(logisticsModule, /logisticsExpenseContainerSummary/);
   assert.match(logisticsModule, /<DetailField label="船名航次" value=\{expense\.order\?\.vesselVoyage \|\| expense\.vesselVoyage \|\| "-"\}/);
   assert.doesNotMatch(logisticsModule, /LogisticsBillContainerInfo/);
@@ -674,7 +683,9 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(logisticsModule, /setActiveTab\(defaultTab\)/);
   assert.match(logisticsModule, /if \(normalizedAuditStatus === "审核通过"\) return "invoice"/);
   assert.match(logisticsModule, /<SideDetailDrawer[\s\S]*surfaceClassName=\{styles\.logisticsExpenseDrawer\}/);
-  assert.match(logisticsModule, /订单号[\s\S]*提单号[\s\S]*柜型[\s\S]*客户[\s\S]*金额[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
+  assert.match(logisticsModule, /订单号 \/ Shipment[\s\S]*客户[\s\S]*CNY 合计[\s\S]*USD 合计[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
+  assert.match(logisticsModule, /formatOriginalCurrencyValue\("CNY", logisticsCurrencyAmountByCode\(currencyTotals, "CNY"\)\)/);
+  assert.match(logisticsModule, /formatOriginalCurrencyValue\("USD", logisticsCurrencyAmountByCode\(currencyTotals, "USD"\)\)/);
   assert.match(logisticsModule, /tabs=\{\[[\s\S]*基础信息[\s\S]*费用明细[\s\S]*发票管理[\s\S]*操作记录/);
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
   assert.match(logisticsModule, /<DetailField label="提单号" value=\{expense\.blNo \|\| expense\.billOfLadingNo \|\| "-"\}/);
@@ -767,6 +778,8 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(logisticsModule, /logisticsExpenseFormCurrencySummary/);
   assert.match(backend, /approvedCurrencyTotals/);
   assert.match(backend, /logisticsPaymentLedgerRow/);
+  assert.match(backend, /groupLogisticsStatementRowsByShipment/);
+  assert.match(logisticsSupplierStatementSource, /const shipmentRows = groupLogisticsStatementRowsByShipment\(rows\)/);
   assert.match(backend, /subtractCurrencyTotals\(approvedCurrencyTotals, paidCurrencyTotals\)/);
   assert.match(backend, /summarizeCurrencyTotals/);
   assert.match(logisticsSupplierStatementSource, /const paidRow = logisticsPaymentLedgerRow\(row\)/);

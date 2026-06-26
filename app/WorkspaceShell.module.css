@@ -1317,6 +1317,94 @@
   resize: vertical;
 }
 
+.costFilterPanel {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.costFilterSearchRow,
+.costFilterPrimaryRow,
+.costFilterSecondaryRow {
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+
+.costFilterSearchRow {
+  grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px);
+}
+
+.costFilterPrimaryRow {
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, auto);
+}
+
+.costFilterSecondaryRow {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.costFilterPanel label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.costFilterPanel input,
+.costFilterPanel select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background-color: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.costFilterPanel select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 8 4 4 4-4' fill='none' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+.costFilterPanel input[type="date"] {
+  padding-right: 10px;
+}
+
+.costFilterPanel input:focus,
+.costFilterPanel select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.costFilterActions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.costFilterActions button {
+  min-width: 76px;
+  height: 38px;
+  white-space: nowrap;
+}
+
 .autocompleteField {
   position: relative;
   grid-column: span 2;
@@ -3641,6 +3729,120 @@
   white-space: nowrap;
 }
 
+.costAmountStack {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.costAmountTotal {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.costAmountBreakdown {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.costAmountBreakdown > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.costAmountBreakdown strong {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.costBreakdownLabelText {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.costBreakdownTable {
+  display: grid;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.costBreakdownHeader,
+.costBreakdownRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(120px, 1fr) minmax(120px, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.costBreakdownHeader {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.costBreakdownHeader > span:not(:first-child),
+.costBreakdownRow > span:not(:first-child) {
+  text-align: right;
+}
+
+.costBreakdownRow {
+  border-top: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.costBreakdownRow > span:not(:first-child) {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.costBreakdownRow > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.costBreakdownRow strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.costBreakdownRow small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .detailAmountCell {
   justify-items: start;
 }
@@ -5381,6 +5583,16 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .costFilterSearchRow,
+  .costFilterPrimaryRow,
+  .costFilterSecondaryRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .costFilterActions {
+    grid-column: span 2;
+  }
+
   .installmentRow {
     grid-template-columns: 1fr 1fr;
   }
@@ -5486,6 +5698,21 @@
 
   .reportFilterGrid {
     grid-template-columns: 1fr;
+  }
+
+  .costFilterSearchRow,
+  .costFilterPrimaryRow,
+  .costFilterSecondaryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .costFilterActions {
+    grid-column: auto;
+    flex-wrap: wrap;
+  }
+
+  .costFilterActions button {
+    flex: 1 1 120px;
   }
 
   .installmentRow {

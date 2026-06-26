@@ -548,6 +548,77 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
 
 export type LogisticsExpenseBillDto = ReturnType<typeof serializeLogisticsExpenseBill>;
 
+export function serializeLogisticsExpenseShipment(rows: LogisticsExpenseLike[] = []) {
+  const items = rows.map(serializeLogisticsExpense);
+  const first = items[0] || {};
+  const rawRows = rows.length ? rows : items;
+  const bills = groupLogisticsExpensesByBill(rawRows);
+  const currencyTotals = summarizeCurrencyTotals(items);
+  const billIds = [...new Set(bills.map((bill) => nonEmpty(bill.billId || bill.id)).filter(Boolean))];
+  const invoiceGroups = logisticsExpenseInvoiceGroups(items);
+  const shipmentNo = first.orderNo || first.orderId || first.blNo || "";
+  return {
+    id: billIds.length === 1 ? billIds[0] : `shipment:${first.orderId || shipmentNo || "unknown"}`,
+    shipmentNo,
+    customer: first.customerShortName || first.customerName || "",
+    isShipment: true,
+    isBill: true,
+    orderId: first.orderId || "",
+    orderNo: first.orderNo || shipmentNo,
+    blNo: [...new Set(items.map((item) => item.blNo || item.billOfLadingNo).filter(Boolean))].join(" / "),
+    billOfLadingNo: [...new Set(items.map((item) => item.billOfLadingNo || item.blNo).filter(Boolean))].join(" / "),
+    customerName: first.customerName || "",
+    customerShortName: first.customerShortName || "",
+    vesselVoyage: first.order?.vesselVoyage || "",
+    supplierName: "",
+    supplierNames: [...new Set(items.map((item) => item.supplierName).filter(Boolean))],
+    costType: `${items.length} 项费用`,
+    currency: "CNY",
+    amount: currencyTotals.cnyActual,
+    amountCny: currencyTotals.totalCny,
+    totalCNY: currencyTotals.cnyActual,
+    totalUSD: Number((currencyTotals.foreignTotals || []).find((item) => item.currency === "USD")?.amount || 0),
+    currencyTotals,
+    auditStatus: aggregateLogisticsExpenseStatus(items, "auditStatus"),
+    invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(items),
+    paymentStatus: aggregateLogisticsExpenseStatus(items, "paymentStatus"),
+    submittedAt: items.map((item) => item.submittedAt).find(Boolean) || null,
+    reviewedBy: items.map((item) => item.reviewedBy).find((item) => item?.name),
+    reviewedAt: items.map((item) => item.reviewedAt).find(Boolean) || null,
+    reviewRemark: items.map((item) => item.reviewRemark || "").find(Boolean) || "",
+    rejectReason: items.map((item) => item.rejectReason || "").find(Boolean) || "",
+    invoiceNotifiedAt: items.map((item) => item.invoiceNotifiedAt).find(Boolean) || null,
+    invoiceNotificationError: items.map((item) => item.invoiceNotificationError || "").find(Boolean) || "",
+    itemCount: items.length,
+    billCount: bills.length,
+    shipmentBillIds: billIds,
+    invoiceGroups,
+    items,
+    order: first.order || {},
+    updatedAt: rows.reduce((latest, row) => {
+      const dateValue = logisticsExpenseBillRecord(row).updatedAt || row.updatedAt || row.createdAt || 0;
+      const time = new Date(dateValue instanceof Date || typeof dateValue === "string" || typeof dateValue === "number" ? dateValue : 0).getTime();
+      return time > latest ? time : latest;
+    }, 0),
+  };
+}
+
+export type LogisticsExpenseShipmentDto = ReturnType<typeof serializeLogisticsExpenseShipment>;
+
+export function groupLogisticsExpensesByShipment(rows: LogisticsExpenseLike[] = []) {
+  const groups = new Map<string, LogisticsExpenseLike[]>();
+  for (const row of rows) {
+    const orderSummary = logisticsExpenseOrderSummary(row.order || {});
+    const shipmentNo = nonEmpty(orderSummary.orderNo || row.orderId || orderSummary.blNo || "unknown");
+    const key = row.orderId || orderSummary.orderId || shipmentNo;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+  return Array.from(groups.values())
+    .map(serializeLogisticsExpenseShipment)
+    .sort(compareLogisticsExpenseBillsForDisplay);
+}
+
 export function logisticsExpenseBillId(expense: LogisticsExpenseLike = {}) {
   const directBillId = nonEmpty(expense.billId || logisticsExpenseBillRecord(expense).id);
   if (directBillId) return directBillId;
