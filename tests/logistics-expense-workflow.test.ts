@@ -866,7 +866,7 @@ test("sales commission base uses actual received payments minus logistics costs"
   assert.match(settingsModule, /提成公式/);
   assert.match(settingsModule, /公式模板/);
   assert.match(settingsModule, /commissionDeductionGrid/);
-  assert.match(settingsModule, /UiOptionCard/);
+  assert.match(settingsModule, /PermissionSelectItem/);
   assert.match(settingsModule, /从FOB中扣减物流费用/);
   assert.match(settingsModule, /<UiSwitch[\s\S]*label="提成基数负数归零"/);
   assert.match(settingsModule, /toggleDeduction\(item\.value\)/);
@@ -877,7 +877,7 @@ test("sales commission base uses actual received payments minus logistics costs"
 
 test("checkbox controls use modern custom selection styling", () => {
   assert.match(settingsModule, /commissionDeductionGrid/);
-  assert.match(settingsModule, /UiCheckbox/);
+  assert.match(settingsModule, /PermissionSelectItem/);
   assert.match(reportsModule, /variant="table"/);
   assert.match(workspaceStyles, /\.uiChoiceCardChecked/);
   assert.match(workspaceStyles, /border-color: #3b82f6/);

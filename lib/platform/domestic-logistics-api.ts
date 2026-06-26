@@ -17,7 +17,7 @@ import {
 } from "./shared";
 import {
   archiveScope,
-  domesticLogisticsExpenseStatusSummary,
+  domesticLogisticsCanArchiveOrder,
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
   domesticLogisticsSelectWithOrder,
@@ -163,16 +163,13 @@ export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, 
     include: domesticLogisticsOrderInclude(),
   });
   const accessibleOrders = orders.filter((order) => canAccessDomesticLogisticsOrder(currentActor, order));
-  const eligibleOrders = accessibleOrders.filter((order) => (
-    order.isArchived !== true
-    && domesticLogisticsExpenseStatusSummary(order, currentActor).status === "审核通过"
-  ));
+  const eligibleOrders = accessibleOrders.filter((order) => domesticLogisticsCanArchiveOrder(order, currentActor));
   const eligibleIds = eligibleOrders.map((order) => order.id);
   const foundIds = new Set(accessibleOrders.map((order) => order.id));
   const skippedIds = requestedOrderIds.filter((orderId) => !eligibleIds.includes(orderId));
 
   if (!eligibleIds.length) {
-    throw codedError("没有符合归档条件的订单，仅允许批量归档审核通过的订单。", 400, "NO_ARCHIVABLE_ORDERS");
+    throw codedError("没有符合归档条件的订单，仅允许批量归档审核通过且已上传发票的订单。", 400, "NO_ARCHIVABLE_ORDERS");
   }
 
   const updateResult = await prisma.receivableOrder.updateMany({

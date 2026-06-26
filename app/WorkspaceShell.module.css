@@ -4653,10 +4653,10 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 9998;
   display: grid;
   place-items: center;
-  background: rgba(15, 23, 42, 0.36);
+  background: rgba(0, 0, 0, 0.45);
   padding: 24px;
   opacity: 1;
   transition: opacity 180ms ease;
@@ -4665,10 +4665,10 @@
 .drawerOverlay {
   position: fixed;
   inset: 0;
-  z-index: 55;
+  z-index: 9998;
   display: flex;
   justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.32);
+  background: rgba(0, 0, 0, 0.45);
   opacity: 1;
   transition: opacity 180ms ease;
 }
@@ -4683,6 +4683,10 @@
 }
 
 .sideDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
   width: min(980px, 88vw);
   height: 100vh;
   background: #f8fafc;
@@ -4751,6 +4755,10 @@
 
 .sideDrawer.logisticsExpenseDrawer {
   width: min(1200px, 94vw);
+}
+
+.sideDrawer.settingsCustomerDrawer {
+  width: min(640px, 92vw);
 }
 
 .sideDrawer.logisticsExpenseDrawer .sideDrawerHeader {
@@ -5061,6 +5069,8 @@
 }
 
 .confirmDialog {
+  position: relative;
+  z-index: 9999;
   width: min(520px, 94vw);
   border: 1px solid #e2e8f0;
   border-radius: 20px;

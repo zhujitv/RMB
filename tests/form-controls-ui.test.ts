@@ -20,6 +20,7 @@ test("shared UI form controls are available for ERP pages", () => {
     "UiTabs",
     "UiInput",
     "UiOptionCard",
+    "PermissionSelectItem",
   ]) {
     assert.match(components, new RegExp(`export function ${componentName}\\b`));
   }
@@ -30,7 +31,7 @@ test("commission formula uses card selections and switch control", () => {
   const negativeBaseSwitchSnippet = settingsModule.slice(Math.max(0, negativeBaseSwitchIndex - 120), negativeBaseSwitchIndex + 180);
 
   assert.match(settingsModule, /commissionDeductionGrid/);
-  assert.match(settingsModule, /UiOptionCard/);
+  assert.match(settingsModule, /PermissionSelectItem/);
   assert.match(settingsModule, /从FOB中扣减物流费用/);
   assert.match(settingsModule, /扣减所有成本/);
   assert.match(negativeBaseSwitchSnippet, /<UiSwitch/);
@@ -40,6 +41,22 @@ test("commission formula uses card selections and switch control", () => {
   assert.doesNotMatch(settingsModule, /type=["']checkbox["']/);
   assert.doesNotMatch(reportsModule, /type=["']checkbox["']/);
   assert.doesNotMatch(workspaceStyles, /\[type=["']checkbox["']\]/);
+});
+
+test("auto-send document selection reuses commission formula card selection", () => {
+  const autoSendIndex = settingsModule.indexOf("<strong>自动发送资料</strong>");
+  const autoSendSnippet = settingsModule.slice(Math.max(0, autoSendIndex - 420), autoSendIndex + 900);
+
+  assert.match(settingsModule, /const docConfig: ShippingDocumentConfig/);
+  assert.match(settingsModule, /key: "invoice"/);
+  assert.match(settingsModule, /key: "packingList"/);
+  assert.match(settingsModule, /key: "customsDeclaration"/);
+  assert.match(autoSendSnippet, /styles\.commissionDeductionGrid/);
+  assert.match(autoSendSnippet, /<PermissionSelectItem/);
+  assert.match(autoSendSnippet, /checked=\{docConfig\[option\.key\]\}/);
+  assert.match(autoSendSnippet, /onChange=\{\(\) => toggleShippingDocumentType\(option\.key\)\}/);
+  assert.doesNotMatch(autoSendSnippet, /variant="compact"/);
+  assert.doesNotMatch(autoSendSnippet, /styles\.checkboxPanel/);
 });
 
 test("native form controls are normalized by the workspace style layer", () => {
@@ -52,6 +69,23 @@ test("native form controls are normalized by the workspace style layer", () => {
   assert.match(workspaceStyles, /input\[type="file"\]::file-selector-button/);
   assert.match(workspaceStyles, /input\[type="radio"\]:not\(\.uiChoiceInput\)/);
   assert.match(workspaceStyles, /background-image: url\("data:image\/svg\+xml/);
+});
+
+test("customer edit panel uses a portal drawer layer instead of inline table rendering", () => {
+  const customerDrawerSnippet = settingsModule.match(/\{customerForm && activeTab === "customers"[\s\S]*?\) : null\}/)?.[0] || "";
+  assert.match(components, /import \{ createPortal \} from "react-dom"/);
+  assert.match(components, /const \[portalTarget, setPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
+  assert.match(components, /setPortalTarget\(document\.body\)/);
+  assert.match(components, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(components, /document\.body\.style\.overflow = previousBodyOverflow \|\| "auto"/);
+  assert.match(components, /return portalTarget \? createPortal\(layer, portalTarget\) : null/);
+  assert.match(customerDrawerSnippet, /<SideDetailDrawer/);
+  assert.match(customerDrawerSnippet, /ariaLabel=\{customerForm\.id \? "编辑客户资料" : "新建客户资料"\}/);
+  assert.match(customerDrawerSnippet, /surfaceClassName=\{styles\.settingsCustomerDrawer\}/);
+  assert.match(customerDrawerSnippet, /<CustomerEditPanel/);
+  assert.match(workspaceStyles, /\.drawerOverlay \{[\s\S]*z-index: 9998;[\s\S]*background: rgba\(0, 0, 0, 0\.45\);/);
+  assert.match(workspaceStyles, /\.sideDrawer \{[\s\S]*position: fixed;[\s\S]*z-index: 9999;/);
+  assert.match(workspaceStyles, /\.sideDrawer\.settingsCustomerDrawer \{[\s\S]*width: min\(640px, 92vw\);/);
 });
 
 test("system buttons use unified design tokens and avoid black backgrounds", () => {

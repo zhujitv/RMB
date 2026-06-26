@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, SideDetailDrawer, UiCheckbox, UiOptionCard, UiSwitch } from "../components";
+import { DetailField, PaginationBar, PermissionSelectItem, SideDetailDrawer, UiCheckbox, UiSwitch } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import styles from "../WorkspaceShell.module.css";
@@ -269,10 +269,12 @@ const PAGE_SIZE = 20;
 const AUDIT_PAGE_SIZE = 50;
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
 const SHIPPING_DOCUMENT_TYPE_OPTIONS = [
-  { value: "commercialInvoice", label: "商业发票" },
-  { value: "packingList", label: "装箱单" },
-  { value: "customsDeclaration", label: "报关单" },
-];
+  { key: "invoice", value: "commercialInvoice", label: "商业发票" },
+  { key: "packingList", value: "packingList", label: "装箱单" },
+  { key: "customsDeclaration", value: "customsDeclaration", label: "报关单" },
+] as const;
+type ShippingDocumentConfigKey = typeof SHIPPING_DOCUMENT_TYPE_OPTIONS[number]["key"];
+type ShippingDocumentConfig = Record<ShippingDocumentConfigKey, boolean>;
 const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
@@ -1085,18 +1087,30 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {customerForm && activeTab === "customers" ? (
-        <CustomerEditPanel
-          form={customerForm}
-          salespeople={salespeople}
-          saving={customerSaving}
-          message={customerMessage}
-          onChange={setCustomerForm}
-          onSubmit={saveCustomerForm}
-          onCancel={() => {
+        <SideDetailDrawer
+          ariaLabel={customerForm.id ? "编辑客户资料" : "新建客户资料"}
+          kicker="客户资料"
+          title={customerForm.id ? "编辑客户资料" : "新建客户资料"}
+          subtitle="客户资料会通过 Portal 挂载到页面顶层，避免被列表或表格遮挡。"
+          surfaceClassName={styles.settingsCustomerDrawer}
+          onClose={() => {
             setCustomerForm(null);
             setCustomerMessage("");
           }}
-        />
+        >
+          <CustomerEditPanel
+            form={customerForm}
+            salespeople={salespeople}
+            saving={customerSaving}
+            message={customerMessage}
+            onChange={setCustomerForm}
+            onSubmit={saveCustomerForm}
+            onCancel={() => {
+              setCustomerForm(null);
+              setCustomerMessage("");
+            }}
+          />
+        </SideDetailDrawer>
       ) : null}
       {supplierForm && activeTab === "suppliers" ? (
         <SupplierEditPanel
@@ -1697,7 +1711,7 @@ function CommissionFormulaSettingsCard({
         <strong>扣减项</strong>
         <div className={styles.commissionDeductionGrid}>
           {COMMISSION_FORMULA_DEDUCTIONS.map((item) => (
-            <UiOptionCard
+            <PermissionSelectItem
               key={item.value}
               label={item.label}
               description={item.description}
@@ -1788,7 +1802,7 @@ function NotificationTemplateSettingsCard({
         </div>
         <div className={styles.commissionDeductionGrid}>
           {NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => (
-            <UiOptionCard
+            <PermissionSelectItem
               key={item.value}
               label={item.label}
               description={item.description}
@@ -1916,14 +1930,22 @@ function CustomerEditPanel({
     ], keyword)).slice(0, 10);
   }
 
-  function toggleShippingDocumentType(value: string) {
-    const current = new Set(form.autoSendDocumentTypes);
-    if (current.has(value)) {
-      current.delete(value);
-    } else {
-      current.add(value);
-    }
-    setField("autoSendDocumentTypes", Array.from(current));
+  const docConfig: ShippingDocumentConfig = SHIPPING_DOCUMENT_TYPE_OPTIONS.reduce((config, option) => {
+    config[option.key] = form.autoSendDocumentTypes.includes(option.value);
+    return config;
+  }, {} as ShippingDocumentConfig);
+
+  function toggleShippingDocumentType(key: ShippingDocumentConfigKey) {
+    const nextConfig: ShippingDocumentConfig = {
+      ...docConfig,
+      [key]: !docConfig[key],
+    };
+    setField(
+      "autoSendDocumentTypes",
+      SHIPPING_DOCUMENT_TYPE_OPTIONS
+        .filter((option) => nextConfig[option.key])
+        .map((option) => option.value),
+    );
   }
 
   return (
@@ -2042,16 +2064,15 @@ function CustomerEditPanel({
             </select>
           </label>
         </div>
-        <div className={styles.checkboxPanel}>
+        <div className={styles.documentGroupCard}>
           <strong>自动发送资料</strong>
-          <div>
+          <div className={styles.commissionDeductionGrid}>
             {SHIPPING_DOCUMENT_TYPE_OPTIONS.map((option) => (
-              <UiCheckbox
+              <PermissionSelectItem
                 key={option.value}
-                variant="compact"
                 label={option.label}
-                checked={form.autoSendDocumentTypes.includes(option.value)}
-                onChange={() => toggleShippingDocumentType(option.value)}
+                checked={docConfig[option.key]}
+                onChange={() => toggleShippingDocumentType(option.key)}
               />
             ))}
           </div>

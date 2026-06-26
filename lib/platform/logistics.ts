@@ -3,6 +3,7 @@ export {
   domesticLogisticsRemark,
   domesticLogisticsSelectWithOrder,
   domesticLogisticsSelectWithRelations,
+  domesticLogisticsCanArchiveOrder,
   domesticLogisticsExpenseStatusSummary,
   domesticLogisticsSubmitterRole,
   normalizeDomesticTransportItems,

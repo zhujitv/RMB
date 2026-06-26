@@ -89,6 +89,7 @@ type LogisticsBillLike = {
   orderId?: string | null;
   supplierId?: string | null;
   auditStatus?: string | null;
+  invoiceStatus?: string | null;
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
 };
@@ -191,6 +192,7 @@ export function domesticLogisticsOrderInclude() {
         orderId: true,
         supplierId: true,
         auditStatus: true,
+        invoiceStatus: true,
         updatedAt: true,
         createdAt: true,
       },
@@ -404,6 +406,10 @@ function domesticLogisticsBillDisplayStatus(bill: LogisticsBillLike = {}) {
   return normalizedDomesticExpenseStatus(bill.auditStatus || "草稿") || "草稿";
 }
 
+function domesticLogisticsBillInvoiceStatus(bill: LogisticsBillLike = {}) {
+  return normalizedDomesticExpenseStatus(bill.invoiceStatus || "未通知") || "未通知";
+}
+
 function domesticLogisticsExpenseDisplayStatus(expense: LogisticsExpenseLike = {}) {
   return normalizedDomesticExpenseStatus(expense.auditStatus || "草稿") || "草稿";
 }
@@ -413,18 +419,48 @@ function logisticsStatusUpdatedAtValue(row: LogisticsBillLike | LogisticsExpense
   return Number.isFinite(time) ? time : 0;
 }
 
-export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
-  const bills = (order.logisticsBills || []).filter((bill) => {
+function domesticLogisticsBillRowsForActor(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+  return (order.logisticsBills || []).filter((bill) => {
     if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
       return bill.supplierId === actor.supplierId;
     }
     return true;
   });
+}
+
+function domesticLogisticsExpenseRowsForActor(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+  return (order.logisticsExpenses || []).filter((expense) => {
+    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
+      return expense.supplierId === actor.supplierId;
+    }
+    return true;
+  });
+}
+
+export function domesticLogisticsCanArchiveOrder(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+  if (order.isArchived === true) return false;
+  const bills = domesticLogisticsBillRowsForActor(order, actor);
+  if (bills.length) {
+    return bills.every((bill) => (
+      domesticLogisticsBillDisplayStatus(bill) === "审核通过"
+      && domesticLogisticsBillInvoiceStatus(bill) === "已上传发票"
+    ));
+  }
+  const expenses = domesticLogisticsExpenseRowsForActor(order, actor);
+  return expenses.length > 0 && expenses.every((expense) => (
+    domesticLogisticsExpenseDisplayStatus(expense) === "审核通过"
+    && (normalizedDomesticExpenseStatus(expense.invoiceStatus || "未通知") || "未通知") === "已上传发票"
+  ));
+}
+
+export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+  const bills = domesticLogisticsBillRowsForActor(order, actor);
   if (bills.length) {
     const rankedBills = bills.map((bill) => {
       const status = domesticLogisticsBillDisplayStatus(bill);
       return {
         status,
+        invoiceStatus: domesticLogisticsBillInvoiceStatus(bill),
         billId: bill.id || "",
         updatedAt: bill.updatedAt || bill.createdAt || null,
         count: bills.length,
@@ -434,21 +470,18 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
     }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
     return rankedBills[0] || {
       status: "未录入",
+      invoiceStatus: "未通知",
       billId: "",
       updatedAt: null,
       count: 0,
     };
   }
 
-  const expenses = (order.logisticsExpenses || []).filter((expense) => {
-    if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
-      return expense.supplierId === actor.supplierId;
-    }
-    return true;
-  });
+  const expenses = domesticLogisticsExpenseRowsForActor(order, actor);
   if (!expenses.length) {
     return {
       status: "未录入",
+      invoiceStatus: "未通知",
       billId: "",
       updatedAt: null,
       count: 0,
@@ -458,6 +491,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
     const status = domesticLogisticsExpenseDisplayStatus(expense);
     return {
       status,
+      invoiceStatus: normalizedDomesticExpenseStatus(expense.invoiceStatus || "未通知") || "未通知",
       billId: domesticLogisticsExpenseBillId(order, expense),
       updatedAt: expense.updatedAt || expense.createdAt || null,
       count: expenses.length,
@@ -467,6 +501,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
   }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
   return ranked[0] || {
     status: "未录入",
+    invoiceStatus: "未通知",
     billId: "",
     updatedAt: null,
     count: 0,
@@ -515,6 +550,8 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     logisticsStatus: domesticLogisticsStatusText(info),
     isArchived: Boolean(order.isArchived),
     auditStatus: expenseStatus.status,
+    invoiceStatus: expenseStatus.invoiceStatus,
+    archiveEligible: domesticLogisticsCanArchiveOrder(order, actor),
     logisticsExpenseStatus: expenseStatus.status,
     logisticsExpenseStatusLabel: expenseStatus.status,
     logisticsExpenseBillId: expenseStatus.billId,

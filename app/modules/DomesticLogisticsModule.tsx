@@ -100,6 +100,8 @@ type DomesticLogisticsRow = {
   logisticsStatus?: string;
   isArchived?: boolean;
   auditStatus?: string;
+  invoiceStatus?: string;
+  archiveEligible?: boolean;
   logisticsExpenseStatus?: string;
   logisticsExpenseStatusLabel?: string;
   logisticsExpenseBillId?: string;
@@ -175,6 +177,8 @@ const ALLOWED_LOGISTICS_ROW_KEYS = [
   "logisticsStatus",
   "isArchived",
   "auditStatus",
+  "invoiceStatus",
+  "archiveEligible",
   "logisticsExpenseStatus",
   "logisticsExpenseStatusLabel",
   "logisticsExpenseBillId",
@@ -200,11 +204,11 @@ const ARCHIVE_SCOPE_OPTIONS = [
   { value: "current", label: "当前业务" },
   { value: "archive", label: "已归档业务" },
 ];
-const ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过的订单";
+const ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过且已上传发票的订单";
 const PAYLOAD_ARCHIVE_ENDPOINT = "/api/domestic-logistics/archive";
 const ARCHIVE_BUTTON_RULE = {
-  allow: ["审核通过 + 未归档"],
-  deny: ["草稿", "待审核", "已驳回", "已归档"],
+  allow: ["审核通过 + 已上传发票 + 未归档"],
+  deny: ["草稿", "待审核", "已驳回", "未上传发票", "已归档"],
 } as const;
 const CONTAINER_TYPE_OPTIONS = ["20GP", "40GP", "40HQ", "45HQ"];
 
@@ -263,7 +267,7 @@ function sanitizeDomesticLogisticsRowsForRender(rows: DomesticLogisticsRow[] = [
 }
 
 function domesticLogisticsCanArchive(row: DomesticLogisticsRow) {
-  return row.auditStatus === "审核通过" && row.isArchived !== true;
+  return row.archiveEligible === true && row.isArchived !== true;
 }
 
 export function DomesticLogisticsModule({
@@ -467,7 +471,7 @@ export function DomesticLogisticsModule({
       title: "确认批量归档？",
       message: "归档只改变物流信息列表展示，不会修改审核、发票、付款、成本或利润数据。",
       details: [
-        `可归档订单：${selectedArchivableRows.length} 个`,
+        `可归档订单：${selectedArchivableRows.length} 个（审核通过且已上传发票）`,
         selectedRows.length > selectedArchivableRows.length
           ? `已自动跳过不符合条件订单：${selectedRows.length - selectedArchivableRows.length} 个`
           : "",
@@ -632,7 +636,7 @@ export function DomesticLogisticsModule({
             className={styles.primaryButtonCompact}
             type="button"
             disabled={loading || !selectedArchivableRows.length}
-            title={selectedArchivableRows.length ? `批量归档 ${selectedArchivableRows.length} 个审核通过订单` : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
+            title={selectedArchivableRows.length ? `批量归档 ${selectedArchivableRows.length} 个审核通过且已上传发票订单` : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
             onClick={archiveSelectedOrders}
             data-rule={ARCHIVE_BUTTON_RULE.allow.join(",")}
           >
@@ -655,7 +659,7 @@ export function DomesticLogisticsModule({
                     label="选择本页可归档订单"
                     checked={allPageArchivableSelected}
                     disabled={!pageArchivableRows.length}
-                    title={pageArchivableRows.length ? "选择本页审核通过订单" : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
+                    title={pageArchivableRows.length ? "选择本页审核通过且已上传发票订单" : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
                     onChange={(event) => togglePageArchivableOrders(event.target.checked)}
                   />
                 </th>

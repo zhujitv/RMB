@@ -61,9 +61,12 @@ test("domestic logistics list exposes logistics fee entry status from backend", 
   assert.match(domesticLogisticsOps, /LOGISTICS_EXPENSE_STATUS_PRIORITY/);
   assert.match(domesticLogisticsOps, /domesticLogisticsExpenseStatusSummary/);
   assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus/);
-  assert.match(domesticLogisticsOps, /const bills = \(order\.logisticsBills \|\| \[\]\)/);
+  assert.match(domesticLogisticsOps, /function domesticLogisticsBillRowsForActor/);
+  assert.match(domesticLogisticsOps, /return \(order\.logisticsBills \|\| \[\]\)\.filter/);
   assert.match(domesticLogisticsOps, /logisticsExpenseStatus: expenseStatus\.status/);
   assert.match(domesticLogisticsOps, /auditStatus: expenseStatus\.status/);
+  assert.match(domesticLogisticsOps, /invoiceStatus: expenseStatus\.invoiceStatus/);
+  assert.match(domesticLogisticsOps, /archiveEligible: domesticLogisticsCanArchiveOrder\(order, actor\)/);
   assert.match(domesticLogisticsOps, /logisticsExpenseBillId: expenseStatus\.billId/);
   assert.doesNotMatch(
     domesticLogisticsOps.match(/function domesticLogisticsExpenseDisplayStatus[\s\S]*?\n}/)?.[0] || "",
@@ -81,7 +84,9 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.doesNotMatch(moduleSource.match(/const ARCHIVE_SCOPE_OPTIONS = \[[\s\S]*?\];/)?.[0] || "", /全部业务|value: "all"/);
   assert.match(domesticLogisticsApi, /orderLogisticsArchiveWhereForScope\(filters\.businessScope\)/);
   assert.match(domesticLogisticsApi, /archiveDomesticLogisticsOrders/);
-  assert.match(domesticLogisticsApi, /domesticLogisticsExpenseStatusSummary\(order, currentActor\)\.status === "审核通过"/);
+  assert.match(domesticLogisticsApi, /domesticLogisticsCanArchiveOrder\(order, currentActor\)/);
+  assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus\(bill\) === "审核通过"/);
+  assert.match(domesticLogisticsOps, /domesticLogisticsBillInvoiceStatus\(bill\) === "已上传发票"/);
   assert.match(domesticLogisticsApi, /isArchived: true/);
   assert.doesNotMatch(
     domesticLogisticsApi.match(/export async function archiveDomesticLogisticsOrders[\s\S]*?\n}\n\nasync function/)?.[0] || "",
@@ -90,9 +95,9 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.match(domesticLogisticsArchiveRoute, /PATCH/);
   assert.match(domesticLogisticsArchiveRoute, /archiveDomesticLogisticsOrders/);
   assert.match(moduleSource, /批量归档/);
-  assert.match(moduleSource, /ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过的订单"/);
+  assert.match(moduleSource, /ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过且已上传发票的订单"/);
   assert.match(moduleSource, /domesticLogisticsCanArchive/);
-  assert.match(moduleSource, /row\.auditStatus === "审核通过" && row\.isArchived !== true/);
+  assert.match(moduleSource, /row\.archiveEligible === true && row\.isArchived !== true/);
   assert.match(moduleSource, /PAYLOAD_ARCHIVE_ENDPOINT/);
   assert.match(moduleSource, /selectedArchivableRows/);
   assert.match(moduleSource, /UiCheckbox/);

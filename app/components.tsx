@@ -2,6 +2,7 @@
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CurrencyTotals } from "../lib/platform/currency-totals";
 import { formatCurrencyAmount, formatCny } from "./formatters";
 import styles from "./WorkspaceShell.module.css";
@@ -90,6 +91,24 @@ const checkboxInputType = "checkbox" as const;
 const radioInputType = "radio" as const;
 const fileInputType = "file" as const;
 const dateInputType = "date" as const;
+let activeDismissibleLayerCount = 0;
+let previousBodyOverflow = "";
+
+function lockBodyScroll() {
+  if (typeof document === "undefined") return () => undefined;
+  if (activeDismissibleLayerCount === 0) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  activeDismissibleLayerCount += 1;
+  return () => {
+    activeDismissibleLayerCount = Math.max(0, activeDismissibleLayerCount - 1);
+    if (activeDismissibleLayerCount === 0) {
+      document.body.style.overflow = previousBodyOverflow || "auto";
+      previousBodyOverflow = "";
+    }
+  };
+}
 
 export function UiInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={mergeClassNames(styles.uiInput, className)} />;
@@ -273,6 +292,10 @@ export function UiCheckbox({
 }
 
 export function UiOptionCard(props: Omit<Parameters<typeof UiCheckbox>[0], "variant">) {
+  return <PermissionSelectItem {...props} />;
+}
+
+export function PermissionSelectItem(props: Omit<Parameters<typeof UiCheckbox>[0], "variant">) {
   return <UiCheckbox {...props} variant="card" />;
 }
 
@@ -764,11 +787,15 @@ export function DismissibleLayer({
   dismissConfirmMessage?: string;
 }) {
   const [closing, setClosing] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setPortalTarget(document.body);
+    const unlockScroll = lockBodyScroll();
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      unlockScroll();
     };
   }, []);
 
@@ -798,7 +825,7 @@ export function DismissibleLayer({
     return () => document.removeEventListener("keydown", handleKeyDown);
   });
 
-  return (
+  const layer = (
     <div
       className={`${overlayClassName} ${closing ? styles.dialogLayerClosing : ""}`}
       role="dialog"
@@ -814,4 +841,6 @@ export function DismissibleLayer({
       </div>
     </div>
   );
+
+  return portalTarget ? createPortal(layer, portalTarget) : null;
 }
