@@ -57,6 +57,7 @@ const backendAggregateStatusSource = backend.match(/export function aggregateLog
 const submitLogisticsExpenseBillSource = backend.match(/export async function submitLogisticsExpenseBill[\s\S]*?\n}\n\nexport async function batchUpdateLogisticsExpenses/)?.[0] || "";
 const reviewLogisticsExpenseBillsSource = backend.match(/export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n\nasync function approveLogisticsExpenseBillRowsInTransaction/)?.[0] || "";
 const approveLogisticsExpenseBillRowsSource = backend.match(/async function approveLogisticsExpenseBillRowsInTransaction[\s\S]*?\n}\n\nasync function updateLogisticsExpenseCostIds/)?.[0] || "";
+const updateLogisticsExpensePaymentStatusSource = backend.match(/export async function updateLogisticsExpensePaymentStatus[\s\S]*?\n}\n\n/)?.[0] || "";
 const logisticsCostRoute = readFileSync("app/api/logistics-costs/[id]/route.ts", "utf8");
 const logisticsInvoiceRoute = readFileSync("app/api/logistics-costs/[id]/invoice/route.ts", "utf8");
 const logisticsReviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
@@ -833,6 +834,25 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(workspaceStyles, /\.logisticsLineDeleteButton/);
   assert.match(workspaceStyles, /border: 1px solid #fecaca/);
   assert.match(workspaceStyles, /th:nth-child\(9\)[\s\S]*width: 120px/);
+});
+
+test("logistics paid button is locked by bill state machine", () => {
+  assert.match(logisticsModule, /const PAY_BUTTON_RULE = \{[\s\S]*审核通过 \+ 已上传发票 \+ 未付款[\s\S]*草稿[\s\S]*待审核[\s\S]*未上传发票[\s\S]*已付款/);
+  assert.match(logisticsModule, /PAY_BUTTON_DISABLED_TOOLTIP = "需审核通过且已上传发票后才可标记付款"/);
+  assert.match(logisticsModule, /inputType: "date"/);
+  assert.match(logisticsModule, /paymentDate: confirmationResult\.inputValue/);
+  assert.match(logisticsModule, /<DetailField label="付款时间" value=\{formatDate\(expense\.paymentDate\)\}/);
+  assert.match(logisticsModule, /function logisticsExpensePayButtonState/);
+  assert.match(logisticsModule, /auditStatus === "审核通过"[\s\S]*invoiceStatus === "已上传发票"[\s\S]*!alreadyPaid/);
+  assert.match(logisticsModule, /if \(!payState\.canMarkPaid\) return/);
+  assert.match(logisticsModule, /className=\{styles\.billPayButton\}/);
+  assert.match(workspaceStyles, /\.billPayButton:disabled,[\s\S]*background: #d9d9d9;[\s\S]*cursor: not-allowed/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /loadLogisticsExpenseBillRowsForAction\(id, actor\)/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /billAuditStatus !== "审核通过"/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /LOGISTICS_PAYMENT_STATE_INVALID/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /LOGISTICS_PAYMENT_DATE_REQUIRED/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /paymentDate/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /orderCost\.updateMany/);
 });
 
 test("sales commission base uses actual received payments minus logistics costs", () => {

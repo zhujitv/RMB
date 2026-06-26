@@ -1593,29 +1593,45 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
 
 export async function updateLogisticsExpensePaymentStatus(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   assertCanConfirmLogisticsInvoice(actor);
-  const before = await loadLogisticsExpenseForAction(id, actor);
+  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  if (!billRows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
+  const before = billRows[0];
   const paymentStatus = nonEmpty(input.paymentStatus || input.status || "已付款");
   if (!LOGISTICS_EXPENSE_PAYMENT_STATUSES.includes(paymentStatus)) {
     throw codedError("请选择有效付款状态。", 400, "LOGISTICS_PAYMENT_STATUS_INVALID");
   }
-  if (paymentStatus === "已付款" && before.invoiceStatus !== "已确认") {
-    throw codedError("发票确认后才能标记已付款。", 400, "LOGISTICS_PAYMENT_REQUIRES_CONFIRMED_INVOICE");
+  const billAuditStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
+  const billInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(billRows);
+  const billPaymentStatus = aggregateLogisticsExpenseStatus(billRows, "paymentStatus");
+  if (paymentStatus === "已付款" && billPaymentStatus === "已付款") {
+    throw codedError("该物流费用账单已付款，不能重复标记。", 400, "LOGISTICS_PAYMENT_ALREADY_PAID");
+  }
+  if (paymentStatus === "已付款" && (billAuditStatus !== "审核通过" || !["已上传", "已确认", "已上传发票"].includes(billInvoiceStatus))) {
+    throw codedError("需审核通过且已上传发票后才可标记付款。", 400, "LOGISTICS_PAYMENT_STATE_INVALID");
+  }
+  const paymentDate = paymentStatus === "已付款" ? dateFromInput(input.paymentDate || input.paidAt || input.paidDate) : null;
+  if (paymentStatus === "已付款" && !paymentDate) {
+    throw codedError("标记已付款时必须填写付款时间。", 400, "LOGISTICS_PAYMENT_DATE_REQUIRED");
   }
   const billId = rowBillId(before);
   await prisma.logisticsBill.update({
     where: { id: billId },
-    data: { paymentStatus, updatedById: actorId(actor) || null },
+    data: { paymentStatus, paymentDate, updatedById: actorId(actor) || null },
   });
-  const saved = await loadLogisticsExpenseForAction(id, actor);
-  if (before.costId) {
-    await prisma.orderCost.update({
-      where: { id: before.costId },
-      data: { paymentStatus: paymentStatus === "已付款" ? "已支付" : "待支付" },
+  const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  const costIds = [...new Set(savedRows.map((row) => nonEmpty(row.costId)).filter(Boolean))];
+  if (costIds.length) {
+    await prisma.orderCost.updateMany({
+      where: { id: { in: costIds } },
+      data: {
+        paymentStatus: paymentStatus === "已付款" ? "已支付" : "待支付",
+        paymentDate,
+      },
     }).catch(() => null);
   }
-  await runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_expenses", id, before, saved));
-  const billRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);
-  await refreshLogisticsBillWorkflowStatus(billRows, actor);
-  const reloadedRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);
-  return serializeLogisticsExpense(reloadedRows.find((row) => row.id === saved.id) || saved);
+  const saved = savedRows.find((row) => row.id === before.id) || savedRows[0] || before;
+  await runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_bills", billId, billRows.map(serializeLogisticsExpense), savedRows.map(serializeLogisticsExpense)));
+  await refreshLogisticsBillWorkflowStatus(savedRows, actor, { paymentStatus, paymentDate });
+  const reloadedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  return serializeLogisticsExpense(reloadedRows.find((row) => row.id === saved.id) || reloadedRows[0] || saved);
 }

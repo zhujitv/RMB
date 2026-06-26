@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, UiTabs, useConfirmationDialog } from "../components";
-import { formatAmount, formatDateTime } from "../formatters";
+import { formatAmount, formatDate, formatDateTime } from "../formatters";
 import { preventEnterFormSubmit } from "../formGuards";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import { customerDisplayName, customerLegalName, downloadBlob } from "../utils";
@@ -76,6 +76,12 @@ const AUDIT_FILTERS = [
   { label: "已确认发票", value: "confirmedInvoice" },
 ];
 const PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
+const PAY_BUTTON_RULE = {
+  allow: ["审核通过 + 已上传发票 + 未付款"],
+  deny: ["草稿", "待审核", "未上传发票", "已付款"],
+} as const;
+const PAY_BUTTON_DISABLED_TOOLTIP = "需审核通过且已上传发票后才可标记付款";
+const todayInputInChinaClient = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 type UserLite = {
   name?: string;
@@ -146,6 +152,7 @@ type LogisticsExpense = {
   rejectReason?: string;
   invoiceNotifiedAt?: string | null;
   invoiceNotificationError?: string;
+  paymentDate?: string | null;
   invoiceDocumentId?: string;
   invoiceDocument?: DocumentLite | null;
   invoiceUploadedBy?: UserLite;
@@ -810,6 +817,51 @@ export function LogisticsFeesModule({
     }
   }
 
+  async function markExpenseBillPaid(expense: LogisticsExpense) {
+    if (busyId === expense.id) return;
+    const payState = logisticsExpensePayButtonState(expense);
+    if (!payState.canMarkPaid) {
+      setError(PAY_BUTTON_DISABLED_TOOLTIP);
+      setNotice("");
+      return;
+    }
+    const confirmationResult = await requestConfirmation({
+      title: "标记物流费用为已付款？",
+      message: "确认后该账单付款状态将更新为已付款，并同步关联成本付款状态。",
+      requireInput: true,
+      inputType: "date",
+      inputLabel: "付款时间",
+      inputValue: expense.paymentDate || todayInputInChinaClient(),
+      inputRequiredMessage: "请选择付款时间。",
+      details: [
+        `订单：${expense.orderNo || "-"}`,
+        `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
+        `账单合计：${logisticsCurrencySummaryPlainText(logisticsExpenseCurrencySummaryFromItems(logisticsExpenseBillItems(expense)))}`,
+      ],
+      confirmLabel: "标记已付款",
+      cancelLabel: "取消",
+      variant: "warning",
+    });
+    if (!confirmationResult.confirmed) return;
+    setBusyId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<LogisticsExpenseMutationResult>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "markPaid", paymentStatus: "已付款", paymentDate: confirmationResult.inputValue }),
+      });
+      if (result.success !== true) throw new Error(result.message || "标记已付款失败");
+      applyLogisticsExpenseMutationResult(result);
+      await loadStatement(statementMonth);
+      setNotice(result.message || "物流费用已标记为已付款");
+    } catch (paymentError) {
+      setError(paymentError instanceof Error ? paymentError.message : "标记已付款失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function loadStatement(month = statementMonth) {
     setStatementLoading(true);
     setError("");
@@ -977,6 +1029,7 @@ export function LogisticsFeesModule({
           canWithdraw={isLogisticsSupplier}
           canEditAmount={isLogisticsSupplier}
           canUploadInvoice={isLogisticsSupplier || canConfirmInvoice || canReviewExpense}
+          canMarkPaid={canConfirmInvoice}
           canSubmitDraft={canCreateExpense}
           canDeleteExpense={canCreateExpense}
           canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
@@ -984,6 +1037,7 @@ export function LogisticsFeesModule({
           onReject={(item) => void rejectExpense(item)}
           onWithdraw={(item) => void withdrawExpense(item)}
           onResendInvoiceNotice={(item) => void resendInvoiceNotice(item)}
+          onMarkPaid={(item) => void markExpenseBillPaid(item)}
           onSubmitDraft={(item) => void submitDraftExpenseBill(item)}
           onSaveDetails={(payload) => saveBillDetails(activeExpense, payload)}
           onValidationError={(message) => {
@@ -1164,6 +1218,7 @@ function LogisticsExpenseRows({
   onReject,
   onWithdraw,
   onResendInvoiceNotice,
+  onMarkPaid,
   onSubmitDraft,
   onSaveDetails,
   onValidationError,
@@ -1172,6 +1227,7 @@ function LogisticsExpenseRows({
   canWithdraw,
   canEditAmount,
   canUploadInvoice,
+  canMarkPaid,
   canSubmitDraft,
   canDeleteExpense,
   canShowSupplier,
@@ -1185,6 +1241,7 @@ function LogisticsExpenseRows({
   canWithdraw: boolean;
   canEditAmount: boolean;
   canUploadInvoice: boolean;
+  canMarkPaid: boolean;
   canSubmitDraft: boolean;
   canDeleteExpense: boolean;
   canShowSupplier: boolean;
@@ -1192,6 +1249,7 @@ function LogisticsExpenseRows({
   onReject: (expense: LogisticsExpense) => void;
   onWithdraw: (expense: LogisticsExpense) => void;
   onResendInvoiceNotice: (expense: LogisticsExpense) => void;
+  onMarkPaid: (expense: LogisticsExpense) => void;
   onSubmitDraft: (expense: LogisticsExpense) => void;
   onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
   onValidationError: (message: string) => void;
@@ -1431,6 +1489,28 @@ function LogisticsExpenseRows({
     );
   }
 
+  function renderBillPaymentControls() {
+    if (!canMarkPaid) return null;
+    const payState = logisticsExpensePayButtonState(expense);
+    const busy = busyId === expense.id;
+    const disabled = busy || saving || !payState.canMarkPaid;
+    return (
+      <button
+        className={styles.billPayButton}
+        type="button"
+        disabled={disabled}
+        title={payState.canMarkPaid ? "将当前账单标记为已付款" : PAY_BUTTON_DISABLED_TOOLTIP}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!payState.canMarkPaid) return;
+          onMarkPaid(expense);
+        }}
+      >
+        {busy ? "更新中..." : (payState.alreadyPaid ? "已付款" : "标记已付款")}
+      </button>
+    );
+  }
+
   function renderBillSubmitControls() {
     if (!shouldShowSubmitBill) return null;
     const disabled = !canSubmitThisBill || hasPendingChanges || busyId === expense.id || saving;
@@ -1473,6 +1553,7 @@ function LogisticsExpenseRows({
           {renderBillWithdrawControls()}
           {renderBillReviewControls()}
           {renderInvoiceNoticeControls()}
+          {renderBillPaymentControls()}
           {renderBillSaveControls()}
         </>
       }
@@ -1553,6 +1634,7 @@ function LogisticsExpenseRows({
           <DetailField label="审核状态" value={auditStatus} />
           <DetailField label="发票状态" value={invoiceStatus} />
           <DetailField label="付款状态" value={paymentStatus} />
+          <DetailField label="付款时间" value={formatDate(expense.paymentDate)} />
           <DetailField label="提交时间" value={formatDateTime(expense.submittedAt)} />
           <DetailField label="审核人" value={expense.reviewedBy?.name || "-"} />
           <DetailField label="审核时间" value={formatDateTime(expense.reviewedAt)} />
@@ -2918,6 +3000,32 @@ function compactStatusLabel(value: unknown, type: "audit" | "invoice" | "payment
   if (text.includes("已付款")) return "已付款";
   if (text.includes("部分")) return "部分付款";
   return "待付款";
+}
+
+function logisticsExpensePayButtonState(expense: LogisticsExpense) {
+  const items = logisticsExpenseBillItems(expense);
+  const auditStatus = compactStatusLabel(logisticsExpenseBillAuditStatusFromRow(expense), "audit");
+  const invoiceStatus = normalizePayButtonInvoiceStatus([
+    logisticsExpenseBillInvoiceStatusFromRow(expense),
+    expense.billInvoiceStatus,
+    expense.invoiceStatus,
+    ...items.flatMap((item) => [item.billInvoiceStatus, item.invoiceStatus, item.detailInvoiceStatus]),
+  ]);
+  const paymentStatus = compactStatusLabel(logisticsExpenseBillPaymentStatusFromRow(expense), "payment");
+  const alreadyPaid = paymentStatus === "已付款";
+  const canMarkPaid = auditStatus === "审核通过"
+    && invoiceStatus === "已上传发票"
+    && !alreadyPaid;
+  return { auditStatus, invoiceStatus, paymentStatus, alreadyPaid, canMarkPaid, rule: PAY_BUTTON_RULE };
+}
+
+function normalizePayButtonInvoiceStatus(values: unknown[]) {
+  const statuses = values.map((value) => String(value || "").trim()).filter(Boolean);
+  if (statuses.some((status) => status.includes("已上传发票") || status === "已上传" || status.includes("已确认"))) {
+    return "已上传发票";
+  }
+  if (statuses.some((status) => status.includes("部分"))) return "未上传发票";
+  return "未上传发票";
 }
 
 function logisticsExpenseLineContainerType(expense: LogisticsExpense) {

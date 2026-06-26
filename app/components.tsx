@@ -16,6 +16,7 @@ export type ConfirmationDialogState = {
   requireInput?: boolean;
   inputLabel?: string;
   inputPlaceholder?: string;
+  inputType?: "textarea" | "text" | "date";
   inputRequiredMessage?: string;
   inputValue?: string;
   inputError?: string;
@@ -50,7 +51,7 @@ export function useConfirmationDialog() {
       resolverRef.current({ confirmed: false });
       resolverRef.current = null;
     }
-    setConfirmation({ ...options, inputValue: "", inputError: "" });
+    setConfirmation({ ...options, inputValue: options.inputValue || "", inputError: "" });
     return new Promise<ConfirmationResult>((resolve) => {
       resolverRef.current = resolve;
     });
@@ -461,13 +462,23 @@ export function ConfirmationDialog({
           {state.requireInput ? (
             <label className={styles.confirmDialogInput}>
               {state.inputLabel || "原因"}
-              <textarea
-                value={state.inputValue || ""}
-                onChange={(event) => onInputChange?.(event.target.value)}
-                placeholder={state.inputPlaceholder}
-                rows={3}
-                autoFocus
-              />
+              {state.inputType === "date" || state.inputType === "text" ? (
+                <input
+                  type={state.inputType}
+                  value={state.inputValue || ""}
+                  onChange={(event) => onInputChange?.(event.target.value)}
+                  placeholder={state.inputPlaceholder}
+                  autoFocus
+                />
+              ) : (
+                <textarea
+                  value={state.inputValue || ""}
+                  onChange={(event) => onInputChange?.(event.target.value)}
+                  placeholder={state.inputPlaceholder}
+                  rows={3}
+                  autoFocus
+                />
+              )}
               {state.inputError ? <small>{state.inputError}</small> : null}
             </label>
           ) : null}

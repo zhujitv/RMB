@@ -607,6 +607,7 @@ model LogisticsBill {
   rejectReason  String?   @map("reject_reason")
   invoiceNotifiedAt DateTime? @map("invoice_notified_at")
   invoiceNotificationError String? @map("invoice_notification_error")
+  paymentDate  DateTime? @map("payment_date") @db.Date
   createdById   String?   @map("created_by")
   updatedById   String?   @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -627,6 +628,7 @@ model LogisticsBill {
   @@index([auditStatus])
   @@index([invoiceStatus])
   @@index([paymentStatus])
+  @@index([paymentDate])
   @@index([billOfLadingNo, auditStatus], map: "logistics_bills_shipment_status_idx")
   @@index([supplierId, auditStatus], map: "logistics_bills_supplier_status_idx")
   @@index([orderId, auditStatus], map: "logistics_bills_order_status_idx")

@@ -2392,6 +2392,7 @@
 
 .billSaveButton,
 .billAddLineButton,
+.billPayButton,
 .billApproveButton,
 .billRejectButton {
   display: inline-flex;
@@ -2435,6 +2436,37 @@
   border-color: var(--button-primary-hover);
   background: var(--button-primary-hover);
   color: var(--button-primary-text);
+}
+
+.billPayButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:disabled,
+.billPayButton:disabled:hover,
+.billPayButton:disabled:focus,
+.billPayButton:disabled:focus-visible,
+.billPayButton:disabled:active {
+  border-color: #d9d9d9;
+  background: #d9d9d9;
+  color: #6b7280;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .billAddLineButton:hover:not(:disabled) {
@@ -2481,6 +2513,8 @@
 
 .billSaveButton:focus,
 .billSaveButton:focus-visible,
+.billPayButton:focus,
+.billPayButton:focus-visible,
 .billAddLineButton:focus,
 .billAddLineButton:focus-visible,
 .billApproveButton:focus,
@@ -5102,9 +5136,9 @@
   font-weight: 700;
 }
 
-.confirmDialogInput textarea {
+.confirmDialogInput textarea,
+.confirmDialogInput input {
   width: 100%;
-  min-height: 92px;
   resize: vertical;
   border: 1px solid #dbe1ea;
   border-radius: 12px;
@@ -5116,7 +5150,16 @@
   outline: none;
 }
 
-.confirmDialogInput textarea:focus {
+.confirmDialogInput textarea {
+  min-height: 92px;
+}
+
+.confirmDialogInput input {
+  height: 40px;
+}
+
+.confirmDialogInput textarea:focus,
+.confirmDialogInput input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
@@ -6894,6 +6937,7 @@
 .logisticsTypographyScope .secondaryButton:disabled,
 .logisticsTypographyScope .billSaveButton:disabled,
 .logisticsTypographyScope .billAddLineButton:disabled,
+.logisticsTypographyScope .billPayButton:disabled,
 .logisticsTypographyScope .billApproveButton:disabled,
 .logisticsTypographyScope .billRejectButton:disabled,
 .logisticsTypographyScope .logisticsLineDeleteButton:disabled {
@@ -6944,6 +6988,39 @@
   border-color: var(--button-primary-active);
   background: var(--button-primary-active);
   color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:hover:not(:disabled),
+.logisticsTypographyScope .billPayButton:focus:not(:disabled),
+.logisticsTypographyScope .billPayButton:focus-visible:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:disabled,
+.logisticsTypographyScope .billPayButton:disabled:hover,
+.logisticsTypographyScope .billPayButton:disabled:focus,
+.logisticsTypographyScope .billPayButton:disabled:focus-visible,
+.logisticsTypographyScope .billPayButton:disabled:active {
+  border-color: #d9d9d9;
+  background: #d9d9d9;
+  color: #6b7280;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .logisticsTypographyScope .billAddLineButton {

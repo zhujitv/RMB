@@ -180,6 +180,7 @@ type LogisticsBillLike = {
   auditStatus?: string | null;
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
+  paymentDate?: unknown;
   submittedBy?: unknown;
   submittedAt?: unknown;
   reviewedBy?: unknown;
@@ -416,6 +417,7 @@ export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
     detailPaymentStatus: expense.paymentStatus || "待开票",
     billInvoiceStatus: bill.invoiceStatus || "",
     billPaymentStatus: bill.paymentStatus || "",
+    paymentDate: dateToInput(dateFromInput(logisticsExpenseBillField(expense, "paymentDate", null))),
     submittedAt: logisticsExpenseBillField(expense, "submittedAt", expense.submittedAt) || null,
     submittedBy: serializeUser(bill.submittedBy),
     reviewedBy: serializeUser(bill.reviewedBy || expense.reviewedBy),
@@ -552,6 +554,7 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
     auditStatus: bill.auditStatus || "草稿",
     invoiceStatus: bill.invoiceStatus || "待开票",
     paymentStatus: bill.paymentStatus || "待开票",
+    paymentDate: dateToInput(dateFromInput(bill.paymentDate)),
     submittedAt: bill.submittedAt || first.submittedAt || null,
     submittedBy: serializeUser(bill.submittedBy),
     reviewedBy: serializeUser(bill.reviewedBy),
