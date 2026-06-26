@@ -16,6 +16,8 @@ const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
 const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
 const reportService = readFileSync("lib/report-service.ts", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 
 function roleMenuLine(source: string, role: string) {
   return source.split("\n").find((line: string) => line.includes(`${role}: [`)) || "";
@@ -107,6 +109,21 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(logisticsClerk.writes.domesticLogistics, true);
   assert.equal(logisticsClerk.writes.documents, true);
   assert.equal(logisticsClerk.writes.logistics, false);
+});
+
+test("salesperson tax refund uploads are limited to own-customer clearance documents", () => {
+  const salesperson = rolePermissionSnapshot("业务员");
+  assert.equal(salesperson.dataScope, "OWN");
+  assert.equal(salesperson.reads.taxRefund, true);
+  assert.equal(salesperson.writes.taxRefund, false);
+  assert.equal(salesperson.writes.documents, true);
+  assert.match(taxRefundModule, /SALESPERSON_TAX_REFUND_UPLOAD_TYPES[\s\S]*BILL_OF_LADING[\s\S]*COMMERCIAL_INVOICE[\s\S]*PACKING_LIST[\s\S]*SALES_CONTRACT/);
+  assert.match(taxRefundModule, /\{ value: "COMMERCIAL_INVOICE", label: "清关发票" \}/);
+  assert.match(taxRefundModule, /if \(role === "业务员"\) return SALESPERSON_TAX_REFUND_UPLOAD_TYPES\.has\(documentType\);/);
+  assert.match(orderDocumentsService, /REACT_TAX_REFUND/);
+  assert.match(orderDocumentsService, /SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES\.includes\(documentType as OrderDocumentType\)/);
+  assert.match(orderDocumentsService, /assertDocumentOrder\(orderId, actor, documentType\)/);
+  assert.match(orderDocumentsService, /canAccessOrder\(actor, order\)/);
 });
 
 test("workspace auth distinguishes expired login from server-side profile failure", () => {

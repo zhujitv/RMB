@@ -212,11 +212,12 @@ type TaxRefundMode = "current" | "archive";
 const PAGE_SIZE = 20;
 const TAX_EXPORT_UPLOAD_TYPES = [
   { value: "BILL_OF_LADING", label: "提单" },
-  { value: "COMMERCIAL_INVOICE", label: "商业发票" },
+  { value: "COMMERCIAL_INVOICE", label: "清关发票" },
   { value: "PACKING_LIST", label: "装箱单" },
   { value: "EXPORT_INVOICE", label: "出口发票" },
   { value: "SALES_CONTRACT", label: "销售合同" },
 ];
+const SALESPERSON_TAX_REFUND_UPLOAD_TYPES = new Set(["BILL_OF_LADING", "COMMERCIAL_INVOICE", "PACKING_LIST", "SALES_CONTRACT"]);
 const TAX_CUSTOMS_UPLOAD_TYPES = [
   { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
   { value: "RELEASE_NOTICE", label: "放行通知书" },
@@ -2325,6 +2326,7 @@ function taxTargetKeyFromMissingLabel(label: string) {
   const text = String(label || "").trim();
   const documentLabelMap: Array<[string, string]> = [
     ["提单", "BILL_OF_LADING"],
+    ["清关发票", "COMMERCIAL_INVOICE"],
     ["商业发票", "COMMERCIAL_INVOICE"],
     ["装箱单", "PACKING_LIST"],
     ["箱单", "PACKING_LIST"],
@@ -2457,6 +2459,7 @@ function logisticsInvoiceLabel(cost: Pick<TaxCost, "costType">) {
 
 function canUploadTaxDocument(role: string, canWriteDocuments: boolean, documentType: string, readOnly?: boolean) {
   if (readOnly || !canWriteDocuments) return false;
+  if (role === "业务员") return SALESPERSON_TAX_REFUND_UPLOAD_TYPES.has(documentType);
   if (documentType === "EXPORT_INVOICE") return ["管理员", "财务"].includes(role);
   if (TAX_CUSTOMS_UPLOAD_TYPES.some((type) => type.value === documentType)) {
     return ["管理员", "业务员", "物流供应商", "物流资料录入员"].includes(role);

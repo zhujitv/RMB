@@ -37,6 +37,7 @@ import {
   requireText,
   resolveStandardFilenameForPersistedDocument,
   runNonCriticalTask,
+  SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES,
   serializeOrderDocument,
   standardFilenameForDocument,
   syncCostInvoiceStatus,
@@ -114,6 +115,7 @@ type ResolvedDocumentScopeInput = {
   documentType: string;
   costId?: string;
   supplierId?: string;
+  uploadSource?: string;
 };
 
 function actorId(actor: ActorLike) {
@@ -161,6 +163,10 @@ function canReadDocument(actor: ActorLike, document: DocumentLike) {
 
 function isProtectedCustomsDocumentType(documentType: unknown = "") {
   return DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(normalizeOrderDocumentType(String(documentType || "")) as OrderDocumentType);
+}
+
+function isTaxRefundUploadSource(uploadSource: unknown = "") {
+  return String(uploadSource || "").trim().toUpperCase() === "REACT_TAX_REFUND";
 }
 
 function canReadProtectedCustomsDocumentContent(actor: ActorLike, document: DocumentLike) {
@@ -212,12 +218,19 @@ function orderDocumentFileInclude() {
   });
 }
 
-async function resolveDocumentScope({ orderId, documentType, costId, supplierId }: ResolvedDocumentScopeInput, actor: ActorLike) {
+async function resolveDocumentScope({ orderId, documentType, costId, supplierId, uploadSource = "" }: ResolvedDocumentScopeInput, actor: ActorLike) {
   documentType = normalizeOrderDocumentType(documentType);
   const relatedModule = relatedModuleForDocumentType(documentType);
   const order = await assertDocumentOrder(orderId, actor, documentType);
   if (["SUBMITTED", "COMPLETED", "ARCHIVED"].includes(order.taxRefundStatus)) throw permissionError("已提交退税档案只允许查看和下载资料");
   const scope = effectivePermissions(actor).dataScope;
+  if (
+    actorRole(actor) === "业务员"
+    && isTaxRefundUploadSource(uploadSource)
+    && !SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)
+  ) {
+    throw permissionError("业务员在退税资料中只能上传本人客户的提单、装箱单、清关发票和销售合同");
+  }
   if (actorRole(actor) === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) {
     throw permissionError("物流供应商不能上传该类资料");
   }
@@ -299,7 +312,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   uploadSource = String(uploadInput.uploadSource || "");
   documentType = normalizeOrderDocumentType(documentType);
   if (!ORDER_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) throw permissionError("请选择有效单证类型", 400);
-  const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId }, actor);
+  const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId, uploadSource }, actor);
   if (isLogisticsGeneratedCostInvoice(documentType, cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。", 400);
   }
