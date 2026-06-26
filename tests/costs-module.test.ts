@@ -21,8 +21,39 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /<th className=\{styles\.amountColumn\}>CNY 合计<\/th>/);
   assert.match(costsModule, /<th className=\{styles\.amountColumn\}>USD 合计<\/th>/);
   assert.match(costsModule, /function CostOrderItemsTable/);
-  assert.match(costsModule, /<th>详情<\/th>/);
+  assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
+});
+
+test("cost management page is centered and constrained to readable table width", () => {
+  assert.match(costsModule, /<div className=\{styles\.costPage\}>/);
+  assert.match(costsModule, /<section className=\{`\$\{styles\.moduleCard\} \$\{styles\.costContent\}`\}>/);
+  assert.match(costsModule, /styles\.costTableWrap/);
+  assert.match(costsModule, /<th className=\{styles\.statusColumn\}>状态<\/th>/);
+  assert.match(costsModule, /<th className=\{styles\.operationColumn\}>详情<\/th>/);
+  assert.match(workspaceStyles, /\.costPage \{[\s\S]*display: flex;[\s\S]*justify-content: center;/);
+  assert.match(workspaceStyles, /\.costContent \{[\s\S]*max-width: 1280px;[\s\S]*padding: 16px 24px;/);
+  assert.match(workspaceStyles, /\.costTableWrap \{[\s\S]*max-width: 100%;[\s\S]*overflow-x: auto;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable \{[\s\S]*width: 100%;[\s\S]*table-layout: fixed;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th,[\s\S]*\.costTableWrap \.dataTable td \{[\s\S]*white-space: nowrap;[\s\S]*text-overflow: ellipsis;/);
+  assert.match(workspaceStyles, /\.costTableWrap\.tablePinnedTwoCols \.dataTable th\.customerColumn,[\s\S]*width: 120px;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.amountColumn,[\s\S]*width: 120px;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 100px;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.operationColumn,[\s\S]*width: 80px;/);
+});
+
+test("cost detail tables always keep an invoice operation column", () => {
+  assert.match(costsModule, /function CostInvoiceActions/);
+  assert.match(costsModule, /invoiceReceived \? \(/);
+  assert.match(costsModule, />查看发票<\/button>/);
+  assert.match(costsModule, />替换<\/button>/);
+  assert.match(costsModule, />上传发票<\/button>/);
+  assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
+  assert.match(costsModule, /<CostOrderItemsTable costs=\{order\.costs \|\| \[\]\} onOpenDocuments=\{onOpenDocuments\} \/>/);
+  assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{onOpenDocuments\} \/>/);
+  assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} \/>/);
+  assert.match(workspaceStyles, /\.costInvoiceActions \{[\s\S]*display: flex;[\s\S]*gap: 6px;/);
+  assert.match(workspaceStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 180px;/);
 });
 
 test("cost payable summary module is explicitly disabled and no longer rendered", () => {
@@ -66,7 +97,9 @@ test("removed payable summary styles cannot reappear as hidden UI", () => {
 test("cost order summary keeps cost items inside shipment detail drawer", () => {
   assert.match(costsModule, /void loadCosts\(1, nextFilters, archiveScope, "orders"\)/);
   assert.match(costsShared, /costs: summaryCosts\.map\(safeSerializeCost\)/);
-  assert.match(costsModule, /<CostOrderItemsTable costs=\{order\.costs \|\| \[\]\} \/>/);
+  assert.match(costsModule, /<CostOrderItemsTable costs=\{order\.costs \|\| \[\]\} onOpenDocuments=\{onOpenDocuments\} \/>/);
+  assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
+  assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} \/>/);
   assert.match(costsModule, /formatCurrencyAmount\(cost\.currency \|\| "CNY", cost\.amount \?\? cost\.amountCny \?\? 0\)/);
   assert.doesNotMatch(costsModule, /\{ \.\.\.emptyCostFilters, orderNo:/);
   assert.doesNotMatch(costsModule, /setCostView\("details"\)/);

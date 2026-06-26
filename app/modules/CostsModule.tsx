@@ -8,7 +8,7 @@ import { preventEnterFormSubmit } from "../formGuards";
 import { formatCny, formatCurrencyAmount, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 import type { CurrencyTotals } from "../../lib/platform/currency-totals";
 import styles from "../WorkspaceShell.module.css";
 import {
@@ -277,6 +277,7 @@ export function CostsModule({
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
+  const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const {
@@ -449,7 +450,8 @@ export function CostsModule({
   }
 
   return (
-    <section className={styles.moduleCard}>
+    <div className={styles.costPage}>
+    <section className={`${styles.moduleCard} ${styles.costContent}`}>
       <div className={styles.moduleHeader}>
         <div>
           <h2>成本管理</h2>
@@ -566,7 +568,7 @@ export function CostsModule({
         重要：成本管理主列表按订单 / shipment 聚合展示。
         费用明细只在订单详情抽屉中展示，避免一票业务在主列表被拆成多行。
       */}
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
+      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.costTableWrap}`}>
         <table className={styles.dataTable}>
           {costView === "orders" ? <CostOrderTableHead /> : <CostDetailTableHead />}
           <tbody>
@@ -635,6 +637,7 @@ export function CostsModule({
       {detailOrderSummary ? (
         <CostOrderSummaryDrawer
           order={detailOrderSummary}
+          onOpenDocuments={(costId) => void openCostDocuments(costId)}
           onClose={() => setDetailOrderSummary(null)}
         />
       ) : null}
@@ -645,6 +648,7 @@ export function CostsModule({
           loading={documentLoading}
           error={documentError}
           uploadingKey={uploadingKey}
+          uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
           canWriteDocuments={canWriteDocuments}
           onClose={() => {
@@ -666,6 +670,7 @@ export function CostsModule({
         />
       ) : null}
     </section>
+    </div>
   );
 
   async function fetchCostDetail(id: string) {
@@ -708,8 +713,9 @@ export function CostsModule({
 
   async function uploadCostDocument(cost: CostRow, documentType: string, file: File | null) {
     if (!file) return;
-    if (!isPdfFile(file)) {
-      setDocumentError("只能上传 PDF 文件");
+    const validationError = validatePdfUploadFile(file);
+    if (validationError) {
+      setDocumentError(validationError);
       return;
     }
     if (!cost.orderId) {
@@ -722,6 +728,7 @@ export function CostsModule({
     }
     const key = costUploadKey(cost, documentType);
     setUploadingKey(key);
+    setUploadProgressByKey((current) => ({ ...current, [key]: 0 }));
     setDocumentError("");
     try {
       const formData = new FormData();
@@ -732,21 +739,20 @@ export function CostsModule({
       formData.append("relatedModule", "SUPPLIER");
       formData.append("uploadSource", "REACT_COSTS");
       formData.append("file", file);
-      const response = await fetch("/api/order-documents", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
+      await uploadFormDataWithProgress("/api/order-documents", formData, (progress) => {
+        setUploadProgressByKey((current) => ({ ...current, [key]: progress }));
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload.success === false) {
-        throw new Error(payload.message || "资料上传失败");
-      }
       await refreshDocumentCost(cost.id);
       setNotice("资料已上传");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
     } finally {
       setUploadingKey("");
+      setUploadProgressByKey((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
     }
   }
 
@@ -1241,7 +1247,6 @@ function CostTableRows({
   onOpenDocuments: () => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
-  const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
@@ -1252,7 +1257,9 @@ function CostTableRows({
         <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
+        <td className={styles.costInvoiceActionColumn}>
+          <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} />
+        </td>
       </tr>
     </>
   );
@@ -1269,7 +1276,7 @@ function CostDetailTableHead() {
         <th className={styles.amountColumn}>成本金额</th>
         <th>付款状态</th>
         <th>发票状态</th>
-        <th>详情</th>
+        <th className={styles.costInvoiceActionColumn}>操作</th>
       </tr>
     </thead>
   );
@@ -1283,8 +1290,8 @@ function CostOrderTableHead() {
         <th className={styles.customerColumn}>客户简称</th>
         <th className={styles.amountColumn}>CNY 合计</th>
         <th className={styles.amountColumn}>USD 合计</th>
-        <th>状态</th>
-        <th>详情</th>
+        <th className={styles.statusColumn}>状态</th>
+        <th className={styles.operationColumn}>详情</th>
       </tr>
     </thead>
   );
@@ -1309,8 +1316,8 @@ function CostOrderSummaryRows({
         <td className={styles.amountColumn}>
           <CostOrderAmountCell order={order} currency="USD" />
         </td>
-        <td><span className={styles.statusPill}>{confirmProgress}</span></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
+        <td className={styles.statusColumn}><span className={styles.statusPill}>{confirmProgress}</span></td>
+        <td className={styles.operationColumn}><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
       </tr>
     </>
   );
@@ -1446,9 +1453,11 @@ function DetailMoneyField({ label, cost }: { label: string; cost: CostRow }) {
 
 function CostOrderSummaryDrawer({
   order,
+  onOpenDocuments,
   onClose,
 }: {
   order: CostOrderSummary;
+  onOpenDocuments: (costId: string) => void;
   onClose: () => void;
 }) {
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
@@ -1470,12 +1479,18 @@ function CostOrderSummaryDrawer({
         <DetailField label="资料状态" value={documentProgress} />
         <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
       </div>
-      <CostOrderItemsTable costs={order.costs || []} />
+      <CostOrderItemsTable costs={order.costs || []} onOpenDocuments={onOpenDocuments} />
     </SideDetailDrawer>
   );
 }
 
-function CostOrderItemsTable({ costs }: { costs: CostRow[] }) {
+function CostOrderItemsTable({
+  costs,
+  onOpenDocuments,
+}: {
+  costs: CostRow[];
+  onOpenDocuments: (costId: string) => void;
+}) {
   return (
     <div className={styles.logisticsDrawerSection}>
       <div className={styles.logisticsDrawerSectionHeader}>
@@ -1494,6 +1509,7 @@ function CostOrderItemsTable({ costs }: { costs: CostRow[] }) {
               <th className={styles.amountColumn}>原币金额</th>
               <th>付款状态</th>
               <th>发票状态</th>
+              <th className={styles.costInvoiceActionColumn}>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -1505,13 +1521,38 @@ function CostOrderItemsTable({ costs }: { costs: CostRow[] }) {
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
                 <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
+                <td className={styles.costInvoiceActionColumn}>
+                  <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} />
+                </td>
               </tr>
             )) : (
-              <tr><td colSpan={6}><div className={styles.emptyState}>暂无成本明细</div></td></tr>
+              <tr><td colSpan={7}><div className={styles.emptyState}>暂无成本明细</div></td></tr>
             )}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function CostInvoiceActions({
+  cost,
+  onOpenDocuments,
+}: {
+  cost: CostRow;
+  onOpenDocuments: () => void;
+}) {
+  const invoiceReceived = cost.invoiceStatus === "已收到";
+  return (
+    <div className={styles.costInvoiceActions}>
+      {invoiceReceived ? (
+        <>
+          <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看发票</button>
+          <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>替换</button>
+        </>
+      ) : (
+        <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>上传发票</button>
+      )}
     </div>
   );
 }
@@ -1521,6 +1562,7 @@ function CostDocumentsDrawer({
   loading,
   error,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   canWriteDocuments,
   onClose,
@@ -1531,6 +1573,7 @@ function CostDocumentsDrawer({
   loading: boolean;
   error: string;
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
   onClose: () => void;
@@ -1593,6 +1636,7 @@ function CostDocumentsDrawer({
                 documentType={documentType}
                 documents={documentsForType(cost, documentType.value)}
                 uploading={uploadingKey === costUploadKey(cost, documentType.value)}
+                uploadProgress={uploadProgressByKey[costUploadKey(cost, documentType.value)] || 0}
                 deletingDocumentId={deletingDocumentId}
                 canWriteDocuments={canWriteDocuments}
                 onUpload={onUpload}
@@ -1612,6 +1656,7 @@ function CostDocumentUploadItem({
   documentType,
   documents,
   uploading,
+  uploadProgress = 0,
   deletingDocumentId,
   canWriteDocuments,
   onUpload,
@@ -1621,6 +1666,7 @@ function CostDocumentUploadItem({
   documentType: { value: string; label: string; required?: boolean };
   documents: CostDocument[];
   uploading: boolean;
+  uploadProgress?: number;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
   onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
@@ -1640,19 +1686,22 @@ function CostDocumentUploadItem({
       </div>
       <div>
         {canWriteDocuments ? (
-          <label className={styles.secondaryButton}>
-            {uploading ? "上传中..." : completed ? "替换/上传PDF" : "选择PDF"}
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={uploading}
-              hidden
-              onChange={(event) => {
-                onUpload(cost, documentType.value, event.target.files?.[0] || null);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          <>
+            <label className={styles.secondaryButton}>
+              {uploading ? "上传中..." : completed ? "替换/上传PDF" : "选择PDF"}
+              <input
+                type="file"
+                accept={PDF_UPLOAD_ACCEPT}
+                disabled={uploading}
+                hidden
+                onChange={(event) => {
+                  onUpload(cost, documentType.value, event.target.files?.[0] || null);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
+          </>
         ) : (
           <button className={styles.secondaryButton} type="button" disabled title="无权限操作">无权限操作</button>
         )}
@@ -1674,6 +1723,18 @@ function CostDocumentUploadItem({
         ))}
       </div>
     </div>
+  );
+}
+
+function UploadProgressInline({ progress }: { progress: number }) {
+  const safeProgress = Math.max(0, Math.min(100, Math.round(progress || 0)));
+  return (
+    <span className={styles.invoiceUploadStatus} data-status="uploading">
+      <span className={styles.invoiceUploadProgressBar}>
+        <span style={{ width: `${safeProgress}%` }} />
+      </span>
+      <span>状态：上传中 {safeProgress}%</span>
+    </span>
   );
 }
 

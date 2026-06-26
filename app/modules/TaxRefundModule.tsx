@@ -9,7 +9,7 @@ import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
-import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 import { logisticsCostTypeLabel } from "../../lib/platform/logistics-cost-types";
 
 type DocumentCompleteness = {
@@ -268,6 +268,7 @@ export function TaxRefundModule({
   const [submittingTaxId, setSubmittingTaxId] = useState("");
   const [cancelingArchiveId, setCancelingArchiveId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
+  const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [recognizingDocumentId, setRecognizingDocumentId] = useState("");
   const [recognitionStatusByDocument, setRecognitionStatusByDocument] = useState<Record<string, string>>({});
@@ -741,13 +742,13 @@ export function TaxRefundModule({
     const uploadKey = uploadScopeKey(orderId, documentType, scope);
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
     setUploadingKey(uploadKey);
+    setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setDetailError("");
     setError("");
     setNotice(isCustomsDeclaration ? "识别中..." : "");
     try {
-      if (!isPdfFile(file)) {
-        throw new Error("只能上传 PDF 文件");
-      }
+      const validationError = validatePdfUploadFile(file);
+      if (validationError) throw new Error(validationError);
       const formData = new FormData();
       formData.append("orderId", orderId);
       formData.append("documentType", documentType);
@@ -755,15 +756,9 @@ export function TaxRefundModule({
       if (scope.costId) formData.append("costId", scope.costId);
       if (scope.supplierId) formData.append("supplierId", scope.supplierId);
       formData.append("file", file);
-      const response = await fetch("/api/order-documents", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
+      const data = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
+        setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
-      const data = await response.json().catch(() => ({})) as UploadDocumentResponse;
-      if (!response.ok || data?.success !== true) {
-        throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
-      }
       const uploadedDocument = data.document || data.data;
       if (uploadedDocument?.id) {
         patchUploadedDocument(orderId, uploadedDocument);
@@ -777,6 +772,11 @@ export function TaxRefundModule({
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
       setUploadingKey("");
+      setUploadProgressByKey((current) => {
+        const next = { ...current };
+        delete next[uploadKey];
+        return next;
+      });
       setRecognizingDocumentId("");
     }
   }
@@ -1047,6 +1047,7 @@ export function TaxRefundModule({
           submittingTax={submittingTaxId === detailRow.id}
           cancelingArchive={cancelingArchiveId === detailRow.id}
           uploadingKey={uploadingKey}
+          uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
           recognizingDocumentId={recognizingDocumentId}
           recognitionStatusByDocument={recognitionStatusByDocument}
@@ -1180,6 +1181,7 @@ function TaxRefundDetailDrawer({
   submittingTax,
   cancelingArchive,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   recognizingDocumentId,
   recognitionStatusByDocument,
@@ -1207,6 +1209,7 @@ function TaxRefundDetailDrawer({
   submittingTax: boolean;
   cancelingArchive: boolean;
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
@@ -1269,6 +1272,7 @@ function TaxRefundDetailDrawer({
             error={error}
             fallback={row}
             uploadingKey={uploadingKey}
+            uploadProgressByKey={uploadProgressByKey}
             deletingDocumentId={deletingDocumentId}
             recognizingDocumentId={recognizingDocumentId}
             recognitionStatusByDocument={recognitionStatusByDocument}
@@ -1297,6 +1301,7 @@ function TaxRefundDetailPanel({
   error,
   fallback,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   recognizingDocumentId,
   recognitionStatusByDocument,
@@ -1317,6 +1322,7 @@ function TaxRefundDetailPanel({
   error: string;
   fallback: TaxRefundRow;
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
@@ -1420,6 +1426,7 @@ function TaxRefundDetailPanel({
                   document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
                 )))[0] || null}
                 uploading={uploadingKey === uploadScopeKey(detail.id, documentType.value)}
+                uploadProgress={uploadProgressByKey[uploadScopeKey(detail.id, documentType.value)] || 0}
                 deletingDocumentId={deletingDocumentId}
                 canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
                 canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
@@ -1434,6 +1441,7 @@ function TaxRefundDetailPanel({
           order={detail}
           documents={detail.documents || []}
           uploadingKey={uploadingKey}
+          uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
           recognizingDocumentId={recognizingDocumentId}
           recognitionStatusByDocument={recognitionStatusByDocument}
@@ -1454,6 +1462,7 @@ function TaxRefundDetailPanel({
               cost={cost}
               documents={detail.documents || []}
               uploadingKey={uploadingKey}
+              uploadProgressByKey={uploadProgressByKey}
               deletingDocumentId={deletingDocumentId}
               currentUserRole={currentUserRole}
               canWriteDocuments={canWriteDocuments}
@@ -1472,6 +1481,7 @@ function TaxRefundDetailPanel({
               cost={cost}
               documents={detail.documents || []}
               uploadingKey={uploadingKey}
+              uploadProgressByKey={uploadProgressByKey}
               deletingDocumentId={deletingDocumentId}
               currentUserRole={currentUserRole}
               canWriteDocuments={canWriteDocuments}
@@ -1631,6 +1641,7 @@ function TaxUploadItem({
   label,
   documents,
   uploading,
+  uploadProgress = 0,
   deletingDocumentId,
   scope,
   canUpload,
@@ -1644,6 +1655,7 @@ function TaxUploadItem({
   label: string;
   documents: TaxDocument[];
   uploading: boolean;
+  uploadProgress?: number;
   deletingDocumentId: string;
   scope?: UploadScope;
   canUpload: boolean;
@@ -1659,6 +1671,7 @@ function TaxUploadItem({
       label={label}
       document={latestTaxDocument(documents)[0] || null}
       uploading={uploading}
+      uploadProgress={uploadProgress}
       deletingDocumentId={deletingDocumentId}
       scope={scope}
       canUpload={canUpload}
@@ -1678,6 +1691,7 @@ function FileUploadCard({
   order,
   document,
   uploading,
+  uploadProgress = 0,
   deletingDocumentId,
   recognizingDocumentId = "",
   recognitionStatus = "-",
@@ -1697,6 +1711,7 @@ function FileUploadCard({
   order?: TaxRefundDetail;
   document: TaxDocument | null;
   uploading: boolean;
+  uploadProgress?: number;
   deletingDocumentId: string;
   recognizingDocumentId?: string;
   recognitionStatus?: string;
@@ -1763,25 +1778,40 @@ function FileUploadCard({
         <div className={styles.fileUploadEmpty}>暂未上传</div>
       )}
       {canUpload ? (
-        <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
-          {uploading ? "上传中..." : UPLOAD_REPLACE_TEXT}
-          <input
-            type="file"
-            accept="application/pdf,.pdf"
-            disabled={uploading}
-            hidden
-            onChange={(event) => {
-              onUpload(orderId, type, event.target.files?.[0] || null, scope);
-              event.currentTarget.value = "";
-            }}
-          />
-        </label>
+        <>
+          <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
+            {uploading ? "上传中..." : UPLOAD_REPLACE_TEXT}
+            <input
+              type="file"
+              accept={PDF_UPLOAD_ACCEPT}
+              disabled={uploading}
+              hidden
+              onChange={(event) => {
+                onUpload(orderId, type, event.target.files?.[0] || null, scope);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
+        </>
       ) : (
         <button className={`${styles.secondaryButton} ${styles.fileUploadButton}`} type="button" disabled title="无权限操作">
           无权限操作
         </button>
       )}
     </div>
+  );
+}
+
+function UploadProgressInline({ progress }: { progress: number }) {
+  const safeProgress = Math.max(0, Math.min(100, Math.round(progress || 0)));
+  return (
+    <span className={styles.invoiceUploadStatus} data-status="uploading">
+      <span className={styles.invoiceUploadProgressBar}>
+        <span style={{ width: `${safeProgress}%` }} />
+      </span>
+      <span>状态：上传中 {safeProgress}%</span>
+    </span>
   );
 }
 
@@ -1885,6 +1915,7 @@ function CustomsUploadCard({
   order,
   documents,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   recognizingDocumentId,
   recognitionStatusByDocument,
@@ -1899,6 +1930,7 @@ function CustomsUploadCard({
   order: TaxRefundDetail;
   documents: TaxDocument[];
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
@@ -1937,6 +1969,7 @@ function CustomsUploadCard({
               order={order}
               document={document}
               uploading={uploading}
+              uploadProgress={uploadProgressByKey[uploadScopeKey(order.id, documentType.value)] || 0}
               deletingDocumentId={deletingDocumentId}
               recognizingDocumentId={recognizingDocumentId}
               recognitionStatus={recognitionStatus}
@@ -2107,6 +2140,7 @@ function FactoryCostUploadGroup({
   cost,
   documents,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   currentUserRole,
   canWriteDocuments,
@@ -2118,6 +2152,7 @@ function FactoryCostUploadGroup({
   cost: TaxCost;
   documents: TaxDocument[];
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   currentUserRole: string;
   canWriteDocuments: boolean;
@@ -2144,6 +2179,7 @@ function FactoryCostUploadGroup({
             && document.costId === cost.id
           ))}
           uploading={uploadingKey === uploadScopeKey(orderId, documentType.value, scope)}
+          uploadProgress={uploadProgressByKey[uploadScopeKey(orderId, documentType.value, scope)] || 0}
           deletingDocumentId={deletingDocumentId}
           scope={scope}
           canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
@@ -2161,6 +2197,7 @@ function LogisticsInvoiceUploadItem({
   cost,
   documents,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   currentUserRole,
   canWriteDocuments,
@@ -2172,6 +2209,7 @@ function LogisticsInvoiceUploadItem({
   cost: TaxCost;
   documents: TaxDocument[];
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   currentUserRole: string;
   canWriteDocuments: boolean;
@@ -2193,6 +2231,7 @@ function LogisticsInvoiceUploadItem({
         && document.costId === cost.id
       ))}
       uploading={uploadingKey === uploadScopeKey(orderId, "SUPPLIER_INVOICE", scope)}
+      uploadProgress={uploadProgressByKey[uploadScopeKey(orderId, "SUPPLIER_INVOICE", scope)] || 0}
       deletingDocumentId={deletingDocumentId}
       scope={scope}
       canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, "SUPPLIER_INVOICE", readOnly)}

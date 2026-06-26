@@ -12,6 +12,11 @@ const sharedAudit = readFileSync("lib/platform/shared-audit.ts", "utf8");
 const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
 const uploadValidation = readFileSync("lib/platform/upload-validation.ts", "utf8");
+const appUtils = readFileSync("app/utils.ts", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const domesticLogisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const costsUiModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const logisticsFeesModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const orderDocumentsRoute = readFileSync("app/api/order-documents/route.ts", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 const logisticsInvoiceService = readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8");
@@ -142,20 +147,21 @@ test("api routes parse JSON bodies through the shared helper", () => {
 
 test("all active PDF upload services reuse shared PDF validation", () => {
   assert.match(uploadValidation, /type ValidatedUploadFile = \{/);
-  assert.match(uploadValidation, /type InvoiceMimeType = "application\/pdf" \| "image\/jpeg" \| "image\/png"/);
   assert.match(uploadValidation, /export function assertPdfUploadFileCandidate/);
   assert.match(uploadValidation, /assertPdfUploadFileCandidate\(candidate: unknown\)/);
   assert.match(uploadValidation, /export async function readValidatedPdfUploadFile/);
   assert.match(uploadValidation, /readValidatedPdfUploadFile\(candidate: unknown, fallbackName = "document\.pdf"\): Promise<ValidatedUploadFile>/);
   assert.match(uploadValidation, /export async function readValidatedInvoiceUploadFile/);
   assert.match(uploadValidation, /readValidatedInvoiceUploadFile\(candidate: unknown, fallbackName = "invoice\.pdf"\): Promise<ValidatedUploadFile>/);
+  assert.match(uploadValidation, /文件大小不能超过 5MB/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
   assert.match(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
   assert.match(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
   assert.match(orderDocumentsRoute, /assertPdfUploadFileCandidate\(candidate\)/);
   assert.match(orderDocumentsService, /readValidatedPdfUploadFile\(file, "document\.pdf"\)/);
   assert.match(logisticsInvoiceService, /readValidatedInvoiceUploadFile\(file, "invoice\.pdf"\)/);
-  assert.match(uploadValidation, /if \(mimeType === "application\/pdf"\) return readValidatedPdfUploadFile\(candidate, fallbackName\)/);
+  assert.match(uploadValidation, /return readValidatedPdfUploadFile\(candidate, fallbackName\)/);
+  assert.doesNotMatch(uploadValidation, /image\/jpeg|image\/png|INVOICE_IMAGE_SIGNATURES|invoiceMimeTypeFromName/);
 });
 
 test("shared PDF validation rejects active content actions", () => {
@@ -164,8 +170,30 @@ test("shared PDF validation rejects active content actions", () => {
   assert.match(uploadValidation, /\/EmbeddedFile\\b/);
   assert.match(uploadValidation, /\/Launch\\b/);
   assert.match(uploadValidation, /function assertPdfDoesNotContainActiveContent\(body: Buffer\)/);
-  assert.match(uploadValidation, /INVOICE_IMAGE_SIGNATURES: Record<Exclude<InvoiceMimeType, "application\/pdf">, \(body: Buffer\) => boolean>/);
   assert.match(uploadValidation, /assertPdfDoesNotContainActiveContent\(body\);[\s\S]*return \{/);
+});
+
+test("all active upload UIs enforce pdf only auto upload with progress", () => {
+  assert.match(appUtils, /export const PDF_UPLOAD_ACCEPT = "\.pdf"/);
+  assert.match(appUtils, /export const PDF_UPLOAD_MAX_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(appUtils, /export function validatePdfUploadFile/);
+  assert.match(appUtils, /file\.type !== "application\/pdf"|file\.type === "application\/pdf"/);
+  assert.match(appUtils, /export function uploadFormDataWithProgress/);
+  assert.match(appUtils, /new XMLHttpRequest\(\)/);
+  assert.match(appUtils, /xhr\.upload\.onprogress/);
+
+  for (const [name, source] of [
+    ["TaxRefundModule", taxRefundModule],
+    ["DomesticLogisticsModule", domesticLogisticsModule],
+    ["CostsModule", costsUiModule],
+    ["LogisticsFeesModule", logisticsFeesModule],
+  ] as const) {
+    assert.match(source, /accept=\{PDF_UPLOAD_ACCEPT\}/, `${name} must use the shared PDF accept rule`);
+    assert.match(source, /validatePdfUploadFile/, `${name} must use the shared 5MB PDF validator`);
+    assert.match(source, /uploadFormDataWithProgress/, `${name} must use upload progress`);
+    assert.match(source, /invoiceUploadProgressBar/, `${name} must render upload progress`);
+    assert.doesNotMatch(source, /PDF \/ JPG \/ PNG|20MB|accept="application\/pdf,\.pdf"|fetch\("\/api\/order-documents"/, `${name} must not keep legacy upload flow`);
+  }
 });
 
 test("server and audit logs redact sensitive file and credential fields", () => {

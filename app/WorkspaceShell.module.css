@@ -1430,6 +1430,98 @@
   white-space: nowrap;
 }
 
+.costPage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.costContent {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  box-sizing: border-box;
+}
+
+.costTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.costTableWrap .dataTable {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.costTableWrap .dataTable th,
+.costTableWrap .dataTable td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+.costTableWrap .dataTable th.orderNoColumn,
+.costTableWrap .dataTable td.orderNoColumn {
+  width: 180px;
+  min-width: 180px;
+}
+
+.costTableWrap .dataTable th.customerColumn,
+.costTableWrap .dataTable td.customerColumn {
+  width: 120px;
+  min-width: 120px;
+}
+
+.costTableWrap .dataTable th.amountColumn,
+.costTableWrap .dataTable td.amountColumn {
+  width: 120px;
+  min-width: 120px;
+}
+
+.costTableWrap .dataTable th.statusColumn,
+.costTableWrap .dataTable td.statusColumn {
+  width: 100px;
+  min-width: 100px;
+}
+
+.costTableWrap .dataTable th.operationColumn,
+.costTableWrap .dataTable td.operationColumn {
+  width: 80px;
+  min-width: 80px;
+}
+
+.costTableWrap .dataTable th.costInvoiceActionColumn,
+.costTableWrap .dataTable td.costInvoiceActionColumn,
+.dataTable th.costInvoiceActionColumn,
+.dataTable td.costInvoiceActionColumn {
+  width: 180px;
+  min-width: 180px;
+  text-align: left;
+  vertical-align: middle;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.costInvoiceActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.costInvoiceActions button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
 .autocompleteField {
   position: relative;
   grid-column: span 2;
@@ -3764,6 +3856,47 @@
   left: 180px;
   width: 140px;
   min-width: 140px;
+}
+
+.costTableWrap.tablePinnedTwoCols .dataTable th:nth-child(1),
+.costTableWrap.tablePinnedTwoCols .dataTable td:nth-child(1),
+.costTableWrap.tablePinnedTwoCols .dataTable th.orderNoColumn,
+.costTableWrap.tablePinnedTwoCols .dataTable td.orderNoColumn {
+  width: 180px;
+  min-width: 180px;
+}
+
+.costTableWrap.tablePinnedTwoCols .dataTable th:nth-child(2),
+.costTableWrap.tablePinnedTwoCols .dataTable td:nth-child(2),
+.costTableWrap.tablePinnedTwoCols .dataTable th.customerColumn,
+.costTableWrap.tablePinnedTwoCols .dataTable td.customerColumn {
+  left: 180px;
+  width: 120px;
+  min-width: 120px;
+}
+
+.costTableWrap .dataTable th.amountColumn,
+.costTableWrap .dataTable td.amountColumn {
+  width: 120px;
+  min-width: 120px;
+}
+
+.costTableWrap .dataTable th.statusColumn,
+.costTableWrap .dataTable td.statusColumn {
+  width: 100px;
+  min-width: 100px;
+}
+
+.costTableWrap .dataTable th.operationColumn,
+.costTableWrap .dataTable td.operationColumn {
+  width: 80px;
+  min-width: 80px;
+}
+
+.costTableWrap .dataTable th.costInvoiceActionColumn,
+.costTableWrap .dataTable td.costInvoiceActionColumn {
+  width: 180px;
+  min-width: 180px;
 }
 
 .detailField {

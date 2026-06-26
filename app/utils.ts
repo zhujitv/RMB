@@ -62,8 +62,60 @@ export function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+export const PDF_UPLOAD_ACCEPT = ".pdf";
+export const PDF_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const PDF_UPLOAD_MAX_SIZE_LABEL = "5MB";
+
 export function isPdfFile(file: File) {
   return file.name.toLowerCase().endsWith(".pdf") && file.type === "application/pdf";
+}
+
+export function validatePdfUploadFile(file: File | null) {
+  if (!file) return "请选择 PDF 文件";
+  if (!isPdfFile(file)) return "仅支持PDF文件";
+  if (file.size > PDF_UPLOAD_MAX_BYTES) return "文件大小不能超过 5MB";
+  return "";
+}
+
+export function uploadFormDataWithProgress<T = Record<string, unknown>>(
+  url: string,
+  formData: FormData,
+  onProgress: (percent: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const nextProgress = Math.min(99, Math.max(1, Math.round((event.loaded / event.total) * 100)));
+      onProgress(nextProgress);
+    };
+    xhr.onload = () => {
+      const result = parseJsonResponse(xhr.responseText) as T & {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (xhr.status < 200 || xhr.status >= 300 || result.success === false) {
+        reject(new Error(result.message || result.error || "文件上传失败"));
+        return;
+      }
+      onProgress(100);
+      resolve(result);
+    };
+    xhr.onerror = () => reject(new Error("上传失败，请重试"));
+    xhr.onabort = () => reject(new Error("上传已取消，请重试"));
+    xhr.send(formData);
+  });
+}
+
+function parseJsonResponse(text: string) {
+  try {
+    return JSON.parse(text || "{}");
+  } catch {
+    return {};
+  }
 }
 
 export function customerDisplayName(record?: CustomerNameLike | null) {

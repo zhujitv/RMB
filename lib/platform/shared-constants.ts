@@ -448,7 +448,7 @@ export const COMMISSION_STATUSES = [
   "不可结算：提成金额为0",
   "已结算",
 ];
-export const MAX_PDF_UPLOAD_BYTES = 20 * 1024 * 1024;
+export const MAX_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export const EXCHANGE_RATE_SETTING_KEY = "exchange_rate";
 export const DEFAULT_EXCHANGE_RATE_SETTINGS = {

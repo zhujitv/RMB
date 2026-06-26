@@ -10,7 +10,7 @@ import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
-import { canWritePermission, customerDisplayName, customerLegalName, isPdfFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 
 type TransportItem = {
   id?: string;
@@ -296,6 +296,7 @@ export function DomesticLogisticsModule({
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
   const [expenseFocus, setExpenseFocus] = useState({ token: 0, billId: "", keyword: "" });
   const [uploadingKey, setUploadingKey] = useState("");
+  const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const {
     confirmation,
@@ -505,27 +506,22 @@ export function DomesticLogisticsModule({
   async function uploadDocument(orderId: string, documentType: string, file: File | null) {
     if (!file) return;
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
-    setUploadingKey(`${orderId}:${documentType}`);
+    const uploadKey = `${orderId}:${documentType}`;
+    setUploadingKey(uploadKey);
+    setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setError("");
     setNotice(isCustomsDeclaration ? "正在识别报关单信息..." : "");
     try {
-      if (!isPdfFile(file)) {
-        throw new Error("只能上传 PDF 文件");
-      }
+      const validationError = validatePdfUploadFile(file);
+      if (validationError) throw new Error(validationError);
       const formData = new FormData();
       formData.append("orderId", orderId);
       formData.append("documentType", documentType);
       formData.append("uploadSource", "REACT_DOMESTIC_LOGISTICS");
       formData.append("file", file);
-      const response = await fetch("/api/order-documents", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
+      const data = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
+        setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
-      const data = (await response.json().catch(() => ({}))) as UploadDocumentResponse;
-      if (!response.ok || data?.success !== true) {
-        throw new Error(typeof data?.message === "string" ? data.message : "文件上传失败");
-      }
       const uploadedDocument = data.document || data.data;
       const recognition = uploadedDocument?.customsRecognition || null;
       if (isCustomsDeclaration) {
@@ -538,6 +534,11 @@ export function DomesticLogisticsModule({
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
       setUploadingKey("");
+      setUploadProgressByKey((current) => {
+        const next = { ...current };
+        delete next[uploadKey];
+        return next;
+      });
     }
   }
 
@@ -722,6 +723,7 @@ export function DomesticLogisticsModule({
                 canDeleteDomesticLogistics={canDeleteDomesticLogistics}
                 onDeleteDomesticLogistics={() => void deleteDomesticLogistics(row)}
                 uploadingKey={uploadingKey}
+                uploadProgressByKey={uploadProgressByKey}
                 deletingDocumentId={deletingDocumentId}
                 onUploadDocument={uploadDocument}
                 onDeleteDocument={deleteDocument}
@@ -786,6 +788,7 @@ function DomesticLogisticsRows({
   canDeleteDomesticLogistics,
   onDeleteDomesticLogistics,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   onUploadDocument,
   onDeleteDocument,
@@ -815,6 +818,7 @@ function DomesticLogisticsRows({
   canDeleteDomesticLogistics: boolean;
   onDeleteDomesticLogistics: () => void;
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   onUploadDocument: (orderId: string, documentType: string, file: File | null) => void;
   onDeleteDocument: (document: DomesticLogisticsDocument) => void;
@@ -932,6 +936,7 @@ function DomesticLogisticsRows({
                 orderId={row.id}
                 documents={row.documents || []}
                 uploadingKey={uploadingKey}
+                uploadProgressByKey={uploadProgressByKey}
                 deletingDocumentId={deletingDocumentId}
                 currentUserRole={currentUserRole}
                 canUpload={canUploadCustomsDocuments}
@@ -1135,6 +1140,7 @@ function CustomsDocumentPanel({
   orderId,
   documents,
   uploadingKey,
+  uploadProgressByKey,
   deletingDocumentId,
   currentUserRole,
   canUpload,
@@ -1145,6 +1151,7 @@ function CustomsDocumentPanel({
   orderId: string;
   documents: DomesticLogisticsDocument[];
   uploadingKey: string;
+  uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   currentUserRole: string;
   canUpload: boolean;
@@ -1164,6 +1171,7 @@ function CustomsDocumentPanel({
           ? latestUploadedDocument(matchedDocuments)
           : null;
         const uploading = uploadingKey === `${orderId}:${documentType.value}`;
+        const uploadProgress = uploadProgressByKey[`${orderId}:${documentType.value}`] || 0;
         if (documentType.value === "CUSTOMS_ENTRY_FORM") {
           return (
             <div className={styles.fileListItem} key={documentType.value}>
@@ -1185,19 +1193,22 @@ function CustomsDocumentPanel({
                   </>
                 ) : null}
                 {canUpload ? (
-                  <label className={styles.secondaryButton}>
-                    {uploading ? "识别中..." : UPLOAD_REPLACE_TEXT}
-                    <input
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      disabled={uploading}
-                      hidden
-                      onChange={(event) => {
-                        onUpload(orderId, documentType.value, event.target.files?.[0] || null);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
+                  <>
+                    <label className={styles.secondaryButton}>
+                      {uploading ? "识别中..." : UPLOAD_REPLACE_TEXT}
+                      <input
+                        type="file"
+                        accept={PDF_UPLOAD_ACCEPT}
+                        disabled={uploading}
+                        hidden
+                        onChange={(event) => {
+                          onUpload(orderId, documentType.value, event.target.files?.[0] || null);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                    {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
+                  </>
                 ) : null}
                 {currentCustomsDeclaration && canDelete ? (
                   <button
@@ -1226,21 +1237,24 @@ function CustomsDocumentPanel({
             </div>
             <div>
               {canUpload ? (
-                <label className={styles.secondaryButton}>
-                  {uploading
-                    ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
-                    : UPLOAD_REPLACE_TEXT}
-                  <input
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    disabled={uploading}
-                    hidden
-                    onChange={(event) => {
-                      onUpload(orderId, documentType.value, event.target.files?.[0] || null);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+                <>
+                  <label className={styles.secondaryButton}>
+                    {uploading
+                      ? (documentType.value === "CUSTOMS_ENTRY_FORM" ? "识别中..." : "上传中...")
+                      : UPLOAD_REPLACE_TEXT}
+                    <input
+                      type="file"
+                      accept={PDF_UPLOAD_ACCEPT}
+                      disabled={uploading}
+                      hidden
+                      onChange={(event) => {
+                        onUpload(orderId, documentType.value, event.target.files?.[0] || null);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
+                </>
               ) : null}
               {matchedDocuments.map((document) => (
                 <span key={document.id} className={styles.fileListItemActions}>
@@ -1267,6 +1281,18 @@ function CustomsDocumentPanel({
         );
       })}
     </div>
+  );
+}
+
+function UploadProgressInline({ progress }: { progress: number }) {
+  const safeProgress = Math.max(0, Math.min(100, Math.round(progress || 0)));
+  return (
+    <span className={styles.invoiceUploadStatus} data-status="uploading">
+      <span className={styles.invoiceUploadProgressBar}>
+        <span style={{ width: `${safeProgress}%` }} />
+      </span>
+      <span>状态：上传中 {safeProgress}%</span>
+    </span>
   );
 }
 

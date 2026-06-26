@@ -49,7 +49,7 @@ const saveBillDetailsSource = logisticsModule.match(/async function saveBillDeta
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
 const logisticsExpenseFormSource = logisticsModule.match(/export function LogisticsExpenseForm[\s\S]*?\n}\n\nfunction LogisticsInvoiceGroupsPanel/)?.[0] || "";
-const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction parseXhrJson/)?.[0] || "";
+const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction StatusPill/)?.[0] || "";
 const monthlySummaryComponentSource = logisticsModule.match(/function MonthlySummaryComponent[\s\S]*?\n}\n\nfunction buildMonthlySummary/)?.[0] || "";
 const supplierSectionComponentSource = logisticsModule.match(/function SupplierSectionComponent[\s\S]*?\n}\n\nfunction LogisticsExpenseBillTable/)?.[0] || "";
 const billTableComponentSource = logisticsModule.match(/function LogisticsExpenseBillTable[\s\S]*?\n}\n\nfunction LogisticsExpenseCompactRow/)?.[0] || "";
@@ -209,12 +209,13 @@ test("logistics expense entry prevents Enter-triggered submit and row creation",
 test("logistics invoice upload starts on file selection and shows upload progress", () => {
   assert.match(invoiceUploadFormSource, /onChange=\{handleFileChange\}/);
   assert.match(invoiceUploadFormSource, /uploadInvoice\(selectedFile\)/);
-  assert.match(invoiceUploadFormSource, /new XMLHttpRequest\(\)/);
-  assert.match(invoiceUploadFormSource, /xhr\.upload\.onprogress/);
+  assert.match(invoiceUploadFormSource, /uploadFormDataWithProgress/);
+  assert.match(invoiceUploadFormSource, /validatePdfUploadFile/);
   assert.match(invoiceUploadFormSource, /上传中 \$\{nextProgress\}%/);
   assert.match(invoiceUploadFormSource, /styles\.invoiceUploadProgressBar/);
-  assert.match(invoiceUploadFormSource, /INVOICE_UPLOAD_ACCEPT/);
-  assert.match(invoiceUploadFormSource, /支持 PDF \/ JPG \/ PNG，最大 20MB。选择文件后自动上传。/);
+  assert.match(invoiceUploadFormSource, /accept=\{PDF_UPLOAD_ACCEPT\}/);
+  assert.match(invoiceUploadFormSource, /仅支持 PDF，最大 \{PDF_UPLOAD_MAX_SIZE_LABEL\}。选择文件后自动上传。/);
+  assert.doesNotMatch(invoiceUploadFormSource, /JPG|PNG|20MB/);
   assert.doesNotMatch(invoiceUploadFormSource, /apiJson|fetch\(/);
   assert.doesNotMatch(invoiceUploadFormSource, />上传发票</);
   assert.match(workspaceStyles, /\.invoiceUploadStatus\[data-status="uploading"\]/);

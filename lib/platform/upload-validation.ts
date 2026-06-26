@@ -16,8 +16,6 @@ type PdfUploadCandidate = {
   fileSize: number;
 };
 
-type InvoiceMimeType = "application/pdf" | "image/jpeg" | "image/png";
-
 const DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS = [
   /\/JavaScript\b/i,
   /\/JS\b/i,
@@ -49,7 +47,7 @@ export function assertPdfUploadFileCandidate(candidate: unknown): PdfUploadCandi
     throw codedError("文件类型不允许，只能上传 PDF 文件", 400, "FILE_TYPE_NOT_ALLOWED");
   }
   if (Number(candidate.size || 0) > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件超过大小限制，最大支持 20MB PDF。", 413, "FILE_TOO_LARGE");
+    throw codedError("文件大小不能超过 5MB", 413, "FILE_TOO_LARGE");
   }
   return { file: candidate, originalFileName: fileName, mimeType, fileSize: Number(candidate.size || 0) };
 }
@@ -59,7 +57,7 @@ export async function readValidatedPdfUploadFile(candidate: unknown, fallbackNam
   const arrayBuffer = await file.arrayBuffer();
   const body = Buffer.from(arrayBuffer);
   if (body.byteLength > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件超过大小限制，最大支持 20MB PDF。", 413, "FILE_TOO_LARGE");
+    throw codedError("文件大小不能超过 5MB", 413, "FILE_TOO_LARGE");
   }
   if (body.byteLength < 5 || body.subarray(0, 5).toString("ascii") !== "%PDF-") {
     throw codedError("文件格式错误，只能上传有效 PDF 文件", 400, "FILE_SIGNATURE_INVALID");
@@ -77,70 +75,9 @@ export async function readValidatedPdfUploadFile(candidate: unknown, fallbackNam
   };
 }
 
-const INVOICE_IMAGE_SIGNATURES: Record<Exclude<InvoiceMimeType, "application/pdf">, (body: Buffer) => boolean> = {
-  "image/png": (body: Buffer) => body.length >= 8
-    && body[0] === 0x89
-    && body[1] === 0x50
-    && body[2] === 0x4e
-    && body[3] === 0x47
-    && body[4] === 0x0d
-    && body[5] === 0x0a
-    && body[6] === 0x1a
-    && body[7] === 0x0a,
-  "image/jpeg": (body: Buffer) => body.length >= 4
-    && body[0] === 0xff
-    && body[1] === 0xd8
-    && body[2] === 0xff,
-};
-
-const INVOICE_UPLOAD_EXTENSIONS = new Map<InvoiceMimeType, string>([
-  ["application/pdf", ".pdf"],
-  ["image/jpeg", ".jpg"],
-  ["image/png", ".png"],
-]);
-
-function isInvoiceMimeType(value: string): value is InvoiceMimeType {
-  return INVOICE_UPLOAD_EXTENSIONS.has(value as InvoiceMimeType);
-}
-
 export async function readValidatedInvoiceUploadFile(candidate: unknown, fallbackName = "invoice.pdf"): Promise<ValidatedUploadFile> {
   if (!(candidate instanceof File)) {
     throw codedError("请选择发票文件", 400, "FILE_REQUIRED");
   }
-  const safeOriginalName = safeFileName(candidate.name || fallbackName);
-  const lowerName = safeOriginalName.toLowerCase();
-  const mimeType = String(candidate.type || "").toLowerCase() || invoiceMimeTypeFromName(lowerName);
-  const expectedExtension = isInvoiceMimeType(mimeType) ? INVOICE_UPLOAD_EXTENSIONS.get(mimeType) : "";
-  if (!expectedExtension || ![".pdf", ".jpg", ".jpeg", ".png"].some((suffix) => lowerName.endsWith(suffix))) {
-    throw codedError("文件类型不允许，只能上传 PDF、JPG 或 PNG 发票文件", 400, "FILE_TYPE_NOT_ALLOWED");
-  }
-  if (Number(candidate.size || 0) > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件超过大小限制，最大支持 20MB。", 413, "FILE_TOO_LARGE");
-  }
-  if (mimeType === "application/pdf") return readValidatedPdfUploadFile(candidate, fallbackName);
-
-  const arrayBuffer = await candidate.arrayBuffer();
-  const body = Buffer.from(arrayBuffer);
-  if (body.byteLength > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件超过大小限制，最大支持 20MB。", 413, "FILE_TOO_LARGE");
-  }
-  const isValidImage = mimeType === "image/jpeg" || mimeType === "image/png"
-    ? INVOICE_IMAGE_SIGNATURES[mimeType](body)
-    : false;
-  if (!isValidImage) {
-    throw codedError("文件格式错误，只能上传有效 JPG 或 PNG 图片", 400, "FILE_SIGNATURE_INVALID");
-  }
-  return {
-    originalFileName: safeOriginalName || safeFileName(fallbackName),
-    mimeType,
-    body,
-    fileSize: Number(candidate.size || body.byteLength || 0),
-  };
-}
-
-function invoiceMimeTypeFromName(fileName: string) {
-  if (fileName.endsWith(".pdf")) return "application/pdf";
-  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
-  if (fileName.endsWith(".png")) return "image/png";
-  return "";
+  return readValidatedPdfUploadFile(candidate, fallbackName);
 }

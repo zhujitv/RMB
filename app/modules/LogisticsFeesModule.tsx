@@ -7,7 +7,7 @@ import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideD
 import { formatAmount, formatDate, formatDateTime } from "../formatters";
 import { preventEnterFormSubmit } from "../formGuards";
 import { SearchAutocomplete } from "../SearchAutocomplete";
-import { customerDisplayName, customerLegalName, downloadBlob } from "../utils";
+import { customerDisplayName, customerLegalName, downloadBlob, PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 import {
   LOGISTICS_COST_TYPE_OPTIONS,
@@ -19,9 +19,6 @@ import {
 import { logisticsInvoiceGroupForExpense, logisticsInvoiceGroupsForExpenses } from "../../lib/platform/logistics-invoice-groups";
 
 const PAGE_SIZE = 20;
-const INVOICE_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
-const INVOICE_UPLOAD_ACCEPT = "application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png";
-const INVOICE_UPLOAD_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const COST_TYPES = [...LOGISTICS_COST_TYPES];
 const COST_TYPE_OPTIONS = [...LOGISTICS_COST_TYPE_OPTIONS];
 const DEFAULT_BILLING_METHOD = "按柜";
@@ -2378,21 +2375,8 @@ function InvoiceUploadForm({
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "failed">("idle");
 
-  function validateInvoiceFile(file: File) {
-    const lowerName = file.name.toLowerCase();
-    const extensionAllowed = [".pdf", ".jpg", ".jpeg", ".png"].some((suffix) => lowerName.endsWith(suffix));
-    const mimeAllowed = !file.type || INVOICE_UPLOAD_FILE_TYPES.has(file.type);
-    if (!mimeAllowed || !extensionAllowed) {
-      return "只能上传 PDF、JPG 或 PNG 文件";
-    }
-    if (file.size > INVOICE_UPLOAD_MAX_BYTES) {
-      return "文件超过大小限制，最大支持 20MB";
-    }
-    return "";
-  }
-
-  function uploadInvoice(file: File) {
-    const validationError = validateInvoiceFile(file);
+  async function uploadInvoice(file: File) {
+    const validationError = validatePdfUploadFile(file);
     if (validationError) {
       setStatus("failed");
       setProgress(0);
@@ -2410,47 +2394,27 @@ function InvoiceUploadForm({
     body.set("invoiceGroup", group.key);
     body.set("file", file);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `/api/logistics-costs/${encodeURIComponent(expense.id)}/invoice`);
-    xhr.withCredentials = true;
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      const nextProgress = Math.min(99, Math.max(1, Math.round((event.loaded / event.total) * 100)));
-      setProgress(nextProgress);
-      setMessage(`上传中 ${nextProgress}%`);
-    };
-    xhr.onload = () => {
-      const result = parseXhrJson(xhr.responseText);
-      if (xhr.status < 200 || xhr.status >= 300 || result.success !== true) {
-        setStatus("failed");
-        setMessage(result.message || result.error || "上传失败，请重试");
-        setUploading(false);
-        setProgress(0);
-        if (inputRef.current) inputRef.current.value = "";
-        return;
-      }
+    try {
+      const result = await uploadFormDataWithProgress<LogisticsExpenseMutationResult>(
+        `/api/logistics-costs/${encodeURIComponent(expense.id)}/invoice`,
+        body,
+        (nextProgress) => {
+          setProgress(nextProgress);
+          setMessage(`上传中 ${nextProgress}%`);
+        },
+      );
       setProgress(100);
       setStatus("success");
       setMessage("上传成功");
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
-      onUploaded(result as LogisticsExpenseMutationResult);
-    };
-    xhr.onerror = () => {
+      onUploaded(result);
+    } catch (uploadError) {
       setStatus("failed");
-      setMessage("上传失败，请重试");
-      setUploading(false);
+      setMessage(uploadError instanceof Error ? uploadError.message : "上传失败，请重试");
       setProgress(0);
-      if (inputRef.current) inputRef.current.value = "";
-    };
-    xhr.onabort = () => {
-      setStatus("failed");
-      setMessage("上传已取消，请重试");
+    } finally {
       setUploading(false);
-      setProgress(0);
       if (inputRef.current) inputRef.current.value = "";
-    };
-    xhr.send(body);
+    }
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -2464,12 +2428,12 @@ function InvoiceUploadForm({
       <input
         ref={inputRef}
         type="file"
-        accept={INVOICE_UPLOAD_ACCEPT}
+        accept={PDF_UPLOAD_ACCEPT}
         aria-label={`${group.label}选择发票文件`}
         onChange={handleFileChange}
         disabled={uploading}
       />
-      <span className={styles.invoiceUploadHelp}>支持 PDF / JPG / PNG，最大 20MB。选择文件后自动上传。</span>
+      <span className={styles.invoiceUploadHelp}>仅支持 PDF，最大 {PDF_UPLOAD_MAX_SIZE_LABEL}。选择文件后自动上传。</span>
       {status !== "idle" ? (
         <span className={styles.invoiceUploadStatus} data-status={status}>
           <span className={styles.invoiceUploadProgressBar}>
@@ -2480,14 +2444,6 @@ function InvoiceUploadForm({
       ) : null}
     </form>
   );
-}
-
-function parseXhrJson(text: string) {
-  try {
-    return JSON.parse(text || "{}");
-  } catch {
-    return {};
-  }
 }
 
 function StatusPill({ value }: { value: string }) {

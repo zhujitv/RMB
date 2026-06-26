@@ -365,7 +365,7 @@ export async function createLogisticsInvoiceDocument(
   const order = asRecord(expense.order);
   const cost = asRecord(expense.cost);
   const logisticsCostType = normalizedCostType(expense.cost?.costType || expense.costType);
-  const extension = invoiceFileExtension(mimeType, originalFileName);
+  const extension = ".pdf";
   const costContext = { ...(expense.cost ? cost : { id: expense.costId }), costType: logisticsCostType };
   const orderId = nonEmpty(order.id);
   const baseStandardFilename = await nextStandardFilenameForUpload(order, "SUPPLIER_INVOICE", {
@@ -420,13 +420,6 @@ export async function createLogisticsInvoiceDocument(
     await deleteR2Object(storageKey).catch(() => null);
     throw error;
   }
-}
-
-function invoiceFileExtension(mimeType = "", fileName = "") {
-  const lowerName = String(fileName || "").toLowerCase();
-  if (String(mimeType).toLowerCase() === "image/png" || lowerName.endsWith(".png")) return ".png";
-  if (String(mimeType).toLowerCase() === "image/jpeg" || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return ".jpg";
-  return ".pdf";
 }
 
 export function canUploadLogisticsExpenseInvoice(actor: LogisticsInvoiceActor, expense: LogisticsExpenseLike) {
