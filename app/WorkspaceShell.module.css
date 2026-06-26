@@ -3337,6 +3337,16 @@
   font-size: 13px;
 }
 
+.logisticsItemsInlineActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 2px 8px 0;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
 .logisticsItemsTotal {
   justify-self: flex-end;
   color: #0f172a;
@@ -7100,6 +7110,11 @@
 .logisticsItemsHead,
 .logisticsItemsRow {
   grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;
+  min-width: 936px;
+  box-sizing: border-box;
+}
+
+.logisticsItemsInlineActions {
   min-width: 936px;
   box-sizing: border-box;
 }

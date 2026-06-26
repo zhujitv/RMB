@@ -48,6 +48,7 @@ const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpe
 const saveBillDetailsSource = logisticsModule.match(/async function saveBillDetails[\s\S]*?\n  async function deleteExpense/)?.[0] || "";
 const frontendAggregateStatusSource = logisticsModule.match(/function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nfunction logisticsInvoiceGroupsForBill/)?.[0] || "";
 const logisticsExpenseDetailLineSource = logisticsModule.match(/function LogisticsExpenseDetailLine[\s\S]*?\n}\n\nexport function LogisticsExpenseForm/)?.[0] || "";
+const logisticsExpenseFormSource = logisticsModule.match(/export function LogisticsExpenseForm[\s\S]*?\n}\n\nfunction LogisticsInvoiceGroupsPanel/)?.[0] || "";
 const invoiceUploadFormSource = logisticsModule.match(/function InvoiceUploadForm[\s\S]*?\n}\n\nfunction parseXhrJson/)?.[0] || "";
 const monthlySummaryComponentSource = logisticsModule.match(/function MonthlySummaryComponent[\s\S]*?\n}\n\nfunction buildMonthlySummary/)?.[0] || "";
 const supplierSectionComponentSource = logisticsModule.match(/function SupplierSectionComponent[\s\S]*?\n}\n\nfunction LogisticsExpenseBillTable/)?.[0] || "";
@@ -229,6 +230,15 @@ test("logistics expense entry grid keeps compact fixed columns", () => {
   assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(5\) \{[\s\S]*width: 80px;/);
   assert.match(workspaceStyles, /\.logisticsItemsRow > strong:nth-child\(6\) \{[\s\S]*width: 110px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(workspaceStyles, /\.logisticsItemsRow > :nth-child\(8\) \{[\s\S]*width: 80px;/);
+});
+
+test("logistics expense entry add buttons sit below the expense input rows", () => {
+  const headerSource = logisticsExpenseFormSource.match(/<div className=\{styles\.logisticsItemsHeader\}>[\s\S]*?<\/div>\n        <div className=\{styles\.logisticsItemsTable\}>/)?.[0] || "";
+  assert.doesNotMatch(headerSource, /添加费用|复制上一行|headerActions/);
+  assert.match(logisticsExpenseFormSource, /className=\{styles\.logisticsItemsInlineActions\}/);
+  assert.ok(logisticsExpenseFormSource.indexOf("className={styles.logisticsItemsInlineActions}") > logisticsExpenseFormSource.indexOf("className={styles.logisticsItemsRow}"));
+  assert.match(workspaceStyles, /\.logisticsItemsInlineActions \{[\s\S]*justify-content: flex-start;[\s\S]*padding: 2px 8px 0;/);
+  assert.match(workspaceStyles, /\.logisticsItemsInlineActions \{[\s\S]*min-width: 936px;/);
 });
 
 test("approval sends invoice notification and preserves failure for audit", () => {

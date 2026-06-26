@@ -2091,10 +2091,6 @@ export function LogisticsExpenseForm({
             <strong>费用明细</strong>
             <span>可一次登记多条拖车费、报关费、港杂费等费用。</span>
           </div>
-          <div className={styles.headerActions}>
-            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(false)}>添加费用</button>
-            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(true)}>复制上一行</button>
-          </div>
         </div>
         <div className={styles.logisticsItemsTable}>
           <div className={styles.logisticsItemsHead}>
@@ -2136,6 +2132,10 @@ export function LogisticsExpenseForm({
               <button className={styles.secondaryButton} type="button" disabled={form.items.length <= 1} onClick={() => removeExpenseItem(index)}>删除</button>
             </div>
           ))}
+          <div className={styles.logisticsItemsInlineActions}>
+            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(false)}>添加费用</button>
+            <button className={styles.secondaryButton} type="button" onKeyDown={preventEnterFormSubmit} onClick={() => addExpenseItem(true)}>复制上一行</button>
+          </div>
         </div>
         <div className={styles.logisticsItemsTotal}>
           <LogisticsCurrencyAmountList summary={formCurrencySummary} />
