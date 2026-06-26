@@ -163,6 +163,7 @@ type TaxRefundResponse = {
     total?: number;
     totalPages?: number;
   };
+  error?: string;
 };
 
 type TaxRefundDetailResponse = {
@@ -319,6 +320,7 @@ export function TaxRefundModule({
       setTotal(Number(pagination.total || result.orders?.length || 0));
       setPage(Number(pagination.page || nextPage));
       setTotalPages(Math.max(1, Number(pagination.totalPages || 1)));
+      if (result.error) setError(result.error || "读取资料失败");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取退税资料失败");
     } finally {

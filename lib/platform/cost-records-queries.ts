@@ -15,11 +15,9 @@ import {
   safeSerializeCost,
   type CostDto,
   successDocument,
-  validCost,
 } from "./shared";
 import { costAccessWhere } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
-import { summarizeCurrencyTotals } from "./currency-totals";
 import {
   archiveScope,
   costPageParams,
@@ -153,7 +151,7 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
   const where = pagedCostWhere(filters, actor);
-  const [total, rows, summaryRows] = await Promise.all([
+  const [total, rows] = await Promise.all([
     prisma.orderCost.count({ where }),
     prisma.orderCost.findMany({
       where,
@@ -162,12 +160,13 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.orderCost.findMany({
-      where,
-      select: { currency: true, amount: true, amountCny: true, paymentStatus: true, deletedAt: true, costType: true },
-    }),
   ]);
-  return { rows: rows.map(safeSerializeCost), total, page, pageSize, summary: summarizeCurrencyTotals(summaryRows.filter(validCost)) };
+  return {
+    rows: rows.map(safeSerializeCost),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike = null) {
@@ -181,7 +180,7 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
     ...orderAccessWhere(actor),
     costs: { some: costWhere },
   };
-  const [total, orders, summaryRows] = await Promise.all([
+  const [total, orders] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
       where,
@@ -204,12 +203,13 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.orderCost.findMany({
-      where: costWhere,
-      select: { currency: true, amount: true, amountCny: true, paymentStatus: true, deletedAt: true, costType: true },
-    }),
   ]);
-  return { rows: orders.map(serializeCostOrderSummary), total, page, pageSize, summary: summarizeCurrencyTotals(summaryRows.filter(validCost)) };
+  return {
+    rows: orders.map(serializeCostOrderSummary),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 export async function getCost(id: string, actor: ActorLike = null) {

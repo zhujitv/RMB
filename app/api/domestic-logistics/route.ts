@@ -1,15 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listDomesticLogisticsOrders, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../lib/platform-db";
+import { apiError, getActor, listDomesticLogisticsOrders, logServerError, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  let actor: Awaited<ReturnType<typeof getActor>>;
   try {
-    const actor = await getActor(request);
-    const query = new URL(request.url).searchParams;
-    return ok({ rows: await listDomesticLogisticsOrders(query, actor) });
+    actor = await getActor(request);
   } catch (error: unknown) {
     return apiError(error, "读取物流信息失败");
+  }
+  const query = new URL(request.url).searchParams;
+  try {
+    return ok({ rows: await listDomesticLogisticsOrders(query, actor) });
+  } catch (error: unknown) {
+    logServerError("API failed: domestic-logistics list", error);
+    return ok({ rows: [], error: "读取资料失败" });
   }
 }
 

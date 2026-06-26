@@ -110,6 +110,7 @@ type DomesticLogisticsRow = {
 
 type DomesticLogisticsResponse = {
   rows: DomesticLogisticsRow[];
+  error?: string;
 };
 
 type DomesticLogisticsForm = {
@@ -301,6 +302,7 @@ export function DomesticLogisticsModule({
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
       const nextRows = sanitizeDomesticLogisticsRowsForRender(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
+      if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取物流信息失败");

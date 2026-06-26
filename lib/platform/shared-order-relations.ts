@@ -1,5 +1,36 @@
 import { Prisma } from "../generated/prisma/client.js";
 
+function domesticLogisticsInfoSafeSelect() {
+  return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
+    id: true,
+    orderId: true,
+    transportType: true,
+    truckPlateNo: true,
+    trailerPlateNo: true,
+    departurePlace: true,
+    destinationPlace: true,
+    departureDate: true,
+    expressTrackingNo: true,
+    cargoDescription: true,
+    remarkTextManualEdited: true,
+    remarkText: true,
+    submittedByUserId: true,
+    submittedAt: true,
+    submitterRole: true,
+    financeStatus: true,
+    financeConfirmedById: true,
+    financeConfirmedAt: true,
+    rejectReason: true,
+    correctionRequested: true,
+    correctionReason: true,
+    deletedAt: true,
+    createdAt: true,
+    updatedAt: true,
+    submittedBy: true,
+    financeConfirmedBy: true,
+  });
+}
+
 export function includeOrderRelations() {
   return Prisma.validator<Prisma.ReceivableOrderInclude>()({
     customer: true,
@@ -43,7 +74,7 @@ export function includeOrderRelations() {
     },
     domesticLogisticsInfos: {
       where: { deletedAt: null },
-      include: { submittedBy: true, financeConfirmedBy: true },
+      select: domesticLogisticsInfoSafeSelect(),
       orderBy: [{ updatedAt: "desc" as const }],
       take: 1,
     },

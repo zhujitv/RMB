@@ -1,7 +1,8 @@
 export {
-  domesticLogisticsInclude,
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
+  domesticLogisticsSelectWithOrder,
+  domesticLogisticsSelectWithRelations,
   domesticLogisticsSubmitterRole,
   normalizeDomesticTransportItems,
   serializeDomesticLogisticsOrder,

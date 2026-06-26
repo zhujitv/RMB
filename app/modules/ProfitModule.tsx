@@ -54,6 +54,7 @@ type ProfitResponse = {
     pageSize?: number;
     totalPages?: number;
   };
+  error?: string;
 };
 
 const PAGE_SIZE = 20;
@@ -94,6 +95,7 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       setTotal(Number(data.total || 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
+      if (result.error) setError(result.error || "读取资料失败");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取利润分析失败");
     } finally {

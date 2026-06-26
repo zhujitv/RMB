@@ -6,6 +6,7 @@ const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
 const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
 const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const costsModuleWithoutDisableGuard = costsModule.replace(/const DISABLE_COMPONENT_RENDER = \[[\s\S]*?\] as const;\nvoid DISABLE_COMPONENT_RENDER;\n/, "");
 
 test("costs page renders only the table list and not duplicate cost cards", () => {
   assert.doesNotMatch(costsModule, /CostMobileCard/);
@@ -24,13 +25,19 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
 });
 
-test("cost payable summaries keep original currency totals separate from CNY analysis totals", () => {
-  assert.match(costsModule, /应付汇总/);
-  assert.match(costsModule, /人民币实际应付/);
-  assert.match(costsModule, /折人民币应付总额/);
-  assert.match(costsModule, /CurrencyTotalsDisplay/);
-  assert.match(costsQueries, /summary: summarizeCurrencyTotals/);
+test("cost payable summary module is explicitly disabled and no longer rendered", () => {
+  assert.match(costsModule, /const DISABLE_COMPONENT_RENDER = \[/);
+  assert.match(costsModule, /"OrderPayableSummary"/);
+  assert.match(costsModule, /"RmbSummaryBlock"/);
+  assert.match(costsModule, /"UsdSummaryBlock"/);
+  assert.match(costsModule, /"ExchangeSummaryBlock"/);
+  assert.doesNotMatch(costsModule, /订单应付汇总|RMB 区块|USD 区块|汇总区块|按当前筛选条件统计|折人民币统计|CurrencyTotalsDisplay/);
+  assert.doesNotMatch(costsModuleWithoutDisableGuard, /OrderPayableSummary|RmbSummaryBlock|UsdSummaryBlock|ExchangeSummaryBlock/);
+  assert.doesNotMatch(costsModule, /CostPayableSummaryBlocks|CostPayableCurrencyBlock|CostBreakdownTable|orderCostPayableSummary|costPayable/);
+  assert.doesNotMatch(costsQueries, /summary: summarizeCurrencyTotals|summarizeCurrencyTotals\(summaryRows|summaryRows/);
+  assert.doesNotMatch(costsQueries, /orderPayableSummary|summarizeOrderPayableSummary/);
   assert.match(costsShared, /currencyTotals/);
+  assert.doesNotMatch(costsShared, /summarizeOrderPayableSummary|orderPayableSummaryFromTotals|PayableCurrencySummary/);
 });
 
 test("cost order summary separates factory logistics and other cost totals", () => {
@@ -45,21 +52,15 @@ test("cost order summary separates factory logistics and other cost totals", () 
   assert.match(costsShared, /costs: summaryCosts\.map\(safeSerializeCost\)/);
   assert.match(costsShared, /totalCostCny = Number\(\(factoryTotals\.totalCny \+ logisticsTotals\.totalCny \+ otherTotals\.totalCny\)\.toFixed\(2\)\)/);
   assert.match(costsShared, /costBreakdown:\s*\{[\s\S]*factory: factoryTotals[\s\S]*logistics: logisticsTotals[\s\S]*other: otherTotals/);
-  assert.match(costsModule, /COST_BREAKDOWN_ROWS/);
-  assert.match(costsModule, /Factory Cost/);
-  assert.match(costsModule, /Logistics Cost/);
-  assert.match(costsModule, /Other Cost/);
   assert.match(costsModule, /function CostOrderAmountCell/);
-  assert.match(costsModule, /function CostBreakdownTable/);
+  assert.match(costsModule, /currencyTotalAmount\(order\.currencyTotals, currency, fallback\)/);
+  assert.match(costsModule, /<CostOrderAmountCell order=\{order\} currency="CNY" fallback=\{order\.totalCostCny\} \/>/);
+  assert.doesNotMatch(costsModule, /COST_BREAKDOWN_ROWS|Factory Cost|Logistics Cost|Other Cost|成本结构/);
   assert.doesNotMatch(costsModule, /label="港杂成本"/);
 });
 
-test("factory cost labels stay on one line in cost summary UI", () => {
-  assert.match(costsModule, /className=\{styles\.costBreakdownLabelText\}>\{row\.cnLabel\}/);
-  assert.match(workspaceStyles, /\.costBreakdownLabelText\s*\{[\s\S]*white-space: nowrap/);
-  assert.match(workspaceStyles, /\.costBreakdownLabelText\s*\{[\s\S]*word-break: keep-all/);
-  assert.match(workspaceStyles, /\.costBreakdownLabelText\s*\{[\s\S]*overflow-wrap: normal/);
-  assert.match(workspaceStyles, /\.costBreakdownLabelText\s*\{[\s\S]*display: inline-flex/);
+test("removed payable summary styles cannot reappear as hidden UI", () => {
+  assert.doesNotMatch(workspaceStyles, /costPayableSummary|costPayableEquivalentBlock|costBreakdownTable|costAmountBreakdown|costBreakdownLabelText/);
 });
 
 test("cost order summary keeps cost items inside shipment detail drawer", () => {

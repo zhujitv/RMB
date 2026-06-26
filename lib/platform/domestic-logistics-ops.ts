@@ -121,12 +121,42 @@ export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableO
   return { taxArchived: false };
 }
 
-export function domesticLogisticsInclude() {
-  return Prisma.validator<Prisma.DomesticLogisticsInfoInclude>()({
-    order: { include: { customer: true, salesperson: true } },
+export function domesticLogisticsSelectWithRelations() {
+  return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
+    id: true,
+    orderId: true,
+    transportType: true,
+    truckPlateNo: true,
+    trailerPlateNo: true,
+    departurePlace: true,
+    destinationPlace: true,
+    departureDate: true,
+    expressTrackingNo: true,
+    cargoDescription: true,
+    remarkTextManualEdited: true,
+    remarkText: true,
+    submittedByUserId: true,
+    submittedAt: true,
+    submitterRole: true,
+    financeStatus: true,
+    financeConfirmedById: true,
+    financeConfirmedAt: true,
+    rejectReason: true,
+    correctionRequested: true,
+    correctionReason: true,
+    deletedAt: true,
+    createdAt: true,
+    updatedAt: true,
     submittedBy: true,
     financeConfirmedBy: true,
     transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+  });
+}
+
+export function domesticLogisticsSelectWithOrder() {
+  return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
+    ...domesticLogisticsSelectWithRelations(),
+    order: { include: { customer: true, salesperson: true } },
   });
 }
 
@@ -135,11 +165,7 @@ export function domesticLogisticsOrderInclude() {
     customer: true,
     salesperson: true,
     domesticLogisticsInfos: {
-      include: {
-        submittedBy: true,
-        financeConfirmedBy: true,
-        transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
-      },
+      select: domesticLogisticsSelectWithRelations(),
       orderBy: [{ updatedAt: "desc" }],
       take: 1,
     },

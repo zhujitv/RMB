@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, CurrencyTotalsDisplay, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatCny, formatCurrencyAmount, formatDate, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
@@ -34,11 +34,13 @@ const COST_FILTER_TYPES = [...QUICK_COST_TYPES, ...LOGISTICS_COST_TYPES]
 const COST_FILTER_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
 );
-const COST_BREAKDOWN_ROWS = [
-  { key: "factory", label: "Factory Cost", cnLabel: "工厂货款" },
-  { key: "logistics", label: "Logistics Cost", cnLabel: "物流费用" },
-  { key: "other", label: "Other Cost", cnLabel: "其他费用" },
+const DISABLE_COMPONENT_RENDER = [
+  "OrderPayableSummary",
+  "RmbSummaryBlock",
+  "UsdSummaryBlock",
+  "ExchangeSummaryBlock",
 ] as const;
+void DISABLE_COMPONENT_RENDER;
 const FACTORY_DOCUMENT_TYPES = [
   { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", required: true },
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", required: true },
@@ -99,7 +101,6 @@ type CostsPage = {
   page: number;
   pageSize: number;
   totalPages?: number;
-  summary?: CurrencyTotals;
 };
 
 type CostsResponse = {
@@ -170,11 +171,6 @@ type CostOrderSummary = {
   portCostCny?: number;
   otherCostCny?: number;
   currencyTotals?: CurrencyTotals;
-  costBreakdown?: {
-    factory?: CurrencyTotals;
-    logistics?: CurrencyTotals;
-    other?: CurrencyTotals;
-  };
   costCount?: number;
   costs?: CostRow[];
   costConfirmProgress?: {
@@ -265,7 +261,6 @@ export function CostsModule({
 }) {
   const [rows, setRows] = useState<CostRow[]>([]);
   const [orderRows, setOrderRows] = useState<CostOrderSummary[]>([]);
-  const [summary, setSummary] = useState<CurrencyTotals | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
@@ -342,7 +337,6 @@ export function CostsModule({
         setOrderRows([]);
       }
       setTotal(Number(data.total || 0));
-      setSummary(data.summary || null);
       setPage(Number(data.page || nextPage));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取成本数据失败");
@@ -491,21 +485,6 @@ export function CostsModule({
         >
           按订单 / Shipment 汇总
         </button>
-      </div>
-
-      <div className={styles.metricGrid} aria-label="应付汇总统计">
-        <article className={`${styles.metricCard} ${styles.metricBlue}`}>
-          <span>订单应付汇总</span>
-          <div className={styles.metricValue}>
-            <CurrencyTotalsDisplay
-              summary={summary}
-              cnyLabel="人民币实际应付"
-              foreignLabel={(currency) => `${currency} 实际应付`}
-              totalLabel="折人民币应付总额"
-            />
-          </div>
-          <small>按当前筛选条件统计；结算看原币，分析看折人民币。</small>
-        </article>
       </div>
 
       <div className={styles.costFilterPanel}>
@@ -1346,47 +1325,10 @@ function CostOrderAmountCell({
   currency: "CNY" | "USD";
   fallback?: number;
 }) {
+  const amount = currencyTotalAmount(order.currencyTotals, currency, fallback);
   return (
     <div className={styles.costAmountStack}>
-      <strong className={styles.costAmountTotal}>
-        {formatCurrencyAmount(currency, currencyTotalAmount(order.currencyTotals, currency, fallback))}
-      </strong>
-      <span className={styles.costAmountBreakdown}>
-        {COST_BREAKDOWN_ROWS.map((row) => {
-          const summary = order.costBreakdown?.[row.key];
-          return (
-            <span key={row.key}>
-              <span className={styles.costBreakdownLabelText}>{row.cnLabel}</span>
-              <strong>{formatCurrencyAmount(currency, currencyTotalAmount(summary, currency))}</strong>
-            </span>
-          );
-        })}
-      </span>
-    </div>
-  );
-}
-
-function CostBreakdownTable({ order }: { order: CostOrderSummary }) {
-  return (
-    <div className={styles.costBreakdownTable}>
-      <div className={styles.costBreakdownHeader}>
-        <span>类别</span>
-        <span>CNY</span>
-        <span>USD</span>
-      </div>
-      {COST_BREAKDOWN_ROWS.map((row) => {
-        const summary = order.costBreakdown?.[row.key];
-        return (
-          <div className={styles.costBreakdownRow} key={row.key}>
-            <span>
-              <strong className={styles.costBreakdownLabelText}>{row.cnLabel}</strong>
-              <small>{row.label}</small>
-            </span>
-            <span>{formatCurrencyAmount("CNY", currencyTotalAmount(summary, "CNY"))}</span>
-            <span>{formatCurrencyAmount("USD", currencyTotalAmount(summary, "USD"))}</span>
-          </div>
-        );
-      })}
+      <strong className={styles.costAmountTotal}>{formatCurrencyAmount(currency, amount)}</strong>
     </div>
   );
 }
@@ -1524,18 +1466,6 @@ function CostOrderSummaryDrawer({
         <DetailField label="订单号" value={order.orderNo || "-"} />
         <DetailField label="提单号" value={order.blNo || order.billOfLadingNo || "-"} />
         <DetailField label="最终应收" value={formatCny(Number(order.receivableAmountCny || 0))} />
-        <DetailField
-          label="总成本"
-          value={(
-            <CurrencyTotalsDisplay
-              summary={order.currencyTotals || { cnyActual: Number(order.totalCostCny || 0), foreignTotals: [], totalCny: Number(order.totalCostCny || 0) }}
-              cnyLabel="人民币实际应付"
-              foreignLabel={(currency) => `${currency} 实际应付`}
-              totalLabel="折人民币应付总额"
-            />
-          )}
-        />
-        <DetailField label="成本结构" value={<CostBreakdownTable order={order} />} wide />
         <DetailField label="成本确认" value={confirmProgress} />
         <DetailField label="资料状态" value={documentProgress} />
         <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
@@ -1823,7 +1753,7 @@ function exchangeRateMeta(currency?: string) {
 function currencyTotalAmount(summary: CurrencyTotals | null | undefined, currency: string, fallback = 0) {
   const normalized = String(currency || "CNY").toUpperCase();
   if (normalized === "CNY") return Number(summary?.cnyActual ?? fallback ?? 0);
-  return Number((summary?.foreignTotals || []).find((item) => item.currency === normalized)?.amount || 0);
+  return Number((summary?.foreignTotals || []).find((item) => String(item.currency || "").toUpperCase() === normalized)?.amount || 0);
 }
 
 function orderLabel(order: CostOrderOption) {

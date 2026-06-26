@@ -17,9 +17,9 @@ import {
 } from "./shared";
 import {
   archiveScope,
-  domesticLogisticsInclude,
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
+  domesticLogisticsSelectWithOrder,
   domesticLogisticsSubmitterRole,
   type DomesticLogisticsOrderDto,
   normalizeDomesticTransportItems,
@@ -165,7 +165,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
   const orderId = requireText(body.orderId || body.order_id, "订单");
   const order = await getDomesticLogisticsOrderForActor(orderId, currentActor, body);
   const before = id
-    ? await prisma.domesticLogisticsInfo.findFirst({ where: { id, deletedAt: null }, include: domesticLogisticsInclude() })
+    ? await prisma.domesticLogisticsInfo.findFirst({ where: { id, deletedAt: null }, select: domesticLogisticsSelectWithOrder() })
     : ((order.domesticLogisticsInfos || [])[0] || null);
   if (id && !before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
   const requestedTransportType = String(body.transportType || "");
@@ -225,7 +225,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
         })),
       });
     }
-    return tx.domesticLogisticsInfo.findUnique({ where: { id: saved.id }, include: domesticLogisticsInclude() });
+    return tx.domesticLogisticsInfo.findUnique({ where: { id: saved.id }, select: domesticLogisticsSelectWithOrder() });
   });
   if (!row) throw codedError("物流信息保存失败，请重试。", 500, "DOMESTIC_LOGISTICS_SAVE_FAILED");
   await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, currentActor, before ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, before, row));
@@ -238,13 +238,13 @@ export async function deleteDomesticLogisticsInfo(request: AuditRequestLike, act
   if (currentActor.role !== "管理员") throw codedError("只有管理员可以删除物流信息。", 403, "PERMISSION_DENIED");
   const before = await prisma.domesticLogisticsInfo.findFirst({
     where: { id, deletedAt: null },
-    include: domesticLogisticsInclude(),
+    select: domesticLogisticsSelectWithOrder(),
   });
   if (!before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
   const row = await prisma.domesticLogisticsInfo.update({
     where: { id },
     data: { deletedAt: new Date() },
-    include: domesticLogisticsInclude(),
+    select: domesticLogisticsSelectWithOrder(),
   });
   await runNonCriticalTask("物流信息删除操作日志写入", () => writeAudit(request, currentActor, "删除物流信息", "domestic_logistics_infos", row.id, before, row));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
@@ -254,7 +254,7 @@ export async function requestDomesticLogisticsCorrection(request: AuditRequestLi
   const body: DomesticLogisticsInput = assertJsonObject(input);
   const before = await prisma.domesticLogisticsInfo.findFirst({
     where: { id, deletedAt: null },
-    include: domesticLogisticsInclude(),
+    select: domesticLogisticsSelectWithOrder(),
   });
   if (!before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
   if (!assertCorrectionPermission(actor)) {
@@ -266,7 +266,7 @@ export async function requestDomesticLogisticsCorrection(request: AuditRequestLi
       correctionRequested: true,
       correctionReason: requireText(body.correctionReason || body.reason, "更正原因"),
     },
-    include: domesticLogisticsInclude(),
+    select: domesticLogisticsSelectWithOrder(),
   });
   await runNonCriticalTask("物流信息更正申请日志写入", () => writeAudit(request, actor, "申请更正物流信息", "domestic_logistics_infos", row.id, before, row));
   return serializeDomesticLogisticsInfo(row);
