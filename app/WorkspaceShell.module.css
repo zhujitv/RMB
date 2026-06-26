@@ -287,38 +287,63 @@
 .primaryButton {
   width: calc(100% - 98px);
   margin-left: 98px;
-  color: #fff;
-  background: #111827;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
 }
 
 .primaryButtonCompact {
-  color: #fff;
-  background: #111827;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
   width: fit-content;
 }
 
 .secondaryButton {
-  color: #111827;
-  background: #fff;
-  border-color: #dbe1ea;
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
 }
 
 .dangerButton {
-  color: #b91c1c;
-  background: #fff;
-  border-color: #fecaca;
+  color: var(--button-danger-text);
+  background: var(--button-danger-bg);
+  border-color: var(--button-danger-bg);
 }
 
 .ghostButton {
-  color: #475569;
-  background: transparent;
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
 }
 
 .primaryButton:disabled,
 .secondaryButton:disabled,
-.dangerButton:disabled {
-  opacity: 0.6;
+.dangerButton:disabled,
+.ghostButton:disabled {
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  opacity: 1;
   cursor: not-allowed;
+}
+
+.primaryButton:hover:not(:disabled),
+.primaryButtonCompact:hover:not(:disabled) {
+  color: var(--button-primary-text);
+  background: var(--button-primary-hover);
+  border-color: var(--button-primary-hover);
+}
+
+.secondaryButton:hover:not(:disabled),
+.ghostButton:hover:not(:disabled) {
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-hover);
+  border-color: var(--button-secondary-border);
+}
+
+.dangerButton:hover:not(:disabled) {
+  color: var(--button-danger-text);
+  background: var(--button-danger-hover);
+  border-color: var(--button-danger-hover);
 }
 
 .uiInput,
@@ -1246,24 +1271,24 @@
 
 .reportTabs button {
   height: 36px;
-  border: 1px solid #dbe1ea;
+  border: 1px solid var(--button-secondary-border);
   border-radius: 999px;
-  background: #fff;
-  color: #334155;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   padding: 0 14px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .reportTabs button:hover {
-  background: #f8fafc;
-  border-color: #bfdbfe;
+  background: var(--button-secondary-hover);
+  border-color: var(--button-secondary-border);
 }
 
 .reportTabs .reportTabActive {
-  color: #fff;
-  background: #111827;
-  border-color: #111827;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
 }
 
 .reportFilterGrid {
@@ -1487,10 +1512,10 @@
 
 .autocompleteEmpty button {
   min-height: 32px;
-  border: 1px solid #dbe1ea;
+  border: 1px solid var(--button-primary-bg);
   border-radius: 10px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1507,8 +1532,7 @@
     background: #1e293b;
   }
 
-  .autocompleteOption strong,
-  .autocompleteEmpty button {
+  .autocompleteOption strong {
     color: #f8fafc;
   }
 
@@ -1518,8 +1542,9 @@
   }
 
   .autocompleteEmpty button {
-    border-color: #334155;
-    background: #111827;
+    border-color: var(--button-primary-bg);
+    background: var(--button-primary-bg);
+    color: var(--button-primary-text);
   }
 }
 
@@ -2017,6 +2042,34 @@
   color: #334155;
 }
 
+.dataTable button:not(:disabled) {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.dataTable button:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.dataTable .dangerButton:not(:disabled),
+.dataTable .billRejectButton:not(:disabled),
+.dataTable .logisticsLineDeleteButton:not(:disabled) {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.dataTable .dangerButton:hover:not(:disabled),
+.dataTable .billRejectButton:hover:not(:disabled),
+.dataTable .logisticsLineDeleteButton:hover:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
 .clickableRow {
   cursor: pointer;
 }
@@ -2134,13 +2187,19 @@
 
 .rowDetailButton {
   height: 32px;
-  border: 1px solid #dbe1ea;
+  border: 1px solid var(--button-primary-bg);
   border-radius: 10px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   padding: 0 10px;
   cursor: pointer;
   font-weight: 700;
+}
+
+.rowDetailButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .detailRow td {
@@ -2341,10 +2400,10 @@
   box-sizing: border-box;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid #2563eb;
+  border: 1px solid var(--button-primary-bg);
   border-radius: 6px;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -2355,69 +2414,69 @@
 }
 
 .billAddLineButton {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .billApproveButton {
-  border-color: #16a34a;
-  background: #16a34a;
-  color: #ffffff;
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .billRejectButton {
-  border-color: #fecaca;
-  background: #ffffff;
-  color: #b91c1c;
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 .billSaveButton:hover:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .billAddLineButton:hover:not(:disabled) {
-  border-color: #93c5fd;
-  background: #dbeafe;
-  color: #1e40af;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .billApproveButton:hover:not(:disabled) {
-  border-color: #15803d;
-  background: #15803d;
-  color: #ffffff;
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .billRejectButton:hover:not(:disabled) {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .billSaveButton:active:not(:disabled) {
-  border-color: #1e40af;
-  background: #1e40af;
-  color: #ffffff;
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
 }
 
 .billAddLineButton:active:not(:disabled) {
-  border-color: #60a5fa;
-  background: #bfdbfe;
-  color: #1e3a8a;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .billApproveButton:active:not(:disabled) {
-  border-color: #166534;
-  background: #166534;
-  color: #ffffff;
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
 }
 
 .billRejectButton:active:not(:disabled) {
-  border-color: #f87171;
-  background: #fee2e2;
-  color: #7f1d1d;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .billSaveButton:focus,
@@ -2428,24 +2487,24 @@
 .billApproveButton:focus-visible,
 .billRejectButton:focus,
 .billRejectButton:focus-visible {
-  border-color: #2563eb;
+  border-color: var(--button-primary-bg);
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
 }
 
 .billSaveButton:focus,
 .billSaveButton:focus-visible {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .billSaveButton:disabled,
 .billAddLineButton:disabled,
 .billApproveButton:disabled,
 .billRejectButton:disabled {
-  border-color: #d1d5db;
-  background: #e5e7eb;
-  color: #6b7280;
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -3013,47 +3072,52 @@
 }
 
 .logisticsSecondaryBtn {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
+  color: var(--button-secondary-text);
 }
 
 .logisticsSecondaryBtn:hover:not(:disabled) {
-  background: #eff6ff;
+  background: var(--button-secondary-hover);
+  border-color: var(--button-secondary-border);
+  color: var(--button-secondary-text);
 }
 
 .logisticsPrimaryBtn {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .logisticsPrimaryBtn:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--button-primary-hover);
+  border-color: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .logisticsEditBtn {
-  background: #2563eb;
-  color: #ffffff;
-  border: 1px solid #2563eb;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  border: 1px solid var(--button-primary-bg);
   font-weight: 500;
 }
 
 .logisticsEditBtn:hover:not(:disabled) {
-  background: #1d4ed8;
-  color: #ffffff;
-  border-color: #1d4ed8;
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+  border-color: var(--button-primary-hover);
 }
 
 .logisticsDangerBtn {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #dc2626;
+  background: var(--button-danger-bg);
+  border-color: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 .logisticsDangerBtn:hover:not(:disabled) {
-  background: #fee2e2;
+  background: var(--button-danger-hover);
+  border-color: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .taxDropdownMenu {
@@ -3482,18 +3546,24 @@
 .fileActionButton {
   height: 34px;
   border-radius: 10px;
-  border: 1px solid #dbe1ea;
+  border: 1px solid var(--button-primary-bg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 12px;
-  color: #111827;
-  background: #fff;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   font-family: inherit;
+}
+
+.fileActionButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .detailGrid {
@@ -6665,7 +6735,7 @@
 }
 
 .dataTable .rowDetailButton {
-  color: var(--text-heading);
+  color: var(--button-primary-text);
   font-size: 13px;
   font-weight: var(--font-weight-button);
 }
@@ -6787,27 +6857,27 @@
 }
 
 .logisticsTypographyScope .primaryButtonCompact {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.18);
   transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
 }
 
 .logisticsTypographyScope .primaryButtonCompact:hover:not(:disabled),
 .logisticsTypographyScope .primaryButtonCompact:focus:not(:disabled),
 .logisticsTypographyScope .primaryButtonCompact:focus-visible:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
-  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.22);
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+  box-shadow: 0 10px 22px rgba(22, 119, 255, 0.22);
 }
 
 .logisticsTypographyScope .primaryButtonCompact:active:not(:disabled) {
-  border-color: #1e40af;
-  background: #1e40af;
-  color: #ffffff;
-  box-shadow: 0 6px 14px rgba(30, 64, 175, 0.2);
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+  box-shadow: 0 6px 14px rgba(9, 88, 217, 0.2);
 }
 
 .logisticsTypographyScope .primaryButtonCompact:disabled,
@@ -6817,133 +6887,133 @@
 .logisticsTypographyScope .billApproveButton:disabled,
 .logisticsTypographyScope .billRejectButton:disabled,
 .logisticsTypographyScope .logisticsLineDeleteButton:disabled {
-  border-color: #d1d5db;
-  background: #e5e7eb;
-  color: #374151;
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
   box-shadow: none;
   opacity: 1;
   cursor: not-allowed;
 }
 
 .logisticsTypographyScope .secondaryButton {
-  border-color: #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .logisticsTypographyScope .secondaryButton:hover:not(:disabled),
 .logisticsTypographyScope .secondaryButton:focus:not(:disabled),
 .logisticsTypographyScope .secondaryButton:focus-visible:not(:disabled) {
-  border-color: #94a3b8;
-  background: #f8fafc;
-  color: #0f172a;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .logisticsTypographyScope .secondaryButton:active:not(:disabled) {
-  border-color: #64748b;
-  background: #f1f5f9;
-  color: #0f172a;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .logisticsTypographyScope .billSaveButton {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #ffffff;
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billSaveButton:hover:not(:disabled),
 .logisticsTypographyScope .billSaveButton:focus:not(:disabled),
 .logisticsTypographyScope .billSaveButton:focus-visible:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billSaveButton:active:not(:disabled) {
-  border-color: #1e40af;
-  background: #1e40af;
-  color: #ffffff;
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billAddLineButton {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .logisticsTypographyScope .billAddLineButton:hover:not(:disabled),
 .logisticsTypographyScope .billAddLineButton:focus:not(:disabled),
 .logisticsTypographyScope .billAddLineButton:focus-visible:not(:disabled) {
-  border-color: #93c5fd;
-  background: #dbeafe;
-  color: #1e40af;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .logisticsTypographyScope .billAddLineButton:active:not(:disabled) {
-  border-color: #60a5fa;
-  background: #bfdbfe;
-  color: #1e3a8a;
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
 }
 
 .logisticsTypographyScope .billApproveButton {
-  border-color: #16a34a;
-  background: #16a34a;
-  color: #ffffff;
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billApproveButton:hover:not(:disabled),
 .logisticsTypographyScope .billApproveButton:focus:not(:disabled),
 .logisticsTypographyScope .billApproveButton:focus-visible:not(:disabled) {
-  border-color: #15803d;
-  background: #15803d;
-  color: #ffffff;
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billApproveButton:active:not(:disabled) {
-  border-color: #166534;
-  background: #166534;
-  color: #ffffff;
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
 }
 
 .logisticsTypographyScope .billRejectButton {
-  border-color: #fecaca;
-  background: #ffffff;
-  color: #b91c1c;
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .billRejectButton:hover:not(:disabled),
 .logisticsTypographyScope .billRejectButton:focus:not(:disabled),
 .logisticsTypographyScope .billRejectButton:focus-visible:not(:disabled) {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .billRejectButton:active:not(:disabled) {
-  border-color: #f87171;
-  background: #fee2e2;
-  color: #7f1d1d;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .logisticsLineDeleteButton {
-  border-color: #fecaca;
-  background: #ffffff;
-  color: #b91c1c;
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .logisticsLineDeleteButton:hover:not(:disabled),
 .logisticsTypographyScope .logisticsLineDeleteButton:focus:not(:disabled),
 .logisticsTypographyScope .logisticsLineDeleteButton:focus-visible:not(:disabled) {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .logisticsLineDeleteButton:active:not(:disabled) {
-  border-color: #f87171;
-  background: #fee2e2;
-  color: #7f1d1d;
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
 }
 
 .logisticsTypographyScope .listToolbar input,

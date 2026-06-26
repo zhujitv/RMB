@@ -12,6 +12,20 @@
   --sidebar-faint: #94a3b8;
   --sidebar-line: #e2e8f0;
   --blue: #2563eb;
+  --button-primary-bg: #1677ff;
+  --button-primary-hover: #4096ff;
+  --button-primary-active: #0958d9;
+  --button-primary-text: #ffffff;
+  --button-secondary-bg: #e6f4ff;
+  --button-secondary-hover: #bae0ff;
+  --button-secondary-text: #1677ff;
+  --button-secondary-border: #1677ff;
+  --button-danger-bg: #ff4d4f;
+  --button-danger-hover: #ff7875;
+  --button-danger-text: #ffffff;
+  --button-disabled-bg: #e5e7eb;
+  --button-disabled-text: #6b7280;
+  --button-disabled-border: #d1d5db;
   --green: #0f8a5f;
   --red: #c2410c;
   --amber: #b7791f;
@@ -53,6 +67,49 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+button,
+.btn,
+.ant-btn,
+[type="button"],
+[type="submit"] {
+  border-radius: 6px;
+  font-weight: var(--font-weight-button);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: none;
+}
+
+button:not([disabled]),
+.btn:not([disabled]),
+.ant-btn:not([disabled]) {
+  background-image: none;
+}
+
+.btn,
+.ant-btn {
+  background-color: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  border-color: var(--button-primary-bg);
+}
+
+.btn:hover,
+.ant-btn:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--button-primary-text);
+  border-color: var(--button-primary-hover);
+}
+
+.btn-danger {
+  background-color: var(--button-danger-bg) !important;
+  color: var(--button-danger-text) !important;
+  border-color: var(--button-danger-bg) !important;
+}
+
+.btn-secondary {
+  background-color: var(--button-secondary-bg) !important;
+  color: var(--button-secondary-text) !important;
+  border: 1px solid var(--button-secondary-border) !important;
 }
 
 a {

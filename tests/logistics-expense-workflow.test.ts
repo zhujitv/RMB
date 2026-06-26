@@ -569,8 +569,8 @@ test("pending logistics expense bills can be rejected with supplier-facing reaso
   assert.match(logisticsModule, /驳回原因/);
   const rejectSource = logisticsModule.match(/async function rejectExpense[\s\S]*?\n  async function resendInvoiceNotice/)?.[0] || "";
   assert.doesNotMatch(rejectSource, /loadExpenses|loadStatement|setExpandedId\(""\)/);
-  assert.match(workspaceStyles, /\.billApproveButton[\s\S]*background: #16a34a/);
-  assert.match(workspaceStyles, /\.billRejectButton[\s\S]*color: #b91c1c/);
+  assert.match(workspaceStyles, /\.billApproveButton \{[\s\S]*background: var\(--button-primary-bg\)/);
+  assert.match(workspaceStyles, /\.billRejectButton \{[\s\S]*background: var\(--button-danger-bg\)/);
   assert.match(workspaceStyles, /\.logisticsBillRejectNotice/);
 });
 
@@ -664,17 +664,17 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.doesNotMatch(logisticsModule, /logistics-save-amount-btn/);
   assert.doesNotMatch(logisticsModule, /primaryButtonCompact[^\\n]*保存金额/);
   assert.match(workspaceStyles, /\.billSaveButton/);
-  assert.match(workspaceStyles, /background: #2563eb/);
-  assert.match(workspaceStyles, /background: #1d4ed8/);
-  assert.match(workspaceStyles, /background: #e5e7eb/);
+  assert.match(workspaceStyles, /background: var\(--button-primary-bg\)/);
+  assert.match(workspaceStyles, /background: var\(--button-primary-hover\)/);
+  assert.match(workspaceStyles, /background: var\(--button-disabled-bg\)/);
   assert.match(workspaceStyles, /\.billAddLineButton/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact \{[\s\S]*background: #2563eb;[\s\S]*color: #ffffff;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact:hover:not\(:disabled\),[\s\S]*background: #1d4ed8;[\s\S]*color: #ffffff;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact:disabled,[\s\S]*background: #e5e7eb;[\s\S]*color: #374151;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.secondaryButton:disabled,[\s\S]*background: #e5e7eb;[\s\S]*color: #374151;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.billSaveButton \{[\s\S]*background: #2563eb;[\s\S]*color: #ffffff;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.billAddLineButton \{[\s\S]*background: #eff6ff;[\s\S]*color: #1d4ed8;/);
-  assert.match(workspaceStyles, /\.logisticsTypographyScope \.logisticsLineDeleteButton:disabled[\s\S]*background: #e5e7eb;[\s\S]*color: #374151;/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact \{[\s\S]*background: var\(--button-primary-bg\);[\s\S]*color: var\(--button-primary-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact:hover:not\(:disabled\),[\s\S]*background: var\(--button-primary-hover\);[\s\S]*color: var\(--button-primary-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.primaryButtonCompact:disabled,[\s\S]*background: var\(--button-disabled-bg\);[\s\S]*color: var\(--button-disabled-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.secondaryButton:disabled,[\s\S]*background: var\(--button-disabled-bg\);[\s\S]*color: var\(--button-disabled-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.billSaveButton \{[\s\S]*background: var\(--button-primary-bg\);[\s\S]*color: var\(--button-primary-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.billAddLineButton \{[\s\S]*background: var\(--button-secondary-bg\);[\s\S]*color: var\(--button-secondary-text\);/);
+  assert.match(workspaceStyles, /\.logisticsTypographyScope \.logisticsLineDeleteButton:disabled[\s\S]*background: var\(--button-disabled-bg\);[\s\S]*color: var\(--button-disabled-text\);/);
   assert.match(workspaceStyles, /\.inlineAmountEditor input[\s\S]*width: 100px/);
   assert.match(workspaceStyles, /th:nth-child\(3\)[\s\S]*text-align: center/);
   assert.match(workspaceStyles, /th:nth-child\(6\)[\s\S]*text-align: center/);
@@ -694,7 +694,7 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.match(workspaceStyles, /\.costSyncCell[\s\S]*align-items: center/);
   assert.match(workspaceStyles, /\.compactDetailActions[\s\S]*align-items: center/);
   assert.match(workspaceStyles, /overflow-x: auto/);
-  assert.match(workspaceStyles, /color: #ffffff/);
+  assert.match(workspaceStyles, /color: var\(--button-primary-text\)/);
   assert.match(logisticsExpenseBatchRoute, /export async function PATCH/);
   assert.match(logisticsExpenseBatchRoute, /batchUpdateLogisticsExpenses/);
   assert.match(backend, /export async function batchUpdateLogisticsExpenses/);
