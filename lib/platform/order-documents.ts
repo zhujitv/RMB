@@ -87,6 +87,7 @@ type DocumentCostLike = {
   createdById?: string | null;
   supplierId?: string | null;
   costType?: string | null;
+  sourceType?: string | null;
   supplier?: Record<string, unknown> | null;
 };
 type DocumentLike = {
@@ -299,6 +300,9 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   documentType = normalizeOrderDocumentType(documentType);
   if (!ORDER_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) throw permissionError("请选择有效单证类型", 400);
   const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId }, actor);
+  if (isLogisticsGeneratedCostInvoice(documentType, cost)) {
+    throw permissionError("物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。", 400);
+  }
   const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "document.pdf");
   const { bucket: r2Bucket } = ensureR2Configured();
   const standardFilename = await nextStandardFilenameForUpload(order, documentType, {
@@ -418,6 +422,9 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
     include: { order: { include: { customer: true } }, cost: true, supplier: true, uploadedBy: true },
   });
   if (!before || before.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (isLogisticsGeneratedCostInvoice(before.documentType, before.cost)) {
+    throw permissionError("物流费用发票请在物流费用模块按发票分组删除或替换，成本管理仅同步查看。", 400);
+  }
   if (!canModifyDocument(actor, before)) throw permissionError("无权限删除该订单单证");
   const document = await prisma.orderDocument.update({
     where: { id },
@@ -445,6 +452,10 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
   }));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
   return serializeOrderDocument(document);
+}
+
+function isLogisticsGeneratedCostInvoice(documentType: string | null | undefined, cost: DocumentCostLike | null | undefined) {
+  return documentType === "SUPPLIER_INVOICE" && cost?.sourceType === "LOGISTICS_EXPENSE";
 }
 
 export async function getOrderDocumentDownload(request: AuditRequestLike, actor: ActorLike, id: string) {

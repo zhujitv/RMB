@@ -164,6 +164,18 @@ test("all active PDF upload services reuse shared PDF validation", () => {
   assert.doesNotMatch(uploadValidation, /image\/jpeg|image\/png|INVOICE_IMAGE_SIGNATURES|invoiceMimeTypeFromName/);
 });
 
+test("logistics generated cost invoices are managed only by logistics invoice groups", () => {
+  assert.match(orderDocumentsService, /function isLogisticsGeneratedCostInvoice\(documentType: string \| null \| undefined, cost: DocumentCostLike \| null \| undefined\)/);
+  assert.match(orderDocumentsService, /documentType === "SUPPLIER_INVOICE" && cost\?\.sourceType === "LOGISTICS_EXPENSE"/);
+  assert.match(orderDocumentsService, /物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。/);
+  assert.match(orderDocumentsService, /物流费用发票请在物流费用模块按发票分组删除或替换，成本管理仅同步查看。/);
+  assert.match(orderDocumentsService, /if \(isLogisticsGeneratedCostInvoice\(documentType, cost\)\) \{/);
+  assert.match(orderDocumentsService, /if \(isLogisticsGeneratedCostInvoice\(before\.documentType, before\.cost\)\) \{/);
+  assert.match(costsUiModule, /function isLogisticsGeneratedCost\(cost: Pick<CostRow, "sourceType">\)/);
+  assert.match(costsUiModule, /const canManageDocuments = canWriteDocuments && !logisticsGenerated/);
+  assert.match(costsUiModule, /发票按物流费用模块的分组开票规则上传；成本管理仅同步查看/);
+});
+
 test("shared PDF validation rejects active content actions", () => {
   assert.match(uploadValidation, /\/JavaScript\\b/);
   assert.match(uploadValidation, /\/OpenAction\\b/);

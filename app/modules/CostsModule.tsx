@@ -1543,9 +1543,16 @@ function CostInvoiceActions({
   onOpenDocuments: () => void;
 }) {
   const invoiceReceived = cost.invoiceStatus === "已收到";
+  const logisticsGenerated = isLogisticsGeneratedCost(cost);
   return (
     <div className={styles.costInvoiceActions}>
-      {invoiceReceived ? (
+      {logisticsGenerated ? (
+        invoiceReceived ? (
+          <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看发票</button>
+        ) : (
+          <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看说明</button>
+        )
+      ) : invoiceReceived ? (
         <>
           <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看发票</button>
           <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>替换</button>
@@ -1583,6 +1590,11 @@ function CostDocumentsDrawer({
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const documentTypes = costDocumentTypesForDrawer(cost);
   const dismissConfirmMessage = uploadingKey ? "当前内容尚未保存，确定关闭吗？" : "";
+  const logisticsGenerated = isLogisticsGeneratedCost(cost);
+  const canManageDocuments = canWriteDocuments && !logisticsGenerated;
+  const readOnlyReason = logisticsGenerated
+    ? "该成本来自物流费用审核，发票按物流费用模块的分组开票规则上传；成本管理仅同步查看，不能在这里上传、替换或删除。"
+    : "";
 
   return (
     <DismissibleLayer
@@ -1623,12 +1635,16 @@ function CostDocumentsDrawer({
             <div className={styles.documentGroupCard}>
               <strong>资料要求</strong>
               <span className={styles.mutedText}>
-                {isFactoryCost(cost) ? "工厂供应商需维护采购合同和增值税发票。" : isLogisticsInvoiceCost(cost) ? "物流类费用需维护对应物流发票。" : "当前成本可维护一份发票资料。"}
+                {logisticsGenerated ? "物流费用发票以发票分组为准：报关费、港杂费、海运费、拖车及其他费用合并发票。成本管理只展示同步结果。"
+                  : isFactoryCost(cost) ? "工厂供应商需维护采购合同和增值税发票。"
+                    : isLogisticsInvoiceCost(cost) ? "客户指定临时货代或手工录入的物流成本，可在成本管理维护对应物流发票。"
+                      : "当前成本可维护一份发票资料。"}
               </span>
             </div>
           </div>
           <div className={styles.documentGroupCard}>
             <strong>资料维护</strong>
+            {readOnlyReason ? <div className={styles.infoStrip}>{readOnlyReason}</div> : null}
             {documentTypes.map((documentType) => (
               <CostDocumentUploadItem
                 key={`${cost.id}-${documentType.value}`}
@@ -1638,7 +1654,8 @@ function CostDocumentsDrawer({
                 uploading={uploadingKey === costUploadKey(cost, documentType.value)}
                 uploadProgress={uploadProgressByKey[costUploadKey(cost, documentType.value)] || 0}
                 deletingDocumentId={deletingDocumentId}
-                canWriteDocuments={canWriteDocuments}
+                canWriteDocuments={canManageDocuments}
+                readOnlyReason={readOnlyReason}
                 onUpload={onUpload}
                 onDelete={onDelete}
               />
@@ -1659,6 +1676,7 @@ function CostDocumentUploadItem({
   uploadProgress = 0,
   deletingDocumentId,
   canWriteDocuments,
+  readOnlyReason,
   onUpload,
   onDelete,
 }: {
@@ -1669,6 +1687,7 @@ function CostDocumentUploadItem({
   uploadProgress?: number;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
+  readOnlyReason?: string;
   onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
   onDelete: (cost: CostRow, document: CostDocument) => void;
 }) {
@@ -1703,7 +1722,7 @@ function CostDocumentUploadItem({
             {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
           </>
         ) : (
-          <button className={styles.secondaryButton} type="button" disabled title="无权限操作">无权限操作</button>
+          <span className={styles.mutedText}>{readOnlyReason || "无权限操作"}</span>
         )}
         {documents.map((document) => (
           <span key={document.id} className={styles.fileListItemActions}>
@@ -1760,6 +1779,10 @@ function isFactoryCost(cost: CostRow) {
 
 function isLogisticsInvoiceCost(cost: CostRow) {
   return LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType || "");
+}
+
+function isLogisticsGeneratedCost(cost: Pick<CostRow, "sourceType">) {
+  return cost.sourceType === "LOGISTICS_EXPENSE";
 }
 
 function logisticsInvoiceLabel(cost: Pick<CostRow, "costType">) {

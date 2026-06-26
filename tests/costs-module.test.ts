@@ -44,6 +44,7 @@ test("cost management page is centered and constrained to readable table width",
 
 test("cost detail tables always keep an invoice operation column", () => {
   assert.match(costsModule, /function CostInvoiceActions/);
+  assert.match(costsModule, /const logisticsGenerated = isLogisticsGeneratedCost\(cost\)/);
   assert.match(costsModule, /invoiceReceived \? \(/);
   assert.match(costsModule, />查看发票<\/button>/);
   assert.match(costsModule, />替换<\/button>/);
@@ -54,6 +55,25 @@ test("cost detail tables always keep an invoice operation column", () => {
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} \/>/);
   assert.match(workspaceStyles, /\.costInvoiceActions \{[\s\S]*display: flex;[\s\S]*gap: 6px;/);
   assert.match(workspaceStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 180px;/);
+});
+
+test("logistics generated costs are read-only in cost invoice management", () => {
+  assert.match(costsModule, /function isLogisticsGeneratedCost\(cost: Pick<CostRow, "sourceType">\)/);
+  assert.match(costsModule, /return cost\.sourceType === "LOGISTICS_EXPENSE"/);
+  assert.match(costsModule, /logisticsGenerated \? \(/);
+  assert.match(costsModule, />查看说明<\/button>/);
+  assert.match(costsModule, /const canManageDocuments = canWriteDocuments && !logisticsGenerated/);
+  assert.match(costsModule, /发票按物流费用模块的分组开票规则上传；成本管理仅同步查看/);
+  assert.match(costsModule, /物流费用发票以发票分组为准：报关费、港杂费、海运费、拖车及其他费用合并发票。成本管理只展示同步结果。/);
+  assert.match(costsModule, /canWriteDocuments=\{canManageDocuments\}/);
+  assert.doesNotMatch(costsModule, /logisticsGenerated[\s\S]{0,240}>上传发票<\/button>/);
+});
+
+test("manual temporary freight forwarder costs remain manageable in costs module", () => {
+  assert.match(costsModule, /客户指定临时货代或手工录入的物流成本，可在成本管理维护对应物流发票。/);
+  assert.match(costsModule, /const canManageDocuments = canWriteDocuments && !logisticsGenerated/);
+  assert.doesNotMatch(costsModule, /isLogisticsInvoiceCost\(cost\)[\s\S]{0,160}canManageDocuments = false/);
+  assert.match(costsModule, /documentType=\{documentType\}[\s\S]*canWriteDocuments=\{canManageDocuments\}/);
 });
 
 test("cost payable summary module is explicitly disabled and no longer rendered", () => {
