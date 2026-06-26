@@ -105,6 +105,7 @@ type DomesticOrderLike = {
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
   documents?: unknown[] | null;
   taxArchived?: boolean | null;
+  isArchived?: boolean | null;
   taxRefundStatus?: string | null;
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
@@ -119,6 +120,11 @@ export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableO
   if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
   if (scope === "all") return {};
   return { taxArchived: false };
+}
+
+export function orderLogisticsArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
+  if (scope === "archive") return { isArchived: true };
+  return { isArchived: false };
 }
 
 export function domesticLogisticsSelectWithRelations() {
@@ -407,7 +413,7 @@ function logisticsStatusUpdatedAtValue(row: LogisticsBillLike | LogisticsExpense
   return Number.isFinite(time) ? time : 0;
 }
 
-function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
+export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike = {}, actor: ActorLike = null) {
   const bills = (order.logisticsBills || []).filter((bill) => {
     if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(String(actor?.role || "")) && actor?.supplierId) {
       return bill.supplierId === actor.supplierId;
@@ -507,6 +513,8 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     destinationCountry: order.customer?.country || order.country || "",
     destinationPort: "",
     logisticsStatus: domesticLogisticsStatusText(info),
+    isArchived: Boolean(order.isArchived),
+    auditStatus: expenseStatus.status,
     logisticsExpenseStatus: expenseStatus.status,
     logisticsExpenseStatusLabel: expenseStatus.status,
     logisticsExpenseBillId: expenseStatus.billId,

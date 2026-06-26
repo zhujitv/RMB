@@ -8,6 +8,7 @@ const css = readFileSync("app/WorkspaceShell.module.css", "utf8");
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
 const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
+const domesticLogisticsArchiveRoute = readFileSync("app/api/domestic-logistics/archive/route.ts", "utf8");
 const exportInvoiceRemarkFormatter = readFileSync("lib/platform/export-invoice-remark.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
 const reportService = readFileSync("lib/report-service.ts", "utf8");
@@ -19,7 +20,8 @@ test("domestic logistics list keeps compact accepted columns", () => {
   for (const label of ["订单号", "客户简称", "到达地", "运输货物名称", "物流状态", "费用录入状态", "详情"]) {
     assert.match(moduleSource, new RegExp(`<th>${label}</th>`));
   }
-  assert.match(moduleSource, /<td colSpan=\{7\}>/);
+  assert.match(moduleSource, /const tableColSpan = canArchiveDomesticLogistics \? 8 : 7;/);
+  assert.match(moduleSource, /<td colSpan=\{tableColSpan\}>/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /focusBillId=\{expenseFocus\.billId\}/);
 });
@@ -61,11 +63,39 @@ test("domestic logistics list exposes logistics fee entry status from backend", 
   assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus/);
   assert.match(domesticLogisticsOps, /const bills = \(order\.logisticsBills \|\| \[\]\)/);
   assert.match(domesticLogisticsOps, /logisticsExpenseStatus: expenseStatus\.status/);
+  assert.match(domesticLogisticsOps, /auditStatus: expenseStatus\.status/);
   assert.match(domesticLogisticsOps, /logisticsExpenseBillId: expenseStatus\.billId/);
   assert.doesNotMatch(
     domesticLogisticsOps.match(/function domesticLogisticsExpenseDisplayStatus[\s\S]*?\n}/)?.[0] || "",
     /invoiceStatus|paymentStatus/,
   );
+});
+
+test("domestic logistics batch archive uses logistics view archive only", () => {
+  assert.match(prismaSchema, /isArchived\s+Boolean\s+@default\(false\)\s+@map\("is_archived"\)/);
+  assert.match(prismaSchema, /@@index\(\[isArchived\]\)/);
+  assert.match(domesticLogisticsOps, /orderLogisticsArchiveWhereForScope/);
+  assert.match(domesticLogisticsOps, /if \(scope === "archive"\) return \{ isArchived: true \};/);
+  assert.match(domesticLogisticsOps, /return \{ isArchived: false \};/);
+  assert.doesNotMatch(domesticLogisticsOps.match(/function orderLogisticsArchiveWhereForScope[\s\S]*?\n}/)?.[0] || "", /return \{\};/);
+  assert.doesNotMatch(moduleSource.match(/const ARCHIVE_SCOPE_OPTIONS = \[[\s\S]*?\];/)?.[0] || "", /全部业务|value: "all"/);
+  assert.match(domesticLogisticsApi, /orderLogisticsArchiveWhereForScope\(filters\.businessScope\)/);
+  assert.match(domesticLogisticsApi, /archiveDomesticLogisticsOrders/);
+  assert.match(domesticLogisticsApi, /domesticLogisticsExpenseStatusSummary\(order, currentActor\)\.status === "审核通过"/);
+  assert.match(domesticLogisticsApi, /isArchived: true/);
+  assert.doesNotMatch(
+    domesticLogisticsApi.match(/export async function archiveDomesticLogisticsOrders[\s\S]*?\n}\n\nasync function/)?.[0] || "",
+    /auditStatus:\s*|invoiceStatus:\s*|paymentStatus:\s*/,
+  );
+  assert.match(domesticLogisticsArchiveRoute, /PATCH/);
+  assert.match(domesticLogisticsArchiveRoute, /archiveDomesticLogisticsOrders/);
+  assert.match(moduleSource, /批量归档/);
+  assert.match(moduleSource, /ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过的订单"/);
+  assert.match(moduleSource, /domesticLogisticsCanArchive/);
+  assert.match(moduleSource, /row\.auditStatus === "审核通过" && row\.isArchived !== true/);
+  assert.match(moduleSource, /PAYLOAD_ARCHIVE_ENDPOINT/);
+  assert.match(moduleSource, /selectedArchivableRows/);
+  assert.match(moduleSource, /UiCheckbox/);
 });
 
 test("domestic logistics list sorts by unified numeric progress score", () => {

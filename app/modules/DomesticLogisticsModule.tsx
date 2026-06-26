@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, UiCheckbox, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
@@ -98,6 +98,8 @@ type DomesticLogisticsRow = {
   customerFullName?: string;
   customerShortName?: string;
   logisticsStatus?: string;
+  isArchived?: boolean;
+  auditStatus?: string;
   logisticsExpenseStatus?: string;
   logisticsExpenseStatusLabel?: string;
   logisticsExpenseBillId?: string;
@@ -171,6 +173,8 @@ const ALLOWED_LOGISTICS_ROW_KEYS = [
   "customerFullName",
   "customerShortName",
   "logisticsStatus",
+  "isArchived",
+  "auditStatus",
   "logisticsExpenseStatus",
   "logisticsExpenseStatusLabel",
   "logisticsExpenseBillId",
@@ -195,8 +199,13 @@ const CUSTOMS_DOCUMENT_TYPES = [
 const ARCHIVE_SCOPE_OPTIONS = [
   { value: "current", label: "当前业务" },
   { value: "archive", label: "已归档业务" },
-  { value: "all", label: "全部业务" },
 ];
+const ARCHIVE_BUTTON_DISABLED_TOOLTIP = "仅允许批量归档审核通过的订单";
+const PAYLOAD_ARCHIVE_ENDPOINT = "/api/domestic-logistics/archive";
+const ARCHIVE_BUTTON_RULE = {
+  allow: ["审核通过 + 未归档"],
+  deny: ["草稿", "待审核", "已驳回", "已归档"],
+} as const;
 const CONTAINER_TYPE_OPTIONS = ["20GP", "40GP", "40HQ", "45HQ"];
 
 function emptyTransportItem(): TransportItem {
@@ -253,6 +262,10 @@ function sanitizeDomesticLogisticsRowsForRender(rows: DomesticLogisticsRow[] = [
   });
 }
 
+function domesticLogisticsCanArchive(row: DomesticLogisticsRow) {
+  return row.auditStatus === "审核通过" && row.isArchived !== true;
+}
+
 export function DomesticLogisticsModule({
   currentUser,
   permissions,
@@ -275,6 +288,7 @@ export function DomesticLogisticsModule({
   const [notice, setNotice] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
   const [expenseFocus, setExpenseFocus] = useState({ token: 0, billId: "", keyword: "" });
   const [uploadingKey, setUploadingKey] = useState("");
@@ -287,6 +301,7 @@ export function DomesticLogisticsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canDeleteDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
+  const canArchiveDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
   const canEditDomesticLogistics = canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
   const canUploadCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "物流供应商", "物流资料录入员"])
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
@@ -302,6 +317,7 @@ export function DomesticLogisticsModule({
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
       const nextRows = sanitizeDomesticLogisticsRowsForRender(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
+      setSelectedOrderIds((current) => current.filter((orderId) => nextRows.some((row) => row.id === orderId)));
       if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
     } catch (loadError) {
@@ -362,6 +378,12 @@ export function DomesticLogisticsModule({
     const start = (page - 1) * PAGE_SIZE;
     return rows.slice(start, start + PAGE_SIZE);
   }, [rows, page]);
+  const selectedRows = useMemo(() => rows.filter((row) => selectedOrderIds.includes(row.id)), [rows, selectedOrderIds]);
+  const selectedArchivableRows = useMemo(() => selectedRows.filter(domesticLogisticsCanArchive), [selectedRows]);
+  const pageArchivableRows = useMemo(() => pageRows.filter(domesticLogisticsCanArchive), [pageRows]);
+  const allPageArchivableSelected = pageArchivableRows.length > 0
+    && pageArchivableRows.every((row) => selectedOrderIds.includes(row.id));
+  const tableColSpan = canArchiveDomesticLogistics ? 8 : 7;
 
   function submitSearch() {
     const value = keyword.trim();
@@ -370,6 +392,7 @@ export function DomesticLogisticsModule({
     setExpandedId("");
     setEditingOrderId("");
     setFeeEntryOrderId("");
+    setSelectedOrderIds([]);
     setNotice("");
     void loadRows(value, businessScope);
   }
@@ -382,6 +405,7 @@ export function DomesticLogisticsModule({
     setExpandedId("");
     setEditingOrderId("");
     setFeeEntryOrderId("");
+    setSelectedOrderIds([]);
     setNotice("");
     void loadRows("", "current");
   }
@@ -392,6 +416,7 @@ export function DomesticLogisticsModule({
     setExpandedId("");
     setEditingOrderId("");
     setFeeEntryOrderId("");
+    setSelectedOrderIds([]);
     setNotice("");
     void loadRows(submittedKeyword, nextBusinessScope);
   }
@@ -415,6 +440,62 @@ export function DomesticLogisticsModule({
     window.setTimeout(() => {
       document.getElementById("domestic-logistics-fees")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
+  }
+
+  function toggleOrderSelection(row: DomesticLogisticsRow, checked: boolean) {
+    if (!domesticLogisticsCanArchive(row)) return;
+    setSelectedOrderIds((current) => {
+      if (checked) return Array.from(new Set([...current, row.id]));
+      return current.filter((orderId) => orderId !== row.id);
+    });
+  }
+
+  function togglePageArchivableOrders(checked: boolean) {
+    const pageArchivableIds = pageArchivableRows.map((row) => row.id);
+    setSelectedOrderIds((current) => {
+      if (checked) return Array.from(new Set([...current, ...pageArchivableIds]));
+      return current.filter((orderId) => !pageArchivableIds.includes(orderId));
+    });
+  }
+
+  async function archiveSelectedOrders() {
+    if (!selectedArchivableRows.length) {
+      setError(ARCHIVE_BUTTON_DISABLED_TOOLTIP);
+      return;
+    }
+    const confirmationResult = await requestConfirmation({
+      title: "确认批量归档？",
+      message: "归档只改变物流信息列表展示，不会修改审核、发票、付款、成本或利润数据。",
+      details: [
+        `可归档订单：${selectedArchivableRows.length} 个`,
+        selectedRows.length > selectedArchivableRows.length
+          ? `已自动跳过不符合条件订单：${selectedRows.length - selectedArchivableRows.length} 个`
+          : "",
+      ].filter(Boolean),
+      confirmLabel: "批量归档",
+      cancelLabel: "取消",
+    });
+    if (!confirmationResult.confirmed) return;
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{
+        success?: boolean;
+        message?: string;
+        archivedCount?: number;
+        archivedIds?: string[];
+        skippedIds?: string[];
+      }>(PAYLOAD_ARCHIVE_ENDPOINT, {
+        method: "PATCH",
+        body: JSON.stringify({ orderIds: selectedOrderIds }),
+      });
+      if (result.success !== true) throw new Error(result.message || "批量归档失败");
+      setSelectedOrderIds([]);
+      await loadRows(submittedKeyword, businessScope);
+      setNotice(result.message || `已归档 ${result.archivedCount || 0} 个订单`);
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : "批量归档失败");
+    }
   }
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null) {
@@ -546,6 +627,18 @@ export function DomesticLogisticsModule({
         </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
+        {canArchiveDomesticLogistics ? (
+          <button
+            className={styles.primaryButtonCompact}
+            type="button"
+            disabled={loading || !selectedArchivableRows.length}
+            title={selectedArchivableRows.length ? `批量归档 ${selectedArchivableRows.length} 个审核通过订单` : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
+            onClick={archiveSelectedOrders}
+            data-rule={ARCHIVE_BUTTON_RULE.allow.join(",")}
+          >
+            批量归档{selectedArchivableRows.length ? `（${selectedArchivableRows.length}）` : ""}
+          </button>
+        ) : null}
       </div>
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
@@ -555,6 +648,18 @@ export function DomesticLogisticsModule({
         <table className={styles.dataTable}>
           <thead>
             <tr>
+              {canArchiveDomesticLogistics ? (
+                <th className={styles.selectionColumn}>
+                  <UiCheckbox
+                    variant="table"
+                    label="选择本页可归档订单"
+                    checked={allPageArchivableSelected}
+                    disabled={!pageArchivableRows.length}
+                    title={pageArchivableRows.length ? "选择本页审核通过订单" : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
+                    onChange={(event) => togglePageArchivableOrders(event.target.checked)}
+                  />
+                </th>
+              ) : null}
               <th>订单号</th>
               <th>客户简称</th>
               <th>到达地</th>
@@ -567,7 +672,7 @@ export function DomesticLogisticsModule({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={tableColSpan}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : pageRows.length ? pageRows.map((row) => (
               <DomesticLogisticsRows
@@ -616,10 +721,15 @@ export function DomesticLogisticsModule({
                 deletingDocumentId={deletingDocumentId}
                 onUploadDocument={uploadDocument}
                 onDeleteDocument={deleteDocument}
+                selectionEnabled={canArchiveDomesticLogistics}
+                selected={selectedOrderIds.includes(row.id)}
+                selectDisabled={!domesticLogisticsCanArchive(row)}
+                colSpan={tableColSpan}
+                onSelect={(checked) => toggleOrderSelection(row, checked)}
               />
             )) : (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的物流信息订单</div></td>
+                <td colSpan={tableColSpan}><div className={styles.emptyState}>未找到匹配的物流信息订单</div></td>
               </tr>
             )}
           </tbody>
@@ -675,6 +785,11 @@ function DomesticLogisticsRows({
   deletingDocumentId,
   onUploadDocument,
   onDeleteDocument,
+  selectionEnabled,
+  selected,
+  selectDisabled,
+  colSpan,
+  onSelect,
 }: {
   row: DomesticLogisticsRow;
   expanded: boolean;
@@ -699,11 +814,28 @@ function DomesticLogisticsRows({
   deletingDocumentId: string;
   onUploadDocument: (orderId: string, documentType: string, file: File | null) => void;
   onDeleteDocument: (document: DomesticLogisticsDocument) => void;
+  selectionEnabled: boolean;
+  selected: boolean;
+  selectDisabled: boolean;
+  colSpan: number;
+  onSelect: (checked: boolean) => void;
 }) {
   const info = row.domesticLogisticsInfo;
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
+        {selectionEnabled ? (
+          <td className={styles.selectionColumn} onClick={(event) => event.stopPropagation()}>
+            <UiCheckbox
+              variant="table"
+              label={`选择订单 ${row.orderNo || row.id}`}
+              checked={selected}
+              disabled={selectDisabled}
+              title={selectDisabled ? ARCHIVE_BUTTON_DISABLED_TOOLTIP : "选择此订单归档"}
+              onChange={(event) => onSelect(event.target.checked)}
+            />
+          </td>
+        ) : null}
         <td><strong>{row.orderNo || "-"}</strong></td>
         <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
@@ -714,7 +846,7 @@ function DomesticLogisticsRows({
       </tr>
       {expanded ? (
         <tr className={styles.detailRow}>
-          <td colSpan={7}>
+          <td colSpan={colSpan}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
                 {canCreateLogisticsExpense ? (

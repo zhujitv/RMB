@@ -17,13 +17,14 @@ import {
 } from "./shared";
 import {
   archiveScope,
+  domesticLogisticsExpenseStatusSummary,
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
   domesticLogisticsSelectWithOrder,
   domesticLogisticsSubmitterRole,
   type DomesticLogisticsOrderDto,
   normalizeDomesticTransportItems,
-  orderArchiveWhereForScope,
+  orderLogisticsArchiveWhereForScope,
   serializeDomesticLogisticsOrder,
   sortDomesticLogisticsOrders,
 } from "./domestic-logistics-ops";
@@ -123,7 +124,7 @@ function domesticLogisticsListWhere(filters: DomesticLogisticsListFilters, actor
   }
   return {
     deletedAt: null,
-    ...orderArchiveWhereForScope(filters.businessScope),
+    ...orderLogisticsArchiveWhereForScope(filters.businessScope),
     ...(andConditions.length ? { AND: andConditions } : {}),
   };
 }
@@ -141,6 +142,72 @@ export async function listDomesticLogisticsOrders(query: DomesticLogisticsQuery,
   return orders.filter((order) => canAccessDomesticLogisticsOrder(actor, order))
     .sort(sortDomesticLogisticsOrders)
     .map((order) => serializeDomesticLogisticsOrder(order, actor));
+}
+
+export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, actor: DomesticLogisticsActorInput, input: unknown = {}) {
+  assertWrite(actor, "domesticLogistics");
+  const currentActor = requireDomesticLogisticsActor(actor);
+  if (currentActor.role !== "管理员") {
+    throw codedError("只有管理员可以批量归档物流信息。", 403, "PERMISSION_DENIED");
+  }
+  const body = assertJsonObject(input);
+  const requestedOrderIds = Array.isArray(body.orderIds)
+    ? Array.from(new Set(body.orderIds.map((value) => nonEmpty(value)).filter(Boolean)))
+    : [];
+  if (!requestedOrderIds.length) {
+    throw codedError("请选择需要归档的订单。", 400, "NO_ORDERS_SELECTED");
+  }
+
+  const orders = await prisma.receivableOrder.findMany({
+    where: { id: { in: requestedOrderIds }, deletedAt: null },
+    include: domesticLogisticsOrderInclude(),
+  });
+  const accessibleOrders = orders.filter((order) => canAccessDomesticLogisticsOrder(currentActor, order));
+  const eligibleOrders = accessibleOrders.filter((order) => (
+    order.isArchived !== true
+    && domesticLogisticsExpenseStatusSummary(order, currentActor).status === "审核通过"
+  ));
+  const eligibleIds = eligibleOrders.map((order) => order.id);
+  const foundIds = new Set(accessibleOrders.map((order) => order.id));
+  const skippedIds = requestedOrderIds.filter((orderId) => !eligibleIds.includes(orderId));
+
+  if (!eligibleIds.length) {
+    throw codedError("没有符合归档条件的订单，仅允许批量归档审核通过的订单。", 400, "NO_ARCHIVABLE_ORDERS");
+  }
+
+  const updateResult = await prisma.receivableOrder.updateMany({
+    where: {
+      id: { in: eligibleIds },
+      deletedAt: null,
+      isArchived: false,
+    },
+    data: {
+      isArchived: true,
+      updatedById: currentActor.id,
+    },
+  });
+
+  await runNonCriticalTask("物流信息批量归档日志写入", () => writeAudit(
+    request,
+    currentActor,
+    "批量归档物流信息",
+    "receivable_orders",
+    "batch",
+    null,
+    {
+      archivedOrderIds: eligibleIds,
+      skippedOrderIds: skippedIds,
+      missingOrInaccessibleOrderIds: requestedOrderIds.filter((orderId) => !foundIds.has(orderId)),
+      archivedCount: updateResult.count,
+    },
+  ));
+
+  return {
+    success: true,
+    archivedIds: eligibleIds,
+    skippedIds,
+    archivedCount: updateResult.count,
+  };
 }
 
 async function getDomesticLogisticsOrderForActor(orderId: string, actor: DomesticLogisticsActorInput, input: DomesticLogisticsInput = {}) {
