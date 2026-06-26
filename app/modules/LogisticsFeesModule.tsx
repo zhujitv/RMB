@@ -131,8 +131,12 @@ type LogisticsExpense = {
   remark?: string;
   auditStatus?: string;
   invoiceStatus?: string;
+  detailInvoiceStatus?: string;
+  billInvoiceStatus?: string;
   invoiceGroups?: LogisticsInvoiceGroupSummary[];
   paymentStatus?: string;
+  detailPaymentStatus?: string;
+  billPaymentStatus?: string;
   submittedAt?: string | null;
   reviewedBy?: UserLite;
   reviewedAt?: string | null;
@@ -1116,9 +1120,9 @@ function LogisticsExpenseCompactRow({
   onOpen: () => void;
   onSelect: (checked: boolean) => void;
 }) {
-  const auditStatus = compactStatusLabel(expense.auditStatus || "草稿", "audit");
-  const invoiceStatus = compactStatusLabel(expense.invoiceStatus || "待开票", "invoice");
-  const paymentStatus = compactStatusLabel(expense.paymentStatus || "待付款", "payment");
+  const auditStatus = compactStatusLabel(logisticsExpenseBillAuditStatusFromRow(expense), "audit");
+  const invoiceStatus = compactStatusLabel(logisticsExpenseBillInvoiceStatusFromRow(expense), "invoice");
+  const paymentStatus = compactStatusLabel(logisticsExpenseBillPaymentStatusFromRow(expense), "payment");
   const items = expense.items?.length ? expense.items : [expense];
   const currencyTotals = expense.currencyTotals || logisticsExpenseCurrencySummaryFromItems(items);
   return (
@@ -1196,8 +1200,8 @@ function LogisticsExpenseRows({
   const items = expense.items?.length ? expense.items : [expense];
   const billAuditStatus = logisticsExpenseBillAuditStatus(items);
   const auditStatus = billAuditStatus;
-  const invoiceStatus = expense.invoiceStatus || "未通知";
-  const paymentStatus = expense.paymentStatus || "待开票";
+  const invoiceStatus = logisticsExpenseBillInvoiceStatusFromRow(expense);
+  const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
   const canEditBillDetails = canEditAmount && logisticsExpenseBillIsEditable(billAuditStatus);
   const supplierNames = expense.supplierNames?.length ? expense.supplierNames : [...new Set(items.map((item) => item.supplierName).filter(Boolean))];
   const rejectReasons = [...new Set(items.map((item) => item.rejectReason || "").filter(Boolean))];
@@ -1236,7 +1240,7 @@ function LogisticsExpenseRows({
   const shouldShowSubmitBill = canSubmitDraft && logisticsExpenseBillIsEditable(billAuditStatus);
   const invoiceGroups = expense.invoiceGroups?.length ? expense.invoiceGroups : logisticsInvoiceGroupsForBill(editingExpenseRows);
   const hasInvoiceNoticeFailure = invoiceGroups.some((group) => group.failed || group.status === "通知失败")
-    || items.some((item) => item.invoiceStatus === "通知失败" || Boolean(item.invoiceNotificationError));
+    || items.some((item) => logisticsExpenseDetailInvoiceStatus(item) === "通知失败" || Boolean(item.invoiceNotificationError));
 
   function updateDraft(id: string, field: keyof LogisticsExpenseDraft, value: string) {
     setBillSaved(false);
@@ -1641,7 +1645,7 @@ function LogisticsExpenseDetailLine({
   onDraftChange: (id: string, field: keyof LogisticsExpenseDraft, value: string) => void;
   onStageDelete: (expense: LogisticsExpense) => void;
 }) {
-  const invoiceStatus = expense.invoiceStatus || "未通知";
+  const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const billEditable = logisticsExpenseBillIsEditable(billAuditStatus);
   const editBlockReason = billEditable ? logisticsExpenseEditBlockReason(expense) : `账单${billAuditStatus}，不能修改`;
   const canEditThisAmount = canEditAmount && billEditable && !editBlockReason;
@@ -2172,7 +2176,7 @@ function LogisticsInvoiceGroupsPanel({
   const [deletingGroupKey, setDeletingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
   const visibleGroups = groups.filter((group) => (group.itemIds?.length || 0) > 0 || !logisticsCurrencySummaryIsZero(group.currencyTotals));
-  const approvedItems = items.filter((item) => item.auditStatus === "审核通过");
+  const approvedItems = items.filter((item) => logisticsExpenseBillAuditStatusFromRow(item) === "审核通过");
   if (!visibleGroups.length || !approvedItems.length) return null;
 
   async function deleteInvoiceGroup(targetExpense: LogisticsExpense, group: LogisticsInvoiceGroupSummary) {
@@ -2222,7 +2226,7 @@ function LogisticsInvoiceGroupsPanel({
             || "";
           const canUploadGroup = canUploadInvoice
             && groupItems.length > 0
-            && groupItems.every((item) => item.auditStatus === "审核通过")
+            && groupItems.every((item) => logisticsExpenseBillAuditStatusFromRow(item) === "审核通过")
             && !uploaded
             && !confirmed;
           const canDeleteGroup = canUploadInvoice && uploaded && !confirmed && Boolean(group.invoiceDocumentId);
@@ -3081,12 +3085,26 @@ function createTemporaryLogisticsExpenseRow(expense: LogisticsExpense, items: Lo
 
 function aggregateClientLogisticsExpenseStatus(items: LogisticsExpense[], field: keyof LogisticsExpense) {
   if (field === "auditStatus") return logisticsExpenseBillAuditStatus(items);
-  const unique = [...new Set(items.map((item) => item[field]).filter(Boolean).map(String))];
+  if (field === "invoiceStatus") {
+    const billValues = items.map(logisticsExpenseBillInvoiceStatusFromRow).filter(Boolean);
+    if (billValues.length) return aggregateClientStatusValues(billValues, field);
+  }
+  if (field === "paymentStatus") {
+    const billValues = items.map(logisticsExpenseBillPaymentStatusFromRow).filter(Boolean);
+    if (billValues.length) return aggregateClientStatusValues(billValues, field);
+  }
+  return aggregateClientStatusValues(items.map((item) => item[field]).filter(Boolean).map(String), field);
+}
+
+function aggregateClientStatusValues(values: string[] = [], field: keyof LogisticsExpense | "invoiceStatus" | "paymentStatus") {
+  const unique = [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
   if (!unique.length) return "-";
   if (unique.length === 1) return unique[0];
   if (field === "invoiceStatus") {
     if (unique.includes("已上传")) return "部分已上传";
+    if (unique.includes("已上传发票")) return "部分上传发票";
     if (unique.includes("已确认")) return "部分已确认";
+    if (unique.includes("已确认发票")) return "部分已确认";
     if (unique.includes("已通知开票")) return "部分已通知";
     if (unique.includes("未通知")) return "部分未通知";
   }
@@ -3102,10 +3120,10 @@ function aggregateClientLogisticsExpenseStatus(items: LogisticsExpense[], field:
 function logisticsInvoiceGroupsForBill(items: LogisticsExpense[]): LogisticsInvoiceGroupSummary[] {
   return logisticsInvoiceGroupsForExpenses(items).map((group) => {
     const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
-    const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(item.invoiceStatus || ""));
-    const confirmed = groupItems.length > 0 && groupItems.every((item) => item.invoiceStatus === "已确认");
-    const failed = groupItems.some((item) => item.invoiceStatus === "通知失败");
-    const notified = groupItems.some((item) => item.invoiceStatus === "已通知开票");
+    const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(logisticsExpenseDetailInvoiceStatus(item)));
+    const confirmed = groupItems.length > 0 && groupItems.every((item) => logisticsExpenseDetailInvoiceStatus(item) === "已确认");
+    const failed = groupItems.some((item) => logisticsExpenseDetailInvoiceStatus(item) === "通知失败");
+    const notified = groupItems.some((item) => logisticsExpenseDetailInvoiceStatus(item) === "已通知开票");
     return {
       key: group.key,
       label: group.label,
@@ -3132,6 +3150,22 @@ function aggregateClientLogisticsInvoiceStatus(items: LogisticsExpense[]) {
   if (groups.some((group) => group.uploaded || group.confirmed)) return "部分上传发票";
   if (groups.some((group) => group.failed)) return "待开票 / 通知失败";
   return "待开票";
+}
+
+function logisticsExpenseBillAuditStatusFromRow(expense: LogisticsExpense) {
+  return String(expense.auditStatus || "草稿").trim() || "草稿";
+}
+
+function logisticsExpenseBillInvoiceStatusFromRow(expense: LogisticsExpense) {
+  return String(expense.invoiceStatus || expense.billInvoiceStatus || "待开票").trim() || "待开票";
+}
+
+function logisticsExpenseBillPaymentStatusFromRow(expense: LogisticsExpense) {
+  return String(expense.paymentStatus || expense.billPaymentStatus || "待开票").trim() || "待开票";
+}
+
+function logisticsExpenseDetailInvoiceStatus(expense: LogisticsExpense) {
+  return String(expense.detailInvoiceStatus || "未通知").trim() || "未通知";
 }
 
 function logisticsExpenseBillItems(expense: LogisticsExpense) {
@@ -3171,7 +3205,7 @@ function defaultLogisticsExpenseDetailTab({
 }
 
 function logisticsExpenseBillAuditStatus(items: LogisticsExpense[]) {
-  const unique = [...new Set(items.map((item) => String(item.auditStatus || "草稿")).filter(Boolean))];
+  const unique = [...new Set(items.map(logisticsExpenseBillAuditStatusFromRow).filter(Boolean))];
   if (!unique.length) return "草稿";
   if (unique.length === 1) return unique[0];
   if (unique.includes("审核通过")) return "审核通过";
@@ -3186,7 +3220,8 @@ function logisticsExpenseBillIsEditable(status: string) {
 
 function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
   const items = logisticsExpenseBillItems(expense);
-  return items.some((item) => String(item.auditStatus || "") === "待审核")
+  return logisticsExpenseBillAuditStatusFromRow(expense) === "待审核"
+    || items.some((item) => logisticsExpenseBillAuditStatusFromRow(item) === "待审核")
     || (items.length > 0 && logisticsExpenseBillAuditStatus(items) === "待审核");
 }
 
@@ -3209,13 +3244,13 @@ function sortLogisticsExpenseBillsForDisplay(rows: LogisticsExpense[]) {
 }
 
 function logisticsExpenseBillSortRank(expense: LogisticsExpense) {
-  const auditStatus = normalizeLogisticsExpenseSortStatus(expense.auditStatus || "草稿");
+  const auditStatus = normalizeLogisticsExpenseSortStatus(logisticsExpenseBillAuditStatusFromRow(expense));
   if (["草稿", "已驳回", "待审核"].includes(auditStatus)) {
     return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[auditStatus] ?? 999;
   }
 
-  const invoiceStatus = normalizeLogisticsExpenseSortStatus(expense.invoiceStatus || "待开票");
-  const paymentStatus = normalizeLogisticsExpenseSortStatus(expense.paymentStatus || "待开票");
+  const invoiceStatus = normalizeLogisticsExpenseSortStatus(logisticsExpenseBillInvoiceStatusFromRow(expense));
+  const paymentStatus = normalizeLogisticsExpenseSortStatus(logisticsExpenseBillPaymentStatusFromRow(expense));
   const invoiceRank = LOGISTICS_EXPENSE_BILL_SORT_PRIORITY[invoiceStatus];
   if (Number.isFinite(invoiceRank) && invoiceRank < LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.已上传发票) return invoiceRank;
   if (["部分付款", "部分已付款"].includes(paymentStatus)) return LOGISTICS_EXPENSE_BILL_SORT_PRIORITY.部分付款;
@@ -3441,9 +3476,9 @@ function expenseCostSyncText(expense: LogisticsExpense) {
 }
 
 function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
-  const auditStatus = expense.auditStatus || "草稿";
-  const invoiceStatus = expense.invoiceStatus || "未通知";
-  const paymentStatus = expense.paymentStatus || "待开票";
+  const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
+  const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
+  const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
   if (expense.costId || auditStatus === "审核通过") return "已审核，不能修改";
   if (auditStatus === "待审核") return "待审核账单不能修改，请先撤回为草稿";
   if (["已上传", "已确认"].includes(invoiceStatus)) return "已开票，不能修改";
@@ -3453,9 +3488,9 @@ function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
 }
 
 function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
-  const auditStatus = expense.auditStatus || "草稿";
-  const invoiceStatus = expense.invoiceStatus || "未通知";
-  const paymentStatus = expense.paymentStatus || "待开票";
+  const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
+  const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
+  const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
   if (expense.costId) return "该费用已同步到成本，请先取消同步后再删除。";
   if (auditStatus === "审核通过") return "已审核通过的物流费用不能删除。";
   if (auditStatus === "待审核") return "待审核账单不能删除明细，请先撤回为草稿。";

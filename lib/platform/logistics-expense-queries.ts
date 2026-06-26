@@ -276,40 +276,24 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
   assertCanReadLogisticsExpenses(actor);
   const month = nonEmpty(query.get("month"));
   const reviewedMonthWhere: Prisma.LogisticsExpenseWhereInput = month ? {
-    OR: [
-      {
-        bill: {
-          is: {
-            reviewedAt: {
-              gte: new Date(`${month}-01T00:00:00.000Z`),
-              lt: new Date(new Date(`${month}-01T00:00:00.000Z`).setUTCMonth(new Date(`${month}-01T00:00:00.000Z`).getUTCMonth() + 1)),
-            },
-          },
-        },
-      },
-      {
-        billId: null,
+    bill: {
+      is: {
         reviewedAt: {
           gte: new Date(`${month}-01T00:00:00.000Z`),
           lt: new Date(new Date(`${month}-01T00:00:00.000Z`).setUTCMonth(new Date(`${month}-01T00:00:00.000Z`).getUTCMonth() + 1)),
         },
       },
-    ],
+    },
   } : {};
   const where: Prisma.LogisticsExpenseWhereInput = {
     deletedAt: null,
     AND: [
-      {
-        OR: [
-          { bill: { is: { auditStatus: "审核通过" } } },
-          { billId: null, auditStatus: "审核通过" },
-        ],
-      },
+      { bill: { is: { auditStatus: "审核通过" } } },
       reviewedMonthWhere,
     ],
     ...logisticsExpenseAccessWhere(actor),
   };
-  const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ reviewedAt: "desc" }] });
+  const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ updatedAt: "desc" }] });
   const shipmentRows = groupLogisticsStatementRowsByShipment(rows);
   return Object.values(shipmentRows.reduce<Record<string, SupplierStatementRow>>((acc, shipment) => {
     const key = shipment.supplierId;

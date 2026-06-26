@@ -40,8 +40,8 @@ const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233
 const invoiceGroupMigration = readFileSync("prisma/migrations/20260623073000_logistics_invoice_group_uploads/migration.sql", "utf8");
 const removeInvoiceManualFieldsMigration = readFileSync("prisma/migrations/20260623194500_remove_logistics_invoice_manual_fields/migration.sql", "utf8");
 const logisticsBillMigration = readFileSync("prisma/migrations/20260624103000_logistics_bills/migration.sql", "utf8");
-const logisticsAuditStatusSyncMigration = readFileSync("prisma/migrations/20260626232000_sync_logistics_expense_audit_status/migration.sql", "utf8");
 const logisticsInvoiceUsdGroupingMigration = readFileSync("prisma/migrations/20260626235000_fix_logistics_invoice_usd_grouping/migration.sql", "utf8");
+const logisticsBillConvergenceMigration = readFileSync("prisma/migrations/20260627120000_converge_logistics_expense_status_to_bills/migration.sql", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
 const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
@@ -434,13 +434,15 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(schema, /billId\s+String\?\s+@map\("bill_id"\)/);
   assert.match(logisticsBillMigration, /CREATE TABLE IF NOT EXISTS "logistics_bills"/);
   assert.match(logisticsBillMigration, /UPDATE "logistics_expenses" le[\s\S]*SET "bill_id" = lb\."id"/);
+  assert.match(logisticsBillConvergenceMigration, /LogisticsBill is the only workflow-state source/);
+  assert.match(logisticsBillConvergenceMigration, /le\."bill_id" IS NULL/);
+  assert.doesNotMatch(logisticsBillConvergenceMigration, /SET "audit_status"/);
   assert.match(approveLogisticsExpenseBillRowsSource, /tx\.logisticsBill\.update/);
-  assert.match(approveLogisticsExpenseBillRowsSource, /tx\.logisticsExpense\.updateMany\(\{[\s\S]*where: \{ billId, deletedAt: null \}[\s\S]*auditStatus: "审核通过"/);
+  assert.doesNotMatch(approveLogisticsExpenseBillRowsSource, /tx\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/);
   assert.match(approveLogisticsExpenseBillRowsSource, /createOrUpdateCostFromLogisticsExpense\(prisma, before, actor\)/);
   assert.match(approveLogisticsExpenseBillRowsSource, /updateLogisticsExpenseCostIds\(prisma, costLinks\)/);
-  assert.match(backend, /prisma\.logisticsExpense\.updateMany\(\{[\s\S]*billId: \{ in: ids \}[\s\S]*auditStatus: "审核通过"/);
-  assert.match(logisticsAuditStatusSyncMigration, /UPDATE "logistics_expenses" le/);
-  assert.match(logisticsAuditStatusSyncMigration, /le\."audit_status" IS DISTINCT FROM lb\."audit_status"/);
+  assert.match(backend, /prisma\.logisticsBill\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/);
+  assert.doesNotMatch(backend, /prisma\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/);
   assert.match(backend, /UPDATE "logistics_expenses"[\s\S]*CASE "id"/);
   assert.match(reviewLogisticsExpenseBillsSource, /await approveLogisticsExpenseBillRowsInTransaction\(bill\.rows, actor, reviewRemark, now\)/);
   assert.match(reviewLogisticsExpenseBillsSource, /const savedRows = await loadLogisticsExpenseBillRowsForAction\(bill\.billId, actor\)/);
@@ -479,7 +481,7 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(logisticsInvoiceUsdGroupingMigration, /LIKE '%ENS费%拖车及其他费用合并发票%'/);
   assert.match(backend, /invoiceDocumentId: document\.id/);
   assert.match(backend, /invoiceStatus: "已上传"/);
-  assert.match(backend, /paymentStatus: "已开票"/);
+  assert.doesNotMatch(backend, /paymentStatus: "已开票"/);
   assert.doesNotMatch(backend, /recognizeLogisticsInvoicePdfBuffer|invoiceRecognition|invoiceSellerName|invoiceBuyerName|invoiceRecognizedAt/);
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
   assert.match(logisticsModule, /按费用类型分组上传，同一分组上传一次即可。/);
@@ -575,7 +577,8 @@ test("pending logistics expense bills can be rejected with supplier-facing reaso
 test("draft logistics expense bills can be submitted for review", () => {
   assert.match(backend, /export async function submitLogisticsExpenseBill/);
   assert.match(backend, /loadLogisticsExpenseBillRowsForSubmit/);
-  assert.match(backend, /prisma\.logisticsExpense\.updateMany/);
+  assert.match(submitLogisticsExpenseBillSource, /prisma\.logisticsBill\.update/);
+  assert.doesNotMatch(submitLogisticsExpenseBillSource, /prisma\.logisticsExpense\.updateMany/);
   assert.match(backend, /只有草稿或已驳回费用可以提交审核。/);
   assert.match(backend, /auditStatus: "待审核"/);
   assert.match(backend, /submittedAt = new Date\(\)/);
@@ -620,7 +623,7 @@ test("logistics expense form supports positive applied quantity", () => {
 
 test("logistics suppliers can edit price and quantity only while bill is draft or rejected", () => {
   assert.match(backend, /beforeAuditStatus/);
-  assert.match(backend, /logisticsExpenseBillRecord\(before\)\.auditStatus/);
+  assert.match(backend, /logisticsExpenseBillAuditStatusValue\(before\)/);
   assert.match(backend, /logisticsExpenseBillEditBlockReason/);
   assert.match(backend, /待审核账单不能修改，请先撤回为草稿。/);
   assert.match(backend, /待审核账单不能删除明细，请先撤回为草稿。/);
