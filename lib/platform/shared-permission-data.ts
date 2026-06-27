@@ -80,7 +80,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     supplierDocuments: "资料回传",
     taxRefund: "退税资料",
     reports: "报表中心",
-    manual: "操作说明书",
+    manual: "操作手册",
     settings: "系统设置",
   },
   read: {

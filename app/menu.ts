@@ -10,7 +10,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
-  { key: "manual", label: "操作说明书", description: "查看平台业务流程和操作规范。" },
+  { key: "manual", label: "操作手册", description: "查看平台业务流程、操作规范和资料要求。" },
   { key: "settings", label: "系统设置", description: "维护用户、客户、供应商、汇率和日志。" },
 ];
 

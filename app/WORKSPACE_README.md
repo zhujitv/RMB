@@ -22,7 +22,7 @@ Available modules:
 - 退税资料
 - 报表中心
 - 系统设置
-- 操作说明书
+- 操作手册
 
 Current module acceptance:
 
