@@ -7,7 +7,7 @@ const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
 test("manual explains current tax refund document upload workflow", () => {
   assert.match(manualModule, /操作手册/);
   assert.doesNotMatch(manualModule, /操作说明书/);
-  assert.match(manualModule, /当前版本：v2\.3/);
+  assert.match(manualModule, /当前版本：v2\.4/);
   assert.match(manualModule, /出口资料上传和报关资料上传区域，按资料卡片上传 PDF/);
   assert.match(manualModule, /通知产品供应商回传工厂采购合同和工厂增值税发票 PDF/);
   assert.match(manualModule, /预览、下载、删除或替换当前 PDF/);
@@ -23,9 +23,21 @@ test("manual explains customs declaration recognition from logistics upload", ()
 
 test("manual explains unified logistics cost entry and review flow", () => {
   assert.match(manualModule, /物流信息是物流模块唯一入口/);
+  assert.match(manualModule, /运输监控作为物流信息下的在途海运监控入口/);
   assert.match(manualModule, /物流费用录入与审核/);
   assert.match(manualModule, /合并审核 \/ 批量审核/);
   assert.match(manualModule, /左侧菜单不再单独显示“物流费用审核”/);
+});
+
+test("manual explains transport monitor and Da Zhang Gui tracking rules", () => {
+  assert.match(manualModule, /title: "运输监控"/);
+  assert.match(manualModule, /默认打开全屏监控视图/);
+  assert.match(manualModule, /在途总票数、即将到港、ETA 已过期、同步失败和今日已同步/);
+  assert.match(manualModule, /只同步本地已有的大掌櫃 Tracking ID，不会创建新的跟踪/);
+  assert.match(manualModule, /管理员、业务员和物流资料录入员可查看系统内所有已创建的大掌櫃海运跟踪/);
+  assert.match(manualModule, /物流供应商和产品供应商账号不可见/);
+  assert.match(manualModule, /一张 Master B\/L 在系统生命周期内只创建一次大掌櫃 Tracking/);
+  assert.match(manualModule, /后台页面优先显示中文船公司、港口、状态和跟踪方式/);
 });
 
 test("manual explains cost list grouping and logistics invoice handling", () => {
@@ -62,4 +74,6 @@ test("manual explains company profile and system branding settings", () => {
   assert.match(manualModule, /登录页品牌、工作台侧边栏、首页欢迎语、Logo 和页脚版权/);
   assert.match(manualModule, /产品供应商资料回传权限/);
   assert.match(manualModule, /物流费用开票通知模板、抄送邮箱和公司品牌配置/);
+  assert.match(manualModule, /大掌櫃接口开关、API Key、Webhook Secret、手动同步和每日自动同步设置/);
+  assert.match(manualModule, /大掌櫃关闭后，物流信息和运输监控不显示相关创建、同步和查看入口/);
 });
