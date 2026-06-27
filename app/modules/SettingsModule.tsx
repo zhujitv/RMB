@@ -441,7 +441,7 @@ const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "oceanTrackingEnabled",
     label: "海运集装箱跟踪",
-    description: "按提单号、柜号创建 ShipsGo 海运跟踪任务。",
+    description: "按提单号、柜号创建大掌櫃海运跟踪任务。",
   },
   {
     key: "airTrackingEnabled",
@@ -451,7 +451,7 @@ const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "manualSyncEnabled",
     label: "手动同步",
-    description: "允许在物流页面手动刷新 ShipsGo 跟踪状态。",
+    description: "允许在物流页面手动刷新大掌櫃跟踪状态。",
   },
   {
     key: "autoSyncEnabled",
@@ -461,7 +461,7 @@ const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "webhookEnabled",
     label: "Webhook 推送",
-    description: "允许接收 ShipsGo 状态变更推送。",
+    description: "允许接收大掌櫃状态变更推送。",
   },
   {
     key: "liveMapEnabled",
@@ -1194,14 +1194,14 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
           }),
         },
       );
-      if (result.success !== true) throw new Error(result.message || "ShipsGo 设置保存失败");
+      if (result.success !== true) throw new Error(result.message || "大掌櫃设置保存失败");
       const nextSettings = result.settings || shipsgoIntegrationForm;
       setShipsgoIntegrationSettings(nextSettings);
       setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(nextSettings));
       markLoaded("shipsgoIntegration");
-      setShipsgoIntegrationMessage(result.message || "ShipsGo 设置已保存");
+      setShipsgoIntegrationMessage(result.message || "大掌櫃设置已保存");
     } catch (saveError) {
-      setShipsgoIntegrationMessage(saveError instanceof Error ? saveError.message : "ShipsGo 设置保存失败");
+      setShipsgoIntegrationMessage(saveError instanceof Error ? saveError.message : "大掌櫃设置保存失败");
     } finally {
       setShipsgoIntegrationSaving(false);
     }
@@ -2146,7 +2146,7 @@ function ShipsgoIntegrationSettingsCard({
     <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>ShipsGo 接口配置</strong>
+          <strong>大掌櫃接口配置</strong>
         </div>
       </div>
 
@@ -2158,8 +2158,8 @@ function ShipsgoIntegrationSettingsCard({
 
       <div className={styles.reportFilterGrid}>
         <UiSwitch
-          label="启用 ShipsGo"
-          description="关闭后，物流信息页面不显示 ShipsGo 相关入口。"
+          label="启用大掌櫃"
+          description="关闭后，物流信息页面不显示大掌櫃相关入口。"
           checked={currentForm.enabled}
           onChange={(value) => setField("enabled", value)}
         />
@@ -2176,7 +2176,7 @@ function ShipsgoIntegrationSettingsCard({
           <input
             value={currentForm.apiKey}
             onChange={(event) => setField("apiKey", event.target.value)}
-            placeholder={currentForm.apiKeyConfigured ? "已配置，留空则保持不变" : "请输入 ShipsGo API Key"}
+            placeholder={currentForm.apiKeyConfigured ? "已配置，留空则保持不变" : "请输入大掌櫃 API Key"}
             autoComplete="off"
           />
         </label>
@@ -2203,7 +2203,7 @@ function ShipsgoIntegrationSettingsCard({
           <input
             value={currentForm.webhookSecret}
             onChange={(event) => setField("webhookSecret", event.target.value)}
-            placeholder={currentForm.webhookSecretConfigured ? "已配置，留空则保持不变" : "用于校验 ShipsGo Webhook"}
+            placeholder={currentForm.webhookSecretConfigured ? "已配置，留空则保持不变" : "用于校验大掌櫃 Webhook"}
             autoComplete="off"
           />
         </label>
@@ -2229,7 +2229,7 @@ function ShipsgoIntegrationSettingsCard({
       </div>
 
       <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存 ShipsGo 设置"}</button>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存大掌櫃设置"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
       </div>
     </form>

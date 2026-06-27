@@ -42,7 +42,7 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
   assert.match(settingsRoute, /readShipsgoIntegrationSettings\(actor\)/);
   assert.match(settingsRoute, /export async function PATCH/);
   assert.match(settingsRoute, /saveShipsgoIntegrationSettings\(request, actor, body\)/);
-  assert.match(settingsRoute, /ShipsGo 设置已保存/);
+  assert.match(settingsRoute, /大掌櫃设置已保存/);
 });
 
 test("settings module exposes third-party API configuration without leaking secrets", () => {
@@ -50,7 +50,7 @@ test("settings module exposes third-party API configuration without leaking secr
   assert.match(settingsModule, /label: "第三方接口"/);
   assert.match(settingsModule, /\/api\/settings\/shipsgo/);
   assert.match(settingsModule, /ShipsgoIntegrationSettingsCard/);
-  assert.match(settingsModule, /保存 ShipsGo 设置/);
+  assert.match(settingsModule, /保存大掌櫃设置/);
   assert.match(settingsModule, /placeholder=\{currentForm\.apiKeyConfigured \? "已配置，留空则保持不变"/);
   assert.match(settingsModule, /SHIPSGO_FEATURE_OPTIONS/);
   assert.match(settingsModule, /activeTab !== "shipsgoIntegration"/);
@@ -61,8 +61,10 @@ test("domestic logistics only receives safe ShipsGo feature flags", () => {
   assert.match(logisticsRoute, /const \[rows, shipsgo\] = await Promise\.all/);
   assert.match(logisticsRoute, /return ok\(\{ rows, shipsgo \}\)/);
   assert.match(logisticsModule, /type ShipsgoFeatureFlags/);
-  assert.match(logisticsModule, /shipsgoFeatures\.enabled \? \(/);
-  assert.match(logisticsModule, /ShipsgoTrackingFeaturePanel/);
+  assert.match(logisticsModule, /shipsgoFeatures\.enabled && shipsgoFeatures\.oceanTrackingEnabled/);
+  assert.doesNotMatch(logisticsModule, /ShipsgoTrackingFeaturePanel/);
+  assert.doesNotMatch(logisticsModule, /Credit 预警阈值/);
+  assert.doesNotMatch(logisticsModule, /每日自动同步/);
   assert.doesNotMatch(logisticsModule, /apiKey|webhookSecret/);
 });
 
@@ -120,11 +122,11 @@ test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
 
 test("ShipsGo create errors are shown inside the create panel", () => {
   const createFunction = logisticsModule.match(/async function createShipsgoTracking[\s\S]*?async function syncShipsgoTracking/)?.[0] || "";
-  assert.match(createFunction, /throw createError instanceof Error \? createError : new Error\("创建 ShipsGo 跟踪失败"\)/);
+  assert.match(createFunction, /throw createError instanceof Error \? createError : new Error\("创建大掌櫃跟踪失败"\)/);
   assert.doesNotMatch(createFunction, /setError\(createError/);
   assert.match(logisticsModule, /const \[createError, setCreateError\] = useState\(""\)/);
   assert.match(logisticsModule, /styles\.shipsgoCreateError/);
-  assert.match(logisticsModule, /const message = error instanceof Error \? error\.message : "创建 ShipsGo 跟踪失败"/);
+  assert.match(logisticsModule, /const message = error instanceof Error \? error\.message : "创建大掌櫃跟踪失败"/);
   assert.match(logisticsModule, /setCreateError\(message\)/);
   assert.match(logisticsModule, /setShowCarrierInput\(true\)/);
 });
@@ -146,5 +148,17 @@ test("ShipsGo creation consumes one tracking per master bill only", () => {
   assert.doesNotMatch(logisticsModule, /柜号 Container No\./);
   assert.match(logisticsModule, /开始追踪/);
   assert.match(logisticsModule, /查看运输状态/);
-  assert.match(logisticsModule, /从 ShipsGo 同步已有跟踪/);
+  assert.match(logisticsModule, /从大掌櫃同步已有跟踪/);
+});
+
+test("ShipsGo raw response port mapping reads nested loading and discharge locations", () => {
+  assert.match(trackingService, /function extractShipsgoPort/);
+  assert.match(trackingService, /recordByNormalizedKey\(route, keys\)/);
+  assert.match(trackingService, /findPortInLocationArrays\(payload, direction\)/);
+  assert.match(trackingService, /portName\(nestedLocation\)/);
+  assert.match(trackingService, /portCode\(nestedLocation\)/);
+  assert.match(trackingService, /originPortName: row\.originName \|\| rawFallback\?\.originName \|\| ""/);
+  assert.match(trackingService, /destinationPortName: row\.destinationName \|\| rawFallback\?\.destinationName \|\| ""/);
+  assert.match(logisticsModule, /tracking\.originPortName \|\| tracking\.originName/);
+  assert.match(logisticsModule, /tracking\.destinationPortName \|\| tracking\.destinationName/);
 });

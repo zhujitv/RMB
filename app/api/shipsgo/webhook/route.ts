@@ -10,6 +10,6 @@ export async function POST(request: NextRequest) {
     const result = await handleShipsgoWebhook(rawBody, signature);
     return ok(result);
   } catch (error: unknown) {
-    return apiError(error, "处理 ShipsGo Webhook 失败");
+    return apiError(error, "处理大掌櫃 Webhook 失败");
   }
 }

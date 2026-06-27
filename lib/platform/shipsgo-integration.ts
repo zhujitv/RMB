@@ -41,12 +41,12 @@ function cleanOptionalUrl(value: unknown, fallback: string) {
   try {
     const url = new URL(text);
     if (!["http:", "https:"].includes(url.protocol)) {
-      throw codedError("ShipsGo API 地址只支持 http 或 https", 400, "VALIDATION_INVALID_URL");
+      throw codedError("大掌櫃 API 地址只支持 http 或 https", 400, "VALIDATION_INVALID_URL");
     }
     return url.toString().replace(/\/+$/, "");
   } catch (error) {
     if ((error as { status?: number } | null)?.status) throw error;
-    throw codedError("ShipsGo API 地址格式错误", 400, "VALIDATION_INVALID_URL");
+    throw codedError("大掌櫃 API 地址格式错误", 400, "VALIDATION_INVALID_URL");
   }
 }
 
@@ -142,7 +142,7 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
     webhookSecret: cleanSecret(data.webhookSecret) || current.webhookSecret,
   });
   if (value.enabled && !value.apiKey) {
-    throw codedError("启用 ShipsGo 前请先填写 API Key", 400, "SHIPSGO_API_KEY_REQUIRED");
+    throw codedError("启用大掌櫃前请先填写 API Key", 400, "SHIPSGO_API_KEY_REQUIRED");
   }
   if (value.webhookEnabled && !value.webhookSecret) {
     throw codedError("启用 Webhook 前请先填写 Webhook Secret", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
@@ -152,8 +152,8 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
     update: { value },
     create: { key: SHIPSGO_INTEGRATION_SETTING_KEY, value },
   });
-  await runNonCriticalTask("ShipsGo 集成设置操作日志写入", () => (
-    writeAudit(request, actor, "更新 ShipsGo 集成设置", "system_settings", SHIPSGO_INTEGRATION_SETTING_KEY, before, setting)
+  await runNonCriticalTask("大掌櫃集成设置操作日志写入", () => (
+    writeAudit(request, actor, "更新大掌櫃集成设置", "system_settings", SHIPSGO_INTEGRATION_SETTING_KEY, before, setting)
   ));
   return serializeShipsgoIntegrationSetting(setting);
 }

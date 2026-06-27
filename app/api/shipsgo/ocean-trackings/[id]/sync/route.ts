@@ -10,6 +10,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const result = await syncShipsgoOceanTracking(request, actor, id);
     return ok({ success: true, ...result });
   } catch (error: unknown) {
-    return apiError(error, "同步 ShipsGo 跟踪失败");
+    return apiError(error, "同步大掌櫃跟踪失败");
   }
 }

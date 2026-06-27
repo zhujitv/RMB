@@ -61,7 +61,7 @@ function cleanInputText(value: unknown, limit = 128) {
 function cleanCarrierScac(value: unknown) {
   const text = cleanInputText(value, 8).toUpperCase();
   if (text && !CARRIER_PATTERN.test(text)) {
-    throw codedError("船公司代码应为 ShipsGo 支持的 SCAC 代码，例如 MAEU / CMDU。", 400, "SHIPSGO_INVALID_CARRIER");
+    throw codedError("船公司代码应为大掌櫃支持的 SCAC 代码，例如 MAEU / CMDU。", 400, "SHIPSGO_INVALID_CARRIER");
   }
   return text;
 }
@@ -89,9 +89,9 @@ function shipsgoApiBaseUrl(settings: ShipsgoSettings) {
 }
 
 function assertShipsgoOceanEnabled(settings: ShipsgoSettings) {
-  if (!settings.enabled) throw codedError("ShipsGo 集成未启用。", 400, "SHIPSGO_DISABLED");
-  if (!settings.apiKey) throw codedError("ShipsGo API Key 未配置。", 400, "SHIPSGO_API_KEY_REQUIRED");
-  if (!settings.oceanTrackingEnabled) throw codedError("ShipsGo 海运跟踪功能未启用。", 400, "SHIPSGO_OCEAN_DISABLED");
+  if (!settings.enabled) throw codedError("大掌櫃集成未启用。", 400, "SHIPSGO_DISABLED");
+  if (!settings.apiKey) throw codedError("大掌櫃 API Key 未配置。", 400, "SHIPSGO_API_KEY_REQUIRED");
+  if (!settings.oceanTrackingEnabled) throw codedError("大掌櫃海运跟踪功能未启用。", 400, "SHIPSGO_OCEAN_DISABLED");
 }
 
 async function shipsgoApiRequest<T>(
@@ -141,11 +141,11 @@ function shipsgoApiErrorStatus(status: number) {
 
 function shipsgoApiErrorMessage(status: number, data: unknown) {
   const detail = shipsgoResponseMessage(data);
-  if (status === 401 || status === 403) return "ShipsGo API Key 无效或权限不足。";
-  if (status === 402) return "ShipsGo Credit 不足，请先充值或调整跟踪数量。";
-  if (status === 429) return "ShipsGo 请求频率过高，请稍后再试。";
-  if (status >= 500) return "ShipsGo 服务暂时不可用，请稍后再试。";
-  return detail || "ShipsGo 请求失败。";
+  if (status === 401 || status === 403) return "大掌櫃 API Key 无效或权限不足。";
+  if (status === 402) return "大掌櫃 Credit 不足，请先充值或调整跟踪数量。";
+  if (status === 429) return "大掌櫃请求频率过高，请稍后再试。";
+  if (status >= 500) return "大掌櫃服务暂时不可用，请稍后再试。";
+  return detail || "大掌櫃请求失败。";
 }
 
 function firstRecord(...values: unknown[]): ShipsgoShipmentPayload | null {
@@ -239,6 +239,10 @@ function recordAt(source: unknown, key: string) {
   return isPlainRecord(value) ? value : {};
 }
 
+function hasRecordEntries(value: unknown) {
+  return isPlainRecord(value) && Object.keys(value).length > 0;
+}
+
 function arrayAt(source: unknown, key: string) {
   const value = isPlainRecord(source) ? source[key] : null;
   return Array.isArray(value) ? value : [];
@@ -303,16 +307,244 @@ function extractContainerNumbersFromPayload(payload: ShipsgoShipmentPayload) {
 
 function portName(...records: unknown[]) {
   for (const record of records) {
-    const value = textAt(record, "location")
-      || textAt(record, "name")
+    const nestedLocation = recordAt(record, "location");
+    const nestedPort = recordAt(record, "port");
+    const value = textAt(record, "name")
       || textAt(record, "port_name")
       || textAt(record, "portName")
+      || (hasRecordEntries(nestedLocation) ? portName(nestedLocation) : "")
+      || (hasRecordEntries(nestedPort) ? portName(nestedPort) : "")
+      || textAt(record, "location")
       || textAt(record, "port")
+      || textAt(record, "city")
       || textAt(record, "unlocode")
+      || textAt(record, "unLocode")
+      || textAt(record, "UNLocode")
       || textAt(record, "code");
     if (value) return value;
   }
   return "";
+}
+
+function portCode(...records: unknown[]) {
+  for (const record of records) {
+    const nestedLocation = recordAt(record, "location");
+    const nestedPort = recordAt(record, "port");
+    const value = textAt(record, "unlocode")
+      || textAt(record, "unLocode")
+      || textAt(record, "UNLocode")
+      || textAt(record, "code")
+      || (hasRecordEntries(nestedLocation) ? portCode(nestedLocation) : "")
+      || (hasRecordEntries(nestedPort) ? portCode(nestedPort) : "");
+    if (value) return value;
+  }
+  return "";
+}
+
+function recordByNormalizedKey(source: unknown, keys: string[]) {
+  if (!isPlainRecord(source)) return {};
+  const normalizedKeys = keys.map(normalizeKey);
+  for (const [key, value] of Object.entries(source)) {
+    if (normalizedKeys.includes(normalizeKey(key)) && isPlainRecord(value)) return value;
+  }
+  return {};
+}
+
+function locationPortRole(value: unknown) {
+  return textByKeys(value, [
+    "type",
+    "role",
+    "portType",
+    "port_type",
+    "locationType",
+    "location_type",
+    "milestone",
+    "event",
+    "eventType",
+    "event_type",
+  ]).toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function findPortInLocationArrays(payload: unknown, direction: "origin" | "destination") {
+  const wanted = direction === "origin"
+    ? ["POL", "ORIGIN", "DEPARTURE", "LOADING", "PORTOFLOADING", "LOADPORT"]
+    : ["POD", "DESTINATION", "ARRIVAL", "DISCHARGE", "PORTOFDISCHARGE", "DISCHARGEPORT"];
+  const arrays = collectArraysByKeys(payload, [
+    "locations",
+    "locationList",
+    "location_list",
+    "ports",
+    "portList",
+    "port_list",
+    "routing",
+    "routes",
+  ]);
+  for (const item of arrays.flat()) {
+    if (!isPlainRecord(item)) continue;
+    const role = locationPortRole(item);
+    if (wanted.some((token) => role === token || role.includes(token))) return item;
+  }
+  return {};
+}
+
+function extractShipsgoPort(payload: ShipsgoShipmentPayload, direction: "origin" | "destination") {
+  const route = recordAt(payload, "route");
+  const routing = recordAt(payload, "routing");
+  const keys = direction === "origin"
+    ? ["pol", "origin", "originPort", "origin_port", "portOfLoading", "port_of_loading", "departurePort", "departure_port", "loadingPort", "loading_port"]
+    : ["pod", "destination", "destinationPort", "destination_port", "portOfDischarge", "port_of_discharge", "arrivalPort", "arrival_port", "dischargePort", "discharge_port"];
+  const records = [
+    recordByNormalizedKey(route, keys),
+    recordByNormalizedKey(routing, keys),
+    recordByNormalizedKey(payload, keys),
+    findPortInLocationArrays(payload, direction),
+  ];
+  const name = portName(...records) || textByKeys(payload, keys);
+  const code = portCode(...records);
+  return { name, code };
+}
+
+function collectArraysByKeys(source: unknown, keys: string[], depth = 0, found: unknown[][] = []) {
+  if (depth > 6 || source == null) return found;
+  if (isPlainRecord(source)) {
+    const normalizedKeys = keys.map(normalizeKey);
+    for (const [key, value] of Object.entries(source)) {
+      if (normalizedKeys.includes(normalizeKey(key)) && Array.isArray(value)) found.push(value);
+      collectArraysByKeys(value, keys, depth + 1, found);
+    }
+  } else if (Array.isArray(source)) {
+    for (const item of source) collectArraysByKeys(item, keys, depth + 1, found);
+  }
+  return found;
+}
+
+function shipsgoEventDate(event: unknown) {
+  return dateByKeys(event, [
+    "timestamp",
+    "time",
+    "date",
+    "datetime",
+    "eventDate",
+    "event_date",
+    "eventTime",
+    "event_time",
+    "actualDate",
+    "actual_date",
+    "estimatedDate",
+    "estimated_date",
+    "plannedDate",
+    "planned_date",
+  ]);
+}
+
+function shipsgoEventLocation(event: unknown) {
+  return portName(
+    recordAt(event, "location"),
+    recordAt(event, "port"),
+    recordAt(event, "place"),
+    recordAt(event, "terminal"),
+  ) || textByKeys(event, [
+    "location",
+    "portName",
+    "port_name",
+    "port",
+    "facility",
+    "terminal",
+    "place",
+    "city",
+    "unlocode",
+    "UNLocode",
+  ]);
+}
+
+function shipsgoEventDescription(event: unknown) {
+  return textByKeys(event, [
+    "description",
+    "statusDescription",
+    "status_description",
+    "eventDescription",
+    "event_description",
+    "eventName",
+    "event_name",
+    "event",
+    "status",
+    "activity",
+    "milestone",
+    "message",
+    "name",
+  ]);
+}
+
+function shipsgoEventVessel(event: unknown) {
+  const vessel = recordAt(event, "vessel");
+  return textAt(vessel, "name")
+    || textAt(event, "vesselName")
+    || textAt(event, "vessel_name")
+    || textByKeys(event, ["vesselName", "vessel_name"]);
+}
+
+function shipsgoEventVoyage(event: unknown) {
+  return textAt(event, "voyage")
+    || textAt(event, "voyageNo")
+    || textAt(event, "voyage_no")
+    || textAt(event, "voyageNumber")
+    || textByKeys(event, ["voyageNo", "voyage_no", "voyageNumber", "voyage"]);
+}
+
+function extractShipsgoTimeline(payload: unknown) {
+  const shipment = extractShipmentPayload(payload);
+  const eventArrays = collectArraysByKeys(shipment, [
+    "events",
+    "checkpoints",
+    "routing",
+    "routes",
+    "locations",
+    "statusHistory",
+    "status_history",
+    "eventTimeline",
+    "event_timeline",
+    "trackingEvents",
+    "tracking_events",
+    "milestones",
+    "movements",
+  ]);
+  const containers = arrayAt(shipment, "containers").concat(arrayByKeys(shipment, ["containerList", "container_list"]));
+  for (const container of containers) {
+    const movements = arrayAt(container, "movements");
+    if (movements.length) eventArrays.push(movements);
+  }
+  const seen = new Set<string>();
+  return eventArrays
+    .flat()
+    .filter((event) => isPlainRecord(event))
+    .map((event) => {
+      const time = shipsgoEventDate(event);
+      const location = shipsgoEventLocation(event);
+      const description = shipsgoEventDescription(event) || "运输节点";
+      const vesselName = shipsgoEventVessel(event);
+      const voyage = shipsgoEventVoyage(event);
+      return {
+        time: time ? time.toISOString() : "",
+        location,
+        description,
+        vesselName,
+        voyage,
+        source: "大掌櫃",
+      };
+    })
+    .filter((event) => event.time || event.location || event.description !== "运输节点")
+    .filter((event) => {
+      const key = `${event.time}|${event.location}|${event.description}|${event.vesselName}|${event.voyage}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      if (!a.time && !b.time) return 0;
+      if (!a.time) return 1;
+      if (!b.time) return -1;
+      return new Date(a.time).getTime() - new Date(b.time).getTime();
+    });
 }
 
 function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
@@ -320,14 +552,8 @@ function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
   const shippingLine = recordAt(payload, "shippingLine");
   const shippingLineSnake = recordAt(payload, "shipping_line");
   const route = recordAt(payload, "route");
-  const pol = recordAt(route, "port_of_loading");
-  const pod = recordAt(route, "port_of_discharge");
-  const originPort = recordAt(payload, "originPort");
-  const destinationPort = recordAt(payload, "destinationPort");
-  const departurePort = recordAt(payload, "departurePort");
-  const arrivalPort = recordAt(payload, "arrivalPort");
-  const polRecord = recordAt(payload, "pol");
-  const podRecord = recordAt(payload, "pod");
+  const originPort = extractShipsgoPort(payload, "origin");
+  const destinationPort = extractShipsgoPort(payload, "destination");
   const tokens = recordAt(payload, "tokens");
   const containers = arrayAt(payload, "containers").concat(arrayByKeys(payload, ["containerList", "container_list"]));
   const events = arrayByKeys(payload, ["events", "eventTimeline", "event_timeline", "trackingEvents", "tracking_events"]);
@@ -399,8 +625,10 @@ function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
     currentStatus: status,
     syncStatus: "SYNCED",
     syncMessage: "",
-    originName: portName(pol, originPort, departurePort, polRecord) || textByKeys(payload, ["originPort", "departurePort", "pol", "portOfLoading"]),
-    destinationName: portName(pod, destinationPort, arrivalPort, podRecord) || textByKeys(payload, ["destinationPort", "arrivalPort", "pod", "portOfDischarge"]),
+    originName: originPort.name,
+    destinationName: destinationPort.name,
+    originPortCode: originPort.code,
+    destinationPortCode: destinationPort.code,
     dateOfLoading: dateAt(route, "date_of_loading") || dateByKeys(payload, ["dateOfLoading", "date_of_loading", "etd", "departureDate"]),
     dateOfDischarge: dateAt(route, "date_of_discharge") || dateByKeys(payload, ["dateOfDischarge", "date_of_discharge", "ata", "arrivalDate"]),
     predictedDischargeDate: dateAt(route, "date_of_discharge_predicted") || eta,
@@ -423,7 +651,12 @@ function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
 }
 
 function trackingDataFromMappedShipment(mapped: ReturnType<typeof mapShipsgoShipmentPayload>) {
-  const { containerNumbers: _containerNumbers, ...trackingData } = mapped;
+  const {
+    containerNumbers: _containerNumbers,
+    originPortCode: _originPortCode,
+    destinationPortCode: _destinationPortCode,
+    ...trackingData
+  } = mapped;
   return trackingData;
 }
 
@@ -462,11 +695,18 @@ function serializeShipsgoTracking(row: {
   rawPayload?: unknown;
   rawResponse?: unknown;
 }) {
-  const rawFallback = isPlainRecord(row.rawResponse)
-    ? mapShipsgoShipmentPayload(row.rawResponse)
-    : isPlainRecord(row.rawPayload)
-      ? mapShipsgoShipmentPayload(row.rawPayload)
-      : null;
+  const rawSource = row.rawResponse ?? row.rawPayload ?? null;
+  const rawShipment = rawSource ? extractShipmentPayload(rawSource) : {};
+  const rawFallback = Object.keys(rawShipment).length ? mapShipsgoShipmentPayload(rawShipment) : null;
+  const timeline = rawSource ? extractShipsgoTimeline(rawSource) : [];
+  const fallbackTimeline = !timeline.length && row.lastEvent ? [{
+    time: dateTimeText(row.lastEventAt),
+    location: row.originName || row.destinationName || "",
+    description: row.lastEvent,
+    vesselName: row.vesselName || "",
+    voyage: row.voyage || "",
+    source: "大掌櫃",
+  }] : [];
   const containerNumbers = uniqueStrings([
     row.containerNumber || "",
     ...((row.containers || []).map((container) => container.containerNo || "")),
@@ -493,7 +733,11 @@ function serializeShipsgoTracking(row: {
     syncStatus: row.syncStatus || "NOT_SYNCED",
     syncMessage: row.syncMessage || "",
     originName: row.originName || rawFallback?.originName || "",
+    originPortName: row.originName || rawFallback?.originName || "",
+    originPortCode: rawFallback?.originPortCode || "",
     destinationName: row.destinationName || rawFallback?.destinationName || "",
+    destinationPortName: row.destinationName || rawFallback?.destinationName || "",
+    destinationPortCode: rawFallback?.destinationPortCode || "",
     dateOfLoading: dateText(row.dateOfLoading || rawFallback?.dateOfLoading),
     dateOfDischarge: dateText(row.dateOfDischarge || rawFallback?.dateOfDischarge),
     predictedDischargeDate: dateText(row.predictedDischargeDate || rawFallback?.predictedDischargeDate),
@@ -507,6 +751,7 @@ function serializeShipsgoTracking(row: {
     lastSyncedAt: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     lastSyncTime: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     updatedAt: dateTimeText(row.updatedAt),
+    timeline: timeline.length ? timeline : fallbackTimeline,
   };
 }
 
@@ -617,11 +862,11 @@ async function findExistingShipsgoShipment(settings: ShipsgoSettings, target: { 
       const shipment = extractShipmentPayload(response.data);
       if (shipmentHasUsefulIdentity(shipment)) return { shipment, path };
     } catch (error) {
-      lastMessage = error instanceof Error ? error.message : "查询 ShipsGo 已有跟踪失败";
+      lastMessage = error instanceof Error ? error.message : "查询大掌櫃已有跟踪失败";
     }
   }
   throw codedError(
-    lastMessage || "未在 ShipsGo 查询到已有 Tracking，请确认提单号或柜号已在 ShipsGo 后台存在。",
+    lastMessage || "未在大掌櫃查询到已有跟踪，请确认提单号或柜号已在大掌櫃后台存在。",
     404,
     "SHIPSGO_EXISTING_TRACKING_NOT_FOUND",
   );
@@ -631,12 +876,12 @@ function createPayloadFromInput(input: ShipsgoTrackingInput, order: ShipsgoTrack
   const carrierScac = cleanCarrierScac(input.carrierScac);
   const masterBlNo = cleanBookingNumber(input.masterBlNo) || cleanBookingNumber(input.bookingNumber) || cleanBookingNumber(order.blNo);
   if (!masterBlNo) {
-    throw codedError("请先填写 Master B/L（提单号）后再开始 ShipsGo 跟踪。", 400, "SHIPSGO_MASTER_BL_REQUIRED");
+    throw codedError("请先填写 Master B/L（提单号）后再开始大掌櫃跟踪。", 400, "SHIPSGO_MASTER_BL_REQUIRED");
   }
   const reference = cleanInputText(input.reference, 128)
     || cleanInputText(`${order.orderNo || order.id}-${masterBlNo}`, 128);
   if (reference && reference.length < 5) {
-    throw codedError("ShipsGo Reference 至少需要 5 个字符。", 400, "SHIPSGO_REFERENCE_TOO_SHORT");
+    throw codedError("大掌櫃 Reference 至少需要 5 个字符。", 400, "SHIPSGO_REFERENCE_TOO_SHORT");
   }
   return {
     reference,
@@ -676,7 +921,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   const currentActorId = actorId(actor);
   const body = assertJsonObject(input) as ShipsgoTrackingInput;
   const orderId = cleanInputText(body.orderId, 80);
-  if (!orderId) throw codedError("请选择需要创建 ShipsGo 跟踪的订单。", 400, "ORDER_REQUIRED");
+  if (!orderId) throw codedError("请选择需要创建大掌櫃跟踪的订单。", 400, "ORDER_REQUIRED");
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const order = await getShipsgoTrackingOrder(orderId, actor);
@@ -698,7 +943,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
     orderBy: [{ updatedAt: "desc" }],
   });
   if (existing) {
-    return { tracking: serializeShipsgoTracking(existing), alreadyExists: true, message: "该订单已创建 ShipsGo 跟踪。" };
+    return { tracking: serializeShipsgoTracking(existing), alreadyExists: true, message: "该订单已创建大掌櫃跟踪。" };
   }
 
   const response = await shipsgoApiRequest<unknown>(
@@ -722,7 +967,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
       carrierScac: mapped.carrierScac || cleanCarrierScac(payload.carrier),
       bookingNumber: mapped.bookingNumber || payload.booking_number,
       containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || null,
-      syncMessage: response.status === 409 ? "ShipsGo 已存在该跟踪，已同步本地记录。" : "",
+      syncMessage: response.status === 409 ? "大掌櫃已存在该跟踪，已同步本地记录。" : "",
       eta: mapped.eta,
       currentStatus: mapped.currentStatus,
       lastCheckedAt: now,
@@ -734,12 +979,12 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   });
   await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
   const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
-  if (!saved) throw codedError("ShipsGo 跟踪本地保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+  if (!saved) throw codedError("大掌櫃跟踪本地保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
 
-  await runNonCriticalTask("ShipsGo 跟踪创建日志写入", () => writeAudit(
+  await runNonCriticalTask("大掌櫃跟踪创建日志写入", () => writeAudit(
     request,
     actor,
-    "创建 ShipsGo 海运跟踪",
+    "创建大掌櫃海运跟踪",
     "shipsgo_trackings",
     saved.id,
     null,
@@ -753,7 +998,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
     },
   ));
 
-  return { tracking: serializeShipsgoTracking(saved), alreadyExists: response.status === 409, message: "ShipsGo 跟踪已创建。" };
+  return { tracking: serializeShipsgoTracking(saved), alreadyExists: response.status === 409, message: "大掌櫃跟踪已创建。" };
 }
 
 async function getTrackingForActor(id: string, actor: ShipsgoActor) {
@@ -771,9 +1016,9 @@ async function getTrackingForActor(id: string, actor: ShipsgoActor) {
       },
     },
   });
-  if (!tracking) throw codedError("ShipsGo 跟踪记录不存在。", 404, "SHIPSGO_TRACKING_NOT_FOUND");
+  if (!tracking) throw codedError("大掌櫃跟踪记录不存在。", 404, "SHIPSGO_TRACKING_NOT_FOUND");
   if (!canAccessDomesticLogisticsOrder(actor, tracking.order)) {
-    throw codedError("无权限访问该 ShipsGo 跟踪记录。", 403, "PERMISSION_DENIED");
+    throw codedError("无权限访问该大掌櫃跟踪记录。", 403, "PERMISSION_DENIED");
   }
   return tracking;
 }
@@ -781,7 +1026,7 @@ async function getTrackingForActor(id: string, actor: ShipsgoActor) {
 export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, trackingId: unknown) {
   assertWrite(actor, "domesticLogistics");
   const id = cleanInputText(trackingId, 80);
-  if (!id) throw codedError("请选择需要同步的 ShipsGo 跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
+  if (!id) throw codedError("请选择需要同步的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const before = await getTrackingForActor(id, actor);
@@ -814,24 +1059,24 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   });
   await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
   const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
-  if (!saved) throw codedError("ShipsGo 跟踪本地同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
-  await runNonCriticalTask("ShipsGo 跟踪同步日志写入", () => writeAudit(
+  if (!saved) throw codedError("大掌櫃跟踪本地同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+  await runNonCriticalTask("大掌櫃跟踪同步日志写入", () => writeAudit(
     request,
     actor,
-    "同步 ShipsGo 海运跟踪",
+    "同步大掌櫃海运跟踪",
     "shipsgo_trackings",
     saved.id,
     { status: before.status, syncStatus: before.syncStatus },
     { status: saved.status, syncStatus: saved.syncStatus, lastSyncedAt: saved.lastSyncedAt },
   ));
-  return { tracking: serializeShipsgoTracking(saved), message: "ShipsGo 状态已同步。" };
+  return { tracking: serializeShipsgoTracking(saved), message: "大掌櫃状态已同步。" };
 }
 
 export async function recoverShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, input: unknown = {}) {
   assertWrite(actor, "domesticLogistics");
   const body = assertJsonObject(input) as ShipsgoTrackingInput;
   const orderId = cleanInputText(body.orderId, 80);
-  if (!orderId) throw codedError("请选择需要补同步 ShipsGo 跟踪的订单。", 400, "ORDER_REQUIRED");
+  if (!orderId) throw codedError("请选择需要补同步大掌櫃跟踪的订单。", 400, "ORDER_REQUIRED");
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const order = await getShipsgoTrackingOrder(orderId, actor);
@@ -862,7 +1107,7 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
     existing?.containerNumber || "",
   ]);
   if (!masterBlNo && !localContainers.length) {
-    throw codedError("本地缺少提单号和柜号，无法从 ShipsGo 找回已有 Tracking。", 400, "SHIPSGO_RECOVER_TARGET_REQUIRED");
+    throw codedError("本地缺少提单号和柜号，无法从大掌櫃找回已有跟踪。", 400, "SHIPSGO_RECOVER_TARGET_REQUIRED");
   }
 
   const found = await findExistingShipsgoShipment(settings, { masterBlNo, carrierScac, containerNumbers: localContainers });
@@ -883,7 +1128,7 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
         eta: mapped.eta,
         currentStatus: mapped.currentStatus,
         syncStatus: "RECOVERED",
-        syncMessage: `已从 ShipsGo 已有 Tracking 补同步。`,
+        syncMessage: "已从大掌櫃已有跟踪补同步。",
         lastCheckedAt: now,
         lastSyncedAt: now,
         lastSyncTime: now,
@@ -904,7 +1149,7 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
         eta: mapped.eta,
         currentStatus: mapped.currentStatus,
         syncStatus: "RECOVERED",
-        syncMessage: "已从 ShipsGo 已有 Tracking 补同步。",
+        syncMessage: "已从大掌櫃已有跟踪补同步。",
         lastCheckedAt: now,
         lastSyncedAt: now,
         lastSyncTime: now,
@@ -914,11 +1159,11 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
     });
   await replaceShipsgoTrackingContainers(savedBase.id, uniqueStrings([...mapped.containerNumbers, ...localContainers]));
   const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
-  if (!saved) throw codedError("ShipsGo 已有 Tracking 补同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
-  await runNonCriticalTask("ShipsGo 已有跟踪补同步日志写入", () => writeAudit(
+  if (!saved) throw codedError("大掌櫃已有跟踪补同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+  await runNonCriticalTask("大掌櫃已有跟踪补同步日志写入", () => writeAudit(
     request,
     actor,
-    "补同步 ShipsGo 已有跟踪",
+    "补同步大掌櫃已有跟踪",
     "shipsgo_trackings",
     saved.id,
     existing ? { shipsgoShipmentId: existing.shipsgoShipmentId, syncStatus: existing.syncStatus } : null,
@@ -930,7 +1175,7 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
       queryPath: found.path,
     },
   ));
-  return { tracking: serializeShipsgoTracking(saved), recovered: true, message: "已从 ShipsGo 同步已有跟踪。" };
+  return { tracking: serializeShipsgoTracking(saved), recovered: true, message: "已从大掌櫃同步已有跟踪。" };
 }
 
 export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor, containerNoInput: unknown) {
@@ -967,12 +1212,12 @@ export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor,
     orderBy: [{ createdAt: "desc" }],
   });
   if (!row) {
-    throw codedError("本地未找到该柜号对应的 ShipsGo Tracking，请管理员先同步已有提单跟踪。", 404, "SHIPSGO_CONTAINER_NOT_FOUND");
+    throw codedError("本地未找到该柜号对应的大掌櫃跟踪，请管理员先同步已有提单跟踪。", 404, "SHIPSGO_CONTAINER_NOT_FOUND");
   }
   if (!canAccessDomesticLogisticsOrder(actor, row.tracking.order)) {
-    throw codedError("无权限访问该柜号对应的 ShipsGo Tracking。", 403, "PERMISSION_DENIED");
+    throw codedError("无权限访问该柜号对应的大掌櫃跟踪。", 403, "PERMISSION_DENIED");
   }
-  return { tracking: serializeShipsgoTracking(row.tracking), message: "已从本地柜号关联返回 ShipsGo Tracking。" };
+  return { tracking: serializeShipsgoTracking(row.tracking), message: "已从本地柜号关联返回大掌櫃跟踪。" };
 }
 
 export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, actor: ShipsgoActor, options: { limit?: number; now?: Date } = {}) {
@@ -1038,10 +1283,10 @@ export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, ac
       results.push({ id: row.id, ok: false, message });
     }
   }
-  await runNonCriticalTask("ShipsGo 定时同步日志写入", () => writeAudit(
+  await runNonCriticalTask("大掌櫃定时同步日志写入", () => writeAudit(
     request,
     actor,
-    "定时同步 ShipsGo 海运跟踪",
+    "定时同步大掌櫃海运跟踪",
     "shipsgo_trackings",
     "cron",
     null,
@@ -1080,14 +1325,14 @@ function recursiveShipmentId(value: unknown, depth = 0): string {
 export async function handleShipsgoWebhook(rawBody: string, signature: unknown) {
   const settings = await getShipsgoIntegrationSettings();
   if (!settings.enabled || !settings.webhookEnabled) {
-    throw codedError("ShipsGo Webhook 未启用。", 400, "SHIPSGO_WEBHOOK_DISABLED");
+    throw codedError("大掌櫃 Webhook 未启用。", 400, "SHIPSGO_WEBHOOK_DISABLED");
   }
   if (!settings.webhookSecret) {
-    throw codedError("ShipsGo Webhook Secret 未配置。", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
+    throw codedError("大掌櫃 Webhook Secret 未配置。", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
   }
   const expected = crypto.createHmac("sha256", settings.webhookSecret).update(rawBody).digest("hex");
   if (!timingSafeEqualText(nonEmpty(signature), expected)) {
-    throw codedError("ShipsGo Webhook 签名校验失败。", 401, "SHIPSGO_WEBHOOK_SIGNATURE_INVALID");
+    throw codedError("大掌櫃 Webhook 签名校验失败。", 401, "SHIPSGO_WEBHOOK_SIGNATURE_INVALID");
   }
   const payload = safeJsonParse(rawBody);
   const shipmentPayload = extractShipmentPayload(payload);
@@ -1099,7 +1344,7 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown) 
     where: { provider: SHIPSGO_PROVIDER, shipsgoShipmentId: shipmentId, deletedAt: null },
     orderBy: [{ updatedAt: "desc" }],
   });
-  if (!before) return { success: true, ignored: true, message: "本地未找到对应 ShipsGo 跟踪，已忽略。" };
+  if (!before) return { success: true, ignored: true, message: "本地未找到对应大掌櫃跟踪，已忽略。" };
   const mapped = mapShipsgoShipmentPayload(shipmentPayload);
   const trackingData = trackingDataFromMappedShipment(mapped);
   const now = new Date();
@@ -1121,7 +1366,7 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown) 
   });
   await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
   const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
-  if (!saved) throw codedError("ShipsGo Webhook 同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+  if (!saved) throw codedError("大掌櫃 Webhook 同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
   return { success: true, tracking: serializeShipsgoTracking(saved) };
 }
 

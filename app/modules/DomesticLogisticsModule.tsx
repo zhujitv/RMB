@@ -93,7 +93,11 @@ type ShipsgoTrackingRow = {
   syncStatus?: string;
   syncMessage?: string;
   originName?: string;
+  originPortName?: string;
+  originPortCode?: string;
   destinationName?: string;
+  destinationPortName?: string;
+  destinationPortCode?: string;
   dateOfLoading?: string;
   dateOfDischarge?: string;
   predictedDischargeDate?: string;
@@ -107,6 +111,16 @@ type ShipsgoTrackingRow = {
   lastSyncedAt?: string;
   lastSyncTime?: string;
   updatedAt?: string;
+  timeline?: ShipsgoTimelineEvent[];
+};
+
+type ShipsgoTimelineEvent = {
+  time?: string;
+  location?: string;
+  description?: string;
+  vesselName?: string;
+  voyage?: string;
+  source?: string;
 };
 
 type UploadDocumentResponse = {
@@ -687,11 +701,11 @@ export function DomesticLogisticsModule({
           carrierScac: payload.carrierScac || "",
         }),
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "创建 ShipsGo 跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "创建大掌櫃跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "ShipsGo 跟踪已创建");
+      setNotice(result.message || "大掌櫃跟踪已创建");
     } catch (createError) {
-      throw createError instanceof Error ? createError : new Error("创建 ShipsGo 跟踪失败");
+      throw createError instanceof Error ? createError : new Error("创建大掌櫃跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -706,11 +720,14 @@ export function DomesticLogisticsModule({
       const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}/sync`, {
         method: "POST",
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步 ShipsGo 跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步大掌櫃跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "ShipsGo 状态已同步");
+      setNotice(result.message || "大掌櫃状态已同步");
+      return result.tracking;
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "同步 ShipsGo 跟踪失败");
+      const message = syncError instanceof Error ? syncError.message : "同步大掌櫃跟踪失败";
+      setError(message);
+      throw new Error(message);
     } finally {
       setShipsgoBusyKey("");
     }
@@ -729,11 +746,11 @@ export function DomesticLogisticsModule({
           masterBlNo: row.blNo || row.billOfLadingNo || "",
         }),
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "从 ShipsGo 同步已有跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "从大掌櫃同步已有跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "已从 ShipsGo 同步已有跟踪");
+      setNotice(result.message || "已从大掌櫃同步已有跟踪");
     } catch (recoverError) {
-      setError(recoverError instanceof Error ? recoverError.message : "从 ShipsGo 同步已有跟踪失败");
+      setError(recoverError instanceof Error ? recoverError.message : "从大掌櫃同步已有跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -789,10 +806,6 @@ export function DomesticLogisticsModule({
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
-      {shipsgoFeatures.enabled ? (
-        <ShipsgoTrackingFeaturePanel features={shipsgoFeatures} />
-      ) : null}
-
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
           <thead>
@@ -918,32 +931,6 @@ export function DomesticLogisticsModule({
   );
 }
 
-function ShipsgoTrackingFeaturePanel({ features }: { features: ShipsgoFeatureFlags }) {
-  const enabledFeatures = [
-    features.oceanTrackingEnabled ? "海运集装箱跟踪" : "",
-    features.airTrackingEnabled ? "空运货物跟踪" : "",
-    features.manualSyncEnabled ? "手动同步" : "",
-    features.autoSyncEnabled ? `每日自动同步 ${features.dailySyncTime || "02:00"}` : "",
-    features.webhookEnabled ? "Webhook 状态推送" : "",
-    features.liveMapEnabled ? "Live Map" : "",
-    features.customerPushEnabled ? "客户自动推送" : "",
-  ].filter(Boolean);
-
-  return (
-    <section className={styles.documentGroupCard} id="shipsgo-tracking-panel">
-      <strong>ShipsGo 跟踪功能</strong>
-      <div className={styles.quickCreateMeta}>
-        {enabledFeatures.length ? enabledFeatures.map((feature) => (
-          <span key={feature}>{feature}</span>
-        )) : <span>已启用 ShipsGo，但未开启前台功能项</span>}
-        {typeof features.creditWarningThreshold === "number" ? (
-          <span>Credit 预警阈值：{features.creditWarningThreshold}</span>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 function defaultShipsgoMasterBl(row: DomesticLogisticsRow) {
   return String(row.blNo || row.billOfLadingNo || "").trim();
 }
@@ -999,7 +986,7 @@ function ShipsgoOrderTrackingPanel({
   canManage: boolean;
   busyKey: string;
   onCreate: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
-  onSync: (trackingId: string) => Promise<void>;
+  onSync: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecover: () => Promise<void>;
 }) {
   const trackings = row.shipsgoTrackings || [];
@@ -1008,6 +995,9 @@ function ShipsgoOrderTrackingPanel({
   const [masterBlNo, setMasterBlNo] = useState(defaultShipsgoMasterBl(row));
   const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [expandedTimelineId, setExpandedTimelineId] = useState("");
+  const [timelineLoadingId, setTimelineLoadingId] = useState("");
+  const [timelineErrors, setTimelineErrors] = useState<Record<string, string>>({});
   const createBusy = busyKey === `${row.id}:shipsgo:create`;
   const recoverBusy = busyKey === `${row.id}:shipsgo:recover`;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
@@ -1017,6 +1007,9 @@ function ShipsgoOrderTrackingPanel({
     setCarrierScac("");
     setShowCarrierInput(false);
     setCreateError("");
+    setExpandedTimelineId("");
+    setTimelineLoadingId("");
+    setTimelineErrors({});
   }, [row.id, row.blNo, row.billOfLadingNo, row.domesticLogisticsInfo?.id]);
 
   function updateCarrierScac(value: string) {
@@ -1034,9 +1027,59 @@ function ShipsgoOrderTrackingPanel({
     try {
       await onCreate({ masterBlNo, carrierScac: showCarrierInput ? carrierScac : "" });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "创建 ShipsGo 跟踪失败";
+      const message = error instanceof Error ? error.message : "创建大掌櫃跟踪失败";
       setCreateError(message);
       if (/船公司|SCAC|carrier/i.test(message)) setShowCarrierInput(true);
+    }
+  }
+
+  function shipsgoTimelineEvents(tracking: ShipsgoTrackingRow) {
+    return Array.isArray(tracking.timeline) ? tracking.timeline : [];
+  }
+
+  async function toggleTimeline(tracking: ShipsgoTrackingRow) {
+    setTimelineErrors((current) => ({ ...current, [tracking.id]: "" }));
+    if (expandedTimelineId === tracking.id) {
+      setExpandedTimelineId("");
+      return;
+    }
+    setExpandedTimelineId(tracking.id);
+    if (!tracking.shipsgoShipmentId) {
+      setTimelineErrors((current) => ({
+        ...current,
+        [tracking.id]: "本地未保存大掌櫃跟踪ID，请先从大掌櫃同步已有跟踪。",
+      }));
+      return;
+    }
+    if (shipsgoTimelineEvents(tracking).length) return;
+    setTimelineLoadingId(tracking.id);
+    try {
+      await onSync(tracking.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步大掌櫃跟踪失败";
+      console.error("读取大掌櫃运输状态失败", error);
+      setTimelineErrors((current) => ({
+        ...current,
+        [tracking.id]: `读取大掌櫃运输状态失败：${message}`,
+      }));
+    } finally {
+      setTimelineLoadingId("");
+    }
+  }
+
+  async function syncTrackingAndTimeline(tracking: ShipsgoTrackingRow) {
+    setTimelineErrors((current) => ({ ...current, [tracking.id]: "" }));
+    try {
+      await onSync(tracking.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步大掌櫃跟踪失败";
+      console.error("同步大掌櫃运输状态失败", error);
+      if (expandedTimelineId === tracking.id) {
+        setTimelineErrors((current) => ({
+          ...current,
+          [tracking.id]: `读取大掌櫃运输状态失败：${message}`,
+        }));
+      }
     }
   }
 
@@ -1044,8 +1087,7 @@ function ShipsgoOrderTrackingPanel({
     <section className={styles.documentGroupCard}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>ShipsGo 海运跟踪</strong>
-          <span>按 Master B/L 建立一次跟踪；柜号仅用于本地关联查询，不会重复创建 Tracking。</span>
+          <strong>大掌櫃海运跟踪</strong>
         </div>
       </div>
       {trackings.length ? (
@@ -1055,6 +1097,10 @@ function ShipsgoOrderTrackingPanel({
             const containers = shipsgoContainerTags(tracking);
             const etaText = tracking.eta || tracking.predictedDischargeDate || tracking.dateOfDischarge || "";
             const showRecover = canManage && shouldShowShipsgoRecover(tracking);
+            const timelineExpanded = expandedTimelineId === tracking.id;
+            const timelineLoading = timelineLoadingId === tracking.id || syncBusy && timelineExpanded && !shipsgoTimelineEvents(tracking).length;
+            const timelineError = timelineErrors[tracking.id] || "";
+            const timelineEvents = shipsgoTimelineEvents(tracking);
             return (
               <article className={styles.shipsgoTrackingCard} key={tracking.id}>
                 <div className={styles.shipsgoTrackingSummary}>
@@ -1081,11 +1127,11 @@ function ShipsgoOrderTrackingPanel({
                   <div className={styles.shipsgoInfoColumn}>
                     <div className={styles.shipsgoInfoItem}>
                       <span>起运港</span>
-                      <strong>{shipsgoValue(tracking.originName)}</strong>
+                      <strong>{shipsgoValue(tracking.originPortName || tracking.originName, "大掌櫃未返回")}</strong>
                     </div>
                     <div className={styles.shipsgoInfoItem}>
                       <span>目的港</span>
-                      <strong>{shipsgoValue(tracking.destinationName)}</strong>
+                      <strong>{shipsgoValue(tracking.destinationPortName || tracking.destinationName, "大掌櫃未返回")}</strong>
                     </div>
                     <div className={styles.shipsgoInfoItem}>
                       <span>跟踪方式</span>
@@ -1112,14 +1158,21 @@ function ShipsgoOrderTrackingPanel({
                       disabled={syncBusy}
                       onClick={(event) => {
                         event.stopPropagation();
-                        void onSync(tracking.id);
+                        void syncTrackingAndTimeline(tracking);
                       }}
                     >
                       {syncBusy ? "同步中..." : "同步最新状态"}
                     </button>
                   ) : null}
-                  <button className={styles.secondaryButton} type="button" onClick={(event) => event.stopPropagation()}>
-                    查看运输状态
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggleTimeline(tracking);
+                    }}
+                  >
+                    {timelineExpanded ? "收起运输状态" : "查看运输状态"}
                   </button>
                   {tracking.mapUrl && features.liveMapEnabled ? (
                     <a className={styles.secondaryButton} href={tracking.mapUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -1136,16 +1189,45 @@ function ShipsgoOrderTrackingPanel({
                         void onRecover();
                       }}
                     >
-                      {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
+                      {recoverBusy ? "同步中..." : "从大掌櫃同步已有跟踪"}
                     </button>
                   ) : null}
                 </div>
+                {timelineExpanded ? (
+                  <div className={styles.shipsgoTimelinePanel}>
+                    <strong>运输状态时间轴</strong>
+                    {timelineLoading ? (
+                      <div className={styles.shipsgoTimelineState}>正在读取大掌櫃运输状态...</div>
+                    ) : timelineError ? (
+                      <div className={styles.shipsgoTimelineError} role="alert">{timelineError}</div>
+                    ) : timelineEvents.length ? (
+                      <div className={styles.shipsgoTimelineList}>
+                        {timelineEvents.map((event, index) => (
+                          <div className={styles.shipsgoTimelineItem} key={`${event.time || "no-time"}-${event.location || "no-location"}-${index}`}>
+                            <div className={styles.shipsgoTimelineDot} aria-hidden="true" />
+                            <div className={styles.shipsgoTimelineContent}>
+                              <div className={styles.shipsgoTimelineHeader}>
+                                <strong>{event.time ? formatDateTime(event.time) : "时间未返回"}</strong>
+                                <span>数据来源：{event.source || "大掌櫃"}</span>
+                              </div>
+                              <span>地点：{shipsgoValue(event.location)}</span>
+                              <span>状态：{shipsgoValue(event.description)}</span>
+                              <span>船名/航次：{[event.vesselName, event.voyage].filter(Boolean).join(" / ") || "未返回"}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.shipsgoTimelineState}>大掌櫃暂未返回运输节点。</div>
+                    )}
+                  </div>
+                ) : null}
               </article>
             );
           })}
         </div>
       ) : (
-        <div className={styles.emptyState}>暂未创建 ShipsGo 跟踪</div>
+        <div className={styles.emptyState}>暂未创建大掌櫃跟踪</div>
       )}
       {canCreate && !hasTracking ? (
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
@@ -1165,7 +1247,7 @@ function ShipsgoOrderTrackingPanel({
             </div>
           ) : null}
           <label>
-            Tracking
+            跟踪
             <button
               className={styles.primaryButtonCompact}
               type="button"
@@ -1179,7 +1261,7 @@ function ShipsgoOrderTrackingPanel({
             </button>
           </label>
           <label>
-            已有 Tracking
+            已有跟踪
             <button
               className={styles.secondaryButton}
               type="button"
@@ -1189,7 +1271,7 @@ function ShipsgoOrderTrackingPanel({
                 void onRecover();
               }}
             >
-              {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
+              {recoverBusy ? "同步中..." : "从大掌櫃同步已有跟踪"}
             </button>
           </label>
         </div>
@@ -1254,7 +1336,7 @@ function DomesticLogisticsRows({
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
   onCreateShipsgoTracking: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
-  onSyncShipsgoTracking: (trackingId: string) => Promise<void>;
+  onSyncShipsgoTracking: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecoverShipsgoTracking: () => Promise<void>;
   onSaved: () => void;
   onCancelEdit: () => void;

@@ -10,6 +10,6 @@ export async function POST(request: NextRequest) {
     const result = await recoverShipsgoOceanTracking(request, actor, body);
     return ok({ success: true, ...result });
   } catch (error: unknown) {
-    return apiError(error, "从 ShipsGo 同步已有跟踪失败");
+    return apiError(error, "从大掌櫃同步已有跟踪失败");
   }
 }

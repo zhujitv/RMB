@@ -10,6 +10,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
     const result = await findShipsgoOceanTrackingByContainerNo(actor, containerNo);
     return ok({ success: true, ...result });
   } catch (error: unknown) {
-    return apiError(error, "查询柜号 ShipsGo Tracking 失败");
+    return apiError(error, "查询柜号大掌櫃跟踪失败");
   }
 }
