@@ -5693,7 +5693,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .supplierDocumentsHeader h1 {
@@ -5720,18 +5720,18 @@
 .supplierDocumentsStats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .supplierDocumentsStatCard {
   min-width: 0;
   border: 1px solid #dbeafe;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #eff6ff, #ffffff);
-  padding: 12px 14px;
+  padding: 9px 12px;
   display: grid;
-  gap: 5px;
+  gap: 3px;
 }
 
 .supplierDocumentsStatCard span {
@@ -5743,72 +5743,143 @@
 .supplierDocumentsStatCard strong {
   min-width: 0;
   color: #0f172a;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.supplierDocumentsTaskGrid {
+.supplierDocumentsListToolbar {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.supplierDocumentsListToolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.supplierDocumentsListToolbar select {
+  height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 28px 0 10px;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.supplierDocumentsTaskList {
   display: grid;
-  gap: 16px;
+  gap: 8px;
 }
 
 .supplierDocumentTaskCard {
   min-width: 0;
+  overflow: hidden;
   border: 1px solid #dbeafe;
-  border-radius: 16px;
-  background: #f8fbff;
-  padding: 16px;
-  display: grid;
-  gap: 14px;
-}
-
-.supplierDocumentTaskTopline {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
-  gap: 10px 14px;
-  align-items: stretch;
-}
-
-.supplierDocumentTaskTopline > span {
-  min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
 }
 
-.supplierDocumentTaskTopline small {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.35;
+.supplierDocumentTaskRow {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: minmax(110px, 0.85fr) minmax(160px, 1.15fr) minmax(92px, auto) minmax(105px, auto) minmax(180px, 1.4fr) minmax(156px, auto);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
 }
 
-.supplierDocumentTaskTopline b {
+.supplierDocumentTaskOrder,
+.supplierDocumentTaskSupplier,
+.supplierDocumentTaskDate,
+.supplierDocumentTaskRequirement {
   min-width: 0;
   color: #0f172a;
   font-size: 13px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.supplierDocumentTaskTopline .statusPill {
-  align-self: flex-start;
+.supplierDocumentTaskSupplier,
+.supplierDocumentTaskDate,
+.supplierDocumentTaskRequirement {
+  font-weight: 600;
+}
+
+.supplierDocumentTaskDate {
+  color: #475569;
+}
+
+.supplierDocumentTaskRow .statusPill {
+  justify-self: center;
   min-height: 24px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.supplierDocumentTaskActions {
+  min-width: 0;
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.supplierDocumentTaskActions button {
+  min-height: 32px;
+  padding: 0 10px;
   font-size: 12px;
 }
 
-.supplierDocumentRequirement {
-  grid-column: span 2;
+.supplierDocumentTaskDetail {
+  border-top: 1px solid #e2e8f0;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.supplierDocumentTaskMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.supplierDocumentTaskMeta span {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.supplierDocumentTaskMeta small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.supplierDocumentTaskMeta b {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .supplierDocumentTemplateButton,
@@ -6096,15 +6167,40 @@
   }
 
   .supplierDocumentsStats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .supplierDocumentTaskTopline {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .supplierDocumentsListToolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .supplierDocumentRequirement {
+  .supplierDocumentTaskRow {
+    grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
+    min-height: 78px;
+    align-items: center;
+  }
+
+  .supplierDocumentTaskSupplier,
+  .supplierDocumentTaskRequirement {
     grid-column: 1 / -1;
+  }
+
+  .supplierDocumentTaskRow .statusPill {
+    justify-self: end;
+  }
+
+  .supplierDocumentTaskDate {
+    justify-self: end;
+  }
+
+  .supplierDocumentTaskActions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .supplierDocumentTaskMeta {
+    grid-template-columns: 1fr;
   }
 
   .supplierDocumentUploadGrid {
@@ -7274,11 +7370,19 @@
     font-size: 21px;
   }
 
-  .supplierDocumentTaskTopline {
+  .supplierDocumentsStats {
     grid-template-columns: 1fr;
   }
 
-  .supplierDocumentTaskCard,
+  .supplierDocumentTaskRow {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierDocumentTaskRow .statusPill,
+  .supplierDocumentTaskDate {
+    justify-self: flex-start;
+  }
+
   .supplierDocumentUploadCard {
     padding: 12px;
   }

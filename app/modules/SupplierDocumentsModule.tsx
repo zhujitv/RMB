@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { PdfPreviewButton } from "../components";
+import { PaginationBar, PdfPreviewButton } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
@@ -49,6 +49,7 @@ const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
 };
+const SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) {
   const [rows, setRows] = useState<SupplierDocumentTask[]>([]);
@@ -57,6 +58,9 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   const [notice, setNotice] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [progressByKey, setProgressByKey] = useState<Record<string, number>>({});
+  const [expandedTaskId, setExpandedTaskId] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     void loadRows();
@@ -110,6 +114,16 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
 
   const pendingCount = useMemo(() => rows.filter((row) => row.status !== "已完成").length, [rows]);
   const isAdmin = currentUser.role === "管理员";
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, safePage, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <section className={`${styles.moduleCard} ${styles.supplierDocumentsPage}`}>
@@ -143,18 +157,50 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       {loading ? (
         <div className={styles.emptyState}>正在加载产品供应商资料回传任务...</div>
       ) : rows.length ? (
-        <div className={styles.supplierDocumentsTaskGrid}>
-          {rows.map((task) => (
-            <SupplierDocumentTaskCard
-              key={task.id}
-              task={task}
-              uploadingKey={uploadingKey}
-              progressByKey={progressByKey}
-              isAdmin={isAdmin}
-              onUpload={uploadDocument}
-            />
-          ))}
-        </div>
+        <>
+          <div className={styles.supplierDocumentsListToolbar}>
+            <span>当前显示 {pagedRows.length} / {rows.length} 条</span>
+            <label>
+              每页
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                  setExpandedTaskId("");
+                }}
+              >
+                {SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size} 条</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className={styles.supplierDocumentsTaskList}>
+            {pagedRows.map((task) => (
+              <SupplierDocumentTaskCard
+                key={task.id}
+                task={task}
+                uploadingKey={uploadingKey}
+                progressByKey={progressByKey}
+                isExpanded={expandedTaskId === task.id}
+                onToggle={() => setExpandedTaskId((current) => (current === task.id ? "" : task.id))}
+                onOpen={() => setExpandedTaskId(task.id)}
+                onUpload={uploadDocument}
+              />
+            ))}
+          </div>
+          <PaginationBar
+            total={rows.length}
+            page={safePage}
+            totalPages={totalPages}
+            loading={loading}
+            onPage={(nextPage) => {
+              setPage(nextPage);
+              setExpandedTaskId("");
+            }}
+          />
+        </>
       ) : (
         <div className={styles.emptyState}>暂无需要回传的产品供应商资料。</div>
       )}
@@ -166,110 +212,119 @@ function SupplierDocumentTaskCard({
   task,
   uploadingKey,
   progressByKey,
-  isAdmin,
+  isExpanded,
+  onToggle,
+  onOpen,
   onUpload,
 }: {
   task: SupplierDocumentTask;
   uploadingKey: string;
   progressByKey: Record<string, number>;
-  isAdmin: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const taskStatus = task.status || "待上传";
+  const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
   return (
     <article className={styles.supplierDocumentTaskCard}>
-      <div className={styles.supplierDocumentTaskTopline}>
-        <span>
-          <small>订单号</small>
-          <b>{task.orderNo || "-"}</b>
+      <div className={styles.supplierDocumentTaskRow}>
+        <span className={styles.supplierDocumentTaskOrder} title={task.orderNo || "-"}>
+          {task.orderNo || "-"}
         </span>
-        {isAdmin ? (
-          <span>
-            <small>供应商</small>
-            <b title={task.supplierName || "-"}>{task.supplierName || "-"}</b>
-          </span>
-        ) : null}
-        <span>
-          <small>状态</small>
-          <b className={`${styles.statusPill} ${supplierDocumentStatusClass(taskStatus)}`}>{taskStatus}</b>
+        <span className={styles.supplierDocumentTaskSupplier} title={task.supplierName || "-"}>
+          {task.supplierName || "-"}
         </span>
-        <span>
-          <small>截止日期</small>
-          <b>{formatDate(task.dueDate) || "-"}</b>
-        </span>
-        <span>
-          <small>通知时间</small>
-          <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
-        </span>
-        {isAdmin ? (
-          <span>
-            <small>通知人</small>
-            <b>{task.requestedByName || "-"}</b>
-          </span>
-        ) : null}
-        <span className={styles.supplierDocumentRequirement}>
-          <small>资料要求</small>
-          <b>{(task.requiredDocumentLabels || []).join("、") || "-"}</b>
+        <span className={`${styles.statusPill} ${supplierDocumentStatusClass(taskStatus)}`}>{taskStatus}</span>
+        <span className={styles.supplierDocumentTaskDate}>{formatDate(task.dueDate) || "-"}</span>
+        <span className={styles.supplierDocumentTaskRequirement} title={requirementText}>{requirementText}</span>
+        <span className={styles.supplierDocumentTaskActions}>
+          <button className={styles.secondaryButton} type="button" onClick={onToggle}>
+            {isExpanded ? "收起" : "展开"}
+          </button>
+          <button className={styles.primaryButtonCompact} type="button" onClick={onOpen}>
+            上传资料
+          </button>
         </span>
       </div>
-      {task.message ? <p className={styles.mutedText}>{task.message}</p> : null}
-      {task.hasTemplate ? (
-        <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
-          下载合同样本（{task.templateFileName || `${task.orderNo || "合同样本"}.xlsx`}）
-        </a>
-      ) : null}
-      <div className={styles.supplierDocumentUploadGrid}>
-        {requiredTypes.map((documentType) => {
-          const document = latestDocumentByType(task.documents || [], documentType);
-          const key = `${task.id}-${documentType}`;
-          const uploading = uploadingKey === key;
-          const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
-          return (
-            <div className={styles.supplierDocumentUploadCard} key={documentType}>
-              <div className={styles.supplierDocumentUploadHeader}>
-                <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
-                <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
-              </div>
-              <div className={styles.supplierDocumentUploadBody}>
-                {document ? (
-                  <div className={styles.fileUploadFile}>
-                    <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
-                      {document.fileName || "-"}
-                    </div>
-                    <div className={styles.fileUploadMeta}>
-                      <span>上传人：{document.uploadedByName || "-"}</span>
-                      <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
-                    </div>
-                    <div className={styles.fileUploadActions}>
-                      <span className={styles.fileUploadActionLabel}>操作：</span>
-                      <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-                    </div>
+      {isExpanded ? (
+        <div className={styles.supplierDocumentTaskDetail}>
+          <div className={styles.supplierDocumentTaskMeta}>
+            <span>
+              <small>通知时间</small>
+              <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
+            </span>
+            <span>
+              <small>通知人</small>
+              <b>{task.requestedByName || "-"}</b>
+            </span>
+            {task.message ? (
+              <span title={task.message}>
+                <small>备注</small>
+                <b>{task.message}</b>
+              </span>
+            ) : null}
+          </div>
+          {task.hasTemplate ? (
+            <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
+              下载合同样本（{task.templateFileName || `${task.orderNo || "合同样本"}.xlsx`}）
+            </a>
+          ) : null}
+          <div className={styles.supplierDocumentUploadGrid}>
+            {requiredTypes.map((documentType) => {
+              const document = latestDocumentByType(task.documents || [], documentType);
+              const key = `${task.id}-${documentType}`;
+              const uploading = uploadingKey === key;
+              const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
+              return (
+                <div className={styles.supplierDocumentUploadCard} key={documentType}>
+                  <div className={styles.supplierDocumentUploadHeader}>
+                    <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
+                    <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
                   </div>
-                ) : null}
-              </div>
-              <div className={styles.supplierDocumentUploadControls}>
-                <label className={styles.supplierDocumentUploadButton}>
-                  {uploading ? "上传中..." : "选择 PDF 文件"}
-                  <input
-                    type="file"
-                    accept={PDF_UPLOAD_ACCEPT}
-                    disabled={uploading}
-                    hidden
-                    onChange={(event) => {
-                      onUpload(task, documentType, event.target.files?.[0] || null);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-                <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
-                {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  <div className={styles.supplierDocumentUploadBody}>
+                    {document ? (
+                      <div className={styles.fileUploadFile}>
+                        <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
+                          {document.fileName || "-"}
+                        </div>
+                        <div className={styles.fileUploadMeta}>
+                          <span>上传人：{document.uploadedByName || "-"}</span>
+                          <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
+                        </div>
+                        <div className={styles.fileUploadActions}>
+                          <span className={styles.fileUploadActionLabel}>操作：</span>
+                          <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
+                          <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className={styles.supplierDocumentUploadControls}>
+                    <label className={styles.supplierDocumentUploadButton}>
+                      {uploading ? "上传中..." : "选择 PDF 文件"}
+                      <input
+                        type="file"
+                        accept={PDF_UPLOAD_ACCEPT}
+                        disabled={uploading}
+                        hidden
+                        onChange={(event) => {
+                          onUpload(task, documentType, event.target.files?.[0] || null);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                    <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
+                    {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
