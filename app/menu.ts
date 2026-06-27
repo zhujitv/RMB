@@ -8,7 +8,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
   { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
   { key: "logisticsReview", label: "物流费用审核", description: "审核供应商提交的物流费用、月结和开票通知。" },
-  { key: "supplierDocuments", label: "资料回传", description: "供应商下载合同样本并回传工厂合同、增值税发票。" },
+  { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
   { key: "manual", label: "操作说明书", description: "查看平台业务流程和操作规范。" },

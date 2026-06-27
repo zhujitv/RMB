@@ -94,7 +94,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       if (data.request?.id) {
         setRows((current) => current.map((row) => (row.id === data.request?.id ? data.request : row)));
       }
-      setNotice(data.message || "资料已上传");
+      setNotice(data.message || "PDF 文件已上传");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
     } finally {
@@ -113,25 +113,25 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
     <section className={styles.moduleCard}>
       <header className={styles.pageHeader}>
         <div>
-          <h1>资料回传</h1>
-          <p>下载合同样本，回传工厂采购合同和增值税发票 PDF。</p>
+          <h1>工厂资料回传</h1>
+          <p>请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。</p>
         </div>
         <button className={styles.secondaryButton} type="button" onClick={loadRows} disabled={loading}>
-          {loading ? "刷新中..." : "刷新"}
+          {loading ? "刷新中..." : "刷新任务"}
         </button>
       </header>
 
       <div className={styles.summaryGrid}>
         <div className={styles.summaryCard}>
-          <span>当前账号</span>
+          <span>回传账号</span>
           <strong>{currentUser.name || "-"}</strong>
         </div>
         <div className={styles.summaryCard}>
-          <span>待处理</span>
+          <span>待回传任务</span>
           <strong>{pendingCount}</strong>
         </div>
         <div className={styles.summaryCard}>
-          <span>任务总数</span>
+          <span>全部任务</span>
           <strong>{rows.length}</strong>
         </div>
       </div>
@@ -140,7 +140,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
 
       {loading ? (
-        <div className={styles.emptyState}>正在加载资料回传任务...</div>
+        <div className={styles.emptyState}>正在加载工厂资料回传任务...</div>
       ) : rows.length ? (
         <div className={styles.documentGroupGrid}>
           {rows.map((task) => (
@@ -154,7 +154,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
           ))}
         </div>
       ) : (
-        <div className={styles.emptyState}>暂无需要回传的资料。</div>
+        <div className={styles.emptyState}>暂无需要回传的工厂资料。</div>
       )}
     </section>
   );
@@ -196,7 +196,7 @@ function SupplierDocumentTaskCard({
       {task.message ? <p className={styles.mutedText}>{task.message}</p> : null}
       {task.hasTemplate ? (
         <a className={styles.secondaryButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
-          下载合同样本：{task.templateFileName || "Excel 样本"}
+          下载已填写合同样本：{task.templateFileName || "合同样本"}
         </a>
       ) : null}
       <div className={styles.fileUploadGrid}>
@@ -229,7 +229,7 @@ function SupplierDocumentTaskCard({
                 <div className={styles.fileUploadEmpty}>暂未上传</div>
               )}
               <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
-                {uploading ? "上传中..." : document ? "替换PDF文件" : "上传PDF文件"}
+                {uploading ? "上传中..." : document ? "替换 PDF 文件" : "上传 PDF 文件"}
                 <input
                   type="file"
                   accept={PDF_UPLOAD_ACCEPT}
@@ -241,7 +241,7 @@ function SupplierDocumentTaskCard({
                   }}
                 />
               </label>
-              <span className={styles.mutedText}>仅支持 PDF，最大 {PDF_UPLOAD_MAX_SIZE_LABEL}。选择文件后自动上传。</span>
+              <span className={styles.mutedText}>仅支持 PDF 格式，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}；选择后自动上传。</span>
               {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
             </div>
           );

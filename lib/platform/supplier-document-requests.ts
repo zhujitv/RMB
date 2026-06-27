@@ -3,12 +3,14 @@ import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 import {
+  DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_OPERATOR_ROLE,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
   assertWrite,
   codedError,
   dateToInput,
+  getCompanyProfileSettings,
   logServerError,
   nonEmpty,
   normalizeEmail,
@@ -47,6 +49,10 @@ const SUPPLIER_DOCUMENT_REQUEST_STATUSES = ["待上传", "部分上传", "已完
 const SUPPLIER_DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
+};
+const SUPPLIER_DOCUMENT_EMAIL_LABELS: Record<string, string> = {
+  SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同（盖章扫描件，PDF）",
+  SUPPLIER_INVOICE: "工厂增值税发票（PDF）",
 };
 const MAX_EXCEL_TEMPLATE_BYTES = 5 * 1024 * 1024;
 const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -107,13 +113,6 @@ function dateFromInput(value: unknown) {
   return date;
 }
 
-function appEntryUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL
-    || process.env.APP_URL
-    || process.env.NEXTAUTH_URL
-    || "";
-}
-
 function supplierRecipientEmails(supplier: SupplierDocumentRequestRow["supplier"]) {
   return uniqueEmails([
     ...(supplier.operatorUsers || []).map((user) => user.email),
@@ -128,6 +127,63 @@ async function adminCcEmails() {
     take: 20,
   });
   return uniqueEmails(users.map((user) => user.email));
+}
+
+function supplierDocumentEmailLabel(type: string) {
+  return SUPPLIER_DOCUMENT_EMAIL_LABELS[type] || `${SUPPLIER_DOCUMENT_LABELS[type] || type}（PDF）`;
+}
+
+function buildSupplierDocumentRequestEmailBody({
+  supplierName,
+  orderNo,
+  requiredTypes,
+  dueDate,
+  templateAttached,
+  companyName,
+  message,
+}: {
+  supplierName: string;
+  orderNo: string;
+  requiredTypes: string[];
+  dueDate: Date | null;
+  templateAttached: boolean;
+  companyName: string;
+  message?: string | null;
+}) {
+  const documentLines = requiredTypes.map((type) => `    * ${supplierDocumentEmailLabel(type)}`);
+  const sampleInstruction = templateAttached
+    ? "1. 本邮件已附上预填好的 Excel 合同样本，请打印合同并加盖公司公章，扫描后回传。"
+    : "1. 请登录平台下载预填好的合同样本，打印合同并加盖公司公章，扫描后回传。";
+  return [
+    `尊敬的 ${supplierName}：`,
+    "",
+    "您好！",
+    "",
+    "您有一份订单资料需要回传，请按以下要求及时办理。",
+    "",
+    "订单信息",
+    "",
+    `* 订单号： ${orderNo}`,
+    "* 需回传资料：",
+    ...documentLines,
+    `* 截止日期： ${dueDate ? dateToInput(dueDate) : "-"}`,
+    "",
+    "操作要求",
+    "",
+    sampleInstruction,
+    "2. 请严格按照附件中的合同内容开具工厂增值税发票，确保发票内容与合同内容一致。",
+    `3. 登录 ${companyName}供应链协同平台，进入 「资料回传」 模块上传资料。`,
+    "4. 所有上传文件仅支持 PDF 格式。",
+    message ? "" : null,
+    message ? "补充说明" : null,
+    message ? "" : null,
+    message ? message : null,
+    "",
+    "感谢您的配合！",
+    "",
+    companyName,
+    "本邮件由系统自动发送，请勿直接回复。",
+  ].filter((line): line is string => line !== null).join("\n");
 }
 
 async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUploadFile | null> {
@@ -330,21 +386,17 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   }
 
   const subject = `NEXTWOOD 工厂资料回传通知：${order.orderNo}`;
-  const uploadUrl = appEntryUrl();
-  const body = [
-    `${supplier.supplierName}：`,
-    "",
-    `订单号：${order.orderNo || order.id}`,
-    `需要回传资料：${requiredTypes.map((type) => SUPPLIER_DOCUMENT_LABELS[type] || type).join("、")}`,
-    dueDate ? `截止日期：${dateToInput(dueDate)}` : "",
-    "",
-    "请登录 NEXTWOOD 供应链协同平台，在“资料回传”中下载合同样本，盖章扫描后上传 PDF；增值税发票也请上传 PDF。",
-    uploadUrl ? `平台入口：${uploadUrl}` : "",
-    template ? "本邮件已附上预填 Excel 合同样本，请下载填写/盖章后回传扫描件。" : "",
-    message ? `备注：${message}` : "",
-    "",
-    "本通知不包含客户信息，请按订单号处理。",
-  ].filter((line) => line !== "").join("\n");
+  const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
+  const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
+  const body = buildSupplierDocumentRequestEmailBody({
+    supplierName: supplier.supplierName,
+    orderNo: order.orderNo || order.id,
+    requiredTypes,
+    dueDate,
+    templateAttached: Boolean(template),
+    companyName,
+    message,
+  });
 
   let created;
   try {

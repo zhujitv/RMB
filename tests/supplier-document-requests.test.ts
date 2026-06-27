@@ -25,11 +25,26 @@ test("supplier document workflow uses existing factory tax document types", () =
   assert.match(service, /readValidatedExcelTemplate/);
 });
 
+test("supplier callback email uses formal PDF-only request template", () => {
+  assert.match(service, /尊敬的 \$\{supplierName\}：/);
+  assert.match(service, /您有一份订单资料需要回传，请按以下要求及时办理。/);
+  assert.match(service, /工厂采购合同（盖章扫描件，PDF）/);
+  assert.match(service, /工厂增值税发票（PDF）/);
+  assert.match(service, /本邮件已附上预填好的 Excel 合同样本，请打印合同并加盖公司公章，扫描后回传。/);
+  assert.match(service, /请严格按照附件中的合同内容开具工厂增值税发票，确保发票内容与合同内容一致。/);
+  assert.match(service, /所有上传文件仅支持 PDF 格式。/);
+  assert.match(service, /本邮件由系统自动发送，请勿直接回复。/);
+});
+
 test("supplier portal does not render customer identity fields", () => {
   assert.doesNotMatch(supplierModule, /customerName|customerFullName|customerShortName|客户简称|客户全称/);
   assert.doesNotMatch(service, /customerName|customerFullName|customerShortName/);
   assert.match(supplierModule, /订单号/);
   assert.match(supplierModule, /资料回传/);
+  assert.match(supplierModule, /本页面仅支持 PDF 文件/);
+  assert.match(supplierModule, /仅支持 PDF 格式，单个文件最大/);
+  assert.match(supplierModule, /回传账号/);
+  assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
 });
 
 test("admin tax refund drawer can notify factory suppliers without replacing tax upload flow", () => {
