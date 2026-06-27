@@ -279,6 +279,22 @@ const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
 const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
+const SUPPLIER_LOGISTICS_COST_TYPE_UI_META: Record<string, { label?: string; description: string }> = {
+  拖车费: { description: "国内拖车、短驳、提送柜等运输费用。" },
+  报关费: { description: "出口报关代理、申报服务相关费用。" },
+  港杂费: { description: "码头、港区、港口服务等本地杂费。" },
+  海运费: { description: "海运主运费及承运人相关费用。" },
+  保险费: { description: "货运保险及运输保障费用。" },
+  ENS: { label: "ENS", description: "ENS 申报及相关承运人费用。" },
+  打单费: { description: "单证制作、文件处理、打单服务费用。" },
+  查验费: { description: "海关查验、协查、查验服务费用。" },
+  超重费: { description: "超重箱、超限或额外重量附加费。" },
+  提箱费: { description: "提空箱、提重箱或场站提箱费用。" },
+  进港费: { description: "集装箱进港、入场及相关操作费用。" },
+  落箱费: { description: "落箱、堆存或场站临时操作费用。" },
+  预提费: { description: "预提箱、提前操作及相关服务费用。" },
+  其他物流费用: { description: "不属于上述类型的零散物流费用。" },
+};
 const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
 const EXCHANGE_RATE_TYPES = ["现汇买入价", "现汇卖出价", "中间价"];
 const COMMISSION_FORMULA_PRESETS = [
@@ -2222,19 +2238,22 @@ function SupplierEditPanel({
         </label>
       </div>
 
-      <div className={styles.checkboxPanel}>
+      <div className={styles.documentGroupCard}>
         <strong>允许录入的物流费用类型</strong>
-        <div>
-          {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => (
-            <UiCheckbox
-              key={costType}
-              variant="compact"
-              label={label}
-              checked={form.allowedLogisticsCostTypes.includes(costType)}
-              disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
-              onChange={() => toggleCostType(costType)}
-            />
-          ))}
+        <div className={styles.supplierLogisticsCostGrid}>
+          {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => {
+            const meta = SUPPLIER_LOGISTICS_COST_TYPE_UI_META[costType];
+            return (
+              <PermissionSelectItem
+                key={costType}
+                label={meta?.label || label}
+                description={meta?.description || "允许供应商在物流费用模块录入该费用。"}
+                checked={form.allowedLogisticsCostTypes.includes(costType)}
+                disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
+                onChange={() => toggleCostType(costType)}
+              />
+            );
+          })}
         </div>
       </div>
 

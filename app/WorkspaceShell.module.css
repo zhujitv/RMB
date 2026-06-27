@@ -4702,6 +4702,12 @@
   gap: 14px;
 }
 
+.supplierLogisticsCostGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .notificationTemplateField {
   display: grid;
   gap: 6px;
@@ -5770,6 +5776,10 @@
     grid-template-columns: 1fr;
   }
 
+  .supplierLogisticsCostGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .taxRefundDrawer {
     width: min(100vw, 900px);
   }
@@ -6578,6 +6588,10 @@
 }
 
 @media (max-width: 520px) {
+  .supplierLogisticsCostGrid {
+    grid-template-columns: 1fr;
+  }
+
   .loadingScreen {
     padding: 18px;
   }

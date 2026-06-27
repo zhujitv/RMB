@@ -59,6 +59,27 @@ test("auto-send document selection reuses commission formula card selection", ()
   assert.doesNotMatch(autoSendSnippet, /styles\.checkboxPanel/);
 });
 
+test("supplier logistics cost types use card multi-select options", () => {
+  const supplierCostIndex = settingsModule.indexOf("<strong>允许录入的物流费用类型</strong>");
+  const supplierCostSnippet = settingsModule.slice(Math.max(0, supplierCostIndex - 420), supplierCostIndex + 1500);
+
+  assert.match(settingsModule, /SUPPLIER_LOGISTICS_COST_TYPE_UI_META/);
+  for (const label of ["拖车费", "报关费", "港杂费", "海运费", "保险费", "ENS", "打单费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"]) {
+    assert.match(settingsModule, new RegExp(label));
+  }
+  assert.match(supplierCostSnippet, /styles\.supplierLogisticsCostGrid/);
+  assert.match(supplierCostSnippet, /LOGISTICS_COST_TYPE_OPTIONS\.map/);
+  assert.match(supplierCostSnippet, /<PermissionSelectItem/);
+  assert.match(supplierCostSnippet, /description=\{meta\?\.description/);
+  assert.match(supplierCostSnippet, /checked=\{form\.allowedLogisticsCostTypes\.includes\(costType\)\}/);
+  assert.match(supplierCostSnippet, /onChange=\{\(\) => toggleCostType\(costType\)\}/);
+  assert.doesNotMatch(supplierCostSnippet, /variant="compact"/);
+  assert.doesNotMatch(supplierCostSnippet, /styles\.checkboxPanel/);
+  assert.match(workspaceStyles, /\.supplierLogisticsCostGrid \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /@media \(max-width: 920px\) \{[\s\S]*\.supplierLogisticsCostGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.supplierLogisticsCostGrid \{[\s\S]*grid-template-columns: 1fr;/);
+});
+
 test("native form controls are normalized by the workspace style layer", () => {
   assert.match(workspaceStyles, /\.uiSwitch/);
   assert.match(workspaceStyles, /\.uiChoiceCard/);
