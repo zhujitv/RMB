@@ -231,37 +231,41 @@ function SupplierDocumentTaskCard({
                 <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
                 <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
               </div>
-              {document ? (
-                <div className={styles.fileUploadFile}>
-                  <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
-                    {document.fileName || "-"}
+              <div className={styles.supplierDocumentUploadBody}>
+                {document ? (
+                  <div className={styles.fileUploadFile}>
+                    <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
+                      {document.fileName || "-"}
+                    </div>
+                    <div className={styles.fileUploadMeta}>
+                      <span>上传人：{document.uploadedByName || "-"}</span>
+                      <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
+                    </div>
+                    <div className={styles.fileUploadActions}>
+                      <span className={styles.fileUploadActionLabel}>操作：</span>
+                      <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
+                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                    </div>
                   </div>
-                  <div className={styles.fileUploadMeta}>
-                    <span>上传人：{document.uploadedByName || "-"}</span>
-                    <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
-                  </div>
-                  <div className={styles.fileUploadActions}>
-                    <span className={styles.fileUploadActionLabel}>操作：</span>
-                    <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-                  </div>
-                </div>
-              ) : null}
-              <label className={styles.supplierDocumentUploadButton}>
-                {uploading ? "上传中..." : "选择 PDF 文件"}
-                <input
-                  type="file"
-                  accept={PDF_UPLOAD_ACCEPT}
-                  disabled={uploading}
-                  hidden
-                  onChange={(event) => {
-                    onUpload(task, documentType, event.target.files?.[0] || null);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </label>
-              <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
-              {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
+                ) : null}
+              </div>
+              <div className={styles.supplierDocumentUploadControls}>
+                <label className={styles.supplierDocumentUploadButton}>
+                  {uploading ? "上传中..." : "选择 PDF 文件"}
+                  <input
+                    type="file"
+                    accept={PDF_UPLOAD_ACCEPT}
+                    disabled={uploading}
+                    hidden
+                    onChange={(event) => {
+                      onUpload(task, documentType, event.target.files?.[0] || null);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
+                {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
+              </div>
             </div>
           );
         })}

@@ -304,6 +304,7 @@ export function TaxRefundModule({
   const [manualShippingMessage, setManualShippingMessage] = useState("");
   const [supplierDocumentForm, setSupplierDocumentForm] = useState<SupplierDocumentRequestForm | null>(null);
   const [supplierDocumentSending, setSupplierDocumentSending] = useState(false);
+  const [supplierDocumentSubmitProgress, setSupplierDocumentSubmitProgress] = useState(0);
   const {
     confirmation,
     requestConfirmation,
@@ -870,6 +871,7 @@ export function TaxRefundModule({
       return;
     }
     setSupplierDocumentSending(true);
+    setSupplierDocumentSubmitProgress(0);
     setSupplierDocumentForm({ ...supplierDocumentForm, error: "" });
     try {
       const formData = new FormData();
@@ -881,15 +883,11 @@ export function TaxRefundModule({
       if (supplierDocumentForm.templateFile) {
         formData.append("templateFile", supplierDocumentForm.templateFile);
       }
-      const response = await fetch("/api/supplier-document-requests", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; error?: string };
-      if (!response.ok || data.success === false) {
-        throw new Error(data.message || data.error || "创建供应商资料回传任务失败");
-      }
+      const data = await uploadFormDataWithProgress<{ success?: boolean; message?: string; error?: string }>(
+        "/api/supplier-document-requests",
+        formData,
+        setSupplierDocumentSubmitProgress,
+      );
       setSupplierDocumentForm(null);
       setNotice(data.message || "已通知供应商回传资料");
       if (detailOrderId === supplierDocumentForm.order.id) await fetchDetail(supplierDocumentForm.order.id);
@@ -899,6 +897,7 @@ export function TaxRefundModule({
         : current);
     } finally {
       setSupplierDocumentSending(false);
+      setSupplierDocumentSubmitProgress(0);
     }
   }
 
@@ -1227,6 +1226,7 @@ export function TaxRefundModule({
         <SupplierDocumentRequestDialog
           form={supplierDocumentForm}
           sending={supplierDocumentSending}
+          submitProgress={supplierDocumentSubmitProgress}
           onClose={() => setSupplierDocumentForm(null)}
           onChange={setSupplierDocumentForm}
           onSubmit={submitSupplierDocumentRequest}
@@ -1656,12 +1656,14 @@ function TaxRefundDetailPanel({
 function SupplierDocumentRequestDialog({
   form,
   sending,
+  submitProgress,
   onClose,
   onChange,
   onSubmit,
 }: {
   form: SupplierDocumentRequestForm;
   sending: boolean;
+  submitProgress: number;
   onClose: () => void;
   onChange: (form: SupplierDocumentRequestForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1761,6 +1763,7 @@ function SupplierDocumentRequestDialog({
               ))}
             </div>
           </div>
+          {sending ? <UploadProgressInline progress={submitProgress} /> : null}
           <div className={styles.detailActions}>
             <button className={styles.primaryButtonCompact} type="submit" disabled={sending || form.loadingSuppliers}>
               {sending ? "发送中..." : "发送通知"}

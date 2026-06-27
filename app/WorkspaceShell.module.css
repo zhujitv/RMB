@@ -5589,11 +5589,14 @@
 
 .fileUploadCard {
   min-width: 0;
+  height: 100%;
+  min-height: 210px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #fff;
   padding: 12px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -5620,7 +5623,9 @@
 
 .fileUploadFile {
   min-width: 0;
+  flex: 1 1 auto;
   display: grid;
+  align-content: flex-start;
   gap: 7px;
 }
 
@@ -5651,6 +5656,10 @@
   line-height: 1.45;
 }
 
+.fileUploadEmpty {
+  flex: 1 1 auto;
+}
+
 .fileUploadActions {
   display: flex;
   align-items: center;
@@ -5664,7 +5673,12 @@
 }
 
 .fileUploadButton {
+  margin-top: auto;
   justify-self: flex-start;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .supplierDocumentsPage {
@@ -5833,12 +5847,15 @@
 
 .supplierDocumentUploadCard {
   min-width: 0;
+  height: 100%;
+  min-height: 228px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: #fff;
   padding: 14px;
-  display: grid;
-  gap: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .supplierDocumentUploadHeader {
@@ -5863,10 +5880,24 @@
   font-size: 12px;
 }
 
+.supplierDocumentUploadBody {
+  min-width: 0;
+  min-height: 86px;
+  flex: 1 1 auto;
+}
+
+.supplierDocumentUploadControls {
+  min-width: 0;
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+}
+
 .supplierDocumentUploadButton {
-  min-height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
 }
 
 .supplierDocumentUploadButton input {
