@@ -146,12 +146,18 @@ test("user list detail action opens the inline user editor directly", () => {
   const settingsRowsIndex = settingsModule.indexOf("function SettingsRows");
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
   const startEditUserSnippet = settingsModule.match(/function startEditUser\(user: UserRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const startCreateUserSnippet = settingsModule.match(/function startCreateUser\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const saveUserSnippet = settingsModule.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
   const userCancelSnippet = settingsModule.match(/<UserEditPanel[\s\S]*?onCancel=\{\(\) => \{[\s\S]*?\}\}/)?.[0] || "";
+  const userEditorRenderIndex = settingsModule.indexOf("{userForm && activeTab === \"users\" ? (");
+  const settingsTableRenderIndex = settingsModule.indexOf("<SettingsTable");
 
   assert.match(settingsModule, /const \[selectedUserId, setSelectedUserId\] = useState\(""\)/);
   assert.match(settingsModule, /const userEditPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
   assert.match(settingsModule, /userEditPanelRef\.current\?\.scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.ok(settingsTableRenderIndex >= 0 && userEditorRenderIndex > settingsTableRenderIndex, "user editor should render after the user list table");
+  assert.match(startCreateUserSnippet, /setSelectedUserId\("new"\)/);
+  assert.match(startCreateUserSnippet, /setUserForm\(emptyUserForm\(\)\)/);
   assert.match(startEditUserSnippet, /setActiveTab\("users"\)/);
   assert.match(startEditUserSnippet, /setDetailRow\(null\)/);
   assert.match(startEditUserSnippet, /setSelectedUserId\(user\.id\)/);

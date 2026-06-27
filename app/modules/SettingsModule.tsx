@@ -717,7 +717,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setActiveTab("users");
     setDetailRow(null);
     setUserMessage("");
-    setSelectedUserId("");
+    setSelectedUserId("new");
     setUserForm(emptyUserForm());
     void ensureActiveSuppliers();
     void ensurePermissionConfig();
@@ -1152,25 +1152,6 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
           }}
         />
       ) : null}
-      {userForm && activeTab === "users" ? (
-        <div ref={userEditPanelRef}>
-          <UserEditPanel
-            form={userForm}
-            suppliers={activeSuppliers}
-            permissionConfig={permissionConfig}
-            saving={userSaving}
-            message={userMessage}
-            onChange={setUserForm}
-            onSubmit={saveUserForm}
-            onCancel={() => {
-              setUserForm(null);
-              setSelectedUserId("");
-              setUserMessage("");
-            }}
-          />
-        </div>
-      ) : null}
-
       {activeTab === "companyProfile" ? (
         <CompanyProfileSettingsCard
           settings={companyProfileSettings}
@@ -1234,23 +1215,43 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
           onSubmit={saveNotificationTemplateSettings}
         />
       ) : (
-        <SettingsTable
-          tab={activeTab}
-          rows={currentRows}
-          columns={listColumns}
-          loading={loading && !loadedTabs.has(activeTab)}
-          pagination={activePagination}
-          detailRow={detailRow}
-          onViewDetail={setDetailRow}
-          onCloseDetail={() => setDetailRow(null)}
-          onEditCustomer={startEditCustomer}
-          onEditSupplier={startEditSupplier}
-          onEditUser={startEditUser}
-          onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
-          onDeleteSupplier={(supplier) => void deleteRecord("supplier", supplier.id)}
-          onDeleteUser={(user) => void deleteRecord("user", user.id)}
-          onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}
-        />
+        <>
+          <SettingsTable
+            tab={activeTab}
+            rows={currentRows}
+            columns={listColumns}
+            loading={loading && !loadedTabs.has(activeTab)}
+            pagination={activePagination}
+            detailRow={detailRow}
+            onViewDetail={setDetailRow}
+            onCloseDetail={() => setDetailRow(null)}
+            onEditCustomer={startEditCustomer}
+            onEditSupplier={startEditSupplier}
+            onEditUser={startEditUser}
+            onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
+            onDeleteSupplier={(supplier) => void deleteRecord("supplier", supplier.id)}
+            onDeleteUser={(user) => void deleteRecord("user", user.id)}
+            onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}
+          />
+          {userForm && activeTab === "users" ? (
+            <div ref={userEditPanelRef}>
+              <UserEditPanel
+                form={userForm}
+                suppliers={activeSuppliers}
+                permissionConfig={permissionConfig}
+                saving={userSaving}
+                message={userMessage}
+                onChange={setUserForm}
+                onSubmit={saveUserForm}
+                onCancel={() => {
+                  setUserForm(null);
+                  setSelectedUserId("");
+                  setUserMessage("");
+                }}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );
