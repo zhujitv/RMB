@@ -160,6 +160,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         <>
           <div className={styles.supplierDocumentsListToolbar}>
             <span>当前显示 {pagedRows.length} / {rows.length} 条</span>
+            <span>本页面仅支持 PDF 文件</span>
             <label>
               每页
               <select
@@ -231,7 +232,7 @@ function SupplierDocumentTaskCard({
   return (
     <article className={styles.supplierDocumentTaskCard}>
       <div className={styles.supplierDocumentTaskRow}>
-        <span className={styles.supplierDocumentTaskOrder} title={task.orderNo || "-"}>
+        <span className={styles.supplierDocumentTaskOrder} aria-label="订单号" title={task.orderNo || "-"}>
           {task.orderNo || "-"}
         </span>
         <span className={styles.supplierDocumentTaskSupplier} title={task.supplierName || "-"}>
