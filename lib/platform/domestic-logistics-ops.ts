@@ -252,6 +252,8 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
         lastSyncedAt: true,
         lastSyncTime: true,
         updatedAt: true,
+        rawPayload: true,
+        rawResponse: true,
         containers: {
           select: { containerNo: true },
           orderBy: [{ containerNo: "asc" }],

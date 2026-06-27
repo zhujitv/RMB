@@ -716,6 +716,29 @@ export function DomesticLogisticsModule({
     }
   }
 
+  async function recoverShipsgoTracking(row: DomesticLogisticsRow) {
+    const busyKey = `${row.id}:shipsgo:recover`;
+    setShipsgoBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/shipsgo/ocean-trackings/recover", {
+        method: "POST",
+        body: JSON.stringify({
+          orderId: row.id,
+          masterBlNo: row.blNo || row.billOfLadingNo || "",
+        }),
+      });
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "从 ShipsGo 同步已有跟踪失败");
+      updateRowShipsgoTracking(row.id, result.tracking);
+      setNotice(result.message || "已从 ShipsGo 同步已有跟踪");
+    } catch (recoverError) {
+      setError(recoverError instanceof Error ? recoverError.message : "从 ShipsGo 同步已有跟踪失败");
+    } finally {
+      setShipsgoBusyKey("");
+    }
+  }
+
   return (
     <>
     <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
@@ -838,6 +861,7 @@ export function DomesticLogisticsModule({
                 canManageShipsgoTracking={canEditDomesticLogistics}
                 onCreateShipsgoTracking={(payload) => createShipsgoTracking(row, payload)}
                 onSyncShipsgoTracking={(trackingId) => syncShipsgoTracking(row, trackingId)}
+                onRecoverShipsgoTracking={() => recoverShipsgoTracking(row)}
                 onSaved={() => {
                   setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "物流信息已保存");
                   setEditingOrderId("");
@@ -936,6 +960,7 @@ function ShipsgoOrderTrackingPanel({
   busyKey,
   onCreate,
   onSync,
+  onRecover,
 }: {
   row: DomesticLogisticsRow;
   features: ShipsgoFeatureFlags;
@@ -943,6 +968,7 @@ function ShipsgoOrderTrackingPanel({
   busyKey: string;
   onCreate: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
   onSync: (trackingId: string) => Promise<void>;
+  onRecover: () => Promise<void>;
 }) {
   const trackings = row.shipsgoTrackings || [];
   const hasTracking = trackings.length > 0;
@@ -951,6 +977,7 @@ function ShipsgoOrderTrackingPanel({
   const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
   const createBusy = busyKey === `${row.id}:shipsgo:create`;
+  const recoverBusy = busyKey === `${row.id}:shipsgo:recover`;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
 
   useEffect(() => {
@@ -986,7 +1013,7 @@ function ShipsgoOrderTrackingPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>ShipsGo 海运跟踪</strong>
-          <span>按真实船公司 SCAC、提单号或柜号创建跟踪；货代供应商不会作为船公司使用。</span>
+          <span>按 Master B/L 建立一次跟踪；柜号仅用于本地关联查询，不会重复创建 Tracking。</span>
         </div>
       </div>
       {trackings.length ? (
@@ -1040,6 +1067,17 @@ function ShipsgoOrderTrackingPanel({
           <button className={styles.secondaryButton} type="button" onClick={(event) => event.stopPropagation()}>
             查看运输状态
           </button>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            disabled={recoverBusy}
+            onClick={(event) => {
+              event.stopPropagation();
+              void onRecover();
+            }}
+          >
+            {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
+          </button>
         </div>
       ) : null}
       {canCreate && !hasTracking ? (
@@ -1064,13 +1102,27 @@ function ShipsgoOrderTrackingPanel({
             <button
               className={styles.primaryButtonCompact}
               type="button"
-              disabled={createBusy}
+              disabled={createBusy || recoverBusy}
               onClick={(event) => {
                 event.stopPropagation();
                 void submitCreateTracking();
               }}
             >
               {createBusy ? "创建中..." : "开始追踪"}
+            </button>
+          </label>
+          <label>
+            已有 Tracking
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={createBusy || recoverBusy}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onRecover();
+              }}
+            >
+              {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
             </button>
           </label>
         </div>
@@ -1100,6 +1152,7 @@ function DomesticLogisticsRows({
   canManageShipsgoTracking,
   onCreateShipsgoTracking,
   onSyncShipsgoTracking,
+  onRecoverShipsgoTracking,
   onSaved,
   onCancelEdit,
   canDeleteDomesticLogistics,
@@ -1135,6 +1188,7 @@ function DomesticLogisticsRows({
   canManageShipsgoTracking: boolean;
   onCreateShipsgoTracking: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
   onSyncShipsgoTracking: (trackingId: string) => Promise<void>;
+  onRecoverShipsgoTracking: () => Promise<void>;
   onSaved: () => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
@@ -1262,6 +1316,7 @@ function DomesticLogisticsRows({
                   busyKey={shipsgoBusyKey}
                   onCreate={onCreateShipsgoTracking}
                   onSync={onSyncShipsgoTracking}
+                  onRecover={onRecoverShipsgoTracking}
                 />
               ) : null}
               <CustomsDocumentPanel

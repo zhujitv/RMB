@@ -474,6 +474,7 @@ model ShipsgoTracking {
   lastSyncedAt           DateTime? @map("last_synced_at")
   lastSyncTime           DateTime? @map("last_sync_time")
   rawPayload             Json?     @map("raw_payload")
+  rawResponse            Json?     @map("raw_response")
   createdById            String?   @map("created_by")
   updatedById            String?   @map("updated_by")
   createdAt              DateTime  @default(now()) @map("created_at")

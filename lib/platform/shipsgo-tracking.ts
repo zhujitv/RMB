@@ -155,19 +155,83 @@ function firstRecord(...values: unknown[]): ShipsgoShipmentPayload | null {
   return null;
 }
 
+function firstArrayRecord(value: unknown): ShipsgoShipmentPayload | null {
+  if (!Array.isArray(value)) return null;
+  return value.find((item) => isPlainRecord(item)) as ShipsgoShipmentPayload | undefined || null;
+}
+
 function extractShipmentPayload(data: unknown): ShipsgoShipmentPayload {
+  if (Array.isArray(data)) return firstArrayRecord(data) || {};
   if (!isPlainRecord(data)) return {};
   return firstRecord(
     data.shipment,
+    data.Shipment,
     data.data,
+    firstArrayRecord(data.data),
+    firstArrayRecord(data.shipments),
+    firstArrayRecord(data.Shipments),
+    firstArrayRecord(data.results),
+    firstArrayRecord(data.items),
     isPlainRecord(data.data) ? data.data.shipment : null,
+    isPlainRecord(data.data) ? firstArrayRecord(data.data.shipments) : null,
     isPlainRecord(data.result) ? data.result.shipment : null,
     data,
   ) || {};
 }
 
 function textAt(source: unknown, key: string) {
-  return isPlainRecord(source) ? nonEmpty(source[key]) : "";
+  if (!isPlainRecord(source)) return "";
+  const value = source[key];
+  if (isPlainRecord(value) || Array.isArray(value)) return "";
+  return nonEmpty(value);
+}
+
+function normalizeKey(key: string) {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function textByKeys(source: unknown, keys: string[], depth = 0): string {
+  if (depth > 6 || source == null) return "";
+  if (isPlainRecord(source)) {
+    const normalizedKeys = keys.map(normalizeKey);
+    for (const [key, value] of Object.entries(source)) {
+      if (normalizedKeys.includes(normalizeKey(key))) {
+        if (isPlainRecord(value) || Array.isArray(value)) {
+          const nested = textByKeys(value, keys, depth + 1);
+          if (nested) return nested;
+          continue;
+        }
+        const text = nonEmpty(value);
+        if (text) return text;
+      }
+    }
+    for (const value of Object.values(source)) {
+      const found = textByKeys(value, keys, depth + 1);
+      if (found) return found;
+    }
+  }
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = textByKeys(item, keys, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
+function arrayByKeys(source: unknown, keys: string[], depth = 0): unknown[] {
+  if (depth > 5 || source == null) return [];
+  if (isPlainRecord(source)) {
+    const normalizedKeys = keys.map(normalizeKey);
+    for (const [key, value] of Object.entries(source)) {
+      if (normalizedKeys.includes(normalizeKey(key)) && Array.isArray(value)) return value;
+    }
+    for (const value of Object.values(source)) {
+      const found = arrayByKeys(value, keys, depth + 1);
+      if (found.length) return found;
+    }
+  }
+  return [];
 }
 
 function recordAt(source: unknown, key: string) {
@@ -182,6 +246,13 @@ function arrayAt(source: unknown, key: string) {
 
 function dateAt(source: unknown, key: string) {
   const text = textAt(source, key);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateByKeys(source: unknown, keys: string[]) {
+  const text = textByKeys(source, keys);
   if (!text) return null;
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -207,6 +278,9 @@ function containerNumberFromRecord(container: unknown) {
   return safeContainerNumber(
     textAt(container, "container_number")
     || textAt(container, "containerNo")
+    || textAt(container, "container_no")
+    || textAt(container, "container")
+    || textAt(container, "cntrNo")
     || textAt(container, "number")
     || textAt(container, "id"),
   );
@@ -214,56 +288,137 @@ function containerNumberFromRecord(container: unknown) {
 
 function extractContainerNumbersFromPayload(payload: ShipsgoShipmentPayload) {
   const containers = arrayAt(payload, "containers")
+    .concat(arrayByKeys(payload, ["containerList", "container_list", "containers"]))
     .map((container) => containerNumberFromRecord(container))
     .filter(Boolean);
-  const directContainer = safeContainerNumber(textAt(payload, "container_number"));
+  const directContainer = safeContainerNumber(
+    textAt(payload, "container_number")
+    || textAt(payload, "containerNo")
+    || textAt(payload, "container_no")
+    || textAt(payload, "containerNumber")
+    || textByKeys(payload, ["container_number", "containerNo", "container_no", "containerNumber"]),
+  );
   return uniqueStrings([directContainer, ...containers]);
+}
+
+function portName(...records: unknown[]) {
+  for (const record of records) {
+    const value = textAt(record, "location")
+      || textAt(record, "name")
+      || textAt(record, "port_name")
+      || textAt(record, "portName")
+      || textAt(record, "port")
+      || textAt(record, "unlocode")
+      || textAt(record, "code");
+    if (value) return value;
+  }
+  return "";
 }
 
 function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
   const carrier = recordAt(payload, "carrier");
+  const shippingLine = recordAt(payload, "shippingLine");
+  const shippingLineSnake = recordAt(payload, "shipping_line");
   const route = recordAt(payload, "route");
   const pol = recordAt(route, "port_of_loading");
   const pod = recordAt(route, "port_of_discharge");
+  const originPort = recordAt(payload, "originPort");
+  const destinationPort = recordAt(payload, "destinationPort");
+  const departurePort = recordAt(payload, "departurePort");
+  const arrivalPort = recordAt(payload, "arrivalPort");
+  const polRecord = recordAt(payload, "pol");
+  const podRecord = recordAt(payload, "pod");
   const tokens = recordAt(payload, "tokens");
-  const containers = arrayAt(payload, "containers");
+  const containers = arrayAt(payload, "containers").concat(arrayByKeys(payload, ["containerList", "container_list"]));
+  const events = arrayByKeys(payload, ["events", "eventTimeline", "event_timeline", "trackingEvents", "tracking_events"]);
   const lastMovement = lastOceanMovement(containers);
   const vessel = lastMovement ? recordAt(lastMovement.movement, "vessel") : {};
-  const shipmentId = textAt(payload, "id");
-  const token = textAt(tokens, "map");
-  const status = textAt(payload, "status") || "UNKNOWN";
-  const eta = dateAt(route, "date_of_discharge_predicted") || dateAt(route, "date_of_discharge");
+  const latestEvent = events.length ? events[events.length - 1] : null;
+  const latestEventVessel = latestEvent ? recordAt(latestEvent, "vessel") : {};
+  const shipmentId = textAt(payload, "id")
+    || textAt(payload, "shipment_id")
+    || textAt(payload, "shipmentId")
+    || recursiveShipmentId(payload);
+  const token = textAt(tokens, "map") || textAt(payload, "mapToken") || textAt(payload, "map_token");
+  const status = textAt(payload, "status")
+    || textAt(payload, "current_status")
+    || textAt(payload, "currentStatus")
+    || textAt(payload, "latestStatus")
+    || textAt(payload, "latest_status")
+    || textAt(latestEvent, "status")
+    || textAt(latestEvent, "event")
+    || "UNKNOWN";
+  const eta = dateAt(route, "date_of_discharge_predicted")
+    || dateAt(route, "date_of_discharge")
+    || dateByKeys(payload, ["eta", "ETA", "estimatedArrival", "estimated_arrival", "estimatedTimeOfArrival", "predictedDischargeDate", "dateOfDischargePredicted"]);
   const containerNumbers = extractContainerNumbersFromPayload(payload);
   const masterBlNo = textAt(payload, "master_bl_no")
     || textAt(payload, "master_bill_of_lading")
     || textAt(payload, "mbl_number")
-    || textAt(payload, "booking_number");
+    || textAt(payload, "masterBlNo")
+    || textAt(payload, "bl_no")
+    || textAt(payload, "blNo")
+    || textAt(payload, "booking_number")
+    || textAt(payload, "bookingNumber");
+  const carrierScac = textAt(carrier, "scac")
+    || textAt(shippingLine, "scac")
+    || textAt(shippingLineSnake, "scac")
+    || textAt(payload, "carrier_scac")
+    || textAt(payload, "carrierScac")
+    || textAt(payload, "scac")
+    || textByKeys(payload, ["carrier_scac", "carrierScac", "scac"]);
+  const carrierName = textAt(carrier, "name")
+    || textAt(shippingLine, "name")
+    || textAt(shippingLineSnake, "name")
+    || textAt(payload, "shippingLine")
+    || textAt(payload, "shipping_line")
+    || textAt(payload, "carrier_name")
+    || textAt(payload, "carrierName")
+    || textByKeys(payload, ["carrier_name", "carrierName", "shippingLineName"]);
+  const vesselName = textAt(vessel, "name")
+    || textAt(latestEventVessel, "name")
+    || textAt(payload, "vesselName")
+    || textAt(payload, "vessel_name")
+    || textByKeys(payload, ["vesselName", "vessel_name", "vessel"]);
+  const voyage = textAt(lastMovement?.movement, "voyage")
+    || textAt(latestEvent, "voyage")
+    || textAt(payload, "voyage")
+    || textAt(payload, "voyageNo")
+    || textAt(payload, "voyage_no")
+    || textAt(payload, "voyageNumber")
+    || textByKeys(payload, ["voyageNo", "voyage_no", "voyageNumber", "voyage"]);
   return {
     shipsgoShipmentId: shipmentId,
     masterBlNo,
     reference: textAt(payload, "reference"),
-    carrierScac: textAt(carrier, "scac"),
-    carrierName: textAt(carrier, "name"),
-    bookingNumber: textAt(payload, "booking_number"),
+    carrierScac,
+    carrierName,
+    bookingNumber: textAt(payload, "booking_number") || textAt(payload, "bookingNumber") || masterBlNo,
     containerNumber: containerNumbers[0] || textAt(payload, "container_number"),
     status,
     currentStatus: status,
     syncStatus: "SYNCED",
     syncMessage: "",
-    originName: textAt(pol, "location"),
-    destinationName: textAt(pod, "location"),
-    dateOfLoading: dateAt(route, "date_of_loading"),
-    dateOfDischarge: dateAt(route, "date_of_discharge"),
-    predictedDischargeDate: dateAt(route, "date_of_discharge_predicted"),
+    originName: portName(pol, originPort, departurePort, polRecord) || textByKeys(payload, ["originPort", "departurePort", "pol", "portOfLoading"]),
+    destinationName: portName(pod, destinationPort, arrivalPort, podRecord) || textByKeys(payload, ["destinationPort", "arrivalPort", "pod", "portOfDischarge"]),
+    dateOfLoading: dateAt(route, "date_of_loading") || dateByKeys(payload, ["dateOfLoading", "date_of_loading", "etd", "departureDate"]),
+    dateOfDischarge: dateAt(route, "date_of_discharge") || dateByKeys(payload, ["dateOfDischarge", "date_of_discharge", "ata", "arrivalDate"]),
+    predictedDischargeDate: dateAt(route, "date_of_discharge_predicted") || eta,
     eta,
-    vesselName: textAt(vessel, "name"),
-    voyage: textAt(lastMovement?.movement, "voyage"),
+    vesselName,
+    voyage,
     mapToken: token,
     mapUrl: mapUrl(shipmentId, token),
-    lastEvent: textAt(lastMovement?.movement, "event"),
-    lastEventAt: lastMovement?.timestamp || null,
+    lastEvent: textAt(lastMovement?.movement, "event")
+      || textAt(latestEvent, "event")
+      || textAt(latestEvent, "status")
+      || textAt(payload, "latestStatus")
+      || textAt(payload, "lastLocation")
+      || textAt(payload, "last_location"),
+    lastEventAt: lastMovement?.timestamp || dateByKeys(latestEvent, ["timestamp", "date", "eventDate", "event_date"]) || null,
     containerNumbers,
     rawPayload: payload as Prisma.InputJsonValue,
+    rawResponse: payload as Prisma.InputJsonValue,
   };
 }
 
@@ -304,23 +459,31 @@ function serializeShipsgoTracking(row: {
   lastSyncTime?: Date | string | null;
   updatedAt?: Date | string | null;
   containers?: { containerNo?: string | null }[] | null;
+  rawPayload?: unknown;
+  rawResponse?: unknown;
 }) {
+  const rawFallback = isPlainRecord(row.rawResponse)
+    ? mapShipsgoShipmentPayload(row.rawResponse)
+    : isPlainRecord(row.rawPayload)
+      ? mapShipsgoShipmentPayload(row.rawPayload)
+      : null;
   const containerNumbers = uniqueStrings([
     row.containerNumber || "",
     ...((row.containers || []).map((container) => container.containerNo || "")),
+    ...(rawFallback?.containerNumbers || []),
   ]);
-  const status = row.currentStatus || row.status || "UNKNOWN";
-  const masterBlNo = row.masterBlNo || row.bookingNumber || "";
+  const status = row.currentStatus || row.status || rawFallback?.currentStatus || rawFallback?.status || "UNKNOWN";
+  const masterBlNo = row.masterBlNo || row.bookingNumber || rawFallback?.masterBlNo || rawFallback?.bookingNumber || "";
   return {
     id: row.id,
     orderId: row.orderId,
     provider: row.provider,
     mode: row.mode,
-    shipsgoShipmentId: row.shipsgoShipmentId || "",
+    shipsgoShipmentId: row.shipsgoShipmentId || rawFallback?.shipsgoShipmentId || "",
     masterBlNo,
     reference: row.reference || "",
-    carrierScac: row.carrierScac || "",
-    carrierName: row.carrierName || "",
+    carrierScac: row.carrierScac || rawFallback?.carrierScac || "",
+    carrierName: row.carrierName || rawFallback?.carrierName || "",
     bookingNumber: row.bookingNumber || masterBlNo,
     containerNumber: containerNumbers[0] || "",
     containerNumbers,
@@ -329,17 +492,17 @@ function serializeShipsgoTracking(row: {
     statusLabel: shipsgoStatusLabel(status),
     syncStatus: row.syncStatus || "NOT_SYNCED",
     syncMessage: row.syncMessage || "",
-    originName: row.originName || "",
-    destinationName: row.destinationName || "",
-    dateOfLoading: dateText(row.dateOfLoading),
-    dateOfDischarge: dateText(row.dateOfDischarge),
-    predictedDischargeDate: dateText(row.predictedDischargeDate),
-    eta: dateText(row.eta || row.predictedDischargeDate || row.dateOfDischarge),
-    vesselName: row.vesselName || "",
-    voyage: row.voyage || "",
-    mapUrl: row.mapUrl || "",
-    lastEvent: row.lastEvent || "",
-    lastEventAt: dateTimeText(row.lastEventAt),
+    originName: row.originName || rawFallback?.originName || "",
+    destinationName: row.destinationName || rawFallback?.destinationName || "",
+    dateOfLoading: dateText(row.dateOfLoading || rawFallback?.dateOfLoading),
+    dateOfDischarge: dateText(row.dateOfDischarge || rawFallback?.dateOfDischarge),
+    predictedDischargeDate: dateText(row.predictedDischargeDate || rawFallback?.predictedDischargeDate),
+    eta: dateText(row.eta || row.predictedDischargeDate || row.dateOfDischarge || rawFallback?.eta),
+    vesselName: row.vesselName || rawFallback?.vesselName || "",
+    voyage: row.voyage || rawFallback?.voyage || "",
+    mapUrl: row.mapUrl || rawFallback?.mapUrl || "",
+    lastEvent: row.lastEvent || rawFallback?.lastEvent || "",
+    lastEventAt: dateTimeText(row.lastEventAt || rawFallback?.lastEventAt),
     lastCheckedAt: dateTimeText(row.lastCheckedAt),
     lastSyncedAt: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     lastSyncTime: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
@@ -411,6 +574,57 @@ async function getShipsgoTrackingOrder(orderId: string, actor: ShipsgoActor) {
     throw codedError("无权限访问该订单物流信息。", 403, "PERMISSION_DENIED");
   }
   return order;
+}
+
+function orderContainerNumbers(order: ShipsgoTrackingOrder) {
+  return uniqueStrings((order.domesticLogisticsInfos || []).flatMap((info) => (
+    info.transportItems || []
+  ).map((item) => safeContainerNumber(item.containerNo))));
+}
+
+function queryString(params: Record<string, string>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  return search.toString();
+}
+
+function shipmentHasUsefulIdentity(payload: ShipsgoShipmentPayload) {
+  const mapped = mapShipsgoShipmentPayload(payload);
+  return Boolean(mapped.shipsgoShipmentId || mapped.masterBlNo || mapped.bookingNumber || mapped.containerNumbers.length);
+}
+
+async function findExistingShipsgoShipment(settings: ShipsgoSettings, target: { masterBlNo: string; carrierScac?: string; containerNumbers?: string[] }) {
+  const candidates: string[] = [];
+  const masterBlNo = target.masterBlNo;
+  const carrier = target.carrierScac || "";
+  if (masterBlNo) {
+    candidates.push(`/ocean/shipments?${queryString({ booking_number: masterBlNo, carrier })}`);
+    candidates.push(`/ocean/shipments?${queryString({ master_bl_no: masterBlNo, carrier })}`);
+    candidates.push(`/ocean/shipments?${queryString({ mbl_number: masterBlNo, carrier })}`);
+    candidates.push(`/ocean/shipments?${queryString({ reference: masterBlNo })}`);
+  }
+  for (const containerNo of target.containerNumbers || []) {
+    candidates.push(`/ocean/shipments?${queryString({ container_number: containerNo })}`);
+    candidates.push(`/ocean/shipments?${queryString({ container_no: containerNo })}`);
+  }
+
+  let lastMessage = "";
+  for (const path of uniqueStrings(candidates)) {
+    try {
+      const response = await shipsgoApiRequest<unknown>(settings, path, { method: "GET" });
+      const shipment = extractShipmentPayload(response.data);
+      if (shipmentHasUsefulIdentity(shipment)) return { shipment, path };
+    } catch (error) {
+      lastMessage = error instanceof Error ? error.message : "查询 ShipsGo 已有跟踪失败";
+    }
+  }
+  throw codedError(
+    lastMessage || "未在 ShipsGo 查询到已有 Tracking，请确认提单号或柜号已在 ShipsGo 后台存在。",
+    404,
+    "SHIPSGO_EXISTING_TRACKING_NOT_FOUND",
+  );
 }
 
 function createPayloadFromInput(input: ShipsgoTrackingInput, order: ShipsgoTrackingOrder) {
@@ -571,7 +785,13 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const before = await getTrackingForActor(id, actor);
-  if (!before.shipsgoShipmentId) throw codedError("该记录还没有 ShipsGo Shipment ID，请先创建跟踪。", 400, "SHIPSGO_SHIPMENT_ID_REQUIRED");
+  if (!before.shipsgoShipmentId) {
+    return recoverShipsgoOceanTracking(request, actor, {
+      orderId: before.orderId,
+      masterBlNo: before.masterBlNo || before.bookingNumber,
+      carrierScac: before.carrierScac,
+    });
+  }
 
   const response = await shipsgoApiRequest<unknown>(settings, `/ocean/shipments/${encodeURIComponent(before.shipsgoShipmentId)}`);
   const shipment = extractShipmentPayload(response.data);
@@ -605,6 +825,112 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
     { status: saved.status, syncStatus: saved.syncStatus, lastSyncedAt: saved.lastSyncedAt },
   ));
   return { tracking: serializeShipsgoTracking(saved), message: "ShipsGo 状态已同步。" };
+}
+
+export async function recoverShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, input: unknown = {}) {
+  assertWrite(actor, "domesticLogistics");
+  const body = assertJsonObject(input) as ShipsgoTrackingInput;
+  const orderId = cleanInputText(body.orderId, 80);
+  if (!orderId) throw codedError("请选择需要补同步 ShipsGo 跟踪的订单。", 400, "ORDER_REQUIRED");
+  const settings = await getShipsgoIntegrationSettings();
+  assertShipsgoOceanEnabled(settings);
+  const order = await getShipsgoTrackingOrder(orderId, actor);
+  const masterBlNo = cleanBookingNumber(body.masterBlNo) || cleanBookingNumber(body.bookingNumber) || cleanBookingNumber(order.blNo);
+  const carrierScac = cleanCarrierScac(body.carrierScac);
+  const existing = await prisma.shipsgoTracking.findFirst({
+    where: {
+      orderId,
+      provider: SHIPSGO_PROVIDER,
+      mode: OCEAN_MODE,
+      deletedAt: null,
+    },
+    include: {
+      containers: {
+        select: { containerNo: true },
+        orderBy: [{ containerNo: "asc" }],
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }],
+  });
+  if (existing?.shipsgoShipmentId) {
+    return syncShipsgoOceanTracking(request, actor, existing.id);
+  }
+
+  const localContainers = uniqueStrings([
+    ...orderContainerNumbers(order),
+    ...((existing?.containers || []).map((container) => container.containerNo || "")),
+    existing?.containerNumber || "",
+  ]);
+  if (!masterBlNo && !localContainers.length) {
+    throw codedError("本地缺少提单号和柜号，无法从 ShipsGo 找回已有 Tracking。", 400, "SHIPSGO_RECOVER_TARGET_REQUIRED");
+  }
+
+  const found = await findExistingShipsgoShipment(settings, { masterBlNo, carrierScac, containerNumbers: localContainers });
+  const mapped = mapShipsgoShipmentPayload(found.shipment);
+  const trackingData = trackingDataFromMappedShipment(mapped);
+  const now = new Date();
+  const currentActorId = actorId(actor);
+  const savedBase = existing
+    ? await prisma.shipsgoTracking.update({
+      where: { id: existing.id },
+      data: {
+        ...trackingData,
+        masterBlNo: mapped.masterBlNo || existing.masterBlNo || existing.bookingNumber || masterBlNo,
+        reference: mapped.reference || existing.reference || masterBlNo,
+        carrierScac: mapped.carrierScac || carrierScac || existing.carrierScac,
+        bookingNumber: mapped.bookingNumber || existing.bookingNumber || masterBlNo,
+        containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || existing.containerNumber,
+        eta: mapped.eta,
+        currentStatus: mapped.currentStatus,
+        syncStatus: "RECOVERED",
+        syncMessage: `已从 ShipsGo 已有 Tracking 补同步。`,
+        lastCheckedAt: now,
+        lastSyncedAt: now,
+        lastSyncTime: now,
+        updatedById: currentActorId || null,
+      },
+    })
+    : await prisma.shipsgoTracking.create({
+      data: {
+        orderId,
+        provider: SHIPSGO_PROVIDER,
+        mode: OCEAN_MODE,
+        ...trackingData,
+        masterBlNo: mapped.masterBlNo || mapped.bookingNumber || masterBlNo,
+        reference: mapped.reference || masterBlNo || cleanInputText(`${order.orderNo || order.id}-shipsgo`, 128),
+        carrierScac: mapped.carrierScac || carrierScac || null,
+        bookingNumber: mapped.bookingNumber || masterBlNo || null,
+        containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || localContainers[0] || null,
+        eta: mapped.eta,
+        currentStatus: mapped.currentStatus,
+        syncStatus: "RECOVERED",
+        syncMessage: "已从 ShipsGo 已有 Tracking 补同步。",
+        lastCheckedAt: now,
+        lastSyncedAt: now,
+        lastSyncTime: now,
+        createdById: currentActorId || null,
+        updatedById: currentActorId || null,
+      },
+    });
+  await replaceShipsgoTrackingContainers(savedBase.id, uniqueStrings([...mapped.containerNumbers, ...localContainers]));
+  const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+  if (!saved) throw codedError("ShipsGo 已有 Tracking 补同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+  await runNonCriticalTask("ShipsGo 已有跟踪补同步日志写入", () => writeAudit(
+    request,
+    actor,
+    "补同步 ShipsGo 已有跟踪",
+    "shipsgo_trackings",
+    saved.id,
+    existing ? { shipsgoShipmentId: existing.shipsgoShipmentId, syncStatus: existing.syncStatus } : null,
+    {
+      orderId,
+      shipsgoShipmentId: saved.shipsgoShipmentId,
+      masterBlNo: saved.masterBlNo || saved.bookingNumber,
+      containerNumbers: (saved.containers || []).map((container) => container.containerNo),
+      queryPath: found.path,
+    },
+  ));
+  return { tracking: serializeShipsgoTracking(saved), recovered: true, message: "已从 ShipsGo 同步已有跟踪。" };
 }
 
 export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor, containerNoInput: unknown) {
