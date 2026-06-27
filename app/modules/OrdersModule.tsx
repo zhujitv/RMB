@@ -775,7 +775,6 @@ function QuickCreateOrderPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialOrder?.id ? "编辑应收订单" : "新建应收订单"}</strong>
-          <span>基础订单信息在本页维护；收款、成本、物流和退税资料在对应模块处理。</span>
         </div>
       </div>
 

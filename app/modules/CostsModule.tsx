@@ -1249,7 +1249,6 @@ function QuickCreateCostPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{editMode ? "编辑成本" : "批量登记成本"}</strong>
-          <span>{editMode ? "编辑单条人工成本记录。" : "可在同一订单下一次录入多条供应商成本。"}</span>
         </div>
         {!editMode ? (
           <div className={styles.detailActions}>

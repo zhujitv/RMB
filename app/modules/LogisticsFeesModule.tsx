@@ -2099,7 +2099,6 @@ export function LogisticsExpenseForm({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>新增物流费用</strong>
-          <span>物流费用提交审核后，审核通过的记录会自动进入成本管理和利润分析。</span>
         </div>
       </div>
       {message ? <div className={styles.inlineError}>{message}</div> : null}
@@ -2168,7 +2167,6 @@ export function LogisticsExpenseForm({
         <div className={styles.logisticsItemsHeader}>
           <div>
             <strong>费用明细</strong>
-            <span>可一次登记多条拖车费、报关费、港杂费等费用。</span>
           </div>
         </div>
         <div className={styles.logisticsItemsTable}>

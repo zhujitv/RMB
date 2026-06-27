@@ -116,11 +116,6 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       <header className={styles.supplierDocumentsHeader}>
         <div>
           <h1>{isAdmin ? "供应商资料回传" : "产品供应商资料回传"}</h1>
-          <p>
-            {isAdmin
-              ? "管理员可查看全部产品供应商回传任务、合同样本和已上传 PDF 资料。"
-              : "请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。"}
-          </p>
         </div>
         <button className={styles.secondaryButton} type="button" onClick={loadRows} disabled={loading}>
           {loading ? "刷新中..." : "刷新任务"}

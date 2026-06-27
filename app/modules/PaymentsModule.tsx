@@ -733,7 +733,6 @@ function QuickCreatePaymentPanel({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialPayment?.id ? "编辑收款" : "快速登记收款"}</strong>
-          <span>待确认收款不进入正式统计；已到账状态由后端权限校验，保存后自动刷新订单回款口径。</span>
         </div>
       </div>
 

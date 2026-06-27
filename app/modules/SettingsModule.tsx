@@ -412,15 +412,15 @@ const USER_STATUS_FILTER_OPTIONS = [
   { label: "邮箱未验证", value: "email_unverified" },
   ...USER_APPROVAL_STATUS_OPTIONS,
 ];
-const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }[] = [
-  { key: "companyProfile", label: "公司资料", description: "维护公司名称、系统品牌、联系方式和页面展示文案。" },
-  { key: "customers", label: "客户资料", description: "客户简称、国家、币种和负责业务员。" },
-  { key: "suppliers", label: "供应商资料", description: "供应商类型、状态和物流相关开关。" },
-  { key: "users", label: "用户与权限", description: "用户角色、账号状态和权限模式。" },
-  { key: "exchangeRates", label: "汇率设置", description: "汇率来源、自动更新和管理员开关。" },
-  { key: "commissionFormula", label: "提成公式", description: "按公司规则组合业务员提成基数。" },
-  { key: "notificationTemplates", label: "通知模板", description: "维护物流费用审核通过后的开票通知邮件文案。" },
-  { key: "auditLogs", label: "操作日志", description: "关键操作追溯记录。" },
+const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
+  { key: "companyProfile", label: "公司资料" },
+  { key: "customers", label: "客户资料" },
+  { key: "suppliers", label: "供应商资料" },
+  { key: "users", label: "用户与权限" },
+  { key: "exchangeRates", label: "汇率设置" },
+  { key: "commissionFormula", label: "提成公式" },
+  { key: "notificationTemplates", label: "通知模板" },
+  { key: "auditLogs", label: "操作日志" },
 ];
 
 const CUSTOMER_COLUMNS: TableColumn<CustomerRow>[] = [
@@ -523,7 +523,6 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const activeMeta = SETTINGS_TABS.find((tab) => tab.key === activeTab) || SETTINGS_TABS[0];
   const activePagination = pagination[activeTab] || emptyPagination(PAGE_SIZE);
   const listColumns = useMemo(() => columnsFor(activeTab), [activeTab]);
   const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs }), [activeTab, customers, suppliers, users, logs]);
@@ -1089,7 +1088,6 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       <div className={styles.moduleHeader}>
         <div>
           <h2>系统设置</h2>
-          <p>{activeMeta.description}</p>
         </div>
         <div className={styles.headerActions}>
           {activeTab === "customers" ? (
@@ -1536,7 +1534,6 @@ function CompanyProfileSettingsCard({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>公司资料 / 系统品牌配置</strong>
-          <span>用于工作台侧边栏、首页欢迎语、页脚版权和后续单公司交付时的品牌信息。</span>
         </div>
       </div>
 
@@ -1640,7 +1637,6 @@ function ExchangeSettingsCard({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>汇率设置</strong>
-          <span>维护外币折人民币来源、自动更新策略，以及退税和物流供应商相关系统开关。</span>
         </div>
         <button className={styles.secondaryButton} type="button" onClick={onRefresh} disabled={refreshing || saving}>
           {refreshing ? "刷新中..." : "手动刷新今日汇率"}
@@ -1748,7 +1744,6 @@ function CommissionFormulaSettingsCard({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>提成公式</strong>
-          <span>管理员可按公司制度组合业务员提成基数，结算、利润分析和提成报表会使用同一公式。</span>
         </div>
       </div>
 
@@ -1855,7 +1850,6 @@ function NotificationTemplateSettingsCard({
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>物流费用开票通知模板</strong>
-          <span>审核通过后发送给物流供应商；批量审核仍按供应商合并，避免同一供应商收到多封重复邮件。</span>
         </div>
       </div>
 
@@ -2108,7 +2102,6 @@ function CustomerEditPanel({
       <section className={styles.customerShippingPanel}>
         <div className={styles.customerShippingHeader}>
           <strong>清关资料自动通知</strong>
-          <span>用于自动或手动向客户发送商业发票、装箱单和报关单。</span>
         </div>
         <UiCheckbox
           variant="inline"
@@ -2219,7 +2212,6 @@ function SupplierEditPanel({
       <section className={styles.userEditTitle}>
         <div>
           <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
-          <span>{readOnly ? "当前为只读查看状态，点击编辑后可修改供应商资料。" : "物流相关开关只对物流类供应商生效；资料回传只对产品供应商生效。"}</span>
         </div>
       </section>
 
@@ -2229,7 +2221,6 @@ function SupplierEditPanel({
         <div className={styles.userEditSectionHeader}>
           <div>
             <strong>基础信息</strong>
-            <span>维护供应商名称、类型、联系人和开票资料。</span>
           </div>
         </div>
         <div className={styles.reportFilterGrid}>
@@ -2303,7 +2294,6 @@ function SupplierEditPanel({
           <div className={styles.userEditSectionHeader}>
             <div>
               <strong>产品供应商权限</strong>
-              <span>仅控制工厂采购合同和工厂增值税发票的供应商回传入口。</span>
             </div>
           </div>
           <div className={styles.reportFilterGrid}>
@@ -2322,7 +2312,6 @@ function SupplierEditPanel({
           <div className={styles.userEditSectionHeader}>
             <div>
               <strong>物流供应商权限</strong>
-              <span>控制物流信息录入、物流费用协同、物流发票上传和默认物流供应商设置。</span>
             </div>
           </div>
           <div className={styles.reportFilterGrid}>
@@ -2574,7 +2563,6 @@ function UserEditPanel({
       <div className={styles.userEditTitle}>
         <div>
           <strong>{form.id ? "编辑用户资料" : "新建用户"}</strong>
-          <span>维护基础账号、角色状态和权限组合；自定义权限保存后立即由后端统一校验。</span>
         </div>
       </div>
 
@@ -2583,7 +2571,6 @@ function UserEditPanel({
       <section className={styles.userEditSection}>
         <div className={styles.userEditSectionHeader}>
           <strong>基本账号信息</strong>
-          <span>维护登录身份、角色和账号状态。</span>
         </div>
         <div className={styles.userEditBasicGrid}>
           <label>
@@ -2690,7 +2677,6 @@ function UserEditPanel({
           <div className={styles.advancedPermissionHeader}>
             <div>
               <strong>高级自定义权限</strong>
-              <span>仅特殊账号需要展开配置；每次只显示一组权限。</span>
             </div>
             <button className={styles.secondaryButton} type="button" onClick={() => setAdvancedPermissionsOpen((open) => !open)}>
               {advancedPermissionsOpen ? "收起高级权限" : "展开高级权限"}

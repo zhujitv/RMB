@@ -158,7 +158,6 @@ export function DashboardModule() {
       <div className={styles.moduleHeader}>
         <div>
           <h2>经营总览</h2>
-          <p>经营总览作为分析工具按需加载，登录后不会预取经营统计。</p>
         </div>
         <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => loadOverview()}>
           {loading ? "刷新中..." : "刷新"}
