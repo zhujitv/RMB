@@ -6400,55 +6400,6 @@
   gap: 10px;
 }
 
-.factoryDocumentChoiceCard {
-  min-height: 72px;
-  justify-content: flex-start;
-  gap: 0;
-  padding: 14px 14px 14px 48px;
-  font-weight: 400;
-}
-
-.factoryDocumentChoiceCard .uiChoiceInput {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-}
-
-.factoryDocumentChoiceCard .uiChoiceCheck {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  transform: translateY(-50%);
-}
-
-.factoryDocumentChoiceCard .uiChoiceText {
-  display: grid;
-  flex: 1 1 auto;
-  min-width: 0;
-  gap: 4px;
-}
-
-.factoryDocumentChoiceCard .uiChoiceText strong {
-  overflow: hidden;
-  color: #0f172a;
-  font-size: 14px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.factoryDocumentChoiceCard .uiChoiceText small {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
 .checkboxPanel label {
   min-height: 48px;
   display: flex;
@@ -6487,9 +6438,96 @@
   box-shadow: none;
 }
 
-.inlineCheckbox input:not(.uiChoiceInput),
-.checkboxPanel input:not(.uiChoiceInput),
-.permissionGroup input:not(.uiChoiceInput),
+.checkboxOptionRow {
+  min-height: 72px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 14px;
+  color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.checkboxOptionRow:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.checkboxOptionRowChecked {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.12);
+}
+
+.checkboxOptionInput {
+  appearance: none;
+  flex: 0 0 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkboxBox {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+  background: #fff;
+  color: transparent;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.checkboxOptionInput:checked + .checkboxBox {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+}
+
+.checkboxOptionInput:focus-visible + .checkboxBox {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 3px;
+}
+
+.checkboxContent {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  margin-left: 10px;
+  min-width: 0;
+}
+
+.checkboxTitle {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.checkboxDesc {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput),
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput),
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput),
 .tableCheckbox {
   appearance: none;
   flex: 0 0 auto;
@@ -6504,9 +6542,9 @@
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-.inlineCheckbox input:not(.uiChoiceInput)::after,
-.checkboxPanel input:not(.uiChoiceInput)::after,
-.permissionGroup input:not(.uiChoiceInput)::after,
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
 .tableCheckbox::after {
   content: "";
   width: 10px;
@@ -6517,9 +6555,9 @@
   transform: rotate(-45deg) translate(1px, -1px);
 }
 
-.inlineCheckbox input:not(.uiChoiceInput):checked,
-.checkboxPanel input:not(.uiChoiceInput):checked,
-.permissionGroup input:not(.uiChoiceInput):checked,
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
 .tableCheckbox:checked {
   border-color: #2563eb;
   background: #2563eb;
@@ -6530,24 +6568,24 @@
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
 }
 
-.inlineCheckbox input:not(.uiChoiceInput):checked::after,
-.checkboxPanel input:not(.uiChoiceInput):checked::after,
-.permissionGroup input:not(.uiChoiceInput):checked::after,
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
 .tableCheckbox:checked::after {
   opacity: 1;
 }
 
-.inlineCheckbox input:not(.uiChoiceInput):focus-visible,
-.checkboxPanel input:not(.uiChoiceInput):focus-visible,
-.permissionGroup input:not(.uiChoiceInput):focus-visible,
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
 .tableCheckbox:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.22);
   outline-offset: 3px;
 }
 
-.inlineCheckbox input:not(.uiChoiceInput):disabled,
-.checkboxPanel input:not(.uiChoiceInput):disabled,
-.permissionGroup input:not(.uiChoiceInput):disabled,
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
 .tableCheckbox:disabled {
   cursor: not-allowed;
   opacity: 0.58;

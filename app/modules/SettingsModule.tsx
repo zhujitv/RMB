@@ -484,6 +484,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [customerSaving, setCustomerSaving] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
   const [supplierForm, setSupplierForm] = useState<SupplierForm | null>(null);
+  const [supplierPanelMode, setSupplierPanelMode] = useState<"view" | "edit">("view");
   const [supplierSaving, setSupplierSaving] = useState(false);
   const [supplierMessage, setSupplierMessage] = useState("");
   const [userForm, setUserForm] = useState<UserForm | null>(null);
@@ -610,6 +611,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setCustomerForm(null);
     setCustomerMessage("");
     setSupplierForm(null);
+    setSupplierPanelMode("view");
     setSupplierMessage("");
     setUserForm(null);
     setSelectedUserId("");
@@ -674,6 +676,9 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         { method: "DELETE" },
       );
       await loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
+      if (kind === "supplier") {
+        closeSupplierPanel();
+      }
       if (kind === "user") {
         setExchangeMessage("");
         setError(result.message || "用户已停用");
@@ -694,6 +699,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setActiveTab("suppliers");
     setDetailRow(null);
     setSupplierMessage("");
+    setSupplierPanelMode("edit");
     setSupplierForm(emptySupplierForm());
   }
 
@@ -732,11 +738,29 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setCustomerForm(customerFormFromRow(customer));
   }
 
-  function startEditSupplier(supplier: SupplierRow) {
+  function startViewSupplier(supplier: SupplierRow) {
     setActiveTab("suppliers");
-    setDetailRow(supplier);
+    setDetailRow(null);
     setSupplierMessage("");
+    setSupplierPanelMode("view");
     setSupplierForm(supplierFormFromRow(supplier));
+  }
+
+  function closeSupplierPanel() {
+    setSupplierForm(null);
+    setSupplierPanelMode("view");
+    setSupplierMessage("");
+  }
+
+  function cancelSupplierEdit() {
+    if (!supplierForm?.id) {
+      closeSupplierPanel();
+      return;
+    }
+    const currentSupplier = suppliers.find((supplier) => supplier.id === supplierForm.id);
+    if (currentSupplier) setSupplierForm(supplierFormFromRow(currentSupplier));
+    setSupplierPanelMode("view");
+    setSupplierMessage("");
   }
 
   function startEditUser(user: UserRow) {
@@ -805,7 +829,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setSupplierMessage("");
     try {
       const isEdit = Boolean(supplierForm.id);
-      const result = await apiJson<{ success?: boolean; message?: string }>(
+      const result = await apiJson<{ success?: boolean; message?: string; supplier?: SupplierRow }>(
         isEdit ? `/api/suppliers/${encodeURIComponent(supplierForm.id)}` : "/api/suppliers",
         {
           method: isEdit ? "PATCH" : "POST",
@@ -833,8 +857,18 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         },
       );
       if (result.success !== true) throw new Error(result.message || "供应商资料保存失败");
-      setSupplierForm(null);
-      await loadTab("suppliers", activePagination.page || 1, filters.suppliers);
+      const savedSupplier = result.supplier;
+      if (savedSupplier?.id) {
+        setSuppliers((current) => {
+          const exists = current.some((supplier) => supplier.id === savedSupplier.id);
+          return exists
+            ? current.map((supplier) => (supplier.id === savedSupplier.id ? savedSupplier : supplier))
+            : [savedSupplier, ...current];
+        });
+        setSupplierForm(supplierFormFromRow(savedSupplier));
+      }
+      setSupplierPanelMode("view");
+      setSupplierMessage(result.message || "供应商已保存");
     } catch (saveError) {
       setSupplierMessage(saveError instanceof Error ? saveError.message : "供应商资料保存失败");
     } finally {
@@ -1145,14 +1179,15 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       {supplierForm && activeTab === "suppliers" ? (
         <SupplierEditPanel
           form={supplierForm}
+          readOnly={Boolean(supplierForm.id) && supplierPanelMode === "view"}
           saving={supplierSaving}
           message={supplierMessage}
           onChange={setSupplierForm}
           onSubmit={saveSupplierForm}
-          onCancel={() => {
-            setSupplierForm(null);
-            setSupplierMessage("");
-          }}
+          onEdit={() => setSupplierPanelMode("edit")}
+          onDelete={() => supplierForm.id ? void deleteRecord("supplier", supplierForm.id) : undefined}
+          onClose={closeSupplierPanel}
+          onCancel={cancelSupplierEdit}
         />
       ) : null}
       {activeTab === "companyProfile" ? (
@@ -1226,13 +1261,17 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
             loading={loading && !loadedTabs.has(activeTab)}
             pagination={activePagination}
             detailRow={detailRow}
-            onViewDetail={setDetailRow}
+            onViewDetail={(row) => {
+              if (activeTab === "suppliers") {
+                startViewSupplier(row as SupplierRow);
+                return;
+              }
+              setDetailRow(row);
+            }}
             onCloseDetail={() => setDetailRow(null)}
             onEditCustomer={startEditCustomer}
-            onEditSupplier={startEditSupplier}
             onEditUser={startEditUser}
             onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
-            onDeleteSupplier={(supplier) => void deleteRecord("supplier", supplier.id)}
             onDeleteUser={(user) => void deleteRecord("user", user.id)}
             onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}
           />
@@ -1279,10 +1318,8 @@ function SettingsTable({
   onViewDetail,
   onCloseDetail,
   onEditCustomer,
-  onEditSupplier,
   onEditUser,
   onDeleteCustomer,
-  onDeleteSupplier,
   onDeleteUser,
   onPage,
 }: {
@@ -1295,10 +1332,8 @@ function SettingsTable({
   onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow) => void;
   onCloseDetail: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
-  onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;
-  onDeleteSupplier: (supplier: SupplierRow) => void;
   onDeleteUser: (user: UserRow) => void;
   onPage: (page: number) => void;
 }) {
@@ -1341,15 +1376,13 @@ function SettingsTable({
         totalPages={pagination.totalPages}
         onPage={onPage}
       />
-      {detailRow && tab !== "users" ? (
+      {detailRow && tab !== "users" && tab !== "suppliers" ? (
         <SettingsDetailDrawer
           tab={tab}
           row={detailRow}
           onClose={onCloseDetail}
           onEditCustomer={onEditCustomer}
-          onEditSupplier={onEditSupplier}
           onDeleteCustomer={onDeleteCustomer}
-          onDeleteSupplier={onDeleteSupplier}
         />
       ) : null}
     </>
@@ -1403,17 +1436,13 @@ function SettingsDetailDrawer({
   row,
   onClose,
   onEditCustomer,
-  onEditSupplier,
   onDeleteCustomer,
-  onDeleteSupplier,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
   onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
-  onEditSupplier: (supplier: SupplierRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;
-  onDeleteSupplier: (supplier: SupplierRow) => void;
 }) {
   const detailFields = detailFieldsFor(tab, row);
   const actions = tab === "customers"
@@ -1423,14 +1452,7 @@ function SettingsDetailDrawer({
         <button className={styles.dangerButton} type="button" onClick={() => onDeleteCustomer(row as CustomerRow)}>删除客户</button>
       </>
     )
-    : tab === "suppliers"
-      ? (
-        <>
-          <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditSupplier(row as SupplierRow)}>编辑供应商</button>
-          <button className={styles.dangerButton} type="button" onClick={() => onDeleteSupplier(row as SupplierRow)}>删除供应商</button>
-        </>
-      )
-      : undefined;
+    : undefined;
 
   return (
     <SideDetailDrawer
@@ -2114,17 +2136,25 @@ function CustomerEditPanel({
 
 function SupplierEditPanel({
   form,
+  readOnly,
   saving,
   message,
   onChange,
   onSubmit,
+  onEdit,
+  onDelete,
+  onClose,
   onCancel,
 }: {
   form: SupplierForm;
+  readOnly: boolean;
   saving: boolean;
   message: string;
   onChange: (form: SupplierForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onEdit: () => void;
+  onDelete: () => void | undefined;
+  onClose: () => void;
   onCancel: () => void;
 }) {
   function setField<K extends keyof SupplierForm>(key: K, value: SupplierForm[K]) {
@@ -2143,13 +2173,21 @@ function SupplierEditPanel({
 
   const logisticsCapable = LOGISTICS_SUPPLIER_TYPES.includes(form.supplierType);
   const factoryDocumentCapable = form.supplierType === "工厂供应商";
+  const isCreate = !form.id;
+  const controlsDisabled = readOnly || saving;
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+    <form className={styles.quickCreatePanel} onSubmit={(event) => {
+      if (readOnly) {
+        event.preventDefault();
+        return;
+      }
+      onSubmit(event);
+    }}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{form.id ? "编辑供应商资料" : "新建供应商资料"}</strong>
-          <span>物流相关开关只对物流类供应商生效；工厂资料回传只对工厂供应商生效。</span>
+          <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
+          <span>{readOnly ? "当前为只读查看状态，点击编辑后可修改供应商资料。" : "物流相关开关只对物流类供应商生效；工厂资料回传只对工厂供应商生效。"}</span>
         </div>
       </div>
 
@@ -2158,7 +2196,7 @@ function SupplierEditPanel({
       <div className={styles.reportFilterGrid}>
         <label>
           供应商名称
-          <input value={form.supplierName} onChange={(event) => setField("supplierName", event.target.value)} required />
+          <input value={form.supplierName} onChange={(event) => setField("supplierName", event.target.value)} required disabled={controlsDisabled} />
         </label>
         <label>
           供应商类型
@@ -2173,85 +2211,85 @@ function SupplierEditPanel({
               allowFactoryDocumentUpload: supplierType === "工厂供应商" ? form.allowFactoryDocumentUpload : false,
               isDefaultLogisticsSupplier: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.isDefaultLogisticsSupplier : false,
             });
-          }}>
+          }} disabled={controlsDisabled}>
             {SUPPLIER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
         </label>
         <label>
           状态
-          <select value={form.status} onChange={(event) => setField("status", event.target.value)}>
+          <select value={form.status} onChange={(event) => setField("status", event.target.value)} disabled={controlsDisabled}>
             {SUPPLIER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
           </select>
         </label>
         <label>
           国家 / 地区
-          <input value={form.country} onChange={(event) => setField("country", event.target.value)} />
+          <input value={form.country} onChange={(event) => setField("country", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           联系人
-          <input value={form.contactPerson} onChange={(event) => setField("contactPerson", event.target.value)} />
+          <input value={form.contactPerson} onChange={(event) => setField("contactPerson", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           电话
-          <input value={form.phone} onChange={(event) => setField("phone", event.target.value)} />
+          <input value={form.phone} onChange={(event) => setField("phone", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           邮箱
-          <input value={form.email} onChange={(event) => setField("email", event.target.value)} type="email" />
+          <input value={form.email} onChange={(event) => setField("email", event.target.value)} type="email" disabled={controlsDisabled} />
         </label>
         <label>
           地址
-          <input value={form.address} onChange={(event) => setField("address", event.target.value)} />
+          <input value={form.address} onChange={(event) => setField("address", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           开票名称
-          <input value={form.invoiceTitle} onChange={(event) => setField("invoiceTitle", event.target.value)} />
+          <input value={form.invoiceTitle} onChange={(event) => setField("invoiceTitle", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           税号
-          <input value={form.taxNumber} onChange={(event) => setField("taxNumber", event.target.value)} />
+          <input value={form.taxNumber} onChange={(event) => setField("taxNumber", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           银行名称
-          <input value={form.bankName} onChange={(event) => setField("bankName", event.target.value)} />
+          <input value={form.bankName} onChange={(event) => setField("bankName", event.target.value)} disabled={controlsDisabled} />
         </label>
         <label>
           银行账号
-          <input value={form.bankAccount} onChange={(event) => setField("bankAccount", event.target.value)} />
+          <input value={form.bankAccount} onChange={(event) => setField("bankAccount", event.target.value)} disabled={controlsDisabled} />
         </label>
         <BooleanSelect
           label="允许录入物流信息"
           value={logisticsCapable && form.allowDomesticLogisticsEntry}
-          disabled={!logisticsCapable}
+          disabled={controlsDisabled || !logisticsCapable}
           onChange={(value) => setField("allowDomesticLogisticsEntry", value)}
         />
         <BooleanSelect
           label="允许物流费用录入"
           value={logisticsCapable && form.allowLogisticsExpenseEntry}
-          disabled={!logisticsCapable}
+          disabled={controlsDisabled || !logisticsCapable}
           onChange={(value) => setField("allowLogisticsExpenseEntry", value)}
         />
         <BooleanSelect
           label="允许物流发票上传"
           value={logisticsCapable && form.allowLogisticsInvoiceUpload}
-          disabled={!logisticsCapable}
+          disabled={controlsDisabled || !logisticsCapable}
           onChange={(value) => setField("allowLogisticsInvoiceUpload", value)}
         />
         <BooleanSelect
           label="允许供应商资料回传"
           value={factoryDocumentCapable && form.allowFactoryDocumentUpload}
-          disabled={!factoryDocumentCapable}
+          disabled={controlsDisabled || !factoryDocumentCapable}
           onChange={(value) => setField("allowFactoryDocumentUpload", value)}
         />
         <BooleanSelect
           label="默认物流供应商"
           value={logisticsCapable && form.isDefaultLogisticsSupplier}
-          disabled={!logisticsCapable}
+          disabled={controlsDisabled || !logisticsCapable}
           onChange={(value) => setField("isDefaultLogisticsSupplier", value)}
         />
         <label>
           备注
-          <input value={form.remark} onChange={(event) => setField("remark", event.target.value)} />
+          <input value={form.remark} onChange={(event) => setField("remark", event.target.value)} disabled={controlsDisabled} />
         </label>
       </div>
 
@@ -2266,7 +2304,7 @@ function SupplierEditPanel({
                 label={meta?.label || label}
                 description={meta?.description || "允许供应商在物流费用模块录入该费用。"}
                 checked={form.allowedLogisticsCostTypes.includes(costType)}
-                disabled={!logisticsCapable || !form.allowLogisticsExpenseEntry}
+                disabled={controlsDisabled || !logisticsCapable || !form.allowLogisticsExpenseEntry}
                 onChange={() => toggleCostType(costType)}
               />
             );
@@ -2275,8 +2313,18 @@ function SupplierEditPanel({
       </div>
 
       <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存供应商"}</button>
-        <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
+        {readOnly ? (
+          <>
+            <button className={styles.primaryButtonCompact} type="button" onClick={onEdit} disabled={saving}>编辑供应商</button>
+            <button className={styles.dangerButton} type="button" onClick={onDelete} disabled={saving}>删除供应商</button>
+            <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>关闭</button>
+          </>
+        ) : (
+          <>
+            <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存供应商"}</button>
+            <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
+          </>
+        )}
       </div>
     </form>
   );
@@ -2652,25 +2700,6 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "备注", value: customer.remark || "-", wide: true },
     ];
   }
-  if (tab === "suppliers") {
-    const supplier = row as SupplierRow;
-    return [
-      { label: "供应商", value: supplier.supplierName || "-", wide: true },
-      { label: "类型", value: supplier.supplierType || "-" },
-      { label: "状态", value: supplier.status || "-" },
-      { label: "联系人", value: supplier.contactPerson || "-" },
-      { label: "电话", value: supplier.phone || "-" },
-      { label: "邮箱", value: supplier.email || "-" },
-      { label: "开票名称", value: supplier.invoiceTitle || "-", wide: true },
-      { label: "税号", value: supplier.taxNumber || "-" },
-      { label: "允许物流信息录入", value: yesNo(supplier.allowDomesticLogisticsEntry) },
-      { label: "允许物流费用录入", value: yesNo(supplier.allowLogisticsExpenseEntry) },
-      { label: "允许物流发票上传", value: yesNo(supplier.allowLogisticsInvoiceUpload) },
-      { label: "允许供应商资料回传", value: yesNo(supplier.allowFactoryDocumentUpload) },
-      { label: "默认物流供应商", value: yesNo(supplier.isDefaultLogisticsSupplier) },
-      { label: "备注", value: supplier.remark || "-", wide: true },
-    ];
-  }
   if (tab === "users") {
     const user = row as UserRow;
     return [
@@ -2702,10 +2731,6 @@ function drawerTitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | Us
     const customer = row as CustomerRow;
     return customer.shortName || customer.name || "客户详情";
   }
-  if (tab === "suppliers") {
-    const supplier = row as SupplierRow;
-    return supplier.supplierName || "供应商详情";
-  }
   if (tab === "users") {
     const user = row as UserRow;
     return user.name || user.email || "用户详情";
@@ -2718,10 +2743,6 @@ function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow |
   if (tab === "customers") {
     const customer = row as CustomerRow;
     return `国家：${customer.country || "-"} · 默认币种：${customer.defaultCurrency || "-"}`;
-  }
-  if (tab === "suppliers") {
-    const supplier = row as SupplierRow;
-    return `类型：${supplier.supplierType || "-"} · 状态：${supplier.status || "-"}`;
   }
   if (tab === "users") {
     const user = row as UserRow;

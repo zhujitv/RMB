@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, PermissionSelectItem, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
+import { CheckboxOptionRow, ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -1748,9 +1748,8 @@ function SupplierDocumentRequestDialog({
             <strong>需要回传的资料</strong>
             <div className={styles.factoryDocumentChoiceGrid}>
               {TAX_FACTORY_UPLOAD_TYPES.map((item) => (
-                <PermissionSelectItem
+                <CheckboxOptionRow
                   key={item.value}
-                  className={styles.factoryDocumentChoiceCard}
                   label={item.label}
                   description={item.value === "SUPPLIER_PURCHASE_CONTRACT" ? "盖章扫描后上传 PDF" : "上传增值税发票 PDF"}
                   checked={form.requiredDocumentTypes.includes(item.value)}

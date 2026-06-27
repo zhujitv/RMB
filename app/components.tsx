@@ -299,6 +299,24 @@ export function PermissionSelectItem(props: Omit<Parameters<typeof UiCheckbox>[0
   return <UiCheckbox {...props} variant="card" />;
 }
 
+export function CheckboxOptionRow({
+  label,
+  description,
+  className,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { label: ReactNode; description?: ReactNode }) {
+  return (
+    <label className={mergeClassNames(styles.checkboxOptionRow, props.checked ? styles.checkboxOptionRowChecked : "", className)}>
+      <input {...props} type={checkboxInputType} className={styles.checkboxOptionInput} />
+      <span className={styles.checkboxBox} aria-hidden="true">✓</span>
+      <span className={styles.checkboxContent}>
+        <span className={styles.checkboxTitle}>{label}</span>
+        {description ? <span className={styles.checkboxDesc}>{description}</span> : null}
+      </span>
+    </label>
+  );
+}
+
 export function UiRadio({
   label,
   description,

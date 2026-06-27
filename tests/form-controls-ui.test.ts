@@ -22,6 +22,7 @@ test("shared UI form controls are available for ERP pages", () => {
     "UiInput",
     "UiOptionCard",
     "PermissionSelectItem",
+    "CheckboxOptionRow",
   ]) {
     assert.match(components, new RegExp(`export function ${componentName}\\b`));
   }
@@ -65,12 +66,18 @@ test("factory supplier callback documents use aligned card selection UI", () => 
   const requestSnippet = taxRefundModule.slice(Math.max(0, requestIndex - 360), requestIndex + 1000);
 
   assert.match(requestSnippet, /styles\.factoryDocumentChoiceGrid/);
-  assert.match(requestSnippet, /<PermissionSelectItem/);
-  assert.match(requestSnippet, /className=\{styles\.factoryDocumentChoiceCard\}/);
+  assert.match(requestSnippet, /<CheckboxOptionRow/);
   assert.match(requestSnippet, /checked=\{form\.requiredDocumentTypes\.includes\(item\.value\)\}/);
   assert.match(requestSnippet, /onChange=\{\(\) => toggleDocumentType\(item\.value\)\}/);
-  assert.match(workspaceStyles, /\.factoryDocumentChoiceCard \{[\s\S]*padding: 14px 14px 14px 48px;/);
-  assert.match(workspaceStyles, /\.factoryDocumentChoiceCard \.uiChoiceCheck \{[\s\S]*left: 14px;[\s\S]*top: 50%;/);
+  assert.match(components, /<label className=\{mergeClassNames\(styles\.checkboxOptionRow/);
+  assert.match(components, /className=\{styles\.checkboxOptionInput\}/);
+  assert.match(components, /className=\{styles\.checkboxBox\} aria-hidden="true">✓<\/span>/);
+  assert.match(components, /className=\{styles\.checkboxContent\}/);
+  assert.match(workspaceStyles, /\.checkboxOptionRow \{[\s\S]*display: flex;[\s\S]*align-items: flex-start;[\s\S]*gap: 10px;/);
+  assert.match(workspaceStyles, /\.checkboxBox \{[\s\S]*width: 18px;[\s\S]*height: 18px;/);
+  assert.match(workspaceStyles, /\.checkboxContent \{[\s\S]*flex: 1;[\s\S]*margin-left: 10px;/);
+  assert.match(workspaceStyles, /\.checkboxPanel input:not\(\.uiChoiceInput\):not\(\.checkboxOptionInput\)/);
+  assert.doesNotMatch(workspaceStyles, /\.factoryDocumentChoiceCard/);
   assert.doesNotMatch(requestSnippet, /type=["']checkbox["']/);
 });
 
@@ -180,7 +187,7 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(settingsRowsSnippet, /if \(tab === "users"\) \{[\s\S]*onEditUser\(row as UserRow\);[\s\S]*return;/);
   assert.match(settingsRowsSnippet, /<tr className=\{styles\.clickableRow\} onClick=\{handlePrimaryAction\}>/);
   assert.match(settingsRowsSnippet, /\{tab === "users" \? "编辑" : "详情"\}/);
-  assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" \? \(/);
+  assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onEditUser=\{onEditUser\}/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onDeleteUser=\{onDeleteUser\}/);
   assert.doesNotMatch(settingsModule, /<button className=\{styles\.primaryButtonCompact\} type="button" onClick=\{\(\) => onEditUser\(row as UserRow\)\}>编辑用户<\/button>/);
@@ -189,6 +196,38 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(saveUserSnippet, /setUserForm\(null\)/);
   assert.match(saveUserSnippet, /setSelectedUserId\(""\)/);
   assert.match(saveUserSnippet, /await loadTab\("users", activePagination\.page \|\| 1, filters\.users\)/);
+});
+
+test("supplier detail action opens unified supplier edit panel in read-only mode", () => {
+  const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
+  const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
+  const settingsTableRenderIndex = settingsModule.indexOf("<SettingsTable");
+  const settingsTableRenderSnippet = settingsModule.slice(settingsTableRenderIndex, settingsTableRenderIndex + 1800);
+  const settingsRowsIndex = settingsModule.indexOf("function SettingsRows");
+  const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
+  const supplierPanelRenderSnippet = settingsModule.match(/\{supplierForm && activeTab === "suppliers"[\s\S]*?\) : null\}/)?.[0] || "";
+  const startViewSupplierSnippet = settingsModule.match(/function startViewSupplier\(supplier: SupplierRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const saveSupplierSnippet = settingsModule.match(/async function saveSupplierForm[\s\S]*?\n  async function saveUserForm/)?.[0] || "";
+  const supplierPanelSnippet = settingsModule.match(/function SupplierEditPanel[\s\S]*?\n}\n\nfunction BooleanSelect/)?.[0] || "";
+
+  assert.match(startViewSupplierSnippet, /setDetailRow\(null\)/);
+  assert.match(startViewSupplierSnippet, /setSupplierPanelMode\("view"\)/);
+  assert.match(startViewSupplierSnippet, /setSupplierForm\(supplierFormFromRow\(supplier\)\)/);
+  assert.match(settingsModule, /const \[supplierPanelMode, setSupplierPanelMode\] = useState<"view" \| "edit">\("view"\)/);
+  assert.match(settingsTableRenderSnippet, /if \(activeTab === "suppliers"\) \{[\s\S]*startViewSupplier\(row as SupplierRow\);[\s\S]*return;/);
+  assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
+  assert.match(settingsRowsSnippet, /onViewDetail\(\)/);
+  assert.match(supplierPanelRenderSnippet, /readOnly=\{Boolean\(supplierForm\.id\) && supplierPanelMode === "view"\}/);
+  assert.match(supplierPanelRenderSnippet, /onEdit=\{\(\) => setSupplierPanelMode\("edit"\)\}/);
+  assert.match(supplierPanelRenderSnippet, /onClose=\{closeSupplierPanel\}/);
+  assert.match(supplierPanelRenderSnippet, /onCancel=\{cancelSupplierEdit\}/);
+  assert.match(supplierPanelSnippet, /readOnly \? "供应商资料" : "编辑供应商资料"/);
+  assert.match(supplierPanelSnippet, /disabled=\{controlsDisabled\}/);
+  assert.match(supplierPanelSnippet, /编辑供应商/);
+  assert.match(supplierPanelSnippet, /保存供应商/);
+  assert.match(saveSupplierSnippet, /setSuppliers\(\(current\) =>/);
+  assert.match(saveSupplierSnippet, /setSupplierPanelMode\("view"\)/);
+  assert.doesNotMatch(saveSupplierSnippet, /await loadTab\("suppliers"/);
 });
 
 test("native form controls are normalized by the workspace style layer", () => {
