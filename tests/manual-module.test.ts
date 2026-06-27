@@ -35,7 +35,7 @@ test("manual explains transport monitor and Da Zhang Gui tracking rules", () => 
   assert.match(manualModule, /在途总票数、即将到港、ETA 已过期、同步失败和今日已同步/);
   assert.match(manualModule, /只同步本地已有的大掌櫃 Tracking ID，不会创建新的跟踪/);
   assert.match(manualModule, /管理员、业务员和物流资料录入员可查看系统内所有已创建的大掌櫃海运跟踪/);
-  assert.match(manualModule, /物流供应商和产品供应商账号不可见/);
+  assert.match(manualModule, /物流供应商和产品供应商不可见/);
   assert.match(manualModule, /一张 Master B\/L 在系统生命周期内只创建一次大掌櫃 Tracking/);
   assert.match(manualModule, /后台页面优先显示中文船公司、港口、状态和跟踪方式/);
 });

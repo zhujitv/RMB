@@ -72,11 +72,12 @@ export {
 export const LOGISTICS_OPERATOR_ROLE = "物流供应商";
 export const PRODUCT_SUPPLIER_TYPE = "产品供应商";
 export const LEGACY_FACTORY_SUPPLIER_TYPE = "工厂供应商";
-export const PRODUCT_SUPPLIER_OPERATOR_ROLE = "产品供应商账号";
+export const PRODUCT_SUPPLIER_OPERATOR_ROLE = "产品供应商";
+export const LEGACY_PRODUCT_SUPPLIER_OPERATOR_ROLE = "产品供应商账号";
 export const LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE = "工厂供应商账号";
 export const FACTORY_SUPPLIER_OPERATOR_ROLE = PRODUCT_SUPPLIER_OPERATOR_ROLE;
 export const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE];
-export const PRODUCT_SUPPLIER_OPERATOR_ROLES = [PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE];
+export const PRODUCT_SUPPLIER_OPERATOR_ROLES = [PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE];
 export const LEGACY_LOGISTICS_OPERATOR_ROLE = "物流资料录入员";
 export const ROLES = ["管理员", "业务员", "财务", LOGISTICS_OPERATOR_ROLE, FACTORY_SUPPLIER_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE];
 
@@ -93,7 +94,8 @@ export function supplierTypeDisplayName(value: unknown = "") {
 }
 
 export function userRoleDisplayName(value: unknown = "") {
-  return String(value || "") === LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE ? PRODUCT_SUPPLIER_OPERATOR_ROLE : String(value || "");
+  const role = String(value || "");
+  return role === LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE || role === LEGACY_PRODUCT_SUPPLIER_OPERATOR_ROLE ? PRODUCT_SUPPLIER_OPERATOR_ROLE : role;
 }
 
 export function supplierTypeStorageValue(value: unknown = "") {

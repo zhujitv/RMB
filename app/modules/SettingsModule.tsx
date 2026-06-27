@@ -308,9 +308,10 @@ const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_T
 const SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
 const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-const FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商账号";
+const FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商";
+const LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE = "产品供应商账号";
 const LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
-const FACTORY_SUPPLIER_ACCOUNT_ROLES = [FACTORY_SUPPLIER_ACCOUNT_ROLE, LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE];
+const FACTORY_SUPPLIER_ACCOUNT_ROLES = [FACTORY_SUPPLIER_ACCOUNT_ROLE, LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE, LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE];
 const SUPPLIER_ACCOUNT_ROLES = ["物流供应商", ...FACTORY_SUPPLIER_ACCOUNT_ROLES];
 const SUPPLIER_LOGISTICS_COST_TYPE_UI_META: Record<string, { label?: string; description: string }> = {
   拖车费: { description: "国内拖车、短驳、提送柜等运输费用。" },
@@ -1012,7 +1013,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       const supplier = suppliers.find((item) => item.id === userForm.supplierId);
       if (!supplierMatchesUserRole(supplier, userForm.role)) {
         setUserMessage(FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(userForm.role)
-          ? "产品供应商账号只能绑定已开启资料回传权限的产品供应商"
+          ? "产品供应商只能绑定已开启资料回传权限的产品供应商"
           : "物流供应商账号只能绑定物流、报关、海运或港杂费用供应商");
         return;
       }

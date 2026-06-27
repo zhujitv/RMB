@@ -531,10 +531,10 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
       throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("产品供应商账号只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("产品供应商只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(role) && !supplier.allowFactoryDocumentUpload) {
-      throw codedError("产品供应商账号绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
+      throw codedError("产品供应商绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
     }
     data.supplierId = supplier.id;
   }
@@ -591,10 +591,10 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
       throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(before.role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("产品供应商账号只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("产品供应商只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(before.role) && !supplier.allowFactoryDocumentUpload) {
-      throw codedError("产品供应商账号绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
+      throw codedError("产品供应商绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
     }
   }
   const user = await prisma.user.update({
