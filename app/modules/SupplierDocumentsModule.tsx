@@ -20,6 +20,7 @@ type SupplierDocumentTask = {
   id: string;
   orderNo?: string;
   supplierName?: string;
+  requestedByName?: string;
   requiredDocumentTypes?: string[];
   requiredDocumentLabels?: string[];
   status?: string;
@@ -108,13 +109,18 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   }
 
   const pendingCount = useMemo(() => rows.filter((row) => row.status !== "已完成").length, [rows]);
+  const isAdmin = currentUser.role === "管理员";
 
   return (
     <section className={`${styles.moduleCard} ${styles.supplierDocumentsPage}`}>
       <header className={styles.supplierDocumentsHeader}>
         <div>
-          <h1>产品供应商资料回传</h1>
-          <p>请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。</p>
+          <h1>{isAdmin ? "供应商资料回传" : "产品供应商资料回传"}</h1>
+          <p>
+            {isAdmin
+              ? "管理员可查看全部产品供应商回传任务、合同样本和已上传 PDF 资料。"
+              : "请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。"}
+          </p>
         </div>
         <button className={styles.secondaryButton} type="button" onClick={loadRows} disabled={loading}>
           {loading ? "刷新中..." : "刷新任务"}
@@ -123,8 +129,8 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
 
       <div className={styles.supplierDocumentsStats}>
         <div className={styles.supplierDocumentsStatCard}>
-          <span>回传账号</span>
-          <strong>{currentUser.name || "-"}</strong>
+          <span>{isAdmin ? "查看范围" : "回传账号"}</span>
+          <strong>{isAdmin ? "全部资料" : (currentUser.name || "-")}</strong>
         </div>
         <div className={styles.supplierDocumentsStatCard}>
           <span>待回传</span>
@@ -149,6 +155,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
               task={task}
               uploadingKey={uploadingKey}
               progressByKey={progressByKey}
+              isAdmin={isAdmin}
               onUpload={uploadDocument}
             />
           ))}
@@ -164,11 +171,13 @@ function SupplierDocumentTaskCard({
   task,
   uploadingKey,
   progressByKey,
+  isAdmin,
   onUpload,
 }: {
   task: SupplierDocumentTask;
   uploadingKey: string;
   progressByKey: Record<string, number>;
+  isAdmin: boolean;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
@@ -180,6 +189,12 @@ function SupplierDocumentTaskCard({
           <small>订单号</small>
           <b>{task.orderNo || "-"}</b>
         </span>
+        {isAdmin ? (
+          <span>
+            <small>供应商</small>
+            <b title={task.supplierName || "-"}>{task.supplierName || "-"}</b>
+          </span>
+        ) : null}
         <span>
           <small>状态</small>
           <b className={`${styles.statusPill} ${supplierDocumentStatusClass(taskStatus)}`}>{taskStatus}</b>
@@ -192,6 +207,12 @@ function SupplierDocumentTaskCard({
           <small>通知时间</small>
           <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
         </span>
+        {isAdmin ? (
+          <span>
+            <small>通知人</small>
+            <b>{task.requestedByName || "-"}</b>
+          </span>
+        ) : null}
         <span className={styles.supplierDocumentRequirement}>
           <small>资料要求</small>
           <b>{(task.requiredDocumentLabels || []).join("、") || "-"}</b>
