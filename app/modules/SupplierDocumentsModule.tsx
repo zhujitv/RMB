@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { PaginationBar, PdfPreviewButton } from "../components";
+import { ConfirmationDialog, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
@@ -31,6 +31,7 @@ type SupplierDocumentTask = {
   sendStatus?: string;
   sendError?: string;
   sentAt?: string;
+  canDelete?: boolean;
   documents?: SupplierDocument[];
   createdAt?: string;
   updatedAt?: string;
@@ -42,6 +43,11 @@ type SupplierDocumentsResponse = {
 
 type SupplierUploadResponse = {
   request?: SupplierDocumentTask;
+  message?: string;
+};
+
+type SupplierDocumentDeleteResponse = {
+  id?: string;
   message?: string;
 };
 
@@ -61,6 +67,14 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   const [expandedTaskId, setExpandedTaskId] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [deletingTaskId, setDeletingTaskId] = useState("");
+  const {
+    confirmation,
+    requestConfirmation,
+    cancelConfirmation,
+    confirmConfirmation,
+    updateConfirmationInput,
+  } = useConfirmationDialog();
 
   useEffect(() => {
     void loadRows();
@@ -109,6 +123,41 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         delete next[uploadKey];
         return next;
       });
+    }
+  }
+
+  async function deleteTask(task: SupplierDocumentTask) {
+    setNotice("");
+    setError("");
+    if (!isAdmin) {
+      setError("只有管理员可以删除资料回传任务。");
+      return;
+    }
+    if (!task.canDelete) {
+      setError("该任务已开始回传资料，无法删除。");
+      return;
+    }
+    const result = await requestConfirmation({
+      title: "删除资料回传任务",
+      message: "确定删除该资料回传任务吗？删除后无法恢复。",
+      confirmLabel: "删除",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!result.confirmed) return;
+    try {
+      setDeletingTaskId(task.id);
+      const data = await apiJson<SupplierDocumentDeleteResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}`,
+        { method: "DELETE" },
+      );
+      setRows((current) => current.filter((row) => row.id !== task.id));
+      setExpandedTaskId((current) => (current === task.id ? "" : current));
+      setNotice(data.message || "已删除资料回传任务。");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
+    } finally {
+      setDeletingTaskId("");
     }
   }
 
@@ -185,9 +234,12 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
                 uploadingKey={uploadingKey}
                 progressByKey={progressByKey}
                 isExpanded={expandedTaskId === task.id}
+                isAdmin={isAdmin}
+                deleting={deletingTaskId === task.id}
                 onToggle={() => setExpandedTaskId((current) => (current === task.id ? "" : task.id))}
                 onOpen={() => setExpandedTaskId(task.id)}
                 onUpload={uploadDocument}
+                onDelete={deleteTask}
               />
             ))}
           </div>
@@ -205,6 +257,14 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       ) : (
         <div className={styles.emptyState}>暂无需要回传的产品供应商资料。</div>
       )}
+      {confirmation ? (
+        <ConfirmationDialog
+          state={confirmation}
+          onCancel={cancelConfirmation}
+          onConfirm={confirmConfirmation}
+          onInputChange={updateConfirmationInput}
+        />
+      ) : null}
     </section>
   );
 }
@@ -214,17 +274,23 @@ function SupplierDocumentTaskCard({
   uploadingKey,
   progressByKey,
   isExpanded,
+  isAdmin,
+  deleting,
   onToggle,
   onOpen,
   onUpload,
+  onDelete,
 }: {
   task: SupplierDocumentTask;
   uploadingKey: string;
   progressByKey: Record<string, number>;
   isExpanded: boolean;
+  isAdmin: boolean;
+  deleting: boolean;
   onToggle: () => void;
   onOpen: () => void;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null) => void;
+  onDelete: (task: SupplierDocumentTask) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const taskStatus = task.status || "待上传";
@@ -248,6 +314,11 @@ function SupplierDocumentTaskCard({
           <button className={styles.primaryButtonCompact} type="button" onClick={onOpen}>
             上传资料
           </button>
+          {isAdmin && task.canDelete ? (
+            <button className={styles.dangerButton} type="button" onClick={() => onDelete(task)} disabled={deleting}>
+              {deleting ? "删除中..." : "删除"}
+            </button>
+          ) : null}
         </span>
       </div>
       {isExpanded ? (

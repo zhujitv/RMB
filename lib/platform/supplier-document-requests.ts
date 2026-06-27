@@ -218,6 +218,9 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
   const documents = (row.documents || [])
     .filter((document) => requiredTypes.includes(document.documentType))
     .map((document) => serializeSupplierDocument(document));
+  const canDelete = actor?.role === "管理员"
+    && row.status === "待上传"
+    && !supplierDocumentRequestHasStartedUpload(row);
   return {
     id: row.id,
     orderId: row.orderId,
@@ -235,6 +238,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     sendError: row.sendError || "",
     sentAt: row.sentAt,
     requestedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.requestedBy?.name || ""),
+    canDelete,
     documents,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -289,6 +293,15 @@ async function refreshSupplierDocumentRequestStatus(tx: Prisma.TransactionClient
   });
 }
 
+function supplierDocumentRequestHasStartedUpload(row: Pick<SupplierDocumentRequestRow, "documents">) {
+  return (row.documents || []).some((document) => {
+    if (document.deletedAt) return false;
+    const uploadStatus = String(document.uploadStatus || "PENDING");
+    const uploadProgress = Number(document.uploadProgress || 0);
+    return uploadStatus !== "PENDING" || uploadProgress > 0;
+  });
+}
+
 async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     id,
@@ -339,6 +352,52 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
     take: 100,
   });
   return rows.map((row) => serializeSupplierDocumentRequest(row, actor));
+}
+
+export async function deleteSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, requestId: string) {
+  if (actor?.role !== "管理员") {
+    throw codedError("只有管理员可以删除资料回传任务。", 403, "SUPPLIER_DOCUMENT_DELETE_ADMIN_ONLY");
+  }
+  const row = await prisma.supplierDocumentRequest.findFirst({
+    where: { id: requestId, deletedAt: null },
+    include: supplierDocumentRequestInclude(),
+  });
+  if (!row) {
+    throw codedError("资料回传任务不存在或已删除。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+  }
+  if (row.status !== "待上传" || supplierDocumentRequestHasStartedUpload(row)) {
+    throw codedError("该任务已开始回传资料，无法删除。", 400, "SUPPLIER_DOCUMENT_REQUEST_STARTED");
+  }
+
+  const now = new Date();
+  const pendingDocumentIds = (row.documents || [])
+    .filter((document) => !document.deletedAt
+      && String(document.uploadStatus || "PENDING") === "PENDING"
+      && Number(document.uploadProgress || 0) === 0)
+    .map((document) => document.id);
+
+  await prisma.$transaction(async (tx) => {
+    if (pendingDocumentIds.length) {
+      await tx.orderDocument.updateMany({
+        where: { id: { in: pendingDocumentIds }, deletedAt: null },
+        data: { deletedAt: now },
+      });
+    }
+    await tx.supplierDocumentRequest.update({
+      where: { id: row.id },
+      data: { deletedAt: now, status: "已关闭" },
+    });
+  });
+
+  if (row.templateStorageKey) {
+    await runNonCriticalTask("资料回传合同样本文件删除", () => deleteR2Object(row.templateStorageKey || ""));
+  }
+  await runNonCriticalTask("资料回传任务删除日志写入", () => writeAudit(request, actor, "删除资料回传任务", "supplier_document_requests", row.id, row, {
+    orderNo: row.order?.orderNo,
+    supplierId: row.supplierId,
+    pendingDocumentIds,
+  }));
+  return { id: row.id, deletedDocumentIds: pendingDocumentIds };
 }
 
 export async function createSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, input: SupplierDocumentRequestInput, templateFile: unknown) {

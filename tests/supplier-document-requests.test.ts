@@ -5,6 +5,7 @@ import test from "node:test";
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readFileSync("lib/platform/supplier-document-requests.ts", "utf8");
 const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
+const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");
 const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const menu = readFileSync("app/menu.ts", "utf8");
@@ -79,4 +80,24 @@ test("product supplier callback uses a dedicated supplier account role", () => {
   assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
   assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
   assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
+});
+
+test("admin can delete only untouched supplier document requests", () => {
+  assert.match(supplierRequestRoute, /export async function DELETE/);
+  assert.match(supplierRequestRoute, /deleteSupplierDocumentRequest\(request, actor, id\)/);
+  assert.match(service, /export async function deleteSupplierDocumentRequest/);
+  assert.match(service, /actor\?\.role !== "管理员"/);
+  assert.match(service, /只有管理员可以删除资料回传任务/);
+  assert.match(service, /row\.status !== "待上传" \|\| supplierDocumentRequestHasStartedUpload\(row\)/);
+  assert.match(service, /该任务已开始回传资料，无法删除。/);
+  assert.match(service, /uploadStatus[^\\n]*!== "PENDING" \|\| uploadProgress > 0/);
+  assert.match(service, /tx\.orderDocument\.updateMany/);
+  assert.match(service, /tx\.supplierDocumentRequest\.update/);
+  assert.match(service, /deletedAt: now/);
+  assert.match(service, /deleteR2Object\(row\.templateStorageKey/);
+  assert.match(supplierModule, /task\.canDelete/);
+  assert.match(supplierModule, /删除资料回传任务/);
+  assert.match(supplierModule, /确定删除该资料回传任务吗？删除后无法恢复。/);
+  assert.match(supplierModule, /method: "DELETE"/);
+  assert.match(supplierModule, /setRows\(\(current\) => current\.filter\(\(row\) => row\.id !== task\.id\)\)/);
 });
