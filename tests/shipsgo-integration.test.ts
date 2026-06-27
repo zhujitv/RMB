@@ -98,3 +98,12 @@ test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
   assert.match(logisticsModule, /ShipsgoOrderTrackingPanel/);
   assert.match(logisticsModule, /\/api\/shipsgo\/ocean-trackings/);
 });
+
+test("ShipsGo create errors are shown inside the create panel", () => {
+  const createFunction = logisticsModule.match(/async function createShipsgoTracking[\s\S]*?async function syncShipsgoTracking/)?.[0] || "";
+  assert.match(createFunction, /throw createError instanceof Error \? createError : new Error\("创建 ShipsGo 跟踪失败"\)/);
+  assert.doesNotMatch(createFunction, /setError\(createError/);
+  assert.match(logisticsModule, /const \[createError, setCreateError\] = useState\(""\)/);
+  assert.match(logisticsModule, /styles\.shipsgoCreateError/);
+  assert.match(logisticsModule, /setCreateError\(error instanceof Error \? error\.message : "创建 ShipsGo 跟踪失败"\)/);
+});

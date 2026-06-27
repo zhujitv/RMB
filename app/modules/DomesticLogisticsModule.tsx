@@ -687,7 +687,7 @@ export function DomesticLogisticsModule({
       updateRowShipsgoTracking(row.id, result.tracking);
       setNotice(result.message || "ShipsGo 跟踪已创建");
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "创建 ShipsGo 跟踪失败");
+      throw createError instanceof Error ? createError : new Error("创建 ShipsGo 跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -943,13 +943,39 @@ function ShipsgoOrderTrackingPanel({
   const [carrierScac, setCarrierScac] = useState("");
   const [bookingNumber, setBookingNumber] = useState(row.blNo || row.billOfLadingNo || "");
   const [containerNumber, setContainerNumber] = useState(firstTrackingContainer(row));
+  const [createError, setCreateError] = useState("");
   const createBusy = busyKey === `${row.id}:shipsgo:create`;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
 
   useEffect(() => {
     setBookingNumber(row.blNo || row.billOfLadingNo || "");
     setContainerNumber(firstTrackingContainer(row));
+    setCreateError("");
   }, [row.id, row.blNo, row.billOfLadingNo, row.domesticLogisticsInfo?.id]);
+
+  function updateCarrierScac(value: string) {
+    setCarrierScac(value.toUpperCase());
+    if (createError) setCreateError("");
+  }
+
+  function updateBookingNumber(value: string) {
+    setBookingNumber(value);
+    if (createError) setCreateError("");
+  }
+
+  function updateContainerNumber(value: string) {
+    setContainerNumber(value.toUpperCase());
+    if (createError) setCreateError("");
+  }
+
+  async function submitCreateTracking() {
+    setCreateError("");
+    try {
+      await onCreate({ carrierScac, bookingNumber, containerNumber });
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "创建 ShipsGo 跟踪失败");
+    }
+  }
 
   return (
     <section className={styles.documentGroupCard}>
@@ -1008,16 +1034,21 @@ function ShipsgoOrderTrackingPanel({
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
           <label>
             船公司 SCAC
-            <input value={carrierScac} onChange={(event) => setCarrierScac(event.target.value.toUpperCase())} placeholder="例如 MAEU / CMDU" />
+            <input value={carrierScac} onChange={(event) => updateCarrierScac(event.target.value)} placeholder="例如 MAEU / CMDU" />
           </label>
           <label>
             提单号 / Booking No.
-            <input value={bookingNumber} onChange={(event) => setBookingNumber(event.target.value)} placeholder="至少填写提单号或柜号" />
+            <input value={bookingNumber} onChange={(event) => updateBookingNumber(event.target.value)} placeholder="至少填写提单号或柜号" />
           </label>
           <label>
             柜号 Container No.
-            <input value={containerNumber} onChange={(event) => setContainerNumber(event.target.value.toUpperCase())} placeholder="例如 MSKU1234567" />
+            <input value={containerNumber} onChange={(event) => updateContainerNumber(event.target.value)} placeholder="例如 MSKU1234567" />
           </label>
+          {createError ? (
+            <div className={`${styles.inlineError} ${styles.shipsgoCreateError}`} role="alert">
+              {createError}
+            </div>
+          ) : null}
           <label>
             创建跟踪
             <button
@@ -1026,7 +1057,7 @@ function ShipsgoOrderTrackingPanel({
               disabled={createBusy}
               onClick={(event) => {
                 event.stopPropagation();
-                void onCreate({ carrierScac, bookingNumber, containerNumber });
+                void submitCreateTracking();
               }}
             >
               {createBusy ? "创建中..." : "创建 ShipsGo 跟踪"}
