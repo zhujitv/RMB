@@ -8,10 +8,14 @@ const trackingService = readFileSync("lib/platform/shipsgo-tracking.ts", "utf8")
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackings/migration.sql", "utf8");
+const masterBlMigration = readFileSync("prisma/migrations/20260628123000_shipsgo_master_bl_containers/migration.sql", "utf8");
 const settingsRoute = readFileSync("app/api/settings/shipsgo/route.ts", "utf8");
 const oceanTrackingRoute = readFileSync("app/api/shipsgo/ocean-trackings/route.ts", "utf8");
 const oceanTrackingSyncRoute = readFileSync("app/api/shipsgo/ocean-trackings/[id]/sync/route.ts", "utf8");
+const oceanTrackingContainerRoute = readFileSync("app/api/shipsgo/ocean-trackings/container/[containerNo]/route.ts", "utf8");
 const webhookRoute = readFileSync("app/api/shipsgo/webhook/route.ts", "utf8");
+const shipsgoCronRoute = readFileSync("app/api/cron/shipsgo-sync/route.ts", "utf8");
+const vercelConfig = readFileSync("vercel.json", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
@@ -63,12 +67,18 @@ test("domestic logistics only receives safe ShipsGo feature flags", () => {
 
 test("ShipsGo tracking has an isolated model and migration", () => {
   assert.match(schema, /model ShipsgoTracking/);
+  assert.match(schema, /model ShipsgoTrackingContainer/);
+  assert.match(schema, /masterBlNo\s+String\?\s+@map\("master_bl_no"\)/);
+  assert.match(schema, /containers ShipsgoTrackingContainer\[\]/);
   assert.match(schema, /shipsgoTrackings ShipsgoTracking\[\]/);
   assert.match(schema, /createdShipsgoTrackings ShipsgoTracking\[\]/);
   assert.match(schema, /@@map\("shipsgo_trackings"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "shipsgo_trackings"/);
   assert.match(migration, /"raw_payload" JSONB/);
   assert.match(migration, /shipsgo_trackings_provider_shipment_unique/);
+  assert.match(masterBlMigration, /CREATE TABLE IF NOT EXISTS "shipsgo_tracking_containers"/);
+  assert.match(masterBlMigration, /"master_bl_no"/);
+  assert.match(masterBlMigration, /shipsgo_tracking_containers_tracking_container_unique/);
 });
 
 test("ShipsGo service uses official v2 headers and signature validation", () => {
@@ -84,9 +94,13 @@ test("ShipsGo service uses official v2 headers and signature validation", () => 
 test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(oceanTrackingRoute, /createShipsgoOceanTracking\(request, actor, body\)/);
   assert.match(oceanTrackingSyncRoute, /syncShipsgoOceanTracking\(request, actor, id\)/);
+  assert.match(oceanTrackingContainerRoute, /findShipsgoOceanTrackingByContainerNo\(actor, containerNo\)/);
   assert.match(webhookRoute, /request\.text\(\)/);
   assert.match(webhookRoute, /X-Shipsgo-Webhook-Signature/);
   assert.match(webhookRoute, /handleShipsgoWebhook\(rawBody, signature\)/);
+  assert.match(shipsgoCronRoute, /syncDueShipsgoOceanTrackings\(request, actor\)/);
+  assert.match(vercelConfig, /"path": "\/api\/cron\/shipsgo-sync"/);
+  assert.match(vercelConfig, /"schedule": "0 \*\/6 \* \* \*"/);
 });
 
 test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
@@ -105,5 +119,24 @@ test("ShipsGo create errors are shown inside the create panel", () => {
   assert.doesNotMatch(createFunction, /setError\(createError/);
   assert.match(logisticsModule, /const \[createError, setCreateError\] = useState\(""\)/);
   assert.match(logisticsModule, /styles\.shipsgoCreateError/);
-  assert.match(logisticsModule, /setCreateError\(error instanceof Error \? error\.message : "创建 ShipsGo 跟踪失败"\)/);
+  assert.match(logisticsModule, /const message = error instanceof Error \? error\.message : "创建 ShipsGo 跟踪失败"/);
+  assert.match(logisticsModule, /setCreateError\(message\)/);
+  assert.match(logisticsModule, /setShowCarrierInput\(true\)/);
+});
+
+test("ShipsGo creation consumes one tracking per master bill only", () => {
+  const payloadFunction = trackingService.match(/function createPayloadFromInput[\s\S]*?async function replaceShipsgoTrackingContainers/)?.[0] || "";
+  const createService = trackingService.match(/export async function createShipsgoOceanTracking[\s\S]*?export async function syncShipsgoOceanTracking/)?.[0] || "";
+  assert.match(payloadFunction, /masterBlNo/);
+  assert.match(payloadFunction, /booking_number: masterBlNo/);
+  assert.doesNotMatch(payloadFunction, /container_number:/);
+  assert.match(createService, /findFirst\(\{\s*where: \{\s*orderId,\s*provider: SHIPSGO_PROVIDER,\s*mode: OCEAN_MODE,\s*deletedAt: null,/);
+  assert.match(createService, /if \(existing\) \{/);
+  assert.match(createService, /alreadyExists: true/);
+  assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, mapped\.containerNumbers\)/);
+  assert.match(trackingService, /export async function findShipsgoOceanTrackingByContainerNo/);
+  assert.match(logisticsModule, /Master B\/L（提单号）/);
+  assert.doesNotMatch(logisticsModule, /柜号 Container No\./);
+  assert.match(logisticsModule, /开始追踪/);
+  assert.match(logisticsModule, /查看运输状态/);
 });

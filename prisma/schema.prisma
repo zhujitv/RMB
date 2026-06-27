@@ -448,12 +448,14 @@ model ShipsgoTracking {
   provider               String    @default("SHIPSGO")
   mode                   String    @default("OCEAN")
   shipsgoShipmentId      String?   @map("shipsgo_shipment_id")
+  masterBlNo             String?   @map("master_bl_no")
   reference              String?
   carrierScac            String?   @map("carrier_scac")
   carrierName            String?   @map("carrier_name")
   bookingNumber          String?   @map("booking_number")
   containerNumber        String?   @map("container_number")
   status                 String    @default("LOCAL_PENDING")
+  currentStatus          String?   @map("current_status")
   syncStatus             String    @default("NOT_SYNCED") @map("sync_status")
   syncMessage            String?   @map("sync_message")
   originName             String?   @map("origin_name")
@@ -461,6 +463,7 @@ model ShipsgoTracking {
   dateOfLoading          DateTime? @map("date_of_loading")
   dateOfDischarge        DateTime? @map("date_of_discharge")
   predictedDischargeDate DateTime? @map("predicted_discharge_date")
+  eta                    DateTime?
   vesselName             String?   @map("vessel_name")
   voyage                 String?
   mapToken               String?   @map("map_token")
@@ -469,6 +472,7 @@ model ShipsgoTracking {
   lastEventAt            DateTime? @map("last_event_at")
   lastCheckedAt          DateTime? @map("last_checked_at")
   lastSyncedAt           DateTime? @map("last_synced_at")
+  lastSyncTime           DateTime? @map("last_sync_time")
   rawPayload             Json?     @map("raw_payload")
   createdById            String?   @map("created_by")
   updatedById            String?   @map("updated_by")
@@ -479,18 +483,36 @@ model ShipsgoTracking {
   order     ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   createdBy User?           @relation("ShipsgoTrackingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?           @relation("ShipsgoTrackingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  containers ShipsgoTrackingContainer[]
 
   @@index([orderId])
   @@index([provider])
   @@index([mode])
   @@index([shipsgoShipmentId])
+  @@index([masterBlNo])
   @@index([bookingNumber])
   @@index([containerNumber])
   @@index([status])
+  @@index([currentStatus])
   @@index([syncStatus])
   @@index([lastSyncedAt])
+  @@index([lastSyncTime])
   @@index([deletedAt])
   @@map("shipsgo_trackings")
+}
+
+model ShipsgoTrackingContainer {
+  id          String   @id @default(cuid())
+  trackingId  String   @map("tracking_id")
+  containerNo String   @map("container_no")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tracking ShipsgoTracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+
+  @@unique([trackingId, containerNo])
+  @@index([trackingId])
+  @@index([containerNo])
+  @@map("shipsgo_tracking_containers")
 }
 
 model CommissionSettlement {

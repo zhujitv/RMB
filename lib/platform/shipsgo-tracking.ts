@@ -24,9 +24,9 @@ type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
 type ShipsgoTrackingInput = Record<string, unknown> & {
   orderId?: unknown;
+  masterBlNo?: unknown;
   carrierScac?: unknown;
   bookingNumber?: unknown;
-  containerNumber?: unknown;
   reference?: unknown;
 };
 
@@ -66,14 +66,6 @@ function cleanCarrierScac(value: unknown) {
   return text;
 }
 
-function cleanContainerNumber(value: unknown) {
-  const text = cleanInputText(value, 24).toUpperCase();
-  if (text && !CONTAINER_PATTERN.test(text)) {
-    throw codedError("柜号格式应为 4 位字母 + 7 位数字，例如 MSKU1234567。", 400, "SHIPSGO_INVALID_CONTAINER");
-  }
-  return text;
-}
-
 function safeContainerNumber(value: unknown) {
   const text = cleanInputText(value, 24).toUpperCase();
   return CONTAINER_PATTERN.test(text) ? text : "";
@@ -85,6 +77,10 @@ function cleanBookingNumber(value: unknown) {
     throw codedError("提单号 / Booking No. 仅支持字母、数字、斜杠和横线。", 400, "SHIPSGO_INVALID_BOOKING");
   }
   return text;
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 function shipsgoApiBaseUrl(settings: ShipsgoSettings) {
@@ -207,6 +203,23 @@ function mapUrl(shipmentId: string, mapToken: string) {
   return `https://map.shipsgo.com/ocean/shipments/${encodeURIComponent(shipmentId)}?token=${encodeURIComponent(mapToken)}`;
 }
 
+function containerNumberFromRecord(container: unknown) {
+  return safeContainerNumber(
+    textAt(container, "container_number")
+    || textAt(container, "containerNo")
+    || textAt(container, "number")
+    || textAt(container, "id"),
+  );
+}
+
+function extractContainerNumbersFromPayload(payload: ShipsgoShipmentPayload) {
+  const containers = arrayAt(payload, "containers")
+    .map((container) => containerNumberFromRecord(container))
+    .filter(Boolean);
+  const directContainer = safeContainerNumber(textAt(payload, "container_number"));
+  return uniqueStrings([directContainer, ...containers]);
+}
+
 function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
   const carrier = recordAt(payload, "carrier");
   const route = recordAt(payload, "route");
@@ -218,14 +231,23 @@ function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
   const vessel = lastMovement ? recordAt(lastMovement.movement, "vessel") : {};
   const shipmentId = textAt(payload, "id");
   const token = textAt(tokens, "map");
+  const status = textAt(payload, "status") || "UNKNOWN";
+  const eta = dateAt(route, "date_of_discharge_predicted") || dateAt(route, "date_of_discharge");
+  const containerNumbers = extractContainerNumbersFromPayload(payload);
+  const masterBlNo = textAt(payload, "master_bl_no")
+    || textAt(payload, "master_bill_of_lading")
+    || textAt(payload, "mbl_number")
+    || textAt(payload, "booking_number");
   return {
     shipsgoShipmentId: shipmentId,
+    masterBlNo,
     reference: textAt(payload, "reference"),
     carrierScac: textAt(carrier, "scac"),
     carrierName: textAt(carrier, "name"),
     bookingNumber: textAt(payload, "booking_number"),
-    containerNumber: textAt(payload, "container_number"),
-    status: textAt(payload, "status") || "UNKNOWN",
+    containerNumber: containerNumbers[0] || textAt(payload, "container_number"),
+    status,
+    currentStatus: status,
     syncStatus: "SYNCED",
     syncMessage: "",
     originName: textAt(pol, "location"),
@@ -233,14 +255,21 @@ function mapShipsgoShipmentPayload(payload: ShipsgoShipmentPayload) {
     dateOfLoading: dateAt(route, "date_of_loading"),
     dateOfDischarge: dateAt(route, "date_of_discharge"),
     predictedDischargeDate: dateAt(route, "date_of_discharge_predicted"),
+    eta,
     vesselName: textAt(vessel, "name"),
     voyage: textAt(lastMovement?.movement, "voyage"),
     mapToken: token,
     mapUrl: mapUrl(shipmentId, token),
     lastEvent: textAt(lastMovement?.movement, "event"),
     lastEventAt: lastMovement?.timestamp || null,
+    containerNumbers,
     rawPayload: payload as Prisma.InputJsonValue,
   };
+}
+
+function trackingDataFromMappedShipment(mapped: ReturnType<typeof mapShipsgoShipmentPayload>) {
+  const { containerNumbers: _containerNumbers, ...trackingData } = mapped;
+  return trackingData;
 }
 
 function serializeShipsgoTracking(row: {
@@ -249,12 +278,14 @@ function serializeShipsgoTracking(row: {
   provider: string;
   mode: string;
   shipsgoShipmentId?: string | null;
+  masterBlNo?: string | null;
   reference?: string | null;
   carrierScac?: string | null;
   carrierName?: string | null;
   bookingNumber?: string | null;
   containerNumber?: string | null;
   status?: string | null;
+  currentStatus?: string | null;
   syncStatus?: string | null;
   syncMessage?: string | null;
   originName?: string | null;
@@ -262,6 +293,7 @@ function serializeShipsgoTracking(row: {
   dateOfLoading?: Date | string | null;
   dateOfDischarge?: Date | string | null;
   predictedDischargeDate?: Date | string | null;
+  eta?: Date | string | null;
   vesselName?: string | null;
   voyage?: string | null;
   mapUrl?: string | null;
@@ -269,21 +301,32 @@ function serializeShipsgoTracking(row: {
   lastEventAt?: Date | string | null;
   lastCheckedAt?: Date | string | null;
   lastSyncedAt?: Date | string | null;
+  lastSyncTime?: Date | string | null;
   updatedAt?: Date | string | null;
+  containers?: { containerNo?: string | null }[] | null;
 }) {
+  const containerNumbers = uniqueStrings([
+    row.containerNumber || "",
+    ...((row.containers || []).map((container) => container.containerNo || "")),
+  ]);
+  const status = row.currentStatus || row.status || "UNKNOWN";
+  const masterBlNo = row.masterBlNo || row.bookingNumber || "";
   return {
     id: row.id,
     orderId: row.orderId,
     provider: row.provider,
     mode: row.mode,
     shipsgoShipmentId: row.shipsgoShipmentId || "",
+    masterBlNo,
     reference: row.reference || "",
     carrierScac: row.carrierScac || "",
     carrierName: row.carrierName || "",
-    bookingNumber: row.bookingNumber || "",
-    containerNumber: row.containerNumber || "",
-    status: row.status || "UNKNOWN",
-    statusLabel: shipsgoStatusLabel(row.status),
+    bookingNumber: row.bookingNumber || masterBlNo,
+    containerNumber: containerNumbers[0] || "",
+    containerNumbers,
+    status,
+    currentStatus: status,
+    statusLabel: shipsgoStatusLabel(status),
     syncStatus: row.syncStatus || "NOT_SYNCED",
     syncMessage: row.syncMessage || "",
     originName: row.originName || "",
@@ -291,13 +334,15 @@ function serializeShipsgoTracking(row: {
     dateOfLoading: dateText(row.dateOfLoading),
     dateOfDischarge: dateText(row.dateOfDischarge),
     predictedDischargeDate: dateText(row.predictedDischargeDate),
+    eta: dateText(row.eta || row.predictedDischargeDate || row.dateOfDischarge),
     vesselName: row.vesselName || "",
     voyage: row.voyage || "",
     mapUrl: row.mapUrl || "",
     lastEvent: row.lastEvent || "",
     lastEventAt: dateTimeText(row.lastEventAt),
     lastCheckedAt: dateTimeText(row.lastCheckedAt),
-    lastSyncedAt: dateTimeText(row.lastSyncedAt),
+    lastSyncedAt: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
+    lastSyncTime: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     updatedAt: dateTimeText(row.updatedAt),
   };
 }
@@ -337,16 +382,6 @@ function shipsgoStatusLabel(value: unknown) {
   return labels[status] || status || "未知";
 }
 
-function firstContainerNumber(order: ShipsgoTrackingOrder) {
-  for (const info of order.domesticLogisticsInfos || []) {
-    for (const item of info.transportItems || []) {
-      const containerNo = safeContainerNumber(item.containerNo);
-      if (containerNo) return containerNo;
-    }
-  }
-  return "";
-}
-
 async function getShipsgoTrackingOrder(orderId: string, actor: ShipsgoActor) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
@@ -380,22 +415,46 @@ async function getShipsgoTrackingOrder(orderId: string, actor: ShipsgoActor) {
 
 function createPayloadFromInput(input: ShipsgoTrackingInput, order: ShipsgoTrackingOrder) {
   const carrierScac = cleanCarrierScac(input.carrierScac);
-  const bookingNumber = cleanBookingNumber(input.bookingNumber) || cleanBookingNumber(order.blNo);
-  const containerNumber = cleanContainerNumber(input.containerNumber) || firstContainerNumber(order);
-  if (!bookingNumber && !containerNumber) {
-    throw codedError("请至少填写提单号 / Booking No. 或柜号后再创建 ShipsGo 跟踪。", 400, "SHIPSGO_TRACKING_TARGET_REQUIRED");
+  const masterBlNo = cleanBookingNumber(input.masterBlNo) || cleanBookingNumber(input.bookingNumber) || cleanBookingNumber(order.blNo);
+  if (!masterBlNo) {
+    throw codedError("请先填写 Master B/L（提单号）后再开始 ShipsGo 跟踪。", 400, "SHIPSGO_MASTER_BL_REQUIRED");
   }
   const reference = cleanInputText(input.reference, 128)
-    || cleanInputText(`${order.orderNo || order.id}-${bookingNumber || containerNumber}`, 128);
+    || cleanInputText(`${order.orderNo || order.id}-${masterBlNo}`, 128);
   if (reference && reference.length < 5) {
     throw codedError("ShipsGo Reference 至少需要 5 个字符。", 400, "SHIPSGO_REFERENCE_TOO_SHORT");
   }
   return {
     reference,
     carrier: carrierScac || null,
-    booking_number: bookingNumber || null,
-    container_number: containerNumber || null,
+    booking_number: masterBlNo,
+    master_bl_no: masterBlNo,
   };
+}
+
+async function replaceShipsgoTrackingContainers(trackingId: string, containerNumbers: string[]) {
+  const cleanContainers = uniqueStrings(containerNumbers.map((containerNo) => safeContainerNumber(containerNo)));
+  await prisma.$transaction([
+    prisma.shipsgoTrackingContainer.deleteMany({ where: { trackingId } }),
+    ...(cleanContainers.length ? [
+      prisma.shipsgoTrackingContainer.createMany({
+        data: cleanContainers.map((containerNo) => ({ trackingId, containerNo })),
+        skipDuplicates: true,
+      }),
+    ] : []),
+  ]);
+}
+
+async function loadShipsgoTrackingWithContainers(id: string) {
+  return prisma.shipsgoTracking.findUnique({
+    where: { id },
+    include: {
+      containers: {
+        select: { containerNo: true },
+        orderBy: [{ containerNo: "asc" }],
+      },
+    },
+  });
 }
 
 export async function createShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, input: unknown = {}) {
@@ -415,14 +474,16 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
       provider: SHIPSGO_PROVIDER,
       mode: OCEAN_MODE,
       deletedAt: null,
-      OR: [
-        payload.booking_number ? { bookingNumber: payload.booking_number } : {},
-        payload.container_number ? { containerNumber: payload.container_number } : {},
-      ].filter((item) => Object.keys(item).length) as Prisma.ShipsgoTrackingWhereInput[],
+    },
+    include: {
+      containers: {
+        select: { containerNo: true },
+        orderBy: [{ containerNo: "asc" }],
+      },
     },
     orderBy: [{ updatedAt: "desc" }],
   });
-  if (existing?.shipsgoShipmentId) {
+  if (existing) {
     return { tracking: serializeShipsgoTracking(existing), alreadyExists: true, message: "该订单已创建 ShipsGo 跟踪。" };
   }
 
@@ -434,39 +495,32 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   );
   const shipment = extractShipmentPayload(response.data);
   const mapped = mapShipsgoShipmentPayload(shipment);
+  const trackingData = trackingDataFromMappedShipment(mapped);
   const now = new Date();
-  const saved = existing
-    ? await prisma.shipsgoTracking.update({
-      where: { id: existing.id },
-      data: {
-        ...mapped,
-        reference: mapped.reference || payload.reference,
-        carrierScac: mapped.carrierScac || cleanCarrierScac(payload.carrier),
-        bookingNumber: mapped.bookingNumber || payload.booking_number,
-        containerNumber: mapped.containerNumber || payload.container_number,
-        syncMessage: response.status === 409 ? "ShipsGo 已存在该跟踪，已同步本地记录。" : "",
-        lastCheckedAt: now,
-        lastSyncedAt: now,
-        updatedById: currentActorId || null,
-      },
-    })
-    : await prisma.shipsgoTracking.create({
-      data: {
-        orderId,
-        provider: SHIPSGO_PROVIDER,
-        mode: OCEAN_MODE,
-        ...mapped,
-        reference: mapped.reference || payload.reference,
-        carrierScac: mapped.carrierScac || cleanCarrierScac(payload.carrier),
-        bookingNumber: mapped.bookingNumber || payload.booking_number,
-        containerNumber: mapped.containerNumber || payload.container_number,
-        syncMessage: response.status === 409 ? "ShipsGo 已存在该跟踪，已同步本地记录。" : "",
-        lastCheckedAt: now,
-        lastSyncedAt: now,
-        createdById: currentActorId || null,
-        updatedById: currentActorId || null,
-      },
-    });
+  const savedBase = await prisma.shipsgoTracking.create({
+    data: {
+      orderId,
+      provider: SHIPSGO_PROVIDER,
+      mode: OCEAN_MODE,
+      ...trackingData,
+      masterBlNo: mapped.masterBlNo || payload.booking_number,
+      reference: mapped.reference || payload.reference,
+      carrierScac: mapped.carrierScac || cleanCarrierScac(payload.carrier),
+      bookingNumber: mapped.bookingNumber || payload.booking_number,
+      containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || null,
+      syncMessage: response.status === 409 ? "ShipsGo 已存在该跟踪，已同步本地记录。" : "",
+      eta: mapped.eta,
+      currentStatus: mapped.currentStatus,
+      lastCheckedAt: now,
+      lastSyncedAt: now,
+      lastSyncTime: now,
+      createdById: currentActorId || null,
+      updatedById: currentActorId || null,
+    },
+  });
+  await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+  const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+  if (!saved) throw codedError("ShipsGo 跟踪本地保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
 
   await runNonCriticalTask("ShipsGo 跟踪创建日志写入", () => writeAudit(
     request,
@@ -478,8 +532,8 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
     {
       orderId,
       shipsgoShipmentId: saved.shipsgoShipmentId,
-      bookingNumber: saved.bookingNumber,
-      containerNumber: saved.containerNumber,
+      masterBlNo: saved.masterBlNo || saved.bookingNumber,
+      containerNumbers: (saved.containers || []).map((container) => container.containerNo),
       creditsCost: response.headers.get("X-Shipsgo-Credits-Cost") || "",
       creditsRemaining: response.headers.get("X-Shipsgo-Credits-Remaining") || "",
     },
@@ -522,16 +576,25 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   const response = await shipsgoApiRequest<unknown>(settings, `/ocean/shipments/${encodeURIComponent(before.shipsgoShipmentId)}`);
   const shipment = extractShipmentPayload(response.data);
   const mapped = mapShipsgoShipmentPayload(shipment);
+  const trackingData = trackingDataFromMappedShipment(mapped);
   const now = new Date();
-  const saved = await prisma.shipsgoTracking.update({
+  const savedBase = await prisma.shipsgoTracking.update({
     where: { id: before.id },
     data: {
-      ...mapped,
+      ...trackingData,
+      masterBlNo: mapped.masterBlNo || before.masterBlNo || before.bookingNumber,
+      containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || before.containerNumber,
+      eta: mapped.eta,
+      currentStatus: mapped.currentStatus,
       lastCheckedAt: now,
       lastSyncedAt: now,
+      lastSyncTime: now,
       updatedById: actorId(actor) || null,
     },
   });
+  await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+  const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+  if (!saved) throw codedError("ShipsGo 跟踪本地同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
   await runNonCriticalTask("ShipsGo 跟踪同步日志写入", () => writeAudit(
     request,
     actor,
@@ -542,6 +605,129 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
     { status: saved.status, syncStatus: saved.syncStatus, lastSyncedAt: saved.lastSyncedAt },
   ));
   return { tracking: serializeShipsgoTracking(saved), message: "ShipsGo 状态已同步。" };
+}
+
+export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor, containerNoInput: unknown) {
+  const containerNo = safeContainerNumber(containerNoInput);
+  if (!containerNo) throw codedError("请输入正确的柜号，例如 MSKU1234567。", 400, "SHIPSGO_INVALID_CONTAINER");
+  const row = await prisma.shipsgoTrackingContainer.findFirst({
+    where: {
+      containerNo,
+      tracking: {
+        provider: SHIPSGO_PROVIDER,
+        mode: OCEAN_MODE,
+        deletedAt: null,
+      },
+    },
+    include: {
+      tracking: {
+        include: {
+          containers: {
+            select: { containerNo: true },
+            orderBy: [{ containerNo: "asc" }],
+          },
+          order: {
+            select: {
+              id: true,
+              orderNo: true,
+              blNo: true,
+              customer: { select: { salespersonUserId: true } },
+              logisticsSuppliers: { select: { supplierId: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+  if (!row) {
+    throw codedError("本地未找到该柜号对应的 ShipsGo Tracking，请管理员先同步已有提单跟踪。", 404, "SHIPSGO_CONTAINER_NOT_FOUND");
+  }
+  if (!canAccessDomesticLogisticsOrder(actor, row.tracking.order)) {
+    throw codedError("无权限访问该柜号对应的 ShipsGo Tracking。", 403, "PERMISSION_DENIED");
+  }
+  return { tracking: serializeShipsgoTracking(row.tracking), message: "已从本地柜号关联返回 ShipsGo Tracking。" };
+}
+
+export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, actor: ShipsgoActor, options: { limit?: number; now?: Date } = {}) {
+  assertWrite(actor, "domesticLogistics");
+  const settings = await getShipsgoIntegrationSettings();
+  assertShipsgoOceanEnabled(settings);
+  const now = options.now || new Date();
+  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const limit = Math.max(1, Math.min(100, Math.trunc(options.limit || 50)));
+  const rows = await prisma.shipsgoTracking.findMany({
+    where: {
+      provider: SHIPSGO_PROVIDER,
+      mode: OCEAN_MODE,
+      deletedAt: null,
+      shipsgoShipmentId: { not: null },
+      OR: [
+        { lastSyncTime: null },
+        { lastSyncTime: { lt: cutoff } },
+        { lastSyncedAt: null },
+        { lastSyncedAt: { lt: cutoff } },
+      ],
+    },
+    orderBy: [{ lastSyncTime: "asc" }, { lastSyncedAt: "asc" }, { updatedAt: "asc" }],
+    take: limit,
+  });
+  const results: Array<{ id: string; ok: boolean; message: string }> = [];
+  for (const row of rows) {
+    try {
+      const response = await shipsgoApiRequest<unknown>(settings, `/ocean/shipments/${encodeURIComponent(row.shipsgoShipmentId || "")}`);
+      const shipment = extractShipmentPayload(response.data);
+      const mapped = mapShipsgoShipmentPayload(shipment);
+      const trackingData = trackingDataFromMappedShipment(mapped);
+      const savedBase = await prisma.shipsgoTracking.update({
+        where: { id: row.id },
+        data: {
+          ...trackingData,
+          masterBlNo: mapped.masterBlNo || row.masterBlNo || row.bookingNumber,
+          containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || row.containerNumber,
+          eta: mapped.eta,
+          currentStatus: mapped.currentStatus,
+          syncStatus: "SYNCED",
+          syncMessage: "",
+          lastCheckedAt: now,
+          lastSyncedAt: now,
+          lastSyncTime: now,
+          updatedById: actorId(actor) || null,
+        },
+      });
+      await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+      results.push({ id: row.id, ok: true, message: "同步成功" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步失败";
+      await prisma.shipsgoTracking.update({
+        where: { id: row.id },
+        data: {
+          syncStatus: "SYNC_FAILED",
+          syncMessage: message.slice(0, 500),
+          lastCheckedAt: now,
+          lastSyncTime: now,
+          updatedById: actorId(actor) || null,
+        },
+      }).catch(() => null);
+      results.push({ id: row.id, ok: false, message });
+    }
+  }
+  await runNonCriticalTask("ShipsGo 定时同步日志写入", () => writeAudit(
+    request,
+    actor,
+    "定时同步 ShipsGo 海运跟踪",
+    "shipsgo_trackings",
+    "cron",
+    null,
+    { total: rows.length, success: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length },
+  ));
+  return {
+    success: true,
+    total: rows.length,
+    successCount: results.filter((item) => item.ok).length,
+    failedCount: results.filter((item) => !item.ok).length,
+    results,
+  };
 }
 
 function recursiveShipmentId(value: unknown, depth = 0): string {
@@ -589,17 +775,27 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown) 
   });
   if (!before) return { success: true, ignored: true, message: "本地未找到对应 ShipsGo 跟踪，已忽略。" };
   const mapped = mapShipsgoShipmentPayload(shipmentPayload);
-  const saved = await prisma.shipsgoTracking.update({
+  const trackingData = trackingDataFromMappedShipment(mapped);
+  const now = new Date();
+  const savedBase = await prisma.shipsgoTracking.update({
     where: { id: before.id },
     data: {
-      ...mapped,
+      ...trackingData,
       shipsgoShipmentId: mapped.shipsgoShipmentId || shipmentId,
+      masterBlNo: mapped.masterBlNo || before.masterBlNo || before.bookingNumber,
+      containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || before.containerNumber,
+      eta: mapped.eta,
+      currentStatus: mapped.currentStatus,
       syncStatus: "WEBHOOK_SYNCED",
       syncMessage: "",
-      lastCheckedAt: new Date(),
-      lastSyncedAt: new Date(),
+      lastCheckedAt: now,
+      lastSyncedAt: now,
+      lastSyncTime: now,
     },
   });
+  await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+  const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+  if (!saved) throw codedError("ShipsGo Webhook 同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
   return { success: true, tracking: serializeShipsgoTracking(saved) };
 }
 

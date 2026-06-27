@@ -80,12 +80,15 @@ type ShipsgoTrackingRow = {
   provider?: string;
   mode?: string;
   shipsgoShipmentId?: string;
+  masterBlNo?: string;
   reference?: string;
   carrierScac?: string;
   carrierName?: string;
   bookingNumber?: string;
   containerNumber?: string;
+  containerNumbers?: string[];
   status?: string;
+  currentStatus?: string;
   statusLabel?: string;
   syncStatus?: string;
   syncMessage?: string;
@@ -94,6 +97,7 @@ type ShipsgoTrackingRow = {
   dateOfLoading?: string;
   dateOfDischarge?: string;
   predictedDischargeDate?: string;
+  eta?: string;
   vesselName?: string;
   voyage?: string;
   mapUrl?: string;
@@ -101,6 +105,7 @@ type ShipsgoTrackingRow = {
   lastEventAt?: string;
   lastCheckedAt?: string;
   lastSyncedAt?: string;
+  lastSyncTime?: string;
   updatedAt?: string;
 };
 
@@ -668,7 +673,7 @@ export function DomesticLogisticsModule({
     }));
   }
 
-  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) {
+  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { masterBlNo: string; carrierScac?: string }) {
     const busyKey = `${row.id}:shipsgo:create`;
     setShipsgoBusyKey(busyKey);
     setError("");
@@ -678,9 +683,8 @@ export function DomesticLogisticsModule({
         method: "POST",
         body: JSON.stringify({
           orderId: row.id,
-          carrierScac: payload.carrierScac,
-          bookingNumber: payload.bookingNumber,
-          containerNumber: payload.containerNumber,
+          masterBlNo: payload.masterBlNo,
+          carrierScac: payload.carrierScac || "",
         }),
       });
       if (result.success !== true || !result.tracking) throw new Error(result.message || "创建 ShipsGo 跟踪失败");
@@ -916,12 +920,13 @@ function ShipsgoTrackingFeaturePanel({ features }: { features: ShipsgoFeatureFla
   );
 }
 
-function firstTrackingContainer(row: DomesticLogisticsRow) {
-  for (const item of row.domesticLogisticsInfo?.transportItems || []) {
-    const containerNo = String(item.containerNo || "").trim().toUpperCase();
-    if (containerNo) return containerNo;
-  }
-  return "";
+function defaultShipsgoMasterBl(row: DomesticLogisticsRow) {
+  return String(row.blNo || row.billOfLadingNo || "").trim();
+}
+
+function shipsgoContainerListText(tracking: ShipsgoTrackingRow) {
+  const containers = Array.isArray(tracking.containerNumbers) ? tracking.containerNumbers : [];
+  return containers.length ? containers.join(" / ") : tracking.containerNumber || "-";
 }
 
 function ShipsgoOrderTrackingPanel({
@@ -936,20 +941,22 @@ function ShipsgoOrderTrackingPanel({
   features: ShipsgoFeatureFlags;
   canManage: boolean;
   busyKey: string;
-  onCreate: (payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) => Promise<void>;
+  onCreate: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
   onSync: (trackingId: string) => Promise<void>;
 }) {
   const trackings = row.shipsgoTrackings || [];
+  const hasTracking = trackings.length > 0;
   const [carrierScac, setCarrierScac] = useState("");
-  const [bookingNumber, setBookingNumber] = useState(row.blNo || row.billOfLadingNo || "");
-  const [containerNumber, setContainerNumber] = useState(firstTrackingContainer(row));
+  const [masterBlNo, setMasterBlNo] = useState(defaultShipsgoMasterBl(row));
+  const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
   const createBusy = busyKey === `${row.id}:shipsgo:create`;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
 
   useEffect(() => {
-    setBookingNumber(row.blNo || row.billOfLadingNo || "");
-    setContainerNumber(firstTrackingContainer(row));
+    setMasterBlNo(defaultShipsgoMasterBl(row));
+    setCarrierScac("");
+    setShowCarrierInput(false);
     setCreateError("");
   }, [row.id, row.blNo, row.billOfLadingNo, row.domesticLogisticsInfo?.id]);
 
@@ -958,22 +965,19 @@ function ShipsgoOrderTrackingPanel({
     if (createError) setCreateError("");
   }
 
-  function updateBookingNumber(value: string) {
-    setBookingNumber(value);
-    if (createError) setCreateError("");
-  }
-
-  function updateContainerNumber(value: string) {
-    setContainerNumber(value.toUpperCase());
+  function updateMasterBlNo(value: string) {
+    setMasterBlNo(value.trim());
     if (createError) setCreateError("");
   }
 
   async function submitCreateTracking() {
     setCreateError("");
     try {
-      await onCreate({ carrierScac, bookingNumber, containerNumber });
+      await onCreate({ masterBlNo, carrierScac: showCarrierInput ? carrierScac : "" });
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "创建 ShipsGo 跟踪失败");
+      const message = error instanceof Error ? error.message : "创建 ShipsGo 跟踪失败";
+      setCreateError(message);
+      if (/船公司|SCAC|carrier/i.test(message)) setShowCarrierInput(true);
     }
   }
 
@@ -993,15 +997,16 @@ function ShipsgoOrderTrackingPanel({
               <div className={styles.subListItem} key={tracking.id}>
                 <strong>
                   {tracking.statusLabel || tracking.status || "未知状态"}
-                  {tracking.containerNumber ? ` · ${tracking.containerNumber}` : ""}
+                  {shipsgoContainerListText(tracking) !== "-" ? ` · ${shipsgoContainerListText(tracking)}` : ""}
                 </strong>
                 <span>船公司：{tracking.carrierName || tracking.carrierScac || "-"}</span>
-                <span>提单号 / Booking：{tracking.bookingNumber || "-"}</span>
+                <span>Master B/L：{tracking.masterBlNo || tracking.bookingNumber || "-"}</span>
+                <span>柜号：{shipsgoContainerListText(tracking)}</span>
                 <span>起运港：{tracking.originName || "-"}</span>
                 <span>目的港：{tracking.destinationName || "-"}</span>
-                <span>预计到港：{tracking.predictedDischargeDate || tracking.dateOfDischarge || "-"}</span>
+                <span>预计到港：{tracking.eta || tracking.predictedDischargeDate || tracking.dateOfDischarge || "-"}</span>
                 <span>船名航次：{[tracking.vesselName, tracking.voyage].filter(Boolean).join(" / ") || "-"}</span>
-                <span>最近同步：{tracking.lastSyncedAt ? formatDateTime(tracking.lastSyncedAt) : "-"}</span>
+                <span>最后同步时间：{tracking.lastSyncTime || tracking.lastSyncedAt ? formatDateTime(tracking.lastSyncTime || tracking.lastSyncedAt || "") : "-"}</span>
                 {tracking.syncMessage ? <span>同步提示：{tracking.syncMessage}</span> : null}
                 <div className={styles.quickCreateMeta}>
                   {tracking.mapUrl && features.liveMapEnabled ? (
@@ -1019,7 +1024,7 @@ function ShipsgoOrderTrackingPanel({
                         void onSync(tracking.id);
                       }}
                     >
-                      {syncBusy ? "同步中..." : "同步状态"}
+                      {syncBusy ? "同步中..." : "同步最新状态"}
                     </button>
                   ) : null}
                 </div>
@@ -1030,27 +1035,32 @@ function ShipsgoOrderTrackingPanel({
       ) : (
         <div className={styles.emptyState}>暂未创建 ShipsGo 跟踪</div>
       )}
-      {canCreate ? (
+      {canCreate && hasTracking ? (
+        <div className={styles.quickCreateMeta}>
+          <button className={styles.secondaryButton} type="button" onClick={(event) => event.stopPropagation()}>
+            查看运输状态
+          </button>
+        </div>
+      ) : null}
+      {canCreate && !hasTracking ? (
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
           <label>
-            船公司 SCAC
-            <input value={carrierScac} onChange={(event) => updateCarrierScac(event.target.value)} placeholder="例如 MAEU / CMDU" />
+            Master B/L（提单号）
+            <input value={masterBlNo} onChange={(event) => updateMasterBlNo(event.target.value)} placeholder="请输入 Master B/L" />
           </label>
-          <label>
-            提单号 / Booking No.
-            <input value={bookingNumber} onChange={(event) => updateBookingNumber(event.target.value)} placeholder="至少填写提单号或柜号" />
-          </label>
-          <label>
-            柜号 Container No.
-            <input value={containerNumber} onChange={(event) => updateContainerNumber(event.target.value)} placeholder="例如 MSKU1234567" />
-          </label>
+          {showCarrierInput ? (
+            <label>
+              船公司 SCAC（仅识别失败时填写）
+              <input value={carrierScac} onChange={(event) => updateCarrierScac(event.target.value)} placeholder="例如 MAEU / CMDU" />
+            </label>
+          ) : null}
           {createError ? (
             <div className={`${styles.inlineError} ${styles.shipsgoCreateError}`} role="alert">
               {createError}
             </div>
           ) : null}
           <label>
-            创建跟踪
+            Tracking
             <button
               className={styles.primaryButtonCompact}
               type="button"
@@ -1060,7 +1070,7 @@ function ShipsgoOrderTrackingPanel({
                 void submitCreateTracking();
               }}
             >
-              {createBusy ? "创建中..." : "创建 ShipsGo 跟踪"}
+              {createBusy ? "创建中..." : "开始追踪"}
             </button>
           </label>
         </div>
@@ -1123,7 +1133,7 @@ function DomesticLogisticsRows({
   shipsgoFeatures: ShipsgoFeatureFlags;
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
-  onCreateShipsgoTracking: (payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) => Promise<void>;
+  onCreateShipsgoTracking: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
   onSyncShipsgoTracking: (trackingId: string) => Promise<void>;
   onSaved: () => void;
   onCancelEdit: () => void;
