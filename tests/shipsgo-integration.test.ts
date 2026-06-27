@@ -21,6 +21,7 @@ const oceanTrackingRoute = readFileSync("app/api/shipsgo/ocean-trackings/route.t
 const oceanTrackingSyncRoute = readFileSync("app/api/shipsgo/ocean-trackings/[id]/sync/route.ts", "utf8");
 const oceanTrackingContainerRoute = readFileSync("app/api/shipsgo/ocean-trackings/container/[containerNo]/route.ts", "utf8");
 const oceanTrackingRecoverRoute = readFileSync("app/api/shipsgo/ocean-trackings/recover/route.ts", "utf8");
+const oceanTrackingControlTowerRoute = readFileSync("app/api/shipsgo/ocean-trackings/control-tower/route.ts", "utf8");
 const webhookRoute = readFileSync("app/api/shipsgo/webhook/route.ts", "utf8");
 const shipsgoCronRoute = readFileSync("app/api/cron/shipsgo-sync/route.ts", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
@@ -28,6 +29,7 @@ const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.t
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const logisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("ShipsGo integration settings are stored safely in system settings", () => {
   assert.match(constants, /SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration"/);
@@ -106,6 +108,7 @@ test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(oceanTrackingSyncRoute, /syncShipsgoOceanTracking\(request, actor, id\)/);
   assert.match(oceanTrackingContainerRoute, /findShipsgoOceanTrackingByContainerNo\(actor, containerNo\)/);
   assert.match(oceanTrackingRecoverRoute, /recoverShipsgoOceanTracking\(request, actor, body\)/);
+  assert.match(oceanTrackingControlTowerRoute, /listShipsgoControlTowerTrackings\(new URL\(request\.url\)\.searchParams, actor\)/);
   assert.match(webhookRoute, /request\.text\(\)/);
   assert.match(webhookRoute, /X-Shipsgo-Webhook-Signature/);
   assert.match(webhookRoute, /handleShipsgoWebhook\(rawBody, signature\)/);
@@ -196,4 +199,31 @@ test("ShipsGo customer notification display can target configured customer langu
   assert.equal(formatShipsgoPortForLocale("SHANGHAI", "CNSHA", "ru"), "Шанхай");
   assert.equal(formatShipsgoStatusForLocale("Arrived", "de"), "Angekommen");
   assert.equal(formatShipsgoTrackingMethodForLocale("Container", "es"), "Seguimiento de contenedor");
+});
+
+test("ShipsGo ocean control tower is read-only and does not create tracking", () => {
+  assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
+  assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
+  assert.match(trackingService, /isExternalLogisticsSupplierAccount\(actor\)/);
+  assert.match(trackingService, /trackingSignalExists\(row\)/);
+  assert.match(trackingService, /includeCompleted/);
+  assert.match(trackingService, /soonArrivingCount/);
+  assert.match(trackingService, /etaOverdueCount/);
+  assert.match(trackingService, /syncFailedCount/);
+  assert.doesNotMatch(oceanTrackingControlTowerRoute, /createShipsgoOceanTracking|recoverShipsgoOceanTracking/);
+});
+
+test("domestic logistics exposes ocean control tower tab and fullscreen monitor UI", () => {
+  assert.match(logisticsModule, /海运控制塔/);
+  assert.match(logisticsModule, /ShipsgoControlTowerView/);
+  assert.match(logisticsModule, /\/api\/shipsgo\/ocean-trackings\/control-tower/);
+  assert.match(logisticsModule, /全屏查看/);
+  assert.match(logisticsModule, /退出全屏/);
+  assert.match(logisticsModule, /setInterval\(\(\) => \{/);
+  assert.match(logisticsModule, /同步最新状态/);
+  assert.match(logisticsModule, /查看运输节点/);
+  assert.match(logisticsModule, /跳转物流详情/);
+  assert.doesNotMatch(logisticsModule.match(/function ShipsgoControlTowerView[\s\S]*?function ControlTowerStatCard/)?.[0] || "", /\/api\/shipsgo\/ocean-trackings",\s*\{/);
+  assert.match(workspaceStyles, /\.controlTowerFullscreen/);
+  assert.match(workspaceStyles, /\.controlTowerTooltip/);
 });

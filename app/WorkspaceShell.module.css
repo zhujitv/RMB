@@ -2251,6 +2251,11 @@
   color: #b91c1c;
 }
 
+.statusInfo {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .statusMuted {
   background: #f1f5f9;
   color: #64748b;
@@ -4765,6 +4770,334 @@
 
 .documentGroupCard > strong {
   color: #0f172a;
+}
+
+.moduleViewTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  padding: 4px;
+  margin-bottom: 14px;
+}
+
+.moduleViewTab,
+.moduleViewTabActive {
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.moduleViewTab {
+  color: #1d4ed8 !important;
+  background: transparent !important;
+}
+
+.moduleViewTabActive {
+  color: #ffffff !important;
+  background: #1677ff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.controlTowerShell,
+.controlTowerFullscreen {
+  display: grid;
+  gap: 14px;
+}
+
+.controlTowerFullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  overflow: auto;
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.controlTowerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.controlTowerHeader h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.controlTowerHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.controlTowerHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.controlTowerStats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.controlTowerStatCard {
+  min-height: 74px;
+  border-radius: 14px;
+  border: 1px solid #dbeafe;
+  background: #ffffff;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.controlTowerStatCard span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.controlTowerStatCard strong {
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.controlTowerStatBlue { border-color: #bfdbfe; background: linear-gradient(135deg, #eff6ff, #ffffff); }
+.controlTowerStatOrange { border-color: #fed7aa; background: linear-gradient(135deg, #fff7ed, #ffffff); }
+.controlTowerStatRed { border-color: #fecaca; background: linear-gradient(135deg, #fef2f2, #ffffff); }
+.controlTowerStatRose { border-color: #fecdd3; background: linear-gradient(135deg, #fff1f2, #ffffff); }
+.controlTowerStatGreen { border-color: #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #ffffff); }
+
+.controlTowerFilters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.controlTowerFilters input,
+.controlTowerFilters select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.controlTowerBigScreen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  gap: 14px;
+  align-items: start;
+}
+
+.controlTowerNodeBoard {
+  min-height: 420px;
+  border: 1px solid #dbeafe;
+  border-radius: 20px;
+  background:
+    linear-gradient(rgba(219, 234, 254, 0.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(219, 234, 254, 0.55) 1px, transparent 1px),
+    radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.12), transparent 24%),
+    radial-gradient(circle at 78% 32%, rgba(14, 165, 233, 0.1), transparent 28%),
+    #ffffff;
+  background-size: 28px 28px, 28px 28px, auto, auto, auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.controlTowerNodeCard {
+  position: relative;
+  min-height: 156px;
+  border-radius: 18px;
+  border: 1px solid #bfdbfe;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #0f172a !important;
+  padding: 13px;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.controlTowerNodeCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px rgba(37, 99, 235, 0.14);
+}
+
+.controlTowerNodeTop,
+.controlTowerNodeMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.controlTowerNodeTop strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.controlTowerRouteLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.controlTowerRouteLine span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controlTowerRouteLine span:nth-child(2) {
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 5px 9px;
+  max-width: 160px;
+}
+
+.controlTowerNodeMeta {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.controlTowerNodeNormal { border-color: #bfdbfe; }
+.controlTowerNodeSoon { border-color: #fdba74; transform: scale(1.01); }
+.controlTowerNodeOverdue { border-color: #f87171; transform: scale(1.02); }
+.controlTowerNodeDone { border-color: #86efac; }
+.controlTowerNodeFailed { border-color: #fb7185; background: #fff1f2 !important; }
+
+.controlTowerTooltip {
+  position: absolute;
+  left: 16px;
+  top: calc(100% - 6px);
+  z-index: 10;
+  width: min(340px, calc(100vw - 48px));
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.18);
+  padding: 12px;
+  display: none;
+  gap: 5px;
+}
+
+.controlTowerNodeCard:hover .controlTowerTooltip {
+  display: grid;
+}
+
+.controlTowerTooltip strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.controlTowerTooltip span {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.controlTowerDetailPanel {
+  position: sticky;
+  top: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+}
+
+.controlTowerStatusStack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.controlTowerAlertDanger,
+.controlTowerAlertWarning,
+.controlTowerAlertMuted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.controlTowerAlertDanger {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.controlTowerAlertWarning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.controlTowerAlertMuted {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.controlTowerRowActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.controlTowerRowActions button,
+.controlTowerRowActions a {
+  min-height: 30px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .shipsgoTrackingList {
@@ -8505,4 +8838,47 @@
 .logisticsItemsRow > :nth-child(8) {
   width: 80px;
   justify-self: center;
+}
+
+@media (max-width: 960px) {
+  .controlTowerStats,
+  .controlTowerBigScreen {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controlTowerNodeBoard {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerHeader,
+  .controlTowerHeaderActions {
+    align-items: stretch;
+  }
+
+  .moduleViewTabs {
+    width: 100%;
+  }
+
+  .moduleViewTab,
+  .moduleViewTabActive {
+    flex: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .controlTowerFilters {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerFullscreen {
+    padding: 12px;
+  }
+
+  .controlTowerRouteLine {
+    grid-template-columns: 1fr;
+  }
 }
