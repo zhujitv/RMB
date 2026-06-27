@@ -1508,8 +1508,8 @@
 
 .costTableWrap .dataTable th.statusColumn,
 .costTableWrap .dataTable td.statusColumn {
-  width: 100px;
-  min-width: 100px;
+  width: 112px;
+  min-width: 112px;
 }
 
 .costTableWrap .dataTable th.operationColumn,
@@ -2196,13 +2196,22 @@
 .statusPill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
   min-height: 26px;
   border-radius: 999px;
-  padding: 0 10px;
+  padding: 0 12px;
   background: #eef2ff;
   color: #3730a3;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-align: center;
 }
 
 .statusSuccess {
@@ -2229,13 +2238,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
   min-height: 28px;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 0 10px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-align: center;
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
@@ -3805,10 +3821,13 @@
 
 .dataTable th.statusColumn,
 .dataTable td.statusColumn {
-  width: 92px;
-  min-width: 92px;
+  width: 112px;
+  min-width: 112px;
   text-align: center;
   vertical-align: middle;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .dataTable th.operationColumn,
@@ -3906,8 +3925,8 @@
 
 .costTableWrap .dataTable th.statusColumn,
 .costTableWrap .dataTable td.statusColumn {
-  width: 100px;
-  min-width: 100px;
+  width: 112px;
+  min-width: 112px;
 }
 
 .costTableWrap .dataTable th.operationColumn,
