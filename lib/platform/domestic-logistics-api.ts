@@ -7,6 +7,7 @@ import {
   assertWrite,
   canWrite,
   codedError,
+  logServerError,
   nonEmpty,
   optional,
   refreshTaxRefundCompleteness,
@@ -129,16 +130,37 @@ function domesticLogisticsListWhere(filters: DomesticLogisticsListFilters, actor
   };
 }
 
+function isShipsgoTrackingSchemaError(error: unknown) {
+  const message = String((error as { message?: unknown } | null | undefined)?.message || error || "");
+  return /shipsgo_trackings|ShipsgoTracking|shipsgoTrackings/i.test(message)
+    && /(does not exist|not exist|relation|table|column|Unknown field|Unknown argument)/i.test(message);
+}
+
+async function findDomesticLogisticsOrdersForList(where: Prisma.ReceivableOrderWhereInput) {
+  try {
+    return await prisma.receivableOrder.findMany({
+      where,
+      include: domesticLogisticsOrderInclude(),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    });
+  } catch (error: unknown) {
+    if (!isShipsgoTrackingSchemaError(error)) throw error;
+    logServerError("domestic logistics list fallback: ShipsGo tracking schema unavailable", error);
+    return prisma.receivableOrder.findMany({
+      where,
+      include: domesticLogisticsOrderInclude({ shipsgoTrackings: false }),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    });
+  }
+}
+
 export async function listDomesticLogisticsOrders(query: DomesticLogisticsQuery, actor: DomesticLogisticsActorInput): Promise<DomesticLogisticsOrderDto[]> {
   assertRead(actor, "domesticLogistics");
   const filters = domesticLogisticsListFiltersFromQuery(query);
   const where = domesticLogisticsListWhere(filters, actor);
-  const orders = await prisma.receivableOrder.findMany({
-    where,
-    include: domesticLogisticsOrderInclude(),
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+  const orders = await findDomesticLogisticsOrdersForList(where);
   return orders.filter((order) => canAccessDomesticLogisticsOrder(actor, order))
     .sort(sortDomesticLogisticsOrders)
     .map((order) => serializeDomesticLogisticsOrder(order, actor));
@@ -160,7 +182,7 @@ export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, 
 
   const orders = await prisma.receivableOrder.findMany({
     where: { id: { in: requestedOrderIds }, deletedAt: null },
-    include: domesticLogisticsOrderInclude(),
+    include: domesticLogisticsOrderInclude({ shipsgoTrackings: false }),
   });
   const accessibleOrders = orders.filter((order) => canAccessDomesticLogisticsOrder(currentActor, order));
   const eligibleOrders = accessibleOrders.filter((order) => domesticLogisticsCanArchiveOrder(order, currentActor));
@@ -210,7 +232,7 @@ export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, 
 async function getDomesticLogisticsOrderForActor(orderId: string, actor: DomesticLogisticsActorInput, input: DomesticLogisticsInput = {}) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
-    include: domesticLogisticsOrderInclude(),
+    include: domesticLogisticsOrderInclude({ shipsgoTrackings: false }),
   });
   if (!order) throw codedError("订单不存在或已删除", 404, "ORDER_NOT_FOUND");
   if (!canAccessDomesticLogisticsOrder(actor, order) && !canClaimDomesticLogisticsOrder(actor, order, input)) {

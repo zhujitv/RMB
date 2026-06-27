@@ -33,6 +33,10 @@ test("domestic logistics reads use explicit safe selects so missing optional mig
   assert.match(domesticOps, /export function domesticLogisticsSelectWithRelations/);
   assert.match(domesticOps, /domesticLogisticsInfos: \{\s*select: domesticLogisticsSelectWithRelations\(\)/);
   assert.doesNotMatch(domesticOps.match(/export function domesticLogisticsSelectWithRelations[\s\S]*?\n}\n/)?.[0] || "", /exportInvoice|customs_export_invoice/);
+  assert.match(domesticOps, /domesticLogisticsOrderInclude\(options: \{ shipsgoTrackings\?: boolean \} = \{\}\)/);
+  assert.match(domesticOps, /if \(includeShipsgoTrackings\) \{/);
+  assert.match(readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"), /findDomesticLogisticsOrdersForList/);
+  assert.match(readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"), /domesticLogisticsOrderInclude\(\{ shipsgoTrackings: false \}\)/);
   assert.match(sharedOrderRelations, /function domesticLogisticsInfoSafeSelect/);
   assert.match(sharedOrderRelations, /domesticLogisticsInfos: \{\s*where: \{ deletedAt: null \},\s*select: domesticLogisticsInfoSafeSelect\(\)/);
 });

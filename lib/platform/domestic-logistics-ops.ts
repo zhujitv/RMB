@@ -170,8 +170,9 @@ export function domesticLogisticsSelectWithOrder() {
   });
 }
 
-export function domesticLogisticsOrderInclude() {
-  return Prisma.validator<Prisma.ReceivableOrderInclude>()({
+export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: boolean } = {}) {
+  const includeShipsgoTrackings = options.shipsgoTrackings !== false;
+  const include: Prisma.ReceivableOrderInclude = {
     customer: true,
     salesperson: true,
     domesticLogisticsInfos: {
@@ -216,7 +217,9 @@ export function domesticLogisticsOrderInclude() {
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     },
-    shipsgoTrackings: {
+  };
+  if (includeShipsgoTrackings) {
+    include.shipsgoTrackings = {
       where: { deletedAt: null },
       select: {
         id: true,
@@ -247,8 +250,9 @@ export function domesticLogisticsOrderInclude() {
         updatedAt: true,
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    },
-  });
+    };
+  }
+  return Prisma.validator<Prisma.ReceivableOrderInclude>()(include);
 }
 
 export function domesticLogisticsSubmitterRole(actor: ActorLike) {

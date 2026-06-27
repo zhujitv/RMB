@@ -90,7 +90,8 @@ test("ShipsGo routes expose create, sync and webhook endpoints", () => {
 });
 
 test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
-  assert.match(domesticLogisticsOps, /shipsgoTrackings: \{/);
+  assert.match(domesticLogisticsOps, /include\.shipsgoTrackings = \{/);
+  assert.match(domesticLogisticsOps, /includeShipsgoTrackings/);
   assert.match(domesticLogisticsOps, /serializeShipsgoTrackingSummary/);
   assert.doesNotMatch(domesticLogisticsOps, /rawPayload: true/);
   assert.match(logisticsModule, /shipsgoTrackings\?: ShipsgoTrackingRow\[\]/);
