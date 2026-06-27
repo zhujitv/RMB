@@ -2315,6 +2315,26 @@ function PermissionChoiceGroup({
   );
 }
 
+type PermissionTabKey = "menus" | "reads" | "writes";
+
+const PERMISSION_MODE_DESCRIPTIONS: Record<string, string> = {
+  ROLE: "适合大多数账号，系统按角色自动分配权限。",
+  CUSTOM: "仅用于特殊账号，可单独控制菜单、数据范围和操作权限。",
+};
+
+const DATA_SCOPE_DESCRIPTIONS: Record<string, string> = {
+  ALL: "可查看系统内全部业务数据。",
+  OWN: "仅查看本人客户、订单及相关业务数据。",
+  OWN_COST: "仅查看与本人相关的成本业务数据。",
+  NONE: "不授予业务数据查看范围。",
+};
+
+const PERMISSION_TAB_LABELS: Record<PermissionTabKey, string> = {
+  menus: "菜单权限",
+  reads: "查看权限",
+  writes: "操作权限",
+};
+
 function UserEditPanel({
   form,
   suppliers,
@@ -2341,6 +2361,38 @@ function UserEditPanel({
   const logisticsSuppliers = suppliers.filter((supplier) => LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
   const selectedSupplier = logisticsSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
+  const [advancedPermissionsOpen, setAdvancedPermissionsOpen] = useState(false);
+  const [activePermissionTab, setActivePermissionTab] = useState<PermissionTabKey>("menus");
+  const permissionModeOptions = permissionConfig?.permissionModes || [
+    { value: "ROLE", label: "固定角色权限" },
+    { value: "CUSTOM", label: "自定义组合权限" },
+  ];
+  const dataScopeOptions = permissionConfig?.dataScopeOptions || [
+    { value: "ALL", label: "全部数据" },
+    { value: "OWN", label: "本人客户和订单" },
+    { value: "OWN_COST", label: "本人成本相关" },
+    { value: "NONE", label: "无数据范围" },
+  ];
+  const activePermissionGroup = {
+    menus: {
+      title: "菜单权限",
+      options: permissionConfig?.menuPermissionOptions || [],
+      values: form.menus,
+      onToggle: (value: string) => togglePermission("menus", value),
+    },
+    reads: {
+      title: "查看权限",
+      options: permissionConfig?.readPermissionOptions || [],
+      values: form.reads,
+      onToggle: (value: string) => togglePermission("reads", value),
+    },
+    writes: {
+      title: "操作权限",
+      options: permissionConfig?.writePermissionOptions || [],
+      values: form.writes,
+      onToggle: (value: string) => togglePermission("writes", value),
+    },
+  }[activePermissionTab];
 
   async function searchLogisticsSuppliers(keyword: string) {
     const filtered = logisticsSuppliers.filter((supplier) => fuzzyIncludes([
@@ -2365,6 +2417,8 @@ function UserEditPanel({
 
   function setPermissionMode(mode: string) {
     if (mode === "CUSTOM") {
+      setAdvancedPermissionsOpen(false);
+      setActivePermissionTab("menus");
       onChange({
         ...form,
         permissionMode: "CUSTOM",
@@ -2375,6 +2429,7 @@ function UserEditPanel({
       });
       return;
     }
+    setAdvancedPermissionsOpen(false);
     onChange({ ...form, permissionMode: "ROLE" });
   }
 
@@ -2386,7 +2441,7 @@ function UserEditPanel({
 
   return (
     <form className={`${styles.quickCreatePanel} ${styles.userEditPanel}`} onSubmit={onSubmit}>
-      <div className={styles.quickCreateHeader}>
+      <div className={styles.userEditTitle}>
         <div>
           <strong>{form.id ? "编辑用户资料" : "新建用户"}</strong>
           <span>维护基础账号、角色状态和权限组合；自定义权限保存后立即由后端统一校验。</span>
@@ -2395,115 +2450,143 @@ function UserEditPanel({
 
       {message ? <div className={styles.inlineError}>{message}</div> : null}
 
-      <div className={styles.userEditBasicGrid}>
-        <label>
-          姓名
-          <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
-        </label>
-        <label>
-          邮箱
-          <input value={form.email} onChange={(event) => setField("email", event.target.value.trim().toLowerCase())} type="email" required />
-        </label>
-        <label>
-          角色
-          <select value={form.role} onChange={(event) => setRole(event.target.value)}>
-            {USER_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-          </select>
-        </label>
-        <label>
-          账号状态
-          <select value={form.approvalStatus} onChange={(event) => setField("approvalStatus", event.target.value)}>
-            {USER_APPROVAL_STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
-        </label>
-        {form.role === "物流供应商" ? (
-          <label>
-            绑定供应商
-            <SearchAutocomplete
-              value={selectedSupplier}
-              cacheKey="settings-user-logistics-suppliers"
-              emptyLabel="未找到匹配供应商"
-              placeholder="搜索供应商 / 类型 / 联系人 / 税号"
-              getLabel={supplierOptionLabel}
-              getDescription={(supplier) => [supplier.contactPerson, supplier.invoiceTitle, supplier.taxNumber].filter(Boolean).join(" / ")}
-              search={searchLogisticsSuppliers}
-              onSelect={(supplier) => setField("supplierId", supplier.id)}
-            />
-            {!logisticsSuppliers.length ? <small className={styles.mutedText}>请先在供应商资料中启用物流相关供应商</small> : null}
-          </label>
-        ) : null}
-        <label>
-          {form.id ? "重置密码" : "初始密码"}
-          <input
-            value={form.password}
-            onChange={(event) => setField("password", event.target.value)}
-            type="password"
-            placeholder={form.id ? "留空则不修改密码" : "新建用户必填"}
-            required={!form.id}
-          />
-        </label>
-      </div>
-
-      <div className={styles.userPermissionPanel}>
-        <div className={styles.quickCreateHeader}>
-          <div>
-            <strong>权限模式</strong>
-            <span>固定角色权限适合大多数账号；自定义组合权限可精细控制菜单、数据范围和读写能力。</span>
-          </div>
+      <section className={styles.userEditSection}>
+        <div className={styles.userEditSectionHeader}>
+          <strong>基本账号信息</strong>
+          <span>维护登录身份、角色和账号状态。</span>
         </div>
-        <div className={styles.userPermissionModeGrid}>
+        <div className={styles.userEditBasicGrid}>
           <label>
-            权限模式
-            <select value={form.permissionMode} onChange={(event) => setPermissionMode(event.target.value)}>
-              {(permissionConfig?.permissionModes || [
-                { value: "ROLE", label: "固定角色权限" },
-                { value: "CUSTOM", label: "自定义组合权限" },
-              ]).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            姓名
+            <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
+          </label>
+          <label>
+            邮箱
+            <input value={form.email} onChange={(event) => setField("email", event.target.value.trim().toLowerCase())} type="email" required />
+          </label>
+          <label>
+            角色
+            <select value={form.role} onChange={(event) => setRole(event.target.value)}>
+              {USER_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
             </select>
           </label>
-          {form.permissionMode === "CUSTOM" ? (
+          <label>
+            账号状态
+            <select value={form.approvalStatus} onChange={(event) => setField("approvalStatus", event.target.value)}>
+              {USER_APPROVAL_STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </select>
+          </label>
+          {form.role === "物流供应商" ? (
             <label>
-              数据范围
-              <select value={form.dataScope} onChange={(event) => setField("dataScope", event.target.value)}>
-                {(permissionConfig?.dataScopeOptions || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              绑定供应商
+              <SearchAutocomplete
+                value={selectedSupplier}
+                cacheKey="settings-user-logistics-suppliers"
+                emptyLabel="未找到匹配供应商"
+                placeholder="搜索供应商 / 类型 / 联系人 / 税号"
+                getLabel={supplierOptionLabel}
+                getDescription={(supplier) => [supplier.contactPerson, supplier.invoiceTitle, supplier.taxNumber].filter(Boolean).join(" / ")}
+                search={searchLogisticsSuppliers}
+                onSelect={(supplier) => setField("supplierId", supplier.id)}
+              />
+              {!logisticsSuppliers.length ? <small className={styles.mutedText}>请先在供应商资料中启用物流相关供应商</small> : null}
             </label>
-          ) : (
-            <label>
-              当前角色默认范围
-              <input value={dataScopeLabel(permissionConfig, defaults.dataScope)} readOnly />
-            </label>
-          )}
+          ) : null}
+          <label>
+            {form.id ? "重置密码" : "初始密码"}
+            <input
+              value={form.password}
+              onChange={(event) => setField("password", event.target.value)}
+              type="password"
+              placeholder={form.id ? "留空则不修改密码" : "新建用户必填"}
+              required={!form.id}
+            />
+          </label>
         </div>
+      </section>
+
+      <section className={styles.userEditSection}>
+        <div className={styles.userEditSectionHeader}>
+          <strong>权限方案</strong>
+          <span>普通账号建议使用固定角色权限，特殊账号再启用自定义组合权限。</span>
+        </div>
+        <div className={styles.permissionModeCards}>
+          {permissionModeOptions.map((option) => (
+            <PermissionSelectItem
+              key={option.value}
+              className={styles.permissionSchemeCard}
+              label={option.label}
+              description={PERMISSION_MODE_DESCRIPTIONS[option.value] || ""}
+              checked={form.permissionMode === option.value}
+              onChange={() => setPermissionMode(option.value)}
+            />
+          ))}
+        </div>
+
         {form.permissionMode === "CUSTOM" ? (
-          <div className={styles.permissionMatrix}>
-            <PermissionChoiceGroup
-              title="菜单权限"
-              options={permissionConfig?.menuPermissionOptions || []}
-              values={form.menus}
-              onToggle={(value) => togglePermission("menus", value)}
-            />
-            <PermissionChoiceGroup
-              title="查看权限"
-              options={permissionConfig?.readPermissionOptions || []}
-              values={form.reads}
-              onToggle={(value) => togglePermission("reads", value)}
-            />
-            <PermissionChoiceGroup
-              title="操作权限"
-              options={permissionConfig?.writePermissionOptions || []}
-              values={form.writes}
-              onToggle={(value) => togglePermission("writes", value)}
-            />
-          </div>
+          <>
+            <div className={styles.dataScopeCardGrid}>
+              {dataScopeOptions.map((option) => (
+                <PermissionSelectItem
+                  key={option.value}
+                  className={styles.permissionSchemeCard}
+                  label={option.label}
+                  description={DATA_SCOPE_DESCRIPTIONS[option.value] || "按当前权限模板控制数据访问范围。"}
+                  checked={form.dataScope === option.value}
+                  onChange={() => setField("dataScope", option.value)}
+                />
+              ))}
+            </div>
+            <div className={styles.permissionTemplateNote}>
+              权限模板说明：当前账号使用自定义组合权限，保存后将按所选数据范围、菜单权限、查看权限和操作权限执行。
+            </div>
+          </>
         ) : (
-          <div className={styles.quickCreateMeta}>
-            <span>菜单：{defaults.menus.length} 项</span>
-            <span>查看权限：{defaults.reads.length} 项</span>
-            <span>操作权限：{defaults.writes.length} 项</span>
+          <div className={styles.permissionTemplateNote}>
+            当前账号将使用【{form.role}】角色默认权限。默认数据范围：{dataScopeLabel(permissionConfig, defaults.dataScope)}；菜单 {defaults.menus.length} 项，查看权限 {defaults.reads.length} 项，操作权限 {defaults.writes.length} 项。
           </div>
         )}
-      </div>
+      </section>
+
+      {form.permissionMode === "CUSTOM" ? (
+        <section className={styles.userEditSection}>
+          <div className={styles.advancedPermissionHeader}>
+            <div>
+              <strong>高级自定义权限</strong>
+              <span>仅特殊账号需要展开配置；每次只显示一组权限。</span>
+            </div>
+            <button className={styles.secondaryButton} type="button" onClick={() => setAdvancedPermissionsOpen((open) => !open)}>
+              {advancedPermissionsOpen ? "收起高级权限" : "展开高级权限"}
+            </button>
+          </div>
+          {advancedPermissionsOpen ? (
+            <>
+              <div className={styles.permissionTabs}>
+                {(Object.keys(PERMISSION_TAB_LABELS) as PermissionTabKey[]).map((tab) => (
+                  <button
+                    key={tab}
+                    className={tab === activePermissionTab ? styles.permissionTabActive : ""}
+                    type="button"
+                    onClick={() => setActivePermissionTab(tab)}
+                  >
+                    {PERMISSION_TAB_LABELS[tab]}
+                  </button>
+                ))}
+              </div>
+              <PermissionChoiceGroup
+                title={activePermissionGroup.title}
+                options={activePermissionGroup.options}
+                values={activePermissionGroup.values}
+                onToggle={activePermissionGroup.onToggle}
+              />
+            </>
+          ) : (
+            <div className={styles.permissionTemplateNote}>
+              高级权限当前已折叠。保存时仍会保留当前自定义权限配置。
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存用户"}</button>
