@@ -50,6 +50,25 @@ test("cost management groups logistics invoices by shipment before display", () 
   assert.match(costsQueries, /summarizeCurrencyTotals\(groupCosts\)/);
 });
 
+test("cost invoice group main list hides long invoice and cost type columns", () => {
+  const headStart = costsModule.indexOf("function CostInvoiceGroupTableHead");
+  const rowStart = costsModule.indexOf("function CostInvoiceGroupRows");
+  const nextStart = costsModule.indexOf("function CostOrderTableHead");
+  const headSnippet = costsModule.slice(headStart, rowStart);
+  const rowSnippet = costsModule.slice(rowStart, nextStart);
+  const drawerSnippet = costsModule.slice(
+    costsModule.indexOf("function CostInvoiceGroupDrawer"),
+    costsModule.indexOf("function CostDocumentsDrawer"),
+  );
+
+  assert.doesNotMatch(headSnippet, /发票号 \/ 文件|包含费用类型/);
+  assert.doesNotMatch(rowSnippet, /group\.invoiceNo|group\.costTypeSummary/);
+  assert.match(drawerSnippet, /<DetailField label="发票号 \/ 文件" value=\{group\.invoiceNo \|\| "-"\} wide \/>/);
+  assert.match(drawerSnippet, /<DetailField label="包含费用类型" value=\{group\.costTypeSummary \|\| "-"\} wide \/>/);
+  assert.match(costsModule, /if \(costView === "invoiceGroups"\) return 8;/);
+  assert.match(costsModule, /if \(costView === "invoiceExceptions"\) return 9;/);
+});
+
 test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsModule, /changeCostView\("invoiceExceptions"\)/);
   assert.match(costsModule, /view: nextView/);

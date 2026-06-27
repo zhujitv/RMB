@@ -1432,8 +1432,6 @@ function CostInvoiceGroupTableHead({ showException }: { showException: boolean }
         <th className={styles.orderNoColumn}>订单号</th>
         <th className={styles.customerColumn}>客户简称</th>
         <th>供应商</th>
-        <th>发票号 / 文件</th>
-        <th>包含费用类型</th>
         <th className={styles.amountColumn}>CNY 合计</th>
         <th className={styles.amountColumn}>USD 合计</th>
         <th className={styles.statusColumn}>付款状态</th>
@@ -1463,8 +1461,6 @@ function CostInvoiceGroupRows({
       <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
       <td className={styles.customerColumn} title={customerLegalName(group)}>{customerDisplayName(group)}</td>
       <td>{supplierName}</td>
-      <td title={group.invoiceNo || ""}>{group.invoiceNo || "-"}</td>
-      <td title={group.costTypeSummary || ""}>{group.costTypeSummary || "-"}</td>
       <td className={styles.amountColumn}>
         <strong className={styles.costAmountTotal}>{formatCurrencyAmount("CNY", currencyTotalAmount(group.currencyTotals, "CNY"))}</strong>
       </td>
@@ -1505,8 +1501,8 @@ function CostOrderTableHead() {
 
 function costViewColSpan(costView: CostView) {
   if (costView === "orders") return 6;
-  if (costView === "invoiceGroups") return 10;
-  if (costView === "invoiceExceptions") return 11;
+  if (costView === "invoiceGroups") return 8;
+  if (costView === "invoiceExceptions") return 9;
   return 8;
 }
 
