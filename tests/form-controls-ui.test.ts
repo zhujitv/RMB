@@ -276,6 +276,13 @@ test("system buttons use unified design tokens and avoid black backgrounds", () 
   assert.match(globalStyles, /--button-danger-bg: #ff4d4f/);
   assert.match(workspaceStyles, /\.primaryButton \{[\s\S]*background: var\(--button-primary-bg\)/);
   assert.match(workspaceStyles, /\.primaryButtonCompact \{[\s\S]*background: var\(--button-primary-bg\)/);
+  assert.match(workspaceStyles, /\.loginSubmitButton \{[\s\S]*width: 100%;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton \{[\s\S]*background: var\(--button-primary-bg\) !important;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton \{[\s\S]*color: var\(--button-primary-text\) !important;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton:hover:not\(:disabled\),[\s\S]*background: var\(--button-primary-hover\) !important;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton:hover:not\(:disabled\),[\s\S]*color: var\(--button-primary-text\) !important;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton:disabled \{[\s\S]*background: var\(--button-disabled-bg\) !important;/);
+  assert.match(workspaceStyles, /\.loginSubmitButton:disabled \{[\s\S]*color: var\(--button-disabled-text\) !important;/);
   assert.match(workspaceStyles, /\.rowDetailButton \{[\s\S]*background: var\(--button-primary-bg\)/);
   assert.match(workspaceStyles, /\.fileActionButton \{[\s\S]*background: var\(--button-primary-bg\)/);
   assert.match(workspaceStyles, /\.dataTable button:not\(:disabled\) \{[\s\S]*background: var\(--button-primary-bg\)/);
