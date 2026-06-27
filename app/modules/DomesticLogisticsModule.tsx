@@ -948,9 +948,41 @@ function defaultShipsgoMasterBl(row: DomesticLogisticsRow) {
   return String(row.blNo || row.billOfLadingNo || "").trim();
 }
 
-function shipsgoContainerListText(tracking: ShipsgoTrackingRow) {
+function shipsgoContainerTags(tracking: ShipsgoTrackingRow) {
   const containers = Array.isArray(tracking.containerNumbers) ? tracking.containerNumbers : [];
-  return containers.length ? containers.join(" / ") : tracking.containerNumber || "-";
+  return Array.from(new Set([...(containers || []), tracking.containerNumber || ""].map((item) => item.trim()).filter(Boolean)));
+}
+
+function shipsgoValue(value: unknown, fallback = "未返回") {
+  const text = String(value || "").trim();
+  return text && text !== "-" ? text : fallback;
+}
+
+function shipsgoVesselVoyage(tracking: ShipsgoTrackingRow) {
+  return [tracking.vesselName, tracking.voyage].map((item) => String(item || "").trim()).filter(Boolean).join(" / ") || "暂无船名航次";
+}
+
+function shipsgoSyncTime(tracking: ShipsgoTrackingRow) {
+  const value = tracking.lastSyncTime || tracking.lastSyncedAt || "";
+  return value ? formatDateTime(value) : "暂无同步记录";
+}
+
+function shipsgoTrackingStatusText(tracking: ShipsgoTrackingRow) {
+  const syncStatus = String(tracking.syncStatus || "").toUpperCase();
+  const status = String(tracking.currentStatus || tracking.status || "").toUpperCase();
+  if (/FAIL|ERROR/.test(syncStatus)) return "同步失败";
+  if (!tracking.shipsgoShipmentId && !tracking.lastSyncTime && !tracking.lastSyncedAt) return "已创建，待同步";
+  if (/COMPLETE|DELIVERED|CLOSED|FINISHED/.test(status)) return "已完成";
+  if (/ARRIVED|DISCHARGED|POD/.test(status)) return "已到港";
+  if (/SAILING|TRANSIT|INPROGRESS|IN_PROGRESS|LOADED|ONBOARD|DEPARTED/.test(status)) return "航行中";
+  if (tracking.statusLabel && !/未知/.test(tracking.statusLabel)) return tracking.statusLabel;
+  if (status && status !== "UNKNOWN") return tracking.currentStatus || tracking.status || "已创建，待同步";
+  return "已创建，待同步";
+}
+
+function shouldShowShipsgoRecover(tracking: ShipsgoTrackingRow) {
+  const syncStatus = String(tracking.syncStatus || "").toUpperCase();
+  return !tracking.shipsgoShipmentId || /FAIL|ERROR|NOT_SYNCED/.test(syncStatus);
 }
 
 function ShipsgoOrderTrackingPanel({
@@ -1017,33 +1049,65 @@ function ShipsgoOrderTrackingPanel({
         </div>
       </div>
       {trackings.length ? (
-        <div className={styles.subList}>
+        <div className={styles.shipsgoTrackingList}>
           {trackings.map((tracking) => {
             const syncBusy = busyKey === `${tracking.id}:shipsgo:sync`;
+            const containers = shipsgoContainerTags(tracking);
+            const etaText = tracking.eta || tracking.predictedDischargeDate || tracking.dateOfDischarge || "";
+            const showRecover = canManage && shouldShowShipsgoRecover(tracking);
             return (
-              <div className={styles.subListItem} key={tracking.id}>
-                <strong>
-                  {tracking.statusLabel || tracking.status || "未知状态"}
-                  {shipsgoContainerListText(tracking) !== "-" ? ` · ${shipsgoContainerListText(tracking)}` : ""}
-                </strong>
-                <span>船公司：{tracking.carrierName || tracking.carrierScac || "-"}</span>
-                <span>Master B/L：{tracking.masterBlNo || tracking.bookingNumber || "-"}</span>
-                <span>柜号：{shipsgoContainerListText(tracking)}</span>
-                <span>起运港：{tracking.originName || "-"}</span>
-                <span>目的港：{tracking.destinationName || "-"}</span>
-                <span>预计到港：{tracking.eta || tracking.predictedDischargeDate || tracking.dateOfDischarge || "-"}</span>
-                <span>船名航次：{[tracking.vesselName, tracking.voyage].filter(Boolean).join(" / ") || "-"}</span>
-                <span>最后同步时间：{tracking.lastSyncTime || tracking.lastSyncedAt ? formatDateTime(tracking.lastSyncTime || tracking.lastSyncedAt || "") : "-"}</span>
-                {tracking.syncMessage ? <span>同步提示：{tracking.syncMessage}</span> : null}
-                <div className={styles.quickCreateMeta}>
-                  {tracking.mapUrl && features.liveMapEnabled ? (
-                    <a className={styles.secondaryButton} href={tracking.mapUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
-                      查看地图
-                    </a>
-                  ) : null}
+              <article className={styles.shipsgoTrackingCard} key={tracking.id}>
+                <div className={styles.shipsgoTrackingSummary}>
+                  <span className={styles.shipsgoStatusBadge}>{shipsgoTrackingStatusText(tracking)}</span>
+                  <strong>预计到港 ETA：{shipsgoValue(etaText, "暂无 ETA")}</strong>
+                  <span>最后同步时间：{shipsgoSyncTime(tracking)}</span>
+                </div>
+
+                <div className={styles.shipsgoTrackingInfoGrid}>
+                  <div className={styles.shipsgoInfoColumn}>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>船公司</span>
+                      <strong>{shipsgoValue(tracking.carrierName || tracking.carrierScac)}</strong>
+                    </div>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>Master B/L</span>
+                      <strong>{shipsgoValue(tracking.masterBlNo || tracking.bookingNumber)}</strong>
+                    </div>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>船名航次</span>
+                      <strong>{shipsgoVesselVoyage(tracking)}</strong>
+                    </div>
+                  </div>
+                  <div className={styles.shipsgoInfoColumn}>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>起运港</span>
+                      <strong>{shipsgoValue(tracking.originName)}</strong>
+                    </div>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>目的港</span>
+                      <strong>{shipsgoValue(tracking.destinationName)}</strong>
+                    </div>
+                    <div className={styles.shipsgoInfoItem}>
+                      <span>跟踪方式</span>
+                      <strong>Master B/L</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.shipsgoContainerBlock}>
+                  <span>关联柜号</span>
+                  <div className={styles.shipsgoContainerTags}>
+                    {containers.length ? containers.map((containerNo) => (
+                      <span key={containerNo}>{containerNo}</span>
+                    )) : <span>未返回</span>}
+                  </div>
+                </div>
+
+                {tracking.syncMessage ? <span className={styles.shipsgoSyncMessage}>同步提示：{tracking.syncMessage}</span> : null}
+                <div className={styles.shipsgoTrackingActions}>
                   {features.manualSyncEnabled && canManage ? (
                     <button
-                      className={styles.secondaryButton}
+                      className={styles.primaryButtonCompact}
                       type="button"
                       disabled={syncBusy}
                       onClick={(event) => {
@@ -1054,32 +1118,35 @@ function ShipsgoOrderTrackingPanel({
                       {syncBusy ? "同步中..." : "同步最新状态"}
                     </button>
                   ) : null}
+                  <button className={styles.secondaryButton} type="button" onClick={(event) => event.stopPropagation()}>
+                    查看运输状态
+                  </button>
+                  {tracking.mapUrl && features.liveMapEnabled ? (
+                    <a className={styles.secondaryButton} href={tracking.mapUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                      查看地图
+                    </a>
+                  ) : null}
+                  {showRecover ? (
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={recoverBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onRecover();
+                      }}
+                    >
+                      {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
+                    </button>
+                  ) : null}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
       ) : (
         <div className={styles.emptyState}>暂未创建 ShipsGo 跟踪</div>
       )}
-      {canCreate && hasTracking ? (
-        <div className={styles.quickCreateMeta}>
-          <button className={styles.secondaryButton} type="button" onClick={(event) => event.stopPropagation()}>
-            查看运输状态
-          </button>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            disabled={recoverBusy}
-            onClick={(event) => {
-              event.stopPropagation();
-              void onRecover();
-            }}
-          >
-            {recoverBusy ? "同步中..." : "从 ShipsGo 同步已有跟踪"}
-          </button>
-        </div>
-      ) : null}
       {canCreate && !hasTracking ? (
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
           <label>
