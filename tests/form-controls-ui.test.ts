@@ -80,6 +80,33 @@ test("supplier logistics cost types use card multi-select options", () => {
   assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.supplierLogisticsCostGrid \{[\s\S]*grid-template-columns: 1fr;/);
 });
 
+test("user permissions reuse unified card multi-select options", () => {
+  const permissionGroupIndex = settingsModule.indexOf("function PermissionChoiceGroup");
+  const permissionGroupSnippet = settingsModule.slice(permissionGroupIndex, permissionGroupIndex + 1400);
+  const customPermissionIndex = settingsModule.indexOf('title="菜单权限"');
+  const customPermissionSnippet = settingsModule.slice(Math.max(0, customPermissionIndex - 420), customPermissionIndex + 1400);
+
+  assert.match(permissionGroupSnippet, /<PermissionSelectItem/);
+  assert.match(permissionGroupSnippet, /styles\.permissionOptionGrid/);
+  assert.match(permissionGroupSnippet, /checked=\{values\.includes\(option\.value\)\}/);
+  assert.match(permissionGroupSnippet, /onChange=\{\(\) => onToggle\(option\.value\)\}/);
+  assert.doesNotMatch(permissionGroupSnippet, /<UiCheckbox/);
+  assert.doesNotMatch(permissionGroupSnippet, /variant="compact"/);
+  assert.match(customPermissionSnippet, /title="菜单权限"/);
+  assert.match(customPermissionSnippet, /title="查看权限"/);
+  assert.match(customPermissionSnippet, /title="操作权限"/);
+  assert.match(customPermissionSnippet, /values=\{form\.menus\}/);
+  assert.match(customPermissionSnippet, /values=\{form\.reads\}/);
+  assert.match(customPermissionSnippet, /values=\{form\.writes\}/);
+  assert.match(customPermissionSnippet, /togglePermission\("menus", value\)/);
+  assert.match(customPermissionSnippet, /togglePermission\("reads", value\)/);
+  assert.match(customPermissionSnippet, /togglePermission\("writes", value\)/);
+  assert.match(workspaceStyles, /\.permissionOptionGrid \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[\s\S]*gap: 16px/);
+  assert.match(workspaceStyles, /\.permissionOptionGrid \.uiChoiceCard \{[\s\S]*min-height: 64px;/);
+  assert.match(workspaceStyles, /@media \(max-width: 920px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: 1fr;/);
+});
+
 test("native form controls are normalized by the workspace style layer", () => {
   assert.match(workspaceStyles, /\.uiSwitch/);
   assert.match(workspaceStyles, /\.uiChoiceCard/);

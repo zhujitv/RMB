@@ -2294,12 +2294,16 @@ function PermissionChoiceGroup({
 }) {
   return (
     <section className={styles.permissionGroup}>
-      <strong>{title}</strong>
-      <div>
+      <div className={styles.permissionGroupHeader}>
+        <strong>{title}</strong>
+        <span>
+          已选择 {values.length} / {options.length} 项
+        </span>
+      </div>
+      <div className={styles.permissionOptionGrid}>
         {options.map((option) => (
-          <UiCheckbox
+          <PermissionSelectItem
             key={option.value}
-            variant="compact"
             label={option.label}
             checked={values.includes(option.value)}
             onChange={() => onToggle(option.value)}
