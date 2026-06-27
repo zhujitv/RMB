@@ -2304,6 +2304,7 @@ function PermissionChoiceGroup({
         {options.map((option) => (
           <PermissionSelectItem
             key={option.value}
+            className={styles.permissionOptionCard}
             label={option.label}
             checked={values.includes(option.value)}
             onChange={() => onToggle(option.value)}
@@ -2384,7 +2385,7 @@ function UserEditPanel({
   }
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+    <form className={`${styles.quickCreatePanel} ${styles.userEditPanel}`} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{form.id ? "编辑用户资料" : "新建用户"}</strong>
@@ -2394,7 +2395,7 @@ function UserEditPanel({
 
       {message ? <div className={styles.inlineError}>{message}</div> : null}
 
-      <div className={styles.reportFilterGrid}>
+      <div className={styles.userEditBasicGrid}>
         <label>
           姓名
           <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
@@ -2443,14 +2444,14 @@ function UserEditPanel({
         </label>
       </div>
 
-      <div className={styles.checkboxPanel}>
+      <div className={styles.userPermissionPanel}>
         <div className={styles.quickCreateHeader}>
           <div>
             <strong>权限模式</strong>
             <span>固定角色权限适合大多数账号；自定义组合权限可精细控制菜单、数据范围和读写能力。</span>
           </div>
         </div>
-        <div className={styles.reportFilterGrid}>
+        <div className={styles.userPermissionModeGrid}>
           <label>
             权限模式
             <select value={form.permissionMode} onChange={(event) => setPermissionMode(event.target.value)}>

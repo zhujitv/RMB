@@ -87,11 +87,16 @@ test("user permissions reuse unified card multi-select options", () => {
   const customPermissionSnippet = settingsModule.slice(Math.max(0, customPermissionIndex - 420), customPermissionIndex + 1400);
 
   assert.match(permissionGroupSnippet, /<PermissionSelectItem/);
+  assert.match(permissionGroupSnippet, /className=\{styles\.permissionOptionCard\}/);
   assert.match(permissionGroupSnippet, /styles\.permissionOptionGrid/);
   assert.match(permissionGroupSnippet, /checked=\{values\.includes\(option\.value\)\}/);
   assert.match(permissionGroupSnippet, /onChange=\{\(\) => onToggle\(option\.value\)\}/);
   assert.doesNotMatch(permissionGroupSnippet, /<UiCheckbox/);
   assert.doesNotMatch(permissionGroupSnippet, /variant="compact"/);
+  assert.match(settingsModule, /styles\.userEditPanel/);
+  assert.match(settingsModule, /styles\.userEditBasicGrid/);
+  assert.match(settingsModule, /styles\.userPermissionPanel/);
+  assert.match(settingsModule, /styles\.userPermissionModeGrid/);
   assert.match(customPermissionSnippet, /title="菜单权限"/);
   assert.match(customPermissionSnippet, /title="查看权限"/);
   assert.match(customPermissionSnippet, /title="操作权限"/);
@@ -101,9 +106,16 @@ test("user permissions reuse unified card multi-select options", () => {
   assert.match(customPermissionSnippet, /togglePermission\("menus", value\)/);
   assert.match(customPermissionSnippet, /togglePermission\("reads", value\)/);
   assert.match(customPermissionSnippet, /togglePermission\("writes", value\)/);
+  assert.match(workspaceStyles, /\.userEditPanel \{[\s\S]*max-width: 1040px;/);
+  assert.match(workspaceStyles, /\.userPermissionModeGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /\.userPermissionModeGrid label \{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\);[\s\S]*white-space: nowrap;/);
   assert.match(workspaceStyles, /\.permissionOptionGrid \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[\s\S]*gap: 16px/);
-  assert.match(workspaceStyles, /\.permissionOptionGrid \.uiChoiceCard \{[\s\S]*min-height: 64px;/);
+  assert.match(workspaceStyles, /\.permissionOptionCard \{[\s\S]*min-height: 48px;[\s\S]*grid-template-columns: minmax\(0, 1fr\) 22px;/);
+  assert.match(workspaceStyles, /\.permissionOptionCard \.uiChoiceInput \{[\s\S]*clip: rect\(0, 0, 0, 0\);[\s\S]*pointer-events: none;/);
+  assert.match(workspaceStyles, /\.permissionOptionCard \.uiChoiceCheck \{[\s\S]*position: static;[\s\S]*grid-column: 2;/);
+  assert.match(workspaceStyles, /\.permissionOptionCard \.uiChoiceText strong \{[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
   assert.match(workspaceStyles, /@media \(max-width: 920px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.userEditBasicGrid,[\s\S]*\.userPermissionModeGrid \{[\s\S]*grid-template-columns: 1fr;/);
   assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: 1fr;/);
 });
 

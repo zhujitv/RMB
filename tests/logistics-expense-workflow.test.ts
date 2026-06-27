@@ -884,7 +884,7 @@ test("checkbox controls use modern custom selection styling", () => {
   assert.match(workspaceStyles, /border-color: #3b82f6/);
   assert.match(workspaceStyles, /background: rgba\(59, 130, 246, 0\.08\)/);
   assert.match(workspaceStyles, /\.checkboxPanel label:has\(input:checked\)/);
-  assert.match(workspaceStyles, /\.permissionOptionGrid \.uiChoiceCard/);
+  assert.match(workspaceStyles, /\.permissionOptionCard \.uiChoiceCheck/);
   assert.match(workspaceStyles, /\.inlineCheckbox:has\(input:checked\)/);
   assert.match(workspaceStyles, /\.tableCheckbox:checked/);
   assert.match(workspaceStyles, /background-image: url\("data:image\/svg\+xml/);
