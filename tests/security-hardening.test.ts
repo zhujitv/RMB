@@ -45,7 +45,15 @@ function cspFor(isDevelopment: boolean) {
   return execFileSync(process.execPath, [
     "--input-type=module",
     "-e",
-    `import('./lib/security-headers.mjs').then(({ buildContentSecurityPolicy }) => process.stdout.write(buildContentSecurityPolicy({ isDevelopment: ${isDevelopment}, nonce: 'testnonce' })))`,
+    `import('./lib/security-headers.mjs').then(({ buildContentSecurityPolicy }) => process.stdout.write(buildContentSecurityPolicy({ isDevelopment: ${isDevelopment}, nonce: 'testnonce', env: {} })))`,
+  ], { encoding: "utf8" });
+}
+
+function configuredCsp() {
+  return execFileSync(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `import('./lib/security-headers.mjs').then(({ buildContentSecurityPolicy }) => process.stdout.write(buildContentSecurityPolicy({ isDevelopment: false, nonce: 'testnonce', env: { CSP_CONNECT_SRC: 'https://api.nextwood.net', CSP_IMG_SRC: 'https://assets.nextwood.net', CSP_FRAME_SRC: 'https://viewer.nextwood.net' } })))`,
   ], { encoding: "utf8" });
 }
 
@@ -82,11 +90,21 @@ test("production CSP removes unsafe inline and local development connect sources
   assert.match(productionCsp, /style-src 'self' 'nonce-testnonce'/);
   assert.doesNotMatch(productionCsp, /unsafe-inline|unsafe-eval/);
   assert.doesNotMatch(productionCsp, /localhost|127\.0\.0\.1/);
+  assert.doesNotMatch(productionCsp, /connect-src[^;]*https:/);
+  assert.doesNotMatch(productionCsp, /img-src[^;]*https:/);
+  assert.match(productionCsp, /img-src 'self' data: blob:/);
 
   const developmentCsp = cspFor(true);
   assert.match(developmentCsp, /unsafe-inline/);
   assert.match(developmentCsp, /localhost:\*/);
   assert.match(developmentCsp, /127\.0\.0\.1:\*/);
+});
+
+test("production CSP external sources require explicit allowlists", () => {
+  const csp = configuredCsp();
+  assert.match(csp, /connect-src 'self' https:\/\/api\.nextwood\.net/);
+  assert.match(csp, /img-src 'self' data: blob: https:\/\/assets\.nextwood\.net/);
+  assert.match(csp, /frame-src 'self' blob: https:\/\/viewer\.nextwood\.net/);
 });
 
 test("critical write paths use shared input schemas", () => {

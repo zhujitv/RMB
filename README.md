@@ -584,6 +584,15 @@ R2_BUCKET="your-r2-bucket"
 R2_ENDPOINT=""
 ```
 
+生产环境 CSP 默认不允许浏览器连接或加载任意外部 `https:` 资源。如确实需要外链资源，例如外部 Logo CDN 或独立 PDF 查看域名，请显式配置白名单：
+
+```text
+CSP_CONNECT_SRC=https://api.example.com
+CSP_IMG_SRC=https://assets.example.com
+CSP_FRAME_SRC=https://viewer.example.com
+CSP_MEDIA_SRC=https://media.example.com
+```
+
 也兼容以下 R2 变量名：
 
 ```bash

@@ -118,7 +118,6 @@ function applySecurityHeaders(response: NextResponse, contentSecurityPolicy: str
 export function proxy(request: NextRequest) {
   const nonce = generateNonce();
   const contentSecurityPolicy = buildContentSecurityPolicy({
-    isDevelopment: IS_DEVELOPMENT,
     nonce,
   });
   const userAgent = request.headers.get("user-agent") || "";
