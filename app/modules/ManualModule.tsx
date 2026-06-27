@@ -26,20 +26,6 @@ const FLOW_STEPS = [
   ["档案查询", "历史资料随时调取"],
 ];
 
-const IMPORTANT_RULES = [
-  "已提交退税前，总体完整度必须为 100%。",
-  "已提交退税后，订单自动归档。",
-  "归档不是删除，所有数据和附件完整保留。",
-  "已归档业务可在退税档案、报表中心或已归档业务筛选中调取。",
-  "退税归档不代表收款完成。",
-  "收款管理不因退税归档而隐藏。",
-  "登录、注册和关键操作必须从系统正式页面进入。",
-  "物流费用录入、月结、合并审核、发票上传和付款状态统一在物流信息底部完成。",
-  "运输监控只读取已创建的大掌櫃跟踪，不会重新创建 Tracking 或重复扣费。",
-  "产品供应商资料回传仅支持 PDF 文件，合同样本用于下载、盖章扫描后回传。",
-  "PDF 附件只能上传普通 PDF，含脚本、启动动作或嵌入文件的 PDF 会被拒绝。",
-];
-
 const SECTIONS: ManualSection[] = [
   {
     id: "positioning",
@@ -237,12 +223,6 @@ export function ManualModule() {
             <small>{text}</small>
           </div>
         ))}
-      </div>
-
-      <div className={styles.manualRuleCard}>
-        <ul>
-          {IMPORTANT_RULES.map((rule) => <li key={rule}>{rule}</li>)}
-        </ul>
       </div>
 
       <div className={styles.manualLayout}>

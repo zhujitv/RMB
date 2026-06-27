@@ -62,10 +62,13 @@ test("manual explains account and upload security rules", () => {
   assert.match(manualModule, /文件预览、下载、删除均受权限控制/);
 });
 
-test("manual homepage keeps rules without the redundant important rules heading", () => {
+test("manual homepage removes the duplicated rule summary block", () => {
   assert.doesNotMatch(manualModule, />重要规则</);
-  assert.match(manualModule, /已提交退税前，总体完整度必须为 100%/);
-  assert.match(manualModule, /PDF 附件只能上传普通 PDF/);
+  assert.doesNotMatch(manualModule, /const IMPORTANT_RULES/);
+  assert.doesNotMatch(manualModule, /manualRuleCard/);
+  assert.match(manualModule, /总体完整度不足 100% 不允许提交退税/);
+  assert.match(manualModule, /归档不是删除/);
+  assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 5MB/);
 });
 
 test("manual explains company profile and system branding settings", () => {

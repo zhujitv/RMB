@@ -1193,7 +1193,6 @@ function ShipsgoControlTowerView({
       <div className={styles.controlTowerHeader}>
         <div>
           <h3>运输监控</h3>
-          <span>集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务</span>
         </div>
         <div className={styles.controlTowerHeaderActions}>
           <span>最后更新时间：{updatedAt ? formatDateTime(updatedAt) : "暂无"}</span>

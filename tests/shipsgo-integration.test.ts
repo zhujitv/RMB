@@ -217,7 +217,7 @@ test("ShipsGo ocean control tower is read-only and does not create tracking", ()
 
 test("domestic logistics exposes ocean control tower tab and fullscreen monitor UI", () => {
   assert.match(logisticsModule, /运输监控/);
-  assert.match(logisticsModule, /集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务/);
+  assert.doesNotMatch(logisticsModule, /集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务/);
   assert.match(logisticsModule, /ShipsgoControlTowerView/);
   assert.match(logisticsModule, /initialFullScreen\?: boolean/);
   assert.match(logisticsModule, /useState\(initialFullScreen\)/);
