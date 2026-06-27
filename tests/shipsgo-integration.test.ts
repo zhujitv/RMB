@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  formatShipsgoCarrierForLocale,
+  formatShipsgoPortForLocale,
+  formatShipsgoStatusForLocale,
+  formatShipsgoTrackingMethodForLocale,
+  normalizeShipsgoDisplayLocale,
+} from "../lib/shipsgo-display.ts";
 
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
@@ -161,4 +168,32 @@ test("ShipsGo raw response port mapping reads nested loading and discharge locat
   assert.match(trackingService, /destinationPortName: row\.destinationName \|\| rawFallback\?\.destinationName \|\| ""/);
   assert.match(logisticsModule, /tracking\.originPortName \|\| tracking\.originName/);
   assert.match(logisticsModule, /tracking\.destinationPortName \|\| tracking\.destinationName/);
+});
+
+test("ShipsGo ERP display localizes carrier ports status and tracking method in Chinese", () => {
+  assert.equal(formatShipsgoCarrierForLocale("HAPAG LLOYD", "HLCU", "zh-CN"), "赫伯罗特（Hapag-Lloyd）");
+  assert.equal(formatShipsgoCarrierForLocale("MAERSK", "MAEU", "zh-CN"), "马士基（Maersk）");
+  assert.equal(formatShipsgoPortForLocale("SHANGHAI", "CNSHA", "zh-CN"), "上海（CNSHA）");
+  assert.equal(formatShipsgoPortForLocale("AARHUS", "DKAAR", "zh-CN"), "奥胡斯（DKAAR）");
+  assert.equal(formatShipsgoStatusForLocale("Sailing", "zh-CN"), "航行中");
+  assert.equal(formatShipsgoStatusForLocale("In Transit", "zh-CN"), "运输途中");
+  assert.equal(formatShipsgoTrackingMethodForLocale("Master B/L", "zh-CN"), "主提单跟踪");
+  assert.match(logisticsModule, /formatShipsgoCarrierForLocale/);
+  assert.match(logisticsModule, /formatShipsgoPortForLocale/);
+  assert.match(logisticsModule, /formatShipsgoStatusForLocale/);
+  assert.match(logisticsModule, /formatShipsgoTrackingMethodForLocale/);
+});
+
+test("ShipsGo customer notification display can target configured customer language", () => {
+  assert.equal(normalizeShipsgoDisplayLocale("zh-CN"), "zh-CN");
+  assert.equal(normalizeShipsgoDisplayLocale("EN"), "en");
+  assert.equal(normalizeShipsgoDisplayLocale("ru"), "ru");
+  assert.equal(normalizeShipsgoDisplayLocale("de"), "de");
+  assert.equal(normalizeShipsgoDisplayLocale("fr"), "fr");
+  assert.equal(normalizeShipsgoDisplayLocale("es"), "es");
+  assert.equal(normalizeShipsgoDisplayLocale(""), "en");
+  assert.equal(formatShipsgoPortForLocale("SHANGHAI", "CNSHA", "en"), "Shanghai");
+  assert.equal(formatShipsgoPortForLocale("SHANGHAI", "CNSHA", "ru"), "Шанхай");
+  assert.equal(formatShipsgoStatusForLocale("Arrived", "de"), "Angekommen");
+  assert.equal(formatShipsgoTrackingMethodForLocale("Container", "es"), "Seguimiento de contenedor");
 });

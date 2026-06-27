@@ -11,6 +11,12 @@ import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
+import {
+  formatShipsgoCarrierForLocale,
+  formatShipsgoPortForLocale,
+  formatShipsgoStatusForLocale,
+  formatShipsgoTrackingMethodForLocale,
+} from "../../lib/shipsgo-display";
 
 type TransportItem = {
   id?: string;
@@ -949,6 +955,18 @@ function shipsgoVesselVoyage(tracking: ShipsgoTrackingRow) {
   return [tracking.vesselName, tracking.voyage].map((item) => String(item || "").trim()).filter(Boolean).join(" / ") || "暂无船名航次";
 }
 
+function shipsgoCarrierText(tracking: ShipsgoTrackingRow) {
+  return formatShipsgoCarrierForLocale(tracking.carrierName || tracking.carrierScac, tracking.carrierScac, "zh-CN") || shipsgoValue(tracking.carrierName || tracking.carrierScac);
+}
+
+function shipsgoPortText(name: unknown, code: unknown = "") {
+  return formatShipsgoPortForLocale(name, code, "zh-CN") || "大掌櫃未返回";
+}
+
+function shipsgoTrackingMethodText(method = "Master B/L") {
+  return formatShipsgoTrackingMethodForLocale(method, "zh-CN") || "主提单跟踪";
+}
+
 function shipsgoSyncTime(tracking: ShipsgoTrackingRow) {
   const value = tracking.lastSyncTime || tracking.lastSyncedAt || "";
   return value ? formatDateTime(value) : "暂无同步记录";
@@ -959,11 +977,9 @@ function shipsgoTrackingStatusText(tracking: ShipsgoTrackingRow) {
   const status = String(tracking.currentStatus || tracking.status || "").toUpperCase();
   if (/FAIL|ERROR/.test(syncStatus)) return "同步失败";
   if (!tracking.shipsgoShipmentId && !tracking.lastSyncTime && !tracking.lastSyncedAt) return "已创建，待同步";
-  if (/COMPLETE|DELIVERED|CLOSED|FINISHED/.test(status)) return "已完成";
-  if (/ARRIVED|DISCHARGED|POD/.test(status)) return "已到港";
-  if (/SAILING|TRANSIT|INPROGRESS|IN_PROGRESS|LOADED|ONBOARD|DEPARTED/.test(status)) return "航行中";
+  const translated = formatShipsgoStatusForLocale(tracking.currentStatus || tracking.status || tracking.statusLabel, "zh-CN");
+  if (translated && !/UNKNOWN|未知/i.test(translated)) return translated;
   if (tracking.statusLabel && !/未知/.test(tracking.statusLabel)) return tracking.statusLabel;
-  if (status && status !== "UNKNOWN") return tracking.currentStatus || tracking.status || "已创建，待同步";
   return "已创建，待同步";
 }
 
@@ -1113,7 +1129,7 @@ function ShipsgoOrderTrackingPanel({
                   <div className={styles.shipsgoInfoColumn}>
                     <div className={styles.shipsgoInfoItem}>
                       <span>船公司</span>
-                      <strong>{shipsgoValue(tracking.carrierName || tracking.carrierScac)}</strong>
+                      <strong>{shipsgoCarrierText(tracking)}</strong>
                     </div>
                     <div className={styles.shipsgoInfoItem}>
                       <span>Master B/L</span>
@@ -1127,15 +1143,15 @@ function ShipsgoOrderTrackingPanel({
                   <div className={styles.shipsgoInfoColumn}>
                     <div className={styles.shipsgoInfoItem}>
                       <span>起运港</span>
-                      <strong>{shipsgoValue(tracking.originPortName || tracking.originName, "大掌櫃未返回")}</strong>
+                      <strong>{shipsgoPortText(tracking.originPortName || tracking.originName, tracking.originPortCode)}</strong>
                     </div>
                     <div className={styles.shipsgoInfoItem}>
                       <span>目的港</span>
-                      <strong>{shipsgoValue(tracking.destinationPortName || tracking.destinationName, "大掌櫃未返回")}</strong>
+                      <strong>{shipsgoPortText(tracking.destinationPortName || tracking.destinationName, tracking.destinationPortCode)}</strong>
                     </div>
                     <div className={styles.shipsgoInfoItem}>
                       <span>跟踪方式</span>
-                      <strong>Master B/L</strong>
+                      <strong>{shipsgoTrackingMethodText("Master B/L")}</strong>
                     </div>
                   </div>
                 </div>
@@ -1210,8 +1226,8 @@ function ShipsgoOrderTrackingPanel({
                                 <strong>{event.time ? formatDateTime(event.time) : "时间未返回"}</strong>
                                 <span>数据来源：{event.source || "大掌櫃"}</span>
                               </div>
-                              <span>地点：{shipsgoValue(event.location)}</span>
-                              <span>状态：{shipsgoValue(event.description)}</span>
+                              <span>地点：{formatShipsgoPortForLocale(event.location, "", "zh-CN") || shipsgoValue(event.location)}</span>
+                              <span>状态：{formatShipsgoStatusForLocale(event.description, "zh-CN") || shipsgoValue(event.description)}</span>
                               <span>船名/航次：{[event.vesselName, event.voyage].filter(Boolean).join(" / ") || "未返回"}</span>
                             </div>
                           </div>
