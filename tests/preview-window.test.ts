@@ -136,6 +136,24 @@ test("tax refund detail keeps upload delete and recognition updates local", () =
   assert.doesNotMatch(taxRefundModule, /await fetchDetail\(order\.id\);\s*await loadRows\(page, submittedKeyword, mode\);/);
 });
 
+test("tax refund detail drawer close only clears local detail state", () => {
+  const closeMatch = taxRefundModule.match(/function closeDetailDrawer\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(closeMatch, "closeDetailDrawer should exist");
+  const closeBody = closeMatch[1];
+
+  assert.match(closeBody, /detailRequestTokenRef\.current \+= 1/);
+  assert.match(closeBody, /setDetailRow\(null\)/);
+  assert.match(closeBody, /setDetailOrderId\(""\)/);
+  assert.match(closeBody, /setDetail\(null\)/);
+  assert.match(closeBody, /setDetailError\(""\)/);
+  assert.match(closeBody, /setDetailLoading\(false\)/);
+  assert.match(closeBody, /setPendingDetailTarget\(""\)/);
+  assert.match(closeBody, /setCustomsFilePicker\(null\)/);
+  assert.match(closeBody, /setManualShippingOrder\(null\)/);
+  assert.doesNotMatch(closeBody, /loadRows\(|fetchDetail\(|window\.location|location\.href|router\.refresh|reloadData|reload\(/);
+  assert.match(taxRefundModule, /onClose=\{closeDetailDrawer\}/);
+});
+
 test("tax refund export documents use compact cards instead of wide tables", () => {
   assert.match(taxRefundModule, /<strong>出口资料上传<\/strong>[\s\S]*styles\.fileUploadGrid[\s\S]*<FileUploadCard/);
   assert.match(taxRefundModule, /function FileUploadCard\(/);

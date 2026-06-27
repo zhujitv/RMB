@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
@@ -290,6 +290,7 @@ export function TaxRefundModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const detailRequestTokenRef = useRef(0);
 
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务"]);
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
@@ -420,15 +421,23 @@ export function TaxRefundModule({
   }
 
   async function fetchDetail(orderId: string) {
+    const requestToken = detailRequestTokenRef.current + 1;
+    detailRequestTokenRef.current = requestToken;
     setDetailError("");
     setDetailLoading(true);
     try {
       const result = await apiJson<TaxRefundDetailResponse>(`/api/tax-refunds/${encodeURIComponent(orderId)}`);
-      setDetail(result.order || null);
+      if (detailRequestTokenRef.current === requestToken) {
+        setDetail(result.order || null);
+      }
     } catch (loadError) {
-      setDetailError(loadError instanceof Error ? loadError.message : "读取退税资料详情失败");
+      if (detailRequestTokenRef.current === requestToken) {
+        setDetailError(loadError instanceof Error ? loadError.message : "读取退税资料详情失败");
+      }
     } finally {
-      setDetailLoading(false);
+      if (detailRequestTokenRef.current === requestToken) {
+        setDetailLoading(false);
+      }
     }
   }
 
@@ -494,11 +503,19 @@ export function TaxRefundModule({
   }
 
   function closeDetailDrawer() {
+    detailRequestTokenRef.current += 1;
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
     setDetailError("");
-    void loadRows(page, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter);
+    setDetailLoading(false);
+    setPendingDetailTarget("");
+    setRecognitionStatusByDocument({});
+    setCustomsFilePicker(null);
+    setManualShippingOrder(null);
+    setManualShippingDraft(null);
+    setManualShippingForm(null);
+    setManualShippingMessage("");
   }
 
   async function downloadPackage(row: TaxRefundRow) {
