@@ -6069,19 +6069,26 @@
 }
 
 .userEditPanel {
-  width: min(100%, 960px);
+  width: 100%;
   max-width: 960px;
-  margin: 18px auto;
+  margin: 0 auto 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-sizing: border-box;
   display: grid;
   gap: 16px;
 }
 
 .userEditTitle,
 .userEditSection {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   background: #fff;
-  padding: 14px;
+  padding: 20px;
 }
 
 .userEditTitle {
@@ -6128,7 +6135,7 @@
 .userEditBasicGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .userEditBasicGrid label {
@@ -6163,13 +6170,13 @@
 .permissionModeCards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .dataScopeCardGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .permissionSchemeCard,
@@ -6271,6 +6278,15 @@
   background: #fff;
   color: #0f172a;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.userEditActions {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .quickCreatePanelInDrawer {
@@ -6540,16 +6556,22 @@
     width: 100%;
   }
 
-  .dataScopeCardGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .permissionOptionGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 520px) {
+  .userEditPanel {
+    max-width: 100%;
+    padding: 0 12px;
+  }
+
+  .userEditTitle,
+  .userEditSection {
+    padding: 12px;
+  }
+
   .userEditBasicGrid,
   .permissionModeCards,
   .dataScopeCardGrid {

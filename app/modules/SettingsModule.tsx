@@ -2593,7 +2593,7 @@ function UserEditPanel({
         </section>
       ) : null}
 
-      <div className={styles.detailActions}>
+      <div className={styles.userEditActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存用户"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
