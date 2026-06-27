@@ -593,6 +593,15 @@ CSP_FRAME_SRC=https://viewer.example.com
 CSP_MEDIA_SRC=https://media.example.com
 ```
 
+所有 `/api/*` 业务接口会在统一入口限流，默认值如下，可按正式环境访问量调整：
+
+```text
+API_RATE_LIMIT_WINDOW_MS=60000
+API_RATE_LIMIT_READ_LIMIT=240
+API_RATE_LIMIT_WRITE_LIMIT=80
+API_RATE_LIMIT_UPLOAD_LIMIT=30
+```
+
 也兼容以下 R2 变量名：
 
 ```bash

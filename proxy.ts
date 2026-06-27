@@ -37,6 +37,16 @@ const BLOCKED_BOT_PATTERNS = [
 
 const IS_DEVELOPMENT = isDevelopmentEnv();
 const SECURITY_HEADERS = Object.fromEntries(staticSecurityHeaders().map(({ key, value }) => [key, value]));
+const API_RATE_LIMIT_STORE = new Map<string, { count: number; resetAt: number }>();
+const API_RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
+let lastRateLimitCleanupAt = 0;
+
+const API_RATE_LIMIT_DEFAULTS = {
+  windowMs: 60_000,
+  readLimit: 240,
+  writeLimit: 80,
+  uploadLimit: 30,
+};
 
 function headerOrigin(value = "") {
   const text = String(value || "").trim();
@@ -91,6 +101,135 @@ function isBlockedBot(userAgent = "") {
   return BLOCKED_BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
 }
 
+function positiveIntegerFromEnv(name: string, fallback: number) {
+  const value = Number.parseInt(process.env[name] || "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function apiRateLimitConfig() {
+  return {
+    windowMs: positiveIntegerFromEnv("API_RATE_LIMIT_WINDOW_MS", API_RATE_LIMIT_DEFAULTS.windowMs),
+    readLimit: positiveIntegerFromEnv("API_RATE_LIMIT_READ_LIMIT", API_RATE_LIMIT_DEFAULTS.readLimit),
+    writeLimit: positiveIntegerFromEnv("API_RATE_LIMIT_WRITE_LIMIT", API_RATE_LIMIT_DEFAULTS.writeLimit),
+    uploadLimit: positiveIntegerFromEnv("API_RATE_LIMIT_UPLOAD_LIMIT", API_RATE_LIMIT_DEFAULTS.uploadLimit),
+  };
+}
+
+function requestIp(request: NextRequest) {
+  return request.headers.get("cf-connecting-ip")
+    || request.headers.get("x-real-ip")
+    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || "unknown";
+}
+
+function sessionTokenForRateLimit(request: NextRequest) {
+  return request.cookies.get("__Host-fta_session")?.value
+    || request.cookies.get("fta_session")?.value
+    || request.cookies.get("fta_user_id")?.value
+    || "";
+}
+
+function hashRateLimitIdentity(value = "") {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function normalizedRateLimitPath(pathname = "") {
+  return pathname
+    .split("/")
+    .map((segment) => {
+      if (/^[0-9a-f]{8,}-[0-9a-f-]{8,}$/i.test(segment)) return ":id";
+      if (/^[0-9a-f]{16,}$/i.test(segment)) return ":id";
+      if (/^\d+$/.test(segment)) return ":id";
+      return segment;
+    })
+    .join("/");
+}
+
+function isApiRequest(request: NextRequest) {
+  return request.nextUrl.pathname.startsWith("/api/");
+}
+
+function isUnsafeMethod(method = "") {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+}
+
+function isUploadApiRequest(request: NextRequest) {
+  const method = request.method.toUpperCase();
+  const pathname = request.nextUrl.pathname;
+  if (!isUnsafeMethod(method)) return false;
+  return /\/(documents|invoice|attachments|import|package)(\/|$)/i.test(pathname);
+}
+
+function cleanupRateLimitStore(now: number) {
+  if (now - lastRateLimitCleanupAt < API_RATE_LIMIT_CLEANUP_INTERVAL_MS) return;
+  lastRateLimitCleanupAt = now;
+  for (const [key, bucket] of API_RATE_LIMIT_STORE.entries()) {
+    if (bucket.resetAt <= now) API_RATE_LIMIT_STORE.delete(key);
+  }
+}
+
+function apiRateLimitIdentity(request: NextRequest) {
+  const sessionToken = sessionTokenForRateLimit(request);
+  if (sessionToken) return `session:${hashRateLimitIdentity(sessionToken)}`;
+  return `ip:${hashRateLimitIdentity(requestIp(request))}`;
+}
+
+function apiRateLimitKey(request: NextRequest) {
+  const methodGroup = isUnsafeMethod(request.method) ? "write" : "read";
+  return [
+    "api",
+    methodGroup,
+    normalizedRateLimitPath(request.nextUrl.pathname),
+    apiRateLimitIdentity(request),
+  ].join(":");
+}
+
+function checkApiRateLimit(request: NextRequest) {
+  if (!isApiRequest(request)) return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
+  if (request.method.toUpperCase() === "OPTIONS") return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
+  const config = apiRateLimitConfig();
+  const limit = isUploadApiRequest(request)
+    ? config.uploadLimit
+    : isUnsafeMethod(request.method)
+      ? config.writeLimit
+      : config.readLimit;
+  const now = Date.now();
+  cleanupRateLimitStore(now);
+  const key = apiRateLimitKey(request);
+  const current = API_RATE_LIMIT_STORE.get(key);
+  const bucket = current && current.resetAt > now
+    ? current
+    : { count: 0, resetAt: now + config.windowMs };
+  bucket.count += 1;
+  API_RATE_LIMIT_STORE.set(key, bucket);
+  return {
+    allowed: bucket.count <= limit,
+    limit,
+    remaining: Math.max(0, limit - bucket.count),
+    resetAt: bucket.resetAt,
+  };
+}
+
+function rateLimitResponse(rateLimit: { limit: number; remaining: number; resetAt: number }, contentSecurityPolicy: string) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000));
+  const response = NextResponse.json({
+    success: false,
+    error: "请求过于频繁，请稍后重试。",
+    message: "请求过于频繁，请稍后重试。",
+    code: "API_RATE_LIMITED",
+  }, { status: 429 });
+  response.headers.set("Retry-After", String(retryAfterSeconds));
+  response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
+  response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
+  response.headers.set("X-RateLimit-Reset", String(Math.ceil(rateLimit.resetAt / 1000)));
+  return applySecurityHeaders(response, contentSecurityPolicy);
+}
+
 function generateNonce() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -126,6 +265,10 @@ export function proxy(request: NextRequest) {
   }
   if (isBlockedCorsPreflight(request)) {
     return applySecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
+  }
+  const apiRateLimit = checkApiRateLimit(request);
+  if (!apiRateLimit.allowed) {
+    return rateLimitResponse(apiRateLimit, contentSecurityPolicy);
   }
 
   if (request.nextUrl.pathname === "/workspace" || request.nextUrl.pathname === "/index.html") {

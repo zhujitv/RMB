@@ -84,6 +84,24 @@ test("cors preflight blocks untrusted origins before route handlers", () => {
   assert.match(proxy, /new NextResponse\("Forbidden", \{ status: 403 \}\)/);
 });
 
+test("business API requests are protected by unified rate limiting", () => {
+  assert.match(proxy, /const API_RATE_LIMIT_STORE = new Map/);
+  assert.match(proxy, /function checkApiRateLimit/);
+  assert.match(proxy, /request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(proxy, /API_RATE_LIMIT_READ_LIMIT/);
+  assert.match(proxy, /API_RATE_LIMIT_WRITE_LIMIT/);
+  assert.match(proxy, /API_RATE_LIMIT_UPLOAD_LIMIT/);
+  assert.match(proxy, /sessionTokenForRateLimit\(request\)/);
+  assert.match(proxy, /requestIp\(request\)/);
+  assert.match(proxy, /const apiRateLimit = checkApiRateLimit\(request\)/);
+  assert.match(proxy, /if \(!apiRateLimit\.allowed\)/);
+  assert.match(proxy, /status: 429/);
+  assert.match(proxy, /Retry-After/);
+  assert.match(proxy, /X-RateLimit-Limit/);
+  assert.match(proxy, /X-RateLimit-Remaining/);
+  assert.match(proxy, /X-RateLimit-Reset/);
+});
+
 test("production CSP removes unsafe inline and local development connect sources", () => {
   const productionCsp = cspFor(false);
   assert.match(productionCsp, /script-src 'self' 'nonce-testnonce'/);
