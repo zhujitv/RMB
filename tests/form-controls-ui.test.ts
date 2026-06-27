@@ -4,6 +4,7 @@ import test from "node:test";
 
 const components = readFileSync("app/components.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const globalStyles = readFileSync("app/globals.css", "utf8");
 const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
@@ -57,6 +58,20 @@ test("auto-send document selection reuses commission formula card selection", ()
   assert.match(autoSendSnippet, /onChange=\{\(\) => toggleShippingDocumentType\(option\.key\)\}/);
   assert.doesNotMatch(autoSendSnippet, /variant="compact"/);
   assert.doesNotMatch(autoSendSnippet, /styles\.checkboxPanel/);
+});
+
+test("factory supplier callback documents use aligned card selection UI", () => {
+  const requestIndex = taxRefundModule.indexOf("<strong>需要回传的资料</strong>");
+  const requestSnippet = taxRefundModule.slice(Math.max(0, requestIndex - 360), requestIndex + 1000);
+
+  assert.match(requestSnippet, /styles\.factoryDocumentChoiceGrid/);
+  assert.match(requestSnippet, /<PermissionSelectItem/);
+  assert.match(requestSnippet, /className=\{styles\.factoryDocumentChoiceCard\}/);
+  assert.match(requestSnippet, /checked=\{form\.requiredDocumentTypes\.includes\(item\.value\)\}/);
+  assert.match(requestSnippet, /onChange=\{\(\) => toggleDocumentType\(item\.value\)\}/);
+  assert.match(workspaceStyles, /\.factoryDocumentChoiceCard \{[\s\S]*padding: 14px 14px 14px 48px;/);
+  assert.match(workspaceStyles, /\.factoryDocumentChoiceCard \.uiChoiceCheck \{[\s\S]*left: 14px;[\s\S]*top: 50%;/);
+  assert.doesNotMatch(requestSnippet, /type=["']checkbox["']/);
 });
 
 test("supplier logistics cost types use card multi-select options", () => {

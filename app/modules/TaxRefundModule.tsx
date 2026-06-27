@@ -1746,10 +1746,11 @@ function SupplierDocumentRequestDialog({
           </div>
           <div className={styles.checkboxPanel}>
             <strong>需要回传的资料</strong>
-            <div>
+            <div className={styles.factoryDocumentChoiceGrid}>
               {TAX_FACTORY_UPLOAD_TYPES.map((item) => (
                 <PermissionSelectItem
                   key={item.value}
+                  className={styles.factoryDocumentChoiceCard}
                   label={item.label}
                   description={item.value === "SUPPLIER_PURCHASE_CONTRACT" ? "盖章扫描后上传 PDF" : "上传增值税发票 PDF"}
                   checked={form.requiredDocumentTypes.includes(item.value)}
