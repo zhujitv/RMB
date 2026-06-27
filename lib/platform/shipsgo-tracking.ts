@@ -932,7 +932,7 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
 export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, actor: ShipsgoActor) {
   assertRead(actor, "domesticLogistics");
   if (isExternalLogisticsSupplierAccount(actor) || actor?.role === "物流供应商" || actor?.supplierId) {
-    throw codedError("供应商账号不可查看海运控制塔。", 403, "PERMISSION_DENIED");
+    throw codedError("供应商账号不可查看运输监控。", 403, "PERMISSION_DENIED");
   }
   const includeCompleted = boolQueryValue(query, "includeCompleted") === true;
   const rows = await prisma.shipsgoTracking.findMany({
@@ -964,7 +964,6 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
   });
   const now = new Date();
   const mappedRows = rows
-    .filter((row) => canAccessDomesticLogisticsOrder(actor, row.order))
     .map((row) => buildShipsgoControlTowerRow(row, now))
     .filter((row) => trackingSignalExists(row))
     .filter((row) => includeCompleted || !row.isCompleted)

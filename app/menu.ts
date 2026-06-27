@@ -7,6 +7,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "costs", label: "成本管理", description: "维护工厂、物流、港杂等成本资料。" },
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
   { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
+  { key: "oceanControlTower", label: "运输监控", description: "集中查看在途海运跟踪和 ETA 预警。", parentKey: "domesticLogistics" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
@@ -15,19 +16,30 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
   产品供应商账号: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "manual"],
+  物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
 };
+
+const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流资料录入员"];
+
+function menusWithDerivedAccess(role: string, menus: string[]) {
+  if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
+    return menus;
+  }
+  const nextMenus = [...menus];
+  nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  return nextMenus;
+}
 
 export function availableMenus(user: User, permissions?: PermissionSnapshot) {
   if (user.role === "管理员") {
     return MENU_ITEMS.filter((item) => ROLE_MENU_FALLBACK["管理员"].includes(item.key));
   }
-  const allowed = permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[user.role] || ["manual"];
+  const allowed = menusWithDerivedAccess(user.role, permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[user.role] || ["manual"]);
   return MENU_ITEMS.filter((item) => allowed.includes(item.key));
 }

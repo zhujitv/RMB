@@ -205,16 +205,19 @@ test("ShipsGo ocean control tower is read-only and does not create tracking", ()
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
   assert.match(trackingService, /isExternalLogisticsSupplierAccount\(actor\)/);
+  assert.match(trackingService, /供应商账号不可查看运输监控/);
   assert.match(trackingService, /trackingSignalExists\(row\)/);
   assert.match(trackingService, /includeCompleted/);
   assert.match(trackingService, /soonArrivingCount/);
   assert.match(trackingService, /etaOverdueCount/);
   assert.match(trackingService, /syncFailedCount/);
+  assert.doesNotMatch(trackingService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*?function dateText/)?.[0] || "", /canAccessDomesticLogisticsOrder\(actor/);
   assert.doesNotMatch(oceanTrackingControlTowerRoute, /createShipsgoOceanTracking|recoverShipsgoOceanTracking/);
 });
 
 test("domestic logistics exposes ocean control tower tab and fullscreen monitor UI", () => {
-  assert.match(logisticsModule, /海运控制塔/);
+  assert.match(logisticsModule, /运输监控/);
+  assert.match(logisticsModule, /集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务/);
   assert.match(logisticsModule, /ShipsgoControlTowerView/);
   assert.match(logisticsModule, /\/api\/shipsgo\/ocean-trackings\/control-tower/);
   assert.match(logisticsModule, /全屏查看/);

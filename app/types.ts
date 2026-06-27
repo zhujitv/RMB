@@ -64,6 +64,7 @@ export type MenuItem = {
   key: string;
   label: string;
   description: string;
+  parentKey?: string;
 };
 
 export type LoginResponse = {

@@ -907,6 +907,23 @@
   background: transparent;
 }
 
+.navChildItem {
+  height: 40px;
+  min-height: 40px;
+  margin-left: 26px;
+  width: calc(100% - 26px);
+  padding-left: 12px;
+  font-size: 13px;
+}
+
+.navChildItem::before {
+  left: -14px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: #dbeafe;
+}
+
 .navIcon {
   width: 20px;
   height: 20px;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
+import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
 
 const backend = [
   readFileSync("lib/platform/shared-constants.ts", "utf8"),
@@ -31,6 +31,14 @@ test("fixed role menus do not expose forbidden global modules", () => {
   }
   assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
   assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
+  assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
+  assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
+  assert.match(backend, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "manual"\]/);
+  assert.match(menuFile, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "manual"\]/);
+  assert.match(backend, /export function menusWithDerivedAccess/);
+  assert.match(menuFile, /function menusWithDerivedAccess/);
+  assert.match(menuFile, /key: "oceanControlTower", label: "运输监控"[\s\S]*parentKey: "domesticLogistics"/);
+  assert.match(workspaceShell, /activeMenu === "oceanControlTower"[\s\S]*initialView="controlTower"/);
   assert.match(backend, /产品供应商账号: \["supplierDocuments", "manual"\]/);
   assert.match(menuFile, /产品供应商账号: \["supplierDocuments", "manual"\]/);
   assert.doesNotMatch(backend, /logisticsReview: "物流费用审核"|logisticsReview", "taxRefund"/);
@@ -73,6 +81,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(salesperson.menus.includes("dashboard"), false);
   assert.equal(salesperson.menus.includes("profit"), false);
   assert.equal(salesperson.menus.includes("logisticsReview"), false);
+  assert.equal(salesperson.menus.includes("oceanControlTower"), true);
   assert.equal(salesperson.reads.payments, true);
   assert.equal(salesperson.reads.taxRefund, true);
   assert.equal(salesperson.reads.commissions, false);
@@ -119,7 +128,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(legacyFactorySupplier.reads.supplierDocuments, true);
 
   const logisticsClerk = rolePermissionSnapshot("物流资料录入员");
-  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "manual"]);
+  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "oceanControlTower", "manual"]);
   assert.equal(logisticsClerk.dataScope, "OWN");
   assert.equal(logisticsClerk.reads.domesticLogistics, true);
   assert.equal(logisticsClerk.reads.documents, true);
@@ -127,6 +136,18 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(logisticsClerk.writes.domesticLogistics, true);
   assert.equal(logisticsClerk.writes.documents, true);
   assert.equal(logisticsClerk.writes.logistics, false);
+
+  const legacyCustomSalesperson = effectivePermissions({
+    role: "业务员",
+    customPermissions: {
+      mode: "CUSTOM",
+      menus: ["orders", "domesticLogistics", "manual"],
+      reads: ["orders", "domesticLogistics"],
+      writes: [],
+      dataScope: "OWN",
+    },
+  });
+  assert.deepEqual(legacyCustomSalesperson.menus, ["orders", "domesticLogistics", "oceanControlTower", "manual"]);
 });
 
 test("salesperson tax refund uploads are limited to own-customer clearance documents", () => {

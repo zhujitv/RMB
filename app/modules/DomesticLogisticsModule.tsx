@@ -417,12 +417,14 @@ export function DomesticLogisticsModule({
   initialKeyword = "",
   initialOpenToken = 0,
   focusFeesToken = 0,
+  initialView = "list",
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialOpenToken?: number;
   focusFeesToken?: number;
+  initialView?: "list" | "controlTower";
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -434,7 +436,7 @@ export function DomesticLogisticsModule({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [shipsgoFeatures, setShipsgoFeatures] = useState<ShipsgoFeatureFlags>({ enabled: false });
-  const [activeLogisticsView, setActiveLogisticsView] = useState<"list" | "controlTower">("list");
+  const [activeLogisticsView, setActiveLogisticsView] = useState<"list" | "controlTower">(initialView);
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -486,6 +488,10 @@ export function DomesticLogisticsModule({
     if (value) return;
     void loadRows("");
   }, []);
+
+  useEffect(() => {
+    setActiveLogisticsView(initialView);
+  }, [initialView]);
 
   useEffect(() => {
     const value = initialKeyword.trim();
@@ -891,7 +897,7 @@ export function DomesticLogisticsModule({
             aria-selected={activeLogisticsView === "controlTower"}
             onClick={() => setActiveLogisticsView("controlTower")}
           >
-            海运控制塔
+            运输监控
           </button>
         ) : null}
       </div>
@@ -1097,13 +1103,13 @@ function ShipsgoControlTowerView({
     try {
       const params = controlTowerSearchParams(nextFilters);
       const result = await apiJson<ShipsgoControlTowerResponse>(`/api/shipsgo/ocean-trackings/control-tower?${params}`);
-      if (result.success === false) throw new Error(result.message || "读取海运控制塔失败");
+      if (result.success === false) throw new Error(result.message || "读取运输监控失败");
       setRows(Array.isArray(result.rows) ? result.rows : []);
       setStats(result.stats || EMPTY_SHIPSGO_CONTROL_TOWER_STATS);
       setUpdatedAt(result.updatedAt || new Date().toISOString());
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : "读取海运控制塔失败";
-      console.error("读取海运控制塔失败", loadError);
+      const message = loadError instanceof Error ? loadError.message : "读取运输监控失败";
+      console.error("读取运输监控失败", loadError);
       setError(message);
       if (!quiet) {
         setRows([]);
@@ -1181,7 +1187,7 @@ function ShipsgoControlTowerView({
     <div className={fullScreen ? styles.controlTowerFullscreen : styles.controlTowerShell}>
       <div className={styles.controlTowerHeader}>
         <div>
-          <h3>海运控制塔</h3>
+          <h3>运输监控</h3>
           <span>集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务</span>
         </div>
         <div className={styles.controlTowerHeaderActions}>

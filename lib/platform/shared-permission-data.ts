@@ -25,14 +25,25 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
   产品供应商账号: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "manual"],
+  物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
 };
+
+const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流资料录入员"];
+
+export function menusWithDerivedAccess(role: string, menus: string[]) {
+  if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
+    return menus;
+  }
+  const nextMenus = [...menus];
+  nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  return nextMenus;
+}
 
 export const ROLE_SCOPE_TEXT: Record<string, string> = {
   管理员: "可查看和管理全部数据",
@@ -77,6 +88,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     costs: "成本管理",
     profit: "利润分析",
     domesticLogistics: "物流信息",
+    oceanControlTower: "运输监控",
     supplierDocuments: "资料回传",
     taxRefund: "退税资料",
     reports: "报表中心",
@@ -181,7 +193,8 @@ export function optionList(keys: string[], labels: Record<string, string>) {
 }
 
 export function roleMenus(role?: string | null) {
-  return ROLE_MENUS[String(role || "")] || [];
+  const roleName = String(role || "");
+  return menusWithDerivedAccess(roleName, ROLE_MENUS[roleName] || []);
 }
 
 export function roleScopeText(role?: string | null) {
@@ -209,7 +222,7 @@ export function normalizedCustomPermissionInput(value: unknown, role: string) {
   const mode = permissionMode(input.mode || input.permissionMode);
   if (mode !== "CUSTOM") return null;
   const fallback = rolePermissionSnapshot(role);
-  const menus = checkedPermissionList(input.menus ?? fallback.menus, MENU_KEYS);
+  const menus = menusWithDerivedAccess(role, checkedPermissionList(input.menus ?? fallback.menus, MENU_KEYS));
   const readKeys = checkedPermissionList(input.reads ?? input.readKeys ?? fallback.readKeys, READ_PERMISSION_KEYS);
   const writeKeys = checkedPermissionList(input.writes ?? input.writeKeys ?? fallback.writeKeys, WRITE_PERMISSION_KEYS);
   const requestedDataScope = String(input.dataScope || "");

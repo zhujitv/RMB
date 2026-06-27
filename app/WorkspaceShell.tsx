@@ -434,6 +434,12 @@ export function WorkspaceShell() {
           initialOpenToken={domesticLogisticsFocus.token}
           focusFeesToken={domesticLogisticsFeesFocusToken}
         />
+      ) : activeMenu === "oceanControlTower" ? (
+        <DomesticLogisticsModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          initialView="controlTower"
+        />
       ) : activeMenu === "supplierDocuments" ? (
         <SupplierDocumentsModule currentUser={payload.user} />
       ) : activeMenu === "profit" ? (
