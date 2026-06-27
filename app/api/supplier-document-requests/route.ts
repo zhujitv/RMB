@@ -9,7 +9,17 @@ export async function GET(request: NextRequest) {
   try {
     const actor = await getActor(request);
     const query = new URL(request.url).searchParams;
-    return ok({ requests: await listSupplierDocumentRequests(query, actor) });
+    const result = await listSupplierDocumentRequests(query, actor);
+    return ok({
+      requests: result.rows,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+      summary: result.summary,
+    });
   } catch (error: unknown) {
     return apiError(error, "读取供应商资料回传任务失败");
   }

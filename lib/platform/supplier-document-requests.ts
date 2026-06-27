@@ -13,6 +13,8 @@ import {
   logServerError,
   nonEmpty,
   normalizeEmail,
+  pageParams,
+  pageResult,
   readValidatedPdfUploadFile,
   refreshTaxRefundCompleteness,
   requireText,
@@ -325,6 +327,7 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
   assertRead(actor, "supplierDocuments");
   const status = nonEmpty(query.get("status"));
   const keyword = nonEmpty(query.get("keyword") || query.get("q"));
+  const { page, pageSize } = pageParams(query, 10, 50);
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     deletedAt: null,
     ...(SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(status) ? { status } : {}),
@@ -345,13 +348,26 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
         ? { order: { orderNo: { contains: keyword, mode: "insensitive" } } }
         : {}),
   };
-  const rows = await prisma.supplierDocumentRequest.findMany({
-    where,
-    include: supplierDocumentRequestInclude(),
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
-  return rows.map((row) => serializeSupplierDocumentRequest(row, actor));
+  const [total, pendingCount, rows] = await Promise.all([
+    prisma.supplierDocumentRequest.count({ where }),
+    prisma.supplierDocumentRequest.count({
+      where: {
+        ...where,
+        status: { not: "已完成" },
+      },
+    }),
+    prisma.supplierDocumentRequest.findMany({
+      where,
+      include: supplierDocumentRequestInclude(),
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  return {
+    ...pageResult(rows.map((row) => serializeSupplierDocumentRequest(row, actor)), total, page, pageSize),
+    summary: { pendingCount },
+  };
 }
 
 export async function deleteSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, requestId: string) {

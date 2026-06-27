@@ -16,6 +16,16 @@ import {
   logisticsCostTypeLabel,
   logisticsCostTypeLocksCurrency,
 } from "../../lib/platform/logistics-cost-types";
+import {
+  LOGISTICS_BILL_PAY_BUTTON_RULE,
+  LOGISTICS_BILL_PAY_DISABLED_TOOLTIP,
+  canReviewLogisticsBill,
+  canSubmitLogisticsBill,
+  logisticsBillDefaultTab,
+  logisticsBillDeleteBlockReason,
+  logisticsBillEditBlockReason,
+  logisticsBillPayState,
+} from "../../lib/platform/logistics-bill-state-machine";
 import { logisticsInvoiceGroupForExpense, logisticsInvoiceGroupsForExpenses } from "../../lib/platform/logistics-invoice-groups";
 
 const PAGE_SIZE = 20;
@@ -73,11 +83,8 @@ const AUDIT_FILTERS = [
   { label: "已确认发票", value: "confirmedInvoice" },
 ];
 const PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
-const PAY_BUTTON_RULE = {
-  allow: ["审核通过 + 已上传发票 + 未付款"],
-  deny: ["草稿", "待审核", "未上传发票", "已付款"],
-} as const;
-const PAY_BUTTON_DISABLED_TOOLTIP = "需审核通过且已上传发票后才可标记付款";
+const PAY_BUTTON_RULE = LOGISTICS_BILL_PAY_BUTTON_RULE;
+const PAY_BUTTON_DISABLED_TOOLTIP = LOGISTICS_BILL_PAY_DISABLED_TOOLTIP;
 const todayInputInChinaClient = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 type UserLite = {
@@ -1272,7 +1279,7 @@ function LogisticsExpenseRows({
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
   const [deletedExpenseIds, setDeletedExpenseIds] = useState<string[]>([]);
   const [billSaved, setBillSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
   useEffect(() => {
     setDrafts(logisticsExpenseDraftsFromItems(items));
     setNewExpenseRows([]);
@@ -2966,11 +2973,7 @@ function logisticsExpensePayButtonState(expense: LogisticsExpense) {
     ...items.flatMap((item) => [item.billInvoiceStatus, item.invoiceStatus, item.detailInvoiceStatus]),
   ]);
   const paymentStatus = compactStatusLabel(logisticsExpenseBillPaymentStatusFromRow(expense), "payment");
-  const alreadyPaid = paymentStatus === "已付款";
-  const canMarkPaid = auditStatus === "审核通过"
-    && invoiceStatus === "已上传发票"
-    && !alreadyPaid;
-  return { auditStatus, invoiceStatus, paymentStatus, alreadyPaid, canMarkPaid, rule: PAY_BUTTON_RULE };
+  return { ...logisticsBillPayState({ auditStatus, invoiceStatus, paymentStatus }), rule: PAY_BUTTON_RULE };
 }
 
 function normalizePayButtonInvoiceStatus(values: unknown[]) {
@@ -3255,15 +3258,7 @@ function defaultLogisticsExpenseDetailTab({
   invoiceStatus?: string;
   paymentStatus?: string;
 }) {
-  const normalizedAuditStatus = auditStatus || "草稿";
-  const normalizedInvoiceStatus = invoiceStatus || "待开票";
-  const normalizedPaymentStatus = paymentStatus || "待开票";
-  if (["草稿", "已驳回"].includes(normalizedAuditStatus)) return "details";
-  if (normalizedAuditStatus === "待审核") return "basic";
-  if (normalizedAuditStatus === "审核通过") return "invoice";
-  if (["待开票", "已通知开票", "部分上传发票", "已上传发票", "已确认", "已确认发票", "待开票 / 通知失败"].includes(normalizedInvoiceStatus)) return "invoice";
-  if (["已付款", "部分付款"].includes(normalizedPaymentStatus)) return "invoice";
-  return "details";
+  return logisticsBillDefaultTab({ auditStatus, invoiceStatus, paymentStatus });
 }
 
 function logisticsExpenseBillAuditStatus(items: LogisticsExpense[]) {
@@ -3277,14 +3272,14 @@ function logisticsExpenseBillAuditStatus(items: LogisticsExpense[]) {
 }
 
 function logisticsExpenseBillIsEditable(status: string) {
-  return ["草稿", "已驳回"].includes(status || "草稿");
+  return canSubmitLogisticsBill({ auditStatus: status });
 }
 
 function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
   const items = logisticsExpenseBillItems(expense);
-  return logisticsExpenseBillAuditStatusFromRow(expense) === "待审核"
-    || items.some((item) => logisticsExpenseBillAuditStatusFromRow(item) === "待审核")
-    || (items.length > 0 && logisticsExpenseBillAuditStatus(items) === "待审核");
+  return canReviewLogisticsBill({ auditStatus: logisticsExpenseBillAuditStatusFromRow(expense) })
+    || items.some((item) => canReviewLogisticsBill({ auditStatus: logisticsExpenseBillAuditStatusFromRow(item) }))
+    || (items.length > 0 && canReviewLogisticsBill({ auditStatus: logisticsExpenseBillAuditStatus(items) }));
 }
 
 function logisticsExpenseBillCanSubmit(expense: LogisticsExpense) {
@@ -3541,26 +3536,24 @@ function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
-  if (expense.costId || auditStatus === "审核通过") return "已审核，不能修改";
-  if (auditStatus === "待审核") return "待审核账单不能修改，请先撤回为草稿";
-  if (["已上传", "已确认"].includes(invoiceStatus)) return "已开票，不能修改";
-  if (["已开票", "待付款", "已付款"].includes(paymentStatus)) return "已付款流程中，不能修改";
-  if (!["草稿", "已驳回"].includes(auditStatus)) return "当前状态不能修改";
-  return "";
+  return logisticsBillEditBlockReason({
+    auditStatus,
+    invoiceStatus,
+    paymentStatus,
+    costSynced: Boolean(expense.costId),
+  }).replace(/。$/, "");
 }
 
 function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
-  if (expense.costId) return "该费用已同步到成本，请先取消同步后再删除。";
-  if (auditStatus === "审核通过") return "已审核通过的物流费用不能删除。";
-  if (auditStatus === "待审核") return "待审核账单不能删除明细，请先撤回为草稿。";
-  if (["已上传", "已确认"].includes(invoiceStatus) || ["已开票", "待付款", "已付款"].includes(paymentStatus)) {
-    return "已开票或已付款的物流费用不能删除。";
-  }
-  if (!["草稿", "已驳回"].includes(auditStatus)) return "当前状态的物流费用不能删除。";
-  return "";
+  return logisticsBillDeleteBlockReason({
+    auditStatus,
+    invoiceStatus,
+    paymentStatus,
+    costSynced: Boolean(expense.costId),
+  });
 }
 
 function csvCell(value: string) {

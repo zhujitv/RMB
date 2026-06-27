@@ -26,6 +26,7 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
+  readFileSync("lib/platform/logistics-bill-state-machine.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-queries.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow.ts", "utf8"),
   readFileSync("lib/platform/profit-overview.ts", "utf8"),
@@ -43,6 +44,7 @@ const removeInvoiceManualFieldsMigration = readFileSync("prisma/migrations/20260
 const logisticsBillMigration = readFileSync("prisma/migrations/20260624103000_logistics_bills/migration.sql", "utf8");
 const logisticsInvoiceUsdGroupingMigration = readFileSync("prisma/migrations/20260626235000_fix_logistics_invoice_usd_grouping/migration.sql", "utf8");
 const logisticsBillConvergenceMigration = readFileSync("prisma/migrations/20260627120000_converge_logistics_expense_status_to_bills/migration.sql", "utf8");
+const logisticsBillStateMachine = readFileSync("lib/platform/logistics-bill-state-machine.ts", "utf8");
 const logisticsModule = readFileSync("app/modules/LogisticsFeesModule.tsx", "utf8");
 const deleteExpenseSource = logisticsModule.match(/async function deleteExpense[\s\S]*?\n  async function withdrawExpense/)?.[0] || "";
 const withdrawExpenseSource = logisticsModule.match(/async function withdrawExpense[\s\S]*?\n  async function submitDraftExpenseBill/)?.[0] || "";
@@ -665,7 +667,7 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.match(logisticsModule, /editableLineSubtotal/);
   assert.match(logisticsModule, /LogisticsExpenseDraft/);
   assert.match(logisticsModule, /className=\{styles\.inlineRemarkInput\}/);
-  assert.match(logisticsModule, /已审核，不能修改/);
+  assert.match(logisticsBillStateMachine, /已审核，不能修改。/);
   assert.match(logisticsModule, /saveStateDirty/);
   assert.match(logisticsModule, /saveStateSaved/);
   assert.match(logisticsModule, /保存本账单明细/);
@@ -736,7 +738,8 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(logisticsModule, /function LogisticsExpenseCompactRow/);
   assert.match(logisticsModule, /defaultLogisticsExpenseDetailTab/);
   assert.match(logisticsModule, /setActiveTab\(defaultTab\)/);
-  assert.match(logisticsModule, /if \(normalizedAuditStatus === "审核通过"\) return "invoice"/);
+  assert.match(logisticsModule, /logisticsBillDefaultTab\(\{ auditStatus, invoiceStatus, paymentStatus \}\)/);
+  assert.match(logisticsBillStateMachine, /if \(auditStatus === "审核通过"\) return "invoice"/);
   assert.match(logisticsModule, /<SideDetailDrawer[\s\S]*surfaceClassName=\{styles\.logisticsExpenseDrawer\}/);
   assert.match(logisticsModule, /订单号 \/ Shipment[\s\S]*客户[\s\S]*CNY 合计[\s\S]*USD 合计[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/);
   assert.match(logisticsModule, /formatOriginalCurrencyValue\("CNY", logisticsCurrencyAmountByCode\(currencyTotals, "CNY"\)\)/);
@@ -848,18 +851,21 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
 });
 
 test("logistics paid button is locked by bill state machine", () => {
-  assert.match(logisticsModule, /const PAY_BUTTON_RULE = \{[\s\S]*审核通过 \+ 已上传发票 \+ 未付款[\s\S]*草稿[\s\S]*待审核[\s\S]*未上传发票[\s\S]*已付款/);
-  assert.match(logisticsModule, /PAY_BUTTON_DISABLED_TOOLTIP = "需审核通过且已上传发票后才可标记付款"/);
+  assert.match(logisticsBillStateMachine, /LOGISTICS_BILL_PAY_BUTTON_RULE = \{[\s\S]*审核通过 \+ 已上传发票 \+ 未付款[\s\S]*草稿[\s\S]*待审核[\s\S]*未上传发票[\s\S]*已付款/);
+  assert.match(logisticsModule, /const PAY_BUTTON_RULE = LOGISTICS_BILL_PAY_BUTTON_RULE/);
+  assert.match(logisticsModule, /const PAY_BUTTON_DISABLED_TOOLTIP = LOGISTICS_BILL_PAY_DISABLED_TOOLTIP/);
   assert.match(logisticsModule, /inputType: "date"/);
   assert.match(logisticsModule, /paymentDate: confirmationResult\.inputValue/);
   assert.match(logisticsModule, /<DetailField label="付款时间" value=\{formatDate\(expense\.paymentDate\)\}/);
   assert.match(logisticsModule, /function logisticsExpensePayButtonState/);
-  assert.match(logisticsModule, /auditStatus === "审核通过"[\s\S]*invoiceStatus === "已上传发票"[\s\S]*!alreadyPaid/);
+  assert.match(logisticsModule, /logisticsBillPayState\(\{ auditStatus, invoiceStatus, paymentStatus \}\)/);
+  assert.match(logisticsBillStateMachine, /export function canMarkLogisticsBillPaid/);
+  assert.match(logisticsBillStateMachine, /normalizeLogisticsBillAuditStatus\(input\.auditStatus\) === "审核通过"[\s\S]*normalizeLogisticsBillInvoiceStatus\(input\.invoiceStatus\) === "已上传发票"[\s\S]*normalizeLogisticsBillPaymentStatus\(input\.paymentStatus\) !== "已付款"/);
   assert.match(logisticsModule, /if \(!payState\.canMarkPaid\) return/);
   assert.match(logisticsModule, /className=\{styles\.billPayButton\}/);
   assert.match(workspaceStyles, /\.billPayButton:disabled,[\s\S]*background: #d9d9d9;[\s\S]*cursor: not-allowed/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /loadLogisticsExpenseBillRowsForAction\(id, actor\)/);
-  assert.match(updateLogisticsExpensePaymentStatusSource, /billAuditStatus !== "审核通过"/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /canMarkLogisticsBillPaid\(\{/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /LOGISTICS_PAYMENT_STATE_INVALID/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /LOGISTICS_PAYMENT_DATE_REQUIRED/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /paymentDate/);

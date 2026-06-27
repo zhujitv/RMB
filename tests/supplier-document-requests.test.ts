@@ -99,5 +99,24 @@ test("admin can delete only untouched supplier document requests", () => {
   assert.match(supplierModule, /删除资料回传任务/);
   assert.match(supplierModule, /确定删除该资料回传任务吗？删除后无法恢复。/);
   assert.match(supplierModule, /method: "DELETE"/);
-  assert.match(supplierModule, /setRows\(\(current\) => current\.filter\(\(row\) => row\.id !== task\.id\)\)/);
+  assert.match(supplierModule, /const nextTotal = Math\.max\(0, total - 1\)/);
+  assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
+});
+
+test("supplier document request list uses server-side pagination", () => {
+  const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
+  assert.match(service, /const \{ page, pageSize \} = pageParams\(query, 10, 50\)/);
+  assert.match(service, /prisma\.supplierDocumentRequest\.count\(\{ where \}\)/);
+  assert.match(service, /skip: \(page - 1\) \* pageSize/);
+  assert.match(service, /take: pageSize/);
+  assert.match(service, /pageResult\(rows\.map\(\(row\) => serializeSupplierDocumentRequest\(row, actor\)\), total, page, pageSize\)/);
+  assert.doesNotMatch(service, /take: 100/);
+  assert.match(supplierRequestListRoute, /requests: result\.rows/);
+  assert.match(supplierRequestListRoute, /pagination: \{/);
+  assert.match(supplierRequestListRoute, /summary: result\.summary/);
+  assert.match(supplierModule, /new URLSearchParams\(\{ page: String\(nextPage\), pageSize: String\(nextPageSize\) \}\)/);
+  assert.match(supplierModule, /<strong>\{total\}<\/strong>/);
+  assert.match(supplierModule, /total=\{total\}/);
+  assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
+  assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);
 });

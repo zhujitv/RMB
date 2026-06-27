@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
@@ -39,6 +39,15 @@ type SupplierDocumentTask = {
 
 type SupplierDocumentsResponse = {
   requests?: SupplierDocumentTask[];
+  pagination?: {
+    page?: number;
+    pageSize?: number;
+    total?: number;
+    totalPages?: number;
+  };
+  summary?: {
+    pendingCount?: number;
+  };
 };
 
 type SupplierUploadResponse = {
@@ -67,6 +76,9 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   const [expandedTaskId, setExpandedTaskId] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pendingCount, setPendingCount] = useState(0);
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const {
     confirmation,
@@ -77,15 +89,22 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   } = useConfirmationDialog();
 
   useEffect(() => {
-    void loadRows();
+    void loadRows(1, pageSize);
   }, []);
 
-  async function loadRows() {
+  async function loadRows(nextPage = page, nextPageSize = pageSize) {
     setLoading(true);
     setError("");
     try {
-      const data = await apiJson<SupplierDocumentsResponse>("/api/supplier-document-requests");
+      const params = new URLSearchParams({ page: String(nextPage), pageSize: String(nextPageSize) });
+      const data = await apiJson<SupplierDocumentsResponse>(`/api/supplier-document-requests?${params.toString()}`);
       setRows(data.requests || []);
+      const pagination = data.pagination || {};
+      setPage(Number(pagination.page || nextPage));
+      setPageSize(Number(pagination.pageSize || nextPageSize));
+      setTotal(Number(pagination.total || data.requests?.length || 0));
+      setTotalPages(Math.max(1, Number(pagination.totalPages || 1)));
+      setPendingCount(Number(data.summary?.pendingCount || 0));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取资料回传任务失败");
     } finally {
@@ -151,9 +170,11 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}`,
         { method: "DELETE" },
       );
-      setRows((current) => current.filter((row) => row.id !== task.id));
       setExpandedTaskId((current) => (current === task.id ? "" : current));
       setNotice(data.message || "已删除资料回传任务。");
+      const nextTotal = Math.max(0, total - 1);
+      const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1))));
+      await loadRows(nextPage, pageSize);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
     } finally {
@@ -161,17 +182,11 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
     }
   }
 
-  const pendingCount = useMemo(() => rows.filter((row) => row.status !== "已完成").length, [rows]);
   const isAdmin = currentUser.role === "管理员";
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pagedRows = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [rows, safePage, pageSize]);
 
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
+    if (page > totalPages) void loadRows(totalPages, pageSize);
   }, [page, totalPages]);
 
   return (
@@ -180,7 +195,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         <div>
           <h1>{isAdmin ? "供应商资料回传" : "产品供应商资料回传"}</h1>
         </div>
-        <button className={styles.secondaryButton} type="button" onClick={loadRows} disabled={loading}>
+        <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
           {loading ? "刷新中..." : "刷新任务"}
         </button>
       </header>
@@ -196,7 +211,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         </div>
         <div className={styles.supplierDocumentsStatCard}>
           <span>全部任务</span>
-          <strong>{rows.length}</strong>
+          <strong>{total}</strong>
         </div>
       </div>
 
@@ -208,16 +223,17 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       ) : rows.length ? (
         <>
           <div className={styles.supplierDocumentsListToolbar}>
-            <span>当前显示 {pagedRows.length} / {rows.length} 条</span>
+            <span>当前显示 {rows.length} / {total} 条</span>
             <span>本页面仅支持 PDF 文件</span>
             <label>
               每页
               <select
                 value={pageSize}
                 onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
+                  const nextPageSize = Number(event.target.value);
+                  setPageSize(nextPageSize);
                   setExpandedTaskId("");
+                  void loadRows(1, nextPageSize);
                 }}
               >
                 {SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS.map((size) => (
@@ -227,7 +243,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
             </label>
           </div>
           <div className={styles.supplierDocumentsTaskList}>
-            {pagedRows.map((task) => (
+            {rows.map((task) => (
               <SupplierDocumentTaskCard
                 key={task.id}
                 task={task}
@@ -244,13 +260,13 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
             ))}
           </div>
           <PaginationBar
-            total={rows.length}
+            total={total}
             page={safePage}
             totalPages={totalPages}
             loading={loading}
             onPage={(nextPage) => {
-              setPage(nextPage);
               setExpandedTaskId("");
+              void loadRows(nextPage, pageSize);
             }}
           />
         </>
