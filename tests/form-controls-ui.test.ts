@@ -133,6 +133,37 @@ test("user permissions reuse unified card multi-select options", () => {
   assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: 1fr;/);
 });
 
+test("user list detail action opens the inline user editor directly", () => {
+  const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
+  const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
+  const detailDrawerCallSnippet = settingsTableSnippet.match(/<SettingsDetailDrawer[\s\S]*?\/>/)?.[0] || "";
+  const settingsRowsIndex = settingsModule.indexOf("function SettingsRows");
+  const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
+  const startEditUserSnippet = settingsModule.match(/function startEditUser\(user: UserRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const saveUserSnippet = settingsModule.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
+  const userCancelSnippet = settingsModule.match(/<UserEditPanel[\s\S]*?onCancel=\{\(\) => \{[\s\S]*?\}\}/)?.[0] || "";
+
+  assert.match(settingsModule, /const \[selectedUserId, setSelectedUserId\] = useState\(""\)/);
+  assert.match(settingsModule, /const userEditPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
+  assert.match(settingsModule, /userEditPanelRef\.current\?\.scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.match(startEditUserSnippet, /setActiveTab\("users"\)/);
+  assert.match(startEditUserSnippet, /setDetailRow\(null\)/);
+  assert.match(startEditUserSnippet, /setSelectedUserId\(user\.id\)/);
+  assert.match(startEditUserSnippet, /setUserForm\(userFormFromRow\(user\)\)/);
+  assert.match(settingsRowsSnippet, /if \(tab === "users"\) \{[\s\S]*onEditUser\(row as UserRow\);[\s\S]*return;/);
+  assert.match(settingsRowsSnippet, /<tr className=\{styles\.clickableRow\} onClick=\{handlePrimaryAction\}>/);
+  assert.match(settingsRowsSnippet, /\{tab === "users" \? "编辑" : "详情"\}/);
+  assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" \? \(/);
+  assert.doesNotMatch(detailDrawerCallSnippet, /onEditUser=\{onEditUser\}/);
+  assert.doesNotMatch(detailDrawerCallSnippet, /onDeleteUser=\{onDeleteUser\}/);
+  assert.doesNotMatch(settingsModule, /<button className=\{styles\.primaryButtonCompact\} type="button" onClick=\{\(\) => onEditUser\(row as UserRow\)\}>编辑用户<\/button>/);
+  assert.match(userCancelSnippet, /setUserForm\(null\)/);
+  assert.match(userCancelSnippet, /setSelectedUserId\(""\)/);
+  assert.match(saveUserSnippet, /setUserForm\(null\)/);
+  assert.match(saveUserSnippet, /setSelectedUserId\(""\)/);
+  assert.match(saveUserSnippet, /await loadTab\("users", activePagination\.page \|\| 1, filters\.users\)/);
+});
+
 test("native form controls are normalized by the workspace style layer", () => {
   assert.match(workspaceStyles, /\.uiSwitch/);
   assert.match(workspaceStyles, /\.uiChoiceCard/);

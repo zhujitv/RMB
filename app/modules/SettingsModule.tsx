@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { DetailField, PaginationBar, PermissionSelectItem, SideDetailDrawer, UiCheckbox, UiSwitch } from "../components";
 import { formatDateTime, yesNo } from "../formatters";
@@ -485,6 +485,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [supplierSaving, setSupplierSaving] = useState(false);
   const [supplierMessage, setSupplierMessage] = useState("");
   const [userForm, setUserForm] = useState<UserForm | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState("");
   const [userSaving, setUserSaving] = useState(false);
   const [userMessage, setUserMessage] = useState("");
   const [companyProfileSaving, setCompanyProfileSaving] = useState(false);
@@ -511,12 +512,18 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       : activeTab === "users"
         ? filters.users
         : filters.auditLogs;
+  const userEditPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!loadedTabs.has(activeTab)) {
       void loadTab(activeTab, 1, filtersForTab(filters, activeTab));
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "users" || !selectedUserId || !userForm) return;
+    userEditPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeTab, selectedUserId, userForm?.id]);
 
   async function loadTab(tab = activeTab, page = activePagination.page || 1, nextFilters = filtersForTab(filters, tab)) {
     setLoading(true);
@@ -603,6 +610,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setSupplierForm(null);
     setSupplierMessage("");
     setUserForm(null);
+    setSelectedUserId("");
     setUserMessage("");
     setCompanyProfileMessage("");
     setExchangeMessage("");
@@ -709,6 +717,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setActiveTab("users");
     setDetailRow(null);
     setUserMessage("");
+    setSelectedUserId("");
     setUserForm(emptyUserForm());
     void ensureActiveSuppliers();
     void ensurePermissionConfig();
@@ -730,8 +739,9 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
 
   function startEditUser(user: UserRow) {
     setActiveTab("users");
-    setDetailRow(user);
+    setDetailRow(null);
     setUserMessage("");
+    setSelectedUserId(user.id);
     setUserForm(userFormFromRow(user));
     void ensureActiveSuppliers();
     void ensurePermissionConfig();
@@ -878,6 +888,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       );
       if (result.success !== true) throw new Error(result.message || "用户保存失败");
       setUserForm(null);
+      setSelectedUserId("");
       await loadTab("users", activePagination.page || 1, filters.users);
     } catch (saveError) {
       setUserMessage(saveError instanceof Error ? saveError.message : "用户保存失败");
@@ -1142,19 +1153,22 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         />
       ) : null}
       {userForm && activeTab === "users" ? (
-        <UserEditPanel
-          form={userForm}
-          suppliers={activeSuppliers}
-          permissionConfig={permissionConfig}
-          saving={userSaving}
-          message={userMessage}
-          onChange={setUserForm}
-          onSubmit={saveUserForm}
-          onCancel={() => {
-            setUserForm(null);
-            setUserMessage("");
-          }}
-        />
+        <div ref={userEditPanelRef}>
+          <UserEditPanel
+            form={userForm}
+            suppliers={activeSuppliers}
+            permissionConfig={permissionConfig}
+            saving={userSaving}
+            message={userMessage}
+            onChange={setUserForm}
+            onSubmit={saveUserForm}
+            onCancel={() => {
+              setUserForm(null);
+              setSelectedUserId("");
+              setUserMessage("");
+            }}
+          />
+        </div>
       ) : null}
 
       {activeTab === "companyProfile" ? (
@@ -1307,12 +1321,7 @@ function SettingsTable({
                 row={row}
                 columns={columns}
                 onViewDetail={() => onViewDetail(row)}
-                onEditCustomer={onEditCustomer}
-                onEditSupplier={onEditSupplier}
                 onEditUser={onEditUser}
-                onDeleteCustomer={onDeleteCustomer}
-                onDeleteSupplier={onDeleteSupplier}
-                onDeleteUser={onDeleteUser}
               />
             )) : (
               <tr>
@@ -1328,17 +1337,15 @@ function SettingsTable({
         totalPages={pagination.totalPages}
         onPage={onPage}
       />
-      {detailRow ? (
+      {detailRow && tab !== "users" ? (
         <SettingsDetailDrawer
           tab={tab}
           row={detailRow}
           onClose={onCloseDetail}
           onEditCustomer={onEditCustomer}
           onEditSupplier={onEditSupplier}
-          onEditUser={onEditUser}
           onDeleteCustomer={onDeleteCustomer}
           onDeleteSupplier={onDeleteSupplier}
-          onDeleteUser={onDeleteUser}
         />
       ) : null}
     </>
@@ -1350,29 +1357,38 @@ function SettingsRows({
   row,
   columns,
   onViewDetail,
-  onEditCustomer,
-  onEditSupplier,
   onEditUser,
-  onDeleteCustomer,
-  onDeleteSupplier,
-  onDeleteUser,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
   columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   onViewDetail: () => void;
-  onEditCustomer: (customer: CustomerRow) => void;
-  onEditSupplier: (supplier: SupplierRow) => void;
   onEditUser: (user: UserRow) => void;
-  onDeleteCustomer: (customer: CustomerRow) => void;
-  onDeleteSupplier: (supplier: SupplierRow) => void;
-  onDeleteUser: (user: UserRow) => void;
 }) {
+  const handlePrimaryAction = () => {
+    if (tab === "users") {
+      onEditUser(row as UserRow);
+      return;
+    }
+    onViewDetail();
+  };
+
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <tr className={styles.clickableRow} onClick={handlePrimaryAction}>
         {columns.map((column) => <td key={String(column.key)}>{valueFor(row, column)}</td>)}
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
+        <td>
+          <button
+            className={styles.rowDetailButton}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handlePrimaryAction();
+            }}
+          >
+            {tab === "users" ? "编辑" : "详情"}
+          </button>
+        </td>
       </tr>
     </>
   );
@@ -1384,20 +1400,16 @@ function SettingsDetailDrawer({
   onClose,
   onEditCustomer,
   onEditSupplier,
-  onEditUser,
   onDeleteCustomer,
   onDeleteSupplier,
-  onDeleteUser,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
   onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onEditSupplier: (supplier: SupplierRow) => void;
-  onEditUser: (user: UserRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;
   onDeleteSupplier: (supplier: SupplierRow) => void;
-  onDeleteUser: (user: UserRow) => void;
 }) {
   const detailFields = detailFieldsFor(tab, row);
   const actions = tab === "customers"
@@ -1414,14 +1426,7 @@ function SettingsDetailDrawer({
           <button className={styles.dangerButton} type="button" onClick={() => onDeleteSupplier(row as SupplierRow)}>删除供应商</button>
         </>
       )
-      : tab === "users"
-        ? (
-          <>
-            <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditUser(row as UserRow)}>编辑用户</button>
-            <button className={styles.dangerButton} type="button" onClick={() => onDeleteUser(row as UserRow)}>停用用户</button>
-          </>
-        )
-        : undefined;
+      : undefined;
 
   return (
     <SideDetailDrawer
