@@ -110,8 +110,8 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   const pendingCount = useMemo(() => rows.filter((row) => row.status !== "已完成").length, [rows]);
 
   return (
-    <section className={styles.moduleCard}>
-      <header className={styles.pageHeader}>
+    <section className={`${styles.moduleCard} ${styles.supplierDocumentsPage}`}>
+      <header className={styles.supplierDocumentsHeader}>
         <div>
           <h1>工厂资料回传</h1>
           <p>请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。</p>
@@ -121,16 +121,16 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
         </button>
       </header>
 
-      <div className={styles.summaryGrid}>
-        <div className={styles.summaryCard}>
+      <div className={styles.supplierDocumentsStats}>
+        <div className={styles.supplierDocumentsStatCard}>
           <span>回传账号</span>
           <strong>{currentUser.name || "-"}</strong>
         </div>
-        <div className={styles.summaryCard}>
-          <span>待回传任务</span>
+        <div className={styles.supplierDocumentsStatCard}>
+          <span>待回传</span>
           <strong>{pendingCount}</strong>
         </div>
-        <div className={styles.summaryCard}>
+        <div className={styles.supplierDocumentsStatCard}>
           <span>全部任务</span>
           <strong>{rows.length}</strong>
         </div>
@@ -142,7 +142,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       {loading ? (
         <div className={styles.emptyState}>正在加载工厂资料回传任务...</div>
       ) : rows.length ? (
-        <div className={styles.documentGroupGrid}>
+        <div className={styles.supplierDocumentsTaskGrid}>
           {rows.map((task) => (
             <SupplierDocumentTaskCard
               key={task.id}
@@ -172,13 +172,17 @@ function SupplierDocumentTaskCard({
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
+  const taskStatus = task.status || "待上传";
   return (
-    <article className={styles.documentGroupCard}>
-      <strong>订单号：{task.orderNo || "-"}</strong>
-      <div className={styles.detailGrid}>
+    <article className={styles.supplierDocumentTaskCard}>
+      <div className={styles.supplierDocumentTaskTopline}>
+        <span>
+          <small>订单号</small>
+          <b>{task.orderNo || "-"}</b>
+        </span>
         <span>
           <small>状态</small>
-          <b>{task.status || "待上传"}</b>
+          <b className={`${styles.statusPill} ${supplierDocumentStatusClass(taskStatus)}`}>{taskStatus}</b>
         </span>
         <span>
           <small>截止日期</small>
@@ -188,27 +192,28 @@ function SupplierDocumentTaskCard({
           <small>通知时间</small>
           <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
         </span>
-        <span>
+        <span className={styles.supplierDocumentRequirement}>
           <small>资料要求</small>
           <b>{(task.requiredDocumentLabels || []).join("、") || "-"}</b>
         </span>
       </div>
       {task.message ? <p className={styles.mutedText}>{task.message}</p> : null}
       {task.hasTemplate ? (
-        <a className={styles.secondaryButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
-          下载已填写合同样本：{task.templateFileName || "合同样本"}
+        <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
+          下载合同样本（{task.templateFileName || `${task.orderNo || "合同样本"}.xlsx`}）
         </a>
       ) : null}
-      <div className={styles.fileUploadGrid}>
+      <div className={styles.supplierDocumentUploadGrid}>
         {requiredTypes.map((documentType) => {
           const document = latestDocumentByType(task.documents || [], documentType);
           const key = `${task.id}-${documentType}`;
           const uploading = uploadingKey === key;
+          const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
           return (
-            <div className={styles.fileUploadCard} key={documentType}>
-              <div className={styles.fileUploadHeader}>
+            <div className={styles.supplierDocumentUploadCard} key={documentType}>
+              <div className={styles.supplierDocumentUploadHeader}>
                 <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
-                <span>{document ? "已上传 1 个文件" : "暂未上传"}</span>
+                <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
               </div>
               {document ? (
                 <div className={styles.fileUploadFile}>
@@ -225,11 +230,9 @@ function SupplierDocumentTaskCard({
                     <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
                   </div>
                 </div>
-              ) : (
-                <div className={styles.fileUploadEmpty}>暂未上传</div>
-              )}
-              <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
-                {uploading ? "上传中..." : document ? "替换 PDF 文件" : "上传 PDF 文件"}
+              ) : null}
+              <label className={styles.supplierDocumentUploadButton}>
+                {uploading ? "上传中..." : "选择 PDF 文件"}
                 <input
                   type="file"
                   accept={PDF_UPLOAD_ACCEPT}
@@ -241,7 +244,7 @@ function SupplierDocumentTaskCard({
                   }}
                 />
               </label>
-              <span className={styles.mutedText}>仅支持 PDF 格式，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}；选择后自动上传。</span>
+              <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
               {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
             </div>
           );
@@ -255,6 +258,13 @@ function latestDocumentByType(documents: SupplierDocument[], documentType: strin
   return documents
     .filter((document) => document.documentType === documentType)
     .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())[0] || null;
+}
+
+function supplierDocumentStatusClass(status: string) {
+  if (status === "已完成" || status === "已上传") return styles.statusSuccess;
+  if (status === "部分上传" || status === "上传中") return styles.statusWarning;
+  if (status === "已关闭") return styles.statusMuted;
+  return styles.statusMuted;
 }
 
 function UploadProgressInline({ progress }: { progress: number }) {

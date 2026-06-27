@@ -42,8 +42,14 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(supplierModule, /订单号/);
   assert.match(supplierModule, /资料回传/);
   assert.match(supplierModule, /本页面仅支持 PDF 文件/);
-  assert.match(supplierModule, /仅支持 PDF 格式，单个文件最大/);
+  assert.match(supplierModule, /仅支持 PDF，单个文件最大/);
   assert.match(supplierModule, /回传账号/);
+  assert.match(supplierModule, /styles\.supplierDocumentsPage/);
+  assert.match(supplierModule, /styles\.supplierDocumentTaskCard/);
+  assert.match(supplierModule, /styles\.supplierDocumentUploadCard/);
+  assert.match(supplierModule, /选择 PDF 文件/);
+  assert.match(supplierModule, /下载合同样本/);
+  assert.doesNotMatch(supplierModule, /fileUploadEmpty/);
   assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
 });
 
