@@ -11,7 +11,7 @@ import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
-import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
+import { canReadPermission, canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 import {
   formatShipsgoCarrierForLocale,
   formatShipsgoPortForLocale,
@@ -462,7 +462,7 @@ export function DomesticLogisticsModule({
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
   const canDeleteCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员"]);
   const canCreateLogisticsExpense = canWritePermission(currentUser, permissions, "logistics", ["管理员", "物流供应商"]);
-  const canViewShipsgoControlTower = !currentUser.supplierId && currentUser.role !== "物流供应商";
+  const canViewShipsgoControlTower = canReadPermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -773,7 +773,7 @@ export function DomesticLogisticsModule({
     }));
   }
 
-  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { masterBlNo: string; carrierScac?: string }) {
+  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac?: string } = {}) {
     const busyKey = `${row.id}:shipsgo:create`;
     setShipsgoBusyKey(busyKey);
     setError("");
@@ -783,7 +783,6 @@ export function DomesticLogisticsModule({
         method: "POST",
         body: JSON.stringify({
           orderId: row.id,
-          masterBlNo: payload.masterBlNo,
           carrierScac: payload.carrierScac || "",
         }),
       });
@@ -1593,14 +1592,13 @@ function ShipsgoOrderTrackingPanel({
   features: ShipsgoFeatureFlags;
   canManage: boolean;
   busyKey: string;
-  onCreate: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
+  onCreate: (payload?: { carrierScac?: string }) => Promise<void>;
   onSync: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecover: () => Promise<void>;
 }) {
   const trackings = row.shipsgoTrackings || [];
   const hasTracking = trackings.length > 0;
   const [carrierScac, setCarrierScac] = useState("");
-  const [masterBlNo, setMasterBlNo] = useState(defaultShipsgoMasterBl(row));
   const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
   const [expandedTimelineId, setExpandedTimelineId] = useState("");
@@ -1608,10 +1606,11 @@ function ShipsgoOrderTrackingPanel({
   const [timelineErrors, setTimelineErrors] = useState<Record<string, string>>({});
   const createBusy = busyKey === `${row.id}:shipsgo:create`;
   const recoverBusy = busyKey === `${row.id}:shipsgo:recover`;
+  const masterBlNo = defaultShipsgoMasterBl(row);
+  const missingMasterBlNo = !masterBlNo;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
 
   useEffect(() => {
-    setMasterBlNo(defaultShipsgoMasterBl(row));
     setCarrierScac("");
     setShowCarrierInput(false);
     setCreateError("");
@@ -1625,15 +1624,14 @@ function ShipsgoOrderTrackingPanel({
     if (createError) setCreateError("");
   }
 
-  function updateMasterBlNo(value: string) {
-    setMasterBlNo(value.trim());
-    if (createError) setCreateError("");
-  }
-
   async function submitCreateTracking() {
     setCreateError("");
+    if (!masterBlNo) {
+      setCreateError("请先在物流信息中录入提单号后再开始追踪");
+      return;
+    }
     try {
-      await onCreate({ masterBlNo, carrierScac: showCarrierInput ? carrierScac : "" });
+      await onCreate({ carrierScac: showCarrierInput ? carrierScac : "" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "创建大掌櫃跟踪失败";
       setCreateError(message);
@@ -1841,7 +1839,7 @@ function ShipsgoOrderTrackingPanel({
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
           <label>
             Master B/L（提单号）
-            <input value={masterBlNo} onChange={(event) => updateMasterBlNo(event.target.value)} placeholder="请输入 Master B/L" />
+            <strong>{masterBlNo || "请先在物流信息中录入提单号后再开始追踪"}</strong>
           </label>
           {showCarrierInput ? (
             <label>
@@ -1859,7 +1857,7 @@ function ShipsgoOrderTrackingPanel({
             <button
               className={styles.primaryButtonCompact}
               type="button"
-              disabled={createBusy || recoverBusy}
+              disabled={createBusy || recoverBusy || missingMasterBlNo}
               onClick={(event) => {
                 event.stopPropagation();
                 void submitCreateTracking();
@@ -1943,7 +1941,7 @@ function DomesticLogisticsRows({
   shipsgoFeatures: ShipsgoFeatureFlags;
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
-  onCreateShipsgoTracking: (payload: { masterBlNo: string; carrierScac?: string }) => Promise<void>;
+  onCreateShipsgoTracking: (payload?: { carrierScac?: string }) => Promise<void>;
   onSyncShipsgoTracking: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecoverShipsgoTracking: () => Promise<void>;
   onSaved: () => void;

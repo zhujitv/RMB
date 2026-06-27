@@ -4,7 +4,7 @@ type QueryLike = {
 };
 
 const PRODUCT_SUPPLIER_ACCOUNT_ROLE = "产品供应商";
-const LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE = "产品供应商账号";
+const LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE = `${PRODUCT_SUPPLIER_ACCOUNT_ROLE}账号`;
 const LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
 const SUPPLIER_DOCUMENT_ROLES = [PRODUCT_SUPPLIER_ACCOUNT_ROLE, LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE, LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE];
 
@@ -29,14 +29,13 @@ export const ROLE_MENUS: Record<string, string[]> = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "manual"],
+  物流供应商: ["domesticLogistics", "oceanControlTower", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
-  产品供应商账号: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
 };
 
-const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流资料录入员"];
+const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];
 
 export function menusWithDerivedAccess(role: string, menus: string[]) {
   if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
@@ -53,7 +52,6 @@ export const ROLE_SCOPE_TEXT: Record<string, string> = {
   财务: "可查看全部应收和收款数据",
   物流供应商: "仅可查看分配订单、提交物流费用并上传发票",
   产品供应商: "仅可查看资料回传任务并上传工厂合同、增值税发票",
-  产品供应商账号: "仅可查看资料回传任务并上传工厂合同、增值税发票",
   工厂供应商账号: "仅可查看资料回传任务并上传工厂合同、增值税发票",
   物流资料录入员: "可录入物流信息和报关资料",
 };
@@ -148,29 +146,39 @@ export function permissionObject(keys: string[], enabledKeys: string[] = []) {
   return Object.fromEntries(keys.map((key) => [key, enabledKeys.includes(key)]));
 }
 
+function normalizeRoleName(role: string) {
+  return role === LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE || role === LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE
+    ? PRODUCT_SUPPLIER_ACCOUNT_ROLE
+    : role;
+}
+
 export function roleReadKeys(role: string) {
-  return READ_PERMISSION_KEYS.filter((area) => READ_PERMISSIONS[area]?.includes(role));
+  const roleName = normalizeRoleName(role);
+  return READ_PERMISSION_KEYS.filter((area) => READ_PERMISSIONS[area]?.includes(roleName));
 }
 
 export function roleWriteKeys(role: string) {
-  return WRITE_PERMISSION_KEYS.filter((area) => WRITE_PERMISSIONS[area]?.includes(role));
+  const roleName = normalizeRoleName(role);
+  return WRITE_PERMISSION_KEYS.filter((area) => WRITE_PERMISSIONS[area]?.includes(roleName));
 }
 
 export function roleDataScope(role: string) {
-  if (role === "管理员" || role === "财务") return "ALL";
-  if (role === "业务员") return "OWN";
-  if (role === "物流供应商") return "OWN";
-  if (SUPPLIER_DOCUMENT_ROLES.includes(role)) return "OWN";
-  if (role === "物流资料录入员") return "OWN";
+  const roleName = normalizeRoleName(role);
+  if (roleName === "管理员" || roleName === "财务") return "ALL";
+  if (roleName === "业务员") return "OWN";
+  if (roleName === "物流供应商") return "OWN";
+  if (SUPPLIER_DOCUMENT_ROLES.includes(roleName)) return "OWN";
+  if (roleName === "物流资料录入员") return "OWN";
   return "NONE";
 }
 
 export function customDataScopeFallback(role: string, writeKeys: string[] = []) {
-  if (role === "管理员" || role === "财务") return "ALL";
-  if (role === "业务员") return "OWN";
-  if (role === "物流供应商") return "OWN";
-  if (SUPPLIER_DOCUMENT_ROLES.includes(role)) return "OWN";
-  if (role === "物流资料录入员") return "OWN";
+  const roleName = normalizeRoleName(role);
+  if (roleName === "管理员" || roleName === "财务") return "ALL";
+  if (roleName === "业务员") return "OWN";
+  if (roleName === "物流供应商") return "OWN";
+  if (SUPPLIER_DOCUMENT_ROLES.includes(roleName)) return "OWN";
+  if (roleName === "物流资料录入员") return "OWN";
   return writeKeys.length ? "OWN" : roleDataScope(role);
 }
 
@@ -196,18 +204,19 @@ export function optionList(keys: string[], labels: Record<string, string>) {
 }
 
 export function roleMenus(role?: string | null) {
-  const roleName = String(role || "");
+  const roleName = normalizeRoleName(String(role || ""));
   return menusWithDerivedAccess(roleName, ROLE_MENUS[roleName] || []);
 }
 
 export function roleScopeText(role?: string | null) {
-  return ROLE_SCOPE_TEXT[String(role || "")] || "未配置权限";
+  return ROLE_SCOPE_TEXT[normalizeRoleName(String(role || ""))] || "未配置权限";
 }
 
 export function rolePermissionSnapshot(role: string) {
-  const menus = roleMenus(role);
-  const readKeys = roleReadKeys(role);
-  const writeKeys = roleWriteKeys(role);
+  const roleName = normalizeRoleName(role);
+  const menus = roleMenus(roleName);
+  const readKeys = roleReadKeys(roleName);
+  const writeKeys = roleWriteKeys(roleName);
   return {
     mode: "ROLE",
     menus,
@@ -215,8 +224,8 @@ export function rolePermissionSnapshot(role: string) {
     writeKeys,
     reads: permissionObject(READ_PERMISSION_KEYS, readKeys),
     writes: permissionObject(WRITE_PERMISSION_KEYS, writeKeys),
-    dataScope: roleDataScope(role),
-    scopeText: roleScopeText(role),
+    dataScope: roleDataScope(roleName),
+    scopeText: roleScopeText(roleName),
   };
 }
 

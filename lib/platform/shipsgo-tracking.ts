@@ -931,9 +931,6 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
 
 export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, actor: ShipsgoActor) {
   assertRead(actor, "domesticLogistics");
-  if (isExternalLogisticsSupplierAccount(actor) || actor?.role === "物流供应商" || actor?.supplierId) {
-    throw codedError("供应商账号不可查看运输监控。", 403, "PERMISSION_DENIED");
-  }
   const includeCompleted = boolQueryValue(query, "includeCompleted") === true;
   const rows = await prisma.shipsgoTracking.findMany({
     where: {
@@ -1109,9 +1106,9 @@ async function findExistingShipsgoShipment(settings: ShipsgoSettings, target: { 
 
 function createPayloadFromInput(input: ShipsgoTrackingInput, order: ShipsgoTrackingOrder) {
   const carrierScac = cleanCarrierScac(input.carrierScac);
-  const masterBlNo = cleanBookingNumber(input.masterBlNo) || cleanBookingNumber(input.bookingNumber) || cleanBookingNumber(order.blNo);
+  const masterBlNo = cleanBookingNumber(order.blNo);
   if (!masterBlNo) {
-    throw codedError("请先填写 Master B/L（提单号）后再开始大掌櫃跟踪。", 400, "SHIPSGO_MASTER_BL_REQUIRED");
+    throw codedError("请先在物流信息中录入提单号后再开始追踪", 400, "SHIPSGO_MASTER_BL_REQUIRED");
   }
   const reference = cleanInputText(input.reference, 128)
     || cleanInputText(`${order.orderNo || order.id}-${masterBlNo}`, 128);

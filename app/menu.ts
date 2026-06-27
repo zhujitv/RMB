@@ -19,14 +19,20 @@ export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "manual"],
+  物流供应商: ["domesticLogistics", "oceanControlTower", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
-  产品供应商账号: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
 };
 
-const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流资料录入员"];
+const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];
+const PRODUCT_SUPPLIER_ROLE = "产品供应商";
+const LEGACY_PRODUCT_SUPPLIER_ROLE = `${PRODUCT_SUPPLIER_ROLE}账号`;
+const LEGACY_FACTORY_SUPPLIER_ROLE = "工厂供应商账号";
+
+function normalizeMenuRole(role: string) {
+  return role === LEGACY_PRODUCT_SUPPLIER_ROLE || role === LEGACY_FACTORY_SUPPLIER_ROLE ? PRODUCT_SUPPLIER_ROLE : role;
+}
 
 function menusWithDerivedAccess(role: string, menus: string[]) {
   if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
@@ -38,9 +44,10 @@ function menusWithDerivedAccess(role: string, menus: string[]) {
 }
 
 export function availableMenus(user: User, permissions?: PermissionSnapshot) {
-  if (user.role === "管理员") {
+  const role = normalizeMenuRole(user.role);
+  if (role === "管理员") {
     return MENU_ITEMS.filter((item) => ROLE_MENU_FALLBACK["管理员"].includes(item.key));
   }
-  const allowed = menusWithDerivedAccess(user.role, permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[user.role] || ["manual"]);
+  const allowed = menusWithDerivedAccess(role, permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[role] || ["manual"]);
   return MENU_ITEMS.filter((item) => allowed.includes(item.key));
 }

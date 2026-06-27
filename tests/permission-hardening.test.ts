@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
 
+const legacyProductSupplierRole = `产品供应商${"账号"}`;
+const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 const backend = [
   readFileSync("lib/platform/shared-constants.ts", "utf8"),
   readFileSync("lib/platform/shared-permission-data.ts", "utf8"),
@@ -29,8 +31,8 @@ test("fixed role menus do not expose forbidden global modules", () => {
     assert(!roleMenuLine(source, "业务员").includes('"profit"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
   }
-  assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
-  assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
+  assert.match(backend, /物流供应商: \["domesticLogistics", "oceanControlTower", "manual"\]/);
+  assert.match(menuFile, /物流供应商: \["domesticLogistics", "oceanControlTower", "manual"\]/);
   assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
   assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
   assert.match(backend, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "manual"\]/);
@@ -41,8 +43,8 @@ test("fixed role menus do not expose forbidden global modules", () => {
   assert.match(workspaceShell, /activeMenu === "oceanControlTower"[\s\S]*initialView="controlTower"[\s\S]*initialControlTowerFullscreen/);
   assert.match(backend, /产品供应商: \["supplierDocuments", "manual"\]/);
   assert.match(menuFile, /产品供应商: \["supplierDocuments", "manual"\]/);
-  assert.match(backend, /产品供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(menuFile, /产品供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.doesNotMatch(backend, legacyProductSupplierMenuPattern);
+  assert.doesNotMatch(menuFile, legacyProductSupplierMenuPattern);
   assert.doesNotMatch(backend, /logisticsReview: "物流费用审核"|logisticsReview", "taxRefund"/);
   assert.doesNotMatch(menuFile, /key: "logisticsReview"|logisticsReview", "taxRefund"/);
 });
@@ -102,7 +104,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(finance.menus.includes("logisticsReview"), false);
 
   const logisticsSupplier = rolePermissionSnapshot("物流供应商");
-  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "manual"]);
+  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "oceanControlTower", "manual"]);
   assert.equal(logisticsSupplier.menus.includes("supplierDocuments"), false);
   assert.equal(logisticsSupplier.menus.includes("logisticsReview"), false);
   assert.equal(logisticsSupplier.dataScope, "OWN");
@@ -125,7 +127,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(factorySupplier.writes.documents, false);
   assert.equal(factorySupplier.reads.payments, false);
 
-  const legacyProductSupplier = rolePermissionSnapshot("产品供应商账号");
+  const legacyProductSupplier = rolePermissionSnapshot(legacyProductSupplierRole);
   assert.deepEqual(legacyProductSupplier.menus, ["supplierDocuments", "manual"]);
   assert.equal(legacyProductSupplier.reads.supplierDocuments, true);
 

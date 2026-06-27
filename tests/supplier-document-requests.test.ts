@@ -10,6 +10,8 @@ const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const menu = readFileSync("app/menu.ts", "utf8");
 const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8");
+const legacyProductSupplierRole = `产品供应商${"账号"}`;
+const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
@@ -71,8 +73,8 @@ test("supplier settings and menus expose the controlled factory upload switch", 
 test("product supplier callback uses a dedicated supplier account role", () => {
   assert.match(permissions, /产品供应商: \["supplierDocuments", "manual"\]/);
   assert.match(menu, /产品供应商: \["supplierDocuments", "manual"\]/);
-  assert.match(permissions, /产品供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(menu, /产品供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.doesNotMatch(permissions, legacyProductSupplierMenuPattern);
+  assert.doesNotMatch(menu, legacyProductSupplierMenuPattern);
   assert.match(permissions, /SUPPLIER_DOCUMENT_ROLES/);
   assert.match(service, /isProductSupplierOperatorRole/);
   assert.match(service, /assertWrite\(actor, "supplierDocuments"\)/);

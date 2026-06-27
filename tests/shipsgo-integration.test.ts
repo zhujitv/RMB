@@ -145,6 +145,9 @@ test("ShipsGo creation consumes one tracking per master bill only", () => {
   const payloadFunction = trackingService.match(/function createPayloadFromInput[\s\S]*?async function replaceShipsgoTrackingContainers/)?.[0] || "";
   const createService = trackingService.match(/export async function createShipsgoOceanTracking[\s\S]*?export async function syncShipsgoOceanTracking/)?.[0] || "";
   assert.match(payloadFunction, /masterBlNo/);
+  assert.match(payloadFunction, /cleanBookingNumber\(order\.blNo\)/);
+  assert.doesNotMatch(payloadFunction, /input\.masterBlNo/);
+  assert.doesNotMatch(payloadFunction, /input\.bookingNumber/);
   assert.match(payloadFunction, /booking_number: masterBlNo/);
   assert.doesNotMatch(payloadFunction, /container_number:/);
   assert.match(createService, /findFirst\(\{\s*where: \{\s*orderId,\s*provider: SHIPSGO_PROVIDER,\s*mode: OCEAN_MODE,\s*deletedAt: null,/);
@@ -155,6 +158,8 @@ test("ShipsGo creation consumes one tracking per master bill only", () => {
   assert.match(trackingService, /export async function recoverShipsgoOceanTracking/);
   assert.match(trackingService, /findExistingShipsgoShipment/);
   assert.match(logisticsModule, /Master B\/L（提单号）/);
+  assert.match(logisticsModule, /请先在物流信息中录入提单号后再开始追踪/);
+  assert.doesNotMatch(logisticsModule, /placeholder="请输入 Master B\/L"/);
   assert.doesNotMatch(logisticsModule, /柜号 Container No\./);
   assert.match(logisticsModule, /开始追踪/);
   assert.match(logisticsModule, /查看运输状态/);
@@ -204,8 +209,9 @@ test("ShipsGo customer notification display can target configured customer langu
 test("ShipsGo ocean control tower is read-only and does not create tracking", () => {
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
-  assert.match(trackingService, /isExternalLogisticsSupplierAccount\(actor\)/);
-  assert.match(trackingService, /供应商账号不可查看运输监控/);
+  const controlTowerService = trackingService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*?function dateText/)?.[0] || "";
+  assert.doesNotMatch(controlTowerService, /isExternalLogisticsSupplierAccount\(actor\)/);
+  assert.doesNotMatch(controlTowerService, /供应商账号不可查看运输监控/);
   assert.match(trackingService, /trackingSignalExists\(row\)/);
   assert.match(trackingService, /includeCompleted/);
   assert.match(trackingService, /soonArrivingCount/);
