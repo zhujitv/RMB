@@ -113,7 +113,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
     <section className={`${styles.moduleCard} ${styles.supplierDocumentsPage}`}>
       <header className={styles.supplierDocumentsHeader}>
         <div>
-          <h1>工厂资料回传</h1>
+          <h1>产品供应商资料回传</h1>
           <p>请下载已填写的合同样本，盖章扫描后与工厂增值税发票一起回传。本页面仅支持 PDF 文件，选择文件后会自动上传。</p>
         </div>
         <button className={styles.secondaryButton} type="button" onClick={loadRows} disabled={loading}>
@@ -140,7 +140,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
 
       {loading ? (
-        <div className={styles.emptyState}>正在加载工厂资料回传任务...</div>
+        <div className={styles.emptyState}>正在加载产品供应商资料回传任务...</div>
       ) : rows.length ? (
         <div className={styles.supplierDocumentsTaskGrid}>
           {rows.map((task) => (
@@ -154,7 +154,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
           ))}
         </div>
       ) : (
-        <div className={styles.emptyState}>暂无需要回传的工厂资料。</div>
+        <div className={styles.emptyState}>暂无需要回传的产品供应商资料。</div>
       )}
     </section>
   );

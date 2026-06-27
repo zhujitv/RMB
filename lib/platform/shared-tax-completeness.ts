@@ -215,7 +215,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     : [{
         key: "__missing_factory_supplier__",
         supplierId: "",
-        supplierName: "未录入工厂供应商",
+        supplierName: "未录入产品供应商",
         costIds: [],
         earliestCostCreatedAt: null,
         missingFactoryCost: true,
@@ -236,7 +236,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
           supplierName: entry.supplierName,
           documentType: type,
           label: entry.missingFactoryCost
-            ? "缺少工厂供应商成本记录"
+            ? "缺少产品供应商成本记录"
             : `${supplierEntries.length > 1 ? entry.supplierName : ""}${type === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票"}`,
           reminderDue: daysSinceCostCreated >= 3,
           daysSinceCostCreated,

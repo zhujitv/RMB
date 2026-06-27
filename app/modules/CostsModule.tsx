@@ -28,6 +28,7 @@ const COST_CONFIRMATION_OPTIONS = [
 const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
 const FOREIGN_CURRENCY_COST_TYPES = ["国外佣金", "国外代理费", "佣金", ...LOGISTICS_USD_COST_TYPES];
 const FACTORY_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
+const PRODUCT_SUPPLIER_TYPES = ["产品供应商", "工厂供应商"];
 const LOGISTICS_INVOICE_COST_TYPES = [...LOGISTICS_COST_TYPES, "国内物流费", "国内拖车费"];
 const COST_FILTER_TYPES = [...QUICK_COST_TYPES, ...LOGISTICS_COST_TYPES]
   .filter((type, index, rows) => rows.indexOf(type) === index);
@@ -1119,10 +1120,10 @@ function QuickCreateCostPanel({
       costType,
       currency,
       exchangeRate: currency === "CNY" ? "1" : "",
-      supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商" ? "" : row.supplierId,
+      supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && !PRODUCT_SUPPLIER_TYPES.includes(selectedSupplier.supplierType) ? "" : row.supplierId,
     } : row));
-    if (FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && selectedSupplier.supplierType !== "工厂供应商") {
-      setMessage("当前成本类型需要选择工厂供应商，请重新选择供应商。");
+    if (FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && !PRODUCT_SUPPLIER_TYPES.includes(selectedSupplier.supplierType)) {
+      setMessage("当前成本类型需要选择产品供应商，请重新选择供应商。");
     }
     await resolveExchangeRate(localId, currency);
   }
@@ -1290,7 +1291,7 @@ function QuickCreateCostPanel({
                     value={selectedSupplier}
                     cacheKey={`cost-suppliers:${FACTORY_COST_TYPES.includes(item.costType) ? "factory" : "all"}:${item.localId}`}
                     emptyLabel="未找到匹配供应商，可先到系统设置新增供应商"
-                    placeholder={FACTORY_COST_TYPES.includes(item.costType) ? "输入工厂供应商 / 开票名称 / 税号" : "输入供应商 / 类型 / 开票名称 / 税号"}
+                    placeholder={FACTORY_COST_TYPES.includes(item.costType) ? "输入产品供应商 / 开票名称 / 税号" : "输入供应商 / 类型 / 开票名称 / 税号"}
                     getLabel={supplierLabel}
                     getDescription={(supplier) => supplier.invoiceTitle || supplier.supplierType || ""}
                     search={(keyword) => searchSuppliers(keyword, item.costType)}
@@ -2093,7 +2094,7 @@ function CostDocumentsDrawer({
               <strong>资料要求</strong>
               <span className={styles.mutedText}>
                 {logisticsGenerated ? "物流费用发票以发票分组为准：报关费、港杂费、海运费、拖车及其他费用合并发票。成本管理只展示同步结果。"
-                  : isFactoryCost(cost) ? "工厂供应商需维护采购合同和增值税发票。"
+                  : isFactoryCost(cost) ? "产品供应商需维护采购合同和增值税发票。"
                     : isLogisticsInvoiceCost(cost) ? "客户指定临时货代或手工录入的物流成本，可在成本管理维护对应物流发票。"
                       : "当前成本可维护一份发票资料。"}
               </span>
@@ -2231,7 +2232,7 @@ function documentsForType(cost: CostRow, documentType: string) {
 }
 
 function isFactoryCost(cost: CostRow) {
-  return cost.supplierType === "工厂供应商" || FACTORY_COST_TYPES.includes(cost.costType || "");
+  return PRODUCT_SUPPLIER_TYPES.includes(cost.supplierType || "") || FACTORY_COST_TYPES.includes(cost.costType || "");
 }
 
 function isLogisticsInvoiceCost(cost: CostRow) {

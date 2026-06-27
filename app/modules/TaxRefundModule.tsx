@@ -12,6 +12,8 @@ import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 import { canWritePermission, customerDisplayName, customerLegalName, downloadBlob, PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
 import { logisticsCostTypeLabel } from "../../lib/platform/logistics-cost-types";
 
+const PRODUCT_SUPPLIER_TYPES = ["产品供应商", "工厂供应商"];
+
 type DocumentCompleteness = {
   completed?: number;
   total?: number;
@@ -842,7 +844,7 @@ export function TaxRefundModule({
             suppliers,
             supplierId: current.supplierId || suppliers[0]?.id || "",
             loadingSuppliers: false,
-            error: suppliers.length ? "" : "暂无已开启资料回传权限的工厂供应商，请先到系统设置开启。",
+            error: suppliers.length ? "" : "暂无已开启资料回传权限的产品供应商，请先到系统设置开启。",
           }
         : current);
     } catch (loadError) {
@@ -850,7 +852,7 @@ export function TaxRefundModule({
         ? {
             ...current,
             loadingSuppliers: false,
-            error: loadError instanceof Error ? loadError.message : "读取工厂供应商失败",
+            error: loadError instanceof Error ? loadError.message : "读取产品供应商失败",
           }
         : current);
     }
@@ -860,7 +862,7 @@ export function TaxRefundModule({
     event.preventDefault();
     if (!supplierDocumentForm) return;
     if (!supplierDocumentForm.supplierId) {
-      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请选择工厂供应商" });
+      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请选择产品供应商" });
       return;
     }
     if (!supplierDocumentForm.requiredDocumentTypes.length) {
@@ -1398,7 +1400,7 @@ function TaxRefundDetailDrawer({
             )}
             {canCreateSupplierDocumentRequest && detail ? (
               <button className={styles.secondaryButton} type="button" onClick={() => onOpenSupplierDocumentRequest(detail)}>
-                通知工厂供应商回传
+                通知产品供应商回传
               </button>
             ) : null}
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
@@ -1609,7 +1611,7 @@ function TaxRefundDetailPanel({
               onUpload={onUpload}
               onDelete={onDelete}
             />
-          )) : <span className={styles.mutedText}>暂未录入工厂供应商成本</span>}
+          )) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
         </div>
         <div className={styles.documentGroupCard} id={taxTargetDomId("logistics-section")}>
           <strong>物流资料上传</strong>
@@ -1677,7 +1679,7 @@ function SupplierDocumentRequestDialog({
   };
   return (
     <DismissibleLayer
-      ariaLabel="通知工厂供应商回传资料"
+      ariaLabel="通知产品供应商回传资料"
       overlayClassName={styles.modalOverlay}
       surfaceClassName={styles.modalCard}
       dismissible={!sending}
@@ -1687,7 +1689,7 @@ function SupplierDocumentRequestDialog({
         <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
           <header className={styles.modalHeader}>
             <div>
-              <strong>通知工厂供应商回传资料</strong>
+              <strong>通知产品供应商回传资料</strong>
               <span>供应商端只显示订单号和资料要求，不显示客户简称或客户全称。</span>
             </div>
             <button className={styles.ghostButton} type="button" onClick={requestClose} disabled={sending}>关闭</button>
@@ -1699,14 +1701,14 @@ function SupplierDocumentRequestDialog({
               <input value={form.order.orderNo || "-"} readOnly />
             </label>
             <label>
-              工厂供应商
+              产品供应商
               <select
                 value={form.supplierId}
                 onChange={(event) => onChange({ ...form, supplierId: event.target.value, error: "" })}
                 disabled={form.loadingSuppliers || sending}
                 required
               >
-                <option value="">{form.loadingSuppliers ? "供应商加载中..." : "请选择工厂供应商"}</option>
+                <option value="">{form.loadingSuppliers ? "供应商加载中..." : "请选择产品供应商"}</option>
                 {form.suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>{supplier.supplierName || "-"}</option>
                 ))}
@@ -2527,7 +2529,7 @@ function taxMissingTargets(completeness: DocumentCompleteness) {
   });
   (completeness.supplier?.missing || []).forEach((item) => {
     if (item.missingFactoryCost) {
-      pushTarget("缺少工厂供应商成本记录", "factory-section");
+      pushTarget("缺少产品供应商成本记录", "factory-section");
       return;
     }
     const documentLabel = taxSupplierDocumentLabel(item.documentType || "");
@@ -2630,7 +2632,7 @@ function factorySupplierCosts(costs: TaxCost[]) {
     cost.id
     && cost.supplierId
     && (
-      cost.supplierType === "工厂供应商"
+      PRODUCT_SUPPLIER_TYPES.includes(cost.supplierType || "")
       || ["工厂货款", "原材料货款", "采购货款", "产品货款"].includes(cost.costType || "")
     )
   ));

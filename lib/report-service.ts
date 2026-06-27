@@ -360,10 +360,10 @@ function orderToTaxRefund(order: BusinessReportRow) {
     customsCompleteness: `${completeness.customs?.completed || 0}/${completeness.customs?.total || 3}`,
     exportCompleteness: `${completeness.export?.completed || 0}/${completeness.export?.total || 5}`,
     factoryCompleteness: factory.missingFactoryCost
-      ? "0/2（未录入工厂供应商）"
+      ? "0/2（未录入产品供应商）"
       : `${factory.completed || 0}/${Math.max(2, Number(factory.total || 0))}`,
     supplierCompleteness: factory.missingFactoryCost
-      ? "0/2（未录入工厂供应商）"
+      ? "0/2（未录入产品供应商）"
       : `${factory.completed || 0}/${Math.max(2, Number(factory.total || 0))}`,
     logisticsInvoiceCompleteness: `${logistics.completed || 0}/${logistics.total || 0}`,
     domesticLogisticsCompleteness: `${completeness.domesticLogistics?.completed || 0}/${completeness.domesticLogistics?.total || 1}`,

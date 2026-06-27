@@ -53,8 +53,8 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
 });
 
-test("admin tax refund drawer can notify factory suppliers without replacing tax upload flow", () => {
-  assert.match(taxModule, /通知工厂供应商回传/);
+test("admin tax refund drawer can notify product suppliers without replacing tax upload flow", () => {
+  assert.match(taxModule, /通知产品供应商回传/);
   assert.match(taxModule, /\/api\/supplier-document-requests/);
   assert.match(taxModule, /allowFactoryDocumentUpload/);
   assert.match(taxModule, /document\.costId === cost\.id \|\| Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
@@ -67,14 +67,16 @@ test("supplier settings and menus expose the controlled factory upload switch", 
   assert.match(permissions, /supplierDocuments/);
 });
 
-test("factory supplier callback uses a dedicated supplier account role", () => {
-  assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(permissions, /supplierDocuments: \["管理员", "工厂供应商账号"\]/);
-  assert.match(service, /FACTORY_SUPPLIER_OPERATOR_ROLE/);
+test("product supplier callback uses a dedicated supplier account role", () => {
+  assert.match(permissions, /产品供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(menu, /产品供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(permissions, /SUPPLIER_DOCUMENT_ROLES/);
+  assert.match(service, /isProductSupplierOperatorRole/);
   assert.match(service, /assertWrite\(actor, "supplierDocuments"\)/);
   assert.match(service, /assertRead\(actor, "supplierDocuments"\)/);
-  assert.match(settingsModule, /FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号"/);
-  assert.match(settingsModule, /supplier\.supplierType === "工厂供应商" && supplier\.allowFactoryDocumentUpload/);
+  assert.match(settingsModule, /FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商账号"/);
+  assert.match(settingsModule, /PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\) && supplier\.allowFactoryDocumentUpload/);
+  assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
   assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
 });

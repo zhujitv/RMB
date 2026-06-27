@@ -89,7 +89,7 @@ test("supplier logistics cost types use card multi-select options", () => {
 
   assert.match(settingsModule, /SUPPLIER_LOGISTICS_COST_TYPE_UI_META/);
   assert.match(supplierPanelSnippet, /<strong>基础信息<\/strong>/);
-  assert.match(supplierPanelSnippet, /<strong>工厂供应商权限<\/strong>/);
+  assert.match(supplierPanelSnippet, /<strong>产品供应商权限<\/strong>/);
   assert.match(supplierPanelSnippet, /<strong>物流供应商权限<\/strong>/);
   assert.match(supplierPanelSnippet, /\{factoryDocumentCapable \? \(/);
   assert.match(supplierPanelSnippet, /\{logisticsCapable \? \(/);

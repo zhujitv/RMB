@@ -153,7 +153,7 @@ test("supplier settings include logistics expense and invoice permissions", () =
   assert.match(settingsModule, /label="允许物流发票上传"/);
   assert.match(settingsModule, /允许录入的物流费用类型/);
   assert.match(settingsModule, /<strong>物流供应商权限<\/strong>/);
-  assert.match(settingsModule, /<strong>工厂供应商权限<\/strong>/);
+  assert.match(settingsModule, /<strong>产品供应商权限<\/strong>/);
   assert.match(supplierMasters, /const isLogisticsSupplierType = DOMESTIC_LOGISTICS_SUPPLIER_TYPES\.includes\(supplierType\)/);
   assert.match(supplierMasters, /if \(isLogisticsSupplierType && allowLogisticsExpenseEntry && !allowedLogisticsCostTypes\.length\)/);
   assert.doesNotMatch(supplierMasters, /allowFactoryDocumentUpload && supplierType !== "工厂供应商"/);

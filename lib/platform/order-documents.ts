@@ -13,7 +13,6 @@ import { canAccessOrder } from "./order-access";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
-  FACTORY_SUPPLIER_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
   ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA,
   ORDER_DOCUMENT_TYPES,
@@ -28,6 +27,7 @@ import {
   codedError,
   effectivePermissions,
   isCustomsDeclarationDocumentType,
+  isProductSupplierOperatorRole,
   logServerError,
   nextStandardFilenameForUpload,
   normalizeOrderDocumentType,
@@ -155,7 +155,7 @@ function relatedModuleForDocumentType(documentType: string) {
 
 function canReadDocument(actor: ActorLike, document: DocumentLike) {
   if (
-    actorRole(actor) === FACTORY_SUPPLIER_OPERATOR_ROLE
+    isProductSupplierOperatorRole(actorRole(actor))
     && document.relatedModule === "SUPPLIER"
     && document.factoryDocumentRequestId
     && document.supplierId

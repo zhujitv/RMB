@@ -21,6 +21,7 @@ import {
   effectivePermissions,
   inputHasOwn,
   isLogisticsCostType,
+  isProductSupplierType,
   nonEmpty,
   normalizedCostType,
   num,
@@ -196,8 +197,8 @@ async function buildCostData(order: CostOrderLike, actor: CostActor, input: Cost
     defaultDate: input.paymentDate || todayInputInChina(),
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
   });
-  if (FACTORY_SUPPLIER_COST_TYPES.includes(costType) && supplier.supplierType !== "工厂供应商" && !confirmedFactorySupplierMismatch(input)) {
-    throw codedError("当前成本类型为工厂货款，但供应商类型不是工厂供应商，请确认是否修改供应商资料。", 409, "FACTORY_SUPPLIER_MISMATCH");
+  if (FACTORY_SUPPLIER_COST_TYPES.includes(costType) && !isProductSupplierType(supplier.supplierType) && !confirmedFactorySupplierMismatch(input)) {
+    throw codedError("当前成本类型为工厂货款，但供应商类型不是产品供应商，请确认是否修改供应商资料。", 409, "FACTORY_SUPPLIER_MISMATCH");
   }
   const requestedCostConfirmed = booleanInput(input.costConfirmed, before?.costConfirmed || false);
   const canConfirmOrdinaryCost = ["管理员", "业务员"].includes(actor.role || "");

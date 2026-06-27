@@ -278,11 +278,16 @@ const SHIPPING_DOCUMENT_TYPE_OPTIONS = [
 type ShippingDocumentConfigKey = typeof SHIPPING_DOCUMENT_TYPE_OPTIONS[number]["key"];
 type ShippingDocumentConfig = Record<ShippingDocumentConfigKey, boolean>;
 const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
-const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
+const PRODUCT_SUPPLIER_TYPE = "产品供应商";
+const LEGACY_FACTORY_SUPPLIER_TYPE = "工厂供应商";
+const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE];
+const SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
 const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-const FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
-const SUPPLIER_ACCOUNT_ROLES = ["物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE];
+const FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商账号";
+const LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
+const FACTORY_SUPPLIER_ACCOUNT_ROLES = [FACTORY_SUPPLIER_ACCOUNT_ROLE, LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE];
+const SUPPLIER_ACCOUNT_ROLES = ["物流供应商", ...FACTORY_SUPPLIER_ACCOUNT_ROLES];
 const SUPPLIER_LOGISTICS_COST_TYPE_UI_META: Record<string, { label?: string; description: string }> = {
   拖车费: { description: "国内拖车、短驳、提送柜等运输费用。" },
   报关费: { description: "出口报关代理、申报服务相关费用。" },
@@ -900,8 +905,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     if (isSupplierAccountRole(userForm.role)) {
       const supplier = suppliers.find((item) => item.id === userForm.supplierId);
       if (!supplierMatchesUserRole(supplier, userForm.role)) {
-        setUserMessage(userForm.role === FACTORY_SUPPLIER_ACCOUNT_ROLE
-          ? "工厂供应商账号只能绑定已开启资料回传权限的工厂供应商"
+        setUserMessage(FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(userForm.role)
+          ? "产品供应商账号只能绑定已开启资料回传权限的产品供应商"
           : "物流供应商账号只能绑定物流、报关、海运或港杂费用供应商");
         return;
       }
@@ -2183,7 +2188,7 @@ function SupplierEditPanel({
   }
 
   const logisticsCapable = LOGISTICS_SUPPLIER_TYPES.includes(form.supplierType);
-  const factoryDocumentCapable = form.supplierType === "工厂供应商";
+  const factoryDocumentCapable = PRODUCT_SUPPLIER_TYPES.includes(form.supplierType);
   const isCreate = !form.id;
   const controlsDisabled = readOnly || saving;
 
@@ -2198,7 +2203,7 @@ function SupplierEditPanel({
       <section className={styles.userEditTitle}>
         <div>
           <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
-          <span>{readOnly ? "当前为只读查看状态，点击编辑后可修改供应商资料。" : "物流相关开关只对物流类供应商生效；工厂资料回传只对工厂供应商生效。"}</span>
+          <span>{readOnly ? "当前为只读查看状态，点击编辑后可修改供应商资料。" : "物流相关开关只对物流类供应商生效；资料回传只对产品供应商生效。"}</span>
         </div>
       </section>
 
@@ -2281,7 +2286,7 @@ function SupplierEditPanel({
         <section className={styles.userEditSection}>
           <div className={styles.userEditSectionHeader}>
             <div>
-              <strong>工厂供应商权限</strong>
+              <strong>产品供应商权限</strong>
               <span>仅控制工厂采购合同和工厂增值税发票的供应商回传入口。</span>
             </div>
           </div>
@@ -2464,7 +2469,7 @@ function UserEditPanel({
 
   const bindableSuppliers = suppliers.filter((supplier) => {
     if (form.role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
-    if (form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE) return supplier.supplierType === "工厂供应商" && supplier.allowFactoryDocumentUpload;
+    if (FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(form.role)) return PRODUCT_SUPPLIER_TYPES.includes(supplier.supplierType || "") && supplier.allowFactoryDocumentUpload;
     return false;
   });
   const selectedSupplier = bindableSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
@@ -2589,7 +2594,7 @@ function UserEditPanel({
               绑定供应商
               <SearchAutocomplete
                 value={selectedSupplier}
-                cacheKey={form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE ? "settings-user-factory-suppliers" : "settings-user-logistics-suppliers"}
+                cacheKey={FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(form.role) ? "settings-user-product-suppliers" : "settings-user-logistics-suppliers"}
                 emptyLabel="未找到匹配供应商"
                 placeholder="搜索供应商 / 类型 / 联系人 / 税号"
                 getLabel={supplierOptionLabel}
@@ -2599,8 +2604,8 @@ function UserEditPanel({
               />
               {!bindableSuppliers.length ? (
                 <small className={styles.mutedText}>
-                  {form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE
-                    ? "请先在供应商资料中建立工厂供应商并开启资料回传权限"
+                  {FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(form.role)
+                    ? "请先在供应商资料中建立产品供应商并开启资料回传权限"
                     : "请先在供应商资料中启用物流相关供应商"}
                 </small>
               ) : null}
@@ -3047,7 +3052,7 @@ function isSupplierAccountRole(role: unknown) {
 function supplierMatchesUserRole(supplier: SupplierRow | undefined, role: string) {
   if (!supplier) return false;
   if (role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
-  if (role === FACTORY_SUPPLIER_ACCOUNT_ROLE) return supplier.supplierType === "工厂供应商" && Boolean(supplier.allowFactoryDocumentUpload);
+  if (FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(role)) return PRODUCT_SUPPLIER_TYPES.includes(supplier.supplierType || "") && Boolean(supplier.allowFactoryDocumentUpload);
   return false;
 }
 
@@ -3128,7 +3133,7 @@ function emptySupplierForm(): SupplierForm {
   return {
     id: "",
     supplierName: "",
-    supplierType: "工厂供应商",
+    supplierType: PRODUCT_SUPPLIER_TYPE,
     status: "启用",
     country: "",
     contactPerson: "",
@@ -3221,7 +3226,7 @@ function permissionDefaultsForRole(config: PermissionConfig | null, role: string
 
 function defaultDataScopeForRole(role: string) {
   if (role === "管理员" || role === "财务") return "ALL";
-  if (role === "业务员" || role === "物流供应商" || role === FACTORY_SUPPLIER_ACCOUNT_ROLE || role === "物流资料录入员") return "OWN";
+  if (role === "业务员" || role === "物流供应商" || FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(role) || role === "物流资料录入员") return "OWN";
   return "NONE";
 }
 

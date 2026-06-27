@@ -13,6 +13,7 @@ import {
   normalizeShippingDocumentTypes,
   preferredOrderDocumentFileName,
   standardFilenameForDocument,
+  supplierTypeDisplayName,
 } from "./shared-constants";
 import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark, normalizeExportInvoiceRemark } from "./export-invoice-remark";
@@ -354,7 +355,7 @@ export function serializeSupplier(supplierInput: unknown = {}) {
   return {
     id: supplier.id,
     supplierName: supplier.supplierName,
-    supplierType: supplier.supplierType,
+    supplierType: supplierTypeDisplayName(supplier.supplierType),
     country: supplier.country || "",
     contactPerson: supplier.contactPerson || "",
     phone: supplier.phone || "",

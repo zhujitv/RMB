@@ -4,7 +4,6 @@ import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
-  FACTORY_SUPPLIER_OPERATOR_ROLE,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
   assertWrite,
@@ -19,6 +18,8 @@ import {
   requireText,
   runNonCriticalTask,
   serializeOrderDocument,
+  isProductSupplierOperatorRole,
+  isProductSupplierType,
   validEmail,
   writeAudit,
 } from "./shared";
@@ -222,7 +223,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     orderId: row.orderId,
     orderNo: row.order?.orderNo || "",
     supplierId: row.supplierId,
-    supplierName: actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE ? "" : (row.supplier?.supplierName || ""),
+    supplierName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.supplier?.supplierName || ""),
     requiredDocumentTypes: requiredTypes,
     requiredDocumentLabels: requiredTypes.map((type) => SUPPLIER_DOCUMENT_LABELS[type] || type),
     status: SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(row.status) ? row.status : "待上传",
@@ -233,7 +234,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     sendStatus: row.sendStatus || "pending",
     sendError: row.sendError || "",
     sentAt: row.sentAt,
-    requestedByName: actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE ? "" : (row.requestedBy?.name || ""),
+    requestedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.requestedBy?.name || ""),
     documents,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -292,8 +293,8 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     id,
     deletedAt: null,
-    ...(actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE
-      ? { supplierId: actor.supplierId || "__no_supplier_bound__" }
+    ...(isProductSupplierOperatorRole(actor?.role)
+      ? { supplierId: actor?.supplierId || "__no_supplier_bound__" }
       : {}),
   };
   const row = await prisma.supplierDocumentRequest.findFirst({
@@ -301,7 +302,7 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
     include: supplierDocumentRequestInclude(),
   });
   if (!row) throw codedError("资料回传任务不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
-  if (actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE && !row.supplier.allowFactoryDocumentUpload) {
+  if (isProductSupplierOperatorRole(actor?.role) && !row.supplier.allowFactoryDocumentUpload) {
     throw codedError("该供应商未开启资料回传权限。", 403, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
   }
   return row;
@@ -314,13 +315,13 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     deletedAt: null,
     ...(SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(status) ? { status } : {}),
-    ...(actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE
+    ...(isProductSupplierOperatorRole(actor?.role)
       ? {
-          supplierId: actor.supplierId || "__no_supplier_bound__",
+          supplierId: actor?.supplierId || "__no_supplier_bound__",
           supplier: { allowFactoryDocumentUpload: true, status: "启用", deletedAt: null },
         }
       : {}),
-    ...(keyword && actor?.role !== FACTORY_SUPPLIER_OPERATOR_ROLE
+    ...(keyword && !isProductSupplierOperatorRole(actor?.role)
       ? {
           OR: [
             { order: { orderNo: { contains: keyword, mode: "insensitive" } } },
@@ -362,7 +363,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   if (!order) throw codedError("请选择有效订单。", 404, "ORDER_NOT_FOUND");
   if (!supplier) throw codedError("请选择有效供应商。", 404, "SUPPLIER_NOT_FOUND");
   if (supplier.status !== "启用") throw codedError("供应商已停用，不能通知回传资料。", 400, "SUPPLIER_DISABLED");
-  if (supplier.supplierType !== "工厂供应商") throw codedError("资料回传只允许通知工厂供应商。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
+  if (!isProductSupplierType(supplier.supplierType)) throw codedError("资料回传只允许通知产品供应商。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
   if (!supplier.allowFactoryDocumentUpload) throw codedError("该供应商未开启资料回传权限，请先到系统设置开启。", 400, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
 
   const recipients = supplierRecipientEmails({ ...supplier, operatorUsers: supplier.operatorUsers });
@@ -385,7 +386,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
     await uploadToR2({ key: templateStorageKey, body: template.body, contentType: template.mimeType });
   }
 
-  const subject = `NEXTWOOD 工厂资料回传通知：${order.orderNo}`;
+  const subject = `NEXTWOOD 产品供应商资料回传通知：${order.orderNo}`;
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
   const body = buildSupplierDocumentRequestEmailBody({

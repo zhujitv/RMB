@@ -6,8 +6,9 @@ import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
-  FACTORY_SUPPLIER_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
+  isProductSupplierOperatorRole,
+  isProductSupplierType,
   runNonCriticalTask,
   BCRYPT_COST,
   INITIAL_ADMIN_EMAIL,
@@ -428,7 +429,7 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         outcome = "password-change-required";
         throw error;
       }
-      if (session.user.role === LOGISTICS_OPERATOR_ROLE || session.user.role === FACTORY_SUPPLIER_OPERATOR_ROLE) {
+      if (session.user.role === LOGISTICS_OPERATOR_ROLE || isProductSupplierOperatorRole(session.user.role)) {
         const supplierId = session.user.supplierId;
         if (!supplierId) {
           await timeServerStep("workbench-init-timing", "getActor.revokeUnboundSupplierSessions", () => revokeUserSessions(session.user.id), {
@@ -444,7 +445,7 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         }), { ...baseContext, role });
         const supplierMatchesRole = session.user.role === LOGISTICS_OPERATOR_ROLE
           ? Boolean(supplier && DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType))
-          : Boolean(supplier && supplier.supplierType === "工厂供应商" && supplier.allowFactoryDocumentUpload);
+          : Boolean(supplier && isProductSupplierType(supplier.supplierType) && supplier.allowFactoryDocumentUpload);
         if (!supplierMatchesRole) {
           await timeServerStep("workbench-init-timing", "getActor.revokeInvalidSupplierSessions", () => revokeUserSessions(session.user.id), {
             ...baseContext,

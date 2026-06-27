@@ -2,7 +2,9 @@ import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
+  LEGACY_FACTORY_SUPPLIER_TYPE,
   LOGISTICS_OPERATOR_ROLE,
+  PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_STATUSES,
   SUPPLIER_TYPES,
   assertRead,
@@ -20,6 +22,7 @@ import {
   requireText,
   runNonCriticalTask,
   serializeSupplier,
+  supplierTypeStorageValue,
   writeAudit,
 } from "./shared";
 import { effectivePermissions } from "./shared-permissions";
@@ -44,7 +47,7 @@ export async function listSuppliers(query: QueryLike, actor: ActorLike = null, o
   const typeText = nonEmpty(query?.get("type") || query?.get("supplierType"));
   const statusText = nonEmpty(query?.get("status"));
   const typeMap: Record<string, string | string[]> = {
-    factory: "工厂供应商",
+    factory: PRODUCT_SUPPLIER_TYPES,
     logistics: "物流供应商",
     logisticsfee: DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
     "logistics-fee": DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
@@ -69,7 +72,11 @@ export async function listSuppliers(query: QueryLike, actor: ActorLike = null, o
       : (SUPPLIER_STATUSES.includes(requestedStatus) ? { status: requestedStatus } : {})),
     ...(Array.isArray(supplierType)
       ? { supplierType: { in: supplierType } }
-      : (supplierType && SUPPLIER_TYPES.includes(supplierType) ? { supplierType } : {})),
+      : (supplierType && PRODUCT_SUPPLIER_TYPES.includes(supplierType)
+        ? { supplierType: { in: PRODUCT_SUPPLIER_TYPES } }
+        : (supplierType && SUPPLIER_TYPES.includes(supplierType)
+          ? { supplierType: supplierTypeStorageValue(supplierType) }
+          : {}))),
     ...(keyword ? {
       OR: [
         { supplierName: { contains: keyword, mode: "insensitive" } },
@@ -142,7 +149,9 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     throw codedError("供应商名称已存在，不能重复创建", 409, "SUPPLIER_DUPLICATE");
   }
   const requestedSupplierType = nonEmpty(input.supplierType);
-  const supplierType = SUPPLIER_TYPES.includes(requestedSupplierType) ? requestedSupplierType : "其他供应商";
+  const supplierType = SUPPLIER_TYPES.includes(requestedSupplierType) || requestedSupplierType === LEGACY_FACTORY_SUPPLIER_TYPE
+    ? supplierTypeStorageValue(requestedSupplierType)
+    : "其他供应商";
   const allowDomesticLogisticsEntry = booleanInput(input.allowDomesticLogisticsEntry, before?.allowDomesticLogisticsEntry || false);
   const allowLogisticsExpenseEntry = booleanInput(input.allowLogisticsExpenseEntry, before?.allowLogisticsExpenseEntry || false);
   const allowLogisticsInvoiceUpload = booleanInput(input.allowLogisticsInvoiceUpload, before?.allowLogisticsInvoiceUpload || false);

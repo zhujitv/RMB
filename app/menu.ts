@@ -20,6 +20,7 @@ export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
   业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
+  产品供应商账号: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "manual"],
 };

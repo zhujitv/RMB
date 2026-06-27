@@ -70,9 +70,35 @@ export {
 };
 
 export const LOGISTICS_OPERATOR_ROLE = "物流供应商";
-export const FACTORY_SUPPLIER_OPERATOR_ROLE = "工厂供应商账号";
+export const PRODUCT_SUPPLIER_TYPE = "产品供应商";
+export const LEGACY_FACTORY_SUPPLIER_TYPE = "工厂供应商";
+export const PRODUCT_SUPPLIER_OPERATOR_ROLE = "产品供应商账号";
+export const LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE = "工厂供应商账号";
+export const FACTORY_SUPPLIER_OPERATOR_ROLE = PRODUCT_SUPPLIER_OPERATOR_ROLE;
+export const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE];
+export const PRODUCT_SUPPLIER_OPERATOR_ROLES = [PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE];
 export const LEGACY_LOGISTICS_OPERATOR_ROLE = "物流资料录入员";
 export const ROLES = ["管理员", "业务员", "财务", LOGISTICS_OPERATOR_ROLE, FACTORY_SUPPLIER_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE];
+
+export function isProductSupplierType(value: unknown = "") {
+  return PRODUCT_SUPPLIER_TYPES.includes(String(value || ""));
+}
+
+export function isProductSupplierOperatorRole(value: unknown = "") {
+  return PRODUCT_SUPPLIER_OPERATOR_ROLES.includes(String(value || ""));
+}
+
+export function supplierTypeDisplayName(value: unknown = "") {
+  return String(value || "") === LEGACY_FACTORY_SUPPLIER_TYPE ? PRODUCT_SUPPLIER_TYPE : String(value || "");
+}
+
+export function userRoleDisplayName(value: unknown = "") {
+  return String(value || "") === LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE ? PRODUCT_SUPPLIER_OPERATOR_ROLE : String(value || "");
+}
+
+export function supplierTypeStorageValue(value: unknown = "") {
+  return String(value || "") === LEGACY_FACTORY_SUPPLIER_TYPE ? PRODUCT_SUPPLIER_TYPE : String(value || "");
+}
 export const USER_APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "DISABLED"];
 export const CURRENCIES = ["USD", "EUR", "GBP", "CNY", "HKD"];
 export const ORDER_STATUSES = ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
@@ -161,7 +187,7 @@ export async function runNonCriticalTask<T>(label: string, task: () => T | Promi
 }
 export const PAYMENT_TERM_TYPES = Object.keys(PAYMENT_TERM_LABELS);
 export const PAYMENT_TERMS = Object.values(PAYMENT_TERM_LABELS);
-export const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
+export const SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 export const SUPPLIER_STATUSES = ["启用", "停用"];
 export const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
 export const EXCHANGE_RATE_TYPES = ["现汇买入价", "现汇卖出价", "中间价"];
@@ -200,7 +226,7 @@ export const TAX_EXPORT_DOCUMENT_TYPES = [
 export const SUPPLIER_DOCUMENT_TYPES: OrderDocumentType[] = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
 export const ORDER_DOCUMENT_TYPES: OrderDocumentType[] = [...EXPORT_DOCUMENT_TYPES, ...SALES_DOCUMENT_TYPES, ...SUPPLIER_DOCUMENT_TYPES];
 export const CUSTOMS_DECLARATION_DOCUMENT_TYPE_ALIASES = new Set(["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION", "报关单"]);
-export const TAX_REFUND_SUPPLIER_TYPES = ["工厂供应商"];
+export const TAX_REFUND_SUPPLIER_TYPES = PRODUCT_SUPPLIER_TYPES;
 export const UPLOAD_STATUSES = ["PENDING", "UPLOADING", "SUCCESS", "FAILED"];
 export const TAX_REFUND_STATUS_LABELS = {
   NOT_READY: "资料不完整",
