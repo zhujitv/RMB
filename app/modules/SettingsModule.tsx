@@ -13,7 +13,7 @@ import {
 } from "../../lib/platform/logistics-cost-types";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../lib/password-policy";
 
-type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
+type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs";
 
 type SettingsFilters = {
   customers: {
@@ -145,6 +145,7 @@ type AuditLogRow = {
 type ExchangeRateSettings = Record<string, unknown>;
 type CommissionFormulaSettings = Record<string, unknown>;
 type NotificationTemplateSettings = Record<string, unknown>;
+type ShipsgoIntegrationSettings = Record<string, unknown>;
 
 type ExchangeRateForm = {
   source: string;
@@ -174,6 +175,24 @@ type NotificationTemplateForm = {
   invoiceRequirements: string;
   uploadUrl: string;
   signature: string;
+};
+
+type ShipsgoIntegrationForm = {
+  enabled: boolean;
+  apiBaseUrl: string;
+  apiKey: string;
+  apiKeyConfigured: boolean;
+  oceanTrackingEnabled: boolean;
+  airTrackingEnabled: boolean;
+  manualSyncEnabled: boolean;
+  autoSyncEnabled: boolean;
+  dailySyncTime: string;
+  webhookEnabled: boolean;
+  webhookSecret: string;
+  webhookSecretConfigured: boolean;
+  liveMapEnabled: boolean;
+  customerPushEnabled: boolean;
+  creditWarningThreshold: string;
 };
 
 type CompanyProfileForm = {
@@ -401,6 +420,67 @@ const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
   uploadUrl: "",
   signature: "NEXTWOOD 供应链协同平台",
 };
+const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
+  enabled: false,
+  apiBaseUrl: "https://api.shipsgo.com",
+  apiKey: "",
+  apiKeyConfigured: false,
+  oceanTrackingEnabled: true,
+  airTrackingEnabled: false,
+  manualSyncEnabled: true,
+  autoSyncEnabled: false,
+  dailySyncTime: "02:00",
+  webhookEnabled: false,
+  webhookSecret: "",
+  webhookSecretConfigured: false,
+  liveMapEnabled: false,
+  customerPushEnabled: false,
+  creditWarningThreshold: "20",
+};
+const SHIPSGO_FEATURE_OPTIONS = [
+  {
+    key: "oceanTrackingEnabled",
+    label: "海运集装箱跟踪",
+    description: "按提单号、柜号创建 ShipsGo 海运跟踪任务。",
+  },
+  {
+    key: "airTrackingEnabled",
+    label: "空运货物跟踪",
+    description: "预留空运 AWB 跟踪能力，开启后前台显示空运入口。",
+  },
+  {
+    key: "manualSyncEnabled",
+    label: "手动同步",
+    description: "允许在物流页面手动刷新 ShipsGo 跟踪状态。",
+  },
+  {
+    key: "autoSyncEnabled",
+    label: "每日自动同步",
+    description: "按配置时间每日拉取状态更新。",
+  },
+  {
+    key: "webhookEnabled",
+    label: "Webhook 推送",
+    description: "允许接收 ShipsGo 状态变更推送。",
+  },
+  {
+    key: "liveMapEnabled",
+    label: "Live Map",
+    description: "开启后前台显示船舶/集装箱可视化入口。",
+  },
+  {
+    key: "customerPushEnabled",
+    label: "客户自动推送",
+    description: "状态更新后可扩展为邮件推送客户。",
+  },
+] satisfies Array<{
+  key: keyof Pick<
+    ShipsgoIntegrationForm,
+    "oceanTrackingEnabled" | "airTrackingEnabled" | "manualSyncEnabled" | "autoSyncEnabled" | "webhookEnabled" | "liveMapEnabled" | "customerPushEnabled"
+  >;
+  label: string;
+  description: string;
+}>;
 const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE, "物流资料录入员"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
@@ -420,6 +500,7 @@ const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "exchangeRates", label: "汇率设置" },
   { key: "commissionFormula", label: "提成公式" },
   { key: "notificationTemplates", label: "通知模板" },
+  { key: "shipsgoIntegration", label: "第三方接口" },
   { key: "auditLogs", label: "操作日志" },
 ];
 
@@ -484,6 +565,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [commissionFormulaForm, setCommissionFormulaForm] = useState<CommissionFormulaForm | null>(null);
   const [notificationTemplateSettings, setNotificationTemplateSettings] = useState<NotificationTemplateSettings | null>(null);
   const [notificationTemplateForm, setNotificationTemplateForm] = useState<NotificationTemplateForm | null>(null);
+  const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
+  const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
@@ -495,6 +578,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     exchangeRates: emptyPagination(PAGE_SIZE),
     commissionFormula: emptyPagination(PAGE_SIZE),
     notificationTemplates: emptyPagination(PAGE_SIZE),
+    shipsgoIntegration: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -519,6 +603,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [commissionFormulaMessage, setCommissionFormulaMessage] = useState("");
   const [notificationTemplateSaving, setNotificationTemplateSaving] = useState(false);
   const [notificationTemplateMessage, setNotificationTemplateMessage] = useState("");
+  const [shipsgoIntegrationSaving, setShipsgoIntegrationSaving] = useState(false);
+  const [shipsgoIntegrationMessage, setShipsgoIntegrationMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -581,6 +667,14 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         markLoaded(tab);
         return;
       }
+      if (tab === "shipsgoIntegration") {
+        const result = await apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo");
+        const settings = result.settings || {};
+        setShipsgoIntegrationSettings(settings);
+        setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
       if (tab === "users") {
         await ensurePermissionConfig();
       }
@@ -638,6 +732,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setExchangeMessage("");
     setCommissionFormulaMessage("");
     setNotificationTemplateMessage("");
+    setShipsgoIntegrationMessage("");
   }
 
   function submitSearch() {
@@ -1083,6 +1178,35 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     }
   }
 
+  async function saveShipsgoIntegrationSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!shipsgoIntegrationForm) return;
+    setShipsgoIntegrationSaving(true);
+    setShipsgoIntegrationMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: ShipsgoIntegrationSettings; message?: string }>(
+        "/api/settings/shipsgo",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            ...shipsgoIntegrationForm,
+            creditWarningThreshold: Number(shipsgoIntegrationForm.creditWarningThreshold || 0),
+          }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "ShipsGo 设置保存失败");
+      const nextSettings = result.settings || shipsgoIntegrationForm;
+      setShipsgoIntegrationSettings(nextSettings);
+      setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(nextSettings));
+      markLoaded("shipsgoIntegration");
+      setShipsgoIntegrationMessage(result.message || "ShipsGo 设置已保存");
+    } catch (saveError) {
+      setShipsgoIntegrationMessage(saveError instanceof Error ? saveError.message : "ShipsGo 设置保存失败");
+    } finally {
+      setShipsgoIntegrationSaving(false);
+    }
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -1118,7 +1242,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         ))}
       </div>
 
-      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" ? (
+      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -1281,6 +1405,20 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
             setNotificationTemplateMessage("已恢复默认模板，请保存后生效");
           }}
           onSubmit={saveNotificationTemplateSettings}
+        />
+      ) : activeTab === "shipsgoIntegration" ? (
+        <ShipsgoIntegrationSettingsCard
+          settings={shipsgoIntegrationSettings}
+          form={shipsgoIntegrationForm}
+          loading={loading && !shipsgoIntegrationSettings}
+          saving={shipsgoIntegrationSaving}
+          message={shipsgoIntegrationMessage}
+          onChange={setShipsgoIntegrationForm}
+          onReset={() => {
+            setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
+            setShipsgoIntegrationMessage("");
+          }}
+          onSubmit={saveShipsgoIntegrationSettings}
         />
       ) : (
         <>
@@ -1968,6 +2106,131 @@ function NotificationTemplateSettingsCard({
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存通知模板"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
         <button className={styles.secondaryButton} type="button" onClick={onRestoreDefault} disabled={saving}>恢复默认模板</button>
+      </div>
+    </form>
+  );
+}
+
+function ShipsgoIntegrationSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+}: {
+  settings: ShipsgoIntegrationSettings | null;
+  form: ShipsgoIntegrationForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: ShipsgoIntegrationForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载第三方接口设置</div>;
+  const currentForm = form || shipsgoIntegrationFormFromSettings(settings);
+
+  function setField<K extends keyof ShipsgoIntegrationForm>(key: K, value: ShipsgoIntegrationForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  function toggleFeature(key: typeof SHIPSGO_FEATURE_OPTIONS[number]["key"]) {
+    setField(key, !currentForm[key]);
+  }
+
+  return (
+    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>ShipsGo 接口配置</strong>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <div className={styles.reportFilterGrid}>
+        <UiSwitch
+          label="启用 ShipsGo"
+          description="关闭后，物流信息页面不显示 ShipsGo 相关入口。"
+          checked={currentForm.enabled}
+          onChange={(value) => setField("enabled", value)}
+        />
+        <label>
+          API Base URL
+          <input
+            value={currentForm.apiBaseUrl}
+            onChange={(event) => setField("apiBaseUrl", event.target.value)}
+            placeholder="https://api.shipsgo.com"
+          />
+        </label>
+        <label>
+          API Key
+          <input
+            value={currentForm.apiKey}
+            onChange={(event) => setField("apiKey", event.target.value)}
+            placeholder={currentForm.apiKeyConfigured ? "已配置，留空则保持不变" : "请输入 ShipsGo API Key"}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          剩余 Credit 预警阈值
+          <input
+            value={currentForm.creditWarningThreshold}
+            onChange={(event) => setField("creditWarningThreshold", event.target.value)}
+            inputMode="numeric"
+            min={0}
+            type="number"
+          />
+        </label>
+        <label>
+          每日同步时间
+          <input
+            value={currentForm.dailySyncTime}
+            onChange={(event) => setField("dailySyncTime", event.target.value)}
+            type="time"
+          />
+        </label>
+        <label>
+          Webhook Secret
+          <input
+            value={currentForm.webhookSecret}
+            onChange={(event) => setField("webhookSecret", event.target.value)}
+            placeholder={currentForm.webhookSecretConfigured ? "已配置，留空则保持不变" : "用于校验 ShipsGo Webhook"}
+            autoComplete="off"
+          />
+        </label>
+      </div>
+
+      <section className={styles.documentGroupCard}>
+        <strong>前台功能显示</strong>
+        <div className={styles.commissionDeductionGrid}>
+          {SHIPSGO_FEATURE_OPTIONS.map((item) => (
+            <PermissionSelectItem
+              key={item.key}
+              label={item.label}
+              description={item.description}
+              checked={Boolean(currentForm[item.key])}
+              onChange={() => toggleFeature(item.key)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <div className={styles.emptyState}>
+        当前状态：{currentForm.enabled ? (currentForm.apiKeyConfigured || currentForm.apiKey ? "已启用" : "待填写 API Key") : "已关闭"}
+      </div>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存 ShipsGo 设置"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
       </div>
     </form>
   );
@@ -2933,6 +3196,26 @@ function notificationTemplateFormFromSettings(settings: NotificationTemplateSett
     invoiceRequirements: templateStringSetting(settings, "invoiceRequirements", DEFAULT_NOTIFICATION_TEMPLATE_FORM.invoiceRequirements),
     uploadUrl: optionalStringSetting(settings, "uploadUrl"),
     signature: templateStringSetting(settings, "signature", DEFAULT_NOTIFICATION_TEMPLATE_FORM.signature),
+  };
+}
+
+function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationSettings | null): ShipsgoIntegrationForm {
+  return {
+    enabled: settings?.enabled === true,
+    apiBaseUrl: stringSetting(settings, "apiBaseUrl", DEFAULT_SHIPSGO_INTEGRATION_FORM.apiBaseUrl),
+    apiKey: "",
+    apiKeyConfigured: settings?.apiKeyConfigured === true,
+    oceanTrackingEnabled: settings?.oceanTrackingEnabled !== false,
+    airTrackingEnabled: settings?.airTrackingEnabled === true,
+    manualSyncEnabled: settings?.manualSyncEnabled !== false,
+    autoSyncEnabled: settings?.autoSyncEnabled === true,
+    dailySyncTime: stringSetting(settings, "dailySyncTime", DEFAULT_SHIPSGO_INTEGRATION_FORM.dailySyncTime),
+    webhookEnabled: settings?.webhookEnabled === true,
+    webhookSecret: "",
+    webhookSecretConfigured: settings?.webhookSecretConfigured === true,
+    liveMapEnabled: settings?.liveMapEnabled === true,
+    customerPushEnabled: settings?.customerPushEnabled === true,
+    creditWarningThreshold: String(settings?.creditWarningThreshold ?? DEFAULT_SHIPSGO_INTEGRATION_FORM.creditWarningThreshold),
   };
 }
 

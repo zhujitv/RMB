@@ -14,6 +14,7 @@ import {
   serializeOrderDocument,
   serializeSupplier,
 } from "./shared";
+import { serializeShipsgoTrackingSummary } from "./shipsgo-tracking";
 import {
   isExternalLogisticsSupplierAccount,
   isInternalLogisticsOperator,
@@ -93,6 +94,7 @@ type LogisticsBillLike = {
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
 };
+type ShipsgoTrackingLike = Parameters<typeof serializeShipsgoTrackingSummary>[0];
 type DomesticOrderLike = {
   id?: string;
   orderNo?: string | null;
@@ -103,6 +105,7 @@ type DomesticOrderLike = {
   logisticsSuppliers?: LogisticsSupplierRowLike[] | null;
   logisticsExpenses?: LogisticsExpenseLike[] | null;
   logisticsBills?: LogisticsBillLike[] | null;
+  shipsgoTrackings?: ShipsgoTrackingLike[] | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
   documents?: unknown[] | null;
   taxArchived?: boolean | null;
@@ -210,6 +213,38 @@ export function domesticLogisticsOrderInclude() {
         paymentStatus: true,
         updatedAt: true,
         createdAt: true,
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    },
+    shipsgoTrackings: {
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        orderId: true,
+        provider: true,
+        mode: true,
+        shipsgoShipmentId: true,
+        reference: true,
+        carrierScac: true,
+        carrierName: true,
+        bookingNumber: true,
+        containerNumber: true,
+        status: true,
+        syncStatus: true,
+        syncMessage: true,
+        originName: true,
+        destinationName: true,
+        dateOfLoading: true,
+        dateOfDischarge: true,
+        predictedDischargeDate: true,
+        vesselName: true,
+        voyage: true,
+        mapUrl: true,
+        lastEvent: true,
+        lastEventAt: true,
+        lastCheckedAt: true,
+        lastSyncedAt: true,
+        updatedAt: true,
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     },
@@ -562,6 +597,7 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     documents: (order.documents || []).map((document) => serializeOrderDocument(document, order as Parameters<typeof serializeOrderDocument>[1])),
     logisticsSupplierIds: (order.logisticsSuppliers || []).map((row) => row.supplierId),
     logisticsSuppliers: (order.logisticsSuppliers || []).map((row) => serializeSupplier(row.supplier)).filter((item) => item.id),
+    shipsgoTrackings: (order.shipsgoTrackings || []).map((row) => serializeShipsgoTrackingSummary(row)),
   };
 }
 

@@ -6,6 +6,8 @@ export * from "./input-schemas";
 export * from "./upload-validation";
 export * from "./shared-exchange";
 export * from "./company-profile";
+export * from "./shipsgo-integration";
+export * from "./shipsgo-tracking";
 export * from "./commission-formula";
 export * from "./notification-templates";
 export * from "./shared-serialization";

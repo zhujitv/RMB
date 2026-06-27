@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listDomesticLogisticsOrders, logServerError, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../lib/platform-db";
+import { apiError, getActor, listDomesticLogisticsOrders, logServerError, ok, parseJsonBody, readShipsgoFeatureFlags, saveDomesticLogisticsInfo } from "../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,11 @@ export async function GET(request: NextRequest) {
   }
   const query = new URL(request.url).searchParams;
   try {
-    return ok({ rows: await listDomesticLogisticsOrders(query, actor) });
+    const [rows, shipsgo] = await Promise.all([
+      listDomesticLogisticsOrders(query, actor),
+      readShipsgoFeatureFlags(),
+    ]);
+    return ok({ rows, shipsgo });
   } catch (error: unknown) {
     logServerError("API failed: domestic-logistics list", error);
     return ok({ rows: [], error: "读取资料失败" });

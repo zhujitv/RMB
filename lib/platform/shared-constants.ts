@@ -501,6 +501,22 @@ export const DEFAULT_COMPANY_PROFILE_SETTINGS = {
   logoUrl: "",
   footerText: "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.",
 };
+export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
+export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
+  enabled: false,
+  apiBaseUrl: "https://api.shipsgo.com",
+  apiKey: "",
+  oceanTrackingEnabled: true,
+  airTrackingEnabled: false,
+  manualSyncEnabled: true,
+  autoSyncEnabled: false,
+  dailySyncTime: "02:00",
+  webhookEnabled: false,
+  webhookSecret: "",
+  liveMapEnabled: false,
+  customerPushEnabled: false,
+  creditWarningThreshold: 20,
+};
 export const COMMISSION_FORMULA_SETTING_KEY = "commission_formula";
 export const COMMISSION_FORMULA_SOURCES = ["ARRIVED_PAYMENTS_CNY", "FOB_CNY", "EXPECTED_GROSS_PROFIT_CNY", "REALIZED_GROSS_PROFIT_CNY"];
 export const COMMISSION_FORMULA_DEDUCTIONS = ["LOGISTICS_COST_CNY", "TOTAL_COST_CNY", "CONFIRMED_TOTAL_COST_CNY", "PAID_CONFIRMED_COST_CNY"];

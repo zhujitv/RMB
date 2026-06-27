@@ -74,6 +74,36 @@ type UploadedDocument = DomesticLogisticsDocument & {
   customsRecognition?: CustomsRecognitionResult | null;
 };
 
+type ShipsgoTrackingRow = {
+  id: string;
+  orderId?: string;
+  provider?: string;
+  mode?: string;
+  shipsgoShipmentId?: string;
+  reference?: string;
+  carrierScac?: string;
+  carrierName?: string;
+  bookingNumber?: string;
+  containerNumber?: string;
+  status?: string;
+  statusLabel?: string;
+  syncStatus?: string;
+  syncMessage?: string;
+  originName?: string;
+  destinationName?: string;
+  dateOfLoading?: string;
+  dateOfDischarge?: string;
+  predictedDischargeDate?: string;
+  vesselName?: string;
+  voyage?: string;
+  mapUrl?: string;
+  lastEvent?: string;
+  lastEventAt?: string;
+  lastCheckedAt?: string;
+  lastSyncedAt?: string;
+  updatedAt?: string;
+};
+
 type UploadDocumentResponse = {
   success?: boolean;
   message?: string;
@@ -110,11 +140,26 @@ type DomesticLogisticsRow = {
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   documents?: DomesticLogisticsDocument[];
   logisticsSuppliers?: Array<{ id: string; supplierName?: string; name?: string; supplierType?: string }>;
+  shipsgoTrackings?: ShipsgoTrackingRow[];
+};
+
+type ShipsgoFeatureFlags = {
+  enabled?: boolean;
+  oceanTrackingEnabled?: boolean;
+  airTrackingEnabled?: boolean;
+  manualSyncEnabled?: boolean;
+  autoSyncEnabled?: boolean;
+  dailySyncTime?: string;
+  webhookEnabled?: boolean;
+  liveMapEnabled?: boolean;
+  customerPushEnabled?: boolean;
+  creditWarningThreshold?: number;
 };
 
 type DomesticLogisticsResponse = {
   rows: DomesticLogisticsRow[];
   error?: string;
+  shipsgo?: ShipsgoFeatureFlags;
 };
 
 type DomesticLogisticsForm = {
@@ -186,6 +231,7 @@ const ALLOWED_LOGISTICS_ROW_KEYS = [
   "submittedAt",
   "documents",
   "logisticsSuppliers",
+  "shipsgoTrackings",
 ] satisfies Array<keyof DomesticLogisticsRow>;
 
 const PAGE_SIZE = 20;
@@ -292,6 +338,7 @@ export function DomesticLogisticsModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [shipsgoFeatures, setShipsgoFeatures] = useState<ShipsgoFeatureFlags>({ enabled: false });
   const [editingOrderId, setEditingOrderId] = useState("");
   const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -300,6 +347,7 @@ export function DomesticLogisticsModule({
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
+  const [shipsgoBusyKey, setShipsgoBusyKey] = useState("");
   const {
     confirmation,
     requestConfirmation,
@@ -324,6 +372,7 @@ export function DomesticLogisticsModule({
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
       const nextRows = sanitizeDomesticLogisticsRowsForRender(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
+      setShipsgoFeatures(result.shipsgo || { enabled: false });
       setSelectedOrderIds((current) => current.filter((orderId) => nextRows.some((row) => row.id === orderId)));
       if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
@@ -607,6 +656,62 @@ export function DomesticLogisticsModule({
     }
   }
 
+  function updateRowShipsgoTracking(orderId: string, tracking: ShipsgoTrackingRow) {
+    setRows((currentRows) => currentRows.map((row) => {
+      if (row.id !== orderId && row.orderId !== orderId) return row;
+      const currentTrackings = row.shipsgoTrackings || [];
+      const nextTrackings = [
+        tracking,
+        ...currentTrackings.filter((item) => item.id !== tracking.id),
+      ];
+      return { ...row, shipsgoTrackings: nextTrackings };
+    }));
+  }
+
+  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) {
+    const busyKey = `${row.id}:shipsgo:create`;
+    setShipsgoBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/shipsgo/ocean-trackings", {
+        method: "POST",
+        body: JSON.stringify({
+          orderId: row.id,
+          carrierScac: payload.carrierScac,
+          bookingNumber: payload.bookingNumber,
+          containerNumber: payload.containerNumber,
+        }),
+      });
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "创建 ShipsGo 跟踪失败");
+      updateRowShipsgoTracking(row.id, result.tracking);
+      setNotice(result.message || "ShipsGo 跟踪已创建");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "创建 ShipsGo 跟踪失败");
+    } finally {
+      setShipsgoBusyKey("");
+    }
+  }
+
+  async function syncShipsgoTracking(row: DomesticLogisticsRow, trackingId: string) {
+    const busyKey = `${trackingId}:shipsgo:sync`;
+    setShipsgoBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}/sync`, {
+        method: "POST",
+      });
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步 ShipsGo 跟踪失败");
+      updateRowShipsgoTracking(row.id, result.tracking);
+      setNotice(result.message || "ShipsGo 状态已同步");
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "同步 ShipsGo 跟踪失败");
+    } finally {
+      setShipsgoBusyKey("");
+    }
+  }
+
   return (
     <>
     <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
@@ -657,6 +762,9 @@ export function DomesticLogisticsModule({
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
+      {shipsgoFeatures.enabled ? (
+        <ShipsgoTrackingFeaturePanel features={shipsgoFeatures} />
+      ) : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.dataTable}>
@@ -721,6 +829,11 @@ export function DomesticLogisticsModule({
                   setFeeEntryOrderId((current) => current === row.id ? "" : row.id);
                 }}
                 onCloseFeeEntry={() => setFeeEntryOrderId("")}
+                shipsgoFeatures={shipsgoFeatures}
+                shipsgoBusyKey={shipsgoBusyKey}
+                canManageShipsgoTracking={canEditDomesticLogistics}
+                onCreateShipsgoTracking={(payload) => createShipsgoTracking(row, payload)}
+                onSyncShipsgoTracking={(trackingId) => syncShipsgoTracking(row, trackingId)}
                 onSaved={() => {
                   setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "物流信息已保存");
                   setEditingOrderId("");
@@ -777,6 +890,154 @@ export function DomesticLogisticsModule({
   );
 }
 
+function ShipsgoTrackingFeaturePanel({ features }: { features: ShipsgoFeatureFlags }) {
+  const enabledFeatures = [
+    features.oceanTrackingEnabled ? "海运集装箱跟踪" : "",
+    features.airTrackingEnabled ? "空运货物跟踪" : "",
+    features.manualSyncEnabled ? "手动同步" : "",
+    features.autoSyncEnabled ? `每日自动同步 ${features.dailySyncTime || "02:00"}` : "",
+    features.webhookEnabled ? "Webhook 状态推送" : "",
+    features.liveMapEnabled ? "Live Map" : "",
+    features.customerPushEnabled ? "客户自动推送" : "",
+  ].filter(Boolean);
+
+  return (
+    <section className={styles.documentGroupCard} id="shipsgo-tracking-panel">
+      <strong>ShipsGo 跟踪功能</strong>
+      <div className={styles.quickCreateMeta}>
+        {enabledFeatures.length ? enabledFeatures.map((feature) => (
+          <span key={feature}>{feature}</span>
+        )) : <span>已启用 ShipsGo，但未开启前台功能项</span>}
+        {typeof features.creditWarningThreshold === "number" ? (
+          <span>Credit 预警阈值：{features.creditWarningThreshold}</span>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function firstTrackingContainer(row: DomesticLogisticsRow) {
+  for (const item of row.domesticLogisticsInfo?.transportItems || []) {
+    const containerNo = String(item.containerNo || "").trim().toUpperCase();
+    if (containerNo) return containerNo;
+  }
+  return "";
+}
+
+function ShipsgoOrderTrackingPanel({
+  row,
+  features,
+  canManage,
+  busyKey,
+  onCreate,
+  onSync,
+}: {
+  row: DomesticLogisticsRow;
+  features: ShipsgoFeatureFlags;
+  canManage: boolean;
+  busyKey: string;
+  onCreate: (payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) => Promise<void>;
+  onSync: (trackingId: string) => Promise<void>;
+}) {
+  const trackings = row.shipsgoTrackings || [];
+  const [carrierScac, setCarrierScac] = useState("");
+  const [bookingNumber, setBookingNumber] = useState(row.blNo || row.billOfLadingNo || "");
+  const [containerNumber, setContainerNumber] = useState(firstTrackingContainer(row));
+  const createBusy = busyKey === `${row.id}:shipsgo:create`;
+  const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
+
+  useEffect(() => {
+    setBookingNumber(row.blNo || row.billOfLadingNo || "");
+    setContainerNumber(firstTrackingContainer(row));
+  }, [row.id, row.blNo, row.billOfLadingNo, row.domesticLogisticsInfo?.id]);
+
+  return (
+    <section className={styles.documentGroupCard}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>ShipsGo 海运跟踪</strong>
+          <span>按真实船公司 SCAC、提单号或柜号创建跟踪；货代供应商不会作为船公司使用。</span>
+        </div>
+      </div>
+      {trackings.length ? (
+        <div className={styles.subList}>
+          {trackings.map((tracking) => {
+            const syncBusy = busyKey === `${tracking.id}:shipsgo:sync`;
+            return (
+              <div className={styles.subListItem} key={tracking.id}>
+                <strong>
+                  {tracking.statusLabel || tracking.status || "未知状态"}
+                  {tracking.containerNumber ? ` · ${tracking.containerNumber}` : ""}
+                </strong>
+                <span>船公司：{tracking.carrierName || tracking.carrierScac || "-"}</span>
+                <span>提单号 / Booking：{tracking.bookingNumber || "-"}</span>
+                <span>起运港：{tracking.originName || "-"}</span>
+                <span>目的港：{tracking.destinationName || "-"}</span>
+                <span>预计到港：{tracking.predictedDischargeDate || tracking.dateOfDischarge || "-"}</span>
+                <span>船名航次：{[tracking.vesselName, tracking.voyage].filter(Boolean).join(" / ") || "-"}</span>
+                <span>最近同步：{tracking.lastSyncedAt ? formatDateTime(tracking.lastSyncedAt) : "-"}</span>
+                {tracking.syncMessage ? <span>同步提示：{tracking.syncMessage}</span> : null}
+                <div className={styles.quickCreateMeta}>
+                  {tracking.mapUrl && features.liveMapEnabled ? (
+                    <a className={styles.secondaryButton} href={tracking.mapUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                      查看地图
+                    </a>
+                  ) : null}
+                  {features.manualSyncEnabled && canManage ? (
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={syncBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onSync(tracking.id);
+                      }}
+                    >
+                      {syncBusy ? "同步中..." : "同步状态"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className={styles.emptyState}>暂未创建 ShipsGo 跟踪</div>
+      )}
+      {canCreate ? (
+        <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
+          <label>
+            船公司 SCAC
+            <input value={carrierScac} onChange={(event) => setCarrierScac(event.target.value.toUpperCase())} placeholder="例如 MAEU / CMDU" />
+          </label>
+          <label>
+            提单号 / Booking No.
+            <input value={bookingNumber} onChange={(event) => setBookingNumber(event.target.value)} placeholder="至少填写提单号或柜号" />
+          </label>
+          <label>
+            柜号 Container No.
+            <input value={containerNumber} onChange={(event) => setContainerNumber(event.target.value.toUpperCase())} placeholder="例如 MSKU1234567" />
+          </label>
+          <label>
+            创建跟踪
+            <button
+              className={styles.primaryButtonCompact}
+              type="button"
+              disabled={createBusy}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onCreate({ carrierScac, bookingNumber, containerNumber });
+              }}
+            >
+              {createBusy ? "创建中..." : "创建 ShipsGo 跟踪"}
+            </button>
+          </label>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function DomesticLogisticsRows({
   row,
   expanded,
@@ -793,6 +1054,11 @@ function DomesticLogisticsRows({
   onOpenExpenseStatus,
   onOpenFeeEntry,
   onCloseFeeEntry,
+  shipsgoFeatures,
+  shipsgoBusyKey,
+  canManageShipsgoTracking,
+  onCreateShipsgoTracking,
+  onSyncShipsgoTracking,
   onSaved,
   onCancelEdit,
   canDeleteDomesticLogistics,
@@ -823,6 +1089,11 @@ function DomesticLogisticsRows({
   onOpenExpenseStatus: () => void;
   onOpenFeeEntry: () => void;
   onCloseFeeEntry: () => void;
+  shipsgoFeatures: ShipsgoFeatureFlags;
+  shipsgoBusyKey: string;
+  canManageShipsgoTracking: boolean;
+  onCreateShipsgoTracking: (payload: { carrierScac: string; bookingNumber: string; containerNumber: string }) => Promise<void>;
+  onSyncShipsgoTracking: (trackingId: string) => Promise<void>;
   onSaved: () => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
@@ -941,6 +1212,16 @@ function DomesticLogisticsRows({
                     </div>
                   ))}
                 </div>
+              ) : null}
+              {shipsgoFeatures.enabled && shipsgoFeatures.oceanTrackingEnabled ? (
+                <ShipsgoOrderTrackingPanel
+                  row={row}
+                  features={shipsgoFeatures}
+                  canManage={canManageShipsgoTracking}
+                  busyKey={shipsgoBusyKey}
+                  onCreate={onCreateShipsgoTracking}
+                  onSync={onSyncShipsgoTracking}
+                />
               ) : null}
               <CustomsDocumentPanel
                 orderId={row.id}
