@@ -93,6 +93,7 @@ type OrderListFilters = {
   orderStatus: string;
   reminderStatus: string;
   month: string;
+  archiveScope: string;
 };
 
 export type OrderListRow = SerializedOrderDto;
@@ -161,7 +162,14 @@ function orderListFiltersFromQuery(query: QueryLike): OrderListFilters {
     orderStatus: nonEmpty(query?.get("orderStatus")),
     reminderStatus: nonEmpty(query?.get("reminderStatus")),
     month: nonEmpty(query?.get("month")),
+    archiveScope: nonEmpty(query?.get("archiveScope") || query?.get("businessScope") || query?.get("taxArchiveScope") || "current"),
   };
+}
+
+function orderArchiveWhere(scope = "current"): Prisma.ReceivableOrderWhereInput {
+  if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
+  if (scope === "all") return {};
+  return { taxArchived: false, NOT: { taxRefundStatus: "SUBMITTED" } };
 }
 
 function orderListWhere(filters: OrderListFilters, actor: ActorLike): Prisma.ReceivableOrderWhereInput {
@@ -169,6 +177,7 @@ function orderListWhere(filters: OrderListFilters, actor: ActorLike): Prisma.Rec
   const clauses: Prisma.ReceivableOrderWhereInput[] = [
     { deletedAt: null },
     orderAccessWhere(actor),
+    orderArchiveWhere(filters.archiveScope),
   ];
   if (filters.currency) clauses.push({ currency: filters.currency });
   if (filters.orderStatus) clauses.push({ status: filters.orderStatus });

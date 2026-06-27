@@ -291,7 +291,13 @@ export function ReportsModule({
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(typeof data.message === "string" ? data.message : "下载报表失败");
+        throw new Error(
+          data && typeof data === "object" && "message" in data && typeof data.message === "string"
+            ? data.message
+            : data && typeof data === "object" && "error" in data && typeof data.error === "string"
+              ? data.error
+              : "下载报表失败",
+        );
       }
       const blob = await response.blob();
       downloadBlob(blob, reportFileName(reportType, format));
@@ -457,7 +463,7 @@ export function ReportsModule({
                 />
               )) : (
                 <tr>
-                  <td colSpan={visibleColumns.length + 2}><div className={styles.emptyState}>未找到匹配的报表数据</div></td>
+                  <td colSpan={visibleColumns.length + 2}><div className={styles.emptyState}>暂无匹配数据</div></td>
                 </tr>
               )
             ) : (

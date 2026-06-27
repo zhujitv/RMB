@@ -7,6 +7,7 @@ import {
   getActor,
   getProfitAnalysis,
   getReminders,
+  logServerError,
   listCosts,
   listOrders,
   listPayments,
@@ -115,6 +116,10 @@ function text(value: unknown) {
 
 function lower(value: unknown) {
   return text(value).trim().toLowerCase();
+}
+
+function nonEmptyText(value: unknown) {
+  return text(value).trim();
 }
 
 function displayCustomerName(value: unknown, fallback = "") {
@@ -399,6 +404,76 @@ function costToRow(cost: ReportRow) {
   };
 }
 
+function reportRecordId(value: unknown) {
+  const row = reportRecord(value);
+  return text(row.id || row.orderId || row.paymentId || row.costId || row.orderNo || "").slice(0, 80);
+}
+
+function safeMapReportRows<T>(items: T[], type: ReportType, mapper: (item: T) => ReportRow) {
+  const rows: ReportRow[] = [];
+  items.forEach((item, index) => {
+    try {
+      rows.push(mapper(item));
+    } catch (error) {
+      logServerError("报表记录转换失败，已跳过单条异常数据", error, {
+        reportType: type,
+        rowIndex: index,
+        rowId: reportRecordId(item),
+      });
+    }
+  });
+  return rows;
+}
+
+function reportQueryForBaseRows(type: ReportType, query: URLSearchParams, filters: ReportFilters) {
+  const next = new URLSearchParams(query);
+  const archiveScope = nonEmptyText(filters.archiveScope || filters.businessScope || query.get("archiveScope") || query.get("businessScope") || "current");
+  if (["current", "archive", "all"].includes(archiveScope)) {
+    next.set("archiveScope", archiveScope);
+    next.set("businessScope", archiveScope);
+  }
+
+  const explicitKeyword = nonEmptyText(filters.keyword || query.get("keyword"));
+  const focusedSearchTerms = [
+    nonEmptyText(filters.customerName || filters.customer),
+    nonEmptyText(filters.orderNo),
+    nonEmptyText(filters.blNo || filters.billOfLadingNo),
+    nonEmptyText(filters.salespersonName || filters.salesperson),
+    nonEmptyText(filters.supplierName || filters.supplier),
+  ].filter(Boolean);
+
+  // Most list APIs only understand `keyword`; convert a single report-field filter
+  // into a backend keyword so the report does not serialize the entire dataset first.
+  if (!explicitKeyword && focusedSearchTerms.length === 1) {
+    next.set("keyword", focusedSearchTerms[0]);
+  } else if (explicitKeyword) {
+    next.set("keyword", explicitKeyword);
+  }
+
+  // Receivable and profit-style reports never need supplier filtering in the base
+  // query; keep that as a report-level filter so unrelated APIs do not reject it.
+  if (!["costs"].includes(type)) {
+    next.delete("supplierName");
+    next.delete("supplier");
+  }
+  return next;
+}
+
+function isDatabaseFieldError(error: unknown) {
+  const message = text((error as { message?: unknown } | null)?.message);
+  return /Unknown (field|argument)|does not exist|not exist|column .* missing|no such column/i.test(message);
+}
+
+function friendlyReportQueryError(error: unknown, filters: ReportFilters) {
+  if (isDatabaseFieldError(error)) {
+    return codedError("报表查询失败：数据库字段不存在，请先同步数据库迁移。", 500, "REPORT_DATABASE_FIELD_MISMATCH");
+  }
+  if (nonEmptyText(filters.customerName || filters.customer)) {
+    return codedError("报表查询失败：客户筛选条件异常，请检查客户名称后重试。", 500, "REPORT_CUSTOMER_FILTER_FAILED");
+  }
+  return codedError("报表查询失败：请稍后重试或联系管理员查看服务器日志。", 500, "REPORT_QUERY_FAILED");
+}
+
 async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLike): Promise<ReportRow[]> {
   if (!REPORT_TYPES[type]) {
     throw codedError("请选择有效报表类型", 400, "REPORT_TYPE_INVALID");
@@ -406,16 +481,16 @@ async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLi
   assertRead(actor, "reports");
   const area = REPORT_TYPES[type].area;
   assertRead(actor, area);
-  if (type === "payments") return (await listPayments(query, actor)).map(paymentToRow);
-  if (type === "costs") return (await listCosts(query, actor)).map(costToRow);
-  if (type === "overdue") return (await getReminders(query, actor)).map(orderToOverdue);
-  if (type === "profits") return (await getProfitAnalysis(query, actor)).map(orderToProfit);
-  if (type === "commissions") return (await getProfitAnalysis(query, actor)).map(orderToCommission);
-  if (type === "tax-refunds") return (await listOrders(query, actor)).map(orderToTaxRefund);
-  return (await listOrders(query, actor)).map(orderToReceivable);
+  if (type === "payments") return safeMapReportRows(await listPayments(query, actor), type, paymentToRow);
+  if (type === "costs") return safeMapReportRows(await listCosts(query, actor), type, costToRow);
+  if (type === "overdue") return safeMapReportRows(await getReminders(query, actor), type, orderToOverdue);
+  if (type === "profits") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToProfit);
+  if (type === "commissions") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToCommission);
+  if (type === "tax-refunds") return safeMapReportRows(await listOrders(query, actor), type, orderToTaxRefund);
+  return safeMapReportRows(await listOrders(query, actor), type, orderToReceivable);
 }
 
-function queryFilters(query: URLSearchParams) {
+function queryFilters(query: URLSearchParams): ReportFilters {
   return {
     dateFrom: query.get("dateFrom") || "",
     dateTo: query.get("dateTo") || "",
@@ -437,13 +512,23 @@ function queryFilters(query: URLSearchParams) {
 
 export async function queryReport(typeInput: unknown, query: URLSearchParams, actor: ActorLike, options: ReportQueryOptions = {}) {
   const type = reportTypeFrom(typeInput);
-  const filters = options.filters || queryFilters(query);
+  const filters: ReportFilters = options.filters || queryFilters(query);
   const page = options.page || query.get("page") || 1;
   const pageSize = options.pageSize || query.get("pageSize") || 20;
   const sortBy = options.sortBy || query.get("sortBy") || "";
   const sortDir = options.sortDir || query.get("sortDir") || "asc";
   const selectedIds = new Set(options.selectedIds || []);
-  let rows: ReportRow[] = await baseRows(type, query, actor);
+  let rows: ReportRow[] = [];
+  try {
+    rows = await baseRows(type, reportQueryForBaseRows(type, query, filters), actor);
+  } catch (error) {
+    logServerError("报表基础数据查询失败", error, {
+      reportType: type,
+      customerName: filters.customerName || filters.customer || "",
+      archiveScope: filters.archiveScope || filters.businessScope || "current",
+    });
+    throw friendlyReportQueryError(error, filters);
+  }
   rows = filterRows(rows, filters);
   if (selectedIds.size) rows = rows.filter((row) => selectedIds.has(String(row.id || "")));
   rows = sortRows(rows, sortBy, sortDir);
