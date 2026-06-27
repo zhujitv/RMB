@@ -38,7 +38,7 @@ test("fixed role menus do not expose forbidden global modules", () => {
   assert.match(backend, /export function menusWithDerivedAccess/);
   assert.match(menuFile, /function menusWithDerivedAccess/);
   assert.match(menuFile, /key: "oceanControlTower", label: "运输监控"[\s\S]*parentKey: "domesticLogistics"/);
-  assert.match(workspaceShell, /activeMenu === "oceanControlTower"[\s\S]*initialView="controlTower"/);
+  assert.match(workspaceShell, /activeMenu === "oceanControlTower"[\s\S]*initialView="controlTower"[\s\S]*initialControlTowerFullscreen/);
   assert.match(backend, /产品供应商账号: \["supplierDocuments", "manual"\]/);
   assert.match(menuFile, /产品供应商账号: \["supplierDocuments", "manual"\]/);
   assert.doesNotMatch(backend, /logisticsReview: "物流费用审核"|logisticsReview", "taxRefund"/);

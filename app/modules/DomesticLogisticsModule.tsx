@@ -418,6 +418,7 @@ export function DomesticLogisticsModule({
   initialOpenToken = 0,
   focusFeesToken = 0,
   initialView = "list",
+  initialControlTowerFullscreen = false,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
@@ -425,6 +426,7 @@ export function DomesticLogisticsModule({
   initialOpenToken?: number;
   focusFeesToken?: number;
   initialView?: "list" | "controlTower";
+  initialControlTowerFullscreen?: boolean;
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -906,6 +908,7 @@ export function DomesticLogisticsModule({
         <ShipsgoControlTowerView
           features={shipsgoFeatures}
           canManage={canEditDomesticLogistics}
+          initialFullScreen={initialControlTowerFullscreen}
           onOpenOrder={openControlTowerOrder}
         />
       ) : (
@@ -1072,10 +1075,12 @@ export function DomesticLogisticsModule({
 function ShipsgoControlTowerView({
   features,
   canManage,
+  initialFullScreen = false,
   onOpenOrder,
 }: {
   features: ShipsgoFeatureFlags;
   canManage: boolean;
+  initialFullScreen?: boolean;
   onOpenOrder: (row: ShipsgoControlTowerRow) => void;
 }) {
   const [rows, setRows] = useState<ShipsgoControlTowerRow[]>([]);
@@ -1089,7 +1094,7 @@ function ShipsgoControlTowerView({
   const [expandedId, setExpandedId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [syncingId, setSyncingId] = useState("");
-  const [fullScreen, setFullScreen] = useState(false);
+  const [fullScreen, setFullScreen] = useState(initialFullScreen);
   const selectedRow = useMemo(() => rows.find((row) => row.id === selectedId) || null, [rows, selectedId]);
 
   function setFilterValue<K extends keyof ShipsgoControlTowerFilters>(key: K, value: ShipsgoControlTowerFilters[K]) {

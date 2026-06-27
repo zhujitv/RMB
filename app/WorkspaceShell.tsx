@@ -439,6 +439,7 @@ export function WorkspaceShell() {
           currentUser={payload.user}
           permissions={payload.permissions}
           initialView="controlTower"
+          initialControlTowerFullscreen
         />
       ) : activeMenu === "supplierDocuments" ? (
         <SupplierDocumentsModule currentUser={payload.user} />

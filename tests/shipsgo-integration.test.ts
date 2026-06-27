@@ -219,6 +219,8 @@ test("domestic logistics exposes ocean control tower tab and fullscreen monitor 
   assert.match(logisticsModule, /运输监控/);
   assert.match(logisticsModule, /集中监控已创建大掌櫃跟踪且尚未到港的在途海运业务/);
   assert.match(logisticsModule, /ShipsgoControlTowerView/);
+  assert.match(logisticsModule, /initialFullScreen\?: boolean/);
+  assert.match(logisticsModule, /useState\(initialFullScreen\)/);
   assert.match(logisticsModule, /\/api\/shipsgo\/ocean-trackings\/control-tower/);
   assert.match(logisticsModule, /全屏查看/);
   assert.match(logisticsModule, /退出全屏/);
