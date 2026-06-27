@@ -43,6 +43,7 @@ import {
   createCostIdempotently,
   duplicateCostFingerprint,
   includeCostRelations,
+  serializeCostOrderSummary,
 } from "./cost-records-shared";
 
 type CostWithOrder = Prisma.OrderCostGetPayload<{ include: { order: { include: { customer: true } } } }>;
@@ -62,6 +63,7 @@ type CostOrderLike = {
   id: string;
   currency?: string | null;
 };
+type DeletedCostAction = "deleted" | "voided";
 
 function requireCostActor(actor: CostActorInput): CostActor {
   if (!actor?.id) throw permissionError("请先登录", 401);
@@ -74,6 +76,85 @@ function requireCostActor(actor: CostActorInput): CostActor {
 
 function isOwnCostScope(actor: CostActor) {
   return effectivePermissions(actor).dataScope === "OWN_COST";
+}
+
+function isCostEntryActor(actor: CostActor) {
+  return isOwnCostScope(actor) || actor.role === "成本录入员";
+}
+
+function isPaidCost(cost: { paymentStatus?: string | null }) {
+  return cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+}
+
+function canPhysicallyDeleteCost(cost: { sourceType?: string | null; paymentStatus?: string | null; costConfirmed?: boolean | null }, hasUploadedInvoice: boolean) {
+  return !hasUploadedInvoice
+    && !isPaidCost(cost)
+    && !cost.costConfirmed
+    && cost.sourceType !== "LOGISTICS_EXPENSE";
+}
+
+function assertCanDeleteCost(actor: CostActor, cost: { createdById?: string | null; paymentStatus?: string | null; costConfirmed?: boolean | null }) {
+  if (actor.role === "管理员") return;
+  const ownCost = cost.createdById === actor.id;
+  if (isCostEntryActor(actor)) {
+    if (!ownCost) throw permissionError("只能删除自己录入的成本记录");
+    if (cost.costConfirmed || isPaidCost(cost)) {
+      throw permissionError("已确认或已付款的成本不能删除，请联系管理员处理。");
+    }
+    return;
+  }
+  if (actor.role === "业务员") {
+    if (!ownCost) throw permissionError("只能删除自己录入的成本记录");
+    if (cost.costConfirmed) throw permissionError("普通业务员不可删除已确认成本");
+    if (isPaidCost(cost)) throw permissionError("已付款成本不能删除，请联系管理员处理。");
+    return;
+  }
+  throw permissionError("当前角色无权限删除成本明细");
+}
+
+async function costOrderSummaryForMutation(orderId: string, actor: CostActor) {
+  const ownCostScope = isOwnCostScope(actor);
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null },
+    include: {
+      customer: true,
+      costs: {
+        where: {
+          deletedAt: null,
+          ...(ownCostScope ? { createdById: actor.id } : {}),
+        },
+        include: {
+          supplier: true,
+          documents: {
+            where: { deletedAt: null },
+            include: { uploadedBy: true, supplier: true },
+            orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+          },
+        },
+        orderBy: [{ createdAt: "desc" }],
+      },
+    },
+  });
+  return order ? serializeCostOrderSummary(order) : null;
+}
+
+function deletionAuditPayload(
+  action: DeletedCostAction,
+  actor: CostActor,
+  cost: CostWithOrder & { supplier?: { supplierName?: string | null } | null },
+  deletedAt: Date,
+) {
+  return {
+    action,
+    deletedById: actor.id,
+    deletedAt,
+    orderNo: cost.order.orderNo,
+    costType: cost.costType,
+    supplier: cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName,
+    amount: Number(cost.amount),
+    currency: cost.currency,
+    amountCny: Number(cost.amountCny),
+  };
 }
 
 async function buildCostData(order: CostOrderLike, actor: CostActor, input: CostInput, id: string | null = null, before: CostWithOrder | null = null) {
@@ -277,17 +358,50 @@ export async function saveCosts(request: AuditRequestLike, actor: CostActorInput
 export async function deleteCost(request: AuditRequestLike, actor: CostActorInput, id: string) {
   assertWrite(actor, "costs");
   const currentActor = requireCostActor(actor);
-  const before = await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } });
+  const before = await prisma.orderCost.findUnique({
+    where: { id },
+    include: {
+      order: { include: { customer: true } },
+      supplier: true,
+      documents: {
+        where: { deletedAt: null },
+      },
+    },
+  });
   if (!before || before.deletedAt) throw permissionError("成本记录不存在或已删除", 404);
   const ownCostScope = isOwnCostScope(currentActor);
   if (ownCostScope && before.createdById !== currentActor.id) throw permissionError("只能删除自己录入的成本记录");
   if (!ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限删除该成本记录");
-  const cost = await prisma.orderCost.update({
-    where: { id },
-    data: { deletedAt: new Date(), updatedById: currentActor.id },
-  });
-  await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(request, currentActor, "删除成本", "order_costs", id, before, cost));
+  assertCanDeleteCost(currentActor, before);
+  const hasUploadedInvoice = before.documents.some((document) => document.uploadStatus === "SUCCESS");
+  const deletedAt = new Date();
+  const action: DeletedCostAction = canPhysicallyDeleteCost(before, hasUploadedInvoice) ? "deleted" : "voided";
+  const auditPayload = deletionAuditPayload(action, currentActor, before, deletedAt);
+  const cost = action === "deleted"
+    ? await prisma.orderCost.delete({ where: { id } })
+    : await prisma.orderCost.update({
+      where: { id },
+      data: {
+        deletedAt,
+        paymentStatus: "已取消",
+        updatedById: currentActor.id,
+      },
+    });
+  await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(
+    request,
+    currentActor,
+    action === "deleted" ? "删除成本明细" : "作废成本明细",
+    "order_costs",
+    id,
+    before,
+    { ...auditPayload, costId: id },
+  ));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
+  return {
+    action,
+    cost: safeSerializeCost(cost),
+    orderSummary: await costOrderSummaryForMutation(before.orderId, currentActor),
+  };
 }
 
 export async function saveLogisticsCost(request: AuditRequestLike, actor: CostActorInput, input: CostInput, id: string | null = null) {

@@ -9,7 +9,7 @@ import { formatCny, formatCurrencyAmount, formatDate, moneyText } from "../forma
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
-import type { CurrencyTotals } from "../../lib/platform/currency-totals";
+import { summarizeCurrencyTotals, type CurrencyTotals } from "../../lib/platform/currency-totals";
 import styles from "../WorkspaceShell.module.css";
 import {
   LOGISTICS_COST_TYPE_OPTIONS,
@@ -118,6 +118,15 @@ type CostDetailResponse = {
     cost?: CostRow;
   };
   message?: string;
+};
+
+type CostDeleteResponse = {
+  success?: boolean;
+  ok?: boolean;
+  message?: string;
+  action?: "deleted" | "voided";
+  cost?: CostRow;
+  orderSummary?: CostOrderSummary | null;
 };
 
 type CostOrderOption = {
@@ -658,6 +667,8 @@ export function CostsModule({
         <CostOrderSummaryDrawer
           order={detailOrderSummary}
           onOpenDocuments={(costId) => void openCostDocuments(costId)}
+          deletingId={deletingId}
+          onDelete={(cost) => void deleteCost(cost)}
           onClose={() => setDetailOrderSummary(null)}
         />
       ) : null}
@@ -804,10 +815,44 @@ export function CostsModule({
     }
   }
 
+  function applyDeletedCost(cost: CostRow, orderSummary?: CostOrderSummary | null) {
+    const nextOrderSummary = orderSummary || null;
+    setRows((current) => current.filter((item) => item.id !== cost.id));
+    setOrderRows((current) => {
+      if (nextOrderSummary) {
+        const exists = current.some((item) => item.id === nextOrderSummary.id || item.orderId === nextOrderSummary.orderId);
+        if (!exists) return current;
+        return current.map((item) => (
+          item.id === nextOrderSummary.id || item.orderId === nextOrderSummary.orderId
+            ? { ...item, ...nextOrderSummary }
+            : item
+        ));
+      }
+      return current.map((item) => (
+        item.id === cost.orderId || item.orderId === cost.orderId
+          ? recalculateOrderSummary(item, item.costs?.filter((row) => row.id !== cost.id) || [])
+          : item
+      ));
+    });
+    setDetailOrderSummary((current) => {
+      if (!current) return current;
+      if (nextOrderSummary && (current.id === nextOrderSummary.id || current.orderId === nextOrderSummary.orderId)) {
+        return { ...current, ...nextOrderSummary };
+      }
+      if (current.id === cost.orderId || current.orderId === cost.orderId) {
+        return recalculateOrderSummary(current, current.costs?.filter((row) => row.id !== cost.id) || []);
+      }
+      return current;
+    });
+    setDetailCost((current) => current?.id === cost.id ? null : current);
+    setDocumentCost((current) => current?.id === cost.id ? null : current);
+    setCostFormDrawer((current) => current?.cost?.id === cost.id ? null : current);
+  }
+
   async function deleteCost(cost: CostRow) {
     const confirmationResult = await requestConfirmation({
-      title: "确认删除这条成本？",
-      message: "删除后将重新计算利润和退税资料完整度。",
+      title: "删除成本明细",
+      message: "确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。",
       details: [
         `订单：${cost.orderNo || "-"}`,
         `成本：${logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`,
@@ -821,15 +866,12 @@ export function CostsModule({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; ok?: boolean; message?: string }>(`/api/costs/${encodeURIComponent(cost.id)}`, {
+      const result = await apiJson<CostDeleteResponse>(`/api/costs/${encodeURIComponent(cost.id)}`, {
         method: "DELETE",
       });
       if (result.success !== true && result.ok !== true) throw new Error(result.message || "删除成本失败");
-      setDetailCost(null);
-      setDetailOrderSummary(null);
-      setCostFormDrawer((current) => current?.cost?.id === cost.id ? null : current);
-      await loadCosts(page, submittedFilters, archiveScope, costView);
-      setNotice(result.message || "成本已删除");
+      applyDeletedCost(cost, result.orderSummary);
+      setNotice(result.message || (result.action === "voided" ? "成本明细已作废" : "成本明细已删除"));
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除成本失败");
     } finally {
@@ -1431,6 +1473,41 @@ function CostOrderAmountCell({
   );
 }
 
+function recalculateOrderSummary(order: CostOrderSummary, costs: CostRow[]): CostOrderSummary {
+  const activeCosts = costs.filter((cost) => Boolean(cost.id));
+  const currencyTotals = summarizeCurrencyTotals(activeCosts);
+  const confirmed = activeCosts.filter((cost) => cost.costConfirmed).length;
+  const documentProgress = activeCosts.reduce((acc, cost) => {
+    const successDocs = (cost.documents || []).filter((document) => document.uploadStatus === "SUCCESS");
+    if (isFactoryCost(cost)) {
+      FACTORY_DOCUMENT_TYPES.forEach((type) => {
+        acc.total += 1;
+        if (successDocs.some((document) => document.documentType === type.value)) acc.completed += 1;
+      });
+    } else if (isLogisticsInvoiceCost(cost)) {
+      acc.total += 1;
+      if (successDocs.some((document) => document.documentType === "SUPPLIER_INVOICE")) acc.completed += 1;
+    }
+    return acc;
+  }, { completed: 0, total: 0 });
+  return {
+    ...order,
+    costs: activeCosts,
+    costCount: activeCosts.length,
+    totalCostCny: currencyTotals.totalCny,
+    currencyTotals,
+    costConfirmProgress: {
+      completed: confirmed,
+      total: activeCosts.length,
+      text: activeCosts.length ? `${confirmed}/${activeCosts.length}` : "无成本",
+    },
+    documentProgress: {
+      ...documentProgress,
+      text: documentProgress.total ? `${documentProgress.completed}/${documentProgress.total}` : "无需资料",
+    },
+  };
+}
+
 function CostDetailDrawer({
   cost,
   deleting,
@@ -1545,10 +1622,14 @@ function DetailMoneyField({ label, cost }: { label: string; cost: CostRow }) {
 function CostOrderSummaryDrawer({
   order,
   onOpenDocuments,
+  deletingId,
+  onDelete,
   onClose,
 }: {
   order: CostOrderSummary;
   onOpenDocuments: (costId: string) => void;
+  deletingId: string;
+  onDelete: (cost: CostRow) => void;
   onClose: () => void;
 }) {
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
@@ -1570,17 +1651,26 @@ function CostOrderSummaryDrawer({
         <DetailField label="资料状态" value={documentProgress} />
         <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
       </div>
-      <CostOrderItemsTable costs={order.costs || []} onOpenDocuments={onOpenDocuments} />
+      <CostOrderItemsTable
+        costs={order.costs || []}
+        deletingId={deletingId}
+        onOpenDocuments={onOpenDocuments}
+        onDelete={onDelete}
+      />
     </SideDetailDrawer>
   );
 }
 
 function CostOrderItemsTable({
   costs,
+  deletingId,
   onOpenDocuments,
+  onDelete,
 }: {
   costs: CostRow[];
+  deletingId: string;
   onOpenDocuments: (costId: string) => void;
+  onDelete: (cost: CostRow) => void;
 }) {
   return (
     <div className={styles.logisticsDrawerSection}>
@@ -1613,7 +1703,20 @@ function CostOrderItemsTable({
                 <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
                 <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
                 <td className={styles.costInvoiceActionColumn}>
-                  <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} />
+                  <div className={styles.costInvoiceActions}>
+                    <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} />
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      disabled={deletingId === cost.id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(cost);
+                      }}
+                    >
+                      {deletingId === cost.id ? "删除中..." : "删除"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             )) : (

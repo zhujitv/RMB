@@ -41,8 +41,8 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await getActor(request);
-    await deleteCost(request, actor, id);
-    return ok({ ok: true });
+    const result = await deleteCost(request, actor, id);
+    return ok({ success: true, ok: true, ...result });
   } catch (error: unknown) {
     return apiError(error, "删除成本失败");
   }
