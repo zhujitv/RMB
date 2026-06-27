@@ -19,6 +19,7 @@ import {
   upgradePasswordHash,
   verifyPassword,
 } from "../../../../lib/platform-db";
+import { passwordMeetsPolicy } from "../../../../lib/password-policy";
 import { prisma } from "../../../../lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,9 @@ const LOGIN_USER_SELECT = {
   defaultLanguage: true,
   customPermissions: true,
   mustChangePassword: true,
+  passwordPolicyPassed: true,
+  emailVerified: true,
+  emailVerifiedAt: true,
   approvalStatus: true,
   isActive: true,
   createdAt: true,
@@ -133,11 +137,16 @@ export async function POST(request: NextRequest) {
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
+    if (user.emailVerified === false) {
+      logSecurityEvent("login failed", loginAuditContext("email_not_verified", email, user.id));
+      await recordLoginAttemptTyped(request, email, false, user.id);
+      return loginFailure("请先完成邮箱验证", 403, "EMAIL_NOT_VERIFIED");
+    }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
       logSecurityEvent("login failed", loginAuditContext("user_pending_approval", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
-      return loginFailure("账号待管理员审核", 403, "USER_PENDING_APPROVAL");
+      return loginFailure("账号正在等待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
       logSecurityEvent("login failed", loginAuditContext("user_rejected", email, user.id));
@@ -149,7 +158,24 @@ export async function POST(request: NextRequest) {
       await recordLoginAttemptTyped(request, email, false, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
-    if (passwordHashNeedsUpgrade(user.passwordHash)) {
+    const currentPasswordMeetsPolicy = passwordMeetsPolicy(body.password || "");
+    if (!user.passwordPolicyPassed && !currentPasswordMeetsPolicy) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          mustChangePassword: true,
+          passwordPolicyPassed: false,
+        },
+        select: LOGIN_USER_SELECT,
+      });
+    } else if (!user.passwordPolicyPassed && currentPasswordMeetsPolicy) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordPolicyPassed: true },
+        select: LOGIN_USER_SELECT,
+      });
+    }
+    if (passwordHashNeedsUpgrade(user.passwordHash) && currentPasswordMeetsPolicy) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { passwordHash: upgradePasswordHash(body.password || "") },
@@ -159,7 +185,7 @@ export async function POST(request: NextRequest) {
     if (!user.mustChangePassword && isInitialAdminPasswordLogin(user, body.password || "")) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { mustChangePassword: true },
+        data: { mustChangePassword: true, passwordPolicyPassed: false },
         select: LOGIN_USER_SELECT,
       });
     }
@@ -169,11 +195,16 @@ export async function POST(request: NextRequest) {
     if (!safeUser) {
       throw new Error("登录成功后未能生成公开用户信息。");
     }
+    const passwordChangeMessage = currentPasswordMeetsPolicy
+      ? "请先修改初始密码"
+      : "当前密码安全强度不足，请先修改密码后继续使用平台。";
     const response = NextResponse.json({
       success: true,
       user: safeUser,
       mustChangePassword: Boolean(safeUser.mustChangePassword),
-      message: Boolean(safeUser.mustChangePassword) ? "请先修改初始密码" : "登录成功",
+      message: Boolean(safeUser.mustChangePassword)
+        ? passwordChangeMessage
+        : "登录成功",
     });
     setSessionCookie(response, session.token);
     return response;

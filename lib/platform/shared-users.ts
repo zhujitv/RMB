@@ -1,7 +1,10 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
+import crypto from "node:crypto";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
 import {
   codedError,
+  logServerError,
   logServerTiming,
   nonEmpty,
   normalizeEmail,
@@ -37,6 +40,7 @@ import {
   revokeUserSessions,
   timingSafeEqualText,
 } from "./shared-auth";
+import { sendSystemEmail } from "./system-email";
 
 type UserInput = Record<string, unknown>;
 type UserListQuery = { get(name: string): string | null } | null;
@@ -59,6 +63,9 @@ type UserRowLike = Record<string, unknown> & {
   supplierId?: string | null;
   supplierOperator?: { supplierName?: string | null; supplierType?: string | null } | null;
   mustChangePassword?: boolean | null;
+  passwordPolicyPassed?: boolean | null;
+  emailVerified?: boolean | null;
+  emailVerifiedAt?: Date | string | null;
   approvalStatus?: string | null;
   isActive?: boolean | null;
   createdAt?: Date | string | null;
@@ -77,6 +84,9 @@ export const USER_AUTH_SELECT = {
   supplierId: true,
   supplierOperator: { select: { supplierName: true, supplierType: true } },
   mustChangePassword: true,
+  passwordPolicyPassed: true,
+  emailVerified: true,
+  emailVerifiedAt: true,
   approvalStatus: true,
   isActive: true,
   createdAt: true,
@@ -95,6 +105,9 @@ export const USER_PUBLIC_SELECT = {
   supplierId: true,
   supplierOperator: { select: { supplierName: true, supplierType: true } },
   mustChangePassword: true,
+  passwordPolicyPassed: true,
+  emailVerified: true,
+  emailVerifiedAt: true,
   approvalStatus: true,
   isActive: true,
   createdAt: true,
@@ -193,6 +206,9 @@ export async function ensureDefaultUsers() {
       role: "管理员",
       avatarInitials: resolveAvatarInitials({}, nonEmpty(process.env.INITIAL_ADMIN_NAME) || existing?.name || "系统管理员", existing),
       mustChangePassword: true,
+      passwordPolicyPassed: false,
+      emailVerified: true,
+      emailVerifiedAt: existing?.emailVerifiedAt || new Date(),
       approvalStatus: "APPROVED",
       isActive: true,
     };
@@ -243,6 +259,9 @@ export function publicUser(userInput: unknown) {
     supplierName: user.supplierOperator?.supplierName || "",
     supplierType: supplierTypeDisplayName(user.supplierOperator?.supplierType),
     mustChangePassword: Boolean(user.mustChangePassword),
+    passwordPolicyPassed: Boolean(user.passwordPolicyPassed),
+    emailVerified: user.emailVerified !== false,
+    emailVerifiedAt: user.emailVerifiedAt,
     approvalStatus: user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED"),
     isActive: user.isActive,
     createdAt: user.createdAt,
@@ -298,6 +317,7 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
     "停用": "DISABLED",
     "已停用": "DISABLED",
   } satisfies Record<string, string>;
+  const emailUnverified = ["email_unverified", "EMAIL_UNVERIFIED", "邮箱未验证"].includes(statusText);
   const approvalStatus = statusText
     ? (USER_APPROVAL_STATUSES.includes(statusText) ? statusText : (statusMap as Record<string, string>)[statusText.toLowerCase()] || (statusMap as Record<string, string>)[statusText] || "")
     : "";
@@ -312,6 +332,7 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
       ? { role: { in: PRODUCT_SUPPLIER_OPERATOR_ROLES } }
       : (ROLES.includes(role) ? { role } : {})),
     ...(USER_APPROVAL_STATUSES.includes(approvalStatus) ? { approvalStatus } : {}),
+    ...(emailUnverified ? { emailVerified: false } : {}),
   };
   if (options.paginated) {
     const { page, pageSize } = pageParams(query, 20, 100);
@@ -335,20 +356,109 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
   return users.map(serializeUser);
 }
 
+function assertPasswordPolicy(password: unknown) {
+  if (!passwordMeetsPolicy(password)) {
+    throw codedError(PASSWORD_POLICY_MESSAGE, 400, "PASSWORD_POLICY_WEAK");
+  }
+}
+
+function requestOriginFromAuditRequest(request: AuditRequestLike) {
+  const rawUrl = String((request as { url?: string } | null | undefined)?.url || "");
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.APP_BASE_URL || "";
+  }
+}
+
+function verificationTokenHash(token: unknown) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function newVerificationToken() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+async function createEmailVerificationToken(userId: string) {
+  await prisma.emailVerificationToken.updateMany({
+    where: { userId, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  });
+  const token = newVerificationToken();
+  const row = await prisma.emailVerificationToken.create({
+    data: {
+      userId,
+      tokenHash: verificationTokenHash(token),
+      expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+    },
+  });
+  return { token, idempotencyKey: `email-verification-${row.id}` };
+}
+
+async function sendEmailVerification(request: AuditRequestLike, user: { id: string; name?: string | null; email: string }) {
+  const { token, idempotencyKey } = await createEmailVerificationToken(user.id);
+  const origin = requestOriginFromAuditRequest(request);
+  const verifyUrl = `${origin || ""}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  await sendSystemEmail({
+    recipientEmails: [user.email],
+    subject: "NEXTWOOD 供应链协同平台邮箱验证",
+    body: [
+      `${user.name || "您好"}：`,
+      "",
+      "请点击以下链接完成邮箱验证。",
+      "",
+      verifyUrl,
+      "",
+      "邮箱验证完成后，管理员审核通过后方可登录平台。",
+      "",
+      "如果您并未申请注册 NEXTWOOD 供应链协同平台，请忽略本邮件。",
+    ].join("\n"),
+    idempotencyKey,
+  });
+}
+
+export async function verifyRegistrationEmail(token: unknown) {
+  if (!String(token || "").trim()) throw codedError("邮箱验证链接无效。", 400, "EMAIL_VERIFICATION_TOKEN_INVALID");
+  const tokenHash = verificationTokenHash(token);
+  const row = await prisma.emailVerificationToken.findUnique({
+    where: { tokenHash },
+    include: { user: { select: USER_PUBLIC_SELECT } },
+  });
+  if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) {
+    throw codedError("邮箱验证链接无效或已过期，请重新提交注册申请或联系管理员。", 400, "EMAIL_VERIFICATION_TOKEN_INVALID");
+  }
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.emailVerificationToken.update({
+      where: { id: row.id },
+      data: { usedAt: new Date() },
+    });
+    return tx.user.update({
+      where: { id: row.userId },
+      data: {
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+      select: USER_PUBLIC_SELECT,
+    });
+  });
+  return serializeUser(updated);
+}
+
 export async function registerUser(request: AuditRequestLike, input: UserInput = {}) {
   await ensureDefaultUsers();
   const name = requireText(input.name, "姓名");
   const email = requireValidEmail(input.email, "邮箱");
   const password = String(input.password || "");
   const confirmPassword = String(input.confirmPassword || input.passwordConfirm || "");
-  if (confirmPassword && confirmPassword !== password) {
-    throw codedError("两次输入的密码不一致", 400, "PASSWORD_CONFIRM_MISMATCH");
+  if (!confirmPassword || confirmPassword !== password) {
+    throw codedError("两次输入的密码不一致。", 400, "PASSWORD_CONFIRM_MISMATCH");
   }
+  assertPasswordPolicy(password);
   const duplicate = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
   });
   if (duplicate) {
-    throw codedError("该邮箱已提交注册或已存在账号，请联系管理员。", 409, "EMAIL_ALREADY_EXISTS");
+    throw codedError("该邮箱已注册，请直接登录或联系管理员。", 409, "EMAIL_ALREADY_EXISTS");
   }
   const user = await prisma.user.create({
     data: {
@@ -359,17 +469,30 @@ export async function registerUser(request: AuditRequestLike, input: UserInput =
       avatarInitials: resolveAvatarInitials(input, name),
       customPermissions: Prisma.JsonNull,
       mustChangePassword: false,
+      passwordPolicyPassed: true,
+      emailVerified: false,
+      emailVerifiedAt: null,
       approvalStatus: "PENDING",
       isActive: false,
     },
   });
+  try {
+    await sendEmailVerification(request, user);
+  } catch (error: unknown) {
+    logServerError("email verification send failed", error, { userId: user.id });
+    await prisma.user.delete({ where: { id: user.id } }).catch((deleteError: unknown) => {
+      logServerError("email verification rollback failed", deleteError, { userId: user.id });
+    });
+    throw codedError("注册申请已提交，但邮箱验证邮件发送失败，请联系管理员重新发送。", 500, "EMAIL_VERIFICATION_SEND_FAILED");
+  }
   await runNonCriticalTask("用户注册操作日志写入", () => writeAudit(request, null, "用户自助注册", "users", user.id, null, {
     id: user.id,
     email: user.email,
     name: user.name,
     approvalStatus: user.approvalStatus,
+    emailVerified: user.emailVerified,
   }));
-  return { id: user.id, email: user.email, name: user.name, approvalStatus: user.approvalStatus };
+  return { id: user.id, email: user.email, name: user.name, approvalStatus: user.approvalStatus, emailVerified: user.emailVerified };
 }
 
 export async function saveUser(request: AuditRequestLike, actor: ActorLike, input: UserInput, id: string | null = null) {
@@ -416,11 +539,20 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     data.supplierId = supplier.id;
   }
   if (input.password) {
+    assertPasswordPolicy(input.password);
     data.passwordHash = hashPassword(String(input.password));
     data.mustChangePassword = true;
+    data.passwordPolicyPassed = false;
   }
   if (!id && !data.passwordHash) {
     throw codedError("新建用户必须设置初始密码，禁止使用固定默认密码。", 400, "INITIAL_PASSWORD_REQUIRED");
+  }
+  if (!id) {
+    data.emailVerified = true;
+    data.emailVerifiedAt = new Date();
+  }
+  if (id && approvalStatus === "APPROVED" && before?.emailVerified === false) {
+    throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
   }
 
   const duplicate = await prisma.user.findFirst({
@@ -448,6 +580,9 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
   }
   const before = await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
   if (!before) throw permissionError("用户不存在", 404);
+  if (nextStatus === "APPROVED" && before.emailVerified === false) {
+    throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
+  }
   if (nextStatus === "APPROVED" && (before.role === LOGISTICS_OPERATOR_ROLE || isProductSupplierOperatorRole(before.role))) {
     if (!before.supplierId) throw codedError(`${before.role}必须绑定一个供应商后才能启用。`, 400, "SUPPLIER_USER_SUPPLIER_REQUIRED");
     const { assertSupplierActive } = await import("./supplier-masters");

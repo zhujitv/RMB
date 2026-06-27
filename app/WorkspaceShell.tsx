@@ -15,6 +15,7 @@ import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse } fr
 import { normalizeEmail } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
 
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 const AUTH_BOOT_TIMEOUT_MS = 15000;
@@ -145,8 +146,14 @@ export function WorkspaceShell() {
     try {
       const payload = await apiJson<AuthPayload>("/api/auth/me", { timeoutMs: AUTH_BOOT_TIMEOUT_MS });
       validateAuthPayload(payload);
-      if (payload.user.mustChangePassword) {
-        nextAuth = { status: "password-change", user: payload.user, message: "请先修改初始密码。" };
+      if (payload.user.mustChangePassword || payload.user.passwordPolicyPassed === false) {
+        nextAuth = {
+          status: "password-change",
+          user: payload.user,
+          message: payload.user.passwordPolicyPassed === false
+            ? "当前密码安全强度不足，请先修改密码后继续使用平台。"
+            : "请先修改初始密码。",
+        };
       } else {
         if (payload.companyProfile) setPublicCompanyProfile(payload.companyProfile);
         nextAuth = { status: "ready", payload };
@@ -247,6 +254,10 @@ export function WorkspaceShell() {
       setAuth({ status: "guest", message: "两次输入的密码不一致。" });
       return;
     }
+    if (!passwordMeetsPolicy(password)) {
+      setAuth({ status: "guest", message: PASSWORD_POLICY_MESSAGE });
+      return;
+    }
     setRegisterBusy(true);
     try {
       const result = await apiJson<{ message?: string }>("/api/auth/register", {
@@ -255,10 +266,11 @@ export function WorkspaceShell() {
           name: String(form.get("name") || "").trim(),
           email: normalizeEmail(String(form.get("email") || "")),
           password,
+          confirmPassword,
         }),
       });
       setRegisterOpen(false);
-      setAuth({ status: "guest", message: result.message || "注册申请已提交，请等待管理员审核。" });
+      setAuth({ status: "guest", message: result.message || "注册申请已提交，请先查收邮件完成邮箱验证。验证完成后，管理员审核通过方可登录。" });
     } catch (error) {
       setAuth({ status: "guest", message: error instanceof Error ? error.message : "提交注册申请失败" });
     } finally {
@@ -273,6 +285,10 @@ export function WorkspaceShell() {
     const confirmPassword = String(form.get("confirmPassword") || "");
     if (newPassword !== confirmPassword) {
       setAuth((current) => current.status === "password-change" ? { ...current, message: "两次输入的新密码不一致。" } : current);
+      return;
+    }
+    if (!passwordMeetsPolicy(newPassword)) {
+      setAuth((current) => current.status === "password-change" ? { ...current, message: PASSWORD_POLICY_MESSAGE } : current);
       return;
     }
     setPasswordBusy(true);

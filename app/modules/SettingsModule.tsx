@@ -11,6 +11,7 @@ import type { CompanyProfileSettings } from "../types";
 import {
   LOGISTICS_COST_TYPE_OPTIONS,
 } from "../../lib/platform/logistics-cost-types";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../lib/password-policy";
 
 type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
@@ -122,6 +123,10 @@ type UserRow = {
   phone?: string;
   approvalStatus?: string;
   isActive?: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
+  passwordPolicyPassed?: boolean;
+  createdAt?: string;
   permissionMode?: string;
   customPermissions?: UserCustomPermissions | null;
   mustChangePassword?: boolean;
@@ -403,6 +408,10 @@ const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "已拒绝", value: "REJECTED" },
   { label: "已停用", value: "DISABLED" },
 ];
+const USER_STATUS_FILTER_OPTIONS = [
+  { label: "邮箱未验证", value: "email_unverified" },
+  ...USER_APPROVAL_STATUS_OPTIONS,
+];
 const SETTINGS_TABS: { key: SettingsTabKey; label: string; description: string }[] = [
   { key: "companyProfile", label: "公司资料", description: "维护公司名称、系统品牌、联系方式和页面展示文案。" },
   { key: "customers", label: "客户资料", description: "客户简称、国家、币种和负责业务员。" },
@@ -435,7 +444,10 @@ const USER_COLUMNS: TableColumn<UserRow>[] = [
   { key: "email", label: "邮箱" },
   { key: "role", label: "角色" },
   { key: "supplierName", label: "所属供应商", render: (row) => isSupplierAccountRole(row.role) ? (supplierDisplayName(row) || "-") : "-" },
-  { key: "approvalStatus", label: "账号状态", render: (row) => userStatus(row) },
+  { key: "emailVerified", label: "邮箱验证状态", render: (row) => row.emailVerified === false ? "邮箱未验证" : "已验证" },
+  { key: "createdAt", label: "注册时间", render: (row) => formatDateTime(row.createdAt) },
+  { key: "approvalStatus", label: "审核状态", render: (row) => approvalStatusText(row.approvalStatus) },
+  { key: "accountStatus", label: "账号状态", render: (row) => userStatus(row) },
   { key: "permissionMode", label: "权限模式", render: (row) => row.permissionMode === "CUSTOM" ? "自定义" : "角色默认" },
 ];
 
@@ -911,6 +923,10 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         return;
       }
     }
+    if (userForm.password.trim() && !passwordMeetsPolicy(userForm.password.trim())) {
+      setUserMessage(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
     setUserSaving(true);
     setUserMessage("");
     try {
@@ -1139,7 +1155,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
                 onChange={(event) => updateFilter("users", "status", event.target.value)}
               >
                 <option value="">全部状态</option>
-                {USER_APPROVAL_STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                {USER_STATUS_FILTER_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
               </select>
               <select
                 value={filters.users.role}
@@ -2473,6 +2489,7 @@ function UserEditPanel({
     return false;
   });
   const selectedSupplier = bindableSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
+  const passwordError = form.password && !passwordMeetsPolicy(form.password) ? PASSWORD_POLICY_MESSAGE : "";
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
   const [advancedPermissionsOpen, setAdvancedPermissionsOpen] = useState(false);
   const [activePermissionTab, setActivePermissionTab] = useState<PermissionTabKey>("menus");
@@ -2620,6 +2637,7 @@ function UserEditPanel({
               placeholder={form.id ? "留空则不修改密码" : "新建用户必填"}
               required={!form.id}
             />
+            {passwordError ? <small className={styles.inlineError}>{passwordError}</small> : null}
           </label>
         </div>
       </section>
@@ -2708,7 +2726,7 @@ function UserEditPanel({
       ) : null}
 
       <div className={styles.userEditActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存用户"}</button>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving || Boolean(passwordError)}>{saving ? "保存中..." : "保存用户"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>
@@ -2760,6 +2778,9 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "姓名", value: user.name || "-" },
       { label: "邮箱", value: user.email || "-", wide: true },
       { label: "角色", value: user.role || "-" },
+      { label: "邮箱验证状态", value: user.emailVerified === false ? "邮箱未验证" : "已验证" },
+      { label: "注册时间", value: formatDateTime(user.createdAt) },
+      { label: "审核状态", value: approvalStatusText(user.approvalStatus) },
       { label: "账号状态", value: userStatus(user) },
       { label: "权限模式", value: user.permissionMode === "CUSTOM" ? "自定义" : "角色默认" },
       { label: "数据范围", value: user.customPermissions?.dataScope || "-" },
@@ -3030,7 +3051,16 @@ function emailListSettingText(settings: Record<string, unknown> | null | undefin
   return typeof value === "string" ? value : "";
 }
 
+function approvalStatusText(status: unknown) {
+  if (status === "APPROVED") return "已启用";
+  if (status === "PENDING") return "待审核";
+  if (status === "REJECTED") return "已拒绝";
+  if (status === "DISABLED") return "已停用";
+  return String(status || "-");
+}
+
 function userStatus(user: UserRow) {
+  if (user.emailVerified === false) return "邮箱未验证";
   if (user.approvalStatus === "APPROVED" && user.isActive !== false) return "已启用";
   if (user.approvalStatus === "PENDING") return "待审核";
   if (user.approvalStatus === "REJECTED") return "已拒绝";

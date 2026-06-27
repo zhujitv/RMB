@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
 import { codedError, logServerTiming, normalizeEmail, timeServerStep } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
@@ -97,6 +98,8 @@ type SessionUserLike = {
   role?: string | null;
   supplierId?: string | null;
   mustChangePassword?: boolean;
+  passwordPolicyPassed?: boolean;
+  emailVerified?: boolean;
   isActive?: boolean;
   passwordHash?: string;
 };
@@ -429,6 +432,20 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         outcome = "password-change-required";
         throw error;
       }
+      if (session.user.emailVerified === false) {
+        await timeServerStep("workbench-init-timing", "getActor.revokeEmailUnverifiedSessions", () => revokeUserSessions(session.user.id), {
+          ...baseContext,
+          role,
+        });
+        outcome = "email-not-verified";
+        throw permissionError("请先完成邮箱验证", 403);
+      }
+      if (session.user.passwordPolicyPassed === false && !allowPasswordChangeRequired) {
+        const error = permissionError("当前密码安全强度不足，请先修改密码后继续使用平台。", 403);
+        error.code = "PASSWORD_CHANGE_REQUIRED";
+        outcome = "password-policy-required";
+        throw error;
+      }
       if (session.user.role === LOGISTICS_OPERATOR_ROLE || isProductSupplierOperatorRole(session.user.role)) {
         const supplierId = session.user.supplierId;
         if (!supplierId) {
@@ -507,8 +524,11 @@ export async function changeOwnPassword(request: RequestLike, actor: ActorLike, 
   const currentPassword = String(input.currentPassword || "");
   const newPassword = String(input.newPassword || "");
   const confirmPassword = String(input.confirmPassword || input.newPasswordConfirm || "");
-  if (confirmPassword && confirmPassword !== newPassword) {
-    throw codedError("两次输入的新密码不一致", 400, "PASSWORD_CONFIRM_MISMATCH");
+  if (!confirmPassword || confirmPassword !== newPassword) {
+    throw codedError("两次输入的新密码不一致。", 400, "PASSWORD_CONFIRM_MISMATCH");
+  }
+  if (!passwordMeetsPolicy(newPassword)) {
+    throw codedError(PASSWORD_POLICY_MESSAGE, 400, "PASSWORD_POLICY_WEAK");
   }
   const user = await prisma.user.findUnique({ where: { id: actor.id } });
   if (!user || !user.isActive) throw permissionError("请先登录", 401);
@@ -524,6 +544,7 @@ export async function changeOwnPassword(request: RequestLike, actor: ActorLike, 
     data: {
       passwordHash: hashPassword(newPassword),
       mustChangePassword: false,
+      passwordPolicyPassed: true,
     },
   });
   await revokeUserSessions(user.id);

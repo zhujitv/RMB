@@ -8,6 +8,12 @@ export type User = {
   avatarInitials?: string;
   defaultLanguage?: string;
   mustChangePassword?: boolean;
+  passwordPolicyPassed?: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
+  approvalStatus?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type PermissionSnapshot = {

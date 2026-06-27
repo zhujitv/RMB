@@ -9,6 +9,7 @@ export {
   registerUser,
   saveUser,
   updateUserStatus,
+  verifyRegistrationEmail,
 } from "./shared-users";
 export {
   canViewAllCustomers,

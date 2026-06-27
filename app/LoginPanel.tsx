@@ -1,6 +1,8 @@
 "use client";
 
 import type { FormEvent } from "react";
+import { useMemo, useState } from "react";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
 import styles from "./WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "./types";
 
@@ -25,11 +27,20 @@ export function LoginPanel({
   onLogin,
   onRegister,
 }: LoginPanelProps) {
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
   const brandName = companyProfile?.brandName?.trim() || "NEXTWOOD";
   const logoUrl = companyProfile?.logoUrl?.trim() || "";
   const footerText = typeof companyProfile?.footerText === "string"
     ? companyProfile.footerText.trim()
     : "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.";
+  const registerPasswordError = useMemo(() => (
+    registerPassword && !passwordMeetsPolicy(registerPassword) ? PASSWORD_POLICY_MESSAGE : ""
+  ), [registerPassword]);
+  const registerConfirmError = useMemo(() => (
+    registerConfirmPassword && registerPassword !== registerConfirmPassword ? "两次输入的密码不一致。" : ""
+  ), [registerConfirmPassword, registerPassword]);
+  const registerSubmitDisabled = registerBusy || Boolean(registerPasswordError || registerConfirmError);
 
   return (
     <main className={styles.loginScreen}>
@@ -92,16 +103,33 @@ export function LoginPanel({
               </label>
               <label>
                 <span>密码</span>
-                <input name="password" type="password" autoComplete="new-password" required />
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={registerPassword}
+                  onChange={(event) => setRegisterPassword(event.target.value)}
+                  required
+                />
               </label>
               <label>
                 <span>确认密码</span>
-                <input name="confirmPassword" type="password" autoComplete="new-password" required />
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={registerConfirmPassword}
+                  onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                  required
+                />
               </label>
-              <button className={styles.loginSubmitButton} type="submit" disabled={registerBusy}>
+              {registerPasswordError || registerConfirmError ? (
+                <p className={styles.formMessage}>{registerPasswordError || registerConfirmError}</p>
+              ) : null}
+              <button className={styles.loginSubmitButton} type="submit" disabled={registerSubmitDisabled}>
                 {registerBusy ? "提交中..." : "提交申请"}
               </button>
-              <small>提交后需管理员审核通过方可登录。</small>
+              <small>提交后需先完成邮箱验证，再由管理员审核通过方可登录。</small>
             </form>
           </section>
         </div>

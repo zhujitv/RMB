@@ -6,6 +6,7 @@ import { apiJson } from "./api";
 import type { User } from "./types";
 import { initials } from "./utils";
 import styles from "./WorkspaceShell.module.css";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
 
 type AccountSettingsProps = {
   user: User;
@@ -28,7 +29,15 @@ export function AccountSettings({ user, onProfileSaved, onPasswordChanged }: Acc
   const [tab, setTab] = useState<"profile" | "security">("profile");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const avatar = useMemo(() => user.avatarInitials?.trim() || initials(user.name), [user.avatarInitials, user.name]);
+  const passwordPolicyMessage = useMemo(() => (
+    newPassword && !passwordMeetsPolicy(newPassword) ? PASSWORD_POLICY_MESSAGE : ""
+  ), [newPassword]);
+  const confirmPasswordMessage = useMemo(() => (
+    confirmPassword && newPassword !== confirmPassword ? "两次输入的新密码不一致。" : ""
+  ), [confirmPassword, newPassword]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,6 +71,10 @@ export function AccountSettings({ user, onProfileSaved, onPasswordChanged }: Acc
     const confirmPassword = String(form.get("confirmPassword") || "");
     if (newPassword !== confirmPassword) {
       setMessage("两次输入的新密码不一致。");
+      return;
+    }
+    if (!passwordMeetsPolicy(newPassword)) {
+      setMessage(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setBusy(true);
@@ -149,14 +162,31 @@ export function AccountSettings({ user, onProfileSaved, onPasswordChanged }: Acc
           </label>
           <label>
             <span>新密码</span>
-            <input name="newPassword" type="password" autoComplete="new-password" required />
+            <input
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+            />
           </label>
           <label>
             <span>确认密码</span>
-            <input name="confirmPassword" type="password" autoComplete="new-password" required />
+            <input
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+            />
           </label>
+          {passwordPolicyMessage || confirmPasswordMessage ? (
+            <p className={styles.formMessage}>{passwordPolicyMessage || confirmPasswordMessage}</p>
+          ) : null}
           {message ? <p className={styles.formMessage}>{message}</p> : null}
-          <button className={styles.primaryButtonCompact} type="submit" disabled={busy}>
+          <button className={styles.primaryButtonCompact} type="submit" disabled={busy || Boolean(passwordPolicyMessage || confirmPasswordMessage)}>
             {busy ? "保存中..." : "更新密码"}
           </button>
         </form>

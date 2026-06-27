@@ -55,6 +55,9 @@ model User {
   customPermissions Json? @map("custom_permissions")
   supplierId    String?   @map("supplier_id")
   mustChangePassword Boolean @default(false) @map("must_change_password")
+  passwordPolicyPassed Boolean @default(false) @map("password_policy_passed")
+  emailVerified Boolean @default(false) @map("email_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at")
   approvalStatus String @default("APPROVED") @map("approval_status")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -78,6 +81,7 @@ model User {
   submittedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundSubmittedBy")
   sessions    UserSession[]
   loginAttempts LoginAttempt[]
+  emailVerificationTokens EmailVerificationToken[]
   auditLogs   AuditLog[]
   supplierOperator Supplier? @relation("SupplierOperators", fields: [supplierId], references: [id])
   submittedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsSubmittedBy")
@@ -98,7 +102,25 @@ model User {
 
   @@index([supplierId])
   @@index([approvalStatus])
+  @@index([emailVerified])
+  @@index([passwordPolicyPassed])
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+  @@map("email_verification_tokens")
 }
 
 model UserSession {
