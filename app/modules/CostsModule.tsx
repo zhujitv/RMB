@@ -364,14 +364,17 @@ export function CostsModule({
     setLoading(true);
     setError("");
     try {
+      const effectiveFilters = nextView === "invoiceExceptions"
+        ? { ...nextFilters, invoiceStatus: "未收到" }
+        : nextFilters;
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(PAGE_SIZE),
         archiveScope: nextArchiveScope,
         view: nextView,
       });
-      if (nextFilters.keyword.trim()) params.set("keyword", nextFilters.keyword.trim());
-      Object.entries(nextFilters).forEach(([key, value]) => {
+      if (effectiveFilters.keyword.trim()) params.set("keyword", effectiveFilters.keyword.trim());
+      Object.entries(effectiveFilters).forEach(([key, value]) => {
         if (key === "keyword") return;
         const text = String(value || "").trim();
         if (text) params.set(key, text);
@@ -501,13 +504,20 @@ export function CostsModule({
   }
 
   function changeCostView(nextView: CostView) {
+    const nextFilters = nextView === "invoiceExceptions"
+      ? { ...submittedFilters, invoiceStatus: "未收到" }
+      : submittedFilters;
+    if (nextView === "invoiceExceptions") {
+      setFilters((current) => ({ ...current, invoiceStatus: "未收到" }));
+      setSubmittedFilters(nextFilters);
+    }
     setCostView(nextView);
     setDetailCost(null);
     setDetailOrderSummary(null);
     setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
-    void loadCosts(1, submittedFilters, archiveScope, nextView);
+    void loadCosts(1, nextFilters, archiveScope, nextView);
   }
 
   return (
@@ -622,7 +632,7 @@ export function CostsModule({
           </label>
           <label>
             发票状态
-            <select value={filters.invoiceStatus} onChange={(event) => setFilter("invoiceStatus", event.target.value)}>
+            <select value={costView === "invoiceExceptions" ? "未收到" : filters.invoiceStatus} onChange={(event) => setFilter("invoiceStatus", event.target.value)} disabled={costView === "invoiceExceptions"}>
               <option value="">全部发票状态</option>
               {COST_INVOICE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
@@ -1396,7 +1406,7 @@ function CostTableRows({
         <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
         <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
-        <td>{supplierName}</td>
+        <td className={styles.supplierColumn} title={supplierName}>{supplierName}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
@@ -1415,7 +1425,7 @@ function CostDetailTableHead() {
         <th className={styles.orderNoColumn}>订单号</th>
         <th className={styles.customerColumn}>客户简称</th>
         <th>成本类型</th>
-        <th>供应商</th>
+        <th className={styles.supplierColumn}>供应商</th>
         <th className={styles.amountColumn}>成本金额</th>
         <th>付款状态</th>
         <th>发票状态</th>
@@ -1431,7 +1441,7 @@ function CostInvoiceGroupTableHead({ showException }: { showException: boolean }
       <tr>
         <th className={styles.orderNoColumn}>订单号</th>
         <th className={styles.customerColumn}>客户简称</th>
-        <th>供应商</th>
+        <th className={styles.supplierColumn}>供应商</th>
         <th className={styles.amountColumn}>CNY 合计</th>
         <th className={styles.amountColumn}>USD 合计</th>
         <th className={styles.statusColumn}>付款状态</th>
@@ -1460,7 +1470,7 @@ function CostInvoiceGroupRows({
     <tr className={styles.clickableRow} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
       <td className={styles.customerColumn} title={customerLegalName(group)}>{customerDisplayName(group)}</td>
-      <td>{supplierName}</td>
+      <td className={styles.supplierColumn} title={supplierName}>{supplierName}</td>
       <td className={styles.amountColumn}>
         <strong className={styles.costAmountTotal}>{formatCurrencyAmount("CNY", currencyTotalAmount(group.currencyTotals, "CNY"))}</strong>
       </td>
@@ -1776,7 +1786,7 @@ function CostOrderItemsTable({
           <thead>
             <tr>
               <th>成本类型</th>
-              <th>供应商</th>
+              <th className={styles.supplierColumn}>供应商</th>
               <th>币种</th>
               <th className={styles.amountColumn}>原币金额</th>
               <th>付款状态</th>
@@ -1788,7 +1798,7 @@ function CostOrderItemsTable({
             {costs.length ? costs.map((cost) => (
               <tr key={cost.id}>
                 <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
-                <td>{cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-"}</td>
+                <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
@@ -1924,7 +1934,7 @@ function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
           <thead>
             <tr>
               <th>费用类型</th>
-              <th>供应商</th>
+              <th className={styles.supplierColumn}>供应商</th>
               <th>币种</th>
               <th className={styles.amountColumn}>原币金额</th>
               <th className={styles.amountColumn}>折人民币</th>
@@ -1937,7 +1947,7 @@ function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
             {costs.length ? costs.map((cost) => (
               <tr key={cost.id}>
                 <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
-                <td>{cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-"}</td>
+                <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount("CNY", cost.amountCny ?? 0)}</td>
@@ -2282,6 +2292,10 @@ function initialSupplierFromCost(cost?: CostRow | null): SupplierOption | null {
     name: cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "未命名供应商",
     supplierType: cost.supplierType || "",
   };
+}
+
+function costSupplierName(cost: Pick<CostRow, "supplierName" | "supplierNameSnapshot" | "vendorName"> | null | undefined) {
+  return cost?.supplierName || cost?.supplierNameSnapshot || cost?.vendorName || "-";
 }
 
 function exchangeRateMeta(currency?: string) {

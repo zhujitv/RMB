@@ -71,6 +71,8 @@ test("cost invoice group main list hides long invoice and cost type columns", ()
 
 test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsModule, /changeCostView\("invoiceExceptions"\)/);
+  assert.match(costsModule, /nextView === "invoiceExceptions"[\s\S]*invoiceStatus: "未收到"/);
+  assert.match(costsModule, /value=\{costView === "invoiceExceptions" \? "未收到" : filters\.invoiceStatus\}/);
   assert.match(costsModule, /view: nextView/);
   assert.match(costsModule, /CostInvoiceGroupTableHead/);
   assert.match(costsModule, /CostInvoiceGroupRows/);
@@ -79,10 +81,12 @@ test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsQueries, /export async function listCostInvoiceExceptions/);
   assert.match(costsQueries, /buildCostInvoiceGroups\(query, actor, \{ exceptionsOnly: true \}\)/);
   assert.match(costsQueries, /function invoiceExceptionType/);
+  assert.match(costsQueries, /if \(invoiceStatus !== "未收到"\) return ""/);
   assert.match(costsQueries, /已付款未收票/);
-  assert.match(costsQueries, /已收票未付款/);
-  assert.match(costsQueries, /paymentStatus === "已支付" && invoiceStatus !== "已收到"/);
-  assert.match(costsQueries, /paymentStatus !== "已支付" && invoiceStatus === "已收到"/);
+  assert.match(costsQueries, /已确认未收票/);
+  assert.match(costsQueries, /超期未收票/);
+  assert.doesNotMatch(costsQueries, /已收票未付款/);
+  assert.match(costsQueries, /group\.invoiceStatus === "未收到" && Boolean\(group\.invoiceExceptionType\)/);
   assert.match(costsQueries, /documents: \{ some: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
   assert.match(costsQueries, /documents: \{ none: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
 });
@@ -98,6 +102,10 @@ test("cost management page is centered and constrained to readable table width",
   assert.match(workspaceStyles, /\.costTableWrap \{[\s\S]*max-width: 100%;[\s\S]*overflow-x: auto;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable \{[\s\S]*width: 100%;[\s\S]*table-layout: fixed;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th,[\s\S]*\.costTableWrap \.dataTable td \{[\s\S]*white-space: nowrap;[\s\S]*text-overflow: ellipsis;/);
+  assert.match(costsModule, /<th className=\{styles\.supplierColumn\}>供应商<\/th>/);
+  assert.match(costsModule, /<td className=\{styles\.supplierColumn\} title=\{supplierName\}>\{supplierName\}<\/td>/);
+  assert.match(costsModule, /<td className=\{styles\.supplierColumn\} title=\{costSupplierName\(cost\)\}>\{costSupplierName\(cost\)\}<\/td>/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.supplierColumn,[\s\S]*min-width: 220px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(workspaceStyles, /\.costTableWrap\.tablePinnedTwoCols \.dataTable th\.customerColumn,[\s\S]*width: 120px;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.amountColumn,[\s\S]*width: 120px;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 112px;/);

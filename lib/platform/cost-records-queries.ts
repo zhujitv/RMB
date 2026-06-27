@@ -249,15 +249,43 @@ function groupInvoiceStatus(costs: CostDto[] = []) {
   return "未收到";
 }
 
-function invoiceExceptionType(paymentStatus = "", invoiceStatus = "") {
-  if (paymentStatus === "已支付" && invoiceStatus !== "已收到") return "PAID_WITHOUT_INVOICE";
-  if (paymentStatus !== "已支付" && invoiceStatus === "已收到") return "INVOICE_WITH_UNPAID";
+const MISSING_INVOICE_OVERDUE_DAYS = 30;
+
+function costTimestamp(value: unknown) {
+  const time = new Date(String(value || "")).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function costDateField(cost: CostDto, field: "costConfirmedAt" | "paymentDate" | "updatedAt" | "createdAt") {
+  if (field in cost) return cost[field as keyof CostDto];
+  return null;
+}
+
+function hasOverdueMissingInvoice(costs: CostDto[] = []) {
+  const cutoff = Date.now() - MISSING_INVOICE_OVERDUE_DAYS * 24 * 60 * 60 * 1000;
+  return costs.some((cost) => {
+    const baseTime = costTimestamp(
+      costDateField(cost, "costConfirmedAt")
+      || costDateField(cost, "paymentDate")
+      || costDateField(cost, "updatedAt")
+      || costDateField(cost, "createdAt"),
+    );
+    return baseTime > 0 && baseTime < cutoff;
+  });
+}
+
+function invoiceExceptionType(costs: CostDto[] = [], paymentStatus = "", invoiceStatus = "") {
+  if (invoiceStatus !== "未收到") return "";
+  if (paymentStatus === "已支付") return "PAID_WITHOUT_INVOICE";
+  if (costs.some((cost) => cost.costConfirmed)) return "CONFIRMED_WITHOUT_INVOICE";
+  if (hasOverdueMissingInvoice(costs)) return "OVERDUE_WITHOUT_INVOICE";
   return "";
 }
 
 function invoiceExceptionLabel(type: string) {
   if (type === "PAID_WITHOUT_INVOICE") return "已付款未收票";
-  if (type === "INVOICE_WITH_UNPAID") return "已收票未付款";
+  if (type === "CONFIRMED_WITHOUT_INVOICE") return "已确认未收票";
+  if (type === "OVERDUE_WITHOUT_INVOICE") return "超期未收票";
   return "";
 }
 
@@ -288,7 +316,7 @@ function serializeCostInvoiceGroup(key: string, costs: CostDto[], rawRows: CostW
   const invoiceFiles = groupInvoiceFiles(groupCosts);
   const paymentStatus = groupPaymentStatus(groupCosts);
   const invoiceStatus = groupInvoiceStatus(groupCosts);
-  const exceptionType = invoiceExceptionType(paymentStatus, invoiceStatus);
+  const exceptionType = invoiceExceptionType(groupCosts, paymentStatus, invoiceStatus);
   const sourceTypes = uniqueTextList(groupCosts.map((cost) => cost.sourceType));
   const groupType = sourceTypes.includes("LOGISTICS_EXPENSE") ? "LOGISTICS_BILL" : "COST";
   const costTypeLabels = uniqueTextList(groupCosts.map((cost) => cost.costType));
@@ -381,7 +409,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
       const costs = rawRows.map(safeSerializeCost);
       return serializeCostInvoiceGroup(key, costs, rawRows);
     })
-    .filter((group) => !options.exceptionsOnly || Boolean(group.invoiceExceptionType))
+    .filter((group) => !options.exceptionsOnly || (group.invoiceStatus === "未收到" && Boolean(group.invoiceExceptionType)))
     .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
   const start = (page - 1) * pageSize;
   return {

@@ -1500,6 +1500,20 @@
   min-width: 120px;
 }
 
+.costTableWrap .dataTable th.supplierColumn,
+.costTableWrap .dataTable td.supplierColumn,
+.dataTable th.supplierColumn,
+.dataTable td.supplierColumn {
+  width: 220px;
+  min-width: 220px;
+  max-width: 260px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .costTableWrap .dataTable th.amountColumn,
 .costTableWrap .dataTable td.amountColumn {
   width: 120px;
@@ -3921,6 +3935,13 @@
 .costTableWrap .dataTable td.amountColumn {
   width: 120px;
   min-width: 120px;
+}
+
+.costTableWrap .dataTable th.supplierColumn,
+.costTableWrap .dataTable td.supplierColumn {
+  width: 220px;
+  min-width: 220px;
+  max-width: 260px;
 }
 
 .costTableWrap .dataTable th.statusColumn,
