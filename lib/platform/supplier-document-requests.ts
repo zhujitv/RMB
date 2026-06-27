@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 import {
+  FACTORY_SUPPLIER_OPERATOR_ROLE,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
   assertWrite,
@@ -165,7 +166,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     orderId: row.orderId,
     orderNo: row.order?.orderNo || "",
     supplierId: row.supplierId,
-    supplierName: actor?.role === "物流供应商" ? "" : (row.supplier?.supplierName || ""),
+    supplierName: actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE ? "" : (row.supplier?.supplierName || ""),
     requiredDocumentTypes: requiredTypes,
     requiredDocumentLabels: requiredTypes.map((type) => SUPPLIER_DOCUMENT_LABELS[type] || type),
     status: SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(row.status) ? row.status : "待上传",
@@ -176,7 +177,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     sendStatus: row.sendStatus || "pending",
     sendError: row.sendError || "",
     sentAt: row.sentAt,
-    requestedByName: actor?.role === "物流供应商" ? "" : (row.requestedBy?.name || ""),
+    requestedByName: actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE ? "" : (row.requestedBy?.name || ""),
     documents,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -235,7 +236,7 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     id,
     deletedAt: null,
-    ...(actor?.role === "物流供应商"
+    ...(actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE
       ? { supplierId: actor.supplierId || "__no_supplier_bound__" }
       : {}),
   };
@@ -244,26 +245,26 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
     include: supplierDocumentRequestInclude(),
   });
   if (!row) throw codedError("资料回传任务不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
-  if (actor?.role === "物流供应商" && !row.supplier.allowFactoryDocumentUpload) {
+  if (actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE && !row.supplier.allowFactoryDocumentUpload) {
     throw codedError("该供应商未开启资料回传权限。", 403, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
   }
   return row;
 }
 
 export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
-  assertRead(actor, "documents");
+  assertRead(actor, "supplierDocuments");
   const status = nonEmpty(query.get("status"));
   const keyword = nonEmpty(query.get("keyword") || query.get("q"));
   const where: Prisma.SupplierDocumentRequestWhereInput = {
     deletedAt: null,
     ...(SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(status) ? { status } : {}),
-    ...(actor?.role === "物流供应商"
+    ...(actor?.role === FACTORY_SUPPLIER_OPERATOR_ROLE
       ? {
           supplierId: actor.supplierId || "__no_supplier_bound__",
           supplier: { allowFactoryDocumentUpload: true, status: "启用", deletedAt: null },
         }
       : {}),
-    ...(keyword && actor?.role !== "物流供应商"
+    ...(keyword && actor?.role !== FACTORY_SUPPLIER_OPERATOR_ROLE
       ? {
           OR: [
             { order: { orderNo: { contains: keyword, mode: "insensitive" } } },
@@ -409,7 +410,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
 }
 
 export async function uploadSupplierDocumentRequestDocument(request: AuditRequestLike, actor: ActorLike, requestId: string, input: SupplierDocumentUploadInput) {
-  assertWrite(actor, "documents");
+  assertWrite(actor, "supplierDocuments");
   const uploadedById = actorId(actor);
   const row = await loadSupplierDocumentRequest(requestId, actor);
   const documentType = nonEmpty(input.documentType).toUpperCase() as OrderDocumentType;
@@ -478,7 +479,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
 }
 
 export async function getSupplierDocumentRequestTemplate(request: AuditRequestLike, actor: ActorLike, requestId: string) {
-  assertRead(actor, "documents");
+  assertRead(actor, "supplierDocuments");
   const row = await loadSupplierDocumentRequest(requestId, actor);
   if (!row.templateStorageKey) {
     throw codedError("该任务没有合同样本文件。", 404, "TEMPLATE_NOT_FOUND");

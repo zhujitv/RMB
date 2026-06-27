@@ -281,6 +281,8 @@ const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const SUPPLIER_TYPES = ["工厂供应商", "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
 const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
+const FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
+const SUPPLIER_ACCOUNT_ROLES = ["物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE];
 const SUPPLIER_LOGISTICS_COST_TYPE_UI_META: Record<string, { label?: string; description: string }> = {
   拖车费: { description: "国内拖车、短驳、提送柜等运输费用。" },
   报关费: { description: "出口报关代理、申报服务相关费用。" },
@@ -389,7 +391,7 @@ const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
   uploadUrl: "",
   signature: "NEXTWOOD 供应链协同平台",
 };
-const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
+const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE, "物流资料录入员"];
 const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },
   { label: "已启用", value: "APPROVED" },
@@ -420,14 +422,14 @@ const SUPPLIER_COLUMNS: TableColumn<SupplierRow>[] = [
   { key: "supplierType", label: "类型" },
   { key: "status", label: "状态" },
   { key: "contactPerson", label: "联系人" },
-  { key: "isDefaultLogisticsSupplier", label: "默认物流", render: (row) => yesNo(row.isDefaultLogisticsSupplier) },
+  { key: "isDefaultLogisticsSupplier", label: "默认物流", render: (row) => LOGISTICS_SUPPLIER_TYPES.includes(row.supplierType || "") ? yesNo(row.isDefaultLogisticsSupplier) : "-" },
 ];
 
 const USER_COLUMNS: TableColumn<UserRow>[] = [
   { key: "name", label: "姓名" },
   { key: "email", label: "邮箱" },
   { key: "role", label: "角色" },
-  { key: "supplierName", label: "所属供应商", render: (row) => row.role === "物流供应商" ? (supplierDisplayName(row) || "-") : "-" },
+  { key: "supplierName", label: "所属供应商", render: (row) => isSupplierAccountRole(row.role) ? (supplierDisplayName(row) || "-") : "-" },
   { key: "approvalStatus", label: "账号状态", render: (row) => userStatus(row) },
   { key: "permissionMode", label: "权限模式", render: (row) => row.permissionMode === "CUSTOM" ? "自定义" : "角色默认" },
 ];
@@ -891,9 +893,18 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       setUserMessage("新建用户必须设置初始密码");
       return;
     }
-    if (userForm.role === "物流供应商" && !userForm.supplierId) {
-      setUserMessage("物流供应商账号必须绑定供应商");
+    if (isSupplierAccountRole(userForm.role) && !userForm.supplierId) {
+      setUserMessage(`${userForm.role}必须绑定供应商`);
       return;
+    }
+    if (isSupplierAccountRole(userForm.role)) {
+      const supplier = suppliers.find((item) => item.id === userForm.supplierId);
+      if (!supplierMatchesUserRole(supplier, userForm.role)) {
+        setUserMessage(userForm.role === FACTORY_SUPPLIER_ACCOUNT_ROLE
+          ? "工厂供应商账号只能绑定已开启资料回传权限的工厂供应商"
+          : "物流供应商账号只能绑定物流、报关、海运或港杂费用供应商");
+        return;
+      }
     }
     setUserSaving(true);
     setUserMessage("");
@@ -904,7 +915,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         email: userForm.email,
         role: userForm.role,
         approvalStatus: userForm.approvalStatus,
-        supplierId: userForm.role === "物流供应商" ? userForm.supplierId : undefined,
+        supplierId: isSupplierAccountRole(userForm.role) ? userForm.supplierId : undefined,
         customPermissions: userForm.permissionMode === "CUSTOM"
           ? {
             mode: "CUSTOM",
@@ -2177,23 +2188,30 @@ function SupplierEditPanel({
   const controlsDisabled = readOnly || saving;
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={(event) => {
+    <form className={`${styles.quickCreatePanel} ${styles.userEditPanel}`} onSubmit={(event) => {
       if (readOnly) {
         event.preventDefault();
         return;
       }
       onSubmit(event);
     }}>
-      <div className={styles.quickCreateHeader}>
+      <section className={styles.userEditTitle}>
         <div>
           <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
           <span>{readOnly ? "当前为只读查看状态，点击编辑后可修改供应商资料。" : "物流相关开关只对物流类供应商生效；工厂资料回传只对工厂供应商生效。"}</span>
         </div>
-      </div>
+      </section>
 
       {message ? <div className={styles.inlineError}>{message}</div> : null}
 
-      <div className={styles.reportFilterGrid}>
+      <section className={styles.userEditSection}>
+        <div className={styles.userEditSectionHeader}>
+          <div>
+            <strong>基础信息</strong>
+            <span>维护供应商名称、类型、联系人和开票资料。</span>
+          </div>
+        </div>
+        <div className={styles.reportFilterGrid}>
         <label>
           供应商名称
           <input value={form.supplierName} onChange={(event) => setField("supplierName", event.target.value)} required disabled={controlsDisabled} />
@@ -2205,11 +2223,6 @@ function SupplierEditPanel({
             onChange({
               ...form,
               supplierType,
-              allowDomesticLogisticsEntry: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowDomesticLogisticsEntry : false,
-              allowLogisticsExpenseEntry: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowLogisticsExpenseEntry : false,
-              allowLogisticsInvoiceUpload: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowLogisticsInvoiceUpload : false,
-              allowFactoryDocumentUpload: supplierType === "工厂供应商" ? form.allowFactoryDocumentUpload : false,
-              isDefaultLogisticsSupplier: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.isDefaultLogisticsSupplier : false,
             });
           }} disabled={controlsDisabled}>
             {SUPPLIER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
@@ -2257,60 +2270,86 @@ function SupplierEditPanel({
           银行账号
           <input value={form.bankAccount} onChange={(event) => setField("bankAccount", event.target.value)} disabled={controlsDisabled} />
         </label>
-        <BooleanSelect
-          label="允许录入物流信息"
-          value={logisticsCapable && form.allowDomesticLogisticsEntry}
-          disabled={controlsDisabled || !logisticsCapable}
-          onChange={(value) => setField("allowDomesticLogisticsEntry", value)}
-        />
-        <BooleanSelect
-          label="允许物流费用录入"
-          value={logisticsCapable && form.allowLogisticsExpenseEntry}
-          disabled={controlsDisabled || !logisticsCapable}
-          onChange={(value) => setField("allowLogisticsExpenseEntry", value)}
-        />
-        <BooleanSelect
-          label="允许物流发票上传"
-          value={logisticsCapable && form.allowLogisticsInvoiceUpload}
-          disabled={controlsDisabled || !logisticsCapable}
-          onChange={(value) => setField("allowLogisticsInvoiceUpload", value)}
-        />
-        <BooleanSelect
-          label="允许供应商资料回传"
-          value={factoryDocumentCapable && form.allowFactoryDocumentUpload}
-          disabled={controlsDisabled || !factoryDocumentCapable}
-          onChange={(value) => setField("allowFactoryDocumentUpload", value)}
-        />
-        <BooleanSelect
-          label="默认物流供应商"
-          value={logisticsCapable && form.isDefaultLogisticsSupplier}
-          disabled={controlsDisabled || !logisticsCapable}
-          onChange={(value) => setField("isDefaultLogisticsSupplier", value)}
-        />
         <label>
           备注
           <input value={form.remark} onChange={(event) => setField("remark", event.target.value)} disabled={controlsDisabled} />
         </label>
-      </div>
-
-      <div className={styles.documentGroupCard}>
-        <strong>允许录入的物流费用类型</strong>
-        <div className={styles.supplierLogisticsCostGrid}>
-          {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => {
-            const meta = SUPPLIER_LOGISTICS_COST_TYPE_UI_META[costType];
-            return (
-              <PermissionSelectItem
-                key={costType}
-                label={meta?.label || label}
-                description={meta?.description || "允许供应商在物流费用模块录入该费用。"}
-                checked={form.allowedLogisticsCostTypes.includes(costType)}
-                disabled={controlsDisabled || !logisticsCapable || !form.allowLogisticsExpenseEntry}
-                onChange={() => toggleCostType(costType)}
-              />
-            );
-          })}
         </div>
-      </div>
+      </section>
+
+      {factoryDocumentCapable ? (
+        <section className={styles.userEditSection}>
+          <div className={styles.userEditSectionHeader}>
+            <div>
+              <strong>工厂供应商权限</strong>
+              <span>仅控制工厂采购合同和工厂增值税发票的供应商回传入口。</span>
+            </div>
+          </div>
+          <div className={styles.reportFilterGrid}>
+            <BooleanSelect
+              label="允许供应商资料回传"
+              value={form.allowFactoryDocumentUpload}
+              disabled={controlsDisabled}
+              onChange={(value) => setField("allowFactoryDocumentUpload", value)}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {logisticsCapable ? (
+        <section className={styles.userEditSection}>
+          <div className={styles.userEditSectionHeader}>
+            <div>
+              <strong>物流供应商权限</strong>
+              <span>控制物流信息录入、物流费用协同、物流发票上传和默认物流供应商设置。</span>
+            </div>
+          </div>
+          <div className={styles.reportFilterGrid}>
+            <BooleanSelect
+              label="允许录入物流信息"
+              value={form.allowDomesticLogisticsEntry}
+              disabled={controlsDisabled}
+              onChange={(value) => setField("allowDomesticLogisticsEntry", value)}
+            />
+            <BooleanSelect
+              label="允许物流费用录入"
+              value={form.allowLogisticsExpenseEntry}
+              disabled={controlsDisabled}
+              onChange={(value) => setField("allowLogisticsExpenseEntry", value)}
+            />
+            <BooleanSelect
+              label="允许物流发票上传"
+              value={form.allowLogisticsInvoiceUpload}
+              disabled={controlsDisabled}
+              onChange={(value) => setField("allowLogisticsInvoiceUpload", value)}
+            />
+            <BooleanSelect
+              label="默认物流供应商"
+              value={form.isDefaultLogisticsSupplier}
+              disabled={controlsDisabled}
+              onChange={(value) => setField("isDefaultLogisticsSupplier", value)}
+            />
+          </div>
+          <div className={styles.documentGroupCard}>
+            <strong>允许录入的物流费用类型</strong>
+            <div className={styles.supplierLogisticsCostGrid}>
+              {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => {
+                const meta = SUPPLIER_LOGISTICS_COST_TYPE_UI_META[costType];
+                return (
+                  <PermissionSelectItem
+                    key={costType}
+                    label={meta?.label || label}
+                    description={meta?.description || "允许供应商在物流费用模块录入该费用。"}
+                    checked={form.allowedLogisticsCostTypes.includes(costType)}
+                    disabled={controlsDisabled || !form.allowLogisticsExpenseEntry}
+                    onChange={() => toggleCostType(costType)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className={styles.detailActions}>
         {readOnly ? (
@@ -2423,8 +2462,12 @@ function UserEditPanel({
     onChange({ ...form, [key]: value });
   }
 
-  const logisticsSuppliers = suppliers.filter((supplier) => LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""));
-  const selectedSupplier = logisticsSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
+  const bindableSuppliers = suppliers.filter((supplier) => {
+    if (form.role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
+    if (form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE) return supplier.supplierType === "工厂供应商" && supplier.allowFactoryDocumentUpload;
+    return false;
+  });
+  const selectedSupplier = bindableSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
   const [advancedPermissionsOpen, setAdvancedPermissionsOpen] = useState(false);
   const [activePermissionTab, setActivePermissionTab] = useState<PermissionTabKey>("menus");
@@ -2459,8 +2502,8 @@ function UserEditPanel({
     },
   }[activePermissionTab];
 
-  async function searchLogisticsSuppliers(keyword: string) {
-    const filtered = logisticsSuppliers.filter((supplier) => fuzzyIncludes([
+  async function searchBindableSuppliers(keyword: string) {
+    const filtered = bindableSuppliers.filter((supplier) => fuzzyIncludes([
       supplier.supplierName,
       supplier.supplierType,
       supplier.contactPerson,
@@ -2475,7 +2518,7 @@ function UserEditPanel({
     onChange({
       ...form,
       role,
-      supplierId: role === "物流供应商" ? form.supplierId : "",
+      supplierId: role === form.role && isSupplierAccountRole(role) ? form.supplierId : "",
       ...(form.permissionMode === "CUSTOM" ? nextDefaults : {}),
     });
   }
@@ -2541,20 +2584,26 @@ function UserEditPanel({
               {USER_APPROVAL_STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
             </select>
           </label>
-          {form.role === "物流供应商" ? (
+          {isSupplierAccountRole(form.role) ? (
             <label>
               绑定供应商
               <SearchAutocomplete
                 value={selectedSupplier}
-                cacheKey="settings-user-logistics-suppliers"
+                cacheKey={form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE ? "settings-user-factory-suppliers" : "settings-user-logistics-suppliers"}
                 emptyLabel="未找到匹配供应商"
                 placeholder="搜索供应商 / 类型 / 联系人 / 税号"
                 getLabel={supplierOptionLabel}
                 getDescription={(supplier) => [supplier.contactPerson, supplier.invoiceTitle, supplier.taxNumber].filter(Boolean).join(" / ")}
-                search={searchLogisticsSuppliers}
+                search={searchBindableSuppliers}
                 onSelect={(supplier) => setField("supplierId", supplier.id)}
               />
-              {!logisticsSuppliers.length ? <small className={styles.mutedText}>请先在供应商资料中启用物流相关供应商</small> : null}
+              {!bindableSuppliers.length ? (
+                <small className={styles.mutedText}>
+                  {form.role === FACTORY_SUPPLIER_ACCOUNT_ROLE
+                    ? "请先在供应商资料中建立工厂供应商并开启资料回传权限"
+                    : "请先在供应商资料中启用物流相关供应商"}
+                </small>
+              ) : null}
             </label>
           ) : null}
           <label>
@@ -2712,7 +2761,7 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "菜单权限", value: user.customPermissions?.menus?.length ? `${user.customPermissions.menus.length} 项自定义` : "-" },
       { label: "查看权限", value: user.customPermissions?.reads?.length ? `${user.customPermissions.reads.length} 项自定义` : "-" },
       { label: "操作权限", value: user.customPermissions?.writes?.length ? `${user.customPermissions.writes.length} 项自定义` : "-" },
-      { label: "绑定供应商", value: user.role === "物流供应商" ? (supplierDisplayName(user) || "-") : "-", wide: user.role === "物流供应商" },
+      { label: "绑定供应商", value: isSupplierAccountRole(user.role) ? (supplierDisplayName(user) || "-") : "-", wide: isSupplierAccountRole(user.role) },
       { label: "首次改密", value: yesNo(user.mustChangePassword) },
     ];
   }
@@ -2991,6 +3040,17 @@ function supplierDisplayName(user: UserRow) {
   return name || type || "";
 }
 
+function isSupplierAccountRole(role: unknown) {
+  return SUPPLIER_ACCOUNT_ROLES.includes(String(role || ""));
+}
+
+function supplierMatchesUserRole(supplier: SupplierRow | undefined, role: string) {
+  if (!supplier) return false;
+  if (role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
+  if (role === FACTORY_SUPPLIER_ACCOUNT_ROLE) return supplier.supplierType === "工厂供应商" && Boolean(supplier.allowFactoryDocumentUpload);
+  return false;
+}
+
 function supplierOptionLabel(supplier: SupplierRow) {
   const name = supplier.supplierName || "未命名供应商";
   return supplier.supplierType ? `${name} / ${supplier.supplierType}` : name;
@@ -3161,7 +3221,7 @@ function permissionDefaultsForRole(config: PermissionConfig | null, role: string
 
 function defaultDataScopeForRole(role: string) {
   if (role === "管理员" || role === "财务") return "ALL";
-  if (role === "业务员" || role === "物流供应商" || role === "物流资料录入员") return "OWN";
+  if (role === "业务员" || role === "物流供应商" || role === FACTORY_SUPPLIER_ACCOUNT_ROLE || role === "物流资料录入员") return "OWN";
   return "NONE";
 }
 

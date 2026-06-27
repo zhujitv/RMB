@@ -34,6 +34,7 @@ const backend = [
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const menuFile = readFileSync("app/menu.ts", "utf8");
 const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const supplierMasters = readFileSync("lib/platform/supplier-masters.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260612190000_logistics_expense_workflow/migration.sql", "utf8");
 const containerCountMigration = readFileSync("prisma/migrations/20260622100000_logistics_expense_container_count/migration.sql", "utf8");
 const invoiceNotificationMigration = readFileSync("prisma/migrations/20260622233000_logistics_expense_invoice_notification/migration.sql", "utf8");
@@ -133,9 +134,9 @@ test("supplier role is renamed and scoped to assigned logistics work", () => {
 
 test("logistics supplier users must bind to one supplier account", () => {
   assert.match(schema, /model User[\s\S]*supplierId\s+String\?\s+@map\("supplier_id"\)/);
-  assert.match(backend, /物流供应商账号必须绑定一个供应商。/);
-  assert.match(backend, /LOGISTICS_USER_SUPPLIER_REQUIRED/);
-  assert.match(settingsModule, /物流供应商账号必须绑定供应商/);
+  assert.match(backend, /SUPPLIER_USER_SUPPLIER_REQUIRED/);
+  assert.match(backend, /LOGISTICS_USER_SUPPLIER_TYPE_INVALID/);
+  assert.match(settingsModule, /SUPPLIER_ACCOUNT_ROLES/);
   assert.match(settingsModule, /绑定供应商/);
 });
 
@@ -151,6 +152,11 @@ test("supplier settings include logistics expense and invoice permissions", () =
   assert.match(settingsModule, /label="允许物流费用录入"/);
   assert.match(settingsModule, /label="允许物流发票上传"/);
   assert.match(settingsModule, /允许录入的物流费用类型/);
+  assert.match(settingsModule, /<strong>物流供应商权限<\/strong>/);
+  assert.match(settingsModule, /<strong>工厂供应商权限<\/strong>/);
+  assert.match(supplierMasters, /const isLogisticsSupplierType = DOMESTIC_LOGISTICS_SUPPLIER_TYPES\.includes\(supplierType\)/);
+  assert.match(supplierMasters, /if \(isLogisticsSupplierType && allowLogisticsExpenseEntry && !allowedLogisticsCostTypes\.length\)/);
+  assert.doesNotMatch(supplierMasters, /allowFactoryDocumentUpload && supplierType !== "工厂供应商"/);
 });
 
 test("invoice upload and confirmation workflow is present", () => {

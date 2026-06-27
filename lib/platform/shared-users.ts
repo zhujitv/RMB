@@ -12,6 +12,7 @@ import {
 import { writeAudit } from "./shared-audit";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
+  FACTORY_SUPPLIER_OPERATOR_ROLE,
   INITIAL_ADMIN_EMAIL,
   INITIAL_ADMIN_PASSWORD,
   LOGISTICS_OPERATOR_ROLE,
@@ -390,12 +391,18 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     isActive: approvalStatus === "APPROVED",
   };
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
-  if (role === LOGISTICS_OPERATOR_ROLE) {
-    if (!supplierId) throw codedError("物流供应商账号必须绑定一个供应商。", 400, "LOGISTICS_USER_SUPPLIER_REQUIRED");
+  if (role === LOGISTICS_OPERATOR_ROLE || role === FACTORY_SUPPLIER_OPERATOR_ROLE) {
+    if (!supplierId) throw codedError(`${role}必须绑定一个供应商。`, 400, "SUPPLIER_USER_SUPPLIER_REQUIRED");
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(supplierId);
-    if (!DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
+    if (role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
       throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+    }
+    if (role === FACTORY_SUPPLIER_OPERATOR_ROLE && supplier.supplierType !== "工厂供应商") {
+      throw codedError("工厂供应商账号只能绑定工厂供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+    }
+    if (role === FACTORY_SUPPLIER_OPERATOR_ROLE && !supplier.allowFactoryDocumentUpload) {
+      throw codedError("工厂供应商账号绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
     }
     data.supplierId = supplier.id;
   }
@@ -432,12 +439,18 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
   }
   const before = await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
   if (!before) throw permissionError("用户不存在", 404);
-  if (nextStatus === "APPROVED" && before.role === LOGISTICS_OPERATOR_ROLE) {
-    if (!before.supplierId) throw codedError("物流供应商账号必须绑定一个供应商后才能启用。", 400, "LOGISTICS_USER_SUPPLIER_REQUIRED");
+  if (nextStatus === "APPROVED" && (before.role === LOGISTICS_OPERATOR_ROLE || before.role === FACTORY_SUPPLIER_OPERATOR_ROLE)) {
+    if (!before.supplierId) throw codedError(`${before.role}必须绑定一个供应商后才能启用。`, 400, "SUPPLIER_USER_SUPPLIER_REQUIRED");
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(before.supplierId);
-    if (!DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
+    if (before.role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
       throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+    }
+    if (before.role === FACTORY_SUPPLIER_OPERATOR_ROLE && supplier.supplierType !== "工厂供应商") {
+      throw codedError("工厂供应商账号只能绑定工厂供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+    }
+    if (before.role === FACTORY_SUPPLIER_OPERATOR_ROLE && !supplier.allowFactoryDocumentUpload) {
+      throw codedError("工厂供应商账号绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
     }
   }
   const user = await prisma.user.update({

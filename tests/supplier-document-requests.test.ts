@@ -45,3 +45,15 @@ test("supplier settings and menus expose the controlled factory upload switch", 
   assert.match(menu, /supplierDocuments/);
   assert.match(permissions, /supplierDocuments/);
 });
+
+test("factory supplier callback uses a dedicated supplier account role", () => {
+  assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(permissions, /supplierDocuments: \["管理员", "工厂供应商账号"\]/);
+  assert.match(service, /FACTORY_SUPPLIER_OPERATOR_ROLE/);
+  assert.match(service, /assertWrite\(actor, "supplierDocuments"\)/);
+  assert.match(service, /assertRead\(actor, "supplierDocuments"\)/);
+  assert.match(settingsModule, /FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号"/);
+  assert.match(settingsModule, /supplier\.supplierType === "工厂供应商" && supplier\.allowFactoryDocumentUpload/);
+  assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
+});

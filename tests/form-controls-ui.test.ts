@@ -84,8 +84,17 @@ test("factory supplier callback documents use aligned card selection UI", () => 
 test("supplier logistics cost types use card multi-select options", () => {
   const supplierCostIndex = settingsModule.indexOf("<strong>允许录入的物流费用类型</strong>");
   const supplierCostSnippet = settingsModule.slice(Math.max(0, supplierCostIndex - 420), supplierCostIndex + 1500);
+  const supplierPanelIndex = settingsModule.indexOf("function SupplierEditPanel");
+  const supplierPanelSnippet = settingsModule.slice(supplierPanelIndex, supplierPanelIndex + 7200);
 
   assert.match(settingsModule, /SUPPLIER_LOGISTICS_COST_TYPE_UI_META/);
+  assert.match(supplierPanelSnippet, /<strong>基础信息<\/strong>/);
+  assert.match(supplierPanelSnippet, /<strong>工厂供应商权限<\/strong>/);
+  assert.match(supplierPanelSnippet, /<strong>物流供应商权限<\/strong>/);
+  assert.match(supplierPanelSnippet, /\{factoryDocumentCapable \? \(/);
+  assert.match(supplierPanelSnippet, /\{logisticsCapable \? \(/);
+  assert.doesNotMatch(supplierPanelSnippet, /allowDomesticLogisticsEntry: LOGISTICS_SUPPLIER_TYPES\.includes\(supplierType\) \? form\.allowDomesticLogisticsEntry : false/);
+  assert.doesNotMatch(supplierPanelSnippet, /allowFactoryDocumentUpload: supplierType === "工厂供应商" \? form\.allowFactoryDocumentUpload : false/);
   for (const label of ["拖车费", "报关费", "港杂费", "海运费", "保险费", "ENS", "打单费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"]) {
     assert.match(settingsModule, new RegExp(label));
   }

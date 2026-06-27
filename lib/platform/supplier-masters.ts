@@ -148,26 +148,16 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
   const allowLogisticsInvoiceUpload = booleanInput(input.allowLogisticsInvoiceUpload, before?.allowLogisticsInvoiceUpload || false);
   const allowFactoryDocumentUpload = booleanInput(input.allowFactoryDocumentUpload, before?.allowFactoryDocumentUpload || false);
   const isDefaultLogisticsSupplier = booleanInput(input.isDefaultLogisticsSupplier, before?.isDefaultLogisticsSupplier || false);
+  const isLogisticsSupplierType = DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType);
   const allowedLogisticsCostTypes = normalizeLogisticsCostTypeList(
     Array.isArray(input.allowedLogisticsCostTypes)
       ? input.allowedLogisticsCostTypes
       : (Array.isArray(before?.allowedLogisticsCostTypes) ? before.allowedLogisticsCostTypes : []),
   );
-  if (allowDomesticLogisticsEntry && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType)) {
-    throw codedError("只有物流、报关、海运、港杂费用供应商可以开启物流信息录入。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
-  }
-  if ((allowLogisticsExpenseEntry || allowLogisticsInvoiceUpload) && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType)) {
-    throw codedError("只有物流、报关、海运、港杂费用供应商可以开启物流费用协同权限。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
-  }
-  if (allowFactoryDocumentUpload && supplierType !== "工厂供应商") {
-    throw codedError("只有工厂供应商可以开启采购合同和增值税发票回传权限。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
-  }
-  if (allowLogisticsExpenseEntry && !allowedLogisticsCostTypes.length) {
+  if (isLogisticsSupplierType && allowLogisticsExpenseEntry && !allowedLogisticsCostTypes.length) {
     throw codedError("请至少配置一个允许录入的物流费用类型。", 400, "LOGISTICS_COST_TYPES_REQUIRED");
   }
-  if (isDefaultLogisticsSupplier && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType)) {
-    throw codedError("默认物流供应商只能设置为物流、报关、海运或港杂费用供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_TYPE_INVALID");
-  }
+  const activeDefaultLogisticsSupplier = isLogisticsSupplierType && isDefaultLogisticsSupplier;
   const data = {
     supplierName,
     supplierType,
@@ -192,7 +182,7 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     ...(id ? {} : { createdById: actorId }),
   };
   const supplier = await prisma.$transaction(async (tx) => {
-    if (isDefaultLogisticsSupplier) {
+    if (activeDefaultLogisticsSupplier) {
       await tx.supplier.updateMany({
         where: { isDefaultLogisticsSupplier: true, ...(id ? { NOT: { id } } : {}) },
         data: { isDefaultLogisticsSupplier: false },

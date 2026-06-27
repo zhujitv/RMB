@@ -6,6 +6,7 @@ import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
+  FACTORY_SUPPLIER_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
   runNonCriticalTask,
   BCRYPT_COST,
@@ -427,7 +428,7 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         outcome = "password-change-required";
         throw error;
       }
-      if (session.user.role === LOGISTICS_OPERATOR_ROLE) {
+      if (session.user.role === LOGISTICS_OPERATOR_ROLE || session.user.role === FACTORY_SUPPLIER_OPERATOR_ROLE) {
         const supplierId = session.user.supplierId;
         if (!supplierId) {
           await timeServerStep("workbench-init-timing", "getActor.revokeUnboundSupplierSessions", () => revokeUserSessions(session.user.id), {
@@ -435,19 +436,22 @@ export async function getActor(request: RequestLike, { required = true, allowPas
             role,
           });
           outcome = "supplier-unbound";
-          throw permissionError("物流供应商账号未绑定供应商，请联系管理员。", 403);
+          throw permissionError(`${session.user.role}未绑定供应商，请联系管理员。`, 403);
         }
         const supplier = await timeServerStep("workbench-init-timing", "getActor.supplierLookup", () => prisma.supplier.findFirst({
           where: { id: supplierId, deletedAt: null, status: "启用" },
-          select: { id: true, supplierType: true },
+          select: { id: true, supplierType: true, allowFactoryDocumentUpload: true },
         }), { ...baseContext, role });
-        if (!supplier || !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
+        const supplierMatchesRole = session.user.role === LOGISTICS_OPERATOR_ROLE
+          ? Boolean(supplier && DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType))
+          : Boolean(supplier && supplier.supplierType === "工厂供应商" && supplier.allowFactoryDocumentUpload);
+        if (!supplierMatchesRole) {
           await timeServerStep("workbench-init-timing", "getActor.revokeInvalidSupplierSessions", () => revokeUserSessions(session.user.id), {
             ...baseContext,
             role,
           });
           outcome = "supplier-invalid";
-          throw permissionError("绑定供应商不存在或已停用，请联系管理员。", 403);
+          throw permissionError("绑定供应商不存在、已停用或未开启对应供应商门户权限，请联系管理员。", 403);
         }
       }
       outcome = "ready";

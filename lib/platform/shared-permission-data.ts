@@ -12,7 +12,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
   logistics: ["管理员", "物流供应商"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
-  supplierDocuments: ["管理员", "物流供应商"],
+  supplierDocuments: ["管理员", "工厂供应商账号"],
   taxRefund: ["管理员", "财务"],
   commissions: ["管理员", "财务"],
   suppliers: ["管理员"],
@@ -24,7 +24,8 @@ export const ROLE_MENUS: Record<string, string[]> = {
   管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  物流供应商: ["supplierDocuments", "domesticLogistics", "manual"],
+  物流供应商: ["domesticLogistics", "manual"],
+  工厂供应商账号: ["supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "manual"],
 };
 
@@ -33,6 +34,7 @@ export const ROLE_SCOPE_TEXT: Record<string, string> = {
   业务员: "仅可查看本人客户和订单",
   财务: "可查看全部应收和收款数据",
   物流供应商: "仅可查看分配订单、提交物流费用并上传发票",
+  工厂供应商账号: "仅可查看资料回传任务并上传工厂合同、增值税发票",
   物流资料录入员: "可录入物流信息和报关资料",
 };
 
@@ -45,7 +47,7 @@ export const READ_PERMISSIONS: Record<string, string[]> = {
   costs: ["管理员", "业务员", "财务"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
-  supplierDocuments: ["管理员", "物流供应商"],
+  supplierDocuments: ["管理员", "工厂供应商账号"],
   taxRefund: ["管理员", "业务员", "财务"],
   commissions: ["管理员", "财务"],
   reports: ["管理员", "业务员", "财务"],
@@ -138,6 +140,7 @@ export function roleDataScope(role: string) {
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
   if (role === "物流供应商") return "OWN";
+  if (role === "工厂供应商账号") return "OWN";
   if (role === "物流资料录入员") return "OWN";
   return "NONE";
 }
@@ -146,6 +149,7 @@ export function customDataScopeFallback(role: string, writeKeys: string[] = []) 
   if (role === "管理员" || role === "财务") return "ALL";
   if (role === "业务员") return "OWN";
   if (role === "物流供应商") return "OWN";
+  if (role === "工厂供应商账号") return "OWN";
   if (role === "物流资料录入员") return "OWN";
   return writeKeys.length ? "OWN" : roleDataScope(role);
 }
