@@ -33,8 +33,8 @@ test("fixed role menus do not expose forbidden global modules", () => {
   assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
   assert.match(backend, /产品供应商账号: \["supplierDocuments", "manual"\]/);
   assert.match(menuFile, /产品供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(backend, /logisticsReview: "物流费用审核"/);
-  assert.match(menuFile, /logisticsReview", "taxRefund"/);
+  assert.doesNotMatch(backend, /logisticsReview: "物流费用审核"|logisticsReview", "taxRefund"/);
+  assert.doesNotMatch(menuFile, /key: "logisticsReview"|logisticsReview", "taxRefund"/);
 });
 
 test("removed viewer and cost entry roles are not exposed by role configuration", () => {
@@ -66,7 +66,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(admin.reads.users, true);
   assert.equal(admin.writes.settings, true);
   assert.equal(admin.writes.commissions, true);
-  assert.equal(admin.menus.includes("logisticsReview"), true);
+  assert.equal(admin.menus.includes("logisticsReview"), false);
 
   const salesperson = rolePermissionSnapshot("业务员");
   assert.equal(salesperson.dataScope, "OWN");

@@ -7,7 +7,6 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "costs", label: "成本管理", description: "维护工厂、物流、港杂等成本资料。" },
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
   { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
-  { key: "logisticsReview", label: "物流费用审核", description: "审核供应商提交的物流费用、月结和开票通知。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
@@ -16,7 +15,7 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview", "taxRefund", "reports", "manual", "settings"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],

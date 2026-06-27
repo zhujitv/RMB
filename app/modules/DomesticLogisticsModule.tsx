@@ -275,11 +275,13 @@ export function DomesticLogisticsModule({
   permissions,
   initialKeyword = "",
   initialOpenToken = 0,
+  focusFeesToken = 0,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialOpenToken?: number;
+  focusFeesToken?: number;
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -362,6 +364,13 @@ export function DomesticLogisticsModule({
       if (canEditDomesticLogistics) setEditingOrderId(matched.id);
     });
   }, [initialOpenToken]);
+
+  useEffect(() => {
+    if (!focusFeesToken) return;
+    window.setTimeout(() => {
+      document.getElementById("domestic-logistics-fees")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, [focusFeesToken]);
 
   useEffect(() => {
     const value = keyword.trim();
@@ -747,6 +756,7 @@ export function DomesticLogisticsModule({
     <LogisticsFeesModule
       sectionId="domestic-logistics-fees"
       embedded
+      title="物流费用录入与审核"
       refreshToken={expenseRefreshToken}
       focusBillId={expenseFocus.billId}
       focusKeyword={expenseFocus.keyword}

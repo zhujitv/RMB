@@ -25,7 +25,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview", "taxRefund", "reports", "manual", "settings"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "manual"],
@@ -77,7 +77,6 @@ export const SETTINGS_PERMISSION_LABELS = {
     costs: "成本管理",
     profit: "利润分析",
     domesticLogistics: "物流信息",
-    logisticsReview: "物流费用审核",
     supplierDocuments: "资料回传",
     taxRefund: "退税资料",
     reports: "报表中心",

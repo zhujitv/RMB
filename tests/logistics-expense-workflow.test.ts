@@ -339,13 +339,17 @@ test("logistics information page exposes per-order expense entry actions", () =>
   assert.match(domesticLogisticsModule, /<LogisticsFeesModule/);
 });
 
-test("admin has a direct logistics expense review menu", () => {
-  assert.match(menuFile, /\{ key: "logisticsReview", label: "物流费用审核"/);
-  assert.match(menuFile, /管理员: \["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "logisticsReview"/);
-  assert.match(workspaceShell, /activeMenu === "logisticsReview"/);
-  assert.match(workspaceShell, /title="物流费用审核"/);
-  assert.match(workspaceShell, /initialStatus="待审核"/);
-  assert.match(workspaceShell, /hideCreateAction/);
+test("logistics information is the single logistics expense entry", () => {
+  assert.doesNotMatch(menuFile, /\{ key: "logisticsReview", label: "物流费用审核"/);
+  assert.doesNotMatch(menuFile, /logisticsReview", "taxRefund"/);
+  assert.match(menuFile, /\{ key: "domesticLogistics", label: "物流信息"/);
+  assert.match(domesticLogisticsModule, /<LogisticsFeesModule/);
+  assert.match(domesticLogisticsModule, /title="物流费用录入与审核"/);
+  assert.match(domesticLogisticsModule, /sectionId="domestic-logistics-fees"/);
+  assert.match(workspaceShell, /normalizeWorkspaceMenuKey\(menuKey: string\)/);
+  assert.match(workspaceShell, /menuKey === "logisticsReview" \? "domesticLogistics" : menuKey/);
+  assert.doesNotMatch(workspaceShell, /title="物流费用审核"/);
+  assert.doesNotMatch(workspaceShell, /hideCreateAction/);
   assert.match(logisticsModule, /initialStatus = ""/);
   assert.match(logisticsModule, /useState\(initialStatus\)/);
 });

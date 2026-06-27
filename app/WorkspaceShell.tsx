@@ -20,6 +20,10 @@ const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 const AUTH_BOOT_TIMEOUT_MS = 15000;
 const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
 
+function normalizeWorkspaceMenuKey(menuKey: string) {
+  return menuKey === "logisticsReview" ? "domesticLogistics" : menuKey;
+}
+
 const OrdersModule = dynamic(() => import("./modules/OrdersModule").then((module) => module.OrdersModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
@@ -37,10 +41,6 @@ const CostsModule = dynamic(() => import("./modules/CostsModule").then((module) 
   loading: () => <BusinessModuleLoading />,
 });
 const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogisticsModule").then((module) => module.DomesticLogisticsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
 });
@@ -131,6 +131,7 @@ export function WorkspaceShell() {
   const [costsFocus, setCostsFocus] = useState({ keyword: "", token: 0 });
   const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
+  const [domesticLogisticsFeesFocusToken, setDomesticLogisticsFeesFocusToken] = useState(0);
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
@@ -185,8 +186,19 @@ export function WorkspaceShell() {
 
   const allowedMenuKeys = useMemo(() => new Set([...ALWAYS_ALLOWED_MENUS, ...menus.map((item) => item.key)]), [menus]);
 
+  function selectWorkspaceMenu(menuKey: string) {
+    const normalizedMenuKey = normalizeWorkspaceMenuKey(menuKey);
+    if (menuKey === "logisticsReview") setDomesticLogisticsFeesFocusToken(Date.now());
+    setActiveMenu(normalizedMenuKey);
+  }
+
   useEffect(() => {
     if (auth.status !== "ready") return;
+    if (activeMenu === "logisticsReview") {
+      setDomesticLogisticsFeesFocusToken(Date.now());
+      setActiveMenu("domesticLogistics");
+      return;
+    }
     if (!allowedMenuKeys.has(activeMenu)) setActiveMenu("welcome");
   }, [activeMenu, allowedMenuKeys, auth.status]);
 
@@ -357,12 +369,12 @@ export function WorkspaceShell() {
       payload={payload}
       menus={menus}
       activeMenu={activeMenu}
-      onSelectMenu={setActiveMenu}
+      onSelectMenu={selectWorkspaceMenu}
       onLogout={handleLogout}
       onPasswordChange={(user) => setAuth({ status: "password-change", user })}
     >
       {activeMenu === "welcome" ? (
-        <WelcomePanel payload={payload} menus={menus} onSelectMenu={setActiveMenu} />
+        <WelcomePanel payload={payload} menus={menus} onSelectMenu={selectWorkspaceMenu} />
       ) : activeMenu === "account" ? (
         <AccountSettings
           user={payload.user}
@@ -404,15 +416,7 @@ export function WorkspaceShell() {
           permissions={payload.permissions}
           initialKeyword={domesticLogisticsFocus.keyword}
           initialOpenToken={domesticLogisticsFocus.token}
-        />
-      ) : activeMenu === "logisticsReview" ? (
-        <LogisticsFeesModule
-          title="物流费用审核"
-          initialStatus="待审核"
-          hideCreateAction
-          currentUserRole={payload.user.role}
-          currentUserSupplierId={payload.user.supplierId || ""}
-          canCreateExpense={false}
+          focusFeesToken={domesticLogisticsFeesFocusToken}
         />
       ) : activeMenu === "supplierDocuments" ? (
         <SupplierDocumentsModule currentUser={payload.user} />
