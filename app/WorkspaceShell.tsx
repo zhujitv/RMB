@@ -44,6 +44,10 @@ const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule"
   ssr: false,
   loading: () => <BusinessModuleLoading />,
 });
+const SupplierDocumentsModule = dynamic(() => import("./modules/SupplierDocumentsModule").then((module) => module.SupplierDocumentsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
 const ProfitModule = dynamic(() => import("./modules/ProfitModule").then((module) => module.ProfitModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
@@ -410,6 +414,8 @@ export function WorkspaceShell() {
           currentUserSupplierId={payload.user.supplierId || ""}
           canCreateExpense={false}
         />
+      ) : activeMenu === "supplierDocuments" ? (
+        <SupplierDocumentsModule currentUser={payload.user} />
       ) : activeMenu === "profit" ? (
         <ProfitModule currentUser={payload.user} />
       ) : activeMenu === "taxRefund" ? (

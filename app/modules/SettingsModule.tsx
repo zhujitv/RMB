@@ -105,6 +105,7 @@ type SupplierRow = {
   allowDomesticLogisticsEntry?: boolean;
   allowLogisticsExpenseEntry?: boolean;
   allowLogisticsInvoiceUpload?: boolean;
+  allowFactoryDocumentUpload?: boolean;
   isDefaultLogisticsSupplier?: boolean;
   allowedLogisticsCostTypes?: string[];
   remark?: string;
@@ -245,6 +246,7 @@ type SupplierForm = {
   allowDomesticLogisticsEntry: boolean;
   allowLogisticsExpenseEntry: boolean;
   allowLogisticsInvoiceUpload: boolean;
+  allowFactoryDocumentUpload: boolean;
   isDefaultLogisticsSupplier: boolean;
   allowedLogisticsCostTypes: string[];
   remark: string;
@@ -823,6 +825,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
             allowDomesticLogisticsEntry: supplierForm.allowDomesticLogisticsEntry,
             allowLogisticsExpenseEntry: supplierForm.allowLogisticsExpenseEntry,
             allowLogisticsInvoiceUpload: supplierForm.allowLogisticsInvoiceUpload,
+            allowFactoryDocumentUpload: supplierForm.allowFactoryDocumentUpload,
             isDefaultLogisticsSupplier: supplierForm.isDefaultLogisticsSupplier,
             allowedLogisticsCostTypes: supplierForm.allowedLogisticsCostTypes,
             remark: supplierForm.remark,
@@ -2139,13 +2142,14 @@ function SupplierEditPanel({
   }
 
   const logisticsCapable = LOGISTICS_SUPPLIER_TYPES.includes(form.supplierType);
+  const factoryDocumentCapable = form.supplierType === "工厂供应商";
 
   return (
     <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{form.id ? "编辑供应商资料" : "新建供应商资料"}</strong>
-          <span>物流相关开关只对物流、报关、海运、港杂费用供应商生效；同一时间只能有一家默认物流供应商。</span>
+          <span>物流相关开关只对物流类供应商生效；工厂资料回传只对工厂供应商生效。</span>
         </div>
       </div>
 
@@ -2166,6 +2170,7 @@ function SupplierEditPanel({
               allowDomesticLogisticsEntry: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowDomesticLogisticsEntry : false,
               allowLogisticsExpenseEntry: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowLogisticsExpenseEntry : false,
               allowLogisticsInvoiceUpload: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.allowLogisticsInvoiceUpload : false,
+              allowFactoryDocumentUpload: supplierType === "工厂供应商" ? form.allowFactoryDocumentUpload : false,
               isDefaultLogisticsSupplier: LOGISTICS_SUPPLIER_TYPES.includes(supplierType) ? form.isDefaultLogisticsSupplier : false,
             });
           }}>
@@ -2231,6 +2236,12 @@ function SupplierEditPanel({
           value={logisticsCapable && form.allowLogisticsInvoiceUpload}
           disabled={!logisticsCapable}
           onChange={(value) => setField("allowLogisticsInvoiceUpload", value)}
+        />
+        <BooleanSelect
+          label="允许供应商资料回传"
+          value={factoryDocumentCapable && form.allowFactoryDocumentUpload}
+          disabled={!factoryDocumentCapable}
+          onChange={(value) => setField("allowFactoryDocumentUpload", value)}
         />
         <BooleanSelect
           label="默认物流供应商"
@@ -2653,6 +2664,9 @@ function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | U
       { label: "开票名称", value: supplier.invoiceTitle || "-", wide: true },
       { label: "税号", value: supplier.taxNumber || "-" },
       { label: "允许物流信息录入", value: yesNo(supplier.allowDomesticLogisticsEntry) },
+      { label: "允许物流费用录入", value: yesNo(supplier.allowLogisticsExpenseEntry) },
+      { label: "允许物流发票上传", value: yesNo(supplier.allowLogisticsInvoiceUpload) },
+      { label: "允许供应商资料回传", value: yesNo(supplier.allowFactoryDocumentUpload) },
       { label: "默认物流供应商", value: yesNo(supplier.isDefaultLogisticsSupplier) },
       { label: "备注", value: supplier.remark || "-", wide: true },
     ];
@@ -3047,6 +3061,7 @@ function emptySupplierForm(): SupplierForm {
     allowDomesticLogisticsEntry: false,
     allowLogisticsExpenseEntry: false,
     allowLogisticsInvoiceUpload: false,
+    allowFactoryDocumentUpload: false,
     isDefaultLogisticsSupplier: false,
     allowedLogisticsCostTypes: [],
     remark: "",
@@ -3071,6 +3086,7 @@ function supplierFormFromRow(supplier: SupplierRow): SupplierForm {
     allowDomesticLogisticsEntry: Boolean(supplier.allowDomesticLogisticsEntry),
     allowLogisticsExpenseEntry: Boolean(supplier.allowLogisticsExpenseEntry),
     allowLogisticsInvoiceUpload: Boolean(supplier.allowLogisticsInvoiceUpload),
+    allowFactoryDocumentUpload: Boolean(supplier.allowFactoryDocumentUpload),
     isDefaultLogisticsSupplier: Boolean(supplier.isDefaultLogisticsSupplier),
     allowedLogisticsCostTypes: Array.isArray(supplier.allowedLogisticsCostTypes) ? supplier.allowedLogisticsCostTypes : [],
     remark: supplier.remark || "",

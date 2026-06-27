@@ -85,6 +85,37 @@ type CostRow = {
   invoiceExceptionLabel?: string;
 };
 
+type CostInvoiceGroupRow = {
+  id: string;
+  groupKey?: string;
+  groupType?: string;
+  logisticsBillId?: string;
+  orderId?: string;
+  orderNo?: string;
+  blNo?: string;
+  billOfLadingNo?: string;
+  customerName?: string;
+  customerFullName?: string;
+  customerShortName?: string;
+  supplierId?: string;
+  supplierName?: string;
+  supplierNameSnapshot?: string;
+  vendorName?: string;
+  invoiceNo?: string;
+  costTypes?: string[];
+  costTypeSummary?: string;
+  currencyTotals?: CurrencyTotals;
+  paymentStatus?: string;
+  invoiceStatus?: string;
+  invoiceExceptionType?: string;
+  invoiceExceptionLabel?: string;
+  costCount?: number;
+  costs?: CostRow[];
+  documents?: CostDocument[];
+  updatedAt?: string;
+  sourceType?: string;
+};
+
 type CostDocument = {
   id: string;
   documentType?: string;
@@ -98,7 +129,7 @@ type CostDocument = {
 };
 
 type CostsPage = {
-  rows: CostRow[] | CostOrderSummary[];
+  rows: CostRow[] | CostOrderSummary[] | CostInvoiceGroupRow[];
   total: number;
   page: number;
   pageSize: number;
@@ -227,7 +258,7 @@ type CostFormDrawerState = {
   mode: "create" | "edit";
   cost: CostRow | null;
 };
-type CostView = "details" | "orders" | "invoiceExceptions";
+type CostView = "invoiceGroups" | "details" | "orders" | "invoiceExceptions";
 
 const PAGE_SIZE = 20;
 
@@ -273,14 +304,16 @@ export function CostsModule({
 }) {
   const [rows, setRows] = useState<CostRow[]>([]);
   const [orderRows, setOrderRows] = useState<CostOrderSummary[]>([]);
+  const [invoiceGroupRows, setInvoiceGroupRows] = useState<CostInvoiceGroupRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<CostFilters>({ ...emptyCostFilters });
   const [submittedFilters, setSubmittedFilters] = useState<CostFilters>({ ...emptyCostFilters });
-  const [costView, setCostView] = useState<CostView>("orders");
+  const [costView, setCostView] = useState<CostView>("invoiceGroups");
   const [archiveScope, setArchiveScope] = useState("current");
   const [detailCost, setDetailCost] = useState<CostRow | null>(null);
   const [detailOrderSummary, setDetailOrderSummary] = useState<CostOrderSummary | null>(null);
+  const [detailInvoiceGroup, setDetailInvoiceGroup] = useState<CostInvoiceGroupRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -304,6 +337,7 @@ export function CostsModule({
   function openCreateCostDrawer() {
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setDocumentCost(null);
     setCostFormDrawer({ mode: "create", cost: null });
   }
@@ -311,6 +345,7 @@ export function CostsModule({
   function openEditCostDrawer(cost: CostRow) {
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setDocumentCost(null);
     setCostFormDrawer({ mode: "edit", cost });
   }
@@ -345,9 +380,15 @@ export function CostsModule({
       if (nextView === "orders") {
         setOrderRows(Array.isArray(data.rows) ? (data.rows as CostOrderSummary[]) : []);
         setRows([]);
+        setInvoiceGroupRows([]);
+      } else if (nextView === "invoiceGroups" || nextView === "invoiceExceptions") {
+        setInvoiceGroupRows(Array.isArray(data.rows) ? (data.rows as CostInvoiceGroupRow[]) : []);
+        setRows([]);
+        setOrderRows([]);
       } else {
         setRows(Array.isArray(data.rows) ? (data.rows as CostRow[]) : []);
         setOrderRows([]);
+        setInvoiceGroupRows([]);
       }
       setTotal(Number(data.total || 0));
       setPage(Number(data.page || nextPage));
@@ -366,9 +407,10 @@ export function CostsModule({
     setSubmittedFilters(nextFilters);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
-    void loadCosts(1, nextFilters, archiveScope, "orders");
+    void loadCosts(1, nextFilters, archiveScope, "invoiceGroups");
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
@@ -388,6 +430,7 @@ export function CostsModule({
       setSubmittedFilters(nextFilters);
       setDetailCost(null);
       setDetailOrderSummary(null);
+      setDetailInvoiceGroup(null);
       setCostFormDrawer(null);
       setNotice("");
       void loadCosts(1, nextFilters, archiveScope, costView);
@@ -407,7 +450,7 @@ export function CostsModule({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const activeRows = costView === "orders" ? orderRows : rows;
+  const activeRows = costView === "orders" ? orderRows : (costView === "invoiceGroups" || costView === "invoiceExceptions" ? invoiceGroupRows : rows);
 
   function setFilter<K extends keyof CostFilters>(key: K, value: CostFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -420,6 +463,7 @@ export function CostsModule({
     setSubmittedFilters(nextFilters);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, nextFilters, archiveScope, costView);
@@ -431,6 +475,7 @@ export function CostsModule({
     setArchiveScope("current");
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, { ...emptyCostFilters }, "current", costView);
@@ -439,6 +484,7 @@ export function CostsModule({
   function gotoPage(nextPage: number) {
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     void loadCosts(nextPage, submittedFilters, archiveScope, costView);
   }
@@ -447,6 +493,7 @@ export function CostsModule({
     setArchiveScope(nextArchiveScope);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, submittedFilters, nextArchiveScope, costView);
@@ -456,6 +503,7 @@ export function CostsModule({
     setCostView(nextView);
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setNotice("");
     void loadCosts(1, submittedFilters, archiveScope, nextView);
@@ -491,6 +539,14 @@ export function CostsModule({
       </div>
 
       <div className={styles.listToolbar}>
+        <button
+          className={costView === "invoiceGroups" ? styles.primaryButtonCompact : styles.secondaryButton}
+          type="button"
+          disabled={loading}
+          onClick={() => changeCostView("invoiceGroups")}
+        >
+          发票组 / Shipment 组
+        </button>
         <button
           className={costView === "orders" ? styles.primaryButtonCompact : styles.secondaryButton}
           type="button"
@@ -590,7 +646,7 @@ export function CostsModule({
       */}
       <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.costTableWrap}`}>
         <table className={styles.dataTable}>
-          {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceExceptions" ? <CostInvoiceExceptionTableHead /> : <CostDetailTableHead />}
+          {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceGroups" || costView === "invoiceExceptions" ? <CostInvoiceGroupTableHead showException={costView === "invoiceExceptions"} /> : <CostDetailTableHead />}
           <tbody>
             {loading ? (
               <tr>
@@ -604,13 +660,14 @@ export function CostsModule({
                   onViewDetail={() => setDetailOrderSummary(order)}
                 />
               ))
-              : costView === "invoiceExceptions"
-                ? rows.map((cost) => (
-                  <CostInvoiceExceptionRows
-                    key={cost.id}
-                    cost={cost}
-                    onViewDetail={() => setDetailCost(cost)}
-                    onOpenDocuments={() => void openCostDocuments(cost.id)}
+              : costView === "invoiceGroups" || costView === "invoiceExceptions"
+                ? invoiceGroupRows.map((group) => (
+                  <CostInvoiceGroupRows
+                    key={group.id}
+                    group={group}
+                    showException={costView === "invoiceExceptions"}
+                    onViewDetail={() => setDetailInvoiceGroup(group)}
+                    onOpenDocuments={() => openInvoiceGroupDocuments(group)}
                   />
                 ))
               : rows.map((cost) => (
@@ -672,6 +729,13 @@ export function CostsModule({
           onClose={() => setDetailOrderSummary(null)}
         />
       ) : null}
+      {detailInvoiceGroup ? (
+        <CostInvoiceGroupDrawer
+          group={detailInvoiceGroup}
+          onOpenDocuments={(costId) => void openCostDocuments(costId)}
+          onClose={() => setDetailInvoiceGroup(null)}
+        />
+      ) : null}
 
       {documentCost ? (
         <CostDocumentsDrawer
@@ -719,6 +783,7 @@ export function CostsModule({
     const cached = rows.find((cost) => cost.id === id) || null;
     setDetailCost(null);
     setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
     setCostFormDrawer(null);
     setDocumentCost(cached);
     setDocumentLoading(true);
@@ -731,6 +796,19 @@ export function CostsModule({
     } finally {
       setDocumentLoading(false);
     }
+  }
+
+  function openInvoiceGroupDocuments(group: CostInvoiceGroupRow) {
+    if (group.groupType === "LOGISTICS_BILL" || (group.costs || []).length !== 1) {
+      setDetailCost(null);
+      setDetailOrderSummary(null);
+      setCostFormDrawer(null);
+      setDocumentCost(null);
+      setDetailInvoiceGroup(group);
+      return;
+    }
+    const costId = group.costs?.[0]?.id;
+    if (costId) void openCostDocuments(costId);
   }
 
   async function refreshDocumentCost(costId: string) {
@@ -774,7 +852,7 @@ export function CostsModule({
         setUploadProgressByKey((current) => ({ ...current, [key]: progress }));
       });
       await refreshDocumentCost(cost.id);
-      if (costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice("资料已上传");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
@@ -806,7 +884,7 @@ export function CostsModule({
       });
       if (result.success === false) throw new Error(result.message || "删除资料失败");
       await refreshDocumentCost(cost.id);
-      if (costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
       setNotice("资料已删除");
     } catch (deleteError) {
       setDocumentError(deleteError instanceof Error ? deleteError.message : "删除资料失败");
@@ -1346,47 +1424,59 @@ function CostDetailTableHead() {
   );
 }
 
-function CostInvoiceExceptionTableHead() {
+function CostInvoiceGroupTableHead({ showException }: { showException: boolean }) {
   return (
     <thead>
       <tr>
         <th className={styles.orderNoColumn}>订单号</th>
         <th className={styles.customerColumn}>客户简称</th>
-        <th>成本类型</th>
         <th>供应商</th>
-        <th className={styles.amountColumn}>成本金额</th>
-        <th>付款状态</th>
-        <th>发票状态</th>
-        <th className={styles.statusColumn}>异常类型</th>
+        <th>发票号 / 文件</th>
+        <th>包含费用类型</th>
+        <th className={styles.amountColumn}>CNY 合计</th>
+        <th className={styles.amountColumn}>USD 合计</th>
+        <th className={styles.statusColumn}>付款状态</th>
+        <th className={styles.statusColumn}>发票状态</th>
+        {showException ? <th className={styles.statusColumn}>异常类型</th> : null}
         <th className={styles.costInvoiceActionColumn}>操作</th>
       </tr>
     </thead>
   );
 }
 
-function CostInvoiceExceptionRows({
-  cost,
+function CostInvoiceGroupRows({
+  group,
+  showException,
   onViewDetail,
   onOpenDocuments,
 }: {
-  cost: CostRow;
+  group: CostInvoiceGroupRow;
+  showException: boolean;
   onViewDetail: () => void;
   onOpenDocuments: () => void;
 }) {
-  const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
-  const exceptionLabel = cost.invoiceExceptionLabel || costInvoiceExceptionLabel(cost);
+  const supplierName = group.supplierName || group.supplierNameSnapshot || group.vendorName || "-";
+  const exceptionLabel = group.invoiceExceptionLabel || "";
   return (
     <tr className={styles.clickableRow} onClick={onViewDetail}>
-      <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
-      <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
-      <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
+      <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
+      <td className={styles.customerColumn} title={customerLegalName(group)}>{customerDisplayName(group)}</td>
       <td>{supplierName}</td>
-      <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
-      <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
-      <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
-      <td className={styles.statusColumn}>
-        <span className={`${styles.statusPill} ${exceptionLabel === "已付款未收票" ? styles.statusWarning : ""}`}>{exceptionLabel}</span>
+      <td title={group.invoiceNo || ""}>{group.invoiceNo || "-"}</td>
+      <td title={group.costTypeSummary || ""}>{group.costTypeSummary || "-"}</td>
+      <td className={styles.amountColumn}>
+        <strong className={styles.costAmountTotal}>{formatCurrencyAmount("CNY", currencyTotalAmount(group.currencyTotals, "CNY"))}</strong>
       </td>
+      <td className={styles.amountColumn}>
+        <strong className={styles.costAmountTotal}>{formatCurrencyAmount("USD", currencyTotalAmount(group.currencyTotals, "USD"))}</strong>
+      </td>
+      <td className={styles.statusColumn}><span className={costPaymentStatusClass(group.paymentStatus)}>{group.paymentStatus || "-"}</span></td>
+      <td className={styles.statusColumn}><span className={costInvoiceStatusClass(group.invoiceStatus)}>{group.invoiceStatus || "-"}</span></td>
+      {showException ? (
+        <td className={styles.statusColumn}>
+          <span className={`${styles.statusPill} ${exceptionLabel === "已付款未收票" ? styles.statusWarning : styles.statusMuted}`}>{exceptionLabel || "-"}</span>
+        </td>
+      ) : null}
       <td className={styles.costInvoiceActionColumn}>
         <div className={styles.costInvoiceActions}>
           <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button>
@@ -1414,20 +1504,24 @@ function CostOrderTableHead() {
 
 function costViewColSpan(costView: CostView) {
   if (costView === "orders") return 6;
-  if (costView === "invoiceExceptions") return 9;
+  if (costView === "invoiceGroups") return 10;
+  if (costView === "invoiceExceptions") return 11;
   return 8;
 }
 
 function costViewLabel(costView: CostView) {
+  if (costView === "invoiceGroups") return "发票组";
   if (costView === "orders") return "订单成本汇总";
-  if (costView === "invoiceExceptions") return "发票异常记录";
+  if (costView === "invoiceExceptions") return "发票异常组";
   return "成本明细";
 }
 
-function costInvoiceExceptionLabel(cost: CostRow) {
-  if (cost.paymentStatus === "已支付" && cost.invoiceStatus !== "已收到") return "已付款未收票";
-  if (["待支付", "部分支付"].includes(cost.paymentStatus || "") && cost.invoiceStatus === "已收到") return "已收票未付款";
-  return "发票异常";
+function costPaymentStatusClass(status = "") {
+  return `${styles.statusPill} ${status === "已支付" ? styles.statusSuccess : status === "部分支付" ? styles.statusWarning : styles.statusMuted}`;
+}
+
+function costInvoiceStatusClass(status = "") {
+  return `${styles.statusPill} ${status === "已收到" ? styles.statusSuccess : status === "部分收到" ? styles.statusWarning : styles.statusMuted}`;
 }
 
 function CostOrderSummaryRows({
@@ -1725,6 +1819,175 @@ function CostOrderItemsTable({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function CostInvoiceGroupDrawer({
+  group,
+  onOpenDocuments,
+  onClose,
+}: {
+  group: CostInvoiceGroupRow;
+  onOpenDocuments: (costId: string) => void;
+  onClose: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState("basic");
+  const supplierName = group.supplierName || group.supplierNameSnapshot || group.vendorName || "-";
+  const costs = group.costs || [];
+  const documents = group.documents || [];
+  const singleManualCost = group.groupType !== "LOGISTICS_BILL" && costs.length === 1;
+
+  useEffect(() => {
+    setActiveTab("basic");
+  }, [group.id]);
+
+  return (
+    <SideDetailDrawer
+      ariaLabel="发票组详情"
+      kicker="成本管理"
+      title={`${group.orderNo || "-"} · ${customerLegalName(group)}`}
+      subtitle={`供应商：${supplierName} · 费用类型：${group.costTypeSummary || "-"} · 发票状态：${group.invoiceStatus || "-"}`}
+      onClose={onClose}
+      actions={
+        singleManualCost ? (
+          <button className={styles.primaryButtonCompact} type="button" onClick={() => onOpenDocuments(costs[0].id)}>资料维护</button>
+        ) : null
+      }
+    >
+      {group.groupType === "LOGISTICS_BILL" ? (
+        <div className={styles.infoStrip}>该组来自物流费用分组开票。成本管理只同步展示发票、付款和异常结果，不再按单条费用维护物流发票。</div>
+      ) : null}
+      <UiTabs
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { key: "basic", label: "基础信息" },
+          { key: "items", label: "费用明细" },
+          { key: "documents", label: "发票资料" },
+        ]}
+      />
+      {activeTab === "basic" ? (
+        <>
+          <div className={styles.detailGrid}>
+            <DetailField label="订单号" value={group.orderNo || "-"} />
+            <DetailField label="客户全称" value={customerLegalName(group)} wide />
+            <DetailField label="提单号" value={group.blNo || group.billOfLadingNo || "-"} />
+            <DetailField label="供应商" value={supplierName} />
+            <DetailField label="发票号 / 文件" value={group.invoiceNo || "-"} wide />
+            <DetailField label="包含费用类型" value={group.costTypeSummary || "-"} wide />
+            <DetailField label="付款状态" value={group.paymentStatus || "-"} />
+            <DetailField label="发票状态" value={group.invoiceStatus || "-"} />
+            {group.invoiceExceptionLabel ? <DetailField label="异常类型" value={group.invoiceExceptionLabel} /> : null}
+            <DetailField label="费用明细数" value={`${group.costCount || costs.length} 项`} />
+          </div>
+          <CostInvoiceGroupTotals group={group} />
+        </>
+      ) : null}
+      {activeTab === "items" ? <CostInvoiceGroupItemsTable costs={costs} /> : null}
+      {activeTab === "documents" ? (
+        <CostInvoiceGroupDocuments
+          documents={documents}
+          groupType={group.groupType}
+          onOpenManualDocuments={singleManualCost ? () => onOpenDocuments(costs[0].id) : undefined}
+        />
+      ) : null}
+    </SideDetailDrawer>
+  );
+}
+
+function CostInvoiceGroupTotals({ group }: { group: Pick<CostInvoiceGroupRow, "currencyTotals"> }) {
+  const cnyTotal = currencyTotalAmount(group.currencyTotals, "CNY");
+  const usdTotal = currencyTotalAmount(group.currencyTotals, "USD");
+  return (
+    <div className={styles.documentGroupGrid}>
+      <div className={styles.documentGroupCard}>
+        <strong>CNY 合计</strong>
+        <span className={styles.costAmountTotal}>{formatCurrencyAmount("CNY", cnyTotal)}</span>
+      </div>
+      <div className={styles.documentGroupCard}>
+        <strong>USD 合计</strong>
+        <span className={styles.costAmountTotal}>{formatCurrencyAmount("USD", usdTotal)}</span>
+      </div>
+    </div>
+  );
+}
+
+function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
+  return (
+    <div className={styles.logisticsDrawerSection}>
+      <div className={styles.logisticsDrawerSectionHeader}>
+        <div>
+          <strong>费用明细</strong>
+          <span>{costs.length} 项</span>
+        </div>
+      </div>
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead>
+            <tr>
+              <th>费用类型</th>
+              <th>供应商</th>
+              <th>币种</th>
+              <th className={styles.amountColumn}>原币金额</th>
+              <th className={styles.amountColumn}>折人民币</th>
+              <th>付款状态</th>
+              <th>发票状态</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {costs.length ? costs.map((cost) => (
+              <tr key={cost.id}>
+                <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
+                <td>{cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-"}</td>
+                <td>{String(cost.currency || "CNY").toUpperCase()}</td>
+                <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
+                <td className={styles.amountColumn}>{formatCurrencyAmount("CNY", cost.amountCny ?? 0)}</td>
+                <td><span className={costPaymentStatusClass(cost.paymentStatus)}>{cost.paymentStatus || "-"}</span></td>
+                <td><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
+                <td title={cost.remark || ""}>{cost.remark || "-"}</td>
+              </tr>
+            )) : (
+              <tr><td colSpan={8}><div className={styles.emptyState}>暂无费用明细</div></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CostInvoiceGroupDocuments({
+  documents,
+  groupType,
+  onOpenManualDocuments,
+}: {
+  documents: CostDocument[];
+  groupType?: string;
+  onOpenManualDocuments?: () => void;
+}) {
+  return (
+    <div className={styles.documentGroupCard}>
+      <strong>整组发票资料</strong>
+      {groupType === "LOGISTICS_BILL" ? (
+        <span className={styles.mutedText}>物流发票按物流费用模块的分组开票入口上传，成本管理仅同步展示该组结果。</span>
+      ) : null}
+      {documents.length ? documents.map((document) => (
+        <div key={document.id} className={styles.fileListItem}>
+          <div>
+            <span>{document.fileName || "-"}</span>
+            <small>{document.uploadedByName || "-"} ｜ {formatDate(document.uploadedAt)}</small>
+          </div>
+          <div className={styles.fileListItemActions}>
+            <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
+            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+          </div>
+        </div>
+      )) : <div className={styles.emptyState}>暂未收到整组发票资料</div>}
+      {onOpenManualDocuments ? (
+        <button className={styles.primaryButtonCompact} type="button" onClick={onOpenManualDocuments}>维护整组发票资料</button>
+      ) : null}
     </div>
   );
 }

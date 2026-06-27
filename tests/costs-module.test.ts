@@ -15,8 +15,9 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.doesNotMatch(costsModule, /CostOrderMobileCard/);
   assert.doesNotMatch(costsModule, /mobileCardList/);
   assert.doesNotMatch(costsModule, /desktopOnly/);
-  assert.match(costsModule, /type CostView = "details" \| "orders" \| "invoiceExceptions"/);
-  assert.match(costsModule, /useState<CostView>\("orders"\)/);
+  assert.match(costsModule, /type CostView = "invoiceGroups" \| "details" \| "orders" \| "invoiceExceptions"/);
+  assert.match(costsModule, /useState<CostView>\("invoiceGroups"\)/);
+  assert.match(costsModule, /发票组 \/ Shipment 组/);
   assert.match(costsModule, /按订单 \/ Shipment 汇总/);
   assert.match(costsModule, /发票异常清单/);
   assert.doesNotMatch(costsModule, />成本明细<\/button>/);
@@ -29,19 +30,40 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
 });
 
-test("cost management exposes paginated invoice exception list", () => {
+test("cost management groups logistics invoices by shipment before display", () => {
+  assert.match(costsModule, /type CostInvoiceGroupRow = \{/);
+  assert.match(costsModule, /changeCostView\("invoiceGroups"\)/);
+  assert.match(costsModule, /CostInvoiceGroupTableHead/);
+  assert.match(costsModule, /CostInvoiceGroupRows/);
+  assert.match(costsModule, /CostInvoiceGroupDrawer/);
+  assert.match(costsModule, /group\.costTypeSummary/);
+  assert.match(costsModule, /currencyTotalAmount\(group\.currencyTotals, "CNY"\)/);
+  assert.match(costsModule, /currencyTotalAmount\(group\.currencyTotals, "USD"\)/);
+  assert.match(costsModule, /onOpenDocuments=\{\(\) => openInvoiceGroupDocuments\(group\)\}/);
+  assert.match(costsQueries, /export async function listCostInvoiceGroups/);
+  assert.match(costsQueries, /function costInvoiceGroupKey/);
+  assert.match(costsQueries, /`logistics-bill:\$\{billId\}`/);
+  assert.match(costsQueries, /generatedLogisticsExpense: \{[\s\S]*bill: true/);
+  assert.match(costsQueries, /const fullWhere: Prisma\.OrderCostWhereInput\[\] = \[\]/);
+  assert.match(costsQueries, /sourceType: "LOGISTICS_EXPENSE"[\s\S]*generatedLogisticsExpense: \{ is: \{ billId: \{ in: billIds \} \} \}/);
+  assert.match(costsQueries, /serializeCostInvoiceGroup/);
+  assert.match(costsQueries, /summarizeCurrencyTotals\(groupCosts\)/);
+});
+
+test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsModule, /changeCostView\("invoiceExceptions"\)/);
   assert.match(costsModule, /view: nextView/);
-  assert.match(costsModule, /CostInvoiceExceptionTableHead/);
-  assert.match(costsModule, /CostInvoiceExceptionRows/);
+  assert.match(costsModule, /CostInvoiceGroupTableHead/);
+  assert.match(costsModule, /CostInvoiceGroupRows/);
   assert.match(costsModule, /invoiceExceptionLabel/);
-  assert.match(costsModule, /已付款未收票/);
-  assert.match(costsModule, /已收票未付款/);
   assert.match(costsModule, /资料维护/);
   assert.match(costsQueries, /export async function listCostInvoiceExceptions/);
-  assert.match(costsQueries, /function costInvoiceExceptionWhere/);
-  assert.match(costsQueries, /paymentStatus: "已支付"[\s\S]*costEffectiveInvoiceMissingWhere/);
-  assert.match(costsQueries, /paymentStatus: \{ in: \["待支付", "部分支付"\] \}[\s\S]*costEffectiveInvoiceReceivedWhere/);
+  assert.match(costsQueries, /buildCostInvoiceGroups\(query, actor, \{ exceptionsOnly: true \}\)/);
+  assert.match(costsQueries, /function invoiceExceptionType/);
+  assert.match(costsQueries, /已付款未收票/);
+  assert.match(costsQueries, /已收票未付款/);
+  assert.match(costsQueries, /paymentStatus === "已支付" && invoiceStatus !== "已收到"/);
+  assert.match(costsQueries, /paymentStatus !== "已支付" && invoiceStatus === "已收到"/);
   assert.match(costsQueries, /documents: \{ some: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
   assert.match(costsQueries, /documents: \{ none: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
 });
@@ -137,7 +159,7 @@ test("removed payable summary styles cannot reappear as hidden UI", () => {
 });
 
 test("cost order summary keeps cost items inside shipment detail drawer", () => {
-  assert.match(costsModule, /void loadCosts\(1, nextFilters, archiveScope, "orders"\)/);
+  assert.match(costsModule, /void loadCosts\(1, nextFilters, archiveScope, "invoiceGroups"\)/);
   assert.match(costsShared, /costs: summaryCosts\.map\(safeSerializeCost\)/);
   assert.match(costsModule, /<CostOrderItemsTable[\s\S]*costs=\{order\.costs \|\| \[\]\}[\s\S]*deletingId=\{deletingId\}[\s\S]*onDelete=\{onDelete\}/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);

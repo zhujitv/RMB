@@ -43,7 +43,8 @@ test("workspace auth payload exposes company profile for brand display", () => {
   assert.match(types, /export type CompanyProfileSettings/);
   assert.match(types, /companyProfile\?: CompanyProfileSettings/);
   assert.match(authMeRoute, /getCompanyProfileSettings/);
-  assert.match(authMeRoute, /companyProfile: await getCompanyProfileSettings\(\)/);
+  assert.match(authMeRoute, /const \[session, companyProfile\]/);
+  assert.match(authMeRoute, /companyProfile,/);
   assert.match(workspaceShell, /loadPublicCompanyProfile/);
   assert.match(workspaceShell, /updateCompanyProfile\(settings: CompanyProfileSettings\)/);
   assert.match(workspaceShell, /onCompanyProfileSaved=\{updateCompanyProfile\}/);

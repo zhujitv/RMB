@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
+import { summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_PAYMENT_STATUSES,
   COST_TYPES,
@@ -29,6 +30,14 @@ import {
 type ActorLike = Record<string, unknown> | null;
 type CostQuery = URLSearchParams;
 type CostBusinessScope = ReturnType<typeof archiveScope>;
+type CostInvoiceGroupCostDto = CostDto & {
+  orderNo?: string;
+  blNo?: string;
+  billOfLadingNo?: string;
+  customerName?: string;
+  customerFullName?: string;
+  customerShortName?: string;
+};
 type CostListFilters = {
   keyword: Prisma.StringFilter | null;
   costType: string;
@@ -45,6 +54,19 @@ const SUCCESS_SUPPLIER_INVOICE_FILTER: Prisma.OrderDocumentWhereInput = {
   uploadStatus: "SUCCESS",
   deletedAt: null,
 };
+
+function includeCostInvoiceGroupRelations() {
+  return Prisma.validator<Prisma.OrderCostInclude>()({
+    ...includeCostRelations(),
+    generatedLogisticsExpense: {
+      include: {
+        bill: true,
+      },
+    },
+  });
+}
+
+type CostWithInvoiceGroupRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostInvoiceGroupRelations> }>;
 
 function insensitiveContains(value: unknown): Prisma.StringFilter | null {
   const text = nonEmpty(value);
@@ -116,21 +138,6 @@ function costEffectiveInvoiceMissingWhere(): Prisma.OrderCostWhereInput {
           { sourceType: { not: "LOGISTICS_EXPENSE" } },
           { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: { not: "已收到" } },
         ],
-      },
-    ],
-  };
-}
-
-function costInvoiceExceptionWhere(): Prisma.OrderCostWhereInput {
-  return {
-    OR: [
-      {
-        paymentStatus: "已支付",
-        ...costEffectiveInvoiceMissingWhere(),
-      },
-      {
-        paymentStatus: { in: ["待支付", "部分支付"] },
-        ...costEffectiveInvoiceReceivedWhere(),
       },
     ],
   };
@@ -208,55 +215,189 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   };
 }
 
-function invoiceExceptionType(cost: CostDto) {
-  if (cost.paymentStatus === "已支付" && cost.invoiceStatus !== "已收到") return "PAID_WITHOUT_INVOICE";
-  if (["待支付", "部分支付"].includes(cost.paymentStatus || "") && cost.invoiceStatus === "已收到") return "INVOICE_WITH_UNPAID";
-  return "UNKNOWN";
+function logisticsBillIdForCost(cost: CostWithInvoiceGroupRelations | null | undefined) {
+  return nonEmpty(cost?.generatedLogisticsExpense?.billId || cost?.generatedLogisticsExpense?.bill?.id);
+}
+
+function costInvoiceGroupKey(cost: CostWithInvoiceGroupRelations) {
+  const billId = logisticsBillIdForCost(cost);
+  if (cost.sourceType === "LOGISTICS_EXPENSE" && billId) return `logistics-bill:${billId}`;
+  if (cost.sourceType === "LOGISTICS_EXPENSE") {
+    return [
+      "logistics-fallback",
+      cost.orderId || "",
+      cost.supplierId || "",
+      cost.order?.blNo || "",
+      cost.currency || "CNY",
+    ].join(":");
+  }
+  return `cost:${cost.id}`;
+}
+
+function groupPaymentStatus(costs: CostDto[] = []) {
+  const statuses = costs.map((cost) => cost.paymentStatus || "待支付");
+  if (statuses.length && statuses.every((status) => status === "已支付")) return "已支付";
+  if (statuses.some((status) => status === "已支付" || status === "部分支付")) return "部分支付";
+  if (statuses.length && statuses.every((status) => status === "已取消")) return "已取消";
+  return statuses[0] || "待支付";
+}
+
+function groupInvoiceStatus(costs: CostDto[] = []) {
+  const statuses = costs.map((cost) => cost.invoiceStatus || "未收到");
+  if (statuses.length && statuses.every((status) => status === "已收到")) return "已收到";
+  if (statuses.some((status) => status === "已收到")) return "部分收到";
+  return "未收到";
+}
+
+function invoiceExceptionType(paymentStatus = "", invoiceStatus = "") {
+  if (paymentStatus === "已支付" && invoiceStatus !== "已收到") return "PAID_WITHOUT_INVOICE";
+  if (paymentStatus !== "已支付" && invoiceStatus === "已收到") return "INVOICE_WITH_UNPAID";
+  return "";
 }
 
 function invoiceExceptionLabel(type: string) {
   if (type === "PAID_WITHOUT_INVOICE") return "已付款未收票";
   if (type === "INVOICE_WITH_UNPAID") return "已收票未付款";
-  return "发票异常";
+  return "";
 }
 
-export async function listCostInvoiceExceptions(query: CostQuery, actor: ActorLike = null) {
+function uniqueTextList(values: Array<string | null | undefined>) {
+  return values.map(nonEmpty).filter((value, index, rows) => value && rows.indexOf(value) === index);
+}
+
+function groupInvoiceFiles(costs: CostDto[] = []) {
+  const documents = costs.flatMap((cost) => cost.documents || [])
+    .filter((document) => (
+      document.documentType === "SUPPLIER_INVOICE"
+      && document.uploadStatus === "SUCCESS"
+    ));
+  const seen = new Set<string>();
+  return documents.filter((document) => {
+    const key = document.id || document.fileName || "";
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function serializeCostInvoiceGroup(key: string, costs: CostDto[], rawRows: CostWithInvoiceGroupRelations[] = []) {
+  const groupCosts = costs as CostInvoiceGroupCostDto[];
+  const first = groupCosts[0] || {};
+  const firstRaw = rawRows[0];
+  const currencyTotals = summarizeCurrencyTotals(groupCosts);
+  const invoiceFiles = groupInvoiceFiles(groupCosts);
+  const paymentStatus = groupPaymentStatus(groupCosts);
+  const invoiceStatus = groupInvoiceStatus(groupCosts);
+  const exceptionType = invoiceExceptionType(paymentStatus, invoiceStatus);
+  const sourceTypes = uniqueTextList(groupCosts.map((cost) => cost.sourceType));
+  const groupType = sourceTypes.includes("LOGISTICS_EXPENSE") ? "LOGISTICS_BILL" : "COST";
+  const costTypeLabels = uniqueTextList(groupCosts.map((cost) => cost.costType));
+  const latestUpdatedAt = groupCosts
+    .map((cost) => new Date(cost.updatedAt || cost.createdAt || 0).getTime())
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0] || 0;
+  return {
+    id: key,
+    groupKey: key,
+    groupType,
+    logisticsBillId: logisticsBillIdForCost(firstRaw),
+    orderId: first.orderId || "",
+    orderNo: first.orderNo || "",
+    blNo: first.blNo || first.billOfLadingNo || "",
+    billOfLadingNo: first.billOfLadingNo || first.blNo || "",
+    customerName: first.customerName || "",
+    customerFullName: first.customerFullName || "",
+    customerShortName: first.customerShortName || "",
+    supplierId: first.supplierId || "",
+    supplierName: first.supplierName || first.supplierNameSnapshot || first.vendorName || "",
+    supplierNameSnapshot: first.supplierNameSnapshot || first.supplierName || first.vendorName || "",
+    vendorName: first.vendorName || first.supplierNameSnapshot || first.supplierName || "",
+    invoiceNo: uniqueTextList(invoiceFiles.map((document) => document.fileName)).join(" / "),
+    costTypes: costTypeLabels,
+    costTypeSummary: costTypeLabels.join(" / "),
+    currencyTotals,
+    paymentStatus,
+    invoiceStatus,
+    invoiceExceptionType: exceptionType,
+    invoiceExceptionLabel: invoiceExceptionLabel(exceptionType),
+    costCount: groupCosts.length,
+    costs: groupCosts,
+    documents: invoiceFiles,
+    updatedAt: latestUpdatedAt ? new Date(latestUpdatedAt).toISOString() : first.updatedAt || first.createdAt || "",
+    sourceType: groupType,
+  };
+}
+
+async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null, options: { exceptionsOnly?: boolean } = {}) {
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
-  const baseWhere = pagedCostWhere(filters, actor);
-  const baseAnd = Array.isArray(baseWhere.AND) ? baseWhere.AND : (baseWhere.AND ? [baseWhere.AND] : []);
-  const where: Prisma.OrderCostWhereInput = {
-    ...baseWhere,
-    AND: [
-      ...baseAnd,
-      costInvoiceExceptionWhere(),
-    ],
-  };
-  const [total, rows] = await Promise.all([
-    prisma.orderCost.count({ where }),
-    prisma.orderCost.findMany({
-      where,
-      include: includeCostRelations(),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
-  const serializedRows = rows.map(safeSerializeCost).map((cost) => {
-    const type = invoiceExceptionType(cost);
-    return {
-      ...cost,
-      invoiceExceptionType: type,
-      invoiceExceptionLabel: invoiceExceptionLabel(type),
-    };
+  const matchingRows = await prisma.orderCost.findMany({
+    where: pagedCostWhere(filters, actor),
+    include: includeCostInvoiceGroupRelations(),
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
   });
+  const groupMap = new Map<string, CostWithInvoiceGroupRelations[]>();
+  matchingRows.forEach((cost) => {
+    const key = costInvoiceGroupKey(cost);
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key)!.push(cost);
+  });
+  const keys = [...groupMap.keys()];
+  const billIds = uniqueTextList(keys.filter((key) => key.startsWith("logistics-bill:")).map((key) => key.replace(/^logistics-bill:/, "")));
+  const singleCostIds = uniqueTextList(keys.filter((key) => key.startsWith("cost:")).map((key) => key.replace(/^cost:/, "")));
+  const fallbackCostIds = keys
+    .filter((key) => key.startsWith("logistics-fallback:"))
+    .flatMap((key) => (groupMap.get(key) || []).map((cost) => cost.id));
+  const fullWhere: Prisma.OrderCostWhereInput[] = [];
+  if (billIds.length) {
+    fullWhere.push({
+      sourceType: "LOGISTICS_EXPENSE",
+      generatedLogisticsExpense: { is: { billId: { in: billIds } } },
+    });
+  }
+  const costIds = uniqueTextList([...singleCostIds, ...fallbackCostIds]);
+  if (costIds.length) fullWhere.push({ id: { in: costIds } });
+  const fullRows = fullWhere.length
+    ? await prisma.orderCost.findMany({
+      where: {
+        deletedAt: null,
+        ...costAccessWhere(actor),
+        OR: fullWhere,
+      },
+      include: includeCostInvoiceGroupRelations(),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    })
+    : [];
+  const rawRowsByKey = fullRows.reduce<Map<string, CostWithInvoiceGroupRelations[]>>((acc, cost) => {
+    const key = costInvoiceGroupKey(cost);
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key)!.push(cost);
+    return acc;
+  }, new Map());
+  const groups = keys
+    .map((key) => {
+      const rawRows = rawRowsByKey.get(key) || groupMap.get(key) || [];
+      const costs = rawRows.map(safeSerializeCost);
+      return serializeCostInvoiceGroup(key, costs, rawRows);
+    })
+    .filter((group) => !options.exceptionsOnly || Boolean(group.invoiceExceptionType))
+    .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  const start = (page - 1) * pageSize;
   return {
-    rows: serializedRows,
-    total,
+    rows: groups.slice(start, start + pageSize),
+    total: groups.length,
     page,
     pageSize,
   };
+}
+
+export async function listCostInvoiceGroups(query: CostQuery, actor: ActorLike = null) {
+  return buildCostInvoiceGroups(query, actor);
+}
+
+export async function listCostInvoiceExceptions(query: CostQuery, actor: ActorLike = null) {
+  return buildCostInvoiceGroups(query, actor, { exceptionsOnly: true });
 }
 
 export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike = null) {

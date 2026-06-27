@@ -37,7 +37,7 @@ type ActorLike = { id?: string | null; role?: string | null; supplierId?: string
 export async function listSuppliers(query: QueryLike, actor: ActorLike = null, onlyActive = false, options: ListOptions = {}) {
   if (!onlyActive) {
     assertRead(actor, "suppliers");
-  } else if (!canRead(actor, "suppliers") && !canWrite(actor, "costs") && !canWrite(actor, "logistics") && !canWrite(actor, "domesticLogistics")) {
+  } else if (!canRead(actor, "suppliers") && !canWrite(actor, "costs") && !canWrite(actor, "logistics") && !canWrite(actor, "domesticLogistics") && !canWrite(actor, "taxRefund")) {
     throw permissionError("没有权限搜索供应商");
   }
   const keyword = nonEmpty(query?.get("q") || query?.get("keyword") || query?.get("party"));
@@ -146,6 +146,7 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
   const allowDomesticLogisticsEntry = booleanInput(input.allowDomesticLogisticsEntry, before?.allowDomesticLogisticsEntry || false);
   const allowLogisticsExpenseEntry = booleanInput(input.allowLogisticsExpenseEntry, before?.allowLogisticsExpenseEntry || false);
   const allowLogisticsInvoiceUpload = booleanInput(input.allowLogisticsInvoiceUpload, before?.allowLogisticsInvoiceUpload || false);
+  const allowFactoryDocumentUpload = booleanInput(input.allowFactoryDocumentUpload, before?.allowFactoryDocumentUpload || false);
   const isDefaultLogisticsSupplier = booleanInput(input.isDefaultLogisticsSupplier, before?.isDefaultLogisticsSupplier || false);
   const allowedLogisticsCostTypes = normalizeLogisticsCostTypeList(
     Array.isArray(input.allowedLogisticsCostTypes)
@@ -157,6 +158,9 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
   }
   if ((allowLogisticsExpenseEntry || allowLogisticsInvoiceUpload) && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType)) {
     throw codedError("只有物流、报关、海运、港杂费用供应商可以开启物流费用协同权限。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
+  }
+  if (allowFactoryDocumentUpload && supplierType !== "工厂供应商") {
+    throw codedError("只有工厂供应商可以开启采购合同和增值税发票回传权限。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
   }
   if (allowLogisticsExpenseEntry && !allowedLogisticsCostTypes.length) {
     throw codedError("请至少配置一个允许录入的物流费用类型。", 400, "LOGISTICS_COST_TYPES_REQUIRED");
@@ -181,6 +185,7 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     allowDomesticLogisticsEntry,
     allowLogisticsExpenseEntry,
     allowLogisticsInvoiceUpload,
+    allowFactoryDocumentUpload,
     isDefaultLogisticsSupplier,
     allowedLogisticsCostTypes,
     updatedById: actorId,

@@ -87,6 +87,40 @@ export function logServerError(label: string, error: unknown, context: Record<st
   }
 }
 
+function serverTimingSlowThresholdMs() {
+  const configured = Number.parseInt(process.env.SERVER_TIMING_SLOW_MS || "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 1000;
+}
+
+export function logServerTiming(label: string, startedAt: number, context: Record<string, unknown> = {}) {
+  const durationMs = Date.now() - startedAt;
+  const slowThresholdMs = serverTimingSlowThresholdMs();
+  const shouldLog = process.env.NODE_ENV !== "production"
+    || process.env.SERVER_TIMING_LOGS === "true"
+    || durationMs >= slowThresholdMs;
+  if (!shouldLog) return durationMs;
+  console.info(label, sanitizeLogValue("context", {
+    ...context,
+    durationMs,
+    slow: durationMs >= slowThresholdMs,
+  }));
+  return durationMs;
+}
+
+export async function timeServerStep<T>(
+  label: string,
+  step: string,
+  task: () => Promise<T>,
+  context: Record<string, unknown> = {},
+) {
+  const startedAt = Date.now();
+  try {
+    return await task();
+  } finally {
+    logServerTiming(label, startedAt, { ...context, step });
+  }
+}
+
 export function logSecurityEvent(label: string, context: Record<string, unknown> = {}) {
   console.warn(label, sanitizeLogValue("context", context));
 }

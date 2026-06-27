@@ -4,7 +4,7 @@ import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   runNonCriticalTask,
 } from "./shared-constants";
-import { assertJsonObject, codedError, isPlainRecord, nonEmpty, normalizeEmail, validEmail } from "./shared-base-utils";
+import { assertJsonObject, codedError, isPlainRecord, logServerTiming, nonEmpty, normalizeEmail, timeServerStep, validEmail } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 
@@ -102,15 +102,30 @@ export function serializeCompanyProfileSetting(setting: SystemSettingLike) {
 }
 
 export async function getCompanyProfileSettings() {
-  const setting = await prisma.systemSetting.findUnique({ where: { key: COMPANY_PROFILE_SETTING_KEY } });
-  if (setting) return serializeCompanyProfileSetting(setting);
-  const created = await prisma.systemSetting.create({
-    data: {
-      key: COMPANY_PROFILE_SETTING_KEY,
-      value: DEFAULT_COMPANY_PROFILE_SETTINGS,
-    },
-  });
-  return serializeCompanyProfileSetting(created);
+  const startedAt = Date.now();
+  let outcome = "unknown";
+  try {
+    const setting = await timeServerStep("workbench-init-timing", "companyProfile.systemSettingLookup", () => (
+      prisma.systemSetting.findUnique({ where: { key: COMPANY_PROFILE_SETTING_KEY } })
+    ));
+    if (setting) {
+      outcome = "found";
+      return serializeCompanyProfileSetting(setting);
+    }
+    const created = await timeServerStep("workbench-init-timing", "companyProfile.systemSettingCreateDefault", () => prisma.systemSetting.create({
+      data: {
+        key: COMPANY_PROFILE_SETTING_KEY,
+        value: DEFAULT_COMPANY_PROFILE_SETTINGS,
+      },
+    }));
+    outcome = "created-default";
+    return serializeCompanyProfileSetting(created);
+  } finally {
+    logServerTiming("workbench-init-timing", startedAt, {
+      step: "companyProfile.total",
+      outcome,
+    });
+  }
 }
 
 export async function readCompanyProfileSettings(actor: SettingsActor) {

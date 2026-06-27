@@ -1,0 +1,40 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { apiError, createSupplierDocumentRequest, getActor, listSupplierDocumentRequests, ok } from "../../../lib/platform-db";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function GET(request: NextRequest) {
+  try {
+    const actor = await getActor(request);
+    const query = new URL(request.url).searchParams;
+    return ok({ requests: await listSupplierDocumentRequests(query, actor) });
+  } catch (error: unknown) {
+    return apiError(error, "读取供应商资料回传任务失败");
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const actor = await getActor(request);
+    const formData = await request.formData();
+    const requestRow = await createSupplierDocumentRequest(request, actor, {
+      orderId: String(formData.get("orderId") || ""),
+      supplierId: String(formData.get("supplierId") || ""),
+      requiredDocumentTypes: String(formData.get("requiredDocumentTypes") || ""),
+      dueDate: String(formData.get("dueDate") || ""),
+      message: String(formData.get("message") || ""),
+    }, formData.get("templateFile"));
+    return NextResponse.json({
+      success: true,
+      request: requestRow,
+      data: requestRow,
+      message: requestRow.sendStatus === "sent"
+        ? "已通知供应商回传资料"
+        : "已创建回传任务，但邮件发送失败，请检查邮箱配置后重试",
+    }, { status: 201 });
+  } catch (error: unknown) {
+    return apiError(error, "创建供应商资料回传任务失败");
+  }
+}

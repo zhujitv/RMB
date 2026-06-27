@@ -10,6 +10,7 @@ export {
   isPlainRecord,
   logSecurityEvent,
   logServerError,
+  logServerTiming,
   nonEmpty,
   normalizeCreditDays,
   normalizeDateText,
@@ -25,6 +26,7 @@ export {
   requireValidEmail,
   requireValidEmailList,
   sanitizeForLog,
+  timeServerStep,
   todayInputInChina,
   validEmail,
 } from "./shared-base-utils";

@@ -93,6 +93,7 @@ model User {
   reviewedLogisticsBills LogisticsBill[] @relation("LogisticsBillReviewedBy")
   createdLogisticsBills LogisticsBill[] @relation("LogisticsBillCreatedBy")
   updatedLogisticsBills LogisticsBill[] @relation("LogisticsBillUpdatedBy")
+  sentSupplierDocumentRequests SupplierDocumentRequest[] @relation("SupplierDocumentRequestRequestedBy")
   assignedOrderLogisticsSuppliers OrderLogisticsSupplier[] @relation("OrderLogisticsSupplierAssignedBy")
 
   @@index([supplierId])
@@ -188,6 +189,7 @@ model Supplier {
   allowDomesticLogisticsEntry Boolean @default(false) @map("allow_domestic_logistics_entry")
   allowLogisticsExpenseEntry Boolean @default(false) @map("allow_logistics_expense_entry")
   allowLogisticsInvoiceUpload Boolean @default(false) @map("allow_logistics_invoice_upload")
+  allowFactoryDocumentUpload Boolean @default(false) @map("allow_factory_document_upload")
   isDefaultLogisticsSupplier Boolean @default(false) @map("is_default_logistics_supplier")
   allowedLogisticsCostTypes Json? @map("allowed_logistics_cost_types")
   createdById   String?   @map("created_by")
@@ -204,6 +206,7 @@ model Supplier {
   logisticsExpenses LogisticsExpense[]
   logisticsBills LogisticsBill[]
   assignedOrders OrderLogisticsSupplier[]
+  factoryDocumentRequests SupplierDocumentRequest[]
 
   @@index([supplierName])
   @@index([supplierType])
@@ -211,6 +214,7 @@ model Supplier {
   @@index([allowDomesticLogisticsEntry])
   @@index([allowLogisticsExpenseEntry])
   @@index([allowLogisticsInvoiceUpload])
+  @@index([allowFactoryDocumentUpload])
   @@index([isDefaultLogisticsSupplier])
   @@index([deletedAt])
   @@map("suppliers")
@@ -296,6 +300,7 @@ model ReceivableOrder {
   logisticsExpenses LogisticsExpense[]
   logisticsBills LogisticsBill[]
   logisticsSuppliers OrderLogisticsSupplier[]
+  supplierDocumentRequests SupplierDocumentRequest[]
 
   @@index([orderNo])
   @@index([blNo])
@@ -442,6 +447,7 @@ model OrderDocument {
   orderId        String            @map("order_id")
   costId         String?           @map("cost_id")
   supplierId     String?           @map("supplier_id")
+  factoryDocumentRequestId String? @map("factory_document_request_id")
   relatedModule  String            @default("EXPORT") @map("related_module")
   documentType   OrderDocumentType @map("document_type")
   fileName       String            @map("file_name")
@@ -464,18 +470,61 @@ model OrderDocument {
   order      ReceivableOrder @relation(fields: [orderId], references: [id])
   cost       OrderCost?      @relation(fields: [costId], references: [id])
   supplier   Supplier?       @relation(fields: [supplierId], references: [id])
+  factoryDocumentRequest SupplierDocumentRequest? @relation(fields: [factoryDocumentRequestId], references: [id], onDelete: SetNull)
   uploadedBy User?           @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
   logisticsExpenseInvoices LogisticsExpense[] @relation("LogisticsExpenseInvoiceDocument")
 
   @@index([orderId])
   @@index([costId])
   @@index([supplierId])
+  @@index([factoryDocumentRequestId])
   @@index([relatedModule])
   @@index([documentType])
   @@index([uploadStatus])
   @@index([uploadedById])
   @@index([deletedAt])
   @@map("order_documents")
+}
+
+model SupplierDocumentRequest {
+  id                    String    @id @default(cuid())
+  orderId               String    @map("order_id")
+  supplierId            String    @map("supplier_id")
+  requestedById         String?   @map("requested_by")
+  requiredDocumentTypes Json      @map("required_document_types")
+  status                String    @default("待上传")
+  dueDate               DateTime? @map("due_date") @db.Date
+  message               String?
+  templateFileName      String?   @map("template_file_name")
+  templateOriginalName  String?   @map("template_original_name")
+  templateMimeType      String?   @map("template_mime_type")
+  templateFileSize      Int?      @map("template_file_size")
+  templateStorageKey    String?   @map("template_storage_key")
+  templateBucket        String?   @map("template_bucket")
+  recipientEmails       Json?     @map("recipient_emails")
+  ccEmails              Json?     @map("cc_emails")
+  sendStatus            String    @default("pending") @map("send_status")
+  sendError             String?   @map("send_error")
+  emailSubject          String?   @map("email_subject")
+  emailBody             String?   @map("email_body")
+  sentAt                DateTime? @map("sent_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+
+  order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplier    Supplier        @relation(fields: [supplierId], references: [id])
+  requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  documents   OrderDocument[]
+
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([requestedById])
+  @@index([status])
+  @@index([sendStatus])
+  @@index([dueDate])
+  @@index([deletedAt])
+  @@map("supplier_document_requests")
 }
 
 model ShippingDocumentNotification {

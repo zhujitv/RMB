@@ -98,6 +98,7 @@ type DocumentLike = {
   relatedModule?: string | null;
   costId?: string | null;
   supplierId?: string | null;
+  factoryDocumentRequestId?: string | null;
   order?: DocumentOrderLike | null;
   cost?: DocumentCostLike | null;
   supplier?: Record<string, unknown> | null;
@@ -154,6 +155,15 @@ function relatedModuleForDocumentType(documentType: string) {
 function canReadDocument(actor: ActorLike, document: DocumentLike) {
   if (!canRead(actor, "documents")) return false;
   if (canUseDomesticLogisticsDocumentScope(actor, String(document.documentType || "")) && canAccessDomesticLogisticsOrder(actor, document.order)) return true;
+  if (
+    actorRole(actor) === LOGISTICS_OPERATOR_ROLE
+    && document.relatedModule === "SUPPLIER"
+    && document.factoryDocumentRequestId
+    && document.supplierId
+    && document.supplierId === actor?.supplierId
+  ) {
+    return true;
+  }
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "ALL") return true;
   if (scope === "OWN") return canAccessOrder(actor, document.order);

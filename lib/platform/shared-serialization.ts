@@ -121,6 +121,7 @@ type SupplierLike = Record<string, unknown> & {
   allowDomesticLogisticsEntry?: boolean | null;
   allowLogisticsExpenseEntry?: boolean | null;
   allowLogisticsInvoiceUpload?: boolean | null;
+  allowFactoryDocumentUpload?: boolean | null;
   isDefaultLogisticsSupplier?: boolean | null;
   allowedLogisticsCostTypes?: unknown;
   createdBy?: UserLike | null;
@@ -171,6 +172,7 @@ type CostDocumentLike = Record<string, unknown> & {
   orderId?: string | null;
   costId?: string | null;
   supplierId?: string | null;
+  factoryDocumentRequestId?: string | null;
   relatedModule?: string | null;
   order?: CostOrderLike | null;
   supplier?: SupplierLike | null;
@@ -367,6 +369,7 @@ export function serializeSupplier(supplierInput: unknown = {}) {
     allowDomesticLogisticsEntry: Boolean(supplier.allowDomesticLogisticsEntry),
     allowLogisticsExpenseEntry: Boolean(supplier.allowLogisticsExpenseEntry),
     allowLogisticsInvoiceUpload: Boolean(supplier.allowLogisticsInvoiceUpload),
+    allowFactoryDocumentUpload: Boolean(supplier.allowFactoryDocumentUpload),
     isDefaultLogisticsSupplier: Boolean(supplier.isDefaultLogisticsSupplier),
     allowedLogisticsCostTypes: expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []),
     createdBy: serializeUser(supplier.createdBy),
@@ -535,6 +538,7 @@ export function serializeOrderDocument(documentInput: unknown, orderOverride: un
     orderId: document.orderId,
     costId: document.costId || "",
     supplierId: document.supplierId || "",
+    factoryDocumentRequestId: document.factoryDocumentRequestId || "",
     relatedModule: document.relatedModule || "EXPORT",
     orderNo: document.order?.orderNo || "",
     blNo: document.order?.blNo || "",

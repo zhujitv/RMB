@@ -29,8 +29,8 @@ test("fixed role menus do not expose forbidden global modules", () => {
     assert(!roleMenuLine(source, "业务员").includes('"profit"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
   }
-  assert.match(backend, /物流供应商: \["domesticLogistics", "manual"\]/);
-  assert.match(menuFile, /物流供应商: \["domesticLogistics", "manual"\]/);
+  assert.match(backend, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
+  assert.match(menuFile, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
   assert.match(backend, /logisticsReview: "物流费用审核"/);
   assert.match(menuFile, /logisticsReview", "taxRefund"/);
 });
@@ -89,7 +89,8 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(finance.menus.includes("logisticsReview"), false);
 
   const logisticsSupplier = rolePermissionSnapshot("物流供应商");
-  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "manual"]);
+  assert.deepEqual(logisticsSupplier.menus, ["supplierDocuments", "domesticLogistics", "manual"]);
+  assert.equal(logisticsSupplier.menus.includes("supplierDocuments"), true);
   assert.equal(logisticsSupplier.menus.includes("logisticsReview"), false);
   assert.equal(logisticsSupplier.dataScope, "OWN");
   assert.equal(logisticsSupplier.reads.payments, false);
@@ -98,6 +99,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(logisticsSupplier.writes.logistics, true);
   assert.equal(logisticsSupplier.writes.domesticLogistics, true);
   assert.equal(logisticsSupplier.writes.documents, true);
+  assert.equal(logisticsSupplier.writes.supplierDocuments, true);
   assert.equal(logisticsSupplier.writes.settings, false);
 
   const logisticsClerk = rolePermissionSnapshot("物流资料录入员");

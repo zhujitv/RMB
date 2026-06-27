@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
-import { codedError, normalizeEmail } from "./shared-base-utils";
+import { codedError, logServerTiming, normalizeEmail, timeServerStep } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
 import {
@@ -367,7 +367,7 @@ export async function revokeUserSessions(userId: string | null | undefined) {
 export async function currentSessionInfo(request: RequestLike) {
   const sessionToken = requestSessionToken(request);
   if (!sessionToken) return null;
-  const session = await prisma.userSession.findFirst({
+  const session = await timeServerStep("workbench-init-timing", "currentSessionInfo.sessionLookup", () => prisma.userSession.findFirst({
     where: {
       tokenHash: sessionTokenHash(sessionToken),
       revokedAt: null,
@@ -377,7 +377,7 @@ export async function currentSessionInfo(request: RequestLike) {
       createdAt: true,
       ipAddress: true,
     },
-  });
+  }), { sessionPresent: true });
   return session ? {
     loginAt: session.createdAt,
     ipAddress: session.ipAddress || "",
@@ -385,11 +385,24 @@ export async function currentSessionInfo(request: RequestLike) {
 }
 
 export async function getActor(request: RequestLike, { required = true, allowPasswordChangeRequired = false }: GetActorOptions = {}) {
-  await ensureDefaultUsers();
+  const startedAt = Date.now();
   const sessionToken = requestSessionToken(request);
-  if (sessionToken) {
+  let outcome = "unknown";
+  let role = "";
+  const baseContext = {
+    required,
+    allowPasswordChangeRequired,
+    sessionPresent: Boolean(sessionToken),
+  };
+  try {
+    if (!sessionToken) {
+      outcome = required ? "missing-session" : "optional-no-session";
+      if (!required) return null;
+      throw permissionError("请先登录", 401);
+    }
+    await timeServerStep("workbench-init-timing", "getActor.ensureDefaultUsers", () => ensureDefaultUsers(), baseContext);
     assertSameOriginRequest(request);
-    const session = await prisma.userSession.findFirst({
+    const session = await timeServerStep("workbench-init-timing", "getActor.sessionLookup", () => prisma.userSession.findFirst({
       where: {
         tokenHash: sessionTokenHash(sessionToken),
         revokedAt: null,
@@ -397,36 +410,60 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         user: { is: { isActive: true, approvalStatus: "APPROVED" } },
       },
       include: { user: { select: USER_AUTH_SELECT } },
-    });
+    }), baseContext);
     if (session?.user) {
+      role = session.user.role || "";
       if (isUnsafeDefaultAdminEmail(session.user.email)) {
-        await revokeUserSessions(session.user.id);
+        await timeServerStep("workbench-init-timing", "getActor.revokeUnsafeDefaultAdminSessions", () => revokeUserSessions(session.user.id), {
+          ...baseContext,
+          role,
+        });
+        outcome = "unsafe-default-admin";
         throw permissionError("默认管理员账号已被禁用，请使用公司管理员账号登录。", 403);
       }
       if (session.user.mustChangePassword && !allowPasswordChangeRequired) {
         const error = permissionError("首次登录必须修改密码", 403);
         error.code = "PASSWORD_CHANGE_REQUIRED";
+        outcome = "password-change-required";
         throw error;
       }
       if (session.user.role === LOGISTICS_OPERATOR_ROLE) {
-        if (!session.user.supplierId) {
-          await revokeUserSessions(session.user.id);
+        const supplierId = session.user.supplierId;
+        if (!supplierId) {
+          await timeServerStep("workbench-init-timing", "getActor.revokeUnboundSupplierSessions", () => revokeUserSessions(session.user.id), {
+            ...baseContext,
+            role,
+          });
+          outcome = "supplier-unbound";
           throw permissionError("物流供应商账号未绑定供应商，请联系管理员。", 403);
         }
-        const supplier = await prisma.supplier.findFirst({
-          where: { id: session.user.supplierId, deletedAt: null, status: "启用" },
+        const supplier = await timeServerStep("workbench-init-timing", "getActor.supplierLookup", () => prisma.supplier.findFirst({
+          where: { id: supplierId, deletedAt: null, status: "启用" },
           select: { id: true, supplierType: true },
-        });
+        }), { ...baseContext, role });
         if (!supplier || !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
-          await revokeUserSessions(session.user.id);
+          await timeServerStep("workbench-init-timing", "getActor.revokeInvalidSupplierSessions", () => revokeUserSessions(session.user.id), {
+            ...baseContext,
+            role,
+          });
+          outcome = "supplier-invalid";
           throw permissionError("绑定供应商不存在或已停用，请联系管理员。", 403);
         }
       }
+      outcome = "ready";
       return session.user;
     }
+    outcome = required ? "invalid-session" : "optional-invalid-session";
+    if (!required) return null;
+    throw permissionError("请先登录", 401);
+  } finally {
+    logServerTiming("workbench-init-timing", startedAt, {
+      ...baseContext,
+      step: "getActor.total",
+      outcome,
+      role,
+    });
   }
-  if (!required) return null;
-  throw permissionError("请先登录", 401);
 }
 
 export function loginAttemptKey(request: RequestLike, email: unknown) {

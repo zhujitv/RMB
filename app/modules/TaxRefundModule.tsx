@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
+import { ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, PermissionSelectItem, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -207,6 +207,26 @@ type ManualShippingForm = {
   emailBody: string;
 };
 
+type SupplierOption = {
+  id: string;
+  supplierName?: string;
+  supplierType?: string;
+  email?: string;
+  allowFactoryDocumentUpload?: boolean;
+};
+
+type SupplierDocumentRequestForm = {
+  order: TaxRefundDetail;
+  suppliers: SupplierOption[];
+  supplierId: string;
+  requiredDocumentTypes: string[];
+  dueDate: string;
+  message: string;
+  templateFile: File | null;
+  loadingSuppliers: boolean;
+  error: string;
+};
+
 type TaxRefundMode = "current" | "archive";
 
 const PAGE_SIZE = 20;
@@ -280,6 +300,8 @@ export function TaxRefundModule({
   const [manualShippingLoading, setManualShippingLoading] = useState(false);
   const [manualShippingSending, setManualShippingSending] = useState(false);
   const [manualShippingMessage, setManualShippingMessage] = useState("");
+  const [supplierDocumentForm, setSupplierDocumentForm] = useState<SupplierDocumentRequestForm | null>(null);
+  const [supplierDocumentSending, setSupplierDocumentSending] = useState(false);
   const {
     confirmation,
     requestConfirmation,
@@ -799,6 +821,85 @@ export function TaxRefundModule({
     }
   }
 
+  async function openSupplierDocumentRequest(order: TaxRefundDetail) {
+    setSupplierDocumentForm({
+      order,
+      suppliers: [],
+      supplierId: "",
+      requiredDocumentTypes: TAX_FACTORY_UPLOAD_TYPES.map((type) => type.value),
+      dueDate: "",
+      message: "",
+      templateFile: null,
+      loadingSuppliers: true,
+      error: "",
+    });
+    try {
+      const data = await apiJson<{ suppliers?: SupplierOption[] }>("/api/suppliers/available?type=factory");
+      const suppliers = (data.suppliers || []).filter((supplier) => supplier.allowFactoryDocumentUpload);
+      setSupplierDocumentForm((current) => current && current.order.id === order.id
+        ? {
+            ...current,
+            suppliers,
+            supplierId: current.supplierId || suppliers[0]?.id || "",
+            loadingSuppliers: false,
+            error: suppliers.length ? "" : "暂无已开启资料回传权限的工厂供应商，请先到系统设置开启。",
+          }
+        : current);
+    } catch (loadError) {
+      setSupplierDocumentForm((current) => current && current.order.id === order.id
+        ? {
+            ...current,
+            loadingSuppliers: false,
+            error: loadError instanceof Error ? loadError.message : "读取工厂供应商失败",
+          }
+        : current);
+    }
+  }
+
+  async function submitSupplierDocumentRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supplierDocumentForm) return;
+    if (!supplierDocumentForm.supplierId) {
+      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请选择工厂供应商" });
+      return;
+    }
+    if (!supplierDocumentForm.requiredDocumentTypes.length) {
+      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请至少选择一种回传资料" });
+      return;
+    }
+    setSupplierDocumentSending(true);
+    setSupplierDocumentForm({ ...supplierDocumentForm, error: "" });
+    try {
+      const formData = new FormData();
+      formData.append("orderId", supplierDocumentForm.order.id);
+      formData.append("supplierId", supplierDocumentForm.supplierId);
+      formData.append("requiredDocumentTypes", supplierDocumentForm.requiredDocumentTypes.join(","));
+      formData.append("dueDate", supplierDocumentForm.dueDate);
+      formData.append("message", supplierDocumentForm.message);
+      if (supplierDocumentForm.templateFile) {
+        formData.append("templateFile", supplierDocumentForm.templateFile);
+      }
+      const response = await fetch("/api/supplier-document-requests", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; error?: string };
+      if (!response.ok || data.success === false) {
+        throw new Error(data.message || data.error || "创建供应商资料回传任务失败");
+      }
+      setSupplierDocumentForm(null);
+      setNotice(data.message || "已通知供应商回传资料");
+      if (detailOrderId === supplierDocumentForm.order.id) await fetchDetail(supplierDocumentForm.order.id);
+    } catch (submitError) {
+      setSupplierDocumentForm((current) => current
+        ? { ...current, error: submitError instanceof Error ? submitError.message : "创建供应商资料回传任务失败" }
+        : current);
+    } finally {
+      setSupplierDocumentSending(false);
+    }
+  }
+
   async function deleteDocument(orderId: string, document: TaxDocument) {
     const result = await requestConfirmation({
       title: "确定删除该文件？",
@@ -1085,6 +1186,8 @@ export function TaxRefundModule({
           onRecognizeCustomsDocument={recognizeCustomsDocument}
           onRecognizeFromUploadedCustoms={recognizeFromUploadedCustoms}
           onOpenManualShippingDocuments={openManualShippingDocuments}
+          canCreateSupplierDocumentRequest={canManageTaxRefund && mode === "current" && !detailRow.taxArchived}
+          onOpenSupplierDocumentRequest={openSupplierDocumentRequest}
           onOpenDomesticLogistics={() => {
             const keywordValue = (detail?.orderNo || detailRow?.orderNo || detailRow.id || "").trim();
             if (keywordValue) onOpenDomesticLogistics?.(keywordValue);
@@ -1116,6 +1219,15 @@ export function TaxRefundModule({
           onSubmit={sendManualShippingDocuments}
           onChange={setManualShippingForm}
           onLanguageChange={updateManualShippingLanguage}
+        />
+      ) : null}
+      {supplierDocumentForm ? (
+        <SupplierDocumentRequestDialog
+          form={supplierDocumentForm}
+          sending={supplierDocumentSending}
+          onClose={() => setSupplierDocumentForm(null)}
+          onChange={setSupplierDocumentForm}
+          onSubmit={submitSupplierDocumentRequest}
         />
       ) : null}
       {confirmation ? (
@@ -1214,6 +1326,8 @@ function TaxRefundDetailDrawer({
   onRecognizeCustomsDocument,
   onRecognizeFromUploadedCustoms,
   onOpenManualShippingDocuments,
+  canCreateSupplierDocumentRequest,
+  onOpenSupplierDocumentRequest,
   onOpenDomesticLogistics,
   currentUserRole,
   canWriteDocuments,
@@ -1242,6 +1356,8 @@ function TaxRefundDetailDrawer({
   onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
   onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
+  canCreateSupplierDocumentRequest: boolean;
+  onOpenSupplierDocumentRequest: (order: TaxRefundDetail) => void;
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
@@ -1280,6 +1396,11 @@ function TaxRefundDetailDrawer({
                 {submittingTax ? "提交中..." : "提交退税并归档"}
               </button>
             )}
+            {canCreateSupplierDocumentRequest && detail ? (
+              <button className={styles.secondaryButton} type="button" onClick={() => onOpenSupplierDocumentRequest(detail)}>
+                通知工厂供应商回传
+              </button>
+            ) : null}
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
           </div>
         </header>
@@ -1527,6 +1648,126 @@ function TaxRefundDetailPanel({
         ))}
       </div>
     </div>
+  );
+}
+
+function SupplierDocumentRequestDialog({
+  form,
+  sending,
+  onClose,
+  onChange,
+  onSubmit,
+}: {
+  form: SupplierDocumentRequestForm;
+  sending: boolean;
+  onClose: () => void;
+  onChange: (form: SupplierDocumentRequestForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const selectedSupplier = form.suppliers.find((supplier) => supplier.id === form.supplierId) || null;
+  const toggleDocumentType = (documentType: string) => {
+    const exists = form.requiredDocumentTypes.includes(documentType);
+    onChange({
+      ...form,
+      requiredDocumentTypes: exists
+        ? form.requiredDocumentTypes.filter((item) => item !== documentType)
+        : [...form.requiredDocumentTypes, documentType],
+      error: "",
+    });
+  };
+  return (
+    <DismissibleLayer
+      ariaLabel="通知工厂供应商回传资料"
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={styles.modalCard}
+      dismissible={!sending}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+          <header className={styles.modalHeader}>
+            <div>
+              <strong>通知工厂供应商回传资料</strong>
+              <span>供应商端只显示订单号和资料要求，不显示客户简称或客户全称。</span>
+            </div>
+            <button className={styles.ghostButton} type="button" onClick={requestClose} disabled={sending}>关闭</button>
+          </header>
+          {form.error ? <div className={styles.inlineError}>{form.error}</div> : null}
+          <div className={styles.reportFilterGrid}>
+            <label>
+              订单号
+              <input value={form.order.orderNo || "-"} readOnly />
+            </label>
+            <label>
+              工厂供应商
+              <select
+                value={form.supplierId}
+                onChange={(event) => onChange({ ...form, supplierId: event.target.value, error: "" })}
+                disabled={form.loadingSuppliers || sending}
+                required
+              >
+                <option value="">{form.loadingSuppliers ? "供应商加载中..." : "请选择工厂供应商"}</option>
+                {form.suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>{supplier.supplierName || "-"}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              供应商邮箱
+              <input value={selectedSupplier?.email || "将优先使用供应商绑定账号邮箱"} readOnly />
+            </label>
+            <label>
+              截止日期
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(event) => onChange({ ...form, dueDate: event.target.value })}
+                disabled={sending}
+              />
+            </label>
+            <label>
+              Excel 合同样本
+              <input
+                type="file"
+                accept=".xlsx"
+                disabled={sending}
+                onChange={(event) => onChange({ ...form, templateFile: event.target.files?.[0] || null })}
+              />
+            </label>
+            <label>
+              备注
+              <input
+                value={form.message}
+                onChange={(event) => onChange({ ...form, message: event.target.value })}
+                placeholder="供应商可见的补充说明"
+                disabled={sending}
+              />
+            </label>
+          </div>
+          <div className={styles.checkboxPanel}>
+            <strong>需要回传的资料</strong>
+            <div>
+              {TAX_FACTORY_UPLOAD_TYPES.map((item) => (
+                <PermissionSelectItem
+                  key={item.value}
+                  label={item.label}
+                  description={item.value === "SUPPLIER_PURCHASE_CONTRACT" ? "盖章扫描后上传 PDF" : "上传增值税发票 PDF"}
+                  checked={form.requiredDocumentTypes.includes(item.value)}
+                  disabled={sending}
+                  onChange={() => toggleDocumentType(item.value)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className={styles.detailActions}>
+            <button className={styles.primaryButtonCompact} type="submit" disabled={sending || form.loadingSuppliers}>
+              {sending ? "发送中..." : "发送通知"}
+            </button>
+            <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={sending}>取消</button>
+          </div>
+        </form>
+      )}
+    </DismissibleLayer>
   );
 }
 
@@ -2194,7 +2435,7 @@ function FactoryCostUploadGroup({
           documents={documents.filter((document) => (
             document.documentType === documentType.value
             && document.uploadStatus === "SUCCESS"
-            && document.costId === cost.id
+            && (document.costId === cost.id || Boolean(cost.supplierId && document.supplierId === cost.supplierId))
           ))}
           uploading={uploadingKey === uploadScopeKey(orderId, documentType.value, scope)}
           uploadProgress={uploadProgressByKey[uploadScopeKey(orderId, documentType.value, scope)] || 0}
