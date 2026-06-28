@@ -178,6 +178,8 @@ export type ShipsgoIntegrationForm = {
   webhookSecret: string;
   webhookSecretConfigured: boolean;
   liveMapEnabled: boolean;
+  liveMapEmbedToken: string;
+  liveMapEmbedTokenConfigured: boolean;
   customerPushEnabled: boolean;
   creditWarningThreshold: string;
 };

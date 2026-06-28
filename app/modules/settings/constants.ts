@@ -146,6 +146,8 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   webhookSecret: "",
   webhookSecretConfigured: false,
   liveMapEnabled: false,
+  liveMapEmbedToken: "",
+  liveMapEmbedTokenConfigured: false,
   customerPushEnabled: false,
   creditWarningThreshold: "20",
 };

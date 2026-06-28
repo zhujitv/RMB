@@ -524,6 +524,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   webhookEnabled: false,
   webhookSecret: "",
   liveMapEnabled: false,
+  liveMapEmbedToken: "",
   customerPushEnabled: false,
   creditWarningThreshold: 20,
 };

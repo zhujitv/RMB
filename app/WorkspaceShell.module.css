@@ -434,6 +434,9 @@
 .shipsgoCreateError { composes: shipsgoCreateError from "./styles/workspace-shell/manual-table.module.css"; }
 .shipsgoInfoColumn { composes: shipsgoInfoColumn from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .shipsgoInfoItem { composes: shipsgoInfoItem from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
+.shipsgoMapDrawer { composes: shipsgoMapDrawer from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
+.shipsgoMapFrame { composes: shipsgoMapFrame from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
+.shipsgoMapFrameWrap { composes: shipsgoMapFrameWrap from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .shipsgoStatusBadge { composes: shipsgoStatusBadge from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .shipsgoSyncMessage { composes: shipsgoSyncMessage from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .shipsgoTimelineContent { composes: shipsgoTimelineContent from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }

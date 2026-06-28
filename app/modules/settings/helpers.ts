@@ -315,6 +315,8 @@ export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationS
     webhookSecret: "",
     webhookSecretConfigured: settings?.webhookSecretConfigured === true,
     liveMapEnabled: settings?.liveMapEnabled === true,
+    liveMapEmbedToken: "",
+    liveMapEmbedTokenConfigured: settings?.liveMapEmbedTokenConfigured === true,
     customerPushEnabled: settings?.customerPushEnabled === true,
     creditWarningThreshold: String(settings?.creditWarningThreshold ?? DEFAULT_SHIPSGO_INTEGRATION_FORM.creditWarningThreshold),
   };

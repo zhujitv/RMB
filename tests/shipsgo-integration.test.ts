@@ -42,8 +42,11 @@ test("ShipsGo integration settings are stored safely in system settings", () => 
   assert.match(service, /assertWrite\(actor, "settings"\)/);
   assert.match(service, /apiKeyConfigured: Boolean\(normalized\.apiKey\)/);
   assert.match(service, /webhookSecretConfigured: Boolean\(normalized\.webhookSecret\)/);
+  assert.match(service, /liveMapEmbedTokenConfigured: Boolean\(normalized\.liveMapEmbedToken\)/);
   assert.match(service, /apiKey: ""/);
   assert.match(service, /webhookSecret: ""/);
+  assert.match(service, /liveMapEmbedToken: ""/);
+  assert.match(service, /liveMapEmbedUrl: enabled && normalized\.liveMapEnabled \? shipsgoEmbedUrl\(normalized\.liveMapEmbedToken\) : ""/);
   assert.match(shared, /export \* from "\.\/shipsgo-integration"/);
   assert.match(shared, /export \* from "\.\/shipsgo-tracking"/);
 });
@@ -63,6 +66,8 @@ test("settings module exposes third-party API configuration without leaking secr
   assert.match(settingsModule, /ShipsgoIntegrationSettingsCard/);
   assert.match(settingsModule, /保存大掌櫃设置/);
   assert.match(settingsModule, /placeholder=\{currentForm\.apiKeyConfigured \? "已配置，留空则保持不变"/);
+  assert.match(settingsModule, /Live Map Embed Token/);
+  assert.match(settingsModule, /placeholder=\{currentForm\.liveMapEmbedTokenConfigured \? "已配置，留空则保持不变"/);
   assert.match(settingsModule, /SHIPSGO_FEATURE_OPTIONS/);
   assert.match(settingsModule, /activeTab !== "shipsgoIntegration"/);
 });
@@ -73,10 +78,13 @@ test("domestic logistics only receives safe ShipsGo feature flags", () => {
   assert.match(logisticsRoute, /return ok\(\{ rows, shipsgo \}\)/);
   assert.match(logisticsModule, /type ShipsgoFeatureFlags/);
   assert.match(logisticsModule, /shipsgoFeatures\.enabled && shipsgoFeatures\.oceanTrackingEnabled/);
+  assert.match(logisticsModule, /liveMapEmbedUrl\?: string/);
+  assert.match(logisticsModule, /<iframe[\s\S]*src=\{embedUrl\}/);
+  assert.match(service, /https:\/\/embed\.shipsgo\.com\/\?token=/);
   assert.doesNotMatch(logisticsModule, /ShipsgoTrackingFeaturePanel/);
   assert.doesNotMatch(logisticsModule, /Credit 预警阈值/);
   assert.doesNotMatch(logisticsModule, /每日自动同步/);
-  assert.doesNotMatch(logisticsModule, /apiKey|webhookSecret/);
+  assert.doesNotMatch(logisticsModule, /apiKey|webhookSecret|liveMapEmbedToken/);
 });
 
 test("ShipsGo tracking has an isolated model and migration", () => {

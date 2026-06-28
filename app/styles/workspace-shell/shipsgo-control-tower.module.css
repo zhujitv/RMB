@@ -525,3 +525,24 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+.shipsgoMapDrawer {
+  width: min(1180px, 94vw);
+}
+
+.shipsgoMapFrameWrap {
+  width: 100%;
+  min-height: 650px;
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.shipsgoMapFrame {
+  display: block;
+  width: 100%;
+  min-height: 650px;
+  border: 0;
+  background: #ffffff;
+}
