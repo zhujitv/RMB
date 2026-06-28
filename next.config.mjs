@@ -7,6 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   allowedDevOrigins: ["localhost", "127.0.0.1"],
+  serverExternalPackages: ["geoip-lite"],
   async headers() {
     return [
       {

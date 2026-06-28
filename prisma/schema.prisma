@@ -157,6 +157,7 @@ model LoginAttempt {
   email         String?
   ipAddress     String?   @map("ip_address")
   userAgent     String?   @map("user_agent")
+  failureReason String?   @map("failure_reason")
   geoCountry    String?   @map("geo_country")
   geoRegion     String?   @map("geo_region")
   geoCity       String?   @map("geo_city")

@@ -356,6 +356,22 @@ function browserLabel(userAgent: string | null | undefined) {
   return "其他浏览器";
 }
 
+function osLabel(userAgent: string | null | undefined) {
+  const ua = String(userAgent || "");
+  if (!ua) return "未记录";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
+  if (/Mac OS X|Macintosh/i.test(ua)) return "macOS";
+  if (/Windows NT/i.test(ua)) return "Windows";
+  if (/Android/i.test(ua)) return "Android";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "未知系统";
+}
+
+function deviceBrowserLabel(userAgent: string | null | undefined) {
+  if (!userAgent) return "未记录";
+  return `${browserLabel(userAgent)} / ${osLabel(userAgent)}`;
+}
+
 export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
   const actorId = requireText(actor?.id, "当前用户");
   const rows = await prisma.loginAttempt.findMany({
@@ -367,6 +383,7 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
       createdAt: true,
       ipAddress: true,
       userAgent: true,
+      failureReason: true,
       geoCountry: true,
       geoRegion: true,
       geoCity: true,
@@ -399,8 +416,9 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
       geoIsp: geo.isp || "",
       geoSource: geo.source || "",
       geoResolvedAt: row.geoResolvedAt || null,
-      browser: browserLabel(row.userAgent),
+      browser: deviceBrowserLabel(row.userAgent),
       result: row.success ? "成功" : "失败",
+      failureReason: row.failureReason || "",
     };
   });
 }

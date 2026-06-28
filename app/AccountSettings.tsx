@@ -41,6 +41,7 @@ type LoginRecord = {
   geoResolvedAt?: string | null;
   browser?: string;
   result?: string;
+  failureReason?: string;
 };
 
 type LoginRecordsResponse = {
@@ -444,7 +445,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
                   <th>登录时间</th>
                   <th>IP 地址</th>
                   <th>登录地区</th>
-                  <th>浏览器</th>
+                  <th>设备 / 浏览器</th>
                   <th>登录结果</th>
                 </tr>
               </thead>

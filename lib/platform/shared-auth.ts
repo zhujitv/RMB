@@ -1,9 +1,10 @@
 import crypto from "node:crypto";
+import { isIP } from "node:net";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
-import { resolveIpGeolocation } from "./ip-geolocation";
-import { codedError, logServerTiming, normalizeEmail, timeServerStep } from "./shared-base-utils";
+import { normalizeClientIp, resolveIpGeolocation } from "./ip-geolocation";
+import { codedError, logServerTiming, normalizeEmail, sanitizeForLog, timeServerStep } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
 import {
@@ -75,6 +76,7 @@ export {
 type RequestLike = {
   url?: string;
   method?: string;
+  ip?: string | null;
   headers?: {
     get(name: string): string | null;
   };
@@ -220,10 +222,39 @@ export function assertSafeInitialAdminConfig() {
   return true;
 }
 
+function splitIpHeader(value: string | null | undefined) {
+  return String(value || "")
+    .split(",")
+    .map((part) => normalizeClientIp(part))
+    .filter(Boolean);
+}
+
+function isPublicClientIp(ip: string) {
+  if (!isIP(ip)) return false;
+  const geo = resolveIpGeolocation(ip);
+  return !["本地", "内网", "保留地址"].includes(geo.country);
+}
+
+function isValidClientAddress(ip: string) {
+  return Boolean(isIP(ip)) || ip.toLowerCase() === "localhost";
+}
+
+function firstPublicOrFirstValidIp(value: string | null | undefined) {
+  const candidates = splitIpHeader(value);
+  return candidates.find(isPublicClientIp) || candidates.find(isValidClientAddress) || "";
+}
+
 export function requestIp(request: RequestLike) {
-  return request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || request?.headers?.get("x-real-ip")
-    || null;
+  const forwardedFor = firstPublicOrFirstValidIp(request?.headers?.get("x-forwarded-for"));
+  if (forwardedFor) return forwardedFor;
+  const realIp = firstPublicOrFirstValidIp(request?.headers?.get("x-real-ip"));
+  if (realIp) return realIp;
+  const cfIp = firstPublicOrFirstValidIp(request?.headers?.get("cf-connecting-ip"));
+  if (cfIp) return cfIp;
+  const vercelIp = firstPublicOrFirstValidIp(request?.headers?.get("vercel-forwarded-for"));
+  if (vercelIp) return vercelIp;
+  const requestIpValue = firstPublicOrFirstValidIp(request?.ip);
+  return requestIpValue || null;
 }
 
 export function requestSessionToken(request: RequestLike) {
@@ -543,15 +574,29 @@ export async function assertLoginNotRateLimited(request: RequestLike, email: unk
   }
 }
 
-export async function recordLoginAttempt(request: RequestLike, email: unknown, success: unknown, userId: string | null = null) {
+export async function recordLoginAttempt(request: RequestLike, email: unknown, success: unknown, userId: string | null = null, failureReason: string | null = null) {
   const ipAddress = requestIp(request);
   const ipGeo = resolveIpGeolocation(ipAddress);
+  const userAgent = request?.headers?.get("user-agent") || null;
+  console.info("login attempt captured", sanitizeForLog({
+    ipAddress,
+    userAgent,
+    success: Boolean(success),
+    failureReason: success ? null : failureReason,
+    geo: {
+      country: ipGeo.country,
+      region: ipGeo.region,
+      city: ipGeo.city,
+      source: ipGeo.source,
+    },
+  }));
   await prisma.loginAttempt.create({
     data: {
       key: loginAttemptKey(request, email),
       email: normalizeEmail(email) || null,
       ipAddress,
-      userAgent: request?.headers?.get("user-agent") || null,
+      userAgent,
+      failureReason: success ? null : failureReason,
       geoCountry: ipGeo.country || null,
       geoRegion: ipGeo.region || null,
       geoCity: ipGeo.city || null,

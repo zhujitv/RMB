@@ -29,6 +29,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "3.0.3",
+    "geoip-lite": "^2.0.3",
     "jszip": "3.10.1",
     "next": "^16.2.9",
     "pdf2json": "^4.0.3",

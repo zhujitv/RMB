@@ -42,6 +42,7 @@ const recordLoginAttemptTyped = recordLoginAttempt as (
   email: string,
   success: boolean,
   userId?: string | null,
+  failureReason?: string | null,
 ) => Promise<void>;
 
 const LOGIN_USER_SELECT = {
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     const email = normalizeEmail(body.email);
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {
-      await recordLoginAttempt(request, email, false, null);
+      await recordLoginAttempt(request, email, false, null, "default_admin_disabled");
       logSecurityEvent("login failed", loginAuditContext("default_admin_disabled", email));
       recordLoginAudit(request, "登录失败", false, "default_admin_disabled", email);
       return loginFailure("默认管理员账号已禁用，请使用公司管理员账号登录。", 403, "DEFAULT_ADMIN_DISABLED");
@@ -141,38 +142,38 @@ export async function POST(request: NextRequest) {
     });
     if (!user) {
       logSecurityEvent("login failed", loginAuditContext("user_not_found", email));
-      await recordLoginAttemptTyped(request, email, false, null);
+      await recordLoginAttemptTyped(request, email, false, null, "user_not_found");
       recordLoginAudit(request, "登录失败", false, "user_not_found", email);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (!(await verifyPassword(body.password || "", user.passwordHash))) {
       logSecurityEvent("login failed", loginAuditContext("wrong_password", email, user.id));
-      await recordLoginAttemptTyped(request, email, false, user.id);
+      await recordLoginAttemptTyped(request, email, false, user.id, "wrong_password");
       recordLoginAudit(request, "登录失败", false, "wrong_password", email, user.id);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (user.emailVerified === false) {
       logSecurityEvent("login failed", loginAuditContext("email_not_verified", email, user.id));
-      await recordLoginAttemptTyped(request, email, false, user.id);
+      await recordLoginAttemptTyped(request, email, false, user.id, "email_not_verified");
       recordLoginAudit(request, "登录失败", false, "email_not_verified", email, user.id);
       return loginFailure("请先完成邮箱验证", 403, "EMAIL_NOT_VERIFIED");
     }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
       logSecurityEvent("login failed", loginAuditContext("user_pending_approval", email, user.id));
-      await recordLoginAttemptTyped(request, email, false, user.id);
+      await recordLoginAttemptTyped(request, email, false, user.id, "user_pending_approval");
       recordLoginAudit(request, "登录失败", false, "user_pending_approval", email, user.id);
       return loginFailure("账号正在等待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
       logSecurityEvent("login failed", loginAuditContext("user_rejected", email, user.id));
-      await recordLoginAttemptTyped(request, email, false, user.id);
+      await recordLoginAttemptTyped(request, email, false, user.id, "user_rejected");
       recordLoginAudit(request, "登录失败", false, "user_rejected", email, user.id);
       return loginFailure("账号审核未通过，请联系管理员。", 403, "USER_REJECTED");
     }
     if (!user.isActive || approvalStatus === "DISABLED") {
       logSecurityEvent("login failed", loginAuditContext("user_disabled", email, user.id));
-      await recordLoginAttemptTyped(request, email, false, user.id);
+      await recordLoginAttemptTyped(request, email, false, user.id, "user_disabled");
       recordLoginAudit(request, "登录失败", false, "user_disabled", email, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
