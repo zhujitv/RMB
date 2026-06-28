@@ -244,6 +244,8 @@ test("salesperson tax refund uploads are limited to own-customer clearance docum
   assert.match(orderDocumentsService, /SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES\.includes\(documentType as OrderDocumentType\)/);
   assert.match(orderDocumentsService, /assertDocumentOrder\(orderId, actor, documentType\)/);
   assert.match(orderDocumentsService, /canAccessOrder\(actor, order\)/);
+  assert.match(orderDocumentsService, /actorRole\(actor\) === "业务员" && canRead\(actor, "documents"\) && canAccessOrder\(actor, document\.order\)/);
+  assert.match(orderDocumentsService, /actorRole\(actor\) === "业务员" && isProtectedCustomsDocumentType\(document\.documentType\)\) return false/);
 });
 
 test("workspace auth distinguishes expired login from server-side profile failure", () => {

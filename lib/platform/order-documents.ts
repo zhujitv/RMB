@@ -192,6 +192,7 @@ function isTaxRefundUploadSource(uploadSource: unknown = "") {
 
 function canReadProtectedCustomsDocumentContent(actor: ActorLike, document: DocumentLike) {
   if (["管理员", "财务"].includes(actorRole(actor)) || isInternalLogisticsOperator(actor)) return true;
+  if (actorRole(actor) === "业务员" && canRead(actor, "documents") && canAccessOrder(actor, document.order)) return true;
   return Boolean(
     isExternalLogisticsSupplierAccount(actor)
     && canRead(actor, "documents")
