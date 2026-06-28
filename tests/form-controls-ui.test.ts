@@ -284,7 +284,8 @@ test("system buttons use unified design tokens and avoid black backgrounds", () 
   assert.match(workspaceStyles, /\.loginSubmitButton:disabled \{[\s\S]*background: var\(--button-disabled-bg\) !important;/);
   assert.match(workspaceStyles, /\.loginSubmitButton:disabled \{[\s\S]*color: var\(--button-disabled-text\) !important;/);
   assert.match(workspaceStyles, /\.rowDetailButton \{[\s\S]*background: var\(--button-primary-bg\)/);
-  assert.match(workspaceStyles, /\.fileActionButton \{[\s\S]*background: var\(--button-primary-bg\)/);
+  assert.match(workspaceStyles, /\.fileActionButton,\s*\.fileDangerButton \{[\s\S]*min-width: 64px;[\s\S]*background: var\(--button-primary-bg\)/);
+  assert.match(workspaceStyles, /\.fileDangerButton \{[\s\S]*background: var\(--button-danger-bg\)/);
   assert.match(workspaceStyles, /\.dataTable button:not\(:disabled\) \{[\s\S]*background: var\(--button-primary-bg\)/);
   assert.match(workspaceStyles, /\.billApproveButton \{[\s\S]*background: var\(--button-primary-bg\)/);
   assert.match(workspaceStyles, /\.dangerButton \{[\s\S]*background: var\(--button-danger-bg\)/);

@@ -2193,7 +2193,7 @@ function CostDocumentUploadItem({
             <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
             {canWriteDocuments ? (
               <button
-                className={styles.secondaryButton}
+                className={styles.fileDangerButton}
                 type="button"
                 disabled={deletingDocumentId === document.id}
                 onClick={() => onDelete(cost, document)}

@@ -2296,7 +2296,7 @@ function CustomsDocumentPanel({
                   ) : null}
                   {canDelete ? (
                     <button
-                      className={styles.secondaryButton}
+                      className={styles.fileDangerButton}
                       type="button"
                       disabled={deletingDocumentId === currentDocument.id}
                       onClick={() => onDelete(currentDocument)}

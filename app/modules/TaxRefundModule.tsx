@@ -2018,7 +2018,7 @@ function FileUploadCard({
             ) : null}
             {canDelete ? (
               <button
-                className={styles.fileActionButton}
+                className={styles.fileDangerButton}
                 type="button"
                 disabled={deleting}
                 onClick={() => onDelete(orderId, document)}
@@ -2321,7 +2321,7 @@ function DocumentFileTable({
                 <td>
                   {canDelete ? (
                     <button
-                      className={styles.secondaryButton}
+                      className={styles.fileDangerButton}
                       type="button"
                       disabled={deletingDocumentId === document.id}
                       onClick={() => onDelete(orderId, document)}

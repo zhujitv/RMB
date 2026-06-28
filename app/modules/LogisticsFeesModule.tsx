@@ -2342,7 +2342,7 @@ function LogisticsInvoiceGroupsPanel({
                     ) : null}
                     {canDeleteGroup ? (
                       <button
-                        className={styles.secondaryButton}
+                        className={styles.fileDangerButton}
                         type="button"
                         disabled={deletingGroupKey === group.key}
                         onClick={() => deleteInvoiceGroup(targetExpense, group)}

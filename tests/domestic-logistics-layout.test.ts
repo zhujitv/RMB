@@ -44,6 +44,10 @@ test("customs document upload cards share one action order", () => {
   assert.ok(customsPanelSource.indexOf("UPLOAD_REPLACE_TEXT") < customsPanelSource.indexOf("<PdfPreviewButton"));
   assert.ok(customsPanelSource.indexOf("<PdfPreviewButton") < customsPanelSource.indexOf(">下载</a>"));
   assert.ok(customsPanelSource.indexOf(">下载</a>") < customsPanelSource.indexOf("onClick={() => onDelete(currentDocument)}"));
+  assert.match(customsPanelSource, /<PdfPreviewButton documentId=\{currentDocument\.id\} fileName=\{currentDocument\.fileName \|\| ""\} \/>/);
+  assert.match(customsPanelSource, /<a className=\{styles\.fileActionButton\}[\s\S]*>下载<\/a>/);
+  assert.match(customsPanelSource, /className=\{styles\.fileDangerButton\}[\s\S]*onClick=\{\(\) => onDelete\(currentDocument\)\}/);
+  assert.match(css, /\.fileActionButton,\s*\.fileDangerButton \{[\s\S]*height: 34px;[\s\S]*min-width: 64px;[\s\S]*padding: 0 12px;/);
 });
 
 test("export invoice remark is structured and hidden from logistics views", () => {
