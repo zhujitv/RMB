@@ -40,12 +40,13 @@ const SECURITY_HEADERS = Object.fromEntries(staticSecurityHeaders().map(({ key, 
 const API_RATE_LIMIT_STORE = new Map<string, { count: number; resetAt: number }>();
 const API_RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
 let lastRateLimitCleanupAt = 0;
+let lastDistributedRateLimitWarningAt = 0;
 
 const API_RATE_LIMIT_DEFAULTS = {
   windowMs: 60_000,
-  readLimit: 240,
-  writeLimit: 80,
-  uploadLimit: 30,
+  readLimit: 1000,
+  writeLimit: 300,
+  uploadLimit: 60,
 };
 
 function headerOrigin(value = "") {
@@ -113,6 +114,13 @@ function apiRateLimitConfig() {
     writeLimit: positiveIntegerFromEnv("API_RATE_LIMIT_WRITE_LIMIT", API_RATE_LIMIT_DEFAULTS.writeLimit),
     uploadLimit: positiveIntegerFromEnv("API_RATE_LIMIT_UPLOAD_LIMIT", API_RATE_LIMIT_DEFAULTS.uploadLimit),
   };
+}
+
+function distributedRateLimitConfig() {
+  const restUrl = String(process.env.RATE_LIMIT_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/+$/, "");
+  const restToken = String(process.env.RATE_LIMIT_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "");
+  const namespace = String(process.env.RATE_LIMIT_NAMESPACE || "nextwood").replace(/[^a-z0-9:_-]/gi, "_");
+  return restUrl && restToken ? { restUrl, restToken, namespace } : null;
 }
 
 function requestIp(request: NextRequest) {
@@ -189,22 +197,22 @@ function apiRateLimitKey(request: NextRequest) {
   ].join(":");
 }
 
-function checkApiRateLimit(request: NextRequest) {
-  if (!isApiRequest(request)) return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
-  if (request.method.toUpperCase() === "OPTIONS") return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
-  const config = apiRateLimitConfig();
+function apiRateLimitLimit(request: NextRequest, config = apiRateLimitConfig()) {
   const limit = isUploadApiRequest(request)
     ? config.uploadLimit
     : isUnsafeMethod(request.method)
       ? config.writeLimit
       : config.readLimit;
-  const now = Date.now();
+  return { limit, windowMs: config.windowMs };
+}
+
+function checkMemoryApiRateLimit(request: NextRequest, limit: number, windowMs: number, now = Date.now()) {
   cleanupRateLimitStore(now);
   const key = apiRateLimitKey(request);
   const current = API_RATE_LIMIT_STORE.get(key);
   const bucket = current && current.resetAt > now
     ? current
-    : { count: 0, resetAt: now + config.windowMs };
+    : { count: 0, resetAt: now + windowMs };
   bucket.count += 1;
   API_RATE_LIMIT_STORE.set(key, bucket);
   return {
@@ -213,6 +221,62 @@ function checkApiRateLimit(request: NextRequest) {
     remaining: Math.max(0, limit - bucket.count),
     resetAt: bucket.resetAt,
   };
+}
+
+function warnDistributedRateLimitFallback(error: unknown) {
+  const now = Date.now();
+  if (now - lastDistributedRateLimitWarningAt < 60_000) return;
+  lastDistributedRateLimitWarningAt = now;
+  console.warn("distributed rate limit unavailable; falling back to memory limit", {
+    message: error instanceof Error ? error.message : String(error || "unknown"),
+  });
+}
+
+async function checkDistributedApiRateLimit(key: string, limit: number, windowMs: number, now = Date.now()) {
+  const config = distributedRateLimitConfig();
+  if (!config) return null;
+  const redisKey = `${config.namespace}:rate:${key}`;
+  const ttlCommand = Math.max(1, Math.ceil(windowMs / 1000));
+  const response = await fetch(`${config.restUrl}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.restToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([
+      ["INCR", redisKey],
+      ["EXPIRE", redisKey, ttlCommand, "NX"],
+      ["TTL", redisKey],
+    ]),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Redis rate limit request failed: ${response.status}`);
+  }
+  const result = await response.json();
+  const count = Number(result?.[0]?.result ?? result?.[0] ?? 0);
+  const ttlSeconds = Number(result?.[2]?.result ?? result?.[2] ?? ttlCommand);
+  const resetAt = now + Math.max(1, ttlSeconds > 0 ? ttlSeconds : ttlCommand) * 1000;
+  return {
+    allowed: count <= limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetAt,
+  };
+}
+
+async function checkApiRateLimit(request: NextRequest) {
+  if (!isApiRequest(request)) return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
+  if (request.method.toUpperCase() === "OPTIONS") return { allowed: true, limit: 0, remaining: 0, resetAt: 0 };
+  const { limit, windowMs } = apiRateLimitLimit(request);
+  const key = apiRateLimitKey(request);
+  try {
+    const distributed = await checkDistributedApiRateLimit(key, limit, windowMs);
+    if (distributed) return distributed;
+  } catch (error) {
+    warnDistributedRateLimitFallback(error);
+  }
+  return checkMemoryApiRateLimit(request, limit, windowMs);
 }
 
 function rateLimitResponse(rateLimit: { limit: number; remaining: number; resetAt: number }, contentSecurityPolicy: string) {
@@ -254,7 +318,7 @@ function applySecurityHeaders(response: NextResponse, contentSecurityPolicy: str
   return response;
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const nonce = generateNonce();
   const contentSecurityPolicy = buildContentSecurityPolicy({
     nonce,
@@ -266,7 +330,7 @@ export function proxy(request: NextRequest) {
   if (isBlockedCorsPreflight(request)) {
     return applySecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
   }
-  const apiRateLimit = checkApiRateLimit(request);
+  const apiRateLimit = await checkApiRateLimit(request);
   if (!apiRateLimit.allowed) {
     return rateLimitResponse(apiRateLimit, contentSecurityPolicy);
   }

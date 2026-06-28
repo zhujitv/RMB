@@ -6,6 +6,7 @@ import test from "node:test";
 const nextConfig = readFileSync("next.config.mjs", "utf8");
 const proxy = readFileSync("proxy.ts", "utf8");
 const securityHeaders = readFileSync("lib/security-headers.mjs", "utf8");
+const apiRouteGuard = readFileSync("lib/api-route-guard.ts", "utf8");
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const sharedUtils = readFileSync("lib/platform/shared-utils.ts", "utf8");
 const sharedAudit = readFileSync("lib/platform/shared-audit.ts", "utf8");
@@ -25,9 +26,14 @@ const paymentsModule = readFileSync("lib/platform/payments-module.ts", "utf8");
 const costsModule = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const loginRoute = readFileSync("app/api/auth/login/route.ts", "utf8");
 const registerRoute = readFileSync("app/api/auth/register/route.ts", "utf8");
+const reportsRoute = readFileSync("app/api/reports/route.ts", "utf8");
+const reportExportRoute = readFileSync("app/api/reports/export/route.ts", "utf8");
+const settingsUsersRoute = readFileSync("app/api/settings/users/route.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const runWithEnvScript = readFileSync("scripts/run-with-env.mjs", "utf8");
+const securityAuditScript = readFileSync("scripts/security-audit.mjs", "utf8");
+const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
 
 function filesUnder(dir: string): string[] {
   return readdirSync(dir)
@@ -63,6 +69,9 @@ test("global security headers are configured for pages api and proxy responses",
   assert.match(proxy, /staticSecurityHeaders/);
   assert.match(securityHeaders, /X-Content-Type-Options/);
   assert.match(securityHeaders, /X-Frame-Options/);
+  assert.match(securityHeaders, /Strict-Transport-Security/);
+  assert.match(securityHeaders, /max-age=31536000; includeSubDomains; preload/);
+  assert.match(securityHeaders, /if \(!isDevelopmentEnv\(env\)\)/);
   assert.match(securityHeaders, /Referrer-Policy/);
   assert.match(securityHeaders, /Permissions-Policy/);
   assert.match(securityHeaders, /Cross-Origin-Opener-Policy/);
@@ -86,20 +95,49 @@ test("cors preflight blocks untrusted origins before route handlers", () => {
 
 test("business API requests are protected by unified rate limiting", () => {
   assert.match(proxy, /const API_RATE_LIMIT_STORE = new Map/);
-  assert.match(proxy, /function checkApiRateLimit/);
+  assert.match(proxy, /async function checkApiRateLimit/);
   assert.match(proxy, /request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(proxy, /API_RATE_LIMIT_READ_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_WRITE_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_UPLOAD_LIMIT/);
   assert.match(proxy, /sessionTokenForRateLimit\(request\)/);
   assert.match(proxy, /requestIp\(request\)/);
-  assert.match(proxy, /const apiRateLimit = checkApiRateLimit\(request\)/);
+  assert.match(proxy, /const apiRateLimit = await checkApiRateLimit\(request\)/);
   assert.match(proxy, /if \(!apiRateLimit\.allowed\)/);
   assert.match(proxy, /status: 429/);
   assert.match(proxy, /Retry-After/);
   assert.match(proxy, /X-RateLimit-Limit/);
   assert.match(proxy, /X-RateLimit-Remaining/);
   assert.match(proxy, /X-RateLimit-Reset/);
+});
+
+test("api rate limiting supports distributed redis with memory fallback", () => {
+  assert.match(proxy, /function distributedRateLimitConfig/);
+  assert.match(proxy, /UPSTASH_REDIS_REST_URL/);
+  assert.match(proxy, /RATE_LIMIT_REDIS_REST_URL/);
+  assert.match(proxy, /RATE_LIMIT_NAMESPACE/);
+  assert.match(proxy, /async function checkDistributedApiRateLimit/);
+  assert.match(proxy, /\/pipeline/);
+  assert.match(proxy, /\["INCR", redisKey\]/);
+  assert.match(proxy, /\["EXPIRE", redisKey, ttlCommand, "NX"\]/);
+  assert.match(proxy, /\["TTL", redisKey\]/);
+  assert.match(proxy, /warnDistributedRateLimitFallback/);
+  assert.match(proxy, /return checkMemoryApiRateLimit\(request, limit, windowMs\)/);
+});
+
+test("sensitive api routes use the shared auth and permission wrapper", () => {
+  assert.match(apiRouteGuard, /export function withApiAuth/);
+  assert.match(apiRouteGuard, /export function withApiPermission/);
+  assert.match(apiRouteGuard, /export function withApiRead/);
+  assert.match(apiRouteGuard, /export function withApiWrite/);
+  assert.match(apiRouteGuard, /const actor = await getActor/);
+  assert.match(apiRouteGuard, /assertRead\(actor, area\)/);
+  assert.match(apiRouteGuard, /assertWrite\(actor, area\)/);
+  assert.match(reportsRoute, /withApiRead\("reports"/);
+  assert.match(reportExportRoute, /withApiRead\("reports"/);
+  assert.match(settingsUsersRoute, /withApiRead\("users"/);
+  assert.doesNotMatch(reportsRoute, /const actor = await getActor/);
+  assert.doesNotMatch(settingsUsersRoute, /const actor = await getActor/);
 });
 
 test("production CSP removes unsafe inline and local development connect sources", () => {
@@ -268,6 +306,18 @@ test("local build scripts load env files before prisma commands", () => {
   assert.match(runWithEnvScript, /const ENV_FILES = \["\.env", "\.env\.local"\]/);
   assert.match(runWithEnvScript, /originalEnvKeys\.has\(key\)/);
   assert.match(runWithEnvScript, /spawnSync\(command, args/);
+});
+
+test("ci runs the security audit guardrail", () => {
+  assert.match(packageJson, /"security:audit": "node scripts\/security-audit\.mjs"/);
+  assert.match(packageJson, /"verify:ci": "[^"]*npm run security:audit/);
+  assert.match(packageJson, /"verify:release": "[^"]*npm run security:audit/);
+  assert.match(ciWorkflow, /npm run verify:ci/);
+  assert.match(securityAuditScript, /Strict-Transport-Security/);
+  assert.match(securityAuditScript, /UPSTASH_REDIS_REST_URL/);
+  assert.match(securityAuditScript, /AUTH_PATTERNS/);
+  assert.match(securityAuditScript, /dangerouslySetInnerHTML/);
+  assert.match(securityAuditScript, /SECURITY_ROLE_MATRIX/);
 });
 
 test("legacy attachment model and service are removed", () => {

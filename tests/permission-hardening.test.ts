@@ -21,6 +21,57 @@ const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 
+const SECURITY_ROLE_MATRIX = [
+  {
+    role: "管理员",
+    dataScope: "ALL",
+    allowedReads: ["users", "customers", "suppliers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
+    allowedWrites: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "suppliers", "settings"],
+    deniedReads: [],
+    deniedWrites: [],
+  },
+  {
+    role: "业务员",
+    dataScope: "OWN",
+    allowedReads: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "reports"],
+    allowedWrites: ["orders", "costs", "documents", "domesticLogistics"],
+    deniedReads: ["users", "suppliers", "settings", "auditLogs", "commissions"],
+    deniedWrites: ["users", "customers", "payments", "taxRefund", "commissions", "suppliers", "settings"],
+  },
+  {
+    role: "财务",
+    dataScope: "ALL",
+    allowedReads: ["orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports"],
+    allowedWrites: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
+    deniedReads: ["users", "customers", "suppliers", "domesticLogistics", "settings", "auditLogs"],
+    deniedWrites: ["users", "customers", "orders", "suppliers", "settings"],
+  },
+  {
+    role: "物流供应商",
+    dataScope: "OWN",
+    allowedReads: ["domesticLogistics", "documents"],
+    allowedWrites: ["logistics", "domesticLogistics", "documents"],
+    deniedReads: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "suppliers", "settings"],
+  },
+  {
+    role: "产品供应商",
+    dataScope: "OWN",
+    allowedReads: ["supplierDocuments"],
+    allowedWrites: ["supplierDocuments"],
+    deniedReads: ["users", "customers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings"],
+  },
+  {
+    role: "物流资料录入员",
+    dataScope: "OWN",
+    allowedReads: ["domesticLogistics", "documents"],
+    allowedWrites: ["domesticLogistics", "documents"],
+    deniedReads: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "taxRefund", "commissions", "suppliers", "settings"],
+  },
+] as const;
+
 function roleMenuLine(source: string, role: string) {
   return source.split("\n").find((line: string) => line.includes(`${role}: [`)) || "";
 }
@@ -158,6 +209,25 @@ test("role permission matrix protects financial and supplier scoped data", () =>
     },
   });
   assert.deepEqual(legacyCustomSalesperson.menus, ["orders", "domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
+});
+
+test("security role matrix is enforced from machine-readable expectations", () => {
+  for (const expectation of SECURITY_ROLE_MATRIX) {
+    const snapshot = rolePermissionSnapshot(expectation.role);
+    assert.equal(snapshot.dataScope, expectation.dataScope, `${expectation.role} data scope`);
+    for (const area of expectation.allowedReads) {
+      assert.equal(snapshot.reads[area], true, `${expectation.role} should read ${area}`);
+    }
+    for (const area of expectation.allowedWrites) {
+      assert.equal(snapshot.writes[area], true, `${expectation.role} should write ${area}`);
+    }
+    for (const area of expectation.deniedReads) {
+      assert.equal(snapshot.reads[area], false, `${expectation.role} must not read ${area}`);
+    }
+    for (const area of expectation.deniedWrites) {
+      assert.equal(snapshot.writes[area], false, `${expectation.role} must not write ${area}`);
+    }
+  }
 });
 
 test("salesperson tax refund uploads are limited to own-customer clearance documents", () => {

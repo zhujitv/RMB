@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, listUsers, ok } from "../../../../lib/platform-db";
+import { withApiRead } from "../../../../lib/api-route-guard";
+import { listUsers, ok } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,21 +16,16 @@ const listUsersTyped = listUsers as (
   totalPages: number;
 }>;
 
-export async function GET(request: NextRequest) {
-  try {
-    const actor = await getActor(request);
-    const query = new URL(request.url).searchParams;
-    const page = await listUsersTyped(actor, query, { paginated: true });
-    return ok({
-      users: page.rows,
-      pagination: {
-        page: page.page,
-        pageSize: page.pageSize,
-        total: page.total,
-        totalPages: page.totalPages,
-      },
-    });
-  } catch (error: unknown) {
-    return apiError(error, "读取用户设置失败");
-  }
-}
+export const GET = withApiRead("users", async (request: NextRequest, actor) => {
+  const query = new URL(request.url).searchParams;
+  const page = await listUsersTyped(actor, query, { paginated: true });
+  return ok({
+    users: page.rows,
+    pagination: {
+      page: page.page,
+      pageSize: page.pageSize,
+      total: page.total,
+      totalPages: page.totalPages,
+    },
+  });
+}, { errorMessage: "读取用户设置失败" });

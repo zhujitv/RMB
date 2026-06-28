@@ -1,0 +1,97 @@
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+
+const ROOTS = ["app", "lib", "prisma", "scripts"];
+const PUBLIC_API_ROUTES = new Set([
+  "app/api/auth/login/route.ts",
+  "app/api/auth/logout/route.ts",
+  "app/api/auth/register/route.ts",
+  "app/api/auth/verify-email/route.ts",
+  "app/api/company-profile/route.ts",
+  "app/api/storage/health/route.ts",
+  "app/api/shipsgo/webhook/route.ts",
+  "app/api/cron/exchange-rates/route.ts",
+  "app/api/cron/shipsgo-sync/route.ts",
+]);
+const AUTH_PATTERNS = [
+  /\bgetActor\b/,
+  /\bwithApiAuth\b/,
+  /\bwithApiRead\b/,
+  /\bwithApiWrite\b/,
+  /\breportGetHandler\b/,
+  /\bassertCronSecret\b/,
+];
+const DANGEROUS_PATTERNS = [
+  { pattern: /dangerouslySetInnerHTML/, label: "dangerouslySetInnerHTML" },
+  { pattern: new RegExp(`\\$queryRaw${"Unsafe"}|\\$executeRaw${"Unsafe"}`), label: "unsafe raw SQL" },
+  { pattern: /\beval\s*\(|new Function\s*\(/, label: "dynamic code execution" },
+  { pattern: /NEXT_PUBLIC_[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PRIVATE|DATABASE_URL)/, label: "public secret env" },
+];
+
+function filesUnder(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((entry) => {
+    const path = `${dir}/${entry}`;
+    if (path.includes("/generated/") || path.includes("/node_modules/")) return [];
+    return statSync(path).isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
+function fail(message, details = []) {
+  console.error(`Security audit failed: ${message}`);
+  for (const detail of details) console.error(`- ${detail}`);
+  process.exit(1);
+}
+
+function assertSourceContains(file, pattern, message) {
+  const source = readFileSync(file, "utf8");
+  if (!pattern.test(source)) fail(message, [file]);
+}
+
+const sourceFiles = ROOTS.flatMap(filesUnder).filter((file) => /\.(ts|tsx|mjs|js|prisma)$/.test(file));
+
+const securityHeaders = readFileSync("lib/security-headers.mjs", "utf8");
+if (!/Strict-Transport-Security/.test(securityHeaders) || !/includeSubDomains; preload/.test(securityHeaders)) {
+  fail("HSTS header is not configured for production.");
+}
+
+const proxy = readFileSync("proxy.ts", "utf8");
+for (const pattern of [
+  /distributedRateLimitConfig/,
+  /UPSTASH_REDIS_REST_URL/,
+  /RATE_LIMIT_REDIS_REST_URL/,
+  /\/pipeline/,
+  /checkDistributedApiRateLimit/,
+  /checkMemoryApiRateLimit/,
+]) {
+  if (!pattern.test(proxy)) fail("API rate limiting is missing distributed Redis support.");
+}
+
+const apiRoutes = filesUnder("app/api").filter((file) => file.endsWith("/route.ts"));
+const unauthenticatedRoutes = apiRoutes.filter((file) => {
+  if (PUBLIC_API_ROUTES.has(file)) return false;
+  const source = readFileSync(file, "utf8");
+  return !AUTH_PATTERNS.some((pattern) => pattern.test(source));
+});
+if (unauthenticatedRoutes.length) {
+  fail("API routes missing explicit auth or approved public classification.", unauthenticatedRoutes);
+}
+
+const dangerousHits = [];
+for (const file of sourceFiles) {
+  if (file === "scripts/security-audit.mjs") continue;
+  const source = readFileSync(file, "utf8");
+  for (const { pattern, label } of DANGEROUS_PATTERNS) {
+    if (pattern.test(source)) dangerousHits.push(`${file}: ${label}`);
+  }
+}
+if (dangerousHits.length) {
+  fail("dangerous source patterns detected.", dangerousHits);
+}
+
+assertSourceContains("lib/platform/upload-validation.ts", /MAX_PDF_UPLOAD_BYTES/, "PDF upload size validation is missing.");
+assertSourceContains("lib/platform/upload-validation.ts", /PDF_ACTIVE_CONTENT_NOT_ALLOWED/, "PDF active-content rejection is missing.");
+assertSourceContains("lib/platform/shared-audit.ts", /sanitizeAuditData/, "Audit log sanitization is missing.");
+assertSourceContains("lib/platform/shared-base-utils.ts", /SENSITIVE_LOG_KEY_PATTERN/, "Server log redaction is missing.");
+assertSourceContains("tests/permission-hardening.test.ts", /SECURITY_ROLE_MATRIX/, "Permission matrix regression test is missing.");
+
+console.log(`Security audit passed: ${apiRoutes.length} API routes checked, ${sourceFiles.length} source files scanned.`);
