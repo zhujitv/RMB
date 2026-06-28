@@ -43,6 +43,8 @@ test("login attempts persist local IP geolocation fields", () => {
 test("account login records display stored or locally resolved region", () => {
   assert.match(sharedUsers, /function osLabel/);
   assert.ok(sharedUsers.includes("return `${browserLabel(userAgent)} / ${osLabel(userAgent)}`;"));
+  assert.match(sharedUsers, /prisma\.userSession\.findMany/);
+  assert.match(sharedUsers, /function fallbackSessionUserAgent/);
   assert.match(sharedUsers, /failureReason: true/);
   assert.match(sharedUsers, /geoCountry: true/);
   assert.match(sharedUsers, /geoResolvedAt: true/);

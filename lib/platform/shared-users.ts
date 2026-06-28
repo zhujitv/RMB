@@ -393,7 +393,36 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
       success: true,
     },
   });
+  const loginTimes = rows.map((row) => new Date(row.createdAt).getTime()).filter(Number.isFinite);
+  const sessionRows = loginTimes.length
+    ? await prisma.userSession.findMany({
+      where: {
+        userId: actorId,
+        createdAt: {
+          gte: new Date(Math.min(...loginTimes) - 5 * 60 * 1000),
+          lte: new Date(Math.max(...loginTimes) + 5 * 60 * 1000),
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        createdAt: true,
+        userAgent: true,
+      },
+    })
+    : [];
+  function fallbackSessionUserAgent(loginAt: Date | string) {
+    const loginTime = new Date(loginAt).getTime();
+    let best: { distance: number; userAgent: string } | null = null;
+    for (const session of sessionRows) {
+      if (!session.userAgent) continue;
+      const distance = Math.abs(new Date(session.createdAt).getTime() - loginTime);
+      if (distance > 5 * 60 * 1000) continue;
+      if (!best || distance < best.distance) best = { distance, userAgent: session.userAgent };
+    }
+    return best?.userAgent || "";
+  }
   return rows.map((row) => {
+    const userAgent = row.userAgent || fallbackSessionUserAgent(row.createdAt);
     const storedGeo = {
       ipAddress: row.ipAddress || "",
       country: row.geoCountry || "",
@@ -416,7 +445,7 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
       geoIsp: geo.isp || "",
       geoSource: geo.source || "",
       geoResolvedAt: row.geoResolvedAt || null,
-      browser: deviceBrowserLabel(row.userAgent),
+      browser: deviceBrowserLabel(userAgent),
       result: row.success ? "成功" : "失败",
       failureReason: row.failureReason || "",
     };
