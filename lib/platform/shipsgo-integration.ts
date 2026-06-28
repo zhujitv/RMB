@@ -23,7 +23,6 @@ type ShipsgoIntegrationInput = {
   webhookEnabled?: unknown;
   webhookSecret?: unknown;
   liveMapEnabled?: unknown;
-  liveMapEmbedToken?: unknown;
   customerPushEnabled?: unknown;
   creditWarningThreshold?: unknown;
 };
@@ -64,11 +63,6 @@ function cleanCreditWarningThreshold(value: unknown) {
   return Math.min(999999, Math.max(0, threshold));
 }
 
-function shipsgoEmbedUrl(token: string) {
-  if (!token) return "";
-  return `https://embed.shipsgo.com/?token=${encodeURIComponent(token)}&tabs=ocean`;
-}
-
 export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
   const input: ShipsgoIntegrationInput = isPlainRecord(value) ? value : {};
   return {
@@ -83,7 +77,6 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
     webhookEnabled: input.webhookEnabled === true,
     webhookSecret: cleanSecret(input.webhookSecret),
     liveMapEnabled: input.liveMapEnabled === true,
-    liveMapEmbedToken: cleanSecret(input.liveMapEmbedToken),
     customerPushEnabled: input.customerPushEnabled === true,
     creditWarningThreshold: cleanCreditWarningThreshold(input.creditWarningThreshold),
   };
@@ -99,10 +92,8 @@ export function serializeShipsgoIntegrationSetting(setting: unknown) {
     ...normalized,
     apiKey: "",
     webhookSecret: "",
-    liveMapEmbedToken: "",
     apiKeyConfigured: Boolean(normalized.apiKey),
     webhookSecretConfigured: Boolean(normalized.webhookSecret),
-    liveMapEmbedTokenConfigured: Boolean(normalized.liveMapEmbedToken),
   };
 }
 
@@ -118,7 +109,6 @@ export function serializeShipsgoFeatureFlags(setting: unknown) {
     dailySyncTime: normalized.dailySyncTime,
     webhookEnabled: enabled && normalized.webhookEnabled,
     liveMapEnabled: enabled && normalized.liveMapEnabled,
-    liveMapEmbedUrl: enabled && normalized.liveMapEnabled ? shipsgoEmbedUrl(normalized.liveMapEmbedToken) : "",
     customerPushEnabled: enabled && normalized.customerPushEnabled,
     creditWarningThreshold: normalized.creditWarningThreshold,
   };
@@ -150,16 +140,12 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
     ...data,
     apiKey: cleanSecret(data.apiKey) || current.apiKey,
     webhookSecret: cleanSecret(data.webhookSecret) || current.webhookSecret,
-    liveMapEmbedToken: cleanSecret(data.liveMapEmbedToken) || current.liveMapEmbedToken,
   });
   if (value.enabled && !value.apiKey) {
     throw codedError("启用大掌櫃前请先填写 API Key", 400, "SHIPSGO_API_KEY_REQUIRED");
   }
   if (value.webhookEnabled && !value.webhookSecret) {
     throw codedError("启用 Webhook 前请先填写 Webhook Secret", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
-  }
-  if (value.liveMapEnabled && !value.liveMapEmbedToken) {
-    throw codedError("启用 Live Map 前请先填写 ShipsGo Embed Token", 400, "SHIPSGO_LIVE_MAP_TOKEN_REQUIRED");
   }
   const setting = await prisma.systemSetting.upsert({
     where: { key: SHIPSGO_INTEGRATION_SETTING_KEY },

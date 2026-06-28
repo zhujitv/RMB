@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   formatShipsgoCarrierForLocale,
   formatShipsgoPortForLocale,
@@ -47,16 +47,10 @@ type ShipsgoTracking = {
   timeline?: ShipsgoTimelineEvent[];
 };
 
-type ShipsgoFeatureFlags = {
-  liveMapEnabled?: boolean;
-  liveMapEmbedUrl?: string;
-};
-
 type TrackingMapResponse = {
   success?: boolean;
   message?: string;
   tracking?: ShipsgoTracking;
-  shipsgo?: ShipsgoFeatureFlags;
 };
 
 type TrackingMapClientProps = {
@@ -114,28 +108,6 @@ function containers(tracking: ShipsgoTracking) {
   ].map(clean).filter(Boolean)));
 }
 
-function appendIfAbsent(url: URL, key: string, value: string) {
-  if (value && !url.searchParams.get(key)) url.searchParams.set(key, value);
-}
-
-function trackingMapUrl(baseUrl: string, tracking: ShipsgoTracking) {
-  try {
-    const url = new URL(baseUrl);
-    const shipmentId = clean(tracking.shipsgoShipmentId);
-    const masterBlNo = clean(tracking.masterBlNo || tracking.bookingNumber);
-    const firstContainer = containers(tracking)[0] || "";
-    appendIfAbsent(url, "trackingId", tracking.id);
-    appendIfAbsent(url, "shipmentId", shipmentId);
-    appendIfAbsent(url, "billOfLading", masterBlNo);
-    appendIfAbsent(url, "masterBlNo", masterBlNo);
-    appendIfAbsent(url, "container", firstContainer);
-    appendIfAbsent(url, "tabs", "ocean");
-    return url.toString();
-  } catch {
-    return baseUrl;
-  }
-}
-
 async function fetchTracking(trackingId: string) {
   const response = await fetch(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}`, {
     credentials: "include",
@@ -154,7 +126,6 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
   const [loading, setLoading] = useState(Boolean(trackingId));
   const [error, setError] = useState("");
   const [tracking, setTracking] = useState<ShipsgoTracking | null>(null);
-  const [features, setFeatures] = useState<ShipsgoFeatureFlags>({});
 
   useEffect(() => {
     if (!trackingId) return;
@@ -165,7 +136,6 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
       .then((data) => {
         if (!active) return;
         setTracking(data.tracking || null);
-        setFeatures(data.shipsgo || {});
       })
       .catch((loadError) => {
         if (!active) return;
@@ -188,11 +158,6 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
     const masterBlNo = clean(tracking.masterBlNo || tracking.bookingNumber);
     document.title = masterBlNo ? `${masterBlNo} - 大掌櫃运输地图` : "大掌櫃运输地图";
   }, [tracking]);
-
-  const embedUrl = useMemo(() => {
-    const baseUrl = clean(features.liveMapEmbedUrl);
-    return baseUrl && tracking ? trackingMapUrl(baseUrl, tracking) : "";
-  }, [features.liveMapEmbedUrl, tracking]);
 
   if (!trackingId) {
     return (
@@ -306,23 +271,21 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
       <section className={styles.mapPanel}>
         <div className={styles.mapHeader}>
           <div>
-            <span>Live Map</span>
+            <span>大掌柜原始地图</span>
             <h2>船舶位置与航线轨迹</h2>
           </div>
-          {tracking.mapUrl ? <a className={styles.secondaryLink} href={tracking.mapUrl} target="_blank" rel="noreferrer">打开大掌櫃原始地图</a> : null}
         </div>
-        {embedUrl ? (
-          <iframe
-            id="shipsgo-embed"
-            className={styles.mapFrame}
-            src={embedUrl}
-            title={`${masterBlNo} 大掌櫃运输地图`}
-            loading="lazy"
-            allowFullScreen
-          />
+        {tracking.mapUrl ? (
+          <div className={styles.mapLinkPanel}>
+            <strong>{masterBlNo}</strong>
+            <span>系统已读取当前跟踪记录。点击下方按钮将按大掌柜返回的原始地图链接打开，不再使用 iframe 嵌入。</span>
+            <a className={styles.primaryMapLink} href={tracking.mapUrl} target="_blank" rel="noreferrer">
+              打开大掌柜原始地图
+            </a>
+          </div>
         ) : (
           <div className={styles.mapFallback}>
-            Live Map Embed Token 未配置，请到系统设置 &gt; 第三方接口填写。
+            大掌柜暂未返回原始地图链接，请先同步最新状态后再试。
           </div>
         )}
       </section>

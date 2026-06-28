@@ -146,8 +146,6 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   webhookSecret: "",
   webhookSecretConfigured: false,
   liveMapEnabled: false,
-  liveMapEmbedToken: "",
-  liveMapEmbedTokenConfigured: false,
   customerPushEnabled: false,
   creditWarningThreshold: "20",
 };
@@ -179,8 +177,8 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   },
   {
     key: "liveMapEnabled",
-    label: "Live Map",
-    description: "开启后前台显示船舶/集装箱可视化入口。",
+    label: "地图入口",
+    description: "开启后前台显示大掌柜返回的原始地图链接。",
   },
   {
     key: "customerPushEnabled",

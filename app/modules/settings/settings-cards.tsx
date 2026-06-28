@@ -602,15 +602,6 @@ export function ShipsgoIntegrationSettingsCard({
             autoComplete="off"
           />
         </label>
-        <label>
-          Live Map Embed Token
-          <input
-            value={currentForm.liveMapEmbedToken}
-            onChange={(event) => setField("liveMapEmbedToken", event.target.value)}
-            placeholder={currentForm.liveMapEmbedTokenConfigured ? "已配置，留空则保持不变" : "请输入 ShipsGo iframe 授权 Token"}
-            autoComplete="off"
-          />
-        </label>
       </div>
 
       <section className={styles.documentGroupCard}>

@@ -230,7 +230,7 @@ test("production CSP external sources require explicit allowlists", () => {
     csp,
     /img-src 'self' data: blob: https:\/\/assets\.nextwood\.net/,
   );
-  assert.match(csp, /frame-src 'self' blob: https:\/\/embed\.shipsgo\.com/);
+  assert.doesNotMatch(csp, /frame-src[^;]*https:\/\/embed\.shipsgo\.com/);
   assert.match(csp, /frame-src[\s\S]*https:\/\/viewer\.nextwood\.net/);
 });
 

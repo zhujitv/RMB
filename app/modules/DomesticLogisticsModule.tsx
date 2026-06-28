@@ -177,7 +177,6 @@ type ShipsgoFeatureFlags = {
   dailySyncTime?: string;
   webhookEnabled?: boolean;
   liveMapEnabled?: boolean;
-  liveMapEmbedUrl?: string;
   customerPushEnabled?: boolean;
   creditWarningThreshold?: number;
 };
@@ -1542,26 +1541,14 @@ function ShipsgoMapAction({
   mapUrl?: string;
 }) {
   if (!features.liveMapEnabled) return null;
-  const embedUrl = String(features.liveMapEmbedUrl || "").trim();
   const cleanTrackingId = String(trackingId || "").trim();
-  if (cleanTrackingId) {
-    return (
-      <a
-        className={styles.secondaryButton}
-        href={`/tracking-map?trackingId=${encodeURIComponent(cleanTrackingId)}`}
-        target="_blank"
-        rel="noreferrer"
-        onClick={(event) => event.stopPropagation()}
-      >
-        查看地图
-      </a>
-    );
-  }
-  if (!embedUrl && !mapUrl) return null;
+  const cleanMapUrl = String(mapUrl || "").trim();
+  const href = cleanMapUrl || (cleanTrackingId ? `/tracking-map?trackingId=${encodeURIComponent(cleanTrackingId)}` : "");
+  if (!href) return null;
   return (
     <a
       className={styles.secondaryButton}
-      href={mapUrl || "/tracking-map"}
+      href={href}
       target="_blank"
       rel="noreferrer"
       onClick={(event) => event.stopPropagation()}
