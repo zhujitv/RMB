@@ -1016,7 +1016,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       return;
     }
     if (isSupplierAccountRole(userForm.role)) {
-      const supplier = suppliers.find((item) => item.id === userForm.supplierId);
+      const supplier = activeSuppliers.find((item) => item.id === userForm.supplierId)
+        || suppliers.find((item) => item.id === userForm.supplierId);
       if (!supplierMatchesUserRole(supplier, userForm.role)) {
         setUserMessage(FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(userForm.role)
           ? "当前角色只能绑定产品供应商"

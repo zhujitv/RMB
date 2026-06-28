@@ -181,6 +181,7 @@ test("user supplier binding follows the currently selected role", () => {
   assert.match(userPanelSnippet, /const bindableSuppliers = suppliers\.filter\(\(supplier\) => supplierMatchesUserRole\(supplier, form\.role\)\)/);
   assert.match(userPanelSnippet, /supplierId: role === form\.role && isSupplierAccountRole\(role\) \? form\.supplierId : ""/);
   assert.match(saveUserSnippet, /supplierId: isSupplierAccountRole\(userForm\.role\) \? userForm\.supplierId : ""/);
+  assert.match(saveUserSnippet, /activeSuppliers\.find\(\(item\) => item\.id === userForm\.supplierId\)[\s\S]*suppliers\.find\(\(item\) => item\.id === userForm\.supplierId\)/);
   assert.match(saveUserSnippet, /当前角色只能绑定产品供应商/);
   assert.match(saveUserSnippet, /当前角色只能绑定物流供应商/);
   assert.match(supplierMatchSnippet, /if \(role === "物流供应商"\) return LOGISTICS_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\)/);

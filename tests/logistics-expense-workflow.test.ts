@@ -359,9 +359,9 @@ test("logistics supplier users must bind to one supplier account", () => {
     schema,
     /model User[\s\S]*supplierId\s+String\?\s+@map\("supplier_id"\)/,
   );
-  assert.match(backend, /SUPPLIER_USER_SUPPLIER_REQUIRED/);
-  assert.match(backend, /LOGISTICS_USER_SUPPLIER_TYPE_INVALID/);
-  assert.match(backend, /FACTORY_USER_SUPPLIER_TYPE_INVALID/);
+  assert.match(backend, /SUPPLIER_ID_MISSING/);
+  assert.match(backend, /SUPPLIER_TYPE_MISMATCH/);
+  assert.match(backend, /ROLE_UPDATE_FAILED/);
   assert.match(backend, /DOMESTIC_LOGISTICS_SUPPLIER_TYPES = \[[\s\S]*LOGISTICS_SUPPLIER_TYPE_CODE/);
   assert.match(backend, /PRODUCT_SUPPLIER_TYPES = \[[\s\S]*PRODUCT_SUPPLIER_TYPE_CODE/);
   assert.match(backend, /supplierId: null/);

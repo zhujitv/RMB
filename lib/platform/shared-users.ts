@@ -691,14 +691,14 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   };
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
   if (role === LOGISTICS_OPERATOR_ROLE || isProductSupplierOperatorRole(role)) {
-    if (!supplierId) throw codedError(`${role}必须绑定一个供应商。`, 400, "SUPPLIER_USER_SUPPLIER_REQUIRED");
+    if (!supplierId) throw codedError(`${role}必须绑定一个供应商。`, 400, "SUPPLIER_ID_MISSING");
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(supplierId);
     if (role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
-      throw codedError("当前角色只能绑定物流供应商", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定物流供应商", 400, "SUPPLIER_TYPE_MISMATCH");
     }
     if (isProductSupplierOperatorRole(role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("当前角色只能绑定产品供应商", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定产品供应商", 400, "SUPPLIER_TYPE_MISMATCH");
     }
     data.supplierId = supplier.id;
   }
@@ -728,9 +728,15 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   if (duplicate) {
     throw codedError("邮箱已存在，不能重复创建", 409, "EMAIL_ALREADY_EXISTS");
   }
-  const user = id
-    ? await prisma.user.update({ where: { id }, data: data as Prisma.UserUncheckedUpdateInput, select: USER_PUBLIC_SELECT })
-    : await prisma.user.create({ data: data as Prisma.UserUncheckedCreateInput, select: USER_PUBLIC_SELECT });
+  let user;
+  try {
+    user = id
+      ? await prisma.user.update({ where: { id }, data: data as Prisma.UserUncheckedUpdateInput, select: USER_PUBLIC_SELECT })
+      : await prisma.user.create({ data: data as Prisma.UserUncheckedCreateInput, select: USER_PUBLIC_SELECT });
+  } catch (error: unknown) {
+    logServerError("user role or supplier update failed", error, { userId: id, role, supplierId: data.supplierId });
+    throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
+  }
   if (id && (data.passwordHash || data.approvalStatus !== "APPROVED")) await revokeUserSessions(id);
   runNonCriticalTask("用户操作日志写入", () => writeAudit(request, actor, id ? "更新用户" : "新增用户", "users", user.id, before, user));
   return serializeUser(user);
@@ -748,14 +754,14 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
     throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
   }
   if (nextStatus === "APPROVED" && (before.role === LOGISTICS_OPERATOR_ROLE || isProductSupplierOperatorRole(before.role))) {
-    if (!before.supplierId) throw codedError(`${before.role}必须绑定一个供应商后才能启用。`, 400, "SUPPLIER_USER_SUPPLIER_REQUIRED");
+    if (!before.supplierId) throw codedError(`${before.role}必须绑定一个供应商后才能启用。`, 400, "SUPPLIER_ID_MISSING");
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(before.supplierId);
     if (before.role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
-      throw codedError("当前角色只能绑定物流供应商", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定物流供应商", 400, "SUPPLIER_TYPE_MISMATCH");
     }
     if (isProductSupplierOperatorRole(before.role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("当前角色只能绑定产品供应商", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定产品供应商", 400, "SUPPLIER_TYPE_MISMATCH");
     }
   }
   const user = await prisma.user.update({
