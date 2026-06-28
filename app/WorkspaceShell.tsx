@@ -90,6 +90,13 @@ function clearClientAuthState() {
   });
 }
 
+function withErrorCode(message: string, code?: string | null) {
+  const normalizedCode = code || "";
+  if (!normalizedCode) return message;
+  const suffix = `（错误代码：${normalizedCode}）`;
+  return message.includes(suffix) ? message : `${message}${suffix}`;
+}
+
 function validateAuthPayload(payload: AuthPayload) {
   if (!payload?.user?.id) throw new Error("账户信息缺少用户ID。");
   if (!payload.user.name) throw new Error("账户信息缺少姓名。");
@@ -99,8 +106,7 @@ function validateAuthPayload(payload: AuthPayload) {
 
 function authLoadErrorState(error: unknown): AuthState {
   const errorCode = error instanceof ApiRequestError ? error.code : "";
-  const codeSuffix = errorCode ? `（错误代码：${errorCode}）` : "";
-  const detail = error instanceof Error ? `${error.message}${codeSuffix}` : `用户信息加载失败${codeSuffix}`;
+  const detail = error instanceof Error ? withErrorCode(error.message, errorCode) : withErrorCode("用户信息加载失败", errorCode);
   if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
     clearClientAuthState();
     const accountStateCodes = ["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"];
@@ -109,7 +115,7 @@ function authLoadErrorState(error: unknown): AuthState {
       : "登录已过期，请重新登录。";
     return {
       status: "guest",
-      message: errorCode ? `${guestMessage}（错误代码：${errorCode}）` : guestMessage,
+      message: withErrorCode(guestMessage, errorCode),
     };
   }
 

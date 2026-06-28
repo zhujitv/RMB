@@ -24,6 +24,7 @@ type ErrorLike = {
   message?: string;
   stack?: string;
   details?: unknown;
+  meta?: unknown;
 };
 
 function authInitErrorCode(error: ErrorLike) {
@@ -125,6 +126,7 @@ export async function GET(request: NextRequest) {
         name: error instanceof Error ? error.name : "Error",
         code: typedError.code || "",
         message: typedError.message || "",
+        meta: typedError.meta,
         stack: process.env.NODE_ENV === "production" ? undefined : typedError.stack,
       },
     }));

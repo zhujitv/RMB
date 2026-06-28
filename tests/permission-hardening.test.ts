@@ -250,10 +250,12 @@ test("workspace auth distinguishes expired login from server-side profile failur
   assert.match(workspaceShell, /function clearClientAuthState\(\)/);
   assert.match(workspaceShell, /window\.localStorage\.removeItem\(key\)/);
   assert.match(workspaceShell, /window\.sessionStorage\.removeItem\(key\)/);
+  assert.match(workspaceShell, /function withErrorCode\(message: string, code\?: string \| null\)/);
+  assert.match(workspaceShell, /return message\.includes\(suffix\) \? message : `\$\{message\}\$\{suffix\}`/);
   assert.match(workspaceShell, /function authLoadErrorState\(error: unknown\): AuthState/);
   assert.match(workspaceShell, /accountStateCodes = \["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"\]/);
   assert.match(workspaceShell, /error\.code === "PASSWORD_CHANGE_REQUIRED" \|\| accountStateCodes\.includes\(error\.code \|\| ""\)/);
-  assert.match(workspaceShell, /message: errorCode \? `\$\{guestMessage\}（错误代码：\$\{errorCode\}）` : guestMessage/);
+  assert.match(workspaceShell, /message: withErrorCode\(guestMessage, errorCode\)/);
   assert.match(workspaceShell, /message: error\.message \|\| "系统暂时无法读取账户信息。"/);
   assert.match(workspaceShell, /message: "工作台初始化失败。"/);
   assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。"/);
@@ -269,6 +271,7 @@ test("auth me initialization returns classified diagnostics instead of one gener
   assert.match(authMeRoute, /USER_PENDING_APPROVAL/);
   assert.match(authMeRoute, /console\.error\("auth me failed: account info load error"/);
   assert.match(authMeRoute, /sanitizeForLog/);
+  assert.match(authMeRoute, /meta: typedError\.meta/);
   assert.match(sharedAuth, /outcome = "user-not-found"/);
   assert.match(sharedAuth, /outcome = "role-missing"/);
   assert.match(sharedAuth, /outcome = "approval-pending"/);
