@@ -459,6 +459,10 @@ export function DomesticLogisticsModule({
   const canDeleteCustomsDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员"]);
   const canCreateLogisticsExpense = canWritePermission(currentUser, permissions, "logistics", ["管理员", "物流供应商"]);
   const canViewShipsgoControlTower = canReadPermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员", "物流供应商", "物流资料录入员"]);
+  const canManageShipsgoTracking = ["管理员", "业务员"].includes(currentUser.role)
+    && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员"]);
+  const canDeleteShipsgoTracking = currentUser.role === "管理员"
+    && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
     setLoading(true);
@@ -747,6 +751,16 @@ export function DomesticLogisticsModule({
     }));
   }
 
+  function removeRowShipsgoTracking(orderId: string, trackingId: string) {
+    setRows((currentRows) => currentRows.map((row) => {
+      if (row.id !== orderId && row.orderId !== orderId) return row;
+      return {
+        ...row,
+        shipsgoTrackings: (row.shipsgoTrackings || []).filter((item) => item.id !== trackingId),
+      };
+    }));
+  }
+
   async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac?: string } = {}) {
     const busyKey = `${row.id}:shipsgo:create`;
     setShipsgoBusyKey(busyKey);
@@ -810,6 +824,37 @@ export function DomesticLogisticsModule({
       setNotice(result.message || "已从大掌櫃同步已有跟踪");
     } catch (recoverError) {
       setError(recoverError instanceof Error ? recoverError.message : "从大掌櫃同步已有跟踪失败");
+    } finally {
+      setShipsgoBusyKey("");
+    }
+  }
+
+  async function deleteShipsgoTracking(row: DomesticLogisticsRow, tracking: ShipsgoTrackingRow) {
+    const confirmationResult = await requestConfirmation({
+      title: "删除大掌櫃跟踪？",
+      message: "删除后该订单将不再显示这条运输跟踪记录。本操作不会调用大掌櫃创建或同步接口。",
+      details: [
+        `订单：${row.orderNo || "-"}`,
+        `Master B/L：${tracking.masterBlNo || tracking.bookingNumber || "-"}`,
+      ],
+      confirmLabel: "删除跟踪",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
+    const busyKey = `${tracking.id}:shipsgo:delete`;
+    setShipsgoBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(tracking.id)}`, {
+        method: "DELETE",
+      });
+      if (result.success !== true) throw new Error(result.message || "删除大掌櫃跟踪失败");
+      removeRowShipsgoTracking(row.id, tracking.id);
+      setNotice(result.message || "大掌櫃跟踪已删除");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除大掌櫃跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -880,7 +925,7 @@ export function DomesticLogisticsModule({
       {activeLogisticsView === "controlTower" && canViewShipsgoControlTower && shipsgoFeatures.enabled && shipsgoFeatures.oceanTrackingEnabled ? (
         <ShipsgoControlTowerView
           features={shipsgoFeatures}
-          canManage={canEditDomesticLogistics}
+          canManage={canManageShipsgoTracking}
           initialFullScreen={initialControlTowerFullscreen}
           onOpenOrder={openControlTowerOrder}
         />
@@ -979,10 +1024,12 @@ export function DomesticLogisticsModule({
                 }}
                 shipsgoFeatures={shipsgoFeatures}
                 shipsgoBusyKey={shipsgoBusyKey}
-                canManageShipsgoTracking={canEditDomesticLogistics}
+                canManageShipsgoTracking={canManageShipsgoTracking}
+                canDeleteShipsgoTracking={canDeleteShipsgoTracking}
                 onCreateShipsgoTracking={(payload) => createShipsgoTracking(row, payload)}
                 onSyncShipsgoTracking={(trackingId) => syncShipsgoTracking(row, trackingId)}
                 onRecoverShipsgoTracking={() => recoverShipsgoTracking(row)}
+                onDeleteShipsgoTracking={(tracking) => deleteShipsgoTracking(row, tracking)}
                 onSaved={() => {
                   setNotice("物流信息已保存");
                   setEditingOrderId("");
@@ -1539,18 +1586,22 @@ function ShipsgoOrderTrackingPanel({
   row,
   features,
   canManage,
+  canDelete,
   busyKey,
   onCreate,
   onSync,
   onRecover,
+  onDelete,
 }: {
   row: DomesticLogisticsRow;
   features: ShipsgoFeatureFlags;
   canManage: boolean;
+  canDelete: boolean;
   busyKey: string;
   onCreate: (payload?: { carrierScac?: string }) => Promise<void>;
   onSync: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecover: () => Promise<void>;
+  onDelete: (tracking: ShipsgoTrackingRow) => void;
 }) {
   const trackings = row.shipsgoTrackings || [];
   const hasTracking = trackings.length > 0;
@@ -1614,6 +1665,13 @@ function ShipsgoOrderTrackingPanel({
       return;
     }
     if (shipsgoTimelineEvents(tracking).length) return;
+    if (!canManage) {
+      setTimelineErrors((current) => ({
+        ...current,
+        [tracking.id]: "暂无已同步运输节点，请联系管理员或业务员同步最新状态。",
+      }));
+      return;
+    }
     setTimelineLoadingId(tracking.id);
     try {
       await onSync(tracking.id);
@@ -1659,6 +1717,7 @@ function ShipsgoOrderTrackingPanel({
             const containers = shipsgoContainerTags(tracking);
             const etaText = tracking.eta || tracking.predictedDischargeDate || tracking.dateOfDischarge || "";
             const showRecover = canManage && shouldShowShipsgoRecover(tracking);
+            const deleteBusy = busyKey === `${tracking.id}:shipsgo:delete`;
             const timelineExpanded = expandedTimelineId === tracking.id;
             const timelineLoading = timelineLoadingId === tracking.id || syncBusy && timelineExpanded && !shipsgoTimelineEvents(tracking).length;
             const timelineError = timelineErrors[tracking.id] || "";
@@ -1752,6 +1811,19 @@ function ShipsgoOrderTrackingPanel({
                       }}
                     >
                       {recoverBusy ? "同步中..." : "从大掌櫃同步已有跟踪"}
+                    </button>
+                  ) : null}
+                  {canDelete ? (
+                    <button
+                      className={styles.dangerButton}
+                      type="button"
+                      disabled={deleteBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(tracking);
+                      }}
+                    >
+                      {deleteBusy ? "删除中..." : "删除跟踪"}
                     </button>
                   ) : null}
                 </div>
@@ -1858,9 +1930,11 @@ function DomesticLogisticsRows({
   shipsgoFeatures,
   shipsgoBusyKey,
   canManageShipsgoTracking,
+  canDeleteShipsgoTracking,
   onCreateShipsgoTracking,
   onSyncShipsgoTracking,
   onRecoverShipsgoTracking,
+  onDeleteShipsgoTracking,
   onSaved,
   onCancelEdit,
   canDeleteDomesticLogistics,
@@ -1891,9 +1965,11 @@ function DomesticLogisticsRows({
   shipsgoFeatures: ShipsgoFeatureFlags;
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
+  canDeleteShipsgoTracking: boolean;
   onCreateShipsgoTracking: (payload?: { carrierScac?: string }) => Promise<void>;
   onSyncShipsgoTracking: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecoverShipsgoTracking: () => Promise<void>;
+  onDeleteShipsgoTracking: (tracking: ShipsgoTrackingRow) => void;
   onSaved: () => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
@@ -2009,10 +2085,12 @@ function DomesticLogisticsRows({
                   row={row}
                   features={shipsgoFeatures}
                   canManage={canManageShipsgoTracking}
+                  canDelete={canDeleteShipsgoTracking}
                   busyKey={shipsgoBusyKey}
                   onCreate={onCreateShipsgoTracking}
                   onSync={onSyncShipsgoTracking}
                   onRecover={onRecoverShipsgoTracking}
+                  onDelete={onDeleteShipsgoTracking}
                 />
               ) : null}
               <CustomsDocumentPanel

@@ -1,15 +1,16 @@
 import type { NextRequest } from "next/server";
 import {
   apiError,
+  codedError,
   currentSessionInfo,
   getCompanyProfileSettings,
-  logServerError,
   logServerTiming,
   ok,
   publicUser,
   ROLES,
   rolePermissions,
   roleScopeText,
+  sanitizeForLog,
   timeServerStep,
 } from "../../../../lib/platform-db";
 
@@ -22,7 +23,61 @@ type ErrorLike = {
   code?: string;
   message?: string;
   stack?: string;
+  details?: unknown;
 };
+
+function authInitErrorCode(error: ErrorLike) {
+  const code = String(error.code || "");
+  const message = String(error.message || "");
+  if (error.status === 401) return "AUTH-UNAUTHENTICATED";
+  if (error.status === 403 && !code) return "PERMISSION_DENIED";
+  if (code === "P1001" || /Can't reach database server|database .*connect|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(message)) {
+    return "AUTH-DB-CONNECTION";
+  }
+  if (
+    ["P2021", "P2022", "P2009"].includes(code)
+    || /Unknown field|Unknown argument|column .*does not exist|The column .* does not exist|Invalid .*select/i.test(message)
+  ) {
+    return "AUTH-DB-SCHEMA";
+  }
+  if (["AUTH_USER_NOT_FOUND", "AUTH_USER_ID_MISSING", "AUTH_ROLE_MISSING"].includes(code)) return code;
+  if (["EMAIL_NOT_VERIFIED", "USER_DISABLED", "USER_PENDING_APPROVAL", "PASSWORD_CHANGE_REQUIRED", "PERMISSION_DENIED"].includes(code)) return code;
+  return "AUTH-001";
+}
+
+function authInitErrorMessage(code: string, error: ErrorLike) {
+  const isProduction = process.env.NODE_ENV === "production";
+  const originalMessage = String(error.message || "账户初始化失败");
+  if (!isProduction) {
+    return `${originalMessage}（错误代码：${code}）`;
+  }
+  if (code === "AUTH-DB-CONNECTION") return "系统暂时无法读取账户信息，请联系管理员。（错误代码：AUTH-DB-CONNECTION）";
+  if (code === "AUTH-DB-SCHEMA") return "系统暂时无法读取账户信息，请联系管理员。（错误代码：AUTH-DB-SCHEMA）";
+  if (code === "AUTH-UNAUTHENTICATED") return "请先登录";
+  if (code === "AUTH_USER_NOT_FOUND") return "登录会话对应的用户不存在，请重新登录或联系管理员。";
+  if (code === "EMAIL_NOT_VERIFIED") return "请先完成邮箱验证";
+  if (code === "USER_DISABLED") return "账号已停用，请联系管理员。";
+  if (code === "USER_PENDING_APPROVAL") return "账号正在等待管理员审核";
+  if (code === "PASSWORD_CHANGE_REQUIRED") return originalMessage;
+  if (code === "PERMISSION_DENIED") return originalMessage || "没有权限读取账户信息。";
+  return "系统暂时无法读取账户信息，请联系管理员。（错误代码：AUTH-001）";
+}
+
+function classifyAuthInitError(error: unknown) {
+  const typedError = (error || {}) as ErrorLike;
+  const code = authInitErrorCode(typedError);
+  const status = typedError.status || (code.startsWith("AUTH-DB") || code === "AUTH-001" ? 500 : 403);
+  const message = authInitErrorMessage(code, typedError);
+  const classified = codedError(message, status, code);
+  classified.details = {
+    sourceCode: typedError.code || "",
+    sourceMessage: typedError.message || "",
+  };
+  if (status >= 500 && process.env.NODE_ENV === "production") {
+    classified.expose = false;
+  }
+  return classified;
+}
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
@@ -54,16 +109,25 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;
-    outcome = typedError.status ? `error-${typedError.status}` : "error-500";
+    const classifiedError = classifyAuthInitError(error);
+    outcome = classifiedError.status ? `error-${classifiedError.status}` : "error-500";
     logServerTiming("workbench-init-timing", startedAt, {
       step: "authMe.total",
       outcome,
       role,
+      code: classifiedError.code,
     });
-    if (!typedError.status || typedError.status >= 500) {
-      logServerError("auth me failed: account info load error", typedError);
-      return apiError(error, "系统暂时无法读取账户信息，请联系管理员。");
-    }
-    return apiError(error, "请先登录");
+    console.error("auth me failed: account info load error", sanitizeForLog({
+      code: classifiedError.code,
+      status: classifiedError.status,
+      role,
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        code: typedError.code || "",
+        message: typedError.message || "",
+        stack: process.env.NODE_ENV === "production" ? undefined : typedError.stack,
+      },
+    }));
+    return apiError(classifiedError, classifiedError.message || "系统暂时无法读取账户信息，请联系管理员。");
   }
 }

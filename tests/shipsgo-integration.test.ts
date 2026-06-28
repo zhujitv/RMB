@@ -18,6 +18,7 @@ const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackin
 const masterBlMigration = readFileSync("prisma/migrations/20260628123000_shipsgo_master_bl_containers/migration.sql", "utf8");
 const settingsRoute = readFileSync("app/api/settings/shipsgo/route.ts", "utf8");
 const oceanTrackingRoute = readFileSync("app/api/shipsgo/ocean-trackings/route.ts", "utf8");
+const oceanTrackingDeleteRoute = readFileSync("app/api/shipsgo/ocean-trackings/[id]/route.ts", "utf8");
 const oceanTrackingSyncRoute = readFileSync("app/api/shipsgo/ocean-trackings/[id]/sync/route.ts", "utf8");
 const oceanTrackingContainerRoute = readFileSync("app/api/shipsgo/ocean-trackings/container/[containerNo]/route.ts", "utf8");
 const oceanTrackingRecoverRoute = readFileSync("app/api/shipsgo/ocean-trackings/recover/route.ts", "utf8");
@@ -105,6 +106,7 @@ test("ShipsGo service uses official v2 headers and signature validation", () => 
 
 test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(oceanTrackingRoute, /createShipsgoOceanTracking\(request, actor, body\)/);
+  assert.match(oceanTrackingDeleteRoute, /deleteShipsgoOceanTracking\(request, actor, id\)/);
   assert.match(oceanTrackingSyncRoute, /syncShipsgoOceanTracking\(request, actor, id\)/);
   assert.match(oceanTrackingContainerRoute, /findShipsgoOceanTrackingByContainerNo\(actor, containerNo\)/);
   assert.match(oceanTrackingRecoverRoute, /recoverShipsgoOceanTracking\(request, actor, body\)/);
@@ -115,6 +117,19 @@ test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(shipsgoCronRoute, /syncDueShipsgoOceanTrackings\(request, actor\)/);
   assert.match(vercelConfig, /"path": "\/api\/cron\/shipsgo-sync"/);
   assert.match(vercelConfig, /"schedule": "0 \*\/6 \* \* \*"/);
+});
+
+test("ShipsGo tracking mutations are role-scoped to admin and owning sales", () => {
+  assert.match(trackingService, /function assertShipsgoTrackingWriteAccess/);
+  assert.match(trackingService, /role === "管理员"/);
+  assert.match(trackingService, /role === "业务员" && order\?\.customer\?\.salespersonUserId === actorId\(actor\)/);
+  assert.match(trackingService, /SHIPSGO_TRACKING_WRITE_FORBIDDEN/);
+  assert.match(trackingService, /function assertShipsgoTrackingDeleteAccess/);
+  assert.match(trackingService, /SHIPSGO_TRACKING_DELETE_ADMIN_ONLY/);
+  assert.match(trackingService.match(/export async function createShipsgoOceanTracking[\s\S]*?const payload = createPayloadFromInput/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, order\)/);
+  assert.match(trackingService.match(/export async function syncShipsgoOceanTracking[\s\S]*?if \(!before\.shipsgoShipmentId\)/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, before\.order\)/);
+  assert.match(trackingService.match(/export async function recoverShipsgoOceanTracking[\s\S]*?const masterBlNo/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, order\)/);
+  assert.match(trackingService, /export async function deleteShipsgoOceanTracking/);
 });
 
 test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
@@ -210,14 +225,13 @@ test("ShipsGo ocean control tower is read-only and does not create tracking", ()
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
   const controlTowerService = trackingService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*?function dateText/)?.[0] || "";
-  assert.doesNotMatch(controlTowerService, /isExternalLogisticsSupplierAccount\(actor\)/);
+  assert.match(controlTowerService, /canAccessDomesticLogisticsOrder\(actor, row\.order\)/);
   assert.doesNotMatch(controlTowerService, /供应商账号不可查看运输监控/);
   assert.match(trackingService, /trackingSignalExists\(row\)/);
   assert.match(trackingService, /includeCompleted/);
   assert.match(trackingService, /soonArrivingCount/);
   assert.match(trackingService, /etaOverdueCount/);
   assert.match(trackingService, /syncFailedCount/);
-  assert.doesNotMatch(trackingService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*?function dateText/)?.[0] || "", /canAccessDomesticLogisticsOrder\(actor/);
   assert.doesNotMatch(oceanTrackingControlTowerRoute, /createShipsgoOceanTracking|recoverShipsgoOceanTracking/);
 });
 
@@ -234,6 +248,8 @@ test("domestic logistics exposes ocean control tower tab and fullscreen monitor 
   assert.match(logisticsModule, /同步最新状态/);
   assert.match(logisticsModule, /查看运输节点/);
   assert.match(logisticsModule, /跳转物流详情/);
+  assert.match(logisticsModule, /const canManageShipsgoTracking = \["管理员", "业务员"\]\.includes\(currentUser\.role\)/);
+  assert.match(logisticsModule, /暂无已同步运输节点，请联系管理员或业务员同步最新状态。/);
   assert.doesNotMatch(logisticsModule.match(/function ShipsgoControlTowerView[\s\S]*?function ControlTowerStatCard/)?.[0] || "", /\/api\/shipsgo\/ocean-trackings",\s*\{/);
   assert.match(workspaceStyles, /\.controlTowerFullscreen/);
   assert.match(workspaceStyles, /\.controlTowerTooltip/);

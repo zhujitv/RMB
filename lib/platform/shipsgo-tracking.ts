@@ -11,7 +11,7 @@ import {
 import { assertRead, assertWrite, timingSafeEqualText } from "./shared-auth";
 import { runNonCriticalTask } from "./shared-constants";
 import { writeAudit } from "./shared-audit";
-import { canAccessDomesticLogisticsOrder, isExternalLogisticsSupplierAccount } from "./masters-access";
+import { canAccessDomesticLogisticsOrder } from "./masters-access";
 import { getShipsgoIntegrationSettings } from "./shipsgo-integration";
 
 type ShipsgoActor = {
@@ -52,6 +52,25 @@ const CARRIER_PATTERN = /^(SG_)?[A-Z0-9]{4}$/;
 
 function actorId(actor: ShipsgoActor) {
   return nonEmpty(actor?.id);
+}
+
+function actorRole(actor: ShipsgoActor) {
+  return nonEmpty(actor?.role);
+}
+
+function assertShipsgoTrackingWriteAccess(
+  actor: ShipsgoActor,
+  order: { customer?: { salespersonUserId?: string | null } | null } | null | undefined,
+) {
+  const role = actorRole(actor);
+  if (role === "管理员") return;
+  if (role === "业务员" && order?.customer?.salespersonUserId === actorId(actor)) return;
+  throw codedError("当前角色不允许创建、同步或删除大掌櫃跟踪。", 403, "SHIPSGO_TRACKING_WRITE_FORBIDDEN");
+}
+
+function assertShipsgoTrackingDeleteAccess(actor: ShipsgoActor) {
+  if (actorRole(actor) === "管理员") return;
+  throw codedError("只有管理员可以删除大掌櫃跟踪。", 403, "SHIPSGO_TRACKING_DELETE_ADMIN_ONLY");
 }
 
 function cleanInputText(value: unknown, limit = 128) {
@@ -961,6 +980,7 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
   });
   const now = new Date();
   const mappedRows = rows
+    .filter((row) => canAccessDomesticLogisticsOrder(actor, row.order))
     .map((row) => buildShipsgoControlTowerRow(row, now))
     .filter((row) => trackingSignalExists(row))
     .filter((row) => includeCompleted || !row.isCompleted)
@@ -1157,6 +1177,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const order = await getShipsgoTrackingOrder(orderId, actor);
+  assertShipsgoTrackingWriteAccess(actor, order);
   const payload = createPayloadFromInput(body, order);
 
   const existing = await prisma.shipsgoTracking.findFirst({
@@ -1262,6 +1283,7 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const before = await getTrackingForActor(id, actor);
+  assertShipsgoTrackingWriteAccess(actor, before.order);
   if (!before.shipsgoShipmentId) {
     return recoverShipsgoOceanTracking(request, actor, {
       orderId: before.orderId,
@@ -1304,6 +1326,37 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   return { tracking: serializeShipsgoTracking(saved), message: "大掌櫃状态已同步。" };
 }
 
+export async function deleteShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, trackingId: unknown) {
+  assertWrite(actor, "domesticLogistics");
+  assertShipsgoTrackingDeleteAccess(actor);
+  const id = cleanInputText(trackingId, 80);
+  if (!id) throw codedError("请选择需要删除的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
+  const before = await getTrackingForActor(id, actor);
+  const now = new Date();
+  const saved = await prisma.shipsgoTracking.update({
+    where: { id: before.id },
+    data: {
+      deletedAt: now,
+      updatedById: actorId(actor) || null,
+    },
+  });
+  await runNonCriticalTask("大掌櫃跟踪删除日志写入", () => writeAudit(
+    request,
+    actor,
+    "删除大掌櫃海运跟踪",
+    "shipsgo_trackings",
+    saved.id,
+    {
+      status: before.status,
+      syncStatus: before.syncStatus,
+      shipsgoShipmentId: before.shipsgoShipmentId,
+      masterBlNo: before.masterBlNo || before.bookingNumber,
+    },
+    { deletedAt: saved.deletedAt },
+  ));
+  return { id: saved.id, message: "大掌櫃跟踪已删除。" };
+}
+
 export async function recoverShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, input: unknown = {}) {
   assertWrite(actor, "domesticLogistics");
   const body = assertJsonObject(input) as ShipsgoTrackingInput;
@@ -1312,6 +1365,7 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
   const settings = await getShipsgoIntegrationSettings();
   assertShipsgoOceanEnabled(settings);
   const order = await getShipsgoTrackingOrder(orderId, actor);
+  assertShipsgoTrackingWriteAccess(actor, order);
   const masterBlNo = cleanBookingNumber(body.masterBlNo) || cleanBookingNumber(body.bookingNumber) || cleanBookingNumber(order.blNo);
   const carrierScac = cleanCarrierScac(body.carrierScac);
   const existing = await prisma.shipsgoTracking.findFirst({

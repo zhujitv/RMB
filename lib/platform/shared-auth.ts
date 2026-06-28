@@ -414,12 +414,43 @@ export async function getActor(request: RequestLike, { required = true, allowPas
         tokenHash: sessionTokenHash(sessionToken),
         revokedAt: null,
         expiresAt: { gt: new Date() },
-        user: { is: { isActive: true, approvalStatus: "APPROVED" } },
       },
       include: { user: { select: USER_AUTH_SELECT } },
     }), baseContext);
-    if (session?.user) {
+    if (session) {
+      if (!session.user) {
+        outcome = "user-not-found";
+        const error = permissionError("登录会话对应的用户不存在，请重新登录或联系管理员。", 401);
+        error.code = "AUTH_USER_NOT_FOUND";
+        throw error;
+      }
       role = session.user.role || "";
+      if (!session.user.id) {
+        outcome = "user-id-missing";
+        const error = new Error("账户初始化失败：用户ID为空。") as Error & { status?: number; code?: string };
+        error.status = 500;
+        error.code = "AUTH_USER_ID_MISSING";
+        throw error;
+      }
+      if (!role) {
+        outcome = "role-missing";
+        const error = new Error("账户初始化失败：用户角色为空，请联系管理员。") as Error & { status?: number; code?: string };
+        error.status = 500;
+        error.code = "AUTH_ROLE_MISSING";
+        throw error;
+      }
+      if (!session.user.isActive) {
+        outcome = "user-disabled";
+        const error = permissionError("账号已停用，请联系管理员。", 403);
+        error.code = "USER_DISABLED";
+        throw error;
+      }
+      if (session.user.approvalStatus !== "APPROVED") {
+        outcome = "approval-pending";
+        const error = permissionError("账号正在等待管理员审核", 403);
+        error.code = "USER_PENDING_APPROVAL";
+        throw error;
+      }
       if (isUnsafeDefaultAdminEmail(session.user.email)) {
         await timeServerStep("workbench-init-timing", "getActor.revokeUnsafeDefaultAdminSessions", () => revokeUserSessions(session.user.id), {
           ...baseContext,
@@ -440,7 +471,9 @@ export async function getActor(request: RequestLike, { required = true, allowPas
           role,
         });
         outcome = "email-not-verified";
-        throw permissionError("请先完成邮箱验证", 403);
+        const error = permissionError("请先完成邮箱验证", 403);
+        error.code = "EMAIL_NOT_VERIFIED";
+        throw error;
       }
       if (session.user.passwordPolicyPassed === false && !allowPasswordChangeRequired) {
         const error = permissionError("当前密码安全强度不足，请先修改密码后继续使用平台。", 403);

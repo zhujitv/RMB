@@ -98,15 +98,21 @@ function validateAuthPayload(payload: AuthPayload) {
 }
 
 function authLoadErrorState(error: unknown): AuthState {
+  const errorCode = error instanceof ApiRequestError ? error.code : "";
+  const codeSuffix = errorCode ? `（错误代码：${errorCode}）` : "";
+  const detail = error instanceof Error ? `${error.message}${codeSuffix}` : `用户信息加载失败${codeSuffix}`;
   if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
     clearClientAuthState();
+    const accountStateCodes = ["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"];
+    const guestMessage = error.code === "PASSWORD_CHANGE_REQUIRED" || accountStateCodes.includes(error.code || "")
+      ? error.message
+      : "登录已过期，请重新登录。";
     return {
       status: "guest",
-      message: error.code === "PASSWORD_CHANGE_REQUIRED" ? error.message : "登录已过期，请重新登录。",
+      message: errorCode ? `${guestMessage}（错误代码：${errorCode}）` : guestMessage,
     };
   }
 
-  const detail = error instanceof Error ? error.message : "用户信息加载失败";
   if (error instanceof ApiRequestError && error.status === 408) {
     return {
       status: "error",
@@ -117,7 +123,7 @@ function authLoadErrorState(error: unknown): AuthState {
   if (error instanceof ApiRequestError && error.status >= 500) {
     return {
       status: "error",
-      message: "系统暂时无法读取账户信息。",
+      message: error.message || "系统暂时无法读取账户信息。",
       detail,
     };
   }

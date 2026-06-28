@@ -12,6 +12,7 @@ const backend = [
   readFileSync("lib/platform/profit-overview.ts", "utf8"),
 ].join("\n");
 const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const authMeRoute = readFileSync("app/api/auth/me/route.ts", "utf8");
 const menuFile = readFileSync("app/menu.ts", "utf8");
 const ledgerRoute = readFileSync("app/api/ledger/route.ts", "utf8");
 const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
@@ -250,10 +251,27 @@ test("workspace auth distinguishes expired login from server-side profile failur
   assert.match(workspaceShell, /window\.localStorage\.removeItem\(key\)/);
   assert.match(workspaceShell, /window\.sessionStorage\.removeItem\(key\)/);
   assert.match(workspaceShell, /function authLoadErrorState\(error: unknown\): AuthState/);
-  assert.match(workspaceShell, /message: error\.code === "PASSWORD_CHANGE_REQUIRED" \? error\.message : "登录已过期，请重新登录。"/);
-  assert.match(workspaceShell, /message: "系统暂时无法读取账户信息。"/);
+  assert.match(workspaceShell, /accountStateCodes = \["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"\]/);
+  assert.match(workspaceShell, /error\.code === "PASSWORD_CHANGE_REQUIRED" \|\| accountStateCodes\.includes\(error\.code \|\| ""\)/);
+  assert.match(workspaceShell, /message: errorCode \? `\$\{guestMessage\}（错误代码：\$\{errorCode\}）` : guestMessage/);
+  assert.match(workspaceShell, /message: error\.message \|\| "系统暂时无法读取账户信息。"/);
   assert.match(workspaceShell, /message: "工作台初始化失败。"/);
   assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。"/);
+});
+
+test("auth me initialization returns classified diagnostics instead of one generic failure", () => {
+  assert.match(authMeRoute, /function classifyAuthInitError/);
+  assert.match(authMeRoute, /AUTH-DB-CONNECTION/);
+  assert.match(authMeRoute, /AUTH-DB-SCHEMA/);
+  assert.match(authMeRoute, /AUTH_USER_NOT_FOUND/);
+  assert.match(authMeRoute, /AUTH_ROLE_MISSING/);
+  assert.match(authMeRoute, /EMAIL_NOT_VERIFIED/);
+  assert.match(authMeRoute, /USER_PENDING_APPROVAL/);
+  assert.match(authMeRoute, /console\.error\("auth me failed: account info load error"/);
+  assert.match(authMeRoute, /sanitizeForLog/);
+  assert.match(sharedAuth, /outcome = "user-not-found"/);
+  assert.match(sharedAuth, /outcome = "role-missing"/);
+  assert.match(sharedAuth, /outcome = "approval-pending"/);
 });
 
 test("workspace boot order enters loading before permission checks", () => {
