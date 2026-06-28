@@ -31,6 +31,7 @@ import {
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
   publicUser,
+  listOwnLoginRecords,
   updateOwnProfile,
 } from "./shared-users";
 import {
@@ -54,6 +55,7 @@ export {
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
   publicUser,
+  listOwnLoginRecords,
   updateOwnProfile,
   permissionError,
   rolePermissions,
@@ -513,6 +515,7 @@ export async function recordLoginAttempt(request: RequestLike, email: unknown, s
       key: loginAttemptKey(request, email),
       email: normalizeEmail(email) || null,
       ipAddress: requestIp(request),
+      userAgent: request?.headers?.get("user-agent") || null,
       success: Boolean(success),
       userId,
     },
@@ -545,6 +548,7 @@ export async function changeOwnPassword(request: RequestLike, actor: ActorLike, 
       passwordHash: hashPassword(newPassword),
       mustChangePassword: false,
       passwordPolicyPassed: true,
+      passwordChangedAt: new Date(),
     },
   });
   await revokeUserSessions(user.id);

@@ -1,0 +1,9 @@
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "english_name" TEXT;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "department" TEXT;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "avatar_url" TEXT;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "default_home" TEXT;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "page_size" INTEGER;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "login_alert_enabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_changed_at" TIMESTAMP(3);
+
+ALTER TABLE "login_attempts" ADD COLUMN IF NOT EXISTS "user_agent" TEXT;

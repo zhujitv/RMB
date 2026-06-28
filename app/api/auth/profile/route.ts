@@ -1,9 +1,19 @@
 import type { NextRequest } from "next/server";
-import { apiError, ok, parseJsonBody, updateOwnProfile } from "../../../../lib/platform-db";
+import { apiError, listOwnLoginRecords, ok, parseJsonBody, updateOwnProfile } from "../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    const actor = await requireApiActor(request);
+    const loginRecords = await listOwnLoginRecords(actor, 10);
+    return ok({ success: true, loginRecords });
+  } catch (error: unknown) {
+    return apiError(error, "读取个人设置失败");
+  }
+}
 
 export async function PATCH(request: NextRequest) {
   try {

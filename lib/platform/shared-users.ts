@@ -54,16 +54,23 @@ type AvatarUserLike = {
 type UserRowLike = Record<string, unknown> & {
   id?: string | null;
   name?: string | null;
+  englishName?: string | null;
+  department?: string | null;
   email?: string | null;
   role?: string | null;
   phone?: string | null;
   avatarInitials?: string | null;
+  avatarUrl?: string | null;
   defaultLanguage?: string | null;
+  defaultHome?: string | null;
+  pageSize?: number | null;
+  loginAlertEnabled?: boolean | null;
   customPermissions?: unknown;
   supplierId?: string | null;
   supplierOperator?: { supplierName?: string | null; supplierType?: string | null } | null;
   mustChangePassword?: boolean | null;
   passwordPolicyPassed?: boolean | null;
+  passwordChangedAt?: Date | string | null;
   emailVerified?: boolean | null;
   emailVerifiedAt?: Date | string | null;
   approvalStatus?: string | null;
@@ -75,16 +82,23 @@ type UserRowLike = Record<string, unknown> & {
 export const USER_AUTH_SELECT = {
   id: true,
   name: true,
+  englishName: true,
+  department: true,
   email: true,
   role: true,
   phone: true,
   avatarInitials: true,
+  avatarUrl: true,
   defaultLanguage: true,
+  defaultHome: true,
+  pageSize: true,
+  loginAlertEnabled: true,
   customPermissions: true,
   supplierId: true,
   supplierOperator: { select: { supplierName: true, supplierType: true } },
   mustChangePassword: true,
   passwordPolicyPassed: true,
+  passwordChangedAt: true,
   emailVerified: true,
   emailVerifiedAt: true,
   approvalStatus: true,
@@ -96,16 +110,23 @@ export const USER_AUTH_SELECT = {
 export const USER_PUBLIC_SELECT = {
   id: true,
   name: true,
+  englishName: true,
+  department: true,
   email: true,
   role: true,
   phone: true,
   avatarInitials: true,
+  avatarUrl: true,
   defaultLanguage: true,
+  defaultHome: true,
+  pageSize: true,
+  loginAlertEnabled: true,
   customPermissions: true,
   supplierId: true,
   supplierOperator: { select: { supplierName: true, supplierType: true } },
   mustChangePassword: true,
   passwordPolicyPassed: true,
+  passwordChangedAt: true,
   emailVerified: true,
   emailVerifiedAt: true,
   approvalStatus: true,
@@ -248,11 +269,16 @@ export function publicUser(userInput: unknown) {
   return {
     id: user.id,
     name: user.name,
+    englishName: user.englishName || "",
+    department: user.department || "",
     email: user.email,
     role: userRoleDisplayName(user.role),
-    phone: user.phone || "",
     avatarInitials: user.avatarInitials || "",
+    avatarUrl: user.avatarUrl || "",
     defaultLanguage: user.defaultLanguage || "zh-CN",
+    defaultHome: user.defaultHome || "welcome",
+    pageSize: user.pageSize || 20,
+    loginAlertEnabled: user.loginAlertEnabled !== false,
     customPermissions,
     permissionMode: customPermissions ? "CUSTOM" : "ROLE",
     supplierId: user.supplierId || "",
@@ -260,6 +286,7 @@ export function publicUser(userInput: unknown) {
     supplierType: supplierTypeDisplayName(user.supplierOperator?.supplierType),
     mustChangePassword: Boolean(user.mustChangePassword),
     passwordPolicyPassed: Boolean(user.passwordPolicyPassed),
+    passwordChangedAt: user.passwordChangedAt,
     emailVerified: user.emailVerified !== false,
     emailVerifiedAt: user.emailVerifiedAt,
     approvalStatus: user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED"),
@@ -278,22 +305,78 @@ export async function updateOwnProfile(request: AuditRequestLike, actor: ActorLi
   const user = await prisma.user.findUnique({ where: { id: actorId } });
   if (!user || !user.isActive) throw permissionError("请先登录", 401);
   const name = requireText(input.name, "姓名");
-  const phone = String(input.phone || "").trim();
+  const englishName = String(input.englishName || "").trim().slice(0, 80);
   const avatarInitials = resolveAvatarInitials(input, name, user);
+  const avatarUrl = normalizeAvatarUrl(input.avatarUrl);
   const requestedDefaultLanguage = String(input.defaultLanguage || "");
   const defaultLanguage = ["zh-CN", "en-US"].includes(requestedDefaultLanguage) ? requestedDefaultLanguage : null;
+  const requestedDefaultHome = String(input.defaultHome || "welcome");
+  const defaultHome = ["welcome", "dashboard", "orders", "payments", "costs", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"].includes(requestedDefaultHome)
+    ? requestedDefaultHome
+    : "welcome";
+  const requestedPageSize = Number(input.pageSize || 20);
+  const pageSize = [10, 20, 50].includes(requestedPageSize) ? requestedPageSize : 20;
+  const loginAlertEnabled = input.loginAlertEnabled !== false;
   const before = publicUser(user);
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       name,
-      phone: phone || null,
+      englishName: englishName || null,
       avatarInitials,
+      avatarUrl,
       defaultLanguage,
+      defaultHome,
+      pageSize,
+      loginAlertEnabled,
     },
   });
   await runNonCriticalTask("个人资料操作日志写入", () => writeAudit(request, actor, "修改本人资料", "users", user.id, before, publicUser(updated)));
   return publicUser(updated);
+}
+
+function normalizeAvatarUrl(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (text.length > 300_000) throw codedError("头像文件过大，请选择更小的图片。", 400, "AVATAR_TOO_LARGE");
+  if (!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(text)) {
+    throw codedError("头像仅支持 PNG、JPG 或 WebP 图片。", 400, "AVATAR_TYPE_INVALID");
+  }
+  return text;
+}
+
+function browserLabel(userAgent: string | null | undefined) {
+  const ua = String(userAgent || "");
+  if (!ua) return "未记录";
+  if (/Edg\//.test(ua)) return "Microsoft Edge";
+  if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return "Chrome";
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "Safari";
+  if (/Firefox\//.test(ua)) return "Firefox";
+  return "其他浏览器";
+}
+
+export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
+  const actorId = requireText(actor?.id, "当前用户");
+  const rows = await prisma.loginAttempt.findMany({
+    where: { userId: actorId },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(Number(limit) || 10, 1), 10),
+    select: {
+      id: true,
+      createdAt: true,
+      ipAddress: true,
+      userAgent: true,
+      success: true,
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    loginAt: row.createdAt,
+    ipAddress: row.ipAddress || "未记录",
+    region: "未记录",
+    browser: browserLabel(row.userAgent),
+    result: row.success ? "成功" : "失败",
+  }));
 }
 
 export async function listUsers(actor: ActorLike, query: UserListQuery = null, options: UserListOptions = {}) {

@@ -147,6 +147,7 @@ export function WorkspaceShell() {
     setAuth({ status: "loading", message: "正在加载工作台..." });
     let nextAuth: AuthState | null = null;
     let shouldResetMenu = false;
+    let nextDefaultMenu = "welcome";
     try {
       const payload = await apiJson<AuthPayload>("/api/auth/me", { timeoutMs: AUTH_BOOT_TIMEOUT_MS });
       validateAuthPayload(payload);
@@ -162,12 +163,13 @@ export function WorkspaceShell() {
         if (payload.companyProfile) setPublicCompanyProfile(payload.companyProfile);
         nextAuth = { status: "ready", payload };
         shouldResetMenu = true;
+        nextDefaultMenu = payload.user.defaultHome || "welcome";
       }
     } catch (error) {
       nextAuth = authLoadErrorState(error);
     } finally {
       setAuth(nextAuth || { status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。" });
-      if (shouldResetMenu) setActiveMenu("welcome");
+      if (shouldResetMenu) setActiveMenu(nextDefaultMenu);
     }
   }
 
@@ -398,6 +400,7 @@ export function WorkspaceShell() {
       ) : activeMenu === "account" ? (
         <AccountSettings
           user={payload.user}
+          companyProfile={payload.companyProfile}
           onProfileSaved={updateCurrentUser}
           onPasswordChanged={(message) => setAuth({ status: "guest", message })}
         />

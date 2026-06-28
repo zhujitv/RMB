@@ -1,14 +1,20 @@
 export type User = {
   id: string;
   name: string;
+  englishName?: string;
+  department?: string;
   email: string;
   role: string;
   supplierId?: string;
-  phone?: string;
   avatarInitials?: string;
+  avatarUrl?: string;
   defaultLanguage?: string;
+  defaultHome?: string;
+  pageSize?: number;
+  loginAlertEnabled?: boolean;
   mustChangePassword?: boolean;
   passwordPolicyPassed?: boolean;
+  passwordChangedAt?: string;
   emailVerified?: boolean;
   emailVerifiedAt?: string;
   approvalStatus?: string;

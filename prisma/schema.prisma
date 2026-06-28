@@ -50,12 +50,19 @@ model User {
   passwordHash String   @map("password_hash")
   role         String   @default("业务员")
   phone        String?
+  englishName  String?   @map("english_name")
+  department   String?
   avatarInitials String? @map("avatar_initials")
+  avatarUrl    String?   @map("avatar_url")
   defaultLanguage String? @map("default_language")
+  defaultHome  String?   @map("default_home")
+  pageSize     Int?      @map("page_size")
+  loginAlertEnabled Boolean @default(true) @map("login_alert_enabled")
   customPermissions Json? @map("custom_permissions")
   supplierId    String?   @map("supplier_id")
   mustChangePassword Boolean @default(false) @map("must_change_password")
   passwordPolicyPassed Boolean @default(false) @map("password_policy_passed")
+  passwordChangedAt DateTime? @map("password_changed_at")
   emailVerified Boolean @default(false) @map("email_verified")
   emailVerifiedAt DateTime? @map("email_verified_at")
   approvalStatus String @default("APPROVED") @map("approval_status")
@@ -149,6 +156,7 @@ model LoginAttempt {
   key       String
   email     String?
   ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
   success   Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
 
