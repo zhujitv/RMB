@@ -26,23 +26,31 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
-  财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "oceanControlTower", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
+  物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
+  物流资料录入员: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
 };
 
 const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];
+const LOGISTICS_FEES_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
 
 export function menusWithDerivedAccess(role: string, menus: string[]) {
-  if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
-    return menus;
-  }
   const nextMenus = [...menus];
-  nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  if (OCEAN_CONTROL_TOWER_ROLES.includes(role) && nextMenus.includes("domesticLogistics") && !nextMenus.includes("oceanControlTower")) {
+    nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  }
+  if (LOGISTICS_FEES_ROLES.includes(role) && !nextMenus.includes("logisticsFees") && (nextMenus.includes("domesticLogistics") || nextMenus.includes("costs"))) {
+    const insertAfter = nextMenus.includes("oceanControlTower")
+      ? nextMenus.indexOf("oceanControlTower")
+      : nextMenus.includes("domesticLogistics")
+        ? nextMenus.indexOf("domesticLogistics")
+        : nextMenus.indexOf("costs");
+    nextMenus.splice(insertAfter + 1, 0, "logisticsFees");
+  }
   return nextMenus;
 }
 
@@ -90,6 +98,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     profit: "利润分析",
     domesticLogistics: "物流信息",
     oceanControlTower: "运输监控",
+    logisticsFees: "物流费用",
     supplierDocuments: "资料回传",
     taxRefund: "退税资料",
     reports: "报表中心",

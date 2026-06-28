@@ -22,11 +22,12 @@ test("manual explains customs declaration recognition from logistics upload", ()
 });
 
 test("manual explains unified logistics cost entry and review flow", () => {
-  assert.match(manualModule, /物流信息是物流模块唯一入口/);
+  assert.match(manualModule, /物流信息集中维护物流状态/);
   assert.match(manualModule, /运输监控作为物流信息下的在途海运监控入口/);
-  assert.match(manualModule, /物流费用录入与审核/);
+  assert.match(manualModule, /title: "物流费用"/);
+  assert.match(manualModule, /物流费用用于维护供应商费用账单、月结汇总、合并审核、发票分组和付款状态/);
   assert.match(manualModule, /合并审核 \/ 批量审核/);
-  assert.match(manualModule, /左侧菜单不再单独显示“物流费用审核”/);
+  assert.match(manualModule, /统一在左侧菜单“物流费用”中完成/);
 });
 
 test("manual explains transport monitor and Da Zhang Gui tracking rules", () => {

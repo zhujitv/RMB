@@ -14,6 +14,7 @@ test("workspace home keeps business modules lazy-loaded behind menu selection", 
     "PaymentsModule",
     "CostsModule",
     "DomesticLogisticsModule",
+    "LogisticsFeesModule",
     "ProfitModule",
     "TaxRefundModule",
     "ReportsModule",
@@ -23,7 +24,6 @@ test("workspace home keeps business modules lazy-loaded behind menu selection", 
     assert.match(workspaceShell, new RegExp(`const ${moduleName} = dynamic\\(\\(\\) => import\\("\\./modules/`));
   }
   assert.match(workspaceShell, /activeMenu === "welcome"[\s\S]*<WelcomePanel/);
-  assert.doesNotMatch(workspaceShell, /const LogisticsFeesModule = dynamic/);
   assert.match(workspaceShell, /if \(auth\.status === "guest"\) void loadPublicCompanyProfile\(\)/);
   assert.doesNotMatch(workspaceShell, /void loadPublicCompanyProfile\(\);\s*\}, \[\]\)/);
 });

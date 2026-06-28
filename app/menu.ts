@@ -8,6 +8,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
   { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
   { key: "oceanControlTower", label: "运输监控", description: "集中查看在途海运跟踪和 ETA 预警。", parentKey: "domesticLogistics" },
+  { key: "logisticsFees", label: "物流费用", description: "录入、审核、月结和维护物流费用。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
@@ -16,16 +17,17 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"],
-  财务: ["payments", "costs", "profit", "domesticLogistics", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "oceanControlTower", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
+  物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "oceanControlTower", "manual"],
+  物流资料录入员: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
 };
 
 const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];
+const LOGISTICS_FEES_ROLES = ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"];
 const PRODUCT_SUPPLIER_ROLE = "产品供应商";
 const LEGACY_PRODUCT_SUPPLIER_ROLE = `${PRODUCT_SUPPLIER_ROLE}账号`;
 const LEGACY_FACTORY_SUPPLIER_ROLE = "工厂供应商账号";
@@ -35,11 +37,18 @@ function normalizeMenuRole(role: string) {
 }
 
 function menusWithDerivedAccess(role: string, menus: string[]) {
-  if (!OCEAN_CONTROL_TOWER_ROLES.includes(role) || !menus.includes("domesticLogistics") || menus.includes("oceanControlTower")) {
-    return menus;
-  }
   const nextMenus = [...menus];
-  nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  if (OCEAN_CONTROL_TOWER_ROLES.includes(role) && nextMenus.includes("domesticLogistics") && !nextMenus.includes("oceanControlTower")) {
+    nextMenus.splice(nextMenus.indexOf("domesticLogistics") + 1, 0, "oceanControlTower");
+  }
+  if (LOGISTICS_FEES_ROLES.includes(role) && !nextMenus.includes("logisticsFees") && (nextMenus.includes("domesticLogistics") || nextMenus.includes("costs"))) {
+    const insertAfter = nextMenus.includes("oceanControlTower")
+      ? nextMenus.indexOf("oceanControlTower")
+      : nextMenus.includes("domesticLogistics")
+        ? nextMenus.indexOf("domesticLogistics")
+        : nextMenus.indexOf("costs");
+    nextMenus.splice(insertAfter + 1, 0, "logisticsFees");
+  }
   return nextMenus;
 }
 

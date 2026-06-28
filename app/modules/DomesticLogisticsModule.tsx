@@ -7,7 +7,6 @@ import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, UiCheckbox, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
-import { LogisticsExpenseForm, LogisticsFeesModule } from "./LogisticsFeesModule";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
@@ -416,17 +415,17 @@ export function DomesticLogisticsModule({
   permissions,
   initialKeyword = "",
   initialOpenToken = 0,
-  focusFeesToken = 0,
   initialView = "list",
   initialControlTowerFullscreen = false,
+  onOpenLogisticsFees,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialOpenToken?: number;
-  focusFeesToken?: number;
   initialView?: "list" | "controlTower";
   initialControlTowerFullscreen?: boolean;
+  onOpenLogisticsFees?: (focus: { keyword?: string; billId?: string }) => void;
 }) {
   const [rows, setRows] = useState<DomesticLogisticsRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -440,10 +439,7 @@ export function DomesticLogisticsModule({
   const [shipsgoFeatures, setShipsgoFeatures] = useState<ShipsgoFeatureFlags>({ enabled: false });
   const [activeLogisticsView, setActiveLogisticsView] = useState<"list" | "controlTower">(initialView);
   const [editingOrderId, setEditingOrderId] = useState("");
-  const [feeEntryOrderId, setFeeEntryOrderId] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [expenseRefreshToken, setExpenseRefreshToken] = useState(0);
-  const [expenseFocus, setExpenseFocus] = useState({ token: 0, billId: "", keyword: "" });
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
@@ -503,7 +499,6 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    setFeeEntryOrderId("");
     setNotice("");
     void loadRows(value, businessScope).then((nextRows) => {
       const matched = nextRows.find((row) => (
@@ -520,13 +515,6 @@ export function DomesticLogisticsModule({
   }, [initialOpenToken]);
 
   useEffect(() => {
-    if (!focusFeesToken) return;
-    window.setTimeout(() => {
-      document.getElementById("domestic-logistics-fees")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }, [focusFeesToken]);
-
-  useEffect(() => {
     const value = keyword.trim();
     if (value === submittedKeyword) return;
     const timer = window.setTimeout(() => {
@@ -534,7 +522,6 @@ export function DomesticLogisticsModule({
       setPage(1);
       setExpandedId("");
       setEditingOrderId("");
-      setFeeEntryOrderId("");
       setNotice("");
       void loadRows(value, businessScope);
     }, 300);
@@ -559,7 +546,6 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    setFeeEntryOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
     void loadRows(value, businessScope);
@@ -572,7 +558,6 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    setFeeEntryOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
     void loadRows("", "current");
@@ -583,7 +568,6 @@ export function DomesticLogisticsModule({
     setPage(1);
     setExpandedId("");
     setEditingOrderId("");
-    setFeeEntryOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
     void loadRows(submittedKeyword, nextBusinessScope);
@@ -593,21 +577,12 @@ export function DomesticLogisticsModule({
     const status = row.logisticsExpenseStatus || "未录入";
     setExpandedId(row.id);
     setEditingOrderId("");
-    if (status === "未录入" || !row.logisticsExpenseBillId) {
-      setFeeEntryOrderId(row.id);
-      setNotice("该订单暂未创建物流费用账单，可在此录入费用。");
-      return;
-    }
-    setFeeEntryOrderId("");
-    setNotice("已定位到对应物流费用账单。");
-    setExpenseFocus((current) => ({
-      token: current.token + 1,
+    const keywordValue = row.blNo || row.billOfLadingNo || row.orderNo || "";
+    setNotice(status === "未录入" || !row.logisticsExpenseBillId ? "已切换到物流费用页面，可在新页面新增物流费用。" : "已切换到物流费用页面并定位对应账单。");
+    onOpenLogisticsFees?.({
       billId: row.logisticsExpenseBillId || "",
-      keyword: row.blNo || row.billOfLadingNo || row.orderNo || "",
-    }));
-    window.setTimeout(() => {
-      document.getElementById("domestic-logistics-fees")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
+      keyword: keywordValue,
+    });
   }
 
   function toggleOrderSelection(row: DomesticLogisticsRow, checked: boolean) {
@@ -753,7 +728,6 @@ export function DomesticLogisticsModule({
       if (result.success !== true) throw new Error(result.message || "删除物流信息失败");
       setExpandedId("");
       setEditingOrderId("");
-      setFeeEntryOrderId("");
       await loadRows(submittedKeyword, businessScope);
       setNotice(result.message || "物流信息已删除");
     } catch (deleteError) {
@@ -981,30 +955,28 @@ export function DomesticLogisticsModule({
                   const next = current === row.id ? "" : row.id;
                   if (!next) {
                     setEditingOrderId("");
-                    setFeeEntryOrderId("");
                   }
                   return next;
                 })}
                 editing={editingOrderId === row.id}
-                feeEntryOpen={feeEntryOrderId === row.id}
                 canEditDomesticLogistics={canEditDomesticLogistics}
                 canUploadCustomsDocuments={canUploadCustomsDocuments}
                 canDeleteCustomsDocuments={canDeleteCustomsDocuments}
                 onEdit={() => {
                   setExpandedId(row.id);
-                  setFeeEntryOrderId("");
                   setEditingOrderId((current) => current === row.id ? "" : row.id);
                 }}
                 canCreateLogisticsExpense={canCreateLogisticsExpense}
                 currentUserRole={currentUser.role}
-                currentUserSupplierId={currentUser.supplierId || ""}
                 onOpenExpenseStatus={() => openLogisticsExpenseStatus(row)}
-                onOpenFeeEntry={() => {
+                onOpenLogisticsFees={() => {
                   setExpandedId(row.id);
                   setEditingOrderId("");
-                  setFeeEntryOrderId((current) => current === row.id ? "" : row.id);
+                  onOpenLogisticsFees?.({
+                    billId: row.logisticsExpenseBillId || "",
+                    keyword: row.blNo || row.billOfLadingNo || row.orderNo || "",
+                  });
                 }}
-                onCloseFeeEntry={() => setFeeEntryOrderId("")}
                 shipsgoFeatures={shipsgoFeatures}
                 shipsgoBusyKey={shipsgoBusyKey}
                 canManageShipsgoTracking={canEditDomesticLogistics}
@@ -1012,10 +984,8 @@ export function DomesticLogisticsModule({
                 onSyncShipsgoTracking={(trackingId) => syncShipsgoTracking(row, trackingId)}
                 onRecoverShipsgoTracking={() => recoverShipsgoTracking(row)}
                 onSaved={() => {
-                  setNotice(feeEntryOrderId === row.id ? "物流费用已提交" : "物流信息已保存");
+                  setNotice("物流信息已保存");
                   setEditingOrderId("");
-                  setFeeEntryOrderId("");
-                  setExpenseRefreshToken((current) => current + 1);
                   void loadRows(submittedKeyword, businessScope);
                 }}
                 onCancelEdit={() => setEditingOrderId("")}
@@ -1045,20 +1015,6 @@ export function DomesticLogisticsModule({
       </>
       )}
     </section>
-    {activeLogisticsView === "list" ? (
-      <LogisticsFeesModule
-        sectionId="domestic-logistics-fees"
-        embedded
-        title="物流费用录入与审核"
-        refreshToken={expenseRefreshToken}
-        focusBillId={expenseFocus.billId}
-        focusKeyword={expenseFocus.keyword}
-        focusToken={expenseFocus.token}
-        currentUserRole={currentUser.role}
-        currentUserSupplierId={currentUser.supplierId || ""}
-        canCreateExpense={canCreateLogisticsExpense}
-      />
-    ) : null}
     {confirmation ? (
       <ConfirmationDialog
         state={confirmation}
@@ -1890,7 +1846,6 @@ function DomesticLogisticsRows({
   row,
   expanded,
   editing,
-  feeEntryOpen,
   canEditDomesticLogistics,
   canUploadCustomsDocuments,
   canDeleteCustomsDocuments,
@@ -1898,10 +1853,8 @@ function DomesticLogisticsRows({
   onEdit,
   canCreateLogisticsExpense,
   currentUserRole,
-  currentUserSupplierId,
   onOpenExpenseStatus,
-  onOpenFeeEntry,
-  onCloseFeeEntry,
+  onOpenLogisticsFees,
   shipsgoFeatures,
   shipsgoBusyKey,
   canManageShipsgoTracking,
@@ -1926,7 +1879,6 @@ function DomesticLogisticsRows({
   row: DomesticLogisticsRow;
   expanded: boolean;
   editing: boolean;
-  feeEntryOpen: boolean;
   canEditDomesticLogistics: boolean;
   canUploadCustomsDocuments: boolean;
   canDeleteCustomsDocuments: boolean;
@@ -1934,10 +1886,8 @@ function DomesticLogisticsRows({
   onEdit: () => void;
   canCreateLogisticsExpense: boolean;
   currentUserRole: string;
-  currentUserSupplierId: string;
   onOpenExpenseStatus: () => void;
-  onOpenFeeEntry: () => void;
-  onCloseFeeEntry: () => void;
+  onOpenLogisticsFees: () => void;
   shipsgoFeatures: ShipsgoFeatureFlags;
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
@@ -1992,7 +1942,7 @@ function DomesticLogisticsRows({
                   <button
                     className={`${styles.logisticsActionBtn} ${styles.logisticsSecondaryBtn}`}
                     type="button"
-                    onClick={(event) => { event.stopPropagation(); onOpenFeeEntry(); }}
+                    onClick={(event) => { event.stopPropagation(); onOpenLogisticsFees(); }}
                   >
                     录入费用
                   </button>
@@ -2018,15 +1968,6 @@ function DomesticLogisticsRows({
               </div>
               {editing ? (
                 <DomesticLogisticsEditPanel row={row} onSaved={onSaved} onCancel={onCancelEdit} />
-              ) : null}
-              {feeEntryOpen ? (
-                <LogisticsExpenseForm
-                  initialOrder={expenseOrderFromDomesticRow(row)}
-                  currentUserRole={currentUserRole}
-                  currentUserSupplierId={currentUserSupplierId}
-                  onCancel={onCloseFeeEntry}
-                  onSaved={onSaved}
-                />
               ) : null}
               <div className={styles.detailGrid}>
                 <DetailField label="客户全称" value={customerLegalName(row)} wide />
@@ -2485,30 +2426,6 @@ function latestUploadedDocument(documents: DomesticLogisticsDocument[]) {
   ))[0] || null;
 }
 
-function expenseOrderFromDomesticRow(row: DomesticLogisticsRow) {
-  const info = row.domesticLogisticsInfo;
-  const transportItems = info?.transportItems || [];
-  const containerNos = transportItems.map((item) => item.containerNo || "").filter(Boolean);
-  const containerTypes = uniqueContainerTypes(transportItems.map((item) => item.containerType));
-  return {
-    id: row.orderId || row.id,
-    orderId: row.orderId || row.id,
-    orderNo: row.orderNo || "",
-    blNo: row.blNo || row.billOfLadingNo || "",
-    billOfLadingNo: row.billOfLadingNo || row.blNo || "",
-    customerName: row.customerFullName || row.customerName || "",
-    customerShortName: row.customerShortName || row.customerName || "",
-    logisticsSuppliers: row.logisticsSuppliers || [],
-    truckPlateNo: info?.truckPlateNo || firstItemValue(info, "truckPlateNo"),
-    cargoName: info?.cargoDescription || firstItemValue(info, "cargoName"),
-    containerNos,
-    containerTypes,
-    containerType: containerTypes.length === 1 ? containerTypes[0] : "",
-    containerCount: containerNos.length || transportItems.length || 0,
-    transportItems,
-  };
-}
-
 function formFromRow(row: DomesticLogisticsRow): DomesticLogisticsForm {
   const info = row.domesticLogisticsInfo;
   const transportType = info?.transportType || "TRUCK";
@@ -2634,12 +2551,6 @@ function normalizeFormTransportItems(items: TransportItem[]) {
     cargoName: (item.cargoName || "").trim(),
     remark: (item.remark || "").trim(),
   })).filter((item) => Object.values(item).some(Boolean));
-}
-
-function uniqueContainerTypes(values: unknown[]) {
-  return values
-    .map((value) => String(value || "").trim().toUpperCase())
-    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
 }
 
 function validateDomesticLogisticsForm(form: DomesticLogisticsForm) {

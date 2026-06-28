@@ -23,7 +23,8 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(moduleSource, /const tableColSpan = canArchiveDomesticLogistics \? 8 : 7;/);
   assert.match(moduleSource, /<td colSpan=\{tableColSpan\}>/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
-  assert.match(moduleSource, /focusBillId=\{expenseFocus\.billId\}/);
+  assert.match(moduleSource, /onOpenLogisticsFees/);
+  assert.doesNotMatch(moduleSource, /<LogisticsFeesModule/);
 });
 
 test("domestic logistics detail keeps per-order fee entry and customs uploads", () => {

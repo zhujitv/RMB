@@ -33,4 +33,5 @@ test("business module headers only show the real module name once", () => {
   for (const title of ["应收订单", "收款管理", "成本管理", "利润分析", "物流信息", "退税资料", "报表中心", "系统设置"]) {
     assert.match(businessModuleSources, new RegExp(`<h2>${title}</h2>`));
   }
+  assert.match(readFileSync("app/WorkspaceShell.tsx", "utf8"), /title="物流费用"/);
 });

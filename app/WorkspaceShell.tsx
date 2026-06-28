@@ -12,7 +12,7 @@ import { PasswordChangePanel } from "./PasswordChangePanel";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
 import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse } from "./types";
-import { normalizeEmail } from "./utils";
+import { canWritePermission, normalizeEmail } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
@@ -22,7 +22,7 @@ const AUTH_BOOT_TIMEOUT_MS = 15000;
 const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
 
 function normalizeWorkspaceMenuKey(menuKey: string) {
-  return menuKey === "logisticsReview" ? "domesticLogistics" : menuKey;
+  return menuKey === "logisticsReview" ? "logisticsFees" : menuKey;
 }
 
 const OrdersModule = dynamic(() => import("./modules/OrdersModule").then((module) => module.OrdersModule), {
@@ -42,6 +42,10 @@ const CostsModule = dynamic(() => import("./modules/CostsModule").then((module) 
   loading: () => <BusinessModuleLoading />,
 });
 const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogisticsModule").then((module) => module.DomesticLogisticsModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
+const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
 });
@@ -132,7 +136,7 @@ export function WorkspaceShell() {
   const [costsFocus, setCostsFocus] = useState({ keyword: "", token: 0 });
   const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
-  const [domesticLogisticsFeesFocusToken, setDomesticLogisticsFeesFocusToken] = useState(0);
+  const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
@@ -195,15 +199,15 @@ export function WorkspaceShell() {
 
   function selectWorkspaceMenu(menuKey: string) {
     const normalizedMenuKey = normalizeWorkspaceMenuKey(menuKey);
-    if (menuKey === "logisticsReview") setDomesticLogisticsFeesFocusToken(Date.now());
+    if (menuKey === "logisticsReview") setLogisticsFeesFocus({ keyword: "", billId: "", token: Date.now() });
     setActiveMenu(normalizedMenuKey);
   }
 
   useEffect(() => {
     if (auth.status !== "ready") return;
     if (activeMenu === "logisticsReview") {
-      setDomesticLogisticsFeesFocusToken(Date.now());
-      setActiveMenu("domesticLogistics");
+      setLogisticsFeesFocus({ keyword: "", billId: "", token: Date.now() });
+      setActiveMenu("logisticsFees");
       return;
     }
     if (!allowedMenuKeys.has(activeMenu)) setActiveMenu("welcome");
@@ -432,7 +436,24 @@ export function WorkspaceShell() {
           permissions={payload.permissions}
           initialKeyword={domesticLogisticsFocus.keyword}
           initialOpenToken={domesticLogisticsFocus.token}
-          focusFeesToken={domesticLogisticsFeesFocusToken}
+          onOpenLogisticsFees={(focus) => {
+            setLogisticsFeesFocus({
+              keyword: focus.keyword?.trim() || "",
+              billId: focus.billId?.trim() || "",
+              token: Date.now(),
+            });
+            setActiveMenu("logisticsFees");
+          }}
+        />
+      ) : activeMenu === "logisticsFees" ? (
+        <LogisticsFeesModule
+          title="物流费用"
+          focusBillId={logisticsFeesFocus.billId}
+          focusKeyword={logisticsFeesFocus.keyword}
+          focusToken={logisticsFeesFocus.token}
+          currentUserRole={payload.user.role}
+          currentUserSupplierId={payload.user.supplierId || ""}
+          canCreateExpense={canWritePermission(payload.user, payload.permissions, "logistics", ["管理员", "物流供应商"])}
         />
       ) : activeMenu === "oceanControlTower" ? (
         <DomesticLogisticsModule

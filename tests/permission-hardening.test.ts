@@ -31,12 +31,12 @@ test("fixed role menus do not expose forbidden global modules", () => {
     assert(!roleMenuLine(source, "业务员").includes('"profit"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
   }
-  assert.match(backend, /物流供应商: \["domesticLogistics", "oceanControlTower", "manual"\]/);
-  assert.match(menuFile, /物流供应商: \["domesticLogistics", "oceanControlTower", "manual"\]/);
-  assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
-  assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "taxRefund", "reports", "manual"\]/);
-  assert.match(backend, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "manual"\]/);
-  assert.match(menuFile, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "manual"\]/);
+  assert.match(backend, /物流供应商: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(menuFile, /物流供应商: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
+  assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
+  assert.match(backend, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(menuFile, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
   assert.match(backend, /export function menusWithDerivedAccess/);
   assert.match(menuFile, /function menusWithDerivedAccess/);
   assert.match(menuFile, /key: "oceanControlTower", label: "运输监控"[\s\S]*parentKey: "domesticLogistics"/);
@@ -85,6 +85,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(salesperson.menus.includes("dashboard"), false);
   assert.equal(salesperson.menus.includes("profit"), false);
   assert.equal(salesperson.menus.includes("logisticsReview"), false);
+  assert.equal(salesperson.menus.includes("logisticsFees"), true);
   assert.equal(salesperson.menus.includes("oceanControlTower"), true);
   assert.equal(salesperson.reads.payments, true);
   assert.equal(salesperson.reads.taxRefund, true);
@@ -102,9 +103,10 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(finance.writes.orders, false);
   assert.equal(finance.writes.users, false);
   assert.equal(finance.menus.includes("logisticsReview"), false);
+  assert.equal(finance.menus.includes("logisticsFees"), true);
 
   const logisticsSupplier = rolePermissionSnapshot("物流供应商");
-  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "oceanControlTower", "manual"]);
+  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
   assert.equal(logisticsSupplier.menus.includes("supplierDocuments"), false);
   assert.equal(logisticsSupplier.menus.includes("logisticsReview"), false);
   assert.equal(logisticsSupplier.dataScope, "OWN");
@@ -136,7 +138,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(legacyFactorySupplier.reads.supplierDocuments, true);
 
   const logisticsClerk = rolePermissionSnapshot("物流资料录入员");
-  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "oceanControlTower", "manual"]);
+  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
   assert.equal(logisticsClerk.dataScope, "OWN");
   assert.equal(logisticsClerk.reads.domesticLogistics, true);
   assert.equal(logisticsClerk.reads.documents, true);
@@ -155,7 +157,7 @@ test("role permission matrix protects financial and supplier scoped data", () =>
       dataScope: "OWN",
     },
   });
-  assert.deepEqual(legacyCustomSalesperson.menus, ["orders", "domesticLogistics", "oceanControlTower", "manual"]);
+  assert.deepEqual(legacyCustomSalesperson.menus, ["orders", "domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
 });
 
 test("salesperson tax refund uploads are limited to own-customer clearance documents", () => {
