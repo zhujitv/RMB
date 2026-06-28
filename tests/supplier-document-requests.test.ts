@@ -80,7 +80,8 @@ test("product supplier callback uses a dedicated supplier account role", () => {
   assert.match(service, /assertWrite\(actor, "supplierDocuments"\)/);
   assert.match(service, /assertRead\(actor, "supplierDocuments"\)/);
   assert.match(settingsModule, /FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商"/);
-  assert.match(settingsModule, /PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\) && supplier\.allowFactoryDocumentUpload/);
+  assert.match(settingsModule, /if \(FACTORY_SUPPLIER_ACCOUNT_ROLES\.includes\(role\)\) return PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\)/);
+  assert.doesNotMatch(settingsModule, /PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\) && supplier\.allowFactoryDocumentUpload/);
   assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
   assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
   assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);

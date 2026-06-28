@@ -361,6 +361,13 @@ test("logistics supplier users must bind to one supplier account", () => {
   );
   assert.match(backend, /SUPPLIER_USER_SUPPLIER_REQUIRED/);
   assert.match(backend, /LOGISTICS_USER_SUPPLIER_TYPE_INVALID/);
+  assert.match(backend, /FACTORY_USER_SUPPLIER_TYPE_INVALID/);
+  assert.match(backend, /DOMESTIC_LOGISTICS_SUPPLIER_TYPES = \[[\s\S]*LOGISTICS_SUPPLIER_TYPE_CODE/);
+  assert.match(backend, /PRODUCT_SUPPLIER_TYPES = \[[\s\S]*PRODUCT_SUPPLIER_TYPE_CODE/);
+  assert.match(backend, /supplierId: null/);
+  assert.match(backend, /当前角色只能绑定物流供应商/);
+  assert.match(backend, /当前角色只能绑定产品供应商/);
+  assert.doesNotMatch(backend, /产品供应商绑定的供应商必须先开启资料回传权限。/);
   assert.match(settingsModule, /SUPPLIER_ACCOUNT_ROLES/);
   assert.match(settingsModule, /绑定供应商/);
 });

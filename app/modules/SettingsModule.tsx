@@ -304,10 +304,12 @@ type ShippingDocumentConfig = Record<ShippingDocumentConfigKey, boolean>;
 const CUSTOMER_COMMISSION_STATUSES = ["启用", "停用"];
 const PRODUCT_SUPPLIER_TYPE = "产品供应商";
 const LEGACY_FACTORY_SUPPLIER_TYPE = "工厂供应商";
-const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE];
+const PRODUCT_SUPPLIER_TYPE_CODE = "PRODUCT";
+const LOGISTICS_SUPPLIER_TYPE_CODE = "LOGISTICS";
+const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE, PRODUCT_SUPPLIER_TYPE_CODE];
 const SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, "物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", "其他供应商"];
 const SUPPLIER_STATUSES = ["启用", "停用"];
-const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
+const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", LOGISTICS_SUPPLIER_TYPE_CODE];
 const FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商";
 const LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE = `${FACTORY_SUPPLIER_ACCOUNT_ROLE}账号`;
 const LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
@@ -515,7 +517,11 @@ const CUSTOMER_COLUMNS: TableColumn<CustomerRow>[] = [
 
 const SUPPLIER_COLUMNS: TableColumn<SupplierRow>[] = [
   { key: "supplierName", label: "供应商" },
-  { key: "supplierType", label: "类型" },
+  {
+    key: "supplierType",
+    label: "类型",
+    render: (row) => supplierTypeLabel(row.supplierType) || "-",
+  },
   { key: "status", label: "状态" },
   { key: "contactPerson", label: "联系人" },
   { key: "isDefaultLogisticsSupplier", label: "默认物流", render: (row) => LOGISTICS_SUPPLIER_TYPES.includes(row.supplierType || "") ? yesNo(row.isDefaultLogisticsSupplier) : "-" },
@@ -1013,8 +1019,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       const supplier = suppliers.find((item) => item.id === userForm.supplierId);
       if (!supplierMatchesUserRole(supplier, userForm.role)) {
         setUserMessage(FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(userForm.role)
-          ? "产品供应商只能绑定已开启资料回传权限的产品供应商"
-          : "物流供应商账号只能绑定物流、报关、海运或港杂费用供应商");
+          ? "当前角色只能绑定产品供应商"
+          : "当前角色只能绑定物流供应商");
         return;
       }
     }
@@ -1031,7 +1037,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         email: userForm.email,
         role: userForm.role,
         approvalStatus: userForm.approvalStatus,
-        supplierId: isSupplierAccountRole(userForm.role) ? userForm.supplierId : undefined,
+        supplierId: isSupplierAccountRole(userForm.role) ? userForm.supplierId : "",
         customPermissions: userForm.permissionMode === "CUSTOM"
           ? {
             mode: "CUSTOM",
@@ -2736,11 +2742,7 @@ function UserEditPanel({
     onChange({ ...form, [key]: value });
   }
 
-  const bindableSuppliers = suppliers.filter((supplier) => {
-    if (form.role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
-    if (FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(form.role)) return PRODUCT_SUPPLIER_TYPES.includes(supplier.supplierType || "") && supplier.allowFactoryDocumentUpload;
-    return false;
-  });
+  const bindableSuppliers = suppliers.filter((supplier) => supplierMatchesUserRole(supplier, form.role));
   const selectedSupplier = bindableSuppliers.find((supplier) => supplier.id === form.supplierId) || null;
   const passwordError = form.password && !passwordMeetsPolicy(form.password) ? PASSWORD_POLICY_MESSAGE : "";
   const defaults = permissionDefaultsForRole(permissionConfig, form.role);
@@ -2873,7 +2875,7 @@ function UserEditPanel({
               {!bindableSuppliers.length ? (
                 <small className={styles.mutedText}>
                   {FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(form.role)
-                    ? "请先在供应商资料中建立产品供应商并开启资料回传权限"
+                    ? "请先在供应商资料中建立产品供应商"
                     : "请先在供应商资料中启用物流相关供应商"}
                 </small>
               ) : null}
@@ -3340,7 +3342,7 @@ function userStatus(user: UserRow) {
 
 function supplierDisplayName(user: UserRow) {
   const name = user.supplierName || "";
-  const type = user.supplierType || "";
+  const type = supplierTypeLabel(user.supplierType);
   if (name && type) return `${name} / ${type}`;
   return name || type || "";
 }
@@ -3352,13 +3354,21 @@ function isSupplierAccountRole(role: unknown) {
 function supplierMatchesUserRole(supplier: SupplierRow | undefined, role: string) {
   if (!supplier) return false;
   if (role === "物流供应商") return LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || "");
-  if (FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(role)) return PRODUCT_SUPPLIER_TYPES.includes(supplier.supplierType || "") && Boolean(supplier.allowFactoryDocumentUpload);
+  if (FACTORY_SUPPLIER_ACCOUNT_ROLES.includes(role)) return PRODUCT_SUPPLIER_TYPES.includes(supplier.supplierType || "");
   return false;
 }
 
 function supplierOptionLabel(supplier: SupplierRow) {
   const name = supplier.supplierName || "未命名供应商";
-  return supplier.supplierType ? `${name} / ${supplier.supplierType}` : name;
+  const type = supplierTypeLabel(supplier.supplierType);
+  return type ? `${name} / ${type}` : name;
+}
+
+function supplierTypeLabel(value: unknown) {
+  const supplierType = String(value || "");
+  if (PRODUCT_SUPPLIER_TYPES.includes(supplierType)) return PRODUCT_SUPPLIER_TYPE;
+  if (supplierType === LOGISTICS_SUPPLIER_TYPE_CODE) return "物流供应商";
+  return supplierType;
 }
 
 function salespersonOptionLabel(user: SalespersonOption) {
@@ -3458,7 +3468,7 @@ function supplierFormFromRow(supplier: SupplierRow): SupplierForm {
   return {
     id: supplier.id,
     supplierName: supplier.supplierName || "",
-    supplierType: supplier.supplierType || "其他供应商",
+    supplierType: supplierTypeLabel(supplier.supplierType) || "其他供应商",
     status: supplier.status || "启用",
     country: supplier.country || "",
     contactPerson: supplier.contactPerson || "",

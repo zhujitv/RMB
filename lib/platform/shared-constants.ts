@@ -72,11 +72,13 @@ export {
 export const LOGISTICS_OPERATOR_ROLE = "物流供应商";
 export const PRODUCT_SUPPLIER_TYPE = "产品供应商";
 export const LEGACY_FACTORY_SUPPLIER_TYPE = "工厂供应商";
+export const PRODUCT_SUPPLIER_TYPE_CODE = "PRODUCT";
+export const LOGISTICS_SUPPLIER_TYPE_CODE = "LOGISTICS";
 export const PRODUCT_SUPPLIER_OPERATOR_ROLE = "产品供应商";
 export const LEGACY_PRODUCT_SUPPLIER_OPERATOR_ROLE = `${PRODUCT_SUPPLIER_OPERATOR_ROLE}账号`;
 export const LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE = "工厂供应商账号";
 export const FACTORY_SUPPLIER_OPERATOR_ROLE = PRODUCT_SUPPLIER_OPERATOR_ROLE;
-export const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE];
+export const PRODUCT_SUPPLIER_TYPES = [PRODUCT_SUPPLIER_TYPE, LEGACY_FACTORY_SUPPLIER_TYPE, PRODUCT_SUPPLIER_TYPE_CODE];
 export const PRODUCT_SUPPLIER_OPERATOR_ROLES = [PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_PRODUCT_SUPPLIER_OPERATOR_ROLE, LEGACY_FACTORY_SUPPLIER_OPERATOR_ROLE];
 export const LEGACY_LOGISTICS_OPERATOR_ROLE = "物流资料录入员";
 export const ROLES = ["管理员", "业务员", "财务", LOGISTICS_OPERATOR_ROLE, FACTORY_SUPPLIER_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE];
@@ -90,7 +92,10 @@ export function isProductSupplierOperatorRole(value: unknown = "") {
 }
 
 export function supplierTypeDisplayName(value: unknown = "") {
-  return String(value || "") === LEGACY_FACTORY_SUPPLIER_TYPE ? PRODUCT_SUPPLIER_TYPE : String(value || "");
+  const supplierType = String(value || "");
+  if (supplierType === LEGACY_FACTORY_SUPPLIER_TYPE || supplierType === PRODUCT_SUPPLIER_TYPE_CODE) return PRODUCT_SUPPLIER_TYPE;
+  if (supplierType === LOGISTICS_SUPPLIER_TYPE_CODE) return "物流供应商";
+  return supplierType;
 }
 
 export function userRoleDisplayName(value: unknown = "") {
@@ -99,7 +104,10 @@ export function userRoleDisplayName(value: unknown = "") {
 }
 
 export function supplierTypeStorageValue(value: unknown = "") {
-  return String(value || "") === LEGACY_FACTORY_SUPPLIER_TYPE ? PRODUCT_SUPPLIER_TYPE : String(value || "");
+  const supplierType = String(value || "");
+  if (supplierType === LEGACY_FACTORY_SUPPLIER_TYPE || supplierType === PRODUCT_SUPPLIER_TYPE_CODE) return PRODUCT_SUPPLIER_TYPE;
+  if (supplierType === LOGISTICS_SUPPLIER_TYPE_CODE) return "物流供应商";
+  return supplierType;
 }
 export const USER_APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "DISABLED"];
 export const CURRENCIES = ["USD", "EUR", "GBP", "CNY", "HKD"];
@@ -128,7 +136,7 @@ export const SEA_FREIGHT_REQUIRED_TRADE_TERMS = ["CIF", "CFR"];
 export const TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_SEA_20260607";
 export const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.flatMap((item) => item.costTypes);
 export const TAX_REFUND_LOGISTICS_INVOICE_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
-export const DOMESTIC_LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
+export const DOMESTIC_LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", LOGISTICS_SUPPLIER_TYPE_CODE];
 export const DOMESTIC_LOGISTICS_TRANSPORT_TYPES = ["TRUCK", "EXPRESS", "MULTIMODAL", "BULK_WAREHOUSE"];
 export const DOMESTIC_LOGISTICS_TRANSPORT_LABELS = {
   TRUCK: "车辆运输",

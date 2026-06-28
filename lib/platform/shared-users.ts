@@ -695,13 +695,10 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(supplierId);
     if (role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
-      throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定物流供应商", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("产品供应商只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
-    }
-    if (isProductSupplierOperatorRole(role) && !supplier.allowFactoryDocumentUpload) {
-      throw codedError("产品供应商绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
+      throw codedError("当前角色只能绑定产品供应商", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
     }
     data.supplierId = supplier.id;
   }
@@ -755,13 +752,10 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
     const { assertSupplierActive } = await import("./supplier-masters");
     const supplier = await assertSupplierActive(before.supplierId);
     if (before.role === LOGISTICS_OPERATOR_ROLE && !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
-      throw codedError("物流供应商账号只能绑定物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
+      throw codedError("当前角色只能绑定物流供应商", 400, "LOGISTICS_USER_SUPPLIER_TYPE_INVALID");
     }
     if (isProductSupplierOperatorRole(before.role) && !isProductSupplierType(supplier.supplierType)) {
-      throw codedError("产品供应商只能绑定产品供应商。", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
-    }
-    if (isProductSupplierOperatorRole(before.role) && !supplier.allowFactoryDocumentUpload) {
-      throw codedError("产品供应商绑定的供应商必须先开启资料回传权限。", 400, "FACTORY_USER_SUPPLIER_UPLOAD_DISABLED");
+      throw codedError("当前角色只能绑定产品供应商", 400, "FACTORY_USER_SUPPLIER_TYPE_INVALID");
     }
   }
   const user = await prisma.user.update({

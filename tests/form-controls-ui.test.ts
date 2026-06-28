@@ -170,6 +170,26 @@ test("user permissions reuse unified card multi-select options", () => {
   assert.match(workspaceStyles, /@media \(max-width: 520px\) \{[\s\S]*\.permissionOptionGrid \{[\s\S]*grid-template-columns: 1fr;/);
 });
 
+test("user supplier binding follows the currently selected role", () => {
+  const saveUserSnippet = settingsModule.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
+  const userPanelIndex = settingsModule.indexOf("function UserEditPanel");
+  const userPanelSnippet = settingsModule.slice(userPanelIndex, userPanelIndex + 7600);
+  const supplierMatchSnippet = settingsModule.match(/function supplierMatchesUserRole[\s\S]*?\n}\n\nfunction supplierOptionLabel/)?.[0] || "";
+
+  assert.match(settingsModule, /LOGISTICS_SUPPLIER_TYPE_CODE = "LOGISTICS"/);
+  assert.match(settingsModule, /PRODUCT_SUPPLIER_TYPE_CODE = "PRODUCT"/);
+  assert.match(userPanelSnippet, /const bindableSuppliers = suppliers\.filter\(\(supplier\) => supplierMatchesUserRole\(supplier, form\.role\)\)/);
+  assert.match(userPanelSnippet, /supplierId: role === form\.role && isSupplierAccountRole\(role\) \? form\.supplierId : ""/);
+  assert.match(saveUserSnippet, /supplierId: isSupplierAccountRole\(userForm\.role\) \? userForm\.supplierId : ""/);
+  assert.match(saveUserSnippet, /当前角色只能绑定产品供应商/);
+  assert.match(saveUserSnippet, /当前角色只能绑定物流供应商/);
+  assert.match(supplierMatchSnippet, /if \(role === "物流供应商"\) return LOGISTICS_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\)/);
+  assert.match(supplierMatchSnippet, /if \(FACTORY_SUPPLIER_ACCOUNT_ROLES\.includes\(role\)\) return PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\)/);
+  assert.match(settingsModule, /function supplierTypeLabel/);
+  assert.match(settingsModule, /supplierTypeLabel\(supplier\.supplierType\)/);
+  assert.doesNotMatch(supplierMatchSnippet, /allowFactoryDocumentUpload/);
+});
+
 test("user list detail action opens the inline user editor directly", () => {
   const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);

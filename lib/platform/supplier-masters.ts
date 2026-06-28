@@ -3,7 +3,9 @@ import type { Prisma } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
   LEGACY_FACTORY_SUPPLIER_TYPE,
+  LOGISTICS_SUPPLIER_TYPE_CODE,
   LOGISTICS_OPERATOR_ROLE,
+  PRODUCT_SUPPLIER_TYPE_CODE,
   PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_STATUSES,
   SUPPLIER_TYPES,
@@ -149,7 +151,10 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     throw codedError("供应商名称已存在，不能重复创建", 409, "SUPPLIER_DUPLICATE");
   }
   const requestedSupplierType = nonEmpty(input.supplierType);
-  const supplierType = SUPPLIER_TYPES.includes(requestedSupplierType) || requestedSupplierType === LEGACY_FACTORY_SUPPLIER_TYPE
+  const supplierType = SUPPLIER_TYPES.includes(requestedSupplierType) ||
+    requestedSupplierType === LEGACY_FACTORY_SUPPLIER_TYPE ||
+    requestedSupplierType === PRODUCT_SUPPLIER_TYPE_CODE ||
+    requestedSupplierType === LOGISTICS_SUPPLIER_TYPE_CODE
     ? supplierTypeStorageValue(requestedSupplierType)
     : "其他供应商";
   const allowDomesticLogisticsEntry = booleanInput(input.allowDomesticLogisticsEntry, before?.allowDomesticLogisticsEntry || false);
