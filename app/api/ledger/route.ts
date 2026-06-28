@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, canRead, getActor, getOverview, listOrders, listPayments, ok, requireAdminGlobal } from "../../../lib/platform-db";
+import { apiError, canRead, getOverview, listOrders, listPayments, ok, requireAdminGlobal } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +10,7 @@ const listPaymentsTyped = listPayments as (query: URLSearchParams, actor: unknow
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = (await getActor(request))!;
+    const actor = (await requireApiActor(request))!;
     requireAdminGlobal(actor, "无权限访问经营总览");
     const query = new URL(request.url).searchParams;
     const [overview, orders, payments] = await Promise.all([

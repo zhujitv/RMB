@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteLogisticsExpenseInvoice, getActor, parseJsonBody, uploadLogisticsExpenseInvoice } from "../../../../../lib/platform-db";
+import { apiError, deleteLogisticsExpenseInvoice, parseJsonBody, uploadLogisticsExpenseInvoice } from "../../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,7 @@ type RouteContext = {
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const formData = await request.formData();
     const result = await uploadLogisticsExpenseInvoice(request, actor, id, formData);
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const body = await parseJsonBody(request, { allowEmpty: true });
     const result = await deleteLogisticsExpenseInvoice(request, actor, id, body);

@@ -1,5 +1,19 @@
 import type { NextRequest } from "next/server";
-import { apiError, currentSessionInfo, getActor, getCompanyProfileSettings, logServerError, logServerTiming, ok, publicUser, ROLES, rolePermissions, roleScopeText, timeServerStep } from "../../../../lib/platform-db";
+import {
+  apiError,
+  currentSessionInfo,
+  getCompanyProfileSettings,
+  logServerError,
+  logServerTiming,
+  ok,
+  publicUser,
+  ROLES,
+  rolePermissions,
+  roleScopeText,
+  timeServerStep,
+} from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +29,8 @@ export async function GET(request: NextRequest) {
   let outcome = "unknown";
   let role = "";
   try {
-    const user = await timeServerStep("workbench-init-timing", "authMe.getActor", () => (
-      getActor(request, { allowPasswordChangeRequired: true })
+    const user = await timeServerStep("workbench-init-timing", "authMe.requireApiActor", () => (
+      requireApiActor(request, { allowPasswordChangeRequired: true })
     ));
     role = user?.role || "";
     const [session, companyProfile] = await timeServerStep("workbench-init-timing", "authMe.parallelSessionAndCompanyProfile", () => Promise.all([

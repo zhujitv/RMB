@@ -1,5 +1,17 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, listCostInvoiceExceptions, listCostInvoiceGroups, listCostOrderSummaries, listCostsPage, ok, parseJsonBody, saveCost, saveCosts } from "../../../lib/platform-db";
+import {
+  apiError,
+  listCostInvoiceExceptions,
+  listCostInvoiceGroups,
+  listCostOrderSummaries,
+  listCostsPage,
+  ok,
+  parseJsonBody,
+  saveCost,
+  saveCosts,
+} from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +50,7 @@ const listCostInvoiceGroupsTyped = listCostInvoiceGroups as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const view = query.get("view");
     const data = view === "orders"
@@ -56,7 +68,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request) as { items?: unknown[] } & Record<string, unknown>;
     if (Array.isArray(body.items)) {
       return ok({ success: true, costs: await saveCostsTyped(request, actor, body) });

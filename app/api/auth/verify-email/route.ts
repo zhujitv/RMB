@@ -36,7 +36,7 @@ function htmlPage(title: string, message: string, ok = true) {
 export async function GET(request: NextRequest) {
   try {
     const token = new URL(request.url).searchParams.get("token") || "";
-    await verifyRegistrationEmail(token);
+    await verifyRegistrationEmail(token, request);
     return htmlPage("邮箱验证成功", "邮箱已完成验证。管理员审核通过后，您即可登录 NEXTWOOD 供应链协同平台。");
   } catch (error: unknown) {
     const response = apiError(error, "邮箱验证失败");

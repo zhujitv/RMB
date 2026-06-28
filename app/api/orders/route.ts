@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listOrders, ok, parseJsonBody, saveOrder } from "../../../lib/platform-db";
+import { apiError, listOrders, ok, parseJsonBody, saveOrder } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,7 @@ const listOrdersTyped = listOrders as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const paginated = query.get("workspace") === "1" || query.has("page") || query.has("pageSize");
     const result = await listOrdersTyped(query, actor, { paginated });
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const order = await saveOrderTyped(request, actor, body);
     return NextResponse.json({

@@ -13,6 +13,15 @@ type AuditUserLike = {
   id?: string | null;
 } | null | undefined;
 
+type AuthAuditInput = {
+  action: string;
+  userId?: string | null;
+  loginIdHash?: string | null;
+  success: boolean;
+  reason?: string | null;
+  details?: Record<string, unknown> | null;
+};
+
 type FilterCost = {
   supplierName?: string | null;
   vendorName?: string | null;
@@ -87,6 +96,29 @@ export async function writeAudit(
       ipAddress: requestIp(request),
     },
   });
+}
+
+export async function writeAuthAudit(request: AuditRequestLike, input: AuthAuditInput) {
+  const entityId = input.userId || input.loginIdHash || null;
+  try {
+    await writeAudit(
+      request,
+      input.userId ? { id: input.userId } : null,
+      input.action,
+      "auth_events",
+      entityId,
+      null,
+      {
+        success: input.success,
+        reason: input.reason || "",
+        loginIdHash: input.loginIdHash || "",
+        ...(input.details || {}),
+      },
+    );
+  } catch {
+    // Auth audit is important, but login and verification flows must not fail
+    // solely because the audit sink is temporarily unavailable.
+  }
 }
 
 export function applyCommonFilters<T extends FilterRow>(rows: T[], query: URLSearchParams): T[] {

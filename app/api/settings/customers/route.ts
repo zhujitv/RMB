@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, listCustomerSalespeople, listCustomers, ok } from "../../../../lib/platform-db";
+import { apiError, listCustomerSalespeople, listCustomers, ok } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const listCustomersPageTyped = listCustomers as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const [page, salespeople] = await Promise.all([
       listCustomersPageTyped(query, actor, { paginated: true }),

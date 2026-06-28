@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listPayments, ok, parseJsonBody, savePayment } from "../../../lib/platform-db";
+import { apiError, listPayments, ok, parseJsonBody, savePayment } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,7 @@ const listPaymentsTyped = listPayments as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const paginated = query.get("workspace") === "1" || query.has("page") || query.has("pageSize");
     const result = await listPaymentsTyped(query, actor, { paginated });
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const payment = await savePaymentTyped(request, actor, body);
     return NextResponse.json({ success: true, payment, message: "收款已保存" }, { status: 201 });

@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, parseJsonBody, saveUser, updateUserStatus } from "../../../../lib/platform-db";
+import { apiError, ok, parseJsonBody, saveUser, updateUserStatus } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const saveUserTyped = saveUser as (
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const user = await saveUserTyped(request, actor, body, id);
     return ok({ success: true, user, message: "用户已保存" });
@@ -29,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const user = await updateUserStatus(request, actor, id, "DISABLED");
     return ok({ success: true, ok: true, user, message: "用户已停用" });
   } catch (error: unknown) {

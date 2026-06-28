@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteSupplier, getActor, ok, parseJsonBody, saveSupplier } from "../../../../lib/platform-db";
+import { apiError, deleteSupplier, ok, parseJsonBody, saveSupplier } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const saveSupplierTyped = saveSupplier as (
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const supplier = await saveSupplierTyped(request, actor, body, id);
     return ok({ success: true, supplier, message: "供应商已保存" });
@@ -29,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     await deleteSupplier(request, actor, id);
     return ok({ success: true, ok: true, message: "供应商已删除" });
   } catch (error: unknown) {

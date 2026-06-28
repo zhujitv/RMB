@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, buildTaxRefundPackage, getActor, requireText } from "../../../../lib/platform-db";
+import { apiError, buildTaxRefundPackage, requireText } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const { buffer, fileName } = await buildTaxRefundPackage(
       request,

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteOrder, getActor, getOrder, ok, parseJsonBody, saveOrder } from "../../../../lib/platform-db";
+import { apiError, deleteOrder, getOrder, ok, parseJsonBody, saveOrder } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,7 @@ const saveOrderTyped = saveOrder as (
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     return ok({ order: await getOrder(id, actor) });
   } catch (error: unknown) {
     return apiError(error, "读取应收订单失败");
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const order = await saveOrderTyped(request, actor, body, id);
     return NextResponse.json({
@@ -56,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     await deleteOrder(request, actor, id);
     return ok({ ok: true });
   } catch (error: unknown) {

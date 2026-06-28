@@ -1,12 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listDomesticLogisticsOrders, logServerError, ok, parseJsonBody, readShipsgoFeatureFlags, saveDomesticLogisticsInfo } from "../../../lib/platform-db";
+import {
+  apiError,
+  listDomesticLogisticsOrders,
+  logServerError,
+  ok,
+  parseJsonBody,
+  readShipsgoFeatureFlags,
+  saveDomesticLogisticsInfo,
+} from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  let actor: Awaited<ReturnType<typeof getActor>>;
+  let actor: Awaited<ReturnType<typeof requireApiActor>>;
   try {
-    actor = await getActor(request);
+    actor = await requireApiActor(request);
   } catch (error: unknown) {
     return apiError(error, "读取物流信息失败");
   }
@@ -25,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const info = await saveDomesticLogisticsInfo(request, actor, body);
     return NextResponse.json({ success: true, info, message: "物流信息已提交" }, { status: 201 });

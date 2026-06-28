@@ -1,5 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, assertPdfUploadFileCandidate, codedError, getActor, listOrderDocuments, logServerError, ok, uploadOrderDocument } from "../../../lib/platform-db";
+import {
+  apiError,
+  assertPdfUploadFileCandidate,
+  codedError,
+  listOrderDocuments,
+  logServerError,
+  ok,
+  uploadOrderDocument,
+} from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +37,7 @@ type UploadFailureContext = {
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     return ok({ documents: await listOrderDocuments(query, actor) });
   } catch (error: unknown) {
@@ -41,7 +51,7 @@ export async function POST(request: NextRequest) {
   let documentType = "";
   let file: File | null = null;
   try {
-    actor = await getActor(request);
+    actor = await requireApiActor(request);
     const formData = await request.formData();
     const candidate = formData.get("file");
     orderId = String(formData.get("orderId") || "").trim();

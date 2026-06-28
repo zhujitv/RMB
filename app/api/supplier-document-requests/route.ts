@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, createSupplierDocumentRequest, getActor, listSupplierDocumentRequests, ok } from "../../../lib/platform-db";
+import { apiError, createSupplierDocumentRequest, listSupplierDocumentRequests, ok } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -7,7 +9,7 @@ export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const result = await listSupplierDocumentRequests(query, actor);
     return ok({
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const formData = await request.formData();
     const requestRow = await createSupplierDocumentRequest(request, actor, {
       orderId: String(formData.get("orderId") || ""),

@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteLogisticsExpense, getActor, ok } from "../../../../lib/platform-db";
+import { apiError, deleteLogisticsExpense, ok } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,7 @@ type RouteContext = {
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const expense = await deleteLogisticsExpense(request, actor, id);
     return ok({ success: true, expense, message: "已删除" });

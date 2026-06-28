@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteCustomer, getActor, ok, parseJsonBody, saveCustomer } from "../../../../lib/platform-db";
+import { apiError, deleteCustomer, ok, parseJsonBody, saveCustomer } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const saveCustomerTyped = saveCustomer as (
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const customer = await saveCustomerTyped(request, actor, body, id);
     return ok({
@@ -33,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     await deleteCustomer(request, actor, id);
     return ok({ ok: true });
   } catch (error: unknown) {

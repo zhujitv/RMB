@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, getActor, listSuppliers, ok, parseJsonBody, saveSupplier } from "../../../lib/platform-db";
+import { apiError, listSuppliers, ok, parseJsonBody, saveSupplier } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ const listSuppliersTyped = listSuppliers as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     return ok({ suppliers: await listSuppliersTyped(new URL(request.url).searchParams, actor) });
   } catch (error: unknown) {
     return apiError(error, "读取供应商失败");
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const supplier = await saveSupplierTyped(request, actor, body);
     return NextResponse.json({ success: true, supplier, message: "供应商已保存" }, { status: 201 });

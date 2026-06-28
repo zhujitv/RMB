@@ -2,6 +2,7 @@ export {
   SENSITIVE_AUDIT_KEY_PATTERN,
   sanitizeAuditData,
   writeAudit,
+  writeAuthAudit,
   applyCommonFilters,
 } from "./shared-audit";
 export {

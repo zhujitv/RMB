@@ -7,13 +7,14 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/auth/register/route.ts",
   "app/api/auth/verify-email/route.ts",
   "app/api/company-profile/route.ts",
-  "app/api/storage/health/route.ts",
   "app/api/shipsgo/webhook/route.ts",
   "app/api/cron/exchange-rates/route.ts",
   "app/api/cron/shipsgo-sync/route.ts",
 ]);
 const AUTH_PATTERNS = [
-  /\bgetActor\b/,
+  /\brequireApiActor\b/,
+  /\brequireApiRead\b/,
+  /\brequireApiWrite\b/,
   /\bwithApiAuth\b/,
   /\bwithApiRead\b/,
   /\bwithApiWrite\b/,
@@ -75,6 +76,10 @@ const unauthenticatedRoutes = apiRoutes.filter((file) => {
 if (unauthenticatedRoutes.length) {
   fail("API routes missing explicit auth or approved public classification.", unauthenticatedRoutes);
 }
+const directGetActorRoutes = apiRoutes.filter((file) => /\bgetActor\b/.test(readFileSync(file, "utf8")));
+if (directGetActorRoutes.length) {
+  fail("API routes must use lib/api-route-guard instead of calling getActor directly.", directGetActorRoutes);
+}
 
 const dangerousHits = [];
 for (const file of sourceFiles) {
@@ -91,6 +96,7 @@ if (dangerousHits.length) {
 assertSourceContains("lib/platform/upload-validation.ts", /MAX_PDF_UPLOAD_BYTES/, "PDF upload size validation is missing.");
 assertSourceContains("lib/platform/upload-validation.ts", /PDF_ACTIVE_CONTENT_NOT_ALLOWED/, "PDF active-content rejection is missing.");
 assertSourceContains("lib/platform/shared-audit.ts", /sanitizeAuditData/, "Audit log sanitization is missing.");
+assertSourceContains("lib/platform/shared-audit.ts", /writeAuthAudit/, "Auth audit logging helper is missing.");
 assertSourceContains("lib/platform/shared-base-utils.ts", /SENSITIVE_LOG_KEY_PATTERN/, "Server log redaction is missing.");
 assertSourceContains("tests/permission-hardening.test.ts", /SECURITY_ROLE_MATRIX/, "Permission matrix regression test is missing.");
 

@@ -18,6 +18,7 @@ import {
   sha256Hex,
   upgradePasswordHash,
   verifyPassword,
+  writeAuthAudit,
 } from "../../../../lib/platform-db";
 import { passwordMeetsPolicy } from "../../../../lib/password-policy";
 import { prisma } from "../../../../lib/prisma";
@@ -82,6 +83,16 @@ function loginAuditContext(reason: string, email: string, userId?: string | null
   };
 }
 
+function recordLoginAudit(request: NextRequest, action: string, success: boolean, reason: string, email: string, userId?: string | null) {
+  void writeAuthAudit(request, {
+    action,
+    success,
+    reason,
+    userId,
+    loginIdHash: sha256Hex(email).slice(0, 16),
+  });
+}
+
 function classifyLoginServiceError(error: ErrorLike) {
   const code = String(error?.code || "");
   const message = String(error?.message || "");
@@ -121,6 +132,7 @@ export async function POST(request: NextRequest) {
     if (isUnsafeDefaultAdminEmail(email)) {
       await recordLoginAttempt(request, email, false, null);
       logSecurityEvent("login failed", loginAuditContext("default_admin_disabled", email));
+      recordLoginAudit(request, "登录失败", false, "default_admin_disabled", email);
       return loginFailure("默认管理员账号已禁用，请使用公司管理员账号登录。", 403, "DEFAULT_ADMIN_DISABLED");
     }
     let user = await prisma.user.findFirst({
@@ -130,32 +142,38 @@ export async function POST(request: NextRequest) {
     if (!user) {
       logSecurityEvent("login failed", loginAuditContext("user_not_found", email));
       await recordLoginAttemptTyped(request, email, false, null);
+      recordLoginAudit(request, "登录失败", false, "user_not_found", email);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (!(await verifyPassword(body.password || "", user.passwordHash))) {
       logSecurityEvent("login failed", loginAuditContext("wrong_password", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
+      recordLoginAudit(request, "登录失败", false, "wrong_password", email, user.id);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
     if (user.emailVerified === false) {
       logSecurityEvent("login failed", loginAuditContext("email_not_verified", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
+      recordLoginAudit(request, "登录失败", false, "email_not_verified", email, user.id);
       return loginFailure("请先完成邮箱验证", 403, "EMAIL_NOT_VERIFIED");
     }
     const approvalStatus = user.approvalStatus || (user.isActive ? "APPROVED" : "DISABLED");
     if (approvalStatus === "PENDING") {
       logSecurityEvent("login failed", loginAuditContext("user_pending_approval", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
+      recordLoginAudit(request, "登录失败", false, "user_pending_approval", email, user.id);
       return loginFailure("账号正在等待管理员审核", 403, "USER_PENDING_APPROVAL");
     }
     if (approvalStatus === "REJECTED") {
       logSecurityEvent("login failed", loginAuditContext("user_rejected", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
+      recordLoginAudit(request, "登录失败", false, "user_rejected", email, user.id);
       return loginFailure("账号审核未通过，请联系管理员。", 403, "USER_REJECTED");
     }
     if (!user.isActive || approvalStatus === "DISABLED") {
       logSecurityEvent("login failed", loginAuditContext("user_disabled", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id);
+      recordLoginAudit(request, "登录失败", false, "user_disabled", email, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
     const currentPasswordMeetsPolicy = passwordMeetsPolicy(body.password || "");
@@ -195,6 +213,7 @@ export async function POST(request: NextRequest) {
     if (!safeUser) {
       throw new Error("登录成功后未能生成公开用户信息。");
     }
+    recordLoginAudit(request, "登录成功", true, safeUser.mustChangePassword ? "password_change_required" : "authenticated", email, user.id);
     const passwordChangeMessage = currentPasswordMeetsPolicy
       ? "请先修改初始密码"
       : "当前密码安全强度不足，请先修改密码后继续使用平台。";

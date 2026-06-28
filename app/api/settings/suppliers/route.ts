@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, listSuppliers, ok } from "../../../../lib/platform-db";
+import { apiError, listSuppliers, ok } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,7 @@ const listSuppliersPageTyped = listSuppliers as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const page = await listSuppliersPageTyped(query, actor, false, { paginated: true });
     return ok({

@@ -3,6 +3,8 @@ import { apiError } from "./platform/shared-base-utils";
 import { assertRead, assertWrite, type AccessUser } from "./platform/shared-access";
 import { getActor } from "./platform/shared-auth";
 
+type GetActorOptions = Parameters<typeof getActor>[1];
+type ApiActorRequest = Parameters<typeof getActor>[0];
 type RouteContext = unknown;
 type GuardedHandler<Context = RouteContext> = (
   request: NextRequest,
@@ -14,6 +16,22 @@ type ApiGuardOptions = {
   errorMessage: string;
   allowPasswordChangeRequired?: boolean;
 };
+
+export async function requireApiActor(request: ApiActorRequest, options?: GetActorOptions) {
+  return getActor(request, options);
+}
+
+export async function requireApiRead(request: ApiActorRequest, area: string, options?: GetActorOptions) {
+  const actor = await requireApiActor(request, options);
+  assertRead(actor, area);
+  return actor;
+}
+
+export async function requireApiWrite(request: ApiActorRequest, area: string, options?: GetActorOptions) {
+  const actor = await requireApiActor(request, options);
+  assertWrite(actor, area);
+  return actor;
+}
 
 export function withApiAuth<Context = RouteContext>(
   handler: GuardedHandler<Context>,

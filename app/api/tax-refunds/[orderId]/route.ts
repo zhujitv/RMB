@@ -1,5 +1,21 @@
 import type { NextRequest } from "next/server";
-import { apiError, cancelTaxRefundArchive, getActor, getTaxRefundOrderDetail, ok, parseJsonBody, prepareManualShippingDocumentsNotification, previewCustomsRecognition, reparseCustomsRecognition, requireText, resendShippingDocumentsNotification, sendManualShippingDocumentsNotification, updateCustomsRecognition, updateTaxRefundStatus } from "../../../../lib/platform-db";
+import {
+  apiError,
+  cancelTaxRefundArchive,
+  getTaxRefundOrderDetail,
+  ok,
+  parseJsonBody,
+  prepareManualShippingDocumentsNotification,
+  previewCustomsRecognition,
+  reparseCustomsRecognition,
+  requireText,
+  resendShippingDocumentsNotification,
+  sendManualShippingDocumentsNotification,
+  updateCustomsRecognition,
+  updateTaxRefundStatus,
+} from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +31,7 @@ type TaxRefundPatchBody = Record<string, unknown> & {
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { orderId } = await params;
     return ok({ order: await getTaxRefundOrderDetail(orderId, actor) });
   } catch (error: unknown) {
@@ -25,7 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { orderId } = await params;
     const body = await parseJsonBody(request) as TaxRefundPatchBody;
     if (body.cancelArchive === true) {

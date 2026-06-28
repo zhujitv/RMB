@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteCost, getActor, getCost, ok, parseJsonBody, saveCost } from "../../../../lib/platform-db";
+import { apiError, deleteCost, getCost, ok, parseJsonBody, saveCost } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ const getCostTyped = getCost as (id: string, actor: unknown) => Promise<unknown>
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     return ok({ success: true, cost: await getCostTyped(id, actor) });
   } catch (error: unknown) {
     return apiError(error, "读取成本详情失败");
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     return ok({ success: true, cost: await saveCostTyped(request, actor, body, id) });
   } catch (error: unknown) {
@@ -40,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const result = await deleteCost(request, actor, id);
     return ok({ success: true, ok: true, ...result });
   } catch (error: unknown) {

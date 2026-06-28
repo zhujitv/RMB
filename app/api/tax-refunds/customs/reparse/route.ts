@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError, getActor, ok, parseJsonBody, previewCustomsRecognition, requireText } from "../../../../../lib/platform-db";
+import { apiError, codedError, ok, parseJsonBody, previewCustomsRecognition, requireText } from "../../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const orderId = requireText(body.orderId, "订单ID");
     const documentId = requireText(body.documentId, "报关单文件ID");

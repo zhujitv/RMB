@@ -126,18 +126,27 @@ test("api rate limiting supports distributed redis with memory fallback", () => 
 });
 
 test("sensitive api routes use the shared auth and permission wrapper", () => {
+  const directGetActorRoutes = apiRouteSources
+    .filter(([, source]) => /\bgetActor\b/.test(source))
+    .map(([file]) => file);
   assert.match(apiRouteGuard, /export function withApiAuth/);
   assert.match(apiRouteGuard, /export function withApiPermission/);
   assert.match(apiRouteGuard, /export function withApiRead/);
   assert.match(apiRouteGuard, /export function withApiWrite/);
+  assert.match(apiRouteGuard, /export async function requireApiActor/);
+  assert.match(apiRouteGuard, /export async function requireApiRead/);
+  assert.match(apiRouteGuard, /export async function requireApiWrite/);
   assert.match(apiRouteGuard, /const actor = await getActor/);
   assert.match(apiRouteGuard, /assertRead\(actor, area\)/);
   assert.match(apiRouteGuard, /assertWrite\(actor, area\)/);
   assert.match(reportsRoute, /withApiRead\("reports"/);
   assert.match(reportExportRoute, /withApiRead\("reports"/);
   assert.match(settingsUsersRoute, /withApiRead\("users"/);
+  assert.match(orderDocumentsRoute, /requireApiActor\(request\)/);
   assert.doesNotMatch(reportsRoute, /const actor = await getActor/);
   assert.doesNotMatch(settingsUsersRoute, /const actor = await getActor/);
+  assert.deepEqual(directGetActorRoutes, [], "API routes must use lib/api-route-guard instead of getActor directly");
+  assert.match(securityAuditScript, /directGetActorRoutes/);
 });
 
 test("production CSP removes unsafe inline and local development connect sources", () => {

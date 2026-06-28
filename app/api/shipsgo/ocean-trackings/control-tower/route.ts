@@ -1,16 +1,17 @@
 import type { NextRequest } from "next/server";
 import {
   apiError,
-  getActor,
   listShipsgoControlTowerTrackings,
   ok,
 } from "../../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const result = await listShipsgoControlTowerTrackings(new URL(request.url).searchParams, actor);
     return ok({ success: true, ...result });
   } catch (error) {

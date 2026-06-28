@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertRead, getActor, getAuditLogs, ok } from "../../../lib/platform-db";
+import { apiError, assertRead, getAuditLogs, ok } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     assertRead(actor, "auditLogs");
     return ok({ logs: await getAuditLogs(new URL(request.url).searchParams, { actor }) });
   } catch (error: unknown) {

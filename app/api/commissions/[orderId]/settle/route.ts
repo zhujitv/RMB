@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, ok, parseJsonBody, settleCommission } from "../../../../../lib/platform-db";
+import { apiError, ok, parseJsonBody, settleCommission } from "../../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,7 @@ type RouteContext = {
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { orderId } = await params;
     const body = await parseJsonBody(request, { allowEmpty: true });
     const order = await settleCommission(request, actor, orderId, body);

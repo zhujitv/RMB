@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError, getActor, logServerError, ok, parseJsonBody, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
+import { apiError, codedError, logServerError, ok, parseJsonBody, reviewLogisticsExpenseBills } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const result = await reviewLogisticsExpenseBills(request, actor, body);
     const message = result.message || (result.emailError

@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertRead, getActor, getAuditLogs, ok } from "../../../../lib/platform-db";
+import { apiError, assertRead, getAuditLogs, ok } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ const getAuditLogsTyped = getAuditLogs as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     assertRead(actor, "auditLogs");
     const query = new URL(request.url).searchParams;
     const page = await getAuditLogsTyped(query, { actor, paginated: true, defaultPageSize: 50 });

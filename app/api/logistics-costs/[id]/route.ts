@@ -1,5 +1,20 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError, confirmLogisticsExpenseInvoice, getActor, logServerError, ok, parseJsonBody, resendLogisticsExpenseInvoiceNotice, reviewLogisticsExpense, submitLogisticsExpenseBill, updateLogisticsExpense, updateLogisticsExpensePaymentStatus, withdrawLogisticsExpenseBill } from "../../../../lib/platform-db";
+import {
+  apiError,
+  codedError,
+  confirmLogisticsExpenseInvoice,
+  logServerError,
+  ok,
+  parseJsonBody,
+  resendLogisticsExpenseInvoiceNotice,
+  reviewLogisticsExpense,
+  submitLogisticsExpenseBill,
+  updateLogisticsExpense,
+  updateLogisticsExpensePaymentStatus,
+  withdrawLogisticsExpenseBill,
+} from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +30,7 @@ type LogisticsExpenseBody = Record<string, unknown> & {
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const body = await parseJsonBody(request) as LogisticsExpenseBody;
     const reviewAction = body.action || body.reviewAction || body.auditAction || "";
@@ -65,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const result = await withdrawLogisticsExpenseBill(request, actor, id);
     return ok({ success: true, ...result, message: "物流费用账单已撤回为草稿" });
   } catch (error: unknown) {

@@ -1,13 +1,15 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertWrite, getActor, ok } from "../../../../lib/platform-db";
+import { apiError, assertWrite, ok } from "../../../../lib/platform-db";
 import { checkR2Storage } from "../../../../lib/r2";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     assertWrite(actor, "settings");
     return ok({ storage: await checkR2Storage() });
   } catch (error: unknown) {

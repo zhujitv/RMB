@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertWrite, getActor, getExchangeRateQuote, ok } from "../../../lib/platform-db";
+import { apiError, assertWrite, getExchangeRateQuote, ok } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ const getExchangeRateQuoteTyped = getExchangeRateQuote as (
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const query = new URL(request.url).searchParams;
     const forceRefresh = query.get("force") === "1";
     if (forceRefresh) assertWrite(actor, "exchangeRates");

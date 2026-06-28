@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
-import { apiError, getActor, getProfitAnalysis, listProfitAnalysisPage, logServerError, ok } from "../../../lib/platform-db";
+import { apiError, getProfitAnalysis, listProfitAnalysisPage, logServerError, ok } from "../../../lib/platform-db";
+
+import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  let actor: Awaited<ReturnType<typeof getActor>>;
+  let actor: Awaited<ReturnType<typeof requireApiActor>>;
   try {
-    actor = await getActor(request);
+    actor = await requireApiActor(request);
   } catch (error: unknown) {
     return apiError(error, "读取利润分析失败");
   }

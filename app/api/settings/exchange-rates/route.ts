@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
-import { apiError, assertRead, getActor, getExchangeRateSettings, ok } from "../../../../lib/platform-db";
+import { apiError, assertRead, getExchangeRateSettings, ok } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     assertRead(actor, "settings");
     return ok({ settings: await getExchangeRateSettings() });
   } catch (error: unknown) {

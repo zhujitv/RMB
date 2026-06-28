@@ -1,5 +1,12 @@
 import type { NextRequest } from "next/server";
-import { getActor, getOrderDocumentPreview, getOrderDocumentPreviewMetadata, pdfContentDispositionHeader, preferredOrderDocumentFileName } from "../../../../../lib/platform-db";
+import {
+  getOrderDocumentPreview,
+  getOrderDocumentPreviewMetadata,
+  pdfContentDispositionHeader,
+  preferredOrderDocumentFileName,
+} from "../../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,7 +36,7 @@ function previewErrorResponse(error: ErrorLike) {
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const { body, document, mimeType } = await getOrderDocumentPreview(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);
@@ -49,7 +56,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
 export async function HEAD(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const document = await getOrderDocumentPreviewMetadata(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);

@@ -1,10 +1,12 @@
-import { apiError, archiveDomesticLogisticsOrders, getActor, ok, parseJsonBody } from "../../../../lib/platform-db";
+import { apiError, archiveDomesticLogisticsOrders, ok, parseJsonBody } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const result = await archiveDomesticLogisticsOrders(request, actor, body);
     return ok({ ...result, message: `已归档 ${result.archivedCount} 个订单` });

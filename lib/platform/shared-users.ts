@@ -12,7 +12,7 @@ import {
   requireValidEmail,
   timeServerStep,
 } from "./shared-base-utils";
-import { writeAudit } from "./shared-audit";
+import { writeAudit, writeAuthAudit } from "./shared-audit";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
   INITIAL_ADMIN_EMAIL,
@@ -417,7 +417,7 @@ async function sendEmailVerification(request: AuditRequestLike, user: { id: stri
   });
 }
 
-export async function verifyRegistrationEmail(token: unknown) {
+export async function verifyRegistrationEmail(token: unknown, request: AuditRequestLike = null) {
   if (!String(token || "").trim()) throw codedError("邮箱验证链接无效。", 400, "EMAIL_VERIFICATION_TOKEN_INVALID");
   const tokenHash = verificationTokenHash(token);
   const row = await prisma.emailVerificationToken.findUnique({
@@ -441,6 +441,17 @@ export async function verifyRegistrationEmail(token: unknown) {
       select: USER_PUBLIC_SELECT,
     });
   });
+  await runNonCriticalTask("邮箱验证操作日志写入", () => writeAuthAudit(request, {
+    action: "邮箱验证成功",
+    success: true,
+    reason: "email_verified",
+    userId: updated.id,
+    loginIdHash: crypto.createHash("sha256").update(String(updated.email || "")).digest("hex").slice(0, 16),
+    details: {
+      approvalStatus: updated.approvalStatus,
+      emailVerified: updated.emailVerified,
+    },
+  }));
   return serializeUser(updated);
 }
 

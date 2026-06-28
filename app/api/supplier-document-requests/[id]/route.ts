@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteSupplierDocumentRequest, getActor } from "../../../../lib/platform-db";
+import { apiError, deleteSupplierDocumentRequest } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const result = await deleteSupplierDocumentRequest(request, actor, id);
     return NextResponse.json({

@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, canWrite, getActor, getExchangeRateSettings, ok, parseJsonBody, saveExchangeRateSettings } from "../../../../lib/platform-db";
+import { apiError, canWrite, getExchangeRateSettings, ok, parseJsonBody, saveExchangeRateSettings } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +9,7 @@ type ErrorWithStatus = Error & { status?: number; expose?: boolean };
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = (await getActor(request))!;
+    const actor = (await requireApiActor(request))!;
     if (actor.role !== "管理员" && !canWrite(actor, "exchangeRates")) {
       const error: ErrorWithStatus = new Error("没有权限查看汇率设置");
       error.status = 403;
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const settings = await saveExchangeRateSettings(request, actor, body);
     return ok({ success: true, settings, message: "汇率设置已保存" });

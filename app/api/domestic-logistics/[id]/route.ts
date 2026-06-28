@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { apiError, deleteDomesticLogisticsInfo, getActor, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../../lib/platform-db";
+import { apiError, deleteDomesticLogisticsInfo, ok, parseJsonBody, saveDomesticLogisticsInfo } from "../../../../lib/platform-db";
+
+import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ const saveDomesticLogisticsInfoTyped = saveDomesticLogisticsInfo as (
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     const body = await parseJsonBody(request);
     const info = await saveDomesticLogisticsInfoTyped(request, actor, body, id);
@@ -28,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await getActor(request);
+    const actor = await requireApiActor(request);
     const { id } = await params;
     await deleteDomesticLogisticsInfo(request, actor, id);
     return ok({ success: true, message: "物流信息已删除" });
