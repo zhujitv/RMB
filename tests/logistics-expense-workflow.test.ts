@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const backend = [
   readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
@@ -210,22 +211,23 @@ const domesticLogisticsModule = readFileSync(
   "app/modules/DomesticLogisticsModule.tsx",
   "utf8",
 );
-const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const settingsModule = readSettingsModuleSource();
 const notificationTemplateCardSource =
   settingsModule.match(
-    /function NotificationTemplateSettingsCard[\s\S]*?\n}\n\nfunction CustomerEditPanel/,
+    /export function NotificationTemplateSettingsCard[\s\S]*?\n}\n/,
   )?.[0] || "";
 const saveNotificationTemplateSource =
-  settingsModule.match(
+  settingsModuleMain.match(
     /async function saveNotificationTemplateSettings[\s\S]*?\n\n  return \(/,
   )?.[0] || "";
 const notificationTemplateFormSource =
   settingsModule.match(
-    /function notificationTemplateFormFromSettings[\s\S]*?\n}\n\nfunction commissionFormulaPreview/,
+    /export function notificationTemplateFormFromSettings[\s\S]*?\n}\n/,
   )?.[0] || "";
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
-const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
 const logisticsExpenseQueries = readFileSync(
   "lib/platform/logistics-expense-queries.ts",
   "utf8",

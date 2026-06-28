@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const previewRoute = readFileSync(
   "app/api/order-documents/[id]/preview/route.ts",
@@ -56,7 +57,7 @@ const sharedSerialization = readFileSync(
   "lib/platform/shared-serialization.ts",
   "utf8",
 );
-const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const styles = readWorkspaceStylesSource();
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
   assert.match(

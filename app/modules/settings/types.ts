@@ -1,0 +1,283 @@
+import type { CompanyProfileSettings } from "../../types";
+
+export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs";
+
+export type SettingsFilters = {
+  customers: {
+    keyword: string;
+  };
+  suppliers: {
+    keyword: string;
+    type: string;
+    status: string;
+  };
+  users: {
+    keyword: string;
+    role: string;
+    status: string;
+  };
+  auditLogs: {
+    keyword: string;
+    action: string;
+  };
+};
+
+export type FiltersFor<T extends SettingsTabKey> =
+  T extends "customers" ? SettingsFilters["customers"]
+    : T extends "suppliers" ? SettingsFilters["suppliers"]
+      : T extends "users" ? SettingsFilters["users"]
+        : T extends "auditLogs" ? SettingsFilters["auditLogs"]
+          : never;
+
+export type TableColumn<T> = {
+  key: keyof T | string;
+  label: string;
+  render?: (row: T) => string;
+};
+
+export type Pagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type UserLite = {
+  name?: string;
+  role?: string;
+};
+
+export type CustomerRow = {
+  id: string;
+  shortName?: string;
+  name?: string;
+  fullName?: string;
+  country?: string;
+  defaultCurrency?: string;
+  salespersonUserId?: string;
+  salespersonName?: string;
+  commissionRate?: number;
+  commissionStatus?: string;
+  contactPerson?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  enableAutoShippingDocsNotification?: boolean;
+  shippingDocsEmails?: string[];
+  shippingDocsCcEmails?: string[];
+  autoSendDocumentTypes?: string[];
+  clearanceEmailLanguage?: string;
+  clearanceEmailLanguageLabel?: string;
+  remark?: string;
+};
+
+export type SalespersonOption = {
+  id: string;
+  name?: string;
+  role?: string;
+};
+
+export type SupplierRow = {
+  id: string;
+  supplierName?: string;
+  supplierType?: string;
+  status?: string;
+  country?: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  invoiceTitle?: string;
+  taxNumber?: string;
+  bankName?: string;
+  bankAccount?: string;
+  allowDomesticLogisticsEntry?: boolean;
+  allowLogisticsExpenseEntry?: boolean;
+  allowLogisticsInvoiceUpload?: boolean;
+  allowFactoryDocumentUpload?: boolean;
+  isDefaultLogisticsSupplier?: boolean;
+  allowedLogisticsCostTypes?: string[];
+  remark?: string;
+};
+
+export type UserRow = {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  supplierId?: string;
+  supplierName?: string;
+  supplierType?: string;
+  phone?: string;
+  approvalStatus?: string;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
+  passwordPolicyPassed?: boolean;
+  createdAt?: string;
+  permissionMode?: string;
+  customPermissions?: UserCustomPermissions | null;
+  mustChangePassword?: boolean;
+};
+
+export type AuditLogRow = {
+  id: string;
+  user?: UserLite | null;
+  action?: string;
+  entityType?: string;
+  entityLabel?: string;
+  ipAddress?: string;
+  createdAt?: string;
+};
+
+export type ExchangeRateSettings = Record<string, unknown>;
+export type CommissionFormulaSettings = Record<string, unknown>;
+export type NotificationTemplateSettings = Record<string, unknown>;
+export type ShipsgoIntegrationSettings = Record<string, unknown>;
+
+export type ExchangeRateForm = {
+  source: string;
+  rateType: string;
+  autoUpdate: boolean;
+  allowManualEdit: boolean;
+  allowMultipleOrderLogisticsSuppliers: boolean;
+  allowAdminIncompleteTaxSubmit: boolean;
+};
+
+export type CommissionFormulaForm = {
+  mode: string;
+  label: string;
+  source: string;
+  deductions: string[];
+  floorAtZero: boolean;
+};
+
+export type NotificationTemplateForm = {
+  autoSendOnApproval: boolean;
+  recipientEmailFields: string[];
+  ccAdminEmails: boolean;
+  ccEmails: string;
+  singleSubjectTemplate: string;
+  batchSubjectTemplate: string;
+  bodyTemplate: string;
+  invoiceRequirements: string;
+  uploadUrl: string;
+  signature: string;
+};
+
+export type ShipsgoIntegrationForm = {
+  enabled: boolean;
+  apiBaseUrl: string;
+  apiKey: string;
+  apiKeyConfigured: boolean;
+  oceanTrackingEnabled: boolean;
+  airTrackingEnabled: boolean;
+  manualSyncEnabled: boolean;
+  autoSyncEnabled: boolean;
+  dailySyncTime: string;
+  webhookEnabled: boolean;
+  webhookSecret: string;
+  webhookSecretConfigured: boolean;
+  liveMapEnabled: boolean;
+  customerPushEnabled: boolean;
+  creditWarningThreshold: string;
+};
+
+export type CompanyProfileForm = {
+  brandName: string;
+  systemName: string;
+  companyNameZh: string;
+  companyNameEn: string;
+  shortName: string;
+  website: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  logoUrl: string;
+  footerText: string;
+};
+
+export type PermissionOption = {
+  value: string;
+  label: string;
+};
+
+export type PermissionConfig = {
+  permissionModes?: PermissionOption[];
+  dataScopeOptions?: PermissionOption[];
+  menuPermissionOptions?: PermissionOption[];
+  readPermissionOptions?: PermissionOption[];
+  writePermissionOptions?: PermissionOption[];
+  roleMenus?: Record<string, string[]>;
+  roleReads?: Record<string, string[]>;
+  roleWrites?: Record<string, string[]>;
+};
+
+export type UserCustomPermissions = {
+  mode?: string;
+  menus?: string[];
+  reads?: string[];
+  writes?: string[];
+  dataScope?: string;
+};
+
+export type CustomerForm = {
+  id: string;
+  name: string;
+  shortName: string;
+  country: string;
+  defaultCurrency: string;
+  salespersonUserId: string;
+  commissionRate: string;
+  commissionStatus: string;
+  contactPerson: string;
+  contactEmail: string;
+  contactPhone: string;
+  enableAutoShippingDocsNotification: boolean;
+  shippingDocsEmails: string;
+  shippingDocsCcEmails: string;
+  autoSendDocumentTypes: string[];
+  clearanceEmailLanguage: string;
+  remark: string;
+};
+
+export type SupplierForm = {
+  id: string;
+  supplierName: string;
+  supplierType: string;
+  status: string;
+  country: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  invoiceTitle: string;
+  taxNumber: string;
+  bankName: string;
+  bankAccount: string;
+  allowDomesticLogisticsEntry: boolean;
+  allowLogisticsExpenseEntry: boolean;
+  allowLogisticsInvoiceUpload: boolean;
+  allowFactoryDocumentUpload: boolean;
+  isDefaultLogisticsSupplier: boolean;
+  allowedLogisticsCostTypes: string[];
+  remark: string;
+};
+
+export type UserForm = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  approvalStatus: string;
+  supplierId: string;
+  password: string;
+  permissionMode: string;
+  dataScope: string;
+  menus: string[];
+  reads: string[];
+  writes: string[];
+};
+
+export type SettingsModuleProps = {
+  onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
+};

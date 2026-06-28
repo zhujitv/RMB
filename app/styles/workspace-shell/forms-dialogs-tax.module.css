@@ -1,0 +1,939 @@
+/* Settings controls, drawers, dialogs, tax refund and upload forms.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.commissionDeductionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.supplierLogisticsCostGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.notificationTemplateField {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notificationTemplateField textarea {
+  width: 100%;
+  min-height: 84px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 9px 10px;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.notificationTemplateField textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.customerShippingPanel {
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.customerShippingHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.customerShippingHeader strong {
+  color: #0f172a;
+}
+
+.customerShippingHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inlineCheckbox {
+  width: fit-content;
+  min-height: 42px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.inlineCheckbox:hover {
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.inlineCheckbox:has(input:checked) {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(219, 234, 254, 0.68));
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.14);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 24px;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.dialogLayerClosing {
+  opacity: 0;
+}
+
+.dialogSurfaceClosing {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.sideDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
+  width: min(980px, 88vw);
+  height: 100vh;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sideDrawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+}
+
+.sideDrawerTitle {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.sideDrawerTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sideDrawerTitle strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sideDrawerTitle small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sideDrawerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sideDrawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 22px;
+}
+
+.sideDrawer.logisticsExpenseDrawer {
+  width: min(1200px, 94vw);
+}
+
+.sideDrawer.settingsCustomerDrawer {
+  width: min(640px, 92vw);
+}
+
+.sideDrawer.logisticsExpenseDrawer .sideDrawerHeader {
+  padding: 14px 18px;
+}
+
+.sideDrawer.logisticsExpenseDrawer .sideDrawerBody {
+  padding: 14px 18px 18px;
+}
+
+.sideDrawer.pdfPreviewDrawer {
+  width: min(1200px, 96vw);
+  background: #0f172a;
+}
+
+.sideDrawer.pdfPreviewDrawer .sideDrawerHeader {
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.96);
+  border-bottom-color: rgba(148, 163, 184, 0.28);
+}
+
+.sideDrawer.pdfPreviewDrawer .sideDrawerTitle span,
+.sideDrawer.pdfPreviewDrawer .sideDrawerTitle small {
+  color: #cbd5e1;
+}
+
+.sideDrawer.pdfPreviewDrawer .sideDrawerTitle strong {
+  color: #f8fafc;
+}
+
+.sideDrawer.pdfPreviewDrawer .sideDrawerBody {
+  padding: 0;
+  overflow: hidden;
+}
+
+.pdfPreviewFrameWrap {
+  width: 100%;
+  height: calc(100vh - 72px);
+  min-height: calc(100vh - 72px);
+  background: #111827;
+}
+
+.pdfPreviewFrame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 72px);
+  border: 0;
+  background: #111827;
+}
+
+.imagePreviewFrame {
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: #111827;
+}
+
+.imagePreviewFrame img {
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.pdfPreviewLoading {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #cbd5e1;
+  font-size: 13px;
+  text-align: center;
+}
+
+.pdfPreviewFallback {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.pdfPreviewFallback strong {
+  font-size: 16px;
+}
+
+.pdfPreviewFallback span {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.taxRefundDrawer {
+  width: min(1040px, 90vw);
+  height: 100vh;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.taxRefundDrawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+}
+
+.taxRefundDrawerTitle {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.taxRefundDrawerTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.taxRefundDrawerTitle strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.taxRefundDrawerTitle small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.taxRefundDrawerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.taxRefundDrawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 22px;
+}
+
+.taxMissingBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.taxMissingBadgeComplete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.missingChipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.missingChipList span,
+.missingChipButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.missingChipButton {
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.missingChipButton:hover {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+  transform: translateY(-1px);
+}
+
+.exportInvoiceRemarkText {
+  min-height: 72px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.exportInvoiceRemarkSection {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.exportInvoiceRemarkSection > strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlocks {
+  display: grid;
+  gap: 10px;
+}
+
+.exportInvoiceRemarkBlock {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+  padding: 10px 12px;
+}
+
+.exportInvoiceRemarkBlock > strong {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlockGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.exportInvoiceRemarkBlockGrid span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.taxTargetHighlight {
+  position: relative;
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.14);
+  scroll-margin-top: 96px;
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.shippingDocsDialog {
+  width: min(860px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.confirmDialog,
+.shippingDocsDialog {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.confirmDialog {
+  position: relative;
+  z-index: 9999;
+  width: min(520px, 94vw);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.modalCard {
+  position: relative;
+  z-index: 9999;
+  width: min(720px, 94vw);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.confirmDialogWarning {
+  border-color: #fed7aa;
+}
+
+.confirmDialogDanger {
+  border-color: #fecaca;
+}
+
+.confirmDialogHeader {
+  display: grid;
+  gap: 6px;
+}
+
+.confirmDialogHeader strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.confirmDialogHeader span {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirmDialogDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confirmDialogDetails span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.confirmDialogWarning .confirmDialogDetails span {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.confirmDialogDanger .confirmDialogDetails span {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.confirmDialogInput {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmDialogInput textarea,
+.confirmDialogInput input {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.confirmDialogInput textarea {
+  min-height: 92px;
+}
+
+.confirmDialogInput input {
+  height: 40px;
+}
+
+.confirmDialogInput textarea:focus,
+.confirmDialogInput input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.confirmDialogInput small {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.confirmDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modalHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.modalHeader strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.modalHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.shippingDocsForm {
+  display: grid;
+  gap: 12px;
+}
+
+.shippingDocsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shippingDocReady,
+.shippingDocMissing {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shippingDocReady {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.shippingDocMissing {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.shippingDocsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shippingDocsFormGrid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select,
+.shippingDocsFormGrid textarea {
+  width: 100%;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 11px;
+  font: inherit;
+}
+
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select {
+  height: 40px;
+}
+
+.shippingDocsFormGrid textarea {
+  min-height: 78px;
+  padding-top: 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.shippingDocsFormGrid input:focus,
+.shippingDocsFormGrid select:focus,
+.shippingDocsFormGrid textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.shippingDocsWideField {
+  grid-column: 1 / -1;
+}
+
+.customsFormCard {
+  grid-column: 1 / -1;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.customsFormHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customsFormHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.customsFormHeader strong {
+  color: #0f172a;
+}
+
+.customsFormHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.customsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.customsFormGrid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customsFormGrid input {
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.customsFormGrid input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.customsFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inlineActionGroup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fileUploadSection {
+  grid-column: 1 / -1;
+}
+
+.fileUploadGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fileUploadCard {
+  min-width: 0;
+  height: 100%;
+  min-height: 210px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fileUploadHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fileUploadHeader strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.fileUploadHeader span {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fileUploadFile {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  align-content: flex-start;
+  gap: 7px;
+}
+
+.fileUploadFileName {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileUploadMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileUploadStatus,
+.fileUploadEmpty {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileUploadEmpty {
+  flex: 1 1 auto;
+}
+
+.fileUploadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fileUploadActionLabel {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.fileUploadButton {
+  margin-top: auto;
+  justify-self: flex-start;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const costsMutation = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
 const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
 const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
-const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
 const costsModuleWithoutDisableGuard = costsModule.replace(/const DISABLE_COMPONENT_RENDER = \[[\s\S]*?\] as const;\nvoid DISABLE_COMPONENT_RENDER;\n/, "");
 
 test("costs page renders only the table list and not duplicate cost cards", () => {

@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const components = readFileSync("app/components.tsx", "utf8");
-const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const settingsModule = readSettingsModuleSource();
 const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const globalStyles = readFileSync("app/globals.css", "utf8");
-const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
 
 test("shared UI form controls are available for ERP pages", () => {
   for (const componentName of [
@@ -171,10 +173,10 @@ test("user permissions reuse unified card multi-select options", () => {
 });
 
 test("user supplier binding follows the currently selected role", () => {
-  const saveUserSnippet = settingsModule.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
+  const saveUserSnippet = settingsModuleMain.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
   const userPanelIndex = settingsModule.indexOf("function UserEditPanel");
   const userPanelSnippet = settingsModule.slice(userPanelIndex, userPanelIndex + 7600);
-  const supplierMatchSnippet = settingsModule.match(/function supplierMatchesUserRole[\s\S]*?\n}\n\nfunction supplierOptionLabel/)?.[0] || "";
+  const supplierMatchSnippet = settingsModule.match(/export function supplierMatchesUserRole[\s\S]*?\n}\n/)?.[0] || "";
 
   assert.match(settingsModule, /LOGISTICS_SUPPLIER_TYPE_CODE = "LOGISTICS"/);
   assert.match(settingsModule, /PRODUCT_SUPPLIER_TYPE_CODE = "PRODUCT"/);
@@ -199,14 +201,14 @@ test("user list detail action opens the inline user editor directly", () => {
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
   const startEditUserSnippet = settingsModule.match(/function startEditUser\(user: UserRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const startCreateUserSnippet = settingsModule.match(/function startCreateUser\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  const saveUserSnippet = settingsModule.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
-  const userCancelSnippet = settingsModule.match(/<UserEditPanel[\s\S]*?onCancel=\{\(\) => \{[\s\S]*?\}\}/)?.[0] || "";
-  const userEditorRenderIndex = settingsModule.indexOf("{userForm && activeTab === \"users\" ? (");
-  const settingsTableRenderIndex = settingsModule.indexOf("<SettingsTable");
+  const saveUserSnippet = settingsModuleMain.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
+  const userCancelSnippet = settingsModuleMain.match(/<UserEditPanel[\s\S]*?onCancel=\{\(\) => \{[\s\S]*?\}\}/)?.[0] || "";
+  const userEditorRenderIndex = settingsModuleMain.indexOf("{userForm && activeTab === \"users\" ? (");
+  const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
 
-  assert.match(settingsModule, /const \[selectedUserId, setSelectedUserId\] = useState\(""\)/);
-  assert.match(settingsModule, /const userEditPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
-  assert.match(settingsModule, /userEditPanelRef\.current\?\.scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.match(settingsModuleMain, /const \[selectedUserId, setSelectedUserId\] = useState\(""\)/);
+  assert.match(settingsModuleMain, /const userEditPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
+  assert.match(settingsModuleMain, /userEditPanelRef\.current\?\.scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
   assert.ok(settingsTableRenderIndex >= 0 && userEditorRenderIndex > settingsTableRenderIndex, "user editor should render after the user list table");
   assert.match(startCreateUserSnippet, /setSelectedUserId\("new"\)/);
   assert.match(startCreateUserSnippet, /setUserForm\(emptyUserForm\(\)\)/);
@@ -231,19 +233,19 @@ test("user list detail action opens the inline user editor directly", () => {
 test("supplier detail action opens unified supplier edit panel in read-only mode", () => {
   const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
-  const settingsTableRenderIndex = settingsModule.indexOf("<SettingsTable");
-  const settingsTableRenderSnippet = settingsModule.slice(settingsTableRenderIndex, settingsTableRenderIndex + 1800);
+  const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
+  const settingsTableRenderSnippet = settingsModuleMain.slice(settingsTableRenderIndex, settingsTableRenderIndex + 1800);
   const settingsRowsIndex = settingsModule.indexOf("function SettingsRows");
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
-  const supplierPanelRenderSnippet = settingsModule.match(/\{supplierForm && activeTab === "suppliers"[\s\S]*?\) : null\}/)?.[0] || "";
-  const startViewSupplierSnippet = settingsModule.match(/function startViewSupplier\(supplier: SupplierRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  const saveSupplierSnippet = settingsModule.match(/async function saveSupplierForm[\s\S]*?\n  async function saveUserForm/)?.[0] || "";
-  const supplierPanelSnippet = settingsModule.match(/function SupplierEditPanel[\s\S]*?\n}\n\nfunction BooleanSelect/)?.[0] || "";
+  const supplierPanelRenderSnippet = settingsModuleMain.match(/\{supplierForm && activeTab === "suppliers"[\s\S]*?\) : null\}/)?.[0] || "";
+  const startViewSupplierSnippet = settingsModuleMain.match(/function startViewSupplier\(supplier: SupplierRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const saveSupplierSnippet = settingsModuleMain.match(/async function saveSupplierForm[\s\S]*?\n  async function saveUserForm/)?.[0] || "";
+  const supplierPanelSnippet = settingsModule.match(/function SupplierEditPanel[\s\S]*?\n}\n/)?.[0] || "";
 
   assert.match(startViewSupplierSnippet, /setDetailRow\(null\)/);
   assert.match(startViewSupplierSnippet, /setSupplierPanelMode\("view"\)/);
   assert.match(startViewSupplierSnippet, /setSupplierForm\(supplierFormFromRow\(supplier\)\)/);
-  assert.match(settingsModule, /const \[supplierPanelMode, setSupplierPanelMode\] = useState<"view" \| "edit">\("view"\)/);
+  assert.match(settingsModuleMain, /const \[supplierPanelMode, setSupplierPanelMode\] = useState<"view" \| "edit">\("view"\)/);
   assert.match(settingsTableRenderSnippet, /if \(activeTab === "suppliers"\) \{[\s\S]*startViewSupplier\(row as SupplierRow\);[\s\S]*return;/);
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.match(settingsRowsSnippet, /onViewDetail\(\)/);
@@ -273,7 +275,7 @@ test("native form controls are normalized by the workspace style layer", () => {
 });
 
 test("customer edit panel uses a portal drawer layer instead of inline table rendering", () => {
-  const customerDrawerSnippet = settingsModule.match(/\{customerForm && activeTab === "customers"[\s\S]*?\) : null\}/)?.[0] || "";
+  const customerDrawerSnippet = settingsModuleMain.match(/\{customerForm && activeTab === "customers"[\s\S]*?\) : null\}/)?.[0] || "";
   assert.match(components, /import \{ createPortal \} from "react-dom"/);
   assert.match(components, /const \[portalTarget, setPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
   assert.match(components, /setPortalTarget\(document\.body\)/);

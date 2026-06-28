@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
 
 test("shared data table typography matches tax refund and logistics tables", () => {
   assert.match(workspaceStyles, /\.dataTable td \{[\s\S]*font-size: 13px;[\s\S]*font-weight: 400;/);

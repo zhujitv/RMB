@@ -8,6 +8,7 @@ import {
   formatShipsgoTrackingMethodForLocale,
   normalizeShipsgoDisplayLocale,
 } from "../lib/shipsgo-display.ts";
+import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
@@ -27,10 +28,10 @@ const webhookRoute = readFileSync("app/api/shipsgo/webhook/route.ts", "utf8");
 const shipsgoCronRoute = readFileSync("app/api/cron/shipsgo-sync/route.ts", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
-const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
+const settingsModule = readSettingsModuleSource();
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const logisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
-const workspaceStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
 
 test("ShipsGo integration settings are stored safely in system settings", () => {
   assert.match(constants, /SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration"/);
