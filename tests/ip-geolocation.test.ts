@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { formatIpGeolocation, resolveIpGeolocation } from "../lib/platform/ip-geolocation.ts";
+
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
+const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
+const migration = readFileSync("prisma/migrations/20260628193000_login_attempt_ip_geolocation/migration.sql", "utf8");
+const localDb = readFileSync("data/ip-geolocation-ranges.json", "utf8");
+
+test("local IP geolocation resolves local private and unknown addresses without network calls", () => {
+  assert.equal(resolveIpGeolocation("127.0.0.1").region, "本地开发环境");
+  assert.equal(resolveIpGeolocation("192.168.1.10").region, "内网地址");
+  assert.equal(resolveIpGeolocation("::1").region, "本地开发环境");
+  assert.equal(resolveIpGeolocation("8.8.8.8").region, "未知地区");
+  assert.equal(formatIpGeolocation({ country: "中国", region: "上海", city: "上海", isp: "中国电信", source: "local-ip-db" }), "中国 · 上海 / 中国电信");
+});
+
+test("login attempts persist local IP geolocation fields", () => {
+  assert.match(schema, /geoCountry\s+String\?\s+@map\("geo_country"\)/);
+  assert.match(schema, /geoRegion\s+String\?\s+@map\("geo_region"\)/);
+  assert.match(schema, /geoCity\s+String\?\s+@map\("geo_city"\)/);
+  assert.match(schema, /geoIsp\s+String\?\s+@map\("geo_isp"\)/);
+  assert.match(schema, /geoSource\s+String\?\s+@map\("geo_source"\)/);
+  assert.match(schema, /geoResolvedAt\s+DateTime\?\s+@map\("geo_resolved_at"\)/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "geo_country"/);
+  assert.match(localDb, /"cidr": "127\.0\.0\.0\/8"/);
+  assert.match(sharedAuth, /const ipGeo = resolveIpGeolocation\(ipAddress\)/);
+  assert.match(sharedAuth, /geoResolvedAt: new Date\(\)/);
+});
+
+test("account login records display stored or locally resolved region", () => {
+  assert.match(sharedUsers, /geoCountry: true/);
+  assert.match(sharedUsers, /geoResolvedAt: true/);
+  assert.match(sharedUsers, /resolveIpGeolocation\(row\.ipAddress\)/);
+  assert.match(sharedUsers, /region: formatIpGeolocation\(geo\)/);
+});

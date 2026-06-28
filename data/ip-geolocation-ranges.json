@@ -1,0 +1,82 @@
+[
+  {
+    "cidr": "127.0.0.0/8",
+    "country": "本地",
+    "region": "本地开发环境",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "10.0.0.0/8",
+    "country": "内网",
+    "region": "内网地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "172.16.0.0/12",
+    "country": "内网",
+    "region": "内网地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "192.168.0.0/16",
+    "country": "内网",
+    "region": "内网地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "100.64.0.0/10",
+    "country": "内网",
+    "region": "运营商共享地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "169.254.0.0/16",
+    "country": "内网",
+    "region": "链路本地地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "0.0.0.0/8",
+    "country": "保留地址",
+    "region": "保留地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "192.0.2.0/24",
+    "country": "保留地址",
+    "region": "文档示例地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "198.51.100.0/24",
+    "country": "保留地址",
+    "region": "文档示例地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  },
+  {
+    "cidr": "203.0.113.0/24",
+    "country": "保留地址",
+    "region": "文档示例地址",
+    "city": "",
+    "isp": "",
+    "source": "local-ip-db"
+  }
+]

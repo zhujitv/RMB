@@ -33,6 +33,12 @@ type LoginRecord = {
   loginAt?: string;
   ipAddress?: string;
   region?: string;
+  geoCountry?: string;
+  geoRegion?: string;
+  geoCity?: string;
+  geoIsp?: string;
+  geoSource?: string;
+  geoResolvedAt?: string | null;
   browser?: string;
   result?: string;
 };

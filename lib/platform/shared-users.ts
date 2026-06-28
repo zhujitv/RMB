@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import crypto from "node:crypto";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
+import { formatIpGeolocation, resolveIpGeolocation } from "./ip-geolocation";
 import {
   codedError,
   logServerError,
@@ -366,17 +367,42 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
       createdAt: true,
       ipAddress: true,
       userAgent: true,
+      geoCountry: true,
+      geoRegion: true,
+      geoCity: true,
+      geoIsp: true,
+      geoSource: true,
+      geoResolvedAt: true,
       success: true,
     },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    loginAt: row.createdAt,
-    ipAddress: row.ipAddress || "未记录",
-    region: "未记录",
-    browser: browserLabel(row.userAgent),
-    result: row.success ? "成功" : "失败",
-  }));
+  return rows.map((row) => {
+    const storedGeo = {
+      ipAddress: row.ipAddress || "",
+      country: row.geoCountry || "",
+      region: row.geoRegion || "",
+      city: row.geoCity || "",
+      isp: row.geoIsp || "",
+      source: row.geoSource || "",
+    };
+    const geo = storedGeo.country || storedGeo.region || storedGeo.city || storedGeo.isp
+      ? storedGeo
+      : resolveIpGeolocation(row.ipAddress);
+    return {
+      id: row.id,
+      loginAt: row.createdAt,
+      ipAddress: row.ipAddress || "未记录",
+      region: formatIpGeolocation(geo),
+      geoCountry: geo.country || "",
+      geoRegion: geo.region || "",
+      geoCity: geo.city || "",
+      geoIsp: geo.isp || "",
+      geoSource: geo.source || "",
+      geoResolvedAt: row.geoResolvedAt || null,
+      browser: browserLabel(row.userAgent),
+      result: row.success ? "成功" : "失败",
+    };
+  });
 }
 
 export async function listUsers(actor: ActorLike, query: UserListQuery = null, options: UserListOptions = {}) {

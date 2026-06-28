@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
+import { resolveIpGeolocation } from "./ip-geolocation";
 import { codedError, logServerTiming, normalizeEmail, timeServerStep } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 export { codedError } from "./shared-base-utils";
@@ -543,12 +544,20 @@ export async function assertLoginNotRateLimited(request: RequestLike, email: unk
 }
 
 export async function recordLoginAttempt(request: RequestLike, email: unknown, success: unknown, userId: string | null = null) {
+  const ipAddress = requestIp(request);
+  const ipGeo = resolveIpGeolocation(ipAddress);
   await prisma.loginAttempt.create({
     data: {
       key: loginAttemptKey(request, email),
       email: normalizeEmail(email) || null,
-      ipAddress: requestIp(request),
+      ipAddress,
       userAgent: request?.headers?.get("user-agent") || null,
+      geoCountry: ipGeo.country || null,
+      geoRegion: ipGeo.region || null,
+      geoCity: ipGeo.city || null,
+      geoIsp: ipGeo.isp || null,
+      geoSource: ipGeo.source || null,
+      geoResolvedAt: new Date(),
       success: Boolean(success),
       userId,
     },

@@ -152,13 +152,19 @@ model UserSession {
 }
 
 model LoginAttempt {
-  id        String   @id @default(cuid())
-  key       String
-  email     String?
-  ipAddress String?  @map("ip_address")
-  userAgent String?  @map("user_agent")
-  success   Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
+  id            String    @id @default(cuid())
+  key           String
+  email         String?
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  geoCountry    String?   @map("geo_country")
+  geoRegion     String?   @map("geo_region")
+  geoCity       String?   @map("geo_city")
+  geoIsp        String?   @map("geo_isp")
+  geoSource     String?   @map("geo_source")
+  geoResolvedAt DateTime? @map("geo_resolved_at")
+  success       Boolean   @default(false)
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   userId String? @map("user_id")
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
