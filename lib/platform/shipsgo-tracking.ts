@@ -1276,6 +1276,16 @@ async function getTrackingForActor(id: string, actor: ShipsgoActor) {
   return tracking;
 }
 
+export async function getShipsgoOceanTracking(actor: ShipsgoActor, trackingId: unknown) {
+  assertRead(actor, "domesticLogistics");
+  const id = cleanInputText(trackingId, 80);
+  if (!id) throw codedError("请选择需要查看的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
+  const allowedTracking = await getTrackingForActor(id, actor);
+  const tracking = await loadShipsgoTrackingWithContainers(allowedTracking.id);
+  if (!tracking) throw codedError("大掌櫃跟踪记录不存在。", 404, "SHIPSGO_TRACKING_NOT_FOUND");
+  return { tracking: serializeShipsgoTracking(tracking) };
+}
+
 export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor: ShipsgoActor, trackingId: unknown) {
   assertWrite(actor, "domesticLogistics");
   const id = cleanInputText(trackingId, 80);

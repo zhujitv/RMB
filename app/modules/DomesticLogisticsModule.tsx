@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { Fragment } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiCheckbox, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, DetailField, PaginationBar, PdfPreviewButton, UiCheckbox, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -1353,7 +1353,7 @@ function ShipsgoControlTowerView({
                       <button className={styles.secondaryButton} type="button" onClick={() => toggleTimeline(row)}>
                         {expandedId === row.id ? "收起节点" : "查看运输节点"}
                       </button>
-                      <ShipsgoMapAction features={features} mapUrl={row.mapUrl} title={row.masterBlNo || row.bookingNumber || row.orderNo || "大掌櫃地图"} />
+                      <ShipsgoMapAction features={features} trackingId={row.id} mapUrl={row.mapUrl} />
                       <button className={styles.secondaryButton} type="button" onClick={() => onOpenOrder(row)}>跳转物流详情</button>
                     </div>
                   </td>
@@ -1525,7 +1525,7 @@ function ControlTowerDetailPanel({
           <button className={styles.primaryButtonCompact} type="button" disabled={syncing} onClick={onSync}>{syncing ? "同步中..." : "同步最新状态"}</button>
         ) : null}
         <button className={styles.secondaryButton} type="button" onClick={onToggleTimeline}>{timelineExpanded ? "收起运输节点" : "展开运输节点"}</button>
-        <ShipsgoMapAction features={features} mapUrl={row.mapUrl} title={row.masterBlNo || row.bookingNumber || row.orderNo || "大掌櫃地图"} />
+        <ShipsgoMapAction features={features} trackingId={row.id} mapUrl={row.mapUrl} />
         <button className={styles.secondaryButton} type="button" onClick={onOpenOrder}>跳转物流详情</button>
       </div>
     </aside>
@@ -1534,60 +1534,40 @@ function ControlTowerDetailPanel({
 
 function ShipsgoMapAction({
   features,
+  trackingId,
   mapUrl,
-  title,
 }: {
   features: ShipsgoFeatureFlags;
+  trackingId?: string;
   mapUrl?: string;
-  title: string;
 }) {
-  const [open, setOpen] = useState(false);
   if (!features.liveMapEnabled) return null;
   const embedUrl = String(features.liveMapEmbedUrl || "").trim();
-  if (!embedUrl && !mapUrl) return null;
-  if (!embedUrl) {
+  const cleanTrackingId = String(trackingId || "").trim();
+  if (cleanTrackingId) {
     return (
-      <a className={styles.secondaryButton} href={mapUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+      <a
+        className={styles.secondaryButton}
+        href={`/tracking-map?trackingId=${encodeURIComponent(cleanTrackingId)}`}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => event.stopPropagation()}
+      >
         查看地图
       </a>
     );
   }
+  if (!embedUrl && !mapUrl) return null;
   return (
-    <>
-      <button
-        className={styles.secondaryButton}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        查看地图
-      </button>
-      {open ? (
-        <SideDetailDrawer
-          ariaLabel="大掌櫃 Live Map"
-          kicker="Live Map"
-          title="大掌櫃运输地图"
-          subtitle={title}
-          surfaceClassName={styles.shipsgoMapDrawer}
-          onClose={() => setOpen(false)}
-        >
-          <div className={styles.shipsgoMapFrameWrap}>
-            <iframe
-              id="shipsgo-embed"
-              className={styles.shipsgoMapFrame}
-              src={embedUrl}
-              title="大掌櫃运输地图"
-              width="100%"
-              height="650"
-              loading="lazy"
-              allowFullScreen
-            />
-          </div>
-        </SideDetailDrawer>
-      ) : null}
-    </>
+    <a
+      className={styles.secondaryButton}
+      href={mapUrl || "/tracking-map"}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+    >
+      查看地图
+    </a>
   );
 }
 
@@ -1855,7 +1835,7 @@ function ShipsgoOrderTrackingPanel({
                   >
                     {timelineExpanded ? "收起运输状态" : "查看运输状态"}
                   </button>
-                  <ShipsgoMapAction features={features} mapUrl={tracking.mapUrl} title={tracking.masterBlNo || tracking.bookingNumber || tracking.containerNumber || "大掌櫃地图"} />
+                  <ShipsgoMapAction features={features} trackingId={tracking.id} mapUrl={tracking.mapUrl} />
                   {showRecover ? (
                     <button
                       className={styles.secondaryButton}

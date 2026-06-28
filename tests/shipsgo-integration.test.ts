@@ -31,6 +31,8 @@ const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.t
 const settingsModule = readSettingsModuleSource();
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const logisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const trackingMapPage = readFileSync("app/tracking-map/page.tsx", "utf8");
+const trackingMapClient = readFileSync("app/tracking-map/tracking-map-client.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 
 test("ShipsGo integration settings are stored safely in system settings", () => {
@@ -79,7 +81,10 @@ test("domestic logistics only receives safe ShipsGo feature flags", () => {
   assert.match(logisticsModule, /type ShipsgoFeatureFlags/);
   assert.match(logisticsModule, /shipsgoFeatures\.enabled && shipsgoFeatures\.oceanTrackingEnabled/);
   assert.match(logisticsModule, /liveMapEmbedUrl\?: string/);
-  assert.match(logisticsModule, /<iframe[\s\S]*src=\{embedUrl\}/);
+  assert.doesNotMatch(logisticsModule, /<iframe[\s\S]*src=\{embedUrl\}/);
+  assert.doesNotMatch(logisticsModule, /SideDetailDrawer[\s\S]*大掌櫃运输地图/);
+  assert.match(logisticsModule, /\/tracking-map\?trackingId=\$\{encodeURIComponent\(cleanTrackingId\)\}/);
+  assert.match(trackingMapClient, /<iframe[\s\S]*src=\{embedUrl\}/);
   assert.match(service, /https:\/\/embed\.shipsgo\.com\/\?token=/);
   assert.doesNotMatch(logisticsModule, /ShipsgoTrackingFeaturePanel/);
   assert.doesNotMatch(logisticsModule, /Credit 预警阈值/);
@@ -114,6 +119,9 @@ test("ShipsGo service uses official v2 headers and signature validation", () => 
 });
 
 test("ShipsGo routes expose create, sync and webhook endpoints", () => {
+  assert.match(oceanTrackingDeleteRoute, /export async function GET/);
+  assert.match(oceanTrackingDeleteRoute, /getShipsgoOceanTracking\(actor, id\)/);
+  assert.match(oceanTrackingDeleteRoute, /readShipsgoFeatureFlags\(\)/);
   assert.match(oceanTrackingRoute, /createShipsgoOceanTracking\(request, actor, body\)/);
   assert.match(oceanTrackingDeleteRoute, /deleteShipsgoOceanTracking\(request, actor, id\)/);
   assert.match(oceanTrackingSyncRoute, /syncShipsgoOceanTracking\(request, actor, id\)/);
@@ -126,6 +134,23 @@ test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(shipsgoCronRoute, /syncDueShipsgoOceanTrackings\(request, actor\)/);
   assert.match(vercelConfig, /"path": "\/api\/cron\/shipsgo-sync"/);
   assert.match(vercelConfig, /"schedule": "0 \*\/6 \* \* \*"/);
+});
+
+test("ShipsGo map opens as a dedicated page and loads by trackingId", () => {
+  assert.match(trackingMapPage, /initialTrackingId=\{firstSearchParam\(params\?\.trackingId\)\}/);
+  assert.match(trackingMapClient, /\/api\/shipsgo\/ocean-trackings\/\$\{encodeURIComponent\(trackingId\)\}/);
+  assert.match(trackingMapClient, /请选择一条运输跟踪记录/);
+  assert.match(trackingMapClient, /当前运输跟踪数据加载失败，请重新同步后再试。/);
+  assert.match(trackingMapClient, /Master B\/L/);
+  assert.match(trackingMapClient, /船公司/);
+  assert.match(trackingMapClient, /船名航次/);
+  assert.match(trackingMapClient, /起运港/);
+  assert.match(trackingMapClient, /目的港/);
+  assert.match(trackingMapClient, /关联柜号/);
+  assert.match(trackingMapClient, /trackingMapUrl\(baseUrl, tracking\)/);
+  assert.match(trackingMapClient, /appendIfAbsent\(url, "trackingId", tracking\.id\)/);
+  assert.match(logisticsModule, /target="_blank"/);
+  assert.doesNotMatch(logisticsModule, /setOpen\(true\)/);
 });
 
 test("ShipsGo tracking mutations are role-scoped to admin and owning sales", () => {
