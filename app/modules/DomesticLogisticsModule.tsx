@@ -2250,73 +2250,20 @@ function CustomsDocumentPanel({
         const matchedDocuments = documents.filter((document) => (
           document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
         ));
-        const currentCustomsDeclaration = documentType.value === "CUSTOMS_ENTRY_FORM"
-          ? latestUploadedDocument(matchedDocuments)
-          : null;
+        const currentDocument = latestUploadedDocument(matchedDocuments);
         const uploading = uploadingKey === `${orderId}:${documentType.value}`;
         const uploadProgress = uploadProgressByKey[`${orderId}:${documentType.value}`] || 0;
-        if (documentType.value === "CUSTOMS_ENTRY_FORM") {
-          return (
-            <div className={styles.fileListItem} key={documentType.value}>
-              <div>
-                <span>{documentType.label}</span>
-                {currentCustomsDeclaration ? (
-                  <small>
-                    {currentCustomsDeclaration.fileName || "-"} ｜ {currentCustomsDeclaration.uploadedByName || "-"} ｜ {formatDateTime(currentCustomsDeclaration.uploadedAt)}
-                  </small>
-                ) : (
-                  <small>暂未上传</small>
-                )}
-              </div>
-              <div>
-                {currentCustomsDeclaration && canPreviewOrDownload ? (
-                  <>
-                    <PdfPreviewButton documentId={currentCustomsDeclaration.id} fileName={currentCustomsDeclaration.fileName || ""} />
-                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentCustomsDeclaration.id)}/download`}>下载</a>
-                  </>
-                ) : null}
-                {canUpload ? (
-                  <>
-                    <label className={styles.secondaryButton}>
-                      {uploading ? "识别中..." : UPLOAD_REPLACE_TEXT}
-                      <input
-                        type="file"
-                        accept={PDF_UPLOAD_ACCEPT}
-                        disabled={uploading}
-                        hidden
-                        onChange={(event) => {
-                          onUpload(orderId, documentType.value, event.target.files?.[0] || null);
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
-                  </>
-                ) : null}
-                {currentCustomsDeclaration && canDelete ? (
-                  <button
-                    className={styles.secondaryButton}
-                    type="button"
-                    disabled={deletingDocumentId === currentCustomsDeclaration.id}
-                    onClick={() => onDelete(currentCustomsDeclaration)}
-                  >
-                    {deletingDocumentId === currentCustomsDeclaration.id ? "删除中..." : "删除"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          );
-        }
         return (
           <div className={styles.fileListItem} key={documentType.value}>
             <div>
               <span>{documentType.label}</span>
-              <small>{matchedDocuments.length ? `已上传 ${matchedDocuments.length} 个文件` : "暂未上传"}</small>
-              {matchedDocuments.map((document) => (
-                <small key={document.id}>
-                  {document.fileName || "-"} ｜ {document.uploadedByName || "-"} ｜ {formatDateTime(document.uploadedAt)}
+              {currentDocument ? (
+                <small>
+                  {currentDocument.fileName || "-"} ｜ {currentDocument.uploadedByName || "-"} ｜ {formatDateTime(currentDocument.uploadedAt)}
                 </small>
-              ))}
+              ) : (
+                <small>暂未上传</small>
+              )}
             </div>
             <div>
               {canUpload ? (
@@ -2339,26 +2286,26 @@ function CustomsDocumentPanel({
                   {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
                 </>
               ) : null}
-              {matchedDocuments.map((document) => (
-                <span key={document.id} className={styles.fileListItemActions}>
+              {currentDocument ? (
+                <>
                   {canPreviewOrDownload ? (
                     <>
-                      <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                      <PdfPreviewButton documentId={currentDocument.id} fileName={currentDocument.fileName || ""} />
+                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentDocument.id)}/download`}>下载</a>
                     </>
                   ) : null}
                   {canDelete ? (
                     <button
                       className={styles.secondaryButton}
                       type="button"
-                      disabled={deletingDocumentId === document.id}
-                      onClick={() => onDelete(document)}
+                      disabled={deletingDocumentId === currentDocument.id}
+                      onClick={() => onDelete(currentDocument)}
                     >
-                      {deletingDocumentId === document.id ? "删除中..." : "删除"}
+                      {deletingDocumentId === currentDocument.id ? "删除中..." : "删除"}
                     </button>
                   ) : null}
-                </span>
-              ))}
+                </>
+              ) : null}
             </div>
           </div>
         );

@@ -55,6 +55,7 @@ test("preview route returns structured JSON errors when stream fails", () => {
 
 test("workspace modules use one PDF preview drawer instead of preview tabs", () => {
   const downloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
+  const currentDocumentDownloadHref = /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(currentDocument\.id\)\}\/download`\}/;
   assert.match(sharedComponents, /export function PdfPreviewButton/);
   assert.match(sharedComponents, /export function PdfPreviewDrawer/);
   assert.match(sharedComponents, /const previewUrl = `\/api\/order-documents\/\$\{encodedId\}\/preview`/);
@@ -75,7 +76,7 @@ test("workspace modules use one PDF preview drawer instead of preview tabs", () 
   assert.match(costsModule, /PdfPreviewButton/);
   assert.match(logisticsModule, /PdfPreviewButton/);
   assert.match(taxRefundModule, downloadHref);
-  assert.match(domesticLogisticsModule, downloadHref);
+  assert.match(domesticLogisticsModule, currentDocumentDownloadHref);
   assert.match(costsModule, downloadHref);
   assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}\n${logisticsModule}`, /\/documents\/preview|window\.open\(/);
   assert.doesNotMatch(`${taxRefundModule}\n${domesticLogisticsModule}\n${costsModule}\n${logisticsModule}`, /target="_blank"[^>]*>预览/);
@@ -224,7 +225,7 @@ test("admin can delete uploaded customs documents with confirmation", () => {
   assert.match(domesticLogisticsModule, /const canDeleteCustomsDocuments = canWritePermission\(currentUser, permissions, "documents", \["管理员"\]\)/);
   assert.match(domesticLogisticsModule, /title: "确定删除该文件？"/);
   assert.match(domesticLogisticsModule, /message: "删除后需要重新上传。"/);
-  assert.match(domesticLogisticsModule, /onClick=\{\(\) => onDelete\(currentCustomsDeclaration\)\}/);
+  assert.match(domesticLogisticsModule, /onClick=\{\(\) => onDelete\(currentDocument\)\}/);
   assert.match(domesticLogisticsModule, /confirmLabel: "删除文件"/);
   assert.match(domesticLogisticsModule, /variant: "danger"/);
   assert.match(domesticLogisticsModule, /setNotice\(result\.message \|\| "已删除文件"\)/);

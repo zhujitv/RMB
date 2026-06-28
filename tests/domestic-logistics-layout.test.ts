@@ -36,6 +36,16 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
   assert.doesNotMatch(moduleSource, /ExportInvoiceRemarkView/);
 });
 
+test("customs document upload cards share one action order", () => {
+  const customsPanelSource = moduleSource.match(/function CustomsDocumentPanel[\s\S]*?\n}\n\nfunction UploadProgressInline/)?.[0] || "";
+  assert.match(customsPanelSource, /CUSTOMS_DOCUMENT_TYPES\.map/);
+  assert.match(customsPanelSource, /const currentDocument = latestUploadedDocument\(matchedDocuments\)/);
+  assert.doesNotMatch(customsPanelSource, /if \(documentType\.value === "CUSTOMS_ENTRY_FORM"\)/);
+  assert.ok(customsPanelSource.indexOf("UPLOAD_REPLACE_TEXT") < customsPanelSource.indexOf("<PdfPreviewButton"));
+  assert.ok(customsPanelSource.indexOf("<PdfPreviewButton") < customsPanelSource.indexOf(">下载</a>"));
+  assert.ok(customsPanelSource.indexOf(">下载</a>") < customsPanelSource.indexOf("onClick={() => onDelete(currentDocument)}"));
+});
+
 test("export invoice remark is structured and hidden from logistics views", () => {
   assert.match(prismaSchema, /exportInvoice\s+Json\?\s+@map\("customs_export_invoice"\)/);
   assert.match(exportInvoiceRemarkFormatter, /export type ExportInvoiceRemark/);
