@@ -58,7 +58,7 @@ test("manual explains account and upload security rules", () => {
   assert.match(manualModule, /使用系统正式网址进入登录页/);
   assert.match(manualModule, /请求来源不合法/);
   assert.match(manualModule, /缺少请求来源校验信息/);
-  assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 5MB/);
+  assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 10MB/);
   assert.doesNotMatch(manualModule, /主动内容的 PDF 会被系统拒绝/);
   assert.doesNotMatch(manualModule, /带主动内容的 PDF 附件/);
   assert.match(manualModule, /文件预览、下载、删除均受权限控制/);
@@ -70,7 +70,7 @@ test("manual homepage removes the duplicated rule summary block", () => {
   assert.doesNotMatch(manualModule, /manualRuleCard/);
   assert.match(manualModule, /总体完整度不足 100% 不允许提交退税/);
   assert.match(manualModule, /归档不是删除/);
-  assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 5MB/);
+  assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 10MB/);
 });
 
 test("manual explains company profile and system branding settings", () => {

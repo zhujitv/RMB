@@ -29,7 +29,7 @@ export function assertPdfUploadFileCandidate(candidate: unknown): PdfUploadCandi
     throw codedError("文件不能为空", 400, "FILE_EMPTY");
   }
   if (Number(candidate.size || 0) > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件大小不能超过 5MB", 413, "FILE_TOO_LARGE");
+    throw codedError("文件大小不能超过 10MB", 413, "FILE_TOO_LARGE");
   }
   return { file: candidate, originalFileName: fileName, mimeType, fileSize: Number(candidate.size || 0) };
 }
@@ -42,7 +42,7 @@ export async function readValidatedPdfUploadFile(candidate: unknown, fallbackNam
     throw codedError("文件不能为空", 400, "FILE_EMPTY");
   }
   if (body.byteLength > MAX_PDF_UPLOAD_BYTES) {
-    throw codedError("文件大小不能超过 5MB", 413, "FILE_TOO_LARGE");
+    throw codedError("文件大小不能超过 10MB", 413, "FILE_TOO_LARGE");
   }
   if (body.byteLength < 5 || body.subarray(0, 5).toString("ascii") !== "%PDF-") {
     throw codedError("文件格式错误，只能上传有效 PDF 文件", 400, "FILE_SIGNATURE_INVALID");

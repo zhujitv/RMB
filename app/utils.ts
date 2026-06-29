@@ -63,8 +63,8 @@ export function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export const PDF_UPLOAD_ACCEPT = ".pdf";
-export const PDF_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
-export const PDF_UPLOAD_MAX_SIZE_LABEL = "5MB";
+export const PDF_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const PDF_UPLOAD_MAX_SIZE_LABEL = "10MB";
 
 export function isPdfFile(file: File) {
   return file.name.toLowerCase().endsWith(".pdf") && file.type === "application/pdf";
@@ -73,7 +73,7 @@ export function isPdfFile(file: File) {
 export function validatePdfUploadFile(file: File | null) {
   if (!file) return "请选择 PDF 文件";
   if (!isPdfFile(file)) return "仅支持PDF文件";
-  if (file.size > PDF_UPLOAD_MAX_BYTES) return "文件大小不能超过 5MB";
+  if (file.size > PDF_UPLOAD_MAX_BYTES) return "文件大小不能超过 10MB";
   return "";
 }
 

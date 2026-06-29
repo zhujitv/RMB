@@ -368,7 +368,7 @@ test("all active PDF upload services reuse shared basic PDF validation", () => {
     uploadValidation,
     /readValidatedInvoiceUploadFile\(candidate: unknown, fallbackName = "invoice\.pdf"\): Promise<ValidatedUploadFile>/,
   );
-  assert.match(uploadValidation, /文件大小不能超过 5MB/);
+  assert.match(uploadValidation, /文件大小不能超过 10MB/);
   assert.match(uploadValidation, /文件不能为空/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
   assert.doesNotMatch(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
@@ -454,7 +454,7 @@ test("all active upload UIs enforce pdf only auto upload with progress", () => {
   assert.match(appUtils, /export const PDF_UPLOAD_ACCEPT = "\.pdf"/);
   assert.match(
     appUtils,
-    /export const PDF_UPLOAD_MAX_BYTES = 5 \* 1024 \* 1024/,
+    /export const PDF_UPLOAD_MAX_BYTES = 10 \* 1024 \* 1024/,
   );
   assert.match(appUtils, /export function validatePdfUploadFile/);
   assert.match(
@@ -479,7 +479,7 @@ test("all active upload UIs enforce pdf only auto upload with progress", () => {
     assert.match(
       source,
       /validatePdfUploadFile/,
-      `${name} must use the shared 5MB PDF validator`,
+      `${name} must use the shared 10MB PDF validator`,
     );
     assert.match(
       source,
