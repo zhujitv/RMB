@@ -38,10 +38,14 @@ type CostLike = {
   amount?: NumericLike | null;
   amountCny?: NumericLike | null;
   currency?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  costConfirmed?: boolean | null;
   createdAt?: Date | string | null;
   deletedAt?: Date | string | null;
 };
 type DomesticLogisticsInfoLike = {
+  transportType?: string | null;
   destinationPlace?: string | null;
   cargoDescription?: string | null;
   remarkText?: string | null;
@@ -53,6 +57,8 @@ type TaxOrderLike = {
   domesticLogisticsInfo?: DomesticLogisticsInfoLike | null;
   taxRefundCompleteness?: unknown;
   tradeTerm?: string | null;
+  transportType?: string | null;
+  shipmentType?: string | null;
   taxRefundStatus?: string | null;
 };
 type SupplierEntry = {
@@ -113,7 +119,8 @@ export function isTaxRefundLogisticsInvoiceCost(cost: CostLike | null | undefine
 }
 
 export function logisticsInvoiceRequirementForCost(cost: CostLike = {}) {
-  return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.find((item) => item.costTypes.includes(String(cost.costType || ""))) || null;
+  const costType = normalizedCostType(String(cost.costType || ""));
+  return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.find((item) => item.costTypes.includes(costType)) || null;
 }
 
 export function normalizedTradeTerm(value = "") {
@@ -128,12 +135,55 @@ export function isSeaFreightRequiredByTradeTerm(order: TaxOrderLike = {}) {
   return SEA_FREIGHT_REQUIRED_TRADE_TERMS.includes(normalizedTradeTerm(order.tradeTerm || ""));
 }
 
+function numberValue(value: NumericLike | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function normalizedTransportMode(value: unknown = "") {
+  const text = String(value || "").trim().toUpperCase();
+  if (["FCL", "FULL_CONTAINER", "FULL CONTAINER", "CONTAINER", "TRUCK", "MULTIMODAL", "整柜", "车辆运输", "多式联运"].includes(text)) return "FCL";
+  if (["LCL", "BULK_WAREHOUSE", "BULK WAREHOUSE", "WAREHOUSE", "拼箱", "散货", "散货进舱"].includes(text)) return "LCL";
+  if (["AIR", "AIR_FREIGHT", "AIR FREIGHT", "空运"].includes(text)) return "AIR";
+  if (["EXPRESS", "COURIER", "快递", "快递运输"].includes(text)) return "EXPRESS";
+  return text;
+}
+
+export function orderTransportMode(order: TaxOrderLike = {}) {
+  const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
+  return normalizedTransportMode(order.transportType || order.shipmentType || domesticLogisticsInfo?.transportType || "");
+}
+
+function positiveCostAmount(cost: CostLike = {}) {
+  return Math.max(numberValue(cost.amountCny), numberValue(cost.amount)) > 0;
+}
+
+function isActualApprovedLogisticsCost(cost: CostLike = {}) {
+  if (!positiveCostAmount(cost)) return false;
+  const sourceType = String(cost.sourceType || "");
+  return sourceType === "LOGISTICS_EXPENSE" || cost.costConfirmed === true || !sourceType;
+}
+
+function isFobLclOrder(order: TaxOrderLike = {}) {
+  return normalizedTradeTerm(order.tradeTerm || "") === "FOB" && orderTransportMode(order) === "LCL";
+}
+
+function isLclGeneralLogisticsRequirement(requirement: { key?: string } = {}) {
+  return requirement.key === "TRUCKING";
+}
+
 export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLike = {}, logisticsInvoiceCosts: CostLike[] = []) {
   const hasSeaFreightCost = logisticsInvoiceCosts.some((cost) => normalizedCostType(String(cost.costType || "")) === "海运费");
+  const actualRequirementKeys = new Set(logisticsInvoiceCosts.flatMap((cost) => {
+    const requirement = logisticsInvoiceRequirementForCost(cost);
+    return requirement?.key ? [requirement.key] : [];
+  }));
+  const fobLcl = isFobLclOrder(order);
   return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.filter((requirement) => (
-    !isSeaFreightRequirement(requirement)
-    || isSeaFreightRequiredByTradeTerm(order)
-    || hasSeaFreightCost
+    actualRequirementKeys.has(requirement.key)
+    || (requirement.key === "CUSTOMS" && fobLcl)
+    || (isLclGeneralLogisticsRequirement(requirement) && fobLcl)
+    || (isSeaFreightRequirement(requirement) && (isSeaFreightRequiredByTradeTerm(order) || hasSeaFreightCost))
   ));
 }
 
@@ -178,7 +228,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const documents = order.documents || [];
   const activeCosts = (order.costs || []).filter((cost) => !cost.deletedAt && cost.supplierId);
   const factoryCosts = activeCosts.filter(isTaxRefundFactoryCost);
-  const logisticsInvoiceCosts = activeCosts.filter((cost) => !isTaxRefundFactoryCost(cost) && isTaxRefundLogisticsInvoiceCost(cost));
+  const logisticsInvoiceCosts = activeCosts.filter((cost) => !isTaxRefundFactoryCost(cost) && isTaxRefundLogisticsInvoiceCost(cost) && isActualApprovedLogisticsCost(cost));
   const successDocs = documents.filter(successDocument);
   const hasOrderType = (type: string) => successDocs.some((doc) => doc.documentType === type && !doc.costId && doc.relatedModule !== "SUPPLIER");
   const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
@@ -284,7 +334,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         documentType: "SUPPLIER_INVOICE",
         invoiceLabel: requirement.label,
         missingBucket: requirement.key,
-        label: requirement.label,
+        label: "缺少已发生费用对应资料",
         reminderDue: daysSinceCostCreated >= 3,
         daysSinceCostCreated,
       });
@@ -421,19 +471,12 @@ export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
     supplier: factory,
     logistics: {
       completed: 0,
-      total: 3,
+      total: 0,
       ruleVersion: TAX_REFUND_LOGISTICS_RULE_VERSION,
       missing: [],
       reminders: [],
       costs: [],
-      requirements: TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.filter((item) => item.key !== SEA_FREIGHT_REQUIREMENT_KEY).map((item) => ({
-        key: item.key,
-        label: item.label,
-        missingCostLabel: item.missingCostLabel,
-        costTypes: item.costTypes,
-        completed: false,
-        costs: [],
-      })),
+      requirements: [],
       missingLogisticsInvoices: [],
       missingCustomsInvoices: [],
       missingPortInvoices: [],
@@ -471,7 +514,6 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   const hasCachedSeaRequirement = cachedLogisticsRequirements.some((item) => item?.key === SEA_FREIGHT_REQUIREMENT_KEY);
   if (!isSeaFreightRequiredByTradeTerm(order) && hasCachedSeaRequirement) return true;
   if (isSeaFreightRequiredByTradeTerm(order) && !hasCachedSeaRequirement) return true;
-  if (Number(logistics.total || 0) < 3) return true;
   if (!Array.isArray(logistics.requirements)) return true;
   if (Array.isArray(cached.missingLabels) && cached.missingLabels.some((label) => (ORDER_DOCUMENT_TYPES as readonly string[]).includes(String(label)))) return true;
   return false;

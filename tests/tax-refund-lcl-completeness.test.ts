@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const completeness = readFileSync("lib/platform/shared-tax-completeness.ts", "utf8");
+const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const reportService = readFileSync("lib/report-service.ts", "utf8");
+const packageJson = readFileSync("package.json", "utf8");
+const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs", "utf8");
+
+test("tax refund completeness adapts FOB LCL logistics invoice requirements to actual costs", () => {
+  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "ACTUAL_COST_LCL_20260629"/);
+  assert.match(constants, /label: "物流费资料"[\s\S]*"国内物流费"[\s\S]*"进港费"[\s\S]*"其他物流费用"/);
+  assert.match(completeness, /export function normalizedTransportMode/);
+  assert.match(completeness, /\["LCL", "BULK_WAREHOUSE"[\s\S]*"拼箱"[\s\S]*"散货进舱"\]\.includes\(text\)\) return "LCL"/);
+  assert.match(completeness, /\["FCL", "FULL_CONTAINER"[\s\S]*"TRUCK"[\s\S]*"MULTIMODAL"[\s\S]*"整柜"/);
+  assert.match(completeness, /function isFobLclOrder/);
+  assert.match(completeness, /normalizedTradeTerm\(order\.tradeTerm \|\| ""\) === "FOB" && orderTransportMode\(order\) === "LCL"/);
+  assert.match(completeness, /requirement\.key === "CUSTOMS" && fobLcl/);
+  assert.match(completeness, /isLclGeneralLogisticsRequirement\(requirement\) && fobLcl/);
+});
+
+test("tax refund logistics completeness is based on occurred approved costs instead of fixed port requirement", () => {
+  assert.match(completeness, /function isActualApprovedLogisticsCost/);
+  assert.match(completeness, /sourceType === "LOGISTICS_EXPENSE" \|\| cost\.costConfirmed === true/);
+  assert.match(completeness, /positiveCostAmount\(cost\)/);
+  assert.match(completeness, /actualRequirementKeys\.has\(requirement\.key\)/);
+  assert.match(completeness, /label: "缺少已发生费用对应资料"/);
+  assert.doesNotMatch(completeness, /Number\(logistics\.total \|\| 0\) < 3/);
+  assert.doesNotMatch(constants, /missingCostLabel: "未录入港杂费"/);
+  assert.match(constants, /missingCostLabel: "缺少已发生费用对应资料"/);
+});
+
+test("historical tax refund completeness refresh and report wording use the shared rule", () => {
+  assert.match(packageJson, /"refresh:tax-refund-completeness"/);
+  assert.match(refreshScript, /refreshTaxRefundCompleteness\(order\.id\)/);
+  assert.match(refreshScript, /receivableOrder\.findMany/);
+  assert.match(reportService, /缺失已发生费用资料明细/);
+  assert.doesNotMatch(reportService, /缺失港杂费发票明细/);
+});
