@@ -342,7 +342,7 @@ test("api routes parse JSON bodies through the shared helper", () => {
   assert.match(registerRoute, /parseJsonBody\(request\)/);
 });
 
-test("all active PDF upload services reuse shared PDF validation", () => {
+test("all active PDF upload services reuse shared basic PDF validation", () => {
   assert.match(uploadValidation, /type ValidatedUploadFile = \{/);
   assert.match(
     uploadValidation,
@@ -369,9 +369,11 @@ test("all active PDF upload services reuse shared PDF validation", () => {
     /readValidatedInvoiceUploadFile\(candidate: unknown, fallbackName = "invoice\.pdf"\): Promise<ValidatedUploadFile>/,
   );
   assert.match(uploadValidation, /文件大小不能超过 5MB/);
+  assert.match(uploadValidation, /文件不能为空/);
   assert.match(uploadValidation, /FILE_SIGNATURE_INVALID/);
-  assert.match(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
-  assert.match(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
+  assert.doesNotMatch(uploadValidation, /DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS/);
+  assert.doesNotMatch(uploadValidation, /PDF_ACTIVE_CONTENT_NOT_ALLOWED/);
+  assert.doesNotMatch(uploadValidation, /OpenAction|RichMedia|EmbeddedFile|XFA|JavaScript/);
   assert.match(
     orderDocumentsRoute,
     /assertPdfUploadFileCandidate\(candidate\)/,
@@ -433,16 +435,16 @@ test("logistics generated cost invoices are managed only by logistics invoice gr
   );
 });
 
-test("shared PDF validation rejects active content actions", () => {
-  assert.match(uploadValidation, /\/JavaScript\\b/);
-  assert.match(uploadValidation, /\/OpenAction\\b/);
-  assert.match(uploadValidation, /\/EmbeddedFile\\b/);
-  assert.match(uploadValidation, /\/Launch\\b/);
-  assert.match(
+test("shared PDF validation does not reject active content actions", () => {
+  assert.doesNotMatch(uploadValidation, /\/JavaScript\\b/);
+  assert.doesNotMatch(uploadValidation, /\/OpenAction\\b/);
+  assert.doesNotMatch(uploadValidation, /\/EmbeddedFile\\b/);
+  assert.doesNotMatch(uploadValidation, /\/Launch\\b/);
+  assert.doesNotMatch(
     uploadValidation,
     /function assertPdfDoesNotContainActiveContent\(body: Buffer\)/,
   );
-  assert.match(
+  assert.doesNotMatch(
     uploadValidation,
     /assertPdfDoesNotContainActiveContent\(body\);[\s\S]*return \{/,
   );

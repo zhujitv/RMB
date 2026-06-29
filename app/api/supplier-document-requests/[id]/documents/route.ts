@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       request: result.request,
       document: result.document,
       data: result,
-      message: "资料已上传",
+      message: "上传成功",
     });
   } catch (error: unknown) {
     return apiError(error, "上传供应商回传资料失败");

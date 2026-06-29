@@ -59,7 +59,8 @@ test("manual explains account and upload security rules", () => {
   assert.match(manualModule, /请求来源不合法/);
   assert.match(manualModule, /缺少请求来源校验信息/);
   assert.match(manualModule, /所有业务附件上传入口统一只支持 PDF，单个文件最大 5MB/);
-  assert.match(manualModule, /含脚本、自动打开动作、嵌入文件等主动内容的 PDF 会被系统拒绝/);
+  assert.doesNotMatch(manualModule, /主动内容的 PDF 会被系统拒绝/);
+  assert.doesNotMatch(manualModule, /带主动内容的 PDF 附件/);
   assert.match(manualModule, /文件预览、下载、删除均受权限控制/);
 });
 

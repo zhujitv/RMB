@@ -132,7 +132,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       if (data.request?.id) {
         setRows((current) => current.map((row) => (row.id === data.request?.id ? data.request : row)));
       }
-      setNotice(data.message || "PDF 文件已上传");
+      setNotice(data.message || "上传成功");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
     } finally {

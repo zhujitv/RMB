@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: document,
       document,
-      message: "文件上传成功",
+      message: "上传成功",
     });
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;

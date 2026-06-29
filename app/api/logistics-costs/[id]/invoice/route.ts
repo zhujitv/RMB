@@ -15,7 +15,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const formData = await request.formData();
     const result = await uploadLogisticsExpenseInvoice(request, actor, id, formData);
-    return NextResponse.json({ success: true, ...result, message: "物流发票已上传" }, { status: 201 });
+    return NextResponse.json({ success: true, ...result, message: "上传成功" }, { status: 201 });
   } catch (error: unknown) {
     return apiError(error, "上传物流发票失败");
   }

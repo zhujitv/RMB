@@ -369,22 +369,6 @@ function emptyTransportItem(): TransportItem {
   };
 }
 
-function customsRecognitionNotice(result?: CustomsRecognitionResult | null) {
-  const status = result?.customsParseStatus || "";
-  const declarationNo = result?.customsDeclarationNo || "";
-  const declarationDate = result?.customsDeclarationDate || "";
-  if (status === "SUCCESS" && declarationNo && declarationDate) {
-    return `已识别报关单号：${declarationNo}；已识别申报日期：${declarationDate}`;
-  }
-  if (declarationNo || declarationDate) {
-    return [
-      declarationNo ? `已识别报关单号：${declarationNo}` : "",
-      declarationDate ? `已识别申报日期：${declarationDate}` : "",
-    ].filter(Boolean).join("；");
-  }
-  return "未识别成功，请手工填写报关单号和申报日期";
-}
-
 function sanitizeDomesticLogisticsInfoForRender(info?: DomesticLogisticsInfo | null): DomesticLogisticsInfo | null {
   if (!info) return null;
   const allowedInfo: Partial<DomesticLogisticsInfo> = {};
@@ -663,16 +647,10 @@ export function DomesticLogisticsModule({
       formData.append("documentType", documentType);
       formData.append("uploadSource", "REACT_DOMESTIC_LOGISTICS");
       formData.append("file", file);
-      const data = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
+      await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
         setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
-      const uploadedDocument = data.document || data.data;
-      const recognition = uploadedDocument?.customsRecognition || null;
-      if (isCustomsDeclaration) {
-        setNotice(customsRecognitionNotice(recognition));
-      } else {
-        setNotice("报关资料已上传");
-      }
+      setNotice("上传成功");
       await loadRows(submittedKeyword, businessScope);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");

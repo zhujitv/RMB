@@ -995,7 +995,7 @@ export function LogisticsFeesModule({
           }}
           onInvoiceUploaded={(result) => {
             applyLogisticsExpenseMutationResult(result);
-            setNotice(result.message || "物流发票已上传");
+            setNotice(result.message || "上传成功");
             void loadStatement(statementMonth);
           }}
         />

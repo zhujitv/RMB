@@ -613,17 +613,13 @@ export function TaxRefundModule({
 
   async function handleUploadedCustomsRecognition(orderId: string, document: TaxDocument, result: CustomsRecognitionResult | null | undefined) {
     if (!result?.attempted || !document.id) {
-      setNotice("报关单已上传");
+      setNotice("上传成功");
       return;
     }
     const statusText = customsRecognitionStatusText(result);
     setDocumentRecognitionStatus(document.id, statusText);
     patchCustomsRecognition(orderId, result);
-    if (result.customsParseStatus === "SUCCESS" || result.customsParseStatus === "PARTIAL") {
-      setNotice("报关单已上传，识别结果已自动回填并同步到退税资料列表。");
-    } else {
-      setNotice("未识别成功，请手工填写报关单号和申报日期");
-    }
+    setNotice("上传成功");
   }
 
   function recognizeFromUploadedCustoms(order: TaxRefundDetail) {
@@ -809,7 +805,7 @@ export function TaxRefundModule({
       if (isCustomsDeclaration && uploadedDocument?.id) {
         await handleUploadedCustomsRecognition(orderId, uploadedDocument, uploadedDocument.customsRecognition || data.customsRecognition || null);
       } else {
-        setNotice("资料文件已上传");
+        setNotice("上传成功");
       }
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");

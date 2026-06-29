@@ -864,7 +864,7 @@ export function CostsModule({
       });
       await refreshDocumentCost(cost.id);
       if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
-      setNotice("资料已上传");
+      setNotice("上传成功");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
     } finally {
