@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
+import { attachBusinessDocumentsToCost } from "./business-documents";
 import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
@@ -258,15 +259,15 @@ function isUniqueConstraintError(error: unknown) {
 
 export async function createCostIdempotently(data: CostCreateData): Promise<{ cost: CostWithRelations; reused: boolean }> {
   const recentDuplicate = await findDuplicateCost(data, COST_IDEMPOTENCY_WINDOW_MS);
-  if (recentDuplicate) return { cost: recentDuplicate, reused: true };
+  if (recentDuplicate) return { cost: await attachBusinessDocumentsToCost(recentDuplicate) as CostWithRelations, reused: true };
   try {
     const cost = await prisma.orderCost.create({ data, include: includeCostRelations() });
-    return { cost, reused: false };
+    return { cost: await attachBusinessDocumentsToCost(cost) as CostWithRelations, reused: false };
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
     const guardedDuplicate = await findDuplicateCost(data, COST_DUPLICATE_GUARD_LOOKBACK_MS, { sameCreator: true })
       || await findDuplicateCost(data, COST_DUPLICATE_GUARD_LOOKBACK_MS);
-    if (guardedDuplicate) return { cost: guardedDuplicate, reused: true };
+    if (guardedDuplicate) return { cost: await attachBusinessDocumentsToCost(guardedDuplicate) as CostWithRelations, reused: true };
     throw error;
   }
 }

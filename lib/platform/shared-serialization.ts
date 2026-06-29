@@ -181,6 +181,7 @@ type CostDocumentLike = Record<string, unknown> & {
   costType?: string | null;
   documentType?: string | null;
   fileName?: string | null;
+  fileUrl?: string | null;
   originalFilename?: string | null;
   originalName?: string | null;
   fileSize?: unknown;
@@ -191,6 +192,7 @@ type CostDocumentLike = Record<string, unknown> & {
   uploadedAt?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
+  source?: string | null;
 };
 type CostLike = Record<string, unknown> & {
   id?: string | null;
@@ -559,8 +561,10 @@ export function serializeOrderDocument(documentInput: unknown, orderOverride: un
     originalName: originalFilename,
     originalFilename,
     standardFilename,
+    fileUrl: document.fileUrl || "",
     fileSize: document.fileSize,
     mimeType: document.mimeType,
+    source: document.source || (document.factoryDocumentRequestId ? "SUPPLIER_RETURN" : document.relatedModule || "ORDER"),
     uploadStatus: document.uploadStatus,
     uploadStatusLabel: uploadStatusLabel(document.uploadStatus),
     uploadProgress: document.uploadProgress,

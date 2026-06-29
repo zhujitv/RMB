@@ -20,6 +20,7 @@ import {
   requireText,
   runNonCriticalTask,
   serializeOrderDocument,
+  syncCostInvoiceStatus,
   isProductSupplierOperatorRole,
   isProductSupplierType,
   validEmail,
@@ -258,12 +259,14 @@ function serializeSupplierDocument(document: unknown) {
     documentType: row.documentType,
     documentTypeLabel: row.documentTypeLabel,
     fileName: row.fileName,
+    fileUrl: row.fileUrl,
     displayFileName: row.displayFileName,
     downloadFileName: row.downloadFileName,
     fileSize: row.fileSize,
     mimeType: row.mimeType,
     uploadStatus: row.uploadStatus,
     uploadStatusLabel: row.uploadStatusLabel,
+    source: row.source,
     uploadedByName: row.uploadedByName,
     uploadedAt: row.uploadedAt,
     createdAt: row.createdAt,
@@ -593,6 +596,19 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
+  if (documentType === "SUPPLIER_INVOICE") {
+    await runNonCriticalTask("成本发票状态同步", async () => {
+      const costs = await prisma.orderCost.findMany({
+        where: {
+          orderId: row.orderId,
+          supplierId: row.supplierId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      await Promise.all(costs.map((cost) => syncCostInvoiceStatus(cost.id)));
+    });
+  }
   await runNonCriticalTask("供应商回传资料日志写入", () => writeAudit(request, actor, "供应商上传回传资料", "order_documents", document.id, null, {
     orderNo: row.order.orderNo,
     supplierId: row.supplierId,

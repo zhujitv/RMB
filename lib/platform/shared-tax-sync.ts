@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import { includeOrderRelations } from "./shared-order-relations";
 import { taxDocumentCompleteness, taxRefundStatusFromCompleteness } from "./shared-tax-completeness";
+import { hasCostBusinessDocument } from "./business-documents";
 
 export async function refreshTaxRefundCompleteness(orderId: string | null | undefined) {
   if (!orderId) return null;
@@ -27,7 +28,7 @@ export async function syncCostInvoiceStatus(costId: string | null | undefined) {
   if (!costId) return null;
   const cost = await prisma.orderCost.findFirst({
     where: { id: costId, deletedAt: null },
-    select: { sourceType: true, invoiceStatus: true },
+    select: { id: true, orderId: true, supplierId: true, sourceType: true, invoiceStatus: true },
   });
   if (!cost) return null;
   const invoiceCount = await prisma.orderDocument.count({
@@ -38,14 +39,15 @@ export async function syncCostInvoiceStatus(costId: string | null | undefined) {
       deletedAt: null,
     },
   });
+  const hasSupplierReturnInvoice = await hasCostBusinessDocument(cost, "SUPPLIER_INVOICE");
   if (cost.sourceType === "LOGISTICS_EXPENSE") {
-    const invoiceStatus = invoiceCount > 0 ? "已收到" : (cost.invoiceStatus || "未通知");
+    const invoiceStatus = invoiceCount > 0 || hasSupplierReturnInvoice ? "已收到" : (cost.invoiceStatus || "未通知");
     return prisma.orderCost.update({
       where: { id: costId },
       data: { invoiceStatus },
     });
   }
-  const invoiceStatus = invoiceCount > 0 ? "已收到" : "未收到";
+  const invoiceStatus = invoiceCount > 0 || hasSupplierReturnInvoice ? "已收到" : "未收到";
   return prisma.orderCost.update({
     where: { id: costId },
     data: { invoiceStatus },

@@ -11,6 +11,7 @@ const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
 const menu = readFileSync("app/menu.ts", "utf8");
 const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8");
+const repairSupplierReturnDocumentsScript = readFileSync("scripts/repair-supplier-return-documents.mjs", "utf8");
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 
@@ -25,8 +26,15 @@ test("supplier document workflow uses existing factory tax document types", () =
   assert.match(service, /SUPPLIER_PURCHASE_CONTRACT/);
   assert.match(service, /SUPPLIER_INVOICE/);
   assert.match(service, /refreshTaxRefundCompleteness\(row\.orderId\)/);
+  assert.match(service, /syncCostInvoiceStatus/);
   assert.match(service, /readValidatedPdfUploadFile/);
   assert.match(service, /readValidatedExcelTemplate/);
+  assert.match(service, /orderId: row\.orderId/);
+  assert.match(service, /supplierId: row\.supplierId/);
+  assert.match(service, /factoryDocumentRequestId: row\.id/);
+  assert.match(service, /source: row\.source/);
+  assert.match(service, /documentType === "SUPPLIER_INVOICE"/);
+  assert.match(service, /orderId: row\.orderId,[\s\S]*supplierId: row\.supplierId,[\s\S]*deletedAt: null/);
 });
 
 test("supplier callback email uses formal PDF-only request template", () => {
@@ -125,4 +133,18 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(supplierModule, /total=\{total\}/);
   assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
   assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);
+});
+
+test("supplier return repair script backfills business document associations", () => {
+  assert.match(repairSupplierReturnDocumentsScript, /factoryDocumentRequestId: \{ not: null \}/);
+  assert.match(repairSupplierReturnDocumentsScript, /refreshTaxRefundCompleteness/);
+  assert.match(repairSupplierReturnDocumentsScript, /syncCostInvoiceStatus/);
+  assert.match(repairSupplierReturnDocumentsScript, /data\.orderId = task\.orderId/);
+  assert.match(repairSupplierReturnDocumentsScript, /data\.supplierId = task\.supplierId \|\| null/);
+  assert.match(repairSupplierReturnDocumentsScript, /data\.relatedModule = "SUPPLIER"/);
+  assert.match(repairSupplierReturnDocumentsScript, /affectedOrderIds\.add\(task\.orderId\)/);
+  assert.match(repairSupplierReturnDocumentsScript, /affectedSupplierInvoicePairs\.set/);
+  assert.match(repairSupplierReturnDocumentsScript, /source: "SUPPLIER_RETURN"/);
+  assert.match(repairSupplierReturnDocumentsScript, /刷新订单完整度/);
+  assert.match(repairSupplierReturnDocumentsScript, /同步成本发票状态/);
 });

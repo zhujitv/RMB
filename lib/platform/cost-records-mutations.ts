@@ -46,6 +46,7 @@ import {
   includeCostRelations,
   serializeCostOrderSummary,
 } from "./cost-records-shared";
+import { attachBusinessDocumentsToCost, attachBusinessDocumentsToCosts } from "./business-documents";
 
 type CostWithOrder = Prisma.OrderCostGetPayload<{ include: { order: { include: { customer: true } } } }>;
 type CostActorInput = {
@@ -314,7 +315,7 @@ export async function saveCost(request: AuditRequestLike, actor: CostActorInput,
     await runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, action, "order_costs", cost.id, before, cost));
   }
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(cost.orderId));
-  return safeSerializeCost(cost);
+  return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
 }
 
 export async function saveCosts(request: AuditRequestLike, actor: CostActorInput, input: unknown) {
@@ -353,7 +354,7 @@ export async function saveCosts(request: AuditRequestLike, actor: CostActorInput
   const createdCosts = results.filter((result) => !result.reused).map((result) => result.cost);
   await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost))));
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
-  return costs.map(safeSerializeCost);
+  return (await attachBusinessDocumentsToCosts(costs)).map(safeSerializeCost);
 }
 
 export async function deleteCost(request: AuditRequestLike, actor: CostActorInput, id: string) {
@@ -420,7 +421,7 @@ export async function saveLogisticsCost(request: AuditRequestLike, actor: CostAc
     : await prisma.orderCost.create({ data, include: includeCostRelations() });
   await runNonCriticalTask("物流费用发票状态同步", () => syncCostInvoiceStatus(cost.id));
   await runNonCriticalTask("物流费用操作日志写入", () => writeAudit(request, currentActor, id ? "修改物流费用" : "新增物流费用", "order_costs", cost.id, before, cost));
-  return safeSerializeCost(cost);
+  return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
 }
 
 export async function deleteLogisticsCost(request: AuditRequestLike, actor: CostActorInput, id: string) {

@@ -13,6 +13,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "audit": "npm audit --omit=dev",
     "security:audit": "node scripts/security-audit.mjs",
+    "repair:supplier-return-documents": "node --experimental-strip-types scripts/repair-supplier-return-documents.mjs",
     "verify:ci": "npm run lint && npm run typecheck && npm test && npm run security:audit && npm run build:app && npm run audit",
     "verify:release": "npm run lint && npm run typecheck && npm test && npm run security:audit && npm run build:release && npm run audit",
     "verify": "npm run verify:ci",

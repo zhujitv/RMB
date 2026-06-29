@@ -8,6 +8,7 @@ const costsMutation = readFileSync("lib/platform/cost-records-mutations.ts", "ut
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
 const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
 const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
+const businessDocuments = readFileSync("lib/platform/business-documents.ts", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 const costsModuleWithoutDisableGuard = costsModule.replace(/const DISABLE_COMPONENT_RENDER = \[[\s\S]*?\] as const;\nvoid DISABLE_COMPONENT_RENDER;\n/, "");
 
@@ -88,8 +89,12 @@ test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsQueries, /超期未收票/);
   assert.doesNotMatch(costsQueries, /已收票未付款/);
   assert.match(costsQueries, /group\.invoiceStatus === "未收到" && Boolean\(group\.invoiceExceptionType\)/);
-  assert.match(costsQueries, /documents: \{ some: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
-  assert.match(costsQueries, /documents: \{ none: SUCCESS_SUPPLIER_INVOICE_FILTER \}/);
+  assert.match(costsQueries, /successfulSupplierInvoicePairs/);
+  assert.match(costsQueries, /supplierInvoicePairWhere/);
+  assert.match(costsQueries, /attachBusinessDocumentsToCosts/);
+  assert.match(businessDocuments, /factoryDocumentRequestId\) return SUPPLIER_RETURN_DOCUMENT_SOURCE/);
+  assert.match(businessDocuments, /document\.orderId !== cost\.orderId \|\| document\.supplierId !== cost\.supplierId/);
+  assert.match(businessDocuments, /cost-document-missing-check/);
 });
 
 test("cost management page is centered and constrained to readable table width", () => {

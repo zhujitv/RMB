@@ -20,6 +20,12 @@ import {
 import { costAccessWhere } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
 import {
+  attachBusinessDocumentsToCost,
+  attachBusinessDocumentsToCostOrders,
+  attachBusinessDocumentsToCosts,
+  successfulSupplierInvoicePairs,
+} from "./business-documents";
+import {
   archiveScope,
   costPageParams,
   includeCostRelations,
@@ -47,6 +53,10 @@ type CostListFilters = {
   dateFrom: Date | null;
   dateTo: Date | null;
   businessScope: CostBusinessScope;
+};
+type SupplierInvoicePair = {
+  orderId: string;
+  supplierId: string;
 };
 
 const SUCCESS_SUPPLIER_INVOICE_FILTER: Prisma.OrderDocumentWhereInput = {
@@ -113,26 +123,41 @@ function costDateRangeFilter(filters: CostListFilters): Prisma.OrderCostWhereInp
   };
 }
 
-function costInvoiceStatusFilter(invoiceStatus: string): Prisma.OrderCostWhereInput | null {
+function supplierInvoicePairWhere(pairs: SupplierInvoicePair[]): Prisma.OrderCostWhereInput | null {
+  const rows = pairs.filter((pair) => pair.orderId && pair.supplierId);
+  if (!rows.length) return null;
+  return {
+    OR: rows.map((pair) => ({
+      orderId: pair.orderId,
+      supplierId: pair.supplierId,
+    })),
+  };
+}
+
+function costInvoiceStatusFilter(invoiceStatus: string, supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput | null {
   if (!invoiceStatus) return null;
-  if (invoiceStatus === "已收到") return costEffectiveInvoiceReceivedWhere();
-  if (invoiceStatus === "未收到") return costEffectiveInvoiceMissingWhere();
+  if (invoiceStatus === "已收到") return costEffectiveInvoiceReceivedWhere(supplierInvoicePairs);
+  if (invoiceStatus === "未收到") return costEffectiveInvoiceMissingWhere(supplierInvoicePairs);
   return null;
 }
 
-function costEffectiveInvoiceReceivedWhere(): Prisma.OrderCostWhereInput {
+function costEffectiveInvoiceReceivedWhere(supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput {
+  const supplierReturnWhere = supplierInvoicePairWhere(supplierInvoicePairs);
   return {
     OR: [
       { documents: { some: SUCCESS_SUPPLIER_INVOICE_FILTER } },
+      ...(supplierReturnWhere ? [supplierReturnWhere] : []),
       { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: "已收到" },
     ],
   };
 }
 
-function costEffectiveInvoiceMissingWhere(): Prisma.OrderCostWhereInput {
+function costEffectiveInvoiceMissingWhere(supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput {
+  const supplierReturnWhere = supplierInvoicePairWhere(supplierInvoicePairs);
   return {
     AND: [
       { documents: { none: SUCCESS_SUPPLIER_INVOICE_FILTER } },
+      ...(supplierReturnWhere ? [{ NOT: supplierReturnWhere }] : []),
       {
         OR: [
           { sourceType: { not: "LOGISTICS_EXPENSE" } },
@@ -143,9 +168,9 @@ function costEffectiveInvoiceMissingWhere(): Prisma.OrderCostWhereInput {
   };
 }
 
-function costFilterClauses(filters: CostListFilters): Prisma.OrderCostWhereInput[] {
+function costFilterClauses(filters: CostListFilters, supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput[] {
   const keyword = filters.keyword;
-  const invoiceStatus = costInvoiceStatusFilter(filters.invoiceStatus);
+  const invoiceStatus = costInvoiceStatusFilter(filters.invoiceStatus, supplierInvoicePairs);
   const dateRange = costDateRangeFilter(filters);
   const clauses: Array<Prisma.OrderCostWhereInput | null> = [
     { order: { is: orderArchiveWhereForScope(filters.businessScope) } },
@@ -172,8 +197,8 @@ function costFilterClauses(filters: CostListFilters): Prisma.OrderCostWhereInput
   return clauses.filter((clause): clause is Prisma.OrderCostWhereInput => Boolean(clause));
 }
 
-function pagedCostWhere(filters: CostListFilters, actor: ActorLike): Prisma.OrderCostWhereInput {
-  const clauses = costFilterClauses(filters);
+function pagedCostWhere(filters: CostListFilters, actor: ActorLike, supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput {
+  const clauses = costFilterClauses(filters, supplierInvoicePairs);
   return {
     deletedAt: null,
     ...costAccessWhere(actor),
@@ -183,20 +208,23 @@ function pagedCostWhere(filters: CostListFilters, actor: ActorLike): Prisma.Orde
 
 export async function listCosts(query: CostQuery, actor: ActorLike = null): Promise<CostDto[]> {
   assertRead(actor, "costs");
-  const where = pagedCostWhere(costListFiltersFromQuery(query), actor);
+  const filters = costListFiltersFromQuery(query);
+  const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
+  const where = pagedCostWhere(filters, actor, invoicePairs);
   const rows = await prisma.orderCost.findMany({
     where,
     include: includeCostRelations(),
     orderBy: [{ createdAt: "desc" }],
   });
-  return rows.map(safeSerializeCost);
+  return (await attachBusinessDocumentsToCosts(rows)).map(safeSerializeCost);
 }
 
 export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
-  const where = pagedCostWhere(filters, actor);
+  const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
+  const where = pagedCostWhere(filters, actor, invoicePairs);
   const [total, rows] = await Promise.all([
     prisma.orderCost.count({ where }),
     prisma.orderCost.findMany({
@@ -207,8 +235,9 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
       take: pageSize,
     }),
   ]);
+  const rowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(rows);
   return {
-    rows: rows.map(safeSerializeCost),
+    rows: rowsWithBusinessDocuments.map(safeSerializeCost),
     total,
     page,
     pageSize,
@@ -360,13 +389,15 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
+  const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
   const matchingRows = await prisma.orderCost.findMany({
-    where: pagedCostWhere(filters, actor),
+    where: pagedCostWhere(filters, actor, invoicePairs),
     include: includeCostInvoiceGroupRelations(),
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
   });
+  const matchingRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(matchingRows);
   const groupMap = new Map<string, CostWithInvoiceGroupRelations[]>();
-  matchingRows.forEach((cost) => {
+  matchingRowsWithBusinessDocuments.forEach((cost) => {
     const key = costInvoiceGroupKey(cost);
     if (!groupMap.has(key)) groupMap.set(key, []);
     groupMap.get(key)!.push(cost);
@@ -397,7 +428,8 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     })
     : [];
-  const rawRowsByKey = fullRows.reduce<Map<string, CostWithInvoiceGroupRelations[]>>((acc, cost) => {
+  const fullRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(fullRows);
+  const rawRowsByKey = fullRowsWithBusinessDocuments.reduce<Map<string, CostWithInvoiceGroupRelations[]>>((acc, cost) => {
     const key = costInvoiceGroupKey(cost);
     if (!acc.has(key)) acc.set(key, []);
     acc.get(key)!.push(cost);
@@ -432,7 +464,8 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
-  const costWhere = pagedCostWhere(filters, actor);
+  const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
+  const costWhere = pagedCostWhere(filters, actor, invoicePairs);
   const where: Prisma.ReceivableOrderWhereInput = {
     deletedAt: null,
     ...orderArchiveWhereForScope(filters.businessScope),
@@ -463,8 +496,9 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
       take: pageSize,
     }),
   ]);
+  const ordersWithBusinessDocuments = await attachBusinessDocumentsToCostOrders(orders);
   return {
-    rows: orders.map(serializeCostOrderSummary),
+    rows: ordersWithBusinessDocuments.map(serializeCostOrderSummary),
     total,
     page,
     pageSize,
@@ -482,5 +516,5 @@ export async function getCost(id: string, actor: ActorLike = null) {
     include: includeCostRelations(),
   });
   if (!cost) throw permissionError("成本记录不存在或无权查看", 404);
-  return safeSerializeCost(cost);
+  return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
 }
