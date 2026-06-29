@@ -118,7 +118,7 @@ export function SettingsRows({
               handlePrimaryAction();
             }}
           >
-            {tab === "users" ? "编辑" : "详情"}
+            {tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
           </button>
         </td>
       </tr>

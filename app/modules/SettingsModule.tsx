@@ -391,7 +391,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setActiveTab("suppliers");
     setDetailRow(null);
     setSupplierMessage("");
-    setSupplierPanelMode("view");
+    setSupplierPanelMode("edit");
     setSupplierForm(supplierFormFromRow(supplier));
   }
 

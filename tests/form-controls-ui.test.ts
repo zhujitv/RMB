@@ -218,7 +218,7 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(startEditUserSnippet, /setUserForm\(userFormFromRow\(user\)\)/);
   assert.match(settingsRowsSnippet, /if \(tab === "users"\) \{[\s\S]*onEditUser\(row as UserRow\);[\s\S]*return;/);
   assert.match(settingsRowsSnippet, /<tr className=\{styles\.clickableRow\} onClick=\{handlePrimaryAction\}>/);
-  assert.match(settingsRowsSnippet, /\{tab === "users" \? "编辑" : "详情"\}/);
+  assert.match(settingsRowsSnippet, /\{tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"\}/);
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onEditUser=\{onEditUser\}/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onDeleteUser=\{onDeleteUser\}/);
@@ -230,7 +230,7 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(saveUserSnippet, /await loadTab\("users", activePagination\.page \|\| 1, filters\.users\)/);
 });
 
-test("supplier detail action opens unified supplier edit panel in read-only mode", () => {
+test("supplier action opens unified supplier edit panel with editable supplier name", () => {
   const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
   const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
@@ -243,17 +243,19 @@ test("supplier detail action opens unified supplier edit panel in read-only mode
   const supplierPanelSnippet = settingsModule.match(/function SupplierEditPanel[\s\S]*?\n}\n/)?.[0] || "";
 
   assert.match(startViewSupplierSnippet, /setDetailRow\(null\)/);
-  assert.match(startViewSupplierSnippet, /setSupplierPanelMode\("view"\)/);
+  assert.match(startViewSupplierSnippet, /setSupplierPanelMode\("edit"\)/);
   assert.match(startViewSupplierSnippet, /setSupplierForm\(supplierFormFromRow\(supplier\)\)/);
   assert.match(settingsModuleMain, /const \[supplierPanelMode, setSupplierPanelMode\] = useState<"view" \| "edit">\("view"\)/);
   assert.match(settingsTableRenderSnippet, /if \(activeTab === "suppliers"\) \{[\s\S]*startViewSupplier\(row as SupplierRow\);[\s\S]*return;/);
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.match(settingsRowsSnippet, /onViewDetail\(\)/);
+  assert.match(settingsRowsSnippet, /\{tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"\}/);
   assert.match(supplierPanelRenderSnippet, /readOnly=\{Boolean\(supplierForm\.id\) && supplierPanelMode === "view"\}/);
   assert.match(supplierPanelRenderSnippet, /onEdit=\{\(\) => setSupplierPanelMode\("edit"\)\}/);
   assert.match(supplierPanelRenderSnippet, /onClose=\{closeSupplierPanel\}/);
   assert.match(supplierPanelRenderSnippet, /onCancel=\{cancelSupplierEdit\}/);
   assert.match(supplierPanelSnippet, /readOnly \? "供应商资料" : "编辑供应商资料"/);
+  assert.match(supplierPanelSnippet, /<input value=\{form\.supplierName\} onChange=\{\(event\) => setField\("supplierName", event\.target\.value\)\} required disabled=\{controlsDisabled\} \/>/);
   assert.match(supplierPanelSnippet, /disabled=\{controlsDisabled\}/);
   assert.match(supplierPanelSnippet, /编辑供应商/);
   assert.match(supplierPanelSnippet, /保存供应商/);
