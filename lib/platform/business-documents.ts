@@ -53,15 +53,22 @@ function successBusinessDocument(document: BusinessDocumentLike = {}) {
 }
 
 export function costBusinessDocumentTypes(cost: CostDocumentCarrier = {}) {
-  return cost.orderId && cost.supplierId ? SUPPLIER_DOCUMENT_TYPES : [];
+  return cost.id && cost.orderId && cost.supplierId ? SUPPLIER_DOCUMENT_TYPES : [];
 }
 
-export function businessDocumentMatchesCost(cost: CostDocumentCarrier, document: BusinessDocumentLike, documentType?: string) {
+export function businessDocumentMatchesCost(
+  cost: CostDocumentCarrier,
+  document: BusinessDocumentLike,
+  documentType?: string,
+  options: { allowLegacySupplierFallback?: boolean } = {},
+) {
   if (!successBusinessDocument(document)) return false;
-  if (!cost.orderId || !cost.supplierId) return false;
+  if (!cost.id || !cost.orderId || !cost.supplierId) return false;
   if (document.orderId !== cost.orderId || document.supplierId !== cost.supplierId) return false;
   if (document.relatedModule !== "SUPPLIER") return false;
   if (documentType && document.documentType !== documentType) return false;
+  if (document.costId) return document.costId === cost.id;
+  if (!options.allowLegacySupplierFallback) return false;
   return costBusinessDocumentTypes(cost).includes(document.documentType as never);
 }
 
@@ -85,11 +92,12 @@ export async function getBusinessDocuments(orderId: string) {
 export function mergeCostBusinessDocuments<T extends CostDocumentCarrier>(
   cost: T,
   businessDocuments: BusinessDocumentLike[] = [],
+  options: { allowLegacySupplierFallback?: boolean } = {},
 ) {
   const existing = cost.documents || [];
   const seen = new Set(existing.map((document) => document.id).filter(Boolean));
   const matched = businessDocuments
-    .filter((document) => businessDocumentMatchesCost(cost, document))
+    .filter((document) => businessDocumentMatchesCost(cost, document, undefined, options))
     .filter((document) => {
       if (!document.id || seen.has(document.id)) return false;
       seen.add(document.id);
@@ -109,6 +117,12 @@ export function mergeCostBusinessDocuments<T extends CostDocumentCarrier>(
 export async function attachBusinessDocumentsToCosts<T extends CostDocumentCarrier>(costs: T[] = []) {
   const orderIds = [...new Set(costs.map((cost) => cost.orderId).filter((id): id is string => Boolean(id)))];
   if (!orderIds.length) return costs;
+  const factoryCostCountsByOrderSupplier = costs.reduce<Map<string, number>>((acc, cost) => {
+    const key = `${cost.orderId || ""}:${cost.supplierId || ""}`;
+    if (!cost.id || !cost.orderId || !cost.supplierId || !costBusinessDocumentTypes(cost).length) return acc;
+    acc.set(key, (acc.get(key) || 0) + 1);
+    return acc;
+  }, new Map());
   const documents = await prisma.orderDocument.findMany({
     where: {
       orderId: { in: orderIds },
@@ -132,7 +146,9 @@ export async function attachBusinessDocumentsToCosts<T extends CostDocumentCarri
     return acc;
   }, new Map());
   return costs.map((cost) => {
-    const merged = mergeCostBusinessDocuments(cost, documentsByOrderId.get(cost.orderId || "") || []);
+    const key = `${cost.orderId || ""}:${cost.supplierId || ""}`;
+    const allowLegacySupplierFallback = (factoryCostCountsByOrderSupplier.get(key) || 0) === 1;
+    const merged = mergeCostBusinessDocuments(cost, documentsByOrderId.get(cost.orderId || "") || [], { allowLegacySupplierFallback });
     logMissingCostBusinessDocuments(merged);
     return merged;
   });
@@ -177,11 +193,22 @@ export async function successfulSupplierInvoicePairs() {
 }
 
 export async function hasCostBusinessDocument(cost: CostDocumentCarrier, documentType: string) {
-  if (!cost.orderId || !cost.supplierId || !documentType) return false;
+  if (!cost.id || !cost.orderId || !cost.supplierId || !documentType) return false;
+  const siblingCostCount = await prisma.orderCost.count({
+    where: {
+      orderId: cost.orderId,
+      supplierId: cost.supplierId,
+      deletedAt: null,
+    },
+  });
   const count = await prisma.orderDocument.count({
     where: {
       orderId: cost.orderId,
       supplierId: cost.supplierId,
+      OR: [
+        { costId: cost.id },
+        ...(siblingCostCount === 1 ? [{ costId: null }] : []),
+      ],
       documentType: documentType as never,
       relatedModule: "SUPPLIER",
       uploadStatus: "SUCCESS",
@@ -195,12 +222,17 @@ function logMissingCostBusinessDocuments(cost: CostDocumentCarrier) {
   const expectedTypes = costBusinessDocumentTypes(cost);
   if (!expectedTypes.length) return;
   expectedTypes.forEach((documentType) => {
-    const matched = (cost.documents || []).filter((document) => businessDocumentMatchesCost(cost, document, documentType));
+    const matched = (cost.documents || []).filter((document) => (
+      successBusinessDocument(document)
+      && document.documentType === documentType
+      && (!document.costId || document.costId === cost.id)
+    ));
     if (matched.length) return;
     console.info("cost-document-missing-check", {
       orderId: cost.orderId || "",
       orderNo: (cost as Record<string, unknown>).orderNo || ((cost as Record<string, unknown>).order as Record<string, unknown> | undefined)?.orderNo || "",
       supplierId: cost.supplierId || "",
+      costItemId: cost.id || "",
       expectedDocumentType: documentType,
       actualMatchedAttachmentsCount: matched.length,
       matchedAttachmentIds: matched.map((document) => document.id).filter(Boolean),

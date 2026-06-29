@@ -94,7 +94,10 @@ test("cost management exposes paginated invoice exception groups", () => {
   assert.match(costsQueries, /attachBusinessDocumentsToCosts/);
   assert.match(businessDocuments, /factoryDocumentRequestId\) return SUPPLIER_RETURN_DOCUMENT_SOURCE/);
   assert.match(businessDocuments, /document\.orderId !== cost\.orderId \|\| document\.supplierId !== cost\.supplierId/);
+  assert.match(businessDocuments, /if \(document\.costId\) return document\.costId === cost\.id/);
+  assert.match(businessDocuments, /allowLegacySupplierFallback/);
   assert.match(businessDocuments, /cost-document-missing-check/);
+  assert.match(businessDocuments, /costItemId: cost\.id \|\| ""/);
 });
 
 test("cost management page is centered and constrained to readable table width", () => {

@@ -4,7 +4,9 @@ import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object
 import { sendShippingDocumentsEmail } from "./shipping-documents";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
+  FACTORY_SUPPLIER_COST_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
+  TAX_REFUND_SUPPLIER_TYPES,
   assertRead,
   assertWrite,
   codedError,
@@ -38,6 +40,7 @@ type SupplierDocumentRequestInput = Record<string, unknown>;
 type SupplierDocumentUploadInput = {
   documentType: string;
   file: unknown;
+  costId?: string;
 };
 type ExcelUploadFile = {
   originalFileName: string;
@@ -63,7 +66,17 @@ const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.sprea
 
 function supplierDocumentRequestInclude() {
   return Prisma.validator<Prisma.SupplierDocumentRequestInclude>()({
-    order: { select: { id: true, orderNo: true } },
+    order: {
+      select: {
+        id: true,
+        orderNo: true,
+        costs: {
+          where: { deletedAt: null },
+          include: { supplier: true },
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    },
     supplier: {
       include: {
         operatorUsers: {
@@ -75,7 +88,7 @@ function supplierDocumentRequestInclude() {
     requestedBy: { select: { id: true, name: true, email: true } },
     documents: {
       where: { deletedAt: null },
-      include: { uploadedBy: true, supplier: true },
+      include: { uploadedBy: true, supplier: true, cost: { include: { supplier: true } } },
       orderBy: [{ createdAt: "desc" }],
     },
   });
@@ -107,6 +120,56 @@ function requiredDocumentTypes(value: unknown) {
     throw codedError("请至少选择一种需要供应商回传的资料。", 400, "SUPPLIER_DOCUMENT_TYPE_REQUIRED");
   }
   return unique;
+}
+
+function factoryCostSlotsForSupplierRequest(row: Pick<SupplierDocumentRequestRow, "orderId" | "supplierId" | "order">) {
+  return (row.order.costs || [])
+    .filter((cost) => (
+      cost.orderId === row.orderId
+      && cost.supplierId === row.supplierId
+      && FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType)
+      && TAX_REFUND_SUPPLIER_TYPES.includes(cost.supplier?.supplierType || "")
+    ))
+    .map((cost, index) => ({
+      id: cost.id,
+      supplierId: cost.supplierId || "",
+      supplierName: cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName || "",
+      costType: cost.costType,
+      amount: Number(cost.amount || 0),
+      amountCny: Number(cost.amountCny || 0),
+      currency: cost.currency || "CNY",
+      label: `工厂货款 ${index + 1}`,
+    }));
+}
+
+async function resolveUniqueFactoryCostForSupplierReturn(orderId: string, supplierId: string, costId = "") {
+  if (costId) {
+    const cost = await prisma.orderCost.findFirst({
+      where: {
+        id: costId,
+        orderId,
+        supplierId,
+        deletedAt: null,
+        costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+        supplier: { is: { supplierType: { in: TAX_REFUND_SUPPLIER_TYPES } } },
+      },
+      select: { id: true },
+    });
+    if (!cost) throw codedError("请选择有效工厂货款资料位。", 400, "FACTORY_COST_SLOT_NOT_FOUND");
+    return cost;
+  }
+  const costs = await prisma.orderCost.findMany({
+    where: {
+      orderId,
+      supplierId,
+      deletedAt: null,
+      costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+      supplier: { is: { supplierType: { in: TAX_REFUND_SUPPLIER_TYPES } } },
+    },
+    select: { id: true },
+    take: 2,
+  });
+  return costs.length === 1 ? costs[0] : null;
 }
 
 function dateFromInput(value: unknown) {
@@ -221,6 +284,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
   const documents = (row.documents || [])
     .filter((document) => requiredTypes.includes(document.documentType))
     .map((document) => serializeSupplierDocument(document));
+  const factoryCostSlots = factoryCostSlotsForSupplierRequest(row);
   const canDelete = actor?.role === "管理员"
     && row.status === "待上传"
     && !supplierDocumentRequestHasStartedUpload(row);
@@ -232,6 +296,7 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     supplierName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.supplier?.supplierName || ""),
     requiredDocumentTypes: requiredTypes,
     requiredDocumentLabels: requiredTypes.map((type) => SUPPLIER_DOCUMENT_LABELS[type] || type),
+    factoryCostSlots,
     status: SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(row.status) ? row.status : "待上传",
     dueDate: dateToInput(row.dueDate),
     message: row.message || "",
@@ -253,6 +318,7 @@ function serializeSupplierDocument(document: unknown) {
   return {
     id: row.id,
     orderId: row.orderId,
+    costId: row.costId,
     supplierId: row.supplierId,
     factoryDocumentRequestId: row.factoryDocumentRequestId,
     relatedModule: row.relatedModule,
@@ -552,6 +618,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(input.file, "supplier-document.pdf");
   const { bucket: r2Bucket } = ensureR2Configured();
   const standardFilename = `${row.order.orderNo || row.orderId}_${SUPPLIER_DOCUMENT_LABELS[documentType] || documentType}.pdf`;
+  const uniqueFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(input.costId));
   const storageFileName = safeFileName(`${row.order.orderNo || row.orderId}_${documentType}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
   const storageKey = buildOrderDocumentKey({
     orderId: row.orderId,
@@ -567,7 +634,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
       const created = await tx.orderDocument.create({
         data: {
           orderId: row.orderId,
-          costId: null,
+          costId: uniqueFactoryCost?.id || null,
           supplierId: row.supplierId,
           factoryDocumentRequestId: row.id,
           relatedModule: "SUPPLIER",
@@ -598,20 +665,23 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
-      const costs = await prisma.orderCost.findMany({
-        where: {
-          orderId: row.orderId,
-          supplierId: row.supplierId,
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
+      const costs = uniqueFactoryCost
+        ? [uniqueFactoryCost]
+        : await prisma.orderCost.findMany({
+            where: {
+              orderId: row.orderId,
+              supplierId: row.supplierId,
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
       await Promise.all(costs.map((cost) => syncCostInvoiceStatus(cost.id)));
     });
   }
   await runNonCriticalTask("供应商回传资料日志写入", () => writeAudit(request, actor, "供应商上传回传资料", "order_documents", document.id, null, {
     orderNo: row.order.orderNo,
     supplierId: row.supplierId,
+    costId: uniqueFactoryCost?.id || "",
     documentType,
     requestId: row.id,
   }));

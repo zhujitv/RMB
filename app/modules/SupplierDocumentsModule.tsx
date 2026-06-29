@@ -10,10 +10,20 @@ import { PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgres
 
 type SupplierDocument = {
   id: string;
+  costId?: string;
   documentType?: string;
   fileName?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+};
+
+type SupplierFactoryCostSlot = {
+  id: string;
+  label?: string;
+  costType?: string;
+  amount?: number;
+  amountCny?: number;
+  currency?: string;
 };
 
 type SupplierDocumentTask = {
@@ -23,6 +33,7 @@ type SupplierDocumentTask = {
   requestedByName?: string;
   requiredDocumentTypes?: string[];
   requiredDocumentLabels?: string[];
+  factoryCostSlots?: SupplierFactoryCostSlot[];
   status?: string;
   dueDate?: string;
   message?: string;
@@ -112,8 +123,8 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
     }
   }
 
-  async function uploadDocument(task: SupplierDocumentTask, documentType: string, file: File | null) {
-    const uploadKey = `${task.id}-${documentType}`;
+  async function uploadDocument(task: SupplierDocumentTask, documentType: string, file: File | null, costId = "") {
+    const uploadKey = supplierUploadKey(task.id, documentType, costId);
     setNotice("");
     setError("");
     try {
@@ -123,6 +134,7 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
       setProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
       const formData = new FormData();
       formData.append("documentType", documentType);
+      if (costId) formData.append("costId", costId);
       formData.append("file", file as File);
       const data = await uploadFormDataWithProgress<SupplierUploadResponse>(
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents`,
@@ -305,10 +317,11 @@ function SupplierDocumentTaskCard({
   deleting: boolean;
   onToggle: () => void;
   onOpen: () => void;
-  onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null) => void;
+  onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
+  const factoryCostSlots = task.factoryCostSlots || [];
   const taskStatus = task.status || "待上传";
   const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
   return (
@@ -361,55 +374,58 @@ function SupplierDocumentTaskCard({
             </a>
           ) : null}
           <div className={styles.supplierDocumentUploadGrid}>
-            {requiredTypes.map((documentType) => {
-              const document = latestDocumentByType(task.documents || [], documentType);
-              const key = `${task.id}-${documentType}`;
-              const uploading = uploadingKey === key;
-              const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
-              return (
-                <div className={styles.supplierDocumentUploadCard} key={documentType}>
-                  <div className={styles.supplierDocumentUploadHeader}>
-                    <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
-                    <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
-                  </div>
-                  <div className={styles.supplierDocumentUploadBody}>
-                    {document ? (
-                      <div className={styles.fileUploadFile}>
-                        <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
-                          {document.fileName || "-"}
+            {(factoryCostSlots.length ? factoryCostSlots : [{ id: "", label: "" }]).flatMap((slot) => (
+              requiredTypes.map((documentType) => {
+                const document = latestDocumentByType(task.documents || [], documentType, slot.id);
+                const key = supplierUploadKey(task.id, documentType, slot.id);
+                const uploading = uploadingKey === key;
+                const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
+                return (
+                  <div className={styles.supplierDocumentUploadCard} key={`${slot.id || "task"}-${documentType}`}>
+                    <div className={styles.supplierDocumentUploadHeader}>
+                      <strong>{[slot.label, DOCUMENT_LABELS[documentType] || documentType].filter(Boolean).join(" / ")}</strong>
+                      <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
+                    </div>
+                    {slot.id ? <span className={styles.supplierDocumentUploadHint}>{[slot.costType, formatFactoryCostSlotAmount(slot)].filter(Boolean).join(" · ")}</span> : null}
+                    <div className={styles.supplierDocumentUploadBody}>
+                      {document ? (
+                        <div className={styles.fileUploadFile}>
+                          <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
+                            {document.fileName || "-"}
+                          </div>
+                          <div className={styles.fileUploadMeta}>
+                            <span>上传人：{document.uploadedByName || "-"}</span>
+                            <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
+                          </div>
+                          <div className={styles.fileUploadActions}>
+                            <span className={styles.fileUploadActionLabel}>操作：</span>
+                            <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
+                            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                          </div>
                         </div>
-                        <div className={styles.fileUploadMeta}>
-                          <span>上传人：{document.uploadedByName || "-"}</span>
-                          <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
-                        </div>
-                        <div className={styles.fileUploadActions}>
-                          <span className={styles.fileUploadActionLabel}>操作：</span>
-                          <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                          <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
-                        </div>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
+                    <div className={styles.supplierDocumentUploadControls}>
+                      <label className={styles.supplierDocumentUploadButton}>
+                        {uploading ? "上传中..." : "选择 PDF 文件"}
+                        <input
+                          type="file"
+                          accept={PDF_UPLOAD_ACCEPT}
+                          disabled={uploading}
+                          hidden
+                          onChange={(event) => {
+                            onUpload(task, documentType, event.target.files?.[0] || null, slot.id);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
+                      {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
+                    </div>
                   </div>
-                  <div className={styles.supplierDocumentUploadControls}>
-                    <label className={styles.supplierDocumentUploadButton}>
-                      {uploading ? "上传中..." : "选择 PDF 文件"}
-                      <input
-                        type="file"
-                        accept={PDF_UPLOAD_ACCEPT}
-                        disabled={uploading}
-                        hidden
-                        onChange={(event) => {
-                          onUpload(task, documentType, event.target.files?.[0] || null);
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
-                    {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ))}
           </div>
         </div>
       ) : null}
@@ -417,10 +433,22 @@ function SupplierDocumentTaskCard({
   );
 }
 
-function latestDocumentByType(documents: SupplierDocument[], documentType: string) {
+function latestDocumentByType(documents: SupplierDocument[], documentType: string, costId = "") {
   return documents
-    .filter((document) => document.documentType === documentType)
+    .filter((document) => document.documentType === documentType && (costId ? document.costId === costId : !document.costId))
     .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())[0] || null;
+}
+
+function supplierUploadKey(taskId: string, documentType: string, costId = "") {
+  return [taskId, documentType, costId].join(":");
+}
+
+function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
+  const amountCny = Number(slot.amountCny || 0);
+  const amount = Number(slot.amount || 0);
+  if (amountCny > 0) return `CNY ${amountCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  if (amount > 0) return `${slot.currency || "CNY"} ${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  return "";
 }
 
 function supplierDocumentStatusClass(status: string) {

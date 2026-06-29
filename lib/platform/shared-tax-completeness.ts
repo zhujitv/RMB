@@ -18,7 +18,9 @@ import { serializeDomesticLogisticsInfo } from "./shared-serialization";
 
 type NumericLike = number | string | { toString(): string };
 type OrderDocumentLike = {
+  id?: string | null;
   documentType?: string | null;
+  fileName?: string | null;
   uploadStatus?: string | null;
   deletedAt?: Date | string | null;
   costId?: string | null;
@@ -65,6 +67,13 @@ type SupplierEntry = {
   key: string;
   supplierId: string;
   supplierName: string;
+  costId?: string;
+  costType?: string;
+  amount?: number;
+  amountCny?: number;
+  currency?: string;
+  itemIndex?: number;
+  sameSupplierCostCount?: number;
   costIds: string[];
   earliestCostCreatedAt: Date | string | null | undefined;
   missingFactoryCost?: boolean;
@@ -206,6 +215,24 @@ export function isTaxRefundSupplierDocument(document: OrderDocumentLike) {
   return false;
 }
 
+function factoryDocumentMatchesCost(document: OrderDocumentLike, cost: CostLike, allowLegacySupplierFallback = false) {
+  if (!successDocument(document)) return false;
+  if (!cost.id || !cost.supplierId) return false;
+  if (document.relatedModule !== "SUPPLIER") return false;
+  if (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType as never)) return false;
+  if (document.costId) return document.costId === cost.id;
+  return allowLegacySupplierFallback && document.supplierId === cost.supplierId;
+}
+
+function factoryCostEntryLabel(cost: CostLike, itemIndex: number, sameSupplierCostCount: number) {
+  const supplierName = supplierNameForCost(cost);
+  const costType = normalizedCostType(String(cost.costType || "")) || "工厂货款";
+  const amount = numberValue(cost.amountCny) || numberValue(cost.amount);
+  const amountText = amount > 0 ? ` ${cost.currency || "CNY"} ${amount}` : "";
+  const itemLabel = sameSupplierCostCount > 1 ? `工厂货款 ${itemIndex}` : costType;
+  return `${supplierName} / ${itemLabel}${amountText}`;
+}
+
 export function confirmedFactorySupplierMismatch(input: Record<string, unknown> = {}) {
   return input.factorySupplierMismatchConfirmed === true || input.factorySupplierMismatchConfirmed === "true";
 }
@@ -244,21 +271,32 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     documentType: "DOMESTIC_LOGISTICS_INFO",
     label: "物流信息",
   }];
-  const supplierEntries: SupplierEntry[] = Object.values(factoryCosts.reduce((acc, cost) => {
+  const supplierCostCounts = factoryCosts.reduce<Record<string, number>>((acc, cost) => {
     const key = supplierKey(cost);
-    acc[key] ||= {
-      key,
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const supplierCostIndexes = new Map<string, number>();
+  const supplierEntries: SupplierEntry[] = factoryCosts.map((cost) => {
+    const key = supplierKey(cost);
+    const itemIndex = (supplierCostIndexes.get(key) || 0) + 1;
+    supplierCostIndexes.set(key, itemIndex);
+    const sameSupplierCostCount = supplierCostCounts[key] || 1;
+    return {
+      key: `${key}:${cost.id || itemIndex}`,
       supplierId: cost.supplierId || "",
       supplierName: supplierNameForCost(cost),
-      costIds: [],
+      costId: cost.id || "",
+      costType: normalizedCostType(String(cost.costType || "")),
+      amount: Number(cost.amount || 0),
+      amountCny: Number(cost.amountCny || 0),
+      currency: cost.currency || "CNY",
+      itemIndex,
+      sameSupplierCostCount,
+      costIds: cost.id ? [cost.id] : [],
       earliestCostCreatedAt: cost.createdAt,
     };
-    if (cost.id) acc[key].costIds.push(cost.id);
-    if (cost.createdAt && (!acc[key].earliestCostCreatedAt || cost.createdAt < acc[key].earliestCostCreatedAt)) {
-      acc[key].earliestCostCreatedAt = cost.createdAt;
-    }
-    return acc;
-  }, {} as Record<string, SupplierEntry>));
+  });
   const hasFactorySupplierCost = supplierEntries.length > 0;
   const supplierRequirementEntries = hasFactorySupplierCost
     ? supplierEntries
@@ -275,19 +313,44 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     const costCreatedAt = entry.earliestCostCreatedAt ? new Date(entry.earliestCostCreatedAt) : null;
     const daysSinceCostCreated = costCreatedAt ? Math.floor((Date.now() - costCreatedAt.getTime()) / 86400000) : 0;
     SUPPLIER_DOCUMENT_TYPES.forEach((type) => {
+      const cost = factoryCosts.find((item) => item.id && item.id === entry.costId) || null;
+      const allowLegacySupplierFallback = Boolean(cost && entry.sameSupplierCostCount === 1);
       const exists = entry.missingFactoryCost ? false : successDocs.some((doc) => (
         doc.documentType === type
-        && doc.relatedModule === "SUPPLIER"
-        && (doc.supplierId === entry.supplierId || entry.costIds.includes(String(doc.costId || "")))
+        && cost
+        && factoryDocumentMatchesCost(doc, cost, allowLegacySupplierFallback)
       ));
+      const matchedDocument = entry.missingFactoryCost ? null : successDocs.find((doc) => (
+        doc.documentType === type
+        && cost
+        && factoryDocumentMatchesCost(doc, cost, allowLegacySupplierFallback)
+      ));
+      if (!entry.missingFactoryCost) {
+        console.info("tax-refund-factory-document-match", {
+          orderId: (order as Record<string, unknown>).id || "",
+          supplierId: entry.supplierId,
+          costItemId: entry.costId || "",
+          purchaseOrderId: "",
+          documentType: type,
+          matchedDocumentId: matchedDocument?.id || "",
+          matchedFileName: (matchedDocument as Record<string, unknown> | null)?.fileName || "",
+        });
+      }
       if (!exists) {
         supplierMissing.push({
+          costId: entry.costId,
           supplierId: entry.supplierId,
           supplierName: entry.supplierName,
+          costType: entry.costType,
+          amount: entry.amount,
+          amountCny: entry.amountCny,
+          currency: entry.currency,
+          itemIndex: entry.itemIndex,
+          sameSupplierCostCount: entry.sameSupplierCostCount,
           documentType: type,
           label: entry.missingFactoryCost
             ? "缺少产品供应商成本记录"
-            : `${supplierEntries.length > 1 ? entry.supplierName : ""}${type === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票"}`,
+            : `${factoryCostEntryLabel(cost || {}, entry.itemIndex || 1, entry.sameSupplierCostCount || 1)} ${type === "SUPPLIER_PURCHASE_CONTRACT" ? "工厂合同" : "工厂发票"}`,
           reminderDue: daysSinceCostCreated >= 3,
           daysSinceCostCreated,
           missingFactoryCost: Boolean(entry.missingFactoryCost),

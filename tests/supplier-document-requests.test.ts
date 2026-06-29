@@ -7,6 +7,7 @@ const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readFileSync("lib/platform/supplier-document-requests.ts", "utf8");
 const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
 const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");
+const supplierRequestDocumentRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/route.ts", "utf8");
 const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
 const menu = readFileSync("app/menu.ts", "utf8");
@@ -69,7 +70,16 @@ test("admin tax refund drawer can notify product suppliers without replacing tax
   assert.match(taxModule, /通知产品供应商回传/);
   assert.match(taxModule, /\/api\/supplier-document-requests/);
   assert.match(taxModule, /allowFactoryDocumentUpload/);
-  assert.match(taxModule, /document\.costId === cost\.id \|\| Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
+  assert.match(taxModule, /documentMatchesFactoryCostSlot\(document, cost, sameSupplierFactoryCostCount\)/);
+  assert.doesNotMatch(taxModule, /document\.costId === cost\.id \|\| Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
+});
+
+test("tax refund factory document slots are bound by cost item", () => {
+  assert.match(taxModule, /factoryDocumentTargetKey\(item\.costId, item\.documentType \|\| ""\)/);
+  assert.match(taxModule, /function documentMatchesFactoryCostSlot/);
+  assert.match(taxModule, /if \(document\.costId\) return document\.costId === cost\.id/);
+  assert.match(taxModule, /sameSupplierFactoryCostCount === 1 && Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
+  assert.match(taxModule, /工厂货款 \$\{displayIndex\}/);
 });
 
 test("supplier settings and menus expose the controlled factory upload switch", () => {
@@ -147,4 +157,17 @@ test("supplier return repair script backfills business document associations", (
   assert.match(repairSupplierReturnDocumentsScript, /source: "SUPPLIER_RETURN"/);
   assert.match(repairSupplierReturnDocumentsScript, /刷新订单完整度/);
   assert.match(repairSupplierReturnDocumentsScript, /同步成本发票状态/);
+});
+
+test("supplier callback upload only auto-binds an unambiguous factory cost", () => {
+  assert.match(service, /resolveUniqueFactoryCostForSupplierReturn/);
+  assert.match(service, /take: 2/);
+  assert.match(service, /return costs\.length === 1 \? costs\[0\] : null/);
+  assert.match(service, /costId: uniqueFactoryCost\?\.id \|\| null/);
+  assert.match(service, /factoryCostSlotsForSupplierRequest/);
+  assert.match(service, /factoryCostSlots/);
+  assert.match(supplierModule, /factoryCostSlots/);
+  assert.match(supplierModule, /supplierUploadKey\(task\.id, documentType, slot\.id\)/);
+  assert.match(supplierModule, /formData\.append\("costId", costId\)/);
+  assert.match(supplierRequestDocumentRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
 });

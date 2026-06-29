@@ -14,6 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const formData = await request.formData();
     const result = await uploadSupplierDocumentRequestDocument(request, actor, id, {
       documentType: String(formData.get("documentType") || ""),
+      costId: String(formData.get("costId") || ""),
       file: formData.get("file"),
     });
     return NextResponse.json({

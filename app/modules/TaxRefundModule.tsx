@@ -28,6 +28,7 @@ type DocumentCompleteness = {
       supplierId?: string;
       supplierName?: string;
       documentType?: string;
+      label?: string;
       missingFactoryCost?: boolean;
     }>;
   };
@@ -96,6 +97,9 @@ type TaxCost = {
   vendorName?: string;
   supplierType?: string;
   costType?: string;
+  amount?: number;
+  amountCny?: number;
+  currency?: string;
   documents?: TaxDocument[];
 };
 
@@ -1592,22 +1596,27 @@ function TaxRefundDetailPanel({
         />
         <div className={styles.documentGroupCard} id={taxTargetDomId("factory-section")}>
           <strong>工厂资料上传</strong>
-          {factoryCosts.length ? factoryCosts.map((cost) => (
-            <FactoryCostUploadGroup
-              key={cost.id}
-              orderId={detail.id}
-              cost={cost}
-              documents={detail.documents || []}
-              uploadingKey={uploadingKey}
-              uploadProgressByKey={uploadProgressByKey}
-              deletingDocumentId={deletingDocumentId}
-              currentUserRole={currentUserRole}
-              canWriteDocuments={canWriteDocuments}
-              readOnly={readOnly}
-              onUpload={onUpload}
-              onDelete={onDelete}
-            />
-          )) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
+          {factoryCosts.length ? factoryCosts.map((cost) => {
+            const ordinal = factoryCostOrdinal(cost, factoryCosts);
+            return (
+              <FactoryCostUploadGroup
+                key={cost.id}
+                orderId={detail.id}
+                cost={cost}
+                documents={detail.documents || []}
+                sameSupplierFactoryCostCount={ordinal.total}
+                displayIndex={ordinal.index}
+                uploadingKey={uploadingKey}
+                uploadProgressByKey={uploadProgressByKey}
+                deletingDocumentId={deletingDocumentId}
+                currentUserRole={currentUserRole}
+                canWriteDocuments={canWriteDocuments}
+                readOnly={readOnly}
+                onUpload={onUpload}
+                onDelete={onDelete}
+              />
+            );
+          }) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
         </div>
         <div className={styles.documentGroupCard} id={taxTargetDomId("logistics-section")}>
           <strong>物流资料上传</strong>
@@ -2399,6 +2408,8 @@ function FactoryCostUploadGroup({
   orderId,
   cost,
   documents,
+  sameSupplierFactoryCostCount,
+  displayIndex,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
@@ -2411,6 +2422,8 @@ function FactoryCostUploadGroup({
   orderId: string;
   cost: TaxCost;
   documents: TaxDocument[];
+  sameSupplierFactoryCostCount: number;
+  displayIndex: number;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
@@ -2422,10 +2435,14 @@ function FactoryCostUploadGroup({
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "未命名供应商";
   const scope = { costId: cost.id, supplierId: cost.supplierId || "" };
+  const amountText = formatFactoryCostAmount(cost);
+  const costLabel = sameSupplierFactoryCostCount > 1 ? `工厂货款 ${displayIndex}` : (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本");
   return (
     <div className={styles.documentGroupCard}>
-      <strong>{supplierName}</strong>
-      <span className={styles.mutedText}>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本"}</span>
+      <strong>{sameSupplierFactoryCostCount > 1 ? `${supplierName} / ${costLabel}` : supplierName}</strong>
+      <span className={styles.mutedText}>
+        {[sameSupplierFactoryCostCount > 1 ? (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本") : costLabel, amountText].filter(Boolean).join(" · ")}
+      </span>
       {TAX_FACTORY_UPLOAD_TYPES.map((documentType) => (
         <TaxUploadItem
           key={`${cost.id}-${documentType.value}`}
@@ -2435,8 +2452,7 @@ function FactoryCostUploadGroup({
           label={documentType.label}
           documents={documents.filter((document) => (
             document.documentType === documentType.value
-            && document.uploadStatus === "SUCCESS"
-            && (document.costId === cost.id || Boolean(cost.supplierId && document.supplierId === cost.supplierId))
+            && documentMatchesFactoryCostSlot(document, cost, sameSupplierFactoryCostCount)
           ))}
           uploading={uploadingKey === uploadScopeKey(orderId, documentType.value, scope)}
           uploadProgress={uploadProgressByKey[uploadScopeKey(orderId, documentType.value, scope)] || 0}
@@ -2532,7 +2548,8 @@ function taxMissingTargets(completeness: DocumentCompleteness) {
       return;
     }
     const documentLabel = taxSupplierDocumentLabel(item.documentType || "");
-    pushTarget(item.supplierName ? `${item.supplierName}${documentLabel}` : documentLabel, "factory-section");
+    const targetKey = item.costId ? factoryDocumentTargetKey(item.costId, item.documentType || "") : "factory-section";
+    pushTarget(item.label || (item.supplierName ? `${item.supplierName}${documentLabel}` : documentLabel), targetKey);
   });
   (completeness.logistics?.missing || []).forEach((item) => {
     if (item.missingCost) {
@@ -2635,6 +2652,33 @@ function factorySupplierCosts(costs: TaxCost[]) {
       || ["工厂货款", "原材料货款", "采购货款", "产品货款"].includes(cost.costType || "")
     )
   ));
+}
+
+function factoryCostSupplierKey(cost: TaxCost) {
+  return cost.supplierId || cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || cost.id;
+}
+
+function factoryCostOrdinal(cost: TaxCost, factoryCosts: TaxCost[]) {
+  const key = factoryCostSupplierKey(cost);
+  const sameSupplierCosts = factoryCosts.filter((item) => factoryCostSupplierKey(item) === key);
+  return {
+    index: Math.max(1, sameSupplierCosts.findIndex((item) => item.id === cost.id) + 1),
+    total: sameSupplierCosts.length,
+  };
+}
+
+function formatFactoryCostAmount(cost: TaxCost) {
+  const amountCny = Number(cost.amountCny || 0);
+  const amount = Number(cost.amount || 0);
+  if (amountCny > 0) return `CNY ${amountCny.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  if (amount > 0) return `${cost.currency || "CNY"} ${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  return "";
+}
+
+function documentMatchesFactoryCostSlot(document: TaxDocument, cost: TaxCost, sameSupplierFactoryCostCount: number) {
+  if (document.uploadStatus !== "SUCCESS") return false;
+  if (document.costId) return document.costId === cost.id;
+  return sameSupplierFactoryCostCount === 1 && Boolean(cost.supplierId && document.supplierId === cost.supplierId);
 }
 
 function logisticsInvoiceCosts(costs: TaxCost[]) {
