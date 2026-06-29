@@ -197,6 +197,8 @@ type ShipsgoControlTowerStats = {
 
 type ShipsgoControlTowerRow = ShipsgoTrackingRow & {
   orderNo?: string;
+  blNo?: string;
+  billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
   orderIsArchived?: boolean;
@@ -542,7 +544,7 @@ export function DomesticLogisticsModule({
   const pageArchivableRows = useMemo(() => pageRows.filter(domesticLogisticsCanArchive), [pageRows]);
   const allPageArchivableSelected = pageArchivableRows.length > 0
     && pageArchivableRows.every((row) => selectedOrderIds.includes(row.id));
-  const tableColSpan = canArchiveDomesticLogistics ? 8 : 7;
+  const tableColSpan = canArchiveDomesticLogistics ? 9 : 8;
 
   function submitSearch() {
     const value = keyword.trim();
@@ -961,8 +963,8 @@ export function DomesticLogisticsModule({
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
+      <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
+        <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
           <thead>
             <tr>
               {canArchiveDomesticLogistics ? (
@@ -977,8 +979,9 @@ export function DomesticLogisticsModule({
                   />
                 </th>
               ) : null}
-              <th>订单号</th>
-              <th>客户简称</th>
+              <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.blNoColumn}>提单号 / B/L No.</th>
+              <th className={styles.customerColumn}>客户简称</th>
               <th>到达地</th>
               <th>运输货物名称</th>
               <th>物流状态</th>
@@ -1300,12 +1303,13 @@ function ShipsgoControlTowerView({
         </div>
       ) : null}
 
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
+      <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
+        <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
           <thead>
             <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
+              <th className={styles.orderNoColumn}>订单号</th>
+              <th className={styles.blNoColumn}>提单号 / B/L No.</th>
+              <th className={styles.customerColumn}>客户简称</th>
               <th>Master B/L</th>
               <th>船公司</th>
               <th>船名航次</th>
@@ -1321,12 +1325,13 @@ function ShipsgoControlTowerView({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={13}><div className={styles.emptyState}>控制塔数据加载中...</div></td></tr>
+              <tr><td colSpan={14}><div className={styles.emptyState}>控制塔数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((row) => (
               <Fragment key={row.id}>
                 <tr className={styles.clickableRow}>
-                  <td><strong>{row.orderNo || "-"}</strong></td>
-                  <td title={row.customerName || row.customerShortName || ""}>{row.customerShortName || "-"}</td>
+                  <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
+                  <td className={styles.blNoColumn}>{row.blNo || row.billOfLadingNo || row.masterBlNo || "-"}</td>
+                  <td className={styles.customerColumn} title={row.customerName || row.customerShortName || ""}>{row.customerShortName || "-"}</td>
                   <td>{row.masterBlNo || row.bookingNumber || "-"}</td>
                   <td>{shipsgoCarrierText(row)}</td>
                   <td>{shipsgoVesselVoyage(row)}</td>
@@ -1359,14 +1364,14 @@ function ShipsgoControlTowerView({
                 </tr>
                 {expandedId === row.id ? (
                   <tr className={styles.detailRow} key={`${row.id}-timeline`}>
-                    <td colSpan={13}>
+                    <td colSpan={14}>
                       <ControlTowerTimeline row={row} />
                     </td>
                   </tr>
                 ) : null}
               </Fragment>
             )) : (
-              <tr><td colSpan={13}><div className={styles.emptyState}>暂无符合条件的海运跟踪</div></td></tr>
+              <tr><td colSpan={14}><div className={styles.emptyState}>暂无符合条件的海运跟踪</div></td></tr>
             )}
           </tbody>
         </table>
@@ -2024,8 +2029,9 @@ function DomesticLogisticsRows({
             />
           </td>
         ) : null}
-        <td><strong>{row.orderNo || "-"}</strong></td>
-        <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+        <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
+        <td className={styles.blNoColumn}>{row.blNo || row.billOfLadingNo || "-"}</td>
+        <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
         <td>{info?.cargoDescription || firstItemValue(info, "cargoName") || "-"}</td>
         <td><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>

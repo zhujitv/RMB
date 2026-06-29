@@ -108,6 +108,24 @@
   table-layout: fixed;
 }
 
+.logisticsCompactTable th.orderNoColumn,
+.logisticsCompactTable td.orderNoColumn {
+  width: 150px;
+  min-width: 150px;
+}
+
+.logisticsCompactTable th.blNoColumn,
+.logisticsCompactTable td.blNoColumn {
+  width: 150px;
+  min-width: 150px;
+}
+
+.logisticsCompactTable th.customerColumn,
+.logisticsCompactTable td.customerColumn {
+  width: 120px;
+  min-width: 120px;
+}
+
 .logisticsCompactTable thead th {
   position: sticky;
   top: 0;

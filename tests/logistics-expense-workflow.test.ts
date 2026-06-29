@@ -1588,6 +1588,14 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(monthlySummaryComponentSource, /\{currency\} 合计/);
   assert.match(logisticsModule, /function SupplierSectionComponent/);
   assert.match(logisticsModule, /function LogisticsExpenseBillTable/);
+  assert.match(logisticsFeesBillTable, /<th className=\{styles\.orderNoColumn\}>订单号 \/ Shipment<\/th>/);
+  assert.match(logisticsFeesBillTable, /<th className=\{styles\.blNoColumn\}>提单号 \/ B\/L No\.<\/th>/);
+  assert.match(logisticsFeesBillTable, /<th className=\{styles\.customerColumn\}>客户简称<\/th>/);
+  assert.ok(logisticsFeesBillTable.indexOf("订单号 / Shipment") < logisticsFeesBillTable.indexOf("提单号 / B/L No."));
+  assert.ok(logisticsFeesBillTable.indexOf("提单号 / B/L No.") < logisticsFeesBillTable.indexOf("客户简称"));
+  assert.match(logisticsFeesBillTable, /<td className=\{styles\.blNoColumn\}>\s*\{expense\.blNo \|\| expense\.billOfLadingNo \|\| "-"\}\s*<\/td>/);
+  assert.match(backend, /\{ billOfLadingNo: keyword \}/);
+  assert.match(backend, /\{ order: \{ is: \{ blNo: keyword \} \} \}/);
   assert.doesNotMatch(
     supplierSectionComponentSource,
     /LogisticsCurrencyAmountList|合计：|statementRowSummary/,

@@ -18,11 +18,19 @@ const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8")
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
-  for (const label of ["订单号", "客户简称", "到达地", "运输货物名称", "物流状态", "费用录入状态", "详情"]) {
-    assert.match(moduleSource, new RegExp(`<th>${label}</th>`));
+  const tableHead = moduleSource.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th>详情<\/th>/)?.[0] || "";
+  assert.match(tableHead, /订单号/);
+  assert.match(tableHead, /提单号 \/ B\/L No\./);
+  assert.match(tableHead, /客户简称/);
+  assert.ok(tableHead.indexOf("订单号") < tableHead.indexOf("提单号 / B/L No."));
+  assert.ok(tableHead.indexOf("提单号 / B/L No.") < tableHead.indexOf("客户简称"));
+  for (const label of ["到达地", "运输货物名称", "物流状态", "费用录入状态", "详情"]) {
+    assert.match(tableHead, new RegExp(`<th>${label}</th>`));
   }
-  assert.match(moduleSource, /const tableColSpan = canArchiveDomesticLogistics \? 8 : 7;/);
+  assert.match(moduleSource, /const tableColSpan = canArchiveDomesticLogistics \? 9 : 8;/);
   assert.match(moduleSource, /<td colSpan=\{tableColSpan\}>/);
+  assert.match(moduleSource, /<td className=\{styles\.blNoColumn\}>\{row\.blNo \|\| row\.billOfLadingNo \|\| "-"\}<\/td>/);
+  assert.match(domesticLogisticsApi, /\{ blNo: \{ contains: keyword, mode: "insensitive" \} \}/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);
   assert.doesNotMatch(moduleSource, /<LogisticsFeesModule/);

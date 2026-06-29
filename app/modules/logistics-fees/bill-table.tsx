@@ -39,7 +39,7 @@ export function LogisticsExpenseBillTable({
   onOpen: (expense: LogisticsExpense) => void;
   onSelectBill: (expense: LogisticsExpense, checked: boolean) => void;
 }) {
-  const colSpan = canReviewExpense ? 9 : 8;
+  const colSpan = canReviewExpense ? 10 : 9;
   return (
     <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
       <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
@@ -59,7 +59,8 @@ export function LogisticsExpenseBillTable({
               </th>
             ) : null}
             <th className={styles.orderNoColumn}>订单号 / Shipment</th>
-            <th className={styles.customerColumn}>客户</th>
+            <th className={styles.blNoColumn}>提单号 / B/L No.</th>
+            <th className={styles.customerColumn}>客户简称</th>
             <th className={styles.amountColumn}>CNY 合计</th>
             <th className={styles.amountColumn}>USD 合计</th>
             <th className={styles.statusColumn}>审核</th>
@@ -154,6 +155,9 @@ function LogisticsExpenseCompactRow({
       ) : null}
       <td className={styles.orderNoColumn}>
         <strong>{expense.shipmentNo || expense.orderNo || "-"}</strong>
+      </td>
+      <td className={styles.blNoColumn}>
+        {expense.blNo || expense.billOfLadingNo || "-"}
       </td>
       <td className={styles.customerColumn} title={customerLegalName(expense)}>
         {expense.customer || customerDisplayName(expense)}

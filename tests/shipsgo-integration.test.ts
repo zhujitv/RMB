@@ -280,6 +280,14 @@ test("domestic logistics exposes ocean control tower tab and fullscreen monitor 
   assert.match(logisticsModule, /同步最新状态/);
   assert.match(logisticsModule, /查看运输节点/);
   assert.match(logisticsModule, /跳转物流详情/);
+  const controlTowerHead = logisticsModule.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th>操作<\/th>/)?.[0] || "";
+  assert.match(controlTowerHead, /提单号 \/ B\/L No\./);
+  assert.match(controlTowerHead, /客户简称/);
+  assert.ok(controlTowerHead.indexOf("订单号") < controlTowerHead.indexOf("提单号 / B/L No."));
+  assert.ok(controlTowerHead.indexOf("提单号 / B/L No.") < controlTowerHead.indexOf("客户简称"));
+  assert.match(logisticsModule, /row\.blNo \|\| row\.billOfLadingNo \|\| row\.masterBlNo \|\| "-"/);
+  assert.match(trackingService, /blNo: row\.order\?\.blNo \|\| tracking\.masterBlNo \|\| tracking\.bookingNumber \|\| ""/);
+  assert.match(trackingService, /billOfLadingNo: row\.order\?\.blNo \|\| tracking\.masterBlNo \|\| tracking\.bookingNumber \|\| ""/);
   assert.match(logisticsModule, /const canManageShipsgoTracking = \["管理员", "业务员"\]\.includes\(currentUser\.role\)/);
   assert.match(logisticsModule, /暂无已同步运输节点，请联系管理员或业务员同步最新状态。/);
   assert.doesNotMatch(logisticsModule.match(/function ShipsgoControlTowerView[\s\S]*?function ControlTowerStatCard/)?.[0] || "", /\/api\/shipsgo\/ocean-trackings",\s*\{/);

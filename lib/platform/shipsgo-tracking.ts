@@ -854,6 +854,8 @@ function trackingMatchesQuery(row: ShipsgoControlTowerRow, query: ShipsgoQueryLi
     row.orderNo,
     row.customerShortName,
     row.customerName,
+    row.blNo,
+    row.billOfLadingNo,
     row.masterBlNo,
     row.bookingNumber,
     row.carrierName,
@@ -868,7 +870,7 @@ function trackingMatchesQuery(row: ShipsgoControlTowerRow, query: ShipsgoQueryLi
   if (keyword && !lowerIncludes(searchable, keyword)) return false;
   if (customer && !lowerIncludes(`${row.customerShortName || ""} ${row.customerName || ""}`, customer)) return false;
   if (orderNo && !lowerIncludes(row.orderNo, orderNo)) return false;
-  if (masterBlNo && !lowerIncludes(`${row.masterBlNo || ""} ${row.bookingNumber || ""}`, masterBlNo)) return false;
+  if (masterBlNo && !lowerIncludes(`${row.blNo || ""} ${row.billOfLadingNo || ""} ${row.masterBlNo || ""} ${row.bookingNumber || ""}`, masterBlNo)) return false;
   if (carrier && !lowerIncludes(`${row.carrierName || ""} ${row.carrierScac || ""}`, carrier)) return false;
   if (origin && !lowerIncludes(`${row.originName || ""} ${row.originPortName || ""} ${row.originPortCode || ""}`, origin)) return false;
   if (destination && !lowerIncludes(`${row.destinationName || ""} ${row.destinationPortName || ""} ${row.destinationPortCode || ""}`, destination)) return false;
@@ -888,6 +890,8 @@ function trackingMatchesQuery(row: ShipsgoControlTowerRow, query: ShipsgoQueryLi
 
 type ShipsgoControlTowerRow = ShipsgoTrackingDto & {
   orderNo: string;
+  blNo: string;
+  billOfLadingNo: string;
   customerName: string;
   customerShortName: string;
   orderIsArchived: boolean;
@@ -906,6 +910,7 @@ type ShipsgoControlTowerRow = ShipsgoTrackingDto & {
 function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTracking>[0] & {
   order?: {
     orderNo?: string | null;
+    blNo?: string | null;
     customerNameSnapshot?: string | null;
     isArchived?: boolean | null;
     customer?: { shortName?: string | null; name?: string | null } | null;
@@ -932,6 +937,8 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
   return {
     ...tracking,
     orderNo: row.order?.orderNo || "",
+    blNo: row.order?.blNo || tracking.masterBlNo || tracking.bookingNumber || "",
+    billOfLadingNo: row.order?.blNo || tracking.masterBlNo || tracking.bookingNumber || "",
     customerName: row.order?.customer?.name || row.order?.customerNameSnapshot || "",
     customerShortName: row.order?.customer?.shortName || row.order?.customerNameSnapshot || "",
     orderIsArchived: row.order?.isArchived === true,
