@@ -48,6 +48,11 @@ function assertSourceContains(file, pattern, message) {
   if (!pattern.test(source)) fail(message, [file]);
 }
 
+function assertSourceDoesNotContain(file, pattern, message) {
+  const source = readFileSync(file, "utf8");
+  if (pattern.test(source)) fail(message, [file]);
+}
+
 const sourceFiles = ROOTS.flatMap(filesUnder).filter((file) => /\.(ts|tsx|mjs|js|prisma)$/.test(file));
 
 const securityHeaders = readFileSync("lib/security-headers.mjs", "utf8");
@@ -94,7 +99,11 @@ if (dangerousHits.length) {
 }
 
 assertSourceContains("lib/platform/upload-validation.ts", /MAX_PDF_UPLOAD_BYTES/, "PDF upload size validation is missing.");
-assertSourceContains("lib/platform/upload-validation.ts", /PDF_ACTIVE_CONTENT_NOT_ALLOWED/, "PDF active-content rejection is missing.");
+assertSourceDoesNotContain(
+  "lib/platform/upload-validation.ts",
+  /PDF_ACTIVE_CONTENT_NOT_ALLOWED|DISALLOWED_PDF_ACTIVE_CONTENT_PATTERNS|OpenAction|RichMedia|EmbeddedFile|XFA/,
+  "PDF upload must not reject active content before saving the original file.",
+);
 assertSourceContains("lib/platform/shared-audit.ts", /sanitizeAuditData/, "Audit log sanitization is missing.");
 assertSourceContains("lib/platform/shared-audit.ts", /writeAuthAudit/, "Auth audit logging helper is missing.");
 assertSourceContains("lib/platform/shared-base-utils.ts", /SENSITIVE_LOG_KEY_PATTERN/, "Server log redaction is missing.");
