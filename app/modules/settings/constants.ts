@@ -201,8 +201,8 @@ export const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "已停用", value: "DISABLED" },
 ];
 export const USER_STATUS_FILTER_OPTIONS = [
-  { label: "邮箱未验证", value: "email_unverified" },
-  ...USER_APPROVAL_STATUS_OPTIONS,
+  { label: "已验证", value: "email_verified" },
+  { label: "未验证", value: "email_unverified" },
 ];
 export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "companyProfile", label: "公司资料" },

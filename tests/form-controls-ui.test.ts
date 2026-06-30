@@ -4,8 +4,10 @@ import test from "node:test";
 import { readSettingsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const components = readFileSync("app/components.tsx", "utf8");
+const accountSettings = readFileSync("app/AccountSettings.tsx", "utf8");
 const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
+const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const globalStyles = readFileSync("app/globals.css", "utf8");
@@ -81,6 +83,19 @@ test("factory supplier callback documents use aligned card selection UI", () => 
   assert.match(workspaceStyles, /\.checkboxPanel input:not\(\.uiChoiceInput\):not\(\.checkboxOptionInput\)/);
   assert.doesNotMatch(workspaceStyles, /\.factoryDocumentChoiceCard/);
   assert.doesNotMatch(requestSnippet, /type=["']checkbox["']/);
+});
+
+test("user email verification wording is concise and consistent", () => {
+  assert.doesNotMatch(`${settingsModule}\n${settingsModuleMain}\n${accountSettings}`, /邮箱验证状态/);
+  assert.doesNotMatch(`${settingsModule}\n${settingsModuleMain}\n${accountSettings}`, /邮箱未验证/);
+  assert.match(settingsModule, /label: "邮箱验证"/);
+  assert.match(settingsModule, /row\.emailVerified === false \? "未验证" : "已验证"/);
+  assert.match(accountSettings, /<span>邮箱验证<\/span>/);
+  assert.match(accountSettings, /user\.emailVerified === false \? "未验证" : "已验证"/);
+  assert.match(settingsModule, /USER_STATUS_FILTER_OPTIONS = \[\s*\{ label: "已验证", value: "email_verified" \},\s*\{ label: "未验证", value: "email_unverified" \},\s*\]/);
+  assert.match(settingsModuleMain, /<option value="">全部<\/option>/);
+  assert.match(sharedUsers, /const emailVerified = \["email_verified", "EMAIL_VERIFIED", "已验证"\]/);
+  assert.match(sharedUsers, /\.\.\.\(emailVerified \? \{ emailVerified: true \} : \{\}\)/);
 });
 
 test("supplier logistics cost types use card multi-select options", () => {

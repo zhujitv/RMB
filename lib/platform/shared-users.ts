@@ -473,7 +473,8 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
     "停用": "DISABLED",
     "已停用": "DISABLED",
   } satisfies Record<string, string>;
-  const emailUnverified = ["email_unverified", "EMAIL_UNVERIFIED", "邮箱未验证"].includes(statusText);
+  const emailVerified = ["email_verified", "EMAIL_VERIFIED", "已验证"].includes(statusText);
+  const emailUnverified = ["email_unverified", "EMAIL_UNVERIFIED", "邮箱未验证", "未验证"].includes(statusText);
   const approvalStatus = statusText
     ? (USER_APPROVAL_STATUSES.includes(statusText) ? statusText : (statusMap as Record<string, string>)[statusText.toLowerCase()] || (statusMap as Record<string, string>)[statusText] || "")
     : "";
@@ -488,6 +489,7 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
       ? { role: { in: PRODUCT_SUPPLIER_OPERATOR_ROLES } }
       : (ROLES.includes(role) ? { role } : {})),
     ...(USER_APPROVAL_STATUSES.includes(approvalStatus) ? { approvalStatus } : {}),
+    ...(emailVerified ? { emailVerified: true } : {}),
     ...(emailUnverified ? { emailVerified: false } : {}),
   };
   if (options.paginated) {

@@ -68,7 +68,7 @@ export const USER_COLUMNS: TableColumn<UserRow>[] = [
   { key: "email", label: "邮箱" },
   { key: "role", label: "角色" },
   { key: "supplierName", label: "所属供应商", render: (row) => isSupplierAccountRole(row.role) ? (supplierDisplayName(row) || "-") : "-" },
-  { key: "emailVerified", label: "邮箱验证状态", render: (row) => row.emailVerified === false ? "邮箱未验证" : "已验证" },
+  { key: "emailVerified", label: "邮箱验证", render: (row) => row.emailVerified === false ? "未验证" : "已验证" },
   { key: "createdAt", label: "注册时间", render: (row) => formatDateTime(row.createdAt) },
   { key: "approvalStatus", label: "审核状态", render: (row) => approvalStatusText(row.approvalStatus) },
   { key: "accountStatus", label: "账号状态", render: (row) => userStatus(row) },
@@ -128,7 +128,7 @@ export function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | Supplier
       { label: "姓名", value: user.name || "-" },
       { label: "邮箱", value: user.email || "-", wide: true },
       { label: "角色", value: user.role || "-" },
-      { label: "邮箱验证状态", value: user.emailVerified === false ? "邮箱未验证" : "已验证" },
+      { label: "邮箱验证", value: user.emailVerified === false ? "未验证" : "已验证" },
       { label: "注册时间", value: formatDateTime(user.createdAt) },
       { label: "审核状态", value: approvalStatusText(user.approvalStatus) },
       { label: "账号状态", value: userStatus(user) },
@@ -430,7 +430,7 @@ export function approvalStatusText(status: unknown) {
 }
 
 export function userStatus(user: UserRow) {
-  if (user.emailVerified === false) return "邮箱未验证";
+  if (user.emailVerified === false) return "未验证";
   if (user.approvalStatus === "APPROVED" && user.isActive !== false) return "已启用";
   if (user.approvalStatus === "PENDING") return "待审核";
   if (user.approvalStatus === "REJECTED") return "已拒绝";

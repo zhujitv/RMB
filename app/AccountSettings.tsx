@@ -399,7 +399,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
             <strong>{formatDateTime(user.passwordChangedAt)}</strong>
           </div>
           <div>
-            <span>邮箱验证状态</span>
+            <span>邮箱验证</span>
             <strong>{user.emailVerified === false ? "未验证" : "已验证"}</strong>
           </div>
           <div className={styles.accountSwitchRow}>

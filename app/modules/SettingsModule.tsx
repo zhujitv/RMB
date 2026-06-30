@@ -813,7 +813,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
                 value={filters.users.status}
                 onChange={(event) => updateFilter("users", "status", event.target.value)}
               >
-                <option value="">全部状态</option>
+                <option value="">全部</option>
                 {USER_STATUS_FILTER_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
               </select>
               <select
