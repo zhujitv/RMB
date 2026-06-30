@@ -673,6 +673,8 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   if (id && !before) throw permissionError("用户不存在", 404);
   const name = requireText(input.name, "姓名");
   const email = requireValidEmail(input.email, "邮箱");
+  const emailChanged = Boolean(id && before && normalizeEmail(before.email) !== email);
+  const emailIsAdminVerified = !id || emailChanged;
   const requestedApprovalStatus = String(input.approvalStatus || "");
   const approvalStatus = USER_APPROVAL_STATUSES.includes(requestedApprovalStatus)
     ? requestedApprovalStatus
@@ -681,7 +683,7 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
       : (input.isActive === false ? "DISABLED" : "APPROVED"));
   const data: Record<string, unknown> = {
     name,
-    email: requireValidEmail(input.email, "邮箱"),
+    email,
     role,
     avatarInitials: resolveAvatarInitials(input, name, before),
     supplierId: null,
@@ -711,11 +713,11 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   if (!id && !data.passwordHash) {
     throw codedError("新建用户必须设置初始密码，禁止使用固定默认密码。", 400, "INITIAL_PASSWORD_REQUIRED");
   }
-  if (!id) {
+  if (emailIsAdminVerified) {
     data.emailVerified = true;
     data.emailVerifiedAt = new Date();
   }
-  if (id && approvalStatus === "APPROVED" && before?.emailVerified === false) {
+  if (id && approvalStatus === "APPROVED" && before?.emailVerified === false && !emailIsAdminVerified) {
     throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
   }
 
@@ -738,6 +740,12 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
   }
   if (id && (data.passwordHash || data.approvalStatus !== "APPROVED")) await revokeUserSessions(id);
+  if (id && emailChanged) {
+    await runNonCriticalTask("邮箱验证令牌失效", () => prisma.emailVerificationToken.updateMany({
+      where: { userId: id, usedAt: null },
+      data: { usedAt: new Date() },
+    }));
+  }
   runNonCriticalTask("用户操作日志写入", () => writeAudit(request, actor, id ? "更新用户" : "新增用户", "users", user.id, before, user));
   return serializeUser(user);
 }

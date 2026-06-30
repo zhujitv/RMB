@@ -261,15 +261,26 @@ test("user email writes use shared email format validation", () => {
   assert.match(sharedBaseUtils, /export function requireValidEmail/);
   assert.match(sharedBaseUtils, /VALIDATION_INVALID_EMAIL/);
   assert.match(sharedUtils, /requireValidEmail/);
-  assert.match(
-    sharedUsers,
-    /const email = requireValidEmail\(input\.email, "邮箱"\)/,
-  );
-  assert.match(sharedUsers, /email: requireValidEmail\(input\.email, "邮箱"\)/);
+  assert.match(sharedUsers, /const email = requireValidEmail\(input\.email, "邮箱"\)/);
+  assert.match(sharedUsers, /const data: Record<string, unknown> = \{[\s\S]*email,/);
   assert.doesNotMatch(
     sharedUsers,
     /requireText\(normalizeEmail\(input\.email\), "邮箱"\)/,
   );
+});
+
+test("admin user email changes are treated as verified emails", () => {
+  assert.match(sharedUsers, /const emailChanged = Boolean\(id && before && normalizeEmail\(before\.email\) !== email\)/);
+  assert.match(sharedUsers, /const emailIsAdminVerified = !id \|\| emailChanged/);
+  assert.match(
+    sharedUsers,
+    /if \(emailIsAdminVerified\) \{[\s\S]*data\.emailVerified = true;[\s\S]*data\.emailVerifiedAt = new Date\(\);[\s\S]*\}/,
+  );
+  assert.match(
+    sharedUsers,
+    /if \(id && approvalStatus === "APPROVED" && before\?\.emailVerified === false && !emailIsAdminVerified\)/,
+  );
+  assert.match(sharedUsers, /if \(id && emailChanged\) \{[\s\S]*邮箱验证令牌失效[\s\S]*emailVerificationToken\.updateMany/);
 });
 
 test("login service errors do not expose deployment diagnostics to unauthenticated users", () => {
