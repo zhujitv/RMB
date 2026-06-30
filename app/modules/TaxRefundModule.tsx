@@ -45,6 +45,29 @@ type DocumentCompleteness = {
       label?: string;
       missingCost?: boolean;
     }>;
+    requirements?: Array<{
+      key?: string;
+      label?: string;
+      costTypes?: string[];
+      completed?: boolean;
+      costs?: Array<{
+        costId?: string;
+        supplierId?: string;
+        supplierName?: string;
+        costType?: string;
+        costTypeRaw?: string;
+      }>;
+      invoiceGroups?: Array<{
+        documentId?: string;
+        logisticsExpenseId?: string;
+        invoiceGroupId?: string;
+        invoiceGroupLabel?: string;
+        includedFeeTypes?: string[];
+        feeTypes?: string[];
+        costTypes?: string[];
+        costIds?: string[];
+      }>;
+    }>;
   };
 };
 
@@ -461,7 +484,9 @@ export function TaxRefundModule({
     try {
       const result = await apiJson<TaxRefundDetailResponse>(`/api/tax-refunds/${encodeURIComponent(orderId)}`);
       if (detailRequestTokenRef.current === requestToken) {
-        setDetail(result.order || null);
+        const nextDetail = result.order || null;
+        setDetail(nextDetail);
+        if (nextDetail) patchRowsForOrder(orderId, nextDetail);
       }
     } catch (loadError) {
       if (detailRequestTokenRef.current === requestToken) {
@@ -815,6 +840,7 @@ export function TaxRefundModule({
       } else {
         setNotice("上传成功");
       }
+      if (detailOrderId === orderId) await fetchDetail(orderId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -955,6 +981,7 @@ export function TaxRefundModule({
           customsParseMessage: "",
         });
       }
+      if (detailOrderId === orderId) await fetchDetail(orderId);
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");
@@ -1693,6 +1720,7 @@ function TaxRefundDetailPanel({
               orderId={detail.id}
               cost={cost}
               documents={detail.documents || []}
+              completeness={detail.documentCompleteness || {}}
               uploadingKey={uploadingKey}
               uploadProgressByKey={uploadProgressByKey}
               deletingDocumentId={deletingDocumentId}
@@ -2539,6 +2567,7 @@ function LogisticsInvoiceUploadItem({
   orderId,
   cost,
   documents,
+  completeness,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
@@ -2551,6 +2580,7 @@ function LogisticsInvoiceUploadItem({
   orderId: string;
   cost: TaxCost;
   documents: TaxDocument[];
+  completeness: DocumentCompleteness;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
@@ -2562,17 +2592,14 @@ function LogisticsInvoiceUploadItem({
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "未命名供应商";
   const scope = { costId: cost.id, supplierId: cost.supplierId || "" };
+  const matchedDocuments = logisticsInvoiceDocumentsForCost(cost, documents, completeness);
   return (
     <TaxUploadItem
       targetKey={logisticsDocumentTargetKey(cost.id)}
       orderId={orderId}
       type="SUPPLIER_INVOICE"
       label={`${logisticsInvoiceLabel(cost)} / ${supplierName}`}
-      documents={documents.filter((document) => (
-        document.documentType === "SUPPLIER_INVOICE"
-        && document.uploadStatus === "SUCCESS"
-        && document.costId === cost.id
-      ))}
+      documents={matchedDocuments}
       uploading={uploadingKey === uploadScopeKey(orderId, "SUPPLIER_INVOICE", scope)}
       uploadProgress={uploadProgressByKey[uploadScopeKey(orderId, "SUPPLIER_INVOICE", scope)] || 0}
       deletingDocumentId={deletingDocumentId}
@@ -2832,6 +2859,57 @@ function logisticsInvoiceCosts(costs: TaxCost[]) {
     && !factorySupplierCosts([cost]).length
     && TAX_LOGISTICS_INVOICE_COST_TYPES.includes(cost.costType || "")
   ));
+}
+
+function normalizedTaxLogisticsCostType(value: unknown) {
+  const text = String(value || "").trim();
+  if (["国内物流费", "国内拖车费"].includes(text)) return "拖车费";
+  if (text === "ENS费") return "ENS";
+  return text;
+}
+
+function uniqueTaxDocuments(documents: TaxDocument[]) {
+  const seen = new Set<string>();
+  return documents.filter((document) => {
+    if (!document?.id || seen.has(document.id)) return false;
+    seen.add(document.id);
+    return true;
+  });
+}
+
+function logisticsRequirementMatchesCost(requirement: NonNullable<NonNullable<DocumentCompleteness["logistics"]>["requirements"]>[number], cost: TaxCost) {
+  const costId = String(cost.id || "");
+  const costType = normalizedTaxLogisticsCostType(cost.costType);
+  if (!costId && !costType) return false;
+  if ((requirement.costs || []).some((item) => (
+    (costId && item.costId === costId)
+    || normalizedTaxLogisticsCostType(item.costType || item.costTypeRaw) === costType
+  ))) return true;
+  if ((requirement.costTypes || []).some((item) => normalizedTaxLogisticsCostType(item) === costType)) return true;
+  return (requirement.invoiceGroups || []).some((group) => {
+    if (costId && (group.costIds || []).includes(costId)) return true;
+    const includedTypes = [
+      ...(group.includedFeeTypes || []),
+      ...(group.feeTypes || []),
+      ...(group.costTypes || []),
+    ];
+    return includedTypes.some((item) => normalizedTaxLogisticsCostType(item) === costType);
+  });
+}
+
+function logisticsInvoiceDocumentsForCost(cost: TaxCost, documents: TaxDocument[], completeness: DocumentCompleteness = {}) {
+  const successInvoices = documents.filter((document) => (
+    document.documentType === "SUPPLIER_INVOICE"
+    && document.uploadStatus === "SUCCESS"
+  ));
+  const directDocuments = successInvoices.filter((document) => document.costId === cost.id);
+  const documentById = new Map(successInvoices.map((document) => [document.id, document]));
+  const groupedDocuments = (completeness.logistics?.requirements || [])
+    .filter((requirement) => logisticsRequirementMatchesCost(requirement, cost))
+    .flatMap((requirement) => (requirement.invoiceGroups || [])
+      .map((group) => documentById.get(String(group.documentId || "")))
+      .filter((document): document is TaxDocument => Boolean(document)));
+  return uniqueTaxDocuments([...directDocuments, ...groupedDocuments]);
 }
 
 function customsRecognitionStatusTextFromResult(result: CustomsRecognitionResult | null | undefined) {

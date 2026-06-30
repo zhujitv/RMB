@@ -61,7 +61,15 @@ export function includeOrderRelations() {
     },
     documents: {
       where: { deletedAt: null },
-      include: { uploadedBy: true, cost: { include: { supplier: true } }, supplier: true },
+      include: {
+        uploadedBy: true,
+        cost: { include: { supplier: true } },
+        supplier: true,
+        logisticsExpenseInvoices: {
+          where: { deletedAt: null },
+          include: { bill: true, cost: true, supplier: true },
+        },
+      },
       orderBy: [{ documentType: "asc" as const }, { createdAt: "desc" as const }],
     },
     logisticsSuppliers: {

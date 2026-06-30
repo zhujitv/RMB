@@ -7,6 +7,8 @@ const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const reportService = readFileSync("lib/report-service.ts", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs", "utf8");
+const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 
 test("tax refund completeness adapts FOB LCL logistics invoice requirements to actual costs", () => {
   assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "GROUPED_INVOICE_INCLUDED_FEES_20260630"/);
@@ -27,8 +29,8 @@ test("tax refund logistics completeness is based on occurred approved costs inst
   assert.match(completeness, /actualRequirementKeys\.has\(requirement\.key\)/);
   assert.match(completeness, /label: "缺少已发生费用对应资料"/);
   assert.match(completeness, /function logisticsInvoiceGroupCoverages/);
-  assert.match(completeness, /logisticsInvoiceGroupForCost\(documentCost\)/);
-  assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[documentCost\]\)/);
+  assert.match(completeness, /logisticsInvoiceGroupForCost\(primaryCost\)/);
+  assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[primaryCost\]\)/);
   assert.match(completeness, /function logisticsRequirementMatchesCoverage/);
   assert.match(completeness, /coverage\.includedFeeTypes\.some\(\(costType\) => requiredTypes\.has\(costType\)\)/);
   assert.match(completeness, /const completed = directCompleted \|\| matchedCoverages\.length > 0/);
@@ -39,6 +41,21 @@ test("tax refund logistics completeness is based on occurred approved costs inst
   assert.doesNotMatch(completeness, /Number\(logistics\.total \|\| 0\) < 3/);
   assert.doesNotMatch(constants, /missingCostLabel: "未录入港杂费"/);
   assert.match(constants, /missingCostLabel: "缺少已发生费用对应资料"/);
+});
+
+test("tax refund detail displays grouped logistics invoices by included fee types", () => {
+  assert.match(orderRelations, /logisticsExpenseInvoices: \{\s*where: \{ deletedAt: null \}/);
+  assert.match(completeness, /document\.logisticsExpenseInvoices/);
+  assert.match(completeness, /logisticsExpenseInvoiceCostLike/);
+  assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[primaryCost\]\)/);
+  assert.match(completeness, /uploadedFileUrl: documentUploadedFileExists\(document\)/);
+  assert.match(completeness, /taxRefundDocumentTypeMatched: completed/);
+  assert.match(taxRefundModule, /function logisticsInvoiceDocumentsForCost/);
+  assert.match(taxRefundModule, /completeness\.logistics\?\.requirements/);
+  assert.match(taxRefundModule, /group\.documentId/);
+  assert.match(taxRefundModule, /group\.includedFeeTypes/);
+  assert.match(taxRefundModule, /group\.feeTypes/);
+  assert.match(taxRefundModule, /group\.costTypes/);
 });
 
 test("historical tax refund completeness refresh and report wording use the shared rule", () => {
