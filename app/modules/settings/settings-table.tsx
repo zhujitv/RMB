@@ -33,10 +33,17 @@ export function SettingsTable({
   onPage: (page: number) => void;
 }) {
   const colSpan = columns.length + 1;
+  const tableWrapClassName = tab === "suppliers"
+    ? `${styles.tableWrap} ${styles.supplierSettingsTableWrap}`
+    : `${styles.tableWrap} ${styles.tablePinnedTwoCols}`;
+  const tableClassName = tab === "suppliers"
+    ? `${styles.dataTable} ${styles.supplierSettingsTable}`
+    : styles.dataTable;
+
   return (
     <>
-      <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
-        <table className={styles.dataTable}>
+      <div className={tableWrapClassName}>
+        <table className={tableClassName}>
           <thead>
             <tr>
               {columns.map((column) => <th key={String(column.key)}>{column.label}</th>)}
@@ -108,7 +115,17 @@ export function SettingsRows({
   return (
     <>
       <tr className={styles.clickableRow} onClick={handlePrimaryAction}>
-        {columns.map((column) => <td key={String(column.key)}>{valueFor(row, column)}</td>)}
+        {columns.map((column) => {
+          const value = valueFor(row, column);
+          const isSupplierName = tab === "suppliers" && String(column.key) === "supplierName";
+          return (
+            <td key={String(column.key)} title={isSupplierName ? value : undefined}>
+              {isSupplierName ? (
+                <span className={styles.supplierSettingsName} title={value}>{value}</span>
+              ) : value}
+            </td>
+          );
+        })}
         <td>
           <button
             className={styles.rowDetailButton}

@@ -752,3 +752,98 @@
 .remarkCard button {
   width: fit-content;
 }
+
+.supplierSettingsTableWrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.supplierSettingsTable {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.supplierSettingsTable th,
+.supplierSettingsTable td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  vertical-align: middle;
+}
+
+.supplierSettingsTable th:nth-child(1),
+.supplierSettingsTable td:nth-child(1) {
+  width: auto;
+  min-width: 280px;
+}
+
+.supplierSettingsTable th:nth-child(2),
+.supplierSettingsTable td:nth-child(2) {
+  width: 136px;
+}
+
+.supplierSettingsTable th:nth-child(3),
+.supplierSettingsTable td:nth-child(3) {
+  width: 76px;
+  text-align: center;
+}
+
+.supplierSettingsTable th:nth-child(4),
+.supplierSettingsTable td:nth-child(4) {
+  width: 112px;
+}
+
+.supplierSettingsTable th:nth-child(5),
+.supplierSettingsTable td:nth-child(5) {
+  width: 90px;
+  text-align: center;
+}
+
+.supplierSettingsTable th:nth-child(6),
+.supplierSettingsTable td:nth-child(6) {
+  width: 78px;
+  text-align: center;
+}
+
+.supplierSettingsName {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.supplierSettingsTable td:nth-child(6) button {
+  min-width: 52px;
+  width: auto;
+  padding-inline: 10px;
+}
+
+@media (max-width: 720px) {
+  .supplierSettingsTable {
+    min-width: 680px;
+  }
+
+  .supplierSettingsTable th:nth-child(1),
+  .supplierSettingsTable td:nth-child(1) {
+    min-width: 250px;
+  }
+
+  .supplierSettingsTable th:nth-child(2),
+  .supplierSettingsTable td:nth-child(2) {
+    width: 118px;
+  }
+
+  .supplierSettingsTable th:nth-child(4),
+  .supplierSettingsTable td:nth-child(4) {
+    width: 96px;
+  }
+}

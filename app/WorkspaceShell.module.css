@@ -494,6 +494,9 @@
 .subListItem { composes: subListItem from "./styles/workspace-shell/responsive-main.module.css"; composes: subListItem from "./styles/workspace-shell/responsive-typography.module.css"; composes: subListItem from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .subModuleCard { composes: subModuleCard from "./styles/workspace-shell/responsive-typography.module.css"; composes: subModuleCard from "./styles/workspace-shell/shell-account.module.css"; }
 .supplierColumn { composes: supplierColumn from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: supplierColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.supplierSettingsName { composes: supplierSettingsName from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
+.supplierSettingsTable { composes: supplierSettingsTable from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
+.supplierSettingsTableWrap { composes: supplierSettingsTableWrap from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .supplierDocumentsHeader { composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsListToolbar from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsPage { composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/supplier-documents.module.css"; }
