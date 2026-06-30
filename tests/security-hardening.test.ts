@@ -401,10 +401,15 @@ test("all active PDF upload services reuse shared basic PDF validation", () => {
     uploadValidation,
     /return readValidatedPdfUploadFile\(candidate, fallbackName\)/,
   );
-  assert.doesNotMatch(
-    uploadValidation,
-    /image\/jpeg|image\/png|INVOICE_IMAGE_SIGNATURES|invoiceMimeTypeFromName/,
+  const pdfUploadReader = uploadValidation.slice(
+    uploadValidation.indexOf("export async function readValidatedPdfUploadFile"),
+    uploadValidation.indexOf("export async function readValidatedInvoiceUploadFile"),
   );
+  assert.doesNotMatch(
+    pdfUploadReader,
+    /image\/jpeg|image\/png|image\/webp|INVOICE_IMAGE_SIGNATURES|invoiceMimeTypeFromName/,
+  );
+  assert.match(uploadValidation, /export async function readValidatedPaymentVoucherUploadFile/);
 });
 
 test("logistics generated cost invoices are managed only by logistics invoice groups", () => {

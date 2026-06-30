@@ -200,12 +200,60 @@ function supplierDocumentEmailLabel(type: string) {
   return SUPPLIER_DOCUMENT_EMAIL_LABELS[type] || `${SUPPLIER_DOCUMENT_LABELS[type] || type}（PDF）`;
 }
 
+function paymentVoucherAttachmentFileName(fileName = "", mimeType = "") {
+  const lowerName = fileName.toLowerCase();
+  const extension = lowerName.endsWith(".png")
+    ? "png"
+    : lowerName.endsWith(".webp")
+      ? "webp"
+      : mimeType === "image/png"
+        ? "png"
+        : mimeType === "image/webp"
+          ? "webp"
+          : "jpg";
+  return `汇款水单.${extension}`;
+}
+
+async function latestProductSupplierPaymentVoucherAttachment(orderId: string, supplierId: string) {
+  const where = {
+    orderId,
+    supplierId,
+    deletedAt: null,
+    sourceType: { not: "LOGISTICS_EXPENSE" },
+    costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+    paymentVoucherStorageKey: { not: null },
+  } as Prisma.OrderCostWhereInput;
+  const orderBy = [
+    { paymentVoucherUploadedAt: "desc" },
+    { updatedAt: "desc" },
+  ] as Prisma.OrderCostOrderByWithRelationInput[];
+  const cost = await prisma.orderCost.findFirst({ where, orderBy });
+  const voucherCost = cost as typeof cost & {
+    paymentVoucherStorageKey?: string | null;
+    paymentVoucherFileName?: string | null;
+    paymentVoucherMimeType?: string | null;
+  };
+  if (!voucherCost?.paymentVoucherStorageKey) return null;
+  const content = await readR2Object(voucherCost.paymentVoucherStorageKey).catch((error) => {
+    logServerError("产品供应商资料回传通知付款凭证读取失败", error, { orderId, supplierId, costId: cost?.id || "" });
+    return null;
+  });
+  if (!content) return null;
+  const contentType = voucherCost.paymentVoucherMimeType || "image/jpeg";
+  return {
+    filename: paymentVoucherAttachmentFileName(voucherCost.paymentVoucherFileName || "", contentType),
+    content,
+    contentType,
+  };
+}
+
 function buildSupplierDocumentRequestEmailBody({
   supplierName,
   orderNo,
   requiredTypes,
   dueDate,
   templateAttached,
+  paymentVoucherAttached,
   companyName,
   message,
 }: {
@@ -214,6 +262,7 @@ function buildSupplierDocumentRequestEmailBody({
   requiredTypes: string[];
   dueDate: Date | null;
   templateAttached: boolean;
+  paymentVoucherAttached: boolean;
   companyName: string;
   message?: string | null;
 }) {
@@ -241,6 +290,7 @@ function buildSupplierDocumentRequestEmailBody({
     "2. 请严格按照附件中的合同内容开具工厂增值税发票，确保发票内容与合同内容一致。",
     `3. 登录 ${companyName}供应链协同平台，进入 「资料回传」 模块上传资料。`,
     "4. 所有上传文件仅支持 PDF 格式。",
+    paymentVoucherAttached ? "5. 已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。" : null,
     message ? "" : null,
     message ? "补充说明" : null,
     message ? "" : null,
@@ -533,12 +583,14 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   const subject = `NEXTWOOD 产品供应商资料回传通知：${order.orderNo}`;
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
+  const paymentVoucherAttachment = await latestProductSupplierPaymentVoucherAttachment(order.id, supplier.id);
   const body = buildSupplierDocumentRequestEmailBody({
     supplierName: supplier.supplierName,
     orderNo: order.orderNo || order.id,
     requiredTypes,
     dueDate,
     templateAttached: Boolean(template),
+    paymentVoucherAttached: Boolean(paymentVoucherAttachment),
     companyName,
     message,
   });
@@ -574,13 +626,17 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   }
 
   try {
+    const attachments = [
+      ...(template ? [{ filename: template.originalFileName, content: template.body, contentType: template.mimeType }] : []),
+      ...(paymentVoucherAttachment ? [paymentVoucherAttachment] : []),
+    ];
     await sendShippingDocumentsEmail({
       recipientEmails: recipients,
       ccEmails,
       subject,
       body,
       notificationId: created.id,
-      attachments: template ? [{ filename: template.originalFileName, content: template.body, contentType: template.mimeType }] : [],
+      attachments,
     });
     created = await prisma.supplierDocumentRequest.update({
       where: { id: created.id },

@@ -5,10 +5,10 @@ import { useEffect, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, DetailField, DismissibleLayer, MoneyAmount, PaginationBar, PdfPreviewButton, SideDetailDrawer, UiTabs, useConfirmationDialog } from "../components";
 import { preventEnterFormSubmit } from "../formGuards";
-import { formatCny, formatCurrencyAmount, formatDate, moneyText } from "../formatters";
+import { formatCny, formatCurrencyAmount, formatDate, formatDateTime, moneyText } from "../formatters";
 import { SearchAutocomplete } from "../SearchAutocomplete";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission, customerDisplayName, customerLegalName, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
+import { canWritePermission, customerDisplayName, customerLegalName, PAYMENT_VOUCHER_UPLOAD_ACCEPT, PDF_UPLOAD_ACCEPT, uploadFormDataWithProgress, validatePaymentVoucherUploadFile, validatePdfUploadFile } from "../utils";
 import { summarizeCurrencyTotals, type CurrencyTotals } from "../../lib/platform/currency-totals";
 import styles from "../WorkspaceShell.module.css";
 import {
@@ -70,6 +70,12 @@ type CostRow = {
   amountCny?: number;
   paymentStatus?: string;
   paymentDate?: string;
+  paid?: boolean;
+  paidAt?: string;
+  paymentVoucherUrl?: string;
+  paymentVoucherFileName?: string;
+  paymentVoucherMimeType?: string;
+  paymentVoucherUploadedAt?: string;
   invoiceStatus?: string;
   costConfirmed?: boolean;
   sourceLabel?: string;
@@ -159,6 +165,15 @@ type CostDeleteResponse = {
   action?: "deleted" | "voided";
   cost?: CostRow;
   orderSummary?: CostOrderSummary | null;
+};
+
+type CostPaymentResponse = {
+  success?: boolean;
+  cost?: CostRow;
+  data?: {
+    cost?: CostRow;
+  };
+  message?: string;
 };
 
 type CostOrderOption = {
@@ -323,6 +338,8 @@ export function CostsModule({
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
+  const [paymentSavingId, setPaymentSavingId] = useState("");
+  const [voucherUploadingKey, setVoucherUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -334,6 +351,7 @@ export function CostsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
+  const canManageFactoryPayments = ["管理员", "财务"].includes(currentUser.role);
 
   function openCreateCostDrawer() {
     setDetailCost(null);
@@ -715,6 +733,7 @@ export function CostsModule({
       {costFormDrawer ? (
         <CostFormDrawer
           drawer={costFormDrawer}
+          canManageFactoryPayments={canManageFactoryPayments}
           onCancel={closeCostFormDrawer}
           onSaved={async () => {
             const savedDrawer = costFormDrawer;
@@ -757,13 +776,20 @@ export function CostsModule({
           uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
           canWriteDocuments={canWriteDocuments}
+          canManageFactoryPayments={canManageFactoryPayments}
+          paymentSavingId={paymentSavingId}
+          voucherUploadingKey={voucherUploadingKey}
           onClose={() => {
             setDocumentCost(null);
             setDocumentError("");
             setUploadingKey("");
+            setPaymentSavingId("");
+            setVoucherUploadingKey("");
             setDeletingDocumentId("");
           }}
           onUpload={(cost, documentType, file) => void uploadCostDocument(cost, documentType, file)}
+          onUpdatePayment={(cost, paid, paidAt) => void updateProductSupplierCostPayment(cost, paid, paidAt)}
+          onUploadPaymentVoucher={(cost, file) => void uploadPaymentVoucher(cost, file)}
           onDelete={(cost, document) => void deleteCostDocument(cost, document)}
         />
       ) : null}
@@ -877,6 +903,90 @@ export function CostsModule({
     }
   }
 
+  async function updateProductSupplierCostPayment(cost: CostRow, paid: boolean, paidAt: string) {
+    if (!isProductSupplierPaymentEnabled(cost)) {
+      setDocumentError("付款信息仅适用于产品供应商货款。");
+      return;
+    }
+    if (!canManageFactoryPayments) {
+      setDocumentError("只有管理员或财务可以维护产品供应商货款付款信息。");
+      return;
+    }
+    if (!paid) {
+      const confirmationResult = await requestConfirmation({
+        title: "取消付款状态",
+        message: "确认取消该产品供应商货款的已付款状态吗？",
+        details: [`供应商：${costSupplierName(cost)}`, `成本：${moneyText(cost.currency, cost.amount, cost.amountCny)}`],
+        confirmLabel: "取消付款",
+        cancelLabel: "返回",
+        variant: "danger",
+      });
+      if (!confirmationResult.confirmed) return;
+    }
+    setPaymentSavingId(cost.id);
+    setDocumentError("");
+    try {
+      const result = await apiJson<CostPaymentResponse>(`/api/costs/${encodeURIComponent(cost.id)}/payment`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          paid,
+          paidAt: paid ? paidAt : null,
+        }),
+      });
+      const nextCost = result.cost || result.data?.cost;
+      if (!nextCost) throw new Error(result.message || "更新付款信息失败");
+      await refreshDocumentCost(nextCost.id);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      setNotice(paid ? "已标记付款" : "已取消付款状态");
+    } catch (paymentError) {
+      setDocumentError(paymentError instanceof Error ? paymentError.message : "更新付款信息失败");
+    } finally {
+      setPaymentSavingId("");
+    }
+  }
+
+  async function uploadPaymentVoucher(cost: CostRow, file: File | null) {
+    if (!file) return;
+    if (!isProductSupplierPaymentEnabled(cost)) {
+      setDocumentError("付款凭证仅适用于产品供应商货款。");
+      return;
+    }
+    if (!canManageFactoryPayments) {
+      setDocumentError("只有管理员或财务可以上传产品供应商货款付款凭证。");
+      return;
+    }
+    const validationError = validatePaymentVoucherUploadFile(file);
+    if (validationError) {
+      setDocumentError(validationError);
+      return;
+    }
+    const key = paymentVoucherUploadKey(cost);
+    setVoucherUploadingKey(key);
+    setUploadProgressByKey((current) => ({ ...current, [key]: 0 }));
+    setDocumentError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const result = await uploadFormDataWithProgress<CostPaymentResponse>(`/api/costs/${encodeURIComponent(cost.id)}/payment-voucher`, formData, (progress) => {
+        setUploadProgressByKey((current) => ({ ...current, [key]: progress }));
+      });
+      const nextCost = result.cost || result.data?.cost;
+      if (!nextCost) throw new Error(result.message || "付款凭证上传失败");
+      await refreshDocumentCost(nextCost.id);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      setNotice("付款凭证已上传");
+    } catch (uploadError) {
+      setDocumentError(uploadError instanceof Error ? uploadError.message : "付款凭证上传失败");
+    } finally {
+      setVoucherUploadingKey("");
+      setUploadProgressByKey((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+  }
+
   async function deleteCostDocument(cost: CostRow, document: CostDocument) {
     const confirmationResult = await requestConfirmation({
       title: "确认删除该资料？",
@@ -971,10 +1081,12 @@ export function CostsModule({
 
 function CostFormDrawer({
   drawer,
+  canManageFactoryPayments,
   onCancel,
   onSaved,
 }: {
   drawer: CostFormDrawerState;
+  canManageFactoryPayments: boolean;
   onCancel: () => void;
   onSaved: () => void | Promise<void>;
 }) {
@@ -999,6 +1111,7 @@ function CostFormDrawer({
       <QuickCreateCostPanel
         drawerMode
         initialCost={cost}
+        canManageFactoryPayments={canManageFactoryPayments}
         onCancel={onCancel}
         onSaved={onSaved}
       />
@@ -1008,11 +1121,13 @@ function CostFormDrawer({
 
 function QuickCreateCostPanel({
   initialCost,
+  canManageFactoryPayments = false,
   drawerMode = false,
   onCancel,
   onSaved,
 }: {
   initialCost?: CostRow | null;
+  canManageFactoryPayments?: boolean;
   drawerMode?: boolean;
   onCancel: () => void;
   onSaved: () => void | Promise<void>;
@@ -1187,7 +1302,8 @@ function QuickCreateCostPanel({
         setMessage(`第 ${index + 1} 条成本请填写汇率；CNY 成本汇率应自动为 1`);
         return;
       }
-      if (item.paymentStatus === "已支付" && !item.paymentDate) {
+      const selectedSupplier = supplierOptions.find((supplier) => supplier.id === item.supplierId) || null;
+      if (!isProductSupplierPaymentFormLocked(item, selectedSupplier, canManageFactoryPayments) && item.paymentStatus === "已支付" && !item.paymentDate) {
         setMessage(`第 ${index + 1} 条成本已支付时必须填写付款日期`);
         return;
       }
@@ -1282,6 +1398,7 @@ function QuickCreateCostPanel({
         {items.map((item, index) => {
           const selectedSupplier = supplierOptions.find((supplier) => supplier.id === item.supplierId) || null;
           const forceCny = !FOREIGN_CURRENCY_COST_TYPES.includes(item.costType);
+          const paymentLocked = isProductSupplierPaymentFormLocked(item, selectedSupplier, canManageFactoryPayments);
           return (
             <div className={styles.documentGroupCard} key={item.localId}>
               <div className={styles.quickCreateHeader}>
@@ -1335,7 +1452,7 @@ function QuickCreateCostPanel({
                 </label>
                 <label>
                   付款状态
-                  <select value={item.paymentStatus} onChange={(event) => setItemValue(item.localId, "paymentStatus", event.target.value)}>
+                  <select value={item.paymentStatus} disabled={paymentLocked} onChange={(event) => setItemValue(item.localId, "paymentStatus", event.target.value)}>
                     {COST_PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
                 </label>
@@ -1346,6 +1463,7 @@ function QuickCreateCostPanel({
                       value={item.paymentDate}
                       onChange={(event) => setItemValue(item.localId, "paymentDate", event.target.value)}
                       type="date"
+                      disabled={paymentLocked}
                       required
                     />
                   </label>
@@ -1680,6 +1798,13 @@ function CostDetailDrawer({
         <div className={styles.detailGrid}>
           <DetailField label="付款状态" value={cost.paymentStatus || "-"} />
           <DetailField label="付款日期" value={formatDate(cost.paymentDate)} />
+          {isProductSupplierPaymentEnabled(cost) ? (
+            <>
+              <DetailField label="产品货款付款" value={isProductSupplierPaid(cost) ? "已付款" : "未付款"} />
+              <DetailField label="付款时间" value={formatDateTime(cost.paidAt || cost.paymentDate)} />
+              <DetailField label="付款凭证" value={cost.paymentVoucherFileName ? "已上传" : isProductSupplierPaid(cost) ? "未上传水单" : "-"} />
+            </>
+          ) : null}
           <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
           <DetailMoneyField label="付款金额" cost={cost} />
         </div>
@@ -2035,8 +2160,13 @@ function CostDocumentsDrawer({
   uploadProgressByKey,
   deletingDocumentId,
   canWriteDocuments,
+  canManageFactoryPayments,
+  paymentSavingId,
+  voucherUploadingKey,
   onClose,
   onUpload,
+  onUpdatePayment,
+  onUploadPaymentVoucher,
   onDelete,
 }: {
   cost: CostRow;
@@ -2046,13 +2176,20 @@ function CostDocumentsDrawer({
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
+  canManageFactoryPayments: boolean;
+  paymentSavingId: string;
+  voucherUploadingKey: string;
   onClose: () => void;
   onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
+  onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
+  onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
   onDelete: (cost: CostRow, document: CostDocument) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const documentTypes = costDocumentTypesForDrawer(cost);
-  const dismissConfirmMessage = uploadingKey ? "当前内容尚未保存，确定关闭吗？" : "";
+  const paymentVoucherKey = paymentVoucherUploadKey(cost);
+  const paymentEnabled = isProductSupplierPaymentEnabled(cost);
+  const dismissConfirmMessage = uploadingKey || voucherUploadingKey ? "当前内容尚未保存，确定关闭吗？" : "";
   const logisticsGenerated = isLogisticsGeneratedCost(cost);
   const canManageDocuments = canWriteDocuments && !logisticsGenerated;
   const readOnlyReason = logisticsGenerated
@@ -2108,6 +2245,17 @@ function CostDocumentsDrawer({
           <div className={styles.documentGroupCard}>
             <strong>资料维护</strong>
             {readOnlyReason ? <div className={styles.infoStrip}>{readOnlyReason}</div> : null}
+            {paymentEnabled ? (
+              <ProductSupplierPaymentPanel
+                cost={cost}
+                canManage={canManageFactoryPayments}
+                saving={paymentSavingId === cost.id}
+                voucherUploading={voucherUploadingKey === paymentVoucherKey}
+                voucherProgress={uploadProgressByKey[paymentVoucherKey] || 0}
+                onUpdatePayment={onUpdatePayment}
+                onUploadPaymentVoucher={onUploadPaymentVoucher}
+              />
+            ) : null}
             {documentTypes.map((documentType) => (
               <CostDocumentUploadItem
                 key={`${cost.id}-${documentType.value}`}
@@ -2128,6 +2276,88 @@ function CostDocumentsDrawer({
         </>
       )}
     </DismissibleLayer>
+  );
+}
+
+function ProductSupplierPaymentPanel({
+  cost,
+  canManage,
+  saving,
+  voucherUploading,
+  voucherProgress,
+  onUpdatePayment,
+  onUploadPaymentVoucher,
+}: {
+  cost: CostRow;
+  canManage: boolean;
+  saving: boolean;
+  voucherUploading: boolean;
+  voucherProgress: number;
+  onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
+  onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
+}) {
+  const paid = isProductSupplierPaid(cost);
+  const [paidAtInput, setPaidAtInput] = useState(() => dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));
+  const voucherUrl = cost.paymentVoucherUrl || (cost.paymentVoucherFileName ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : "");
+  const voucherLabel = cost.paymentVoucherFileName ? "查看付款凭证" : paid ? "未上传水单" : "未上传";
+
+  useEffect(() => {
+    setPaidAtInput(dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));
+  }, [cost.id, cost.paidAt, cost.paymentDate]);
+
+  function submitPaid() {
+    const nextPaidAt = dateTimeLocalToIso(paidAtInput || dateTimeLocalValue());
+    onUpdatePayment(cost, true, nextPaidAt);
+  }
+
+  return (
+    <div className={styles.fileListItem}>
+      <div>
+        <span>产品货款付款</span>
+        <small>{paid ? `已付款 ｜ ${formatDateTime(cost.paidAt || cost.paymentDate)}` : "未付款，可先不上传凭证"}</small>
+        <small>付款凭证：{voucherUrl ? <a className={styles.fileActionButton} href={voucherUrl} target="_blank" rel="noreferrer">{voucherLabel}</a> : voucherLabel}</small>
+      </div>
+      <div className={styles.fileListItemActions}>
+        {canManage ? (
+          <>
+            <label>
+              <span className={styles.mutedText}>付款时间</span>
+              <input
+                className={styles.uiInput}
+                type="datetime-local"
+                value={paidAtInput}
+                disabled={saving}
+                onChange={(event) => setPaidAtInput(event.target.value)}
+              />
+            </label>
+            <button className={paid ? styles.secondaryButton : styles.primaryButtonCompact} type="button" disabled={saving} onClick={submitPaid}>
+              {saving ? "保存中..." : paid ? "更新付款时间" : "标记已付款"}
+            </button>
+            {paid ? (
+              <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => onUpdatePayment(cost, false, "")}>
+                取消付款
+              </button>
+            ) : null}
+            <label className={styles.secondaryButton}>
+              {voucherUploading ? "上传中..." : cost.paymentVoucherFileName ? "更换付款凭证" : "上传付款凭证"}
+              <input
+                type="file"
+                accept={PAYMENT_VOUCHER_UPLOAD_ACCEPT}
+                disabled={voucherUploading}
+                hidden
+                onChange={(event) => {
+                  onUploadPaymentVoucher(cost, event.target.files?.[0] || null);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {voucherUploading ? <UploadProgressInline progress={voucherProgress} /> : null}
+          </>
+        ) : (
+          <span className={styles.mutedText}>只读</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2248,6 +2478,19 @@ function isLogisticsGeneratedCost(cost: Pick<CostRow, "sourceType">) {
   return cost.sourceType === "LOGISTICS_EXPENSE";
 }
 
+function isProductSupplierPaymentEnabled(cost: CostRow) {
+  return isFactoryCost(cost) && !isLogisticsGeneratedCost(cost) && !isLogisticsInvoiceCost(cost);
+}
+
+function isProductSupplierPaid(cost: CostRow) {
+  return Boolean(cost.paid) || cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+}
+
+function isProductSupplierPaymentFormLocked(item: Pick<CostItemForm, "costType">, supplier: SupplierOption | null, canManageFactoryPayments: boolean) {
+  if (canManageFactoryPayments) return false;
+  return FACTORY_COST_TYPES.includes(item.costType) || PRODUCT_SUPPLIER_TYPES.includes(supplier?.supplierType || "");
+}
+
 function logisticsInvoiceLabel(cost: Pick<CostRow, "costType">) {
   if (["拖车费", "国内物流费", "国内拖车费"].includes(cost.costType || "")) return "拖车费发票";
   if (cost.costType === "报关费") return "报关费发票";
@@ -2258,6 +2501,22 @@ function logisticsInvoiceLabel(cost: Pick<CostRow, "costType">) {
 
 function costUploadKey(cost: CostRow, documentType: string) {
   return [cost.orderId || "", cost.id, cost.supplierId || "", documentType].join(":");
+}
+
+function paymentVoucherUploadKey(cost: CostRow) {
+  return [cost.id, "payment-voucher"].join(":");
+}
+
+function dateTimeLocalValue(value?: string | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function dateTimeLocalToIso(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
 function costFormFromRow(cost?: CostRow | null): QuickCostForm {

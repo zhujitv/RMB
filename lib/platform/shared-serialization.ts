@@ -20,6 +20,12 @@ import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark, 
 
 export { USER_PUBLIC_SELECT, publicUser, serializeUser };
 
+function dateTimeToIso(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+}
+
 type OrderDocumentStatusLike = {
   documentType?: string | null;
   uploadStatus?: string | null;
@@ -216,6 +222,14 @@ type CostLike = Record<string, unknown> & {
   costConfirmed?: boolean | null;
   costConfirmedAt?: Date | string | null;
   paymentDate?: Date | string | null;
+  paid?: boolean | null;
+  paidAt?: Date | string | null;
+  paymentVoucherUrl?: string | null;
+  paymentVoucherFileName?: string | null;
+  paymentVoucherMimeType?: string | null;
+  paymentVoucherUploadedAt?: Date | string | null;
+  paymentVoucherStorageKey?: string | null;
+  paymentVoucherBucket?: string | null;
   invoiceStatus?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
@@ -440,6 +454,12 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     paymentStatus: cost.paymentStatus || "待支付",
     costConfirmed: Boolean(cost.costConfirmed),
     paymentDate: dateToInput(cost.paymentDate),
+    paid: Boolean(cost.paid),
+    paidAt: dateTimeToIso(cost.paidAt),
+    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : (cost.paymentVoucherUrl || ""),
+    paymentVoucherFileName: cost.paymentVoucherFileName || "",
+    paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
+    paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
     invoiceStatus: cost.sourceType === "LOGISTICS_EXPENSE"
       ? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
       : invoiceStatusFromDocuments(cost.documents || []),
@@ -505,6 +525,12 @@ export function serializeCost(costInput: unknown) {
     costConfirmed: Boolean(cost.costConfirmed),
     costConfirmedAt: cost.costConfirmedAt,
     paymentDate: dateToInput(cost.paymentDate),
+    paid: Boolean(cost.paid),
+    paidAt: dateTimeToIso(cost.paidAt),
+    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : (cost.paymentVoucherUrl || ""),
+    paymentVoucherFileName: cost.paymentVoucherFileName || "",
+    paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
+    paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
     invoiceStatus: cost.sourceType === "LOGISTICS_EXPENSE"
       ? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
       : invoiceStatusFromDocuments(cost.documents || []),

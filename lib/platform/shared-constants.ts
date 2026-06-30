@@ -487,6 +487,7 @@ export const COMMISSION_STATUSES = [
   "已结算",
 ];
 export const MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_PAYMENT_VOUCHER_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export const EXCHANGE_RATE_SETTING_KEY = "exchange_rate";
 export const DEFAULT_EXCHANGE_RATE_SETTINGS = {

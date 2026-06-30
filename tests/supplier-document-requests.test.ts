@@ -49,6 +49,19 @@ test("supplier callback email uses formal PDF-only request template", () => {
   assert.match(service, /本邮件由系统自动发送，请勿直接回复。/);
 });
 
+test("product supplier callback email attaches only matching cost payment voucher", () => {
+  assert.match(service, /function paymentVoucherAttachmentFileName/);
+  assert.match(service, /return `汇款水单\.\$\{extension\}`/);
+  assert.match(service, /async function latestProductSupplierPaymentVoucherAttachment\(orderId: string, supplierId: string\)/);
+  assert.match(service, /sourceType: \{ not: "LOGISTICS_EXPENSE" \}/);
+  assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
+  assert.match(service, /paymentVoucherStorageKey: \{ not: null \}/);
+  assert.match(service, /readR2Object\(voucherCost\.paymentVoucherStorageKey\)/);
+  assert.match(service, /已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。/);
+  assert.match(service, /paymentVoucherAttached: Boolean\(paymentVoucherAttachment\)/);
+  assert.match(service, /\.\.\.\(paymentVoucherAttachment \? \[paymentVoucherAttachment\] : \[\]\)/);
+});
+
 test("supplier portal does not render customer identity fields", () => {
   assert.doesNotMatch(supplierModule, /customerName|customerFullName|customerShortName|客户简称|客户全称/);
   assert.doesNotMatch(service, /customerName|customerFullName|customerShortName/);

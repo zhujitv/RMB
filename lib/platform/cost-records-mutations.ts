@@ -1,6 +1,14 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import {
+  buildCostPaymentVoucherKey,
+  deleteR2Object,
+  ensureR2Configured,
+  readR2Object,
+  safeFileName,
+  uploadToR2,
+} from "../r2";
+import {
   COST_PAYMENT_STATUSES,
   COST_BATCH_INPUT_SCHEMA,
   COST_INPUT_SCHEMA,
@@ -11,6 +19,7 @@ import {
   amountCny,
   assertInputSchema,
   assertJsonObject,
+  assertRead,
   assertWrite,
   booleanInput,
   canConfirmLogisticsCost,
@@ -27,6 +36,7 @@ import {
   num,
   optional,
   permissionError,
+  readValidatedPaymentVoucherUploadFile,
   refreshTaxRefundCompleteness,
   requirePositive,
   requireText,
@@ -66,6 +76,16 @@ type CostOrderLike = {
   currency?: string | null;
 };
 type DeletedCostAction = "deleted" | "voided";
+type CostWithPaymentRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostRelations> }> & {
+  paid?: boolean | null;
+  paidAt?: Date | null;
+  paymentVoucherUrl?: string | null;
+  paymentVoucherFileName?: string | null;
+  paymentVoucherMimeType?: string | null;
+  paymentVoucherUploadedAt?: Date | null;
+  paymentVoucherStorageKey?: string | null;
+  paymentVoucherBucket?: string | null;
+};
 
 function requireCostActor(actor: CostActorInput): CostActor {
   if (!actor?.id) throw permissionError("请先登录", 401);
@@ -86,6 +106,59 @@ function isCostEntryActor(actor: CostActor) {
 
 function isPaidCost(cost: { paymentStatus?: string | null }) {
   return cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+}
+
+function assertCanManageProductSupplierPayment(actor: CostActor) {
+  if (actor.role === "管理员" || actor.role === "财务") return;
+  throw permissionError("只有管理员或财务可以维护产品供应商货款付款信息", 403);
+}
+
+function isProductSupplierPaymentCost(cost: {
+  costType?: string | null;
+  sourceType?: string | null;
+  supplier?: { supplierType?: string | null } | null;
+}) {
+  if (cost.sourceType === "LOGISTICS_EXPENSE" || isLogisticsCostType(cost.costType || "")) return false;
+  return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType || "") || isProductSupplierType(cost.supplier?.supplierType);
+}
+
+function assertProductSupplierPaymentCost(cost: {
+  costType?: string | null;
+  sourceType?: string | null;
+  supplier?: { supplierType?: string | null } | null;
+}) {
+  if (!isProductSupplierPaymentCost(cost)) {
+    throw codedError("付款信息仅适用于成本管理中的产品供应商货款。", 400, "COST_PAYMENT_SCOPE_INVALID");
+  }
+}
+
+function paymentBooleanInput(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const text = nonEmpty(value).toLowerCase();
+  return ["true", "1", "yes", "y", "已付款", "已支付"].includes(text);
+}
+
+function paidAtFromInput(value: unknown, fallback = new Date()) {
+  const text = nonEmpty(value);
+  if (!text) return fallback;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) throw codedError("付款时间格式错误", 400, "INVALID_PAID_AT");
+  return date;
+}
+
+function paymentVoucherFileName(extension: string) {
+  return `汇款水单.${extension === "jpeg" ? "jpg" : extension}`;
+}
+
+async function loadCostForPayment(actor: CostActor, id: string): Promise<CostWithPaymentRelations> {
+  const cost = await prisma.orderCost.findFirst({
+    where: { id, deletedAt: null },
+    include: includeCostRelations(),
+  });
+  if (!cost) throw permissionError("成本记录不存在或已删除", 404);
+  if (!canAccessOrder(actor, cost.order)) throw permissionError("无权限读取该成本记录");
+  assertProductSupplierPaymentCost(cost);
+  return cost as CostWithPaymentRelations;
 }
 
 function canPhysicallyDeleteCost(cost: { sourceType?: string | null; paymentStatus?: string | null; costConfirmed?: boolean | null }, hasUploadedInvoice: boolean) {
@@ -211,11 +284,20 @@ async function buildCostData(order: CostOrderLike, actor: CostActor, input: Cost
   }
   const costConfirmed = canConfirmOrdinaryCost ? requestedCostConfirmed : Boolean(before?.costConfirmed);
   const paymentStatusInput = nonEmpty(input.paymentStatus);
-  const paymentStatus = COST_PAYMENT_STATUSES.includes(paymentStatusInput) ? paymentStatusInput : "待支付";
-  const paymentDate = dateFromInput(input.paymentDate);
-  if (paymentStatus === "已支付" && !paymentDate) {
+  const requestedPaymentStatus = COST_PAYMENT_STATUSES.includes(paymentStatusInput) ? paymentStatusInput : "待支付";
+  const requestedPaymentDate = dateFromInput(input.paymentDate);
+  const productPaymentCost = isProductSupplierPaymentCost({ costType, sourceType, supplier });
+  const canManageProductPayment = actor.role === "管理员" || actor.role === "财务";
+  const paymentStatus = productPaymentCost && !canManageProductPayment
+    ? (before?.paymentStatus || "待支付")
+    : requestedPaymentStatus;
+  const paymentDate = productPaymentCost && !canManageProductPayment
+    ? (before?.paymentDate || null)
+    : requestedPaymentDate;
+  if (!(productPaymentCost && !canManageProductPayment) && paymentStatus === "已支付" && !paymentDate) {
     throw codedError("已支付成本必须填写付款日期", 400, "PAYMENT_DATE_REQUIRED");
   }
+  const paid = productPaymentCost && isPaidCost({ paymentStatus });
   return {
     orderId: order.id,
     supplierId: supplier.id,
@@ -230,6 +312,10 @@ async function buildCostData(order: CostOrderLike, actor: CostActor, input: Cost
     amount,
     amountCny: amountCny(amount, exchange.exchangeRate),
     paymentStatus,
+    ...(productPaymentCost ? {
+      paid: productPaymentCost && !canManageProductPayment ? Boolean(before?.paid) : paid,
+      paidAt: productPaymentCost && !canManageProductPayment ? (before?.paidAt || null) : (paid ? paymentDate : null),
+    } : {}),
     costConfirmed,
     costConfirmedAt: costConfirmed ? (before?.costConfirmedAt || new Date()) : null,
     paymentDate,
@@ -403,6 +489,87 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
     action,
     cost: safeSerializeCost(cost),
     orderSummary: await costOrderSummaryForMutation(before.orderId, currentActor),
+  };
+}
+
+export async function updateProductSupplierCostPayment(request: AuditRequestLike, actor: CostActorInput, id: string, input: CostInput) {
+  assertRead(actor, "costs");
+  const currentActor = requireCostActor(actor);
+  assertCanManageProductSupplierPayment(currentActor);
+  const before = await loadCostForPayment(currentActor, id);
+  const paid = paymentBooleanInput(input.paid ?? input.isPaid ?? input.paymentPaid);
+  const paidAt = paid ? paidAtFromInput(input.paidAt ?? input.paymentTime ?? input.paymentDate) : null;
+  const data = {
+    paid,
+    paidAt,
+    paymentStatus: paid ? "已支付" : "待支付",
+    paymentDate: paidAt,
+    updatedById: currentActor.id,
+  } as Prisma.OrderCostUncheckedUpdateInput;
+  const updated = await prisma.orderCost.update({
+    where: { id },
+    data,
+    include: includeCostRelations(),
+  });
+  await runNonCriticalTask("成本付款信息操作日志写入", () => writeAudit(request, currentActor, paid ? "标记产品供应商货款已付款" : "取消产品供应商货款付款", "order_costs", id, before, updated));
+  return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
+}
+
+export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequestLike, actor: CostActorInput, id: string, file: unknown) {
+  assertRead(actor, "costs");
+  const currentActor = requireCostActor(actor);
+  assertCanManageProductSupplierPayment(currentActor);
+  const before = await loadCostForPayment(currentActor, id);
+  const { body, mimeType, extension, fileSize } = await readValidatedPaymentVoucherUploadFile(file, "payment-voucher.jpg");
+  const fileName = paymentVoucherFileName(extension);
+  const storageFileName = safeFileName(`payment-voucher-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileName.split(".").pop() || extension}`);
+  const storageKey = buildCostPaymentVoucherKey({ costId: id, fileName: storageFileName });
+  const { bucket } = ensureR2Configured();
+  await uploadToR2({ key: storageKey, body, contentType: mimeType });
+  let updated;
+  try {
+    updated = await prisma.orderCost.update({
+      where: { id },
+      data: {
+        paymentVoucherUrl: null,
+        paymentVoucherFileName: fileName,
+        paymentVoucherMimeType: mimeType,
+        paymentVoucherUploadedAt: new Date(),
+        paymentVoucherStorageKey: storageKey,
+        paymentVoucherBucket: bucket,
+        updatedById: currentActor.id,
+      } as Prisma.OrderCostUncheckedUpdateInput,
+      include: includeCostRelations(),
+    });
+  } catch (error: unknown) {
+    await deleteR2Object(storageKey).catch(() => null);
+    throw error;
+  }
+  const oldStorageKey = before.paymentVoucherStorageKey || "";
+  if (oldStorageKey && oldStorageKey !== storageKey) {
+    await runNonCriticalTask("付款凭证旧文件删除", () => deleteR2Object(oldStorageKey));
+  }
+  await runNonCriticalTask("成本付款凭证操作日志写入", () => writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
+    costId: id,
+    fileName,
+    mimeType,
+    fileSize,
+  }));
+  return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
+}
+
+export async function getProductSupplierCostPaymentVoucher(_request: AuditRequestLike, actor: CostActorInput, id: string) {
+  assertRead(actor, "costs");
+  const currentActor = requireCostActor(actor);
+  const cost = await loadCostForPayment(currentActor, id);
+  const storageKey = cost.paymentVoucherStorageKey || "";
+  if (!storageKey) throw codedError("该成本记录尚未上传付款凭证。", 404, "PAYMENT_VOUCHER_NOT_FOUND");
+  const body = await readR2Object(storageKey);
+  return {
+    body,
+    mimeType: cost.paymentVoucherMimeType || "application/octet-stream",
+    fileName: cost.paymentVoucherFileName || "汇款水单.jpg",
+    cost: safeSerializeCost(cost),
   };
 }
 

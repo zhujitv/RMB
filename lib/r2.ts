@@ -24,6 +24,10 @@ type OrderDocumentKeyInput = {
   relatedModule?: string;
   supplierId?: string;
 };
+type CostPaymentVoucherKeyInput = {
+  costId: string;
+  fileName: string;
+};
 
 type R2UploadInput = {
   key: string;
@@ -136,6 +140,10 @@ export function buildOrderDocumentKey({ orderId, documentType, fileName, related
     return `receivable-orders/${orderId}/sales-contracts/${safeName}`;
   }
   return `receivable-orders/${orderId}/export-documents/${documentType}/${safeName}`;
+}
+
+export function buildCostPaymentVoucherKey({ costId, fileName }: CostPaymentVoucherKeyInput) {
+  return `order-costs/${costId}/payment-voucher/${safeFileName(fileName || "payment-voucher")}`;
 }
 
 function isTimeoutError(error: unknown) {

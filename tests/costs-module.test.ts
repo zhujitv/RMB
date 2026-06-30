@@ -6,9 +6,20 @@ import { readWorkspaceStylesSource } from "./source-helpers.ts";
 const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
 const costsMutation = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
+const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "utf8");
+const costPaymentVoucherRoute = readFileSync("app/api/costs/[id]/payment-voucher/route.ts", "utf8");
+const costPaymentVoucherDownloadRoute = readFileSync("app/api/costs/[id]/payment-voucher/download/route.ts", "utf8");
 const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
 const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
 const businessDocuments = readFileSync("lib/platform/business-documents.ts", "utf8");
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+const paymentVoucherMigration = readFileSync("prisma/migrations/20260630093000_product_supplier_cost_payment_voucher/migration.sql", "utf8");
+const uploadValidation = readFileSync("lib/platform/upload-validation.ts", "utf8");
+const appUtils = readFileSync("app/utils.ts", "utf8");
+const logisticsFeesModule = [
+  "app/modules/LogisticsFeesModule.tsx",
+  "app/modules/logistics-fees/invoice-groups-panel.tsx",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const workspaceStyles = readWorkspaceStylesSource();
 const costsModuleWithoutDisableGuard = costsModule.replace(/const DISABLE_COMPONENT_RENDER = \[[\s\S]*?\] as const;\nvoid DISABLE_COMPONENT_RENDER;\n/, "");
 
@@ -30,6 +41,35 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /function CostOrderItemsTable/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
   assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
+});
+
+test("product supplier cost payment vouchers are scoped away from logistics fees", () => {
+  assert.match(schema, /paid\s+Boolean\s+@default\(false\)/);
+  assert.match(schema, /paidAt\s+DateTime\?\s+@map\("paid_at"\)/);
+  assert.match(schema, /paymentVoucherStorageKey\s+String\?\s+@map\("payment_voucher_storage_key"\)/);
+  assert.match(paymentVoucherMigration, /"cost_type" IN \('工厂货款', '原材料货款', '采购货款', '产品货款'\)/);
+  assert.match(paymentVoucherMigration, /"source_type" <> 'LOGISTICS_EXPENSE'/);
+  assert.match(costsMutation, /function assertCanManageProductSupplierPayment/);
+  assert.match(costsMutation, /actor\.role === "管理员" \|\| actor\.role === "财务"/);
+  assert.match(costsMutation, /function isProductSupplierPaymentCost/);
+  assert.match(costsMutation, /cost\.sourceType === "LOGISTICS_EXPENSE" \|\| isLogisticsCostType/);
+  assert.match(costsMutation, /export async function updateProductSupplierCostPayment/);
+  assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher/);
+  assert.match(costsMutation, /productPaymentCost && !canManageProductPayment/);
+  assert.match(costPaymentRoute, /updateProductSupplierCostPayment\(request, actor, id/);
+  assert.match(costPaymentVoucherRoute, /uploadProductSupplierCostPaymentVoucher\(request, actor, id/);
+  assert.match(costPaymentVoucherDownloadRoute, /getProductSupplierCostPaymentVoucher\(request, actor, id\)/);
+  assert.match(uploadValidation, /readValidatedPaymentVoucherUploadFile/);
+  assert.match(uploadValidation, /image\/jpeg/);
+  assert.match(appUtils, /PAYMENT_VOUCHER_UPLOAD_ACCEPT/);
+  assert.match(costsModule, /function ProductSupplierPaymentPanel/);
+  assert.match(costsModule, /function isProductSupplierPaymentEnabled/);
+  assert.match(costsModule, /isFactoryCost\(cost\) && !isLogisticsGeneratedCost\(cost\) && !isLogisticsInvoiceCost\(cost\)/);
+  assert.match(costsModule, /const canManageFactoryPayments = \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
+  assert.match(costsModule, /function isProductSupplierPaymentFormLocked/);
+  assert.match(costsModule, /disabled=\{paymentLocked\}/);
+  assert.match(costsModule, /validatePaymentVoucherUploadFile/);
+  assert.doesNotMatch(logisticsFeesModule, /付款凭证|汇款水单|已付款开关|单次付款时间/);
 });
 
 test("cost management groups logistics invoices by shipment before display", () => {
