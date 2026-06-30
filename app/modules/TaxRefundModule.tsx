@@ -52,6 +52,8 @@ type TaxRefundRow = {
   id: string;
   orderNo?: string;
   blNo?: string;
+  billOfLadingNo?: string;
+  billOfLadingNumbers?: string[];
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
@@ -1115,22 +1117,32 @@ export function TaxRefundModule({
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
+      <div className={`${styles.tableWrap} ${styles.taxRefundTableWrap}`}>
+        <table className={`${styles.dataTable} ${styles.taxRefundTable}`}>
+          <colgroup>
+            <col className={styles.taxRefundOrderNoColumn} />
+            <col className={styles.taxRefundBlNoColumn} />
+            <col className={styles.taxRefundCustomerColumn} />
+            <col className={styles.taxRefundDateColumn} />
+            <col className={styles.taxRefundCompletenessColumn} />
+            <col className={styles.taxRefundStatusColumn} />
+            <col className={styles.taxRefundActionColumn} />
+          </colgroup>
           <thead>
             <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
-              <th>申报日期</th>
-              <th>总体完整度</th>
-              <th>退税状态</th>
-              <th>详情</th>
+              <th className={styles.taxRefundOrderNoColumn}>订单号</th>
+              <th className={styles.taxRefundBlNoColumn}>提单号</th>
+              <th className={styles.taxRefundCustomerColumn}>客户简称</th>
+              <th className={styles.taxRefundDateColumn}>申报日期</th>
+              <th className={styles.taxRefundCompletenessColumn}>总体完整度</th>
+              <th className={styles.taxRefundStatusColumn}>退税状态</th>
+              <th className={styles.taxRefundActionColumn}>详情</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : rows.length ? rows.map((row) => {
               const rowStatus = taxRowStatus(row);
@@ -1150,7 +1162,7 @@ export function TaxRefundModule({
               );
             }) : (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
               </tr>
             )}
           </tbody>
@@ -1274,6 +1286,8 @@ function TaxRefundTableRow({
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
   const currentStatus = taxRowStatus(row);
   const missingGroups = taxCompletenessTooltipGroups(completeness, percent);
+  const billOfLadingNumbers = taxRefundBillOfLadingNumbers(row);
+  const billOfLadingTitle = billOfLadingNumbers.join(" / ");
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const tooltipId = `tax-completeness-tooltip-${row.id}`;
 
@@ -1290,10 +1304,17 @@ function TaxRefundTableRow({
 
   return (
     <tr className={styles.clickableRow} onClick={onViewDetail}>
-      <td>{row.orderNo || "-"}</td>
-      <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
-      <td>{declarationDate}</td>
-      <td>
+      <td className={styles.taxRefundOrderNoColumn}>{row.orderNo || "-"}</td>
+      <td className={styles.taxRefundBlNoColumn} title={billOfLadingTitle || "-"}>
+        {billOfLadingNumbers.length ? (
+          <span className={styles.taxRefundBlNoList}>
+            {billOfLadingNumbers.map((blNo) => <span key={blNo}>{blNo}</span>)}
+          </span>
+        ) : "-"}
+      </td>
+      <td className={styles.taxRefundCustomerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+      <td className={styles.taxRefundDateColumn}>{declarationDate}</td>
+      <td className={styles.taxRefundCompletenessColumn}>
         <span className={styles.taxCompletenessTooltipAnchor}>
           <span
             className={`${styles.statusPill} ${completenessClass(percent)} ${missingGroups.length ? styles.taxCompletenessTooltipTrigger : ""}`}
@@ -1322,7 +1343,7 @@ function TaxRefundTableRow({
           </div>
         ) : null}
       </td>
-      <td>
+      <td className={styles.taxRefundStatusColumn}>
         {canUpdateStatus ? (
           <select
             value={currentStatus}
@@ -1338,7 +1359,7 @@ function TaxRefundTableRow({
           <span className={`${styles.statusPill} ${statusClass(currentStatus)}`}>{row.taxRefundStatusLabel || taxStatusLabel(currentStatus)}</span>
         )}
       </td>
-      <td>
+      <td className={styles.taxRefundActionColumn}>
         <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>
           详情
         </button>
@@ -1409,6 +1430,7 @@ function TaxRefundDetailDrawer({
   canWriteDocuments: boolean;
 }) {
   const displayCustomer = customerLegalName(row);
+  const displayBillOfLadingNo = taxRefundBillOfLadingText(detail || {}, row);
   const dismissLocked = packageDownloading || submittingTax || Boolean(uploadingKey);
   const dismissConfirmMessage = dismissLocked ? "当前内容尚未保存，确定关闭吗？" : "";
 
@@ -1427,7 +1449,7 @@ function TaxRefundDetailDrawer({
           <div className={styles.taxRefundDrawerTitle}>
             <span>退税资料详情</span>
             <strong>{row.orderNo || "-"} · {displayCustomer}</strong>
-            <small>提单号：{row.blNo || "-"}</small>
+            <small>提单号：{displayBillOfLadingNo}</small>
           </div>
           <div className={styles.taxRefundDrawerActions}>
             <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
@@ -1530,6 +1552,7 @@ function TaxRefundDetailPanel({
   const groups = groupDocuments(detail.documents || []);
   const domesticExportInvoiceRemark = detail.domesticLogisticsInfo?.exportInvoice?.remark || null;
   const domesticRemarkText = detail.domesticLogisticsInfo?.remarkText || "";
+  const displayBillOfLadingNo = taxRefundBillOfLadingText(detail, fallback);
   const factoryCosts = factorySupplierCosts(detail.costs || []);
   const canRecognizeCustoms = canRecognizeTaxCustoms(currentUserRole, canWriteDocuments, readOnly);
   const showTaxArchiveRecord = Boolean(
@@ -1561,7 +1584,7 @@ function TaxRefundDetailPanel({
           <div className={styles.detailGrid}>
             <DetailField label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
             <DetailField label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
-            <DetailField label="提单号" value={detail.blNo || fallback.blNo || "-"} />
+            <DetailField label="提单号" value={displayBillOfLadingNo} />
             <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
             <DetailField label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
             <DetailField label="物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemarkText ? "已提交" : "未提交")} />
@@ -2567,6 +2590,23 @@ function normalizedMissingLabels(completeness: DocumentCompleteness) {
   return labels.map((label) => String(label || "").trim()).filter(Boolean);
 }
 
+function taxRefundBillOfLadingNumbers(row: Partial<TaxRefundRow> = {}, fallback: Partial<TaxRefundRow> = {}) {
+  const arrayValues = [row.billOfLadingNumbers, fallback.billOfLadingNumbers]
+    .find((items) => Array.isArray(items) && items.some((item) => String(item || "").trim()))
+    || [];
+  const values = arrayValues.length
+    ? arrayValues
+    : [row.billOfLadingNo, row.blNo, fallback.billOfLadingNo, fallback.blNo];
+  return values
+    .map((value) => String(value || "").trim())
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function taxRefundBillOfLadingText(row: Partial<TaxRefundRow> = {}, fallback: Partial<TaxRefundRow> = {}) {
+  const numbers = taxRefundBillOfLadingNumbers(row, fallback);
+  return numbers.length ? numbers.join(" / ") : "-";
+}
+
 function taxCompletenessTooltipGroups(completeness: DocumentCompleteness, percent: number) {
   if (percent >= 100 || Number(completeness.completed || 0) >= Number(completeness.total || 0)) return [];
   const groups: Array<{ category: string; items: string[] }> = [
@@ -2821,6 +2861,8 @@ function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
   const patch: Partial<TaxRefundRow> = {};
   if (detail.orderNo !== undefined) patch.orderNo = detail.orderNo;
   if (detail.blNo !== undefined) patch.blNo = detail.blNo;
+  if (detail.billOfLadingNo !== undefined) patch.billOfLadingNo = detail.billOfLadingNo;
+  if (detail.billOfLadingNumbers !== undefined) patch.billOfLadingNumbers = detail.billOfLadingNumbers;
   if (detail.customerName !== undefined) patch.customerName = detail.customerName;
   if (detail.customerFullName !== undefined) patch.customerFullName = detail.customerFullName;
   if (detail.customerShortName !== undefined) patch.customerShortName = detail.customerShortName;

@@ -9,6 +9,7 @@ const css = readWorkspaceStylesSource();
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
 const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
+const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
 const domesticLogisticsArchiveRoute = readFileSync("app/api/domestic-logistics/archive/route.ts", "utf8");
 const exportInvoiceRemarkFormatter = readFileSync("lib/platform/export-invoice-remark.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
@@ -50,6 +51,32 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);
   assert.doesNotMatch(moduleSource, /<LogisticsFeesModule/);
+});
+
+test("tax refund list keeps bill of lading readable between order and customer", () => {
+  const tableHead = taxModuleSource.match(/<th className=\{styles\.taxRefundOrderNoColumn\}>订单号<\/th>[\s\S]*?<th className=\{styles\.taxRefundActionColumn\}>详情<\/th>/)?.[0] || "";
+  assert.match(tableHead, /订单号/);
+  assert.match(tableHead, /提单号/);
+  assert.match(tableHead, /客户简称/);
+  assert.ok(tableHead.indexOf("订单号") < tableHead.indexOf("提单号"));
+  assert.ok(tableHead.indexOf("提单号") < tableHead.indexOf("客户简称"));
+  assert.match(taxModuleSource, /<col className=\{styles\.taxRefundBlNoColumn\} \/>/);
+  assert.match(taxModuleSource, /<td colSpan=\{7\}>/);
+  assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
+  assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
+  assert.match(taxRefundService, /logisticsBills: \{\s*where: \{ deletedAt: null \}/);
+  assert.match(taxRefundService, /billOfLadingNumbers/);
+  assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
+  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1020px;[\s\S]*table-layout: fixed;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundOrderNoColumn,[\s\S]*width: 150px;[\s\S]*min-width: 150px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 280px;[\s\S]*min-width: 240px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundCustomerColumn,[\s\S]*width: 130px;[\s\S]*min-width: 120px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundDateColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundCompletenessColumn,[\s\S]*width: 120px;[\s\S]*min-width: 120px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundStatusColumn,[\s\S]*width: 160px;[\s\S]*min-width: 160px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundActionColumn,[\s\S]*width: 70px;[\s\S]*min-width: 70px;/);
+  assert.match(css, /\.taxRefundTable th\.taxRefundBlNoColumn,[\s\S]*overflow-wrap: anywhere;/);
+  assert.match(css, /\.taxRefundTableWrap \{[\s\S]*overflow-x: auto;/);
 });
 
 test("domestic logistics detail keeps per-order fee entry and customs uploads", () => {

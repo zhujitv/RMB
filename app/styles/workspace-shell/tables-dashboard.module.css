@@ -147,6 +147,96 @@
   font-weight: 700;
 }
 
+.taxRefundTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.taxRefundTable.dataTable {
+  min-width: 1020px;
+  table-layout: fixed;
+}
+
+.taxRefundTable col.taxRefundOrderNoColumn,
+.taxRefundTable th.taxRefundOrderNoColumn,
+.taxRefundTable td.taxRefundOrderNoColumn {
+  width: 150px;
+  min-width: 150px;
+}
+
+.taxRefundTable col.taxRefundBlNoColumn,
+.taxRefundTable th.taxRefundBlNoColumn,
+.taxRefundTable td.taxRefundBlNoColumn {
+  width: 280px;
+  min-width: 240px;
+}
+
+.taxRefundTable col.taxRefundCustomerColumn,
+.taxRefundTable th.taxRefundCustomerColumn,
+.taxRefundTable td.taxRefundCustomerColumn {
+  width: 130px;
+  min-width: 120px;
+}
+
+.taxRefundTable col.taxRefundDateColumn,
+.taxRefundTable th.taxRefundDateColumn,
+.taxRefundTable td.taxRefundDateColumn {
+  width: 110px;
+  min-width: 110px;
+}
+
+.taxRefundTable col.taxRefundCompletenessColumn,
+.taxRefundTable th.taxRefundCompletenessColumn,
+.taxRefundTable td.taxRefundCompletenessColumn {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.taxRefundTable col.taxRefundStatusColumn,
+.taxRefundTable th.taxRefundStatusColumn,
+.taxRefundTable td.taxRefundStatusColumn {
+  width: 160px;
+  min-width: 160px;
+}
+
+.taxRefundTable col.taxRefundActionColumn,
+.taxRefundTable th.taxRefundActionColumn,
+.taxRefundTable td.taxRefundActionColumn {
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.taxRefundTable th.taxRefundBlNoColumn,
+.taxRefundTable td.taxRefundBlNoColumn {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.taxRefundTable td.taxRefundOrderNoColumn,
+.taxRefundTable td.taxRefundBlNoColumn {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.taxRefundBlNoList {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.taxRefundBlNoList span {
+  display: block;
+}
+
+.taxRefundTable td.taxRefundStatusColumn select {
+  max-width: 100%;
+}
+
 .logisticsCompactTableWrap {
   width: 100%;
   max-width: 100%;

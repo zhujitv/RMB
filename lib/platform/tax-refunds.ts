@@ -64,6 +64,7 @@ type TaxRefundListOrder = Prisma.ReceivableOrderGetPayload<{
     customer: true;
     taxRefundArchivedBy: true;
     taxSubmittedBy: true;
+    logisticsBills: { select: { billOfLadingNo: true; createdAt: true } };
     payments: { select: { amountCny: true; status: true; deletedAt: true } };
   };
 }>;
@@ -79,6 +80,15 @@ type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
   };
 }>;
 
+function taxRefundBillOfLadingNumbers(order: TaxRefundListOrder) {
+  const logisticsBillNos = (order.logisticsBills || [])
+    .map((bill) => nonEmpty(bill.billOfLadingNo))
+    .filter(Boolean);
+  const fallbackOrderBlNo = nonEmpty(order.blNo);
+  const values = logisticsBillNos.length ? logisticsBillNos : [fallbackOrderBlNo];
+  return values.filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
+}
+
 export function serializeTaxRefundListOrder(order: TaxRefundListOrder) {
   const completeness = cachedTaxRefundCompleteness(order);
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
@@ -87,10 +97,14 @@ export function serializeTaxRefundListOrder(order: TaxRefundListOrder) {
     .reduce((sum, payment) => sum + Number(payment.amountCny || 0), 0);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
+  const billOfLadingNumbers = taxRefundBillOfLadingNumbers(order);
+  const billOfLadingNo = billOfLadingNumbers.join(" / ");
   return {
     id: order.id,
     orderNo: order.orderNo,
-    blNo: order.blNo || "",
+    blNo: billOfLadingNo || order.blNo || "",
+    billOfLadingNo,
+    billOfLadingNumbers,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
@@ -179,6 +193,7 @@ function taxRefundKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInpu
     OR: [
       { orderNo: { contains: keyword, mode: "insensitive" } },
       { blNo: { contains: keyword, mode: "insensitive" } },
+      { logisticsBills: { some: { deletedAt: null, billOfLadingNo: { contains: keyword, mode: "insensitive" } } } },
       { customsDeclarationNo: { contains: keyword, mode: "insensitive" } },
       { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
       { taxRefundStatus: { contains: keyword, mode: "insensitive" } },
@@ -234,6 +249,11 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
         customer: true,
         taxRefundArchivedBy: true,
         taxSubmittedBy: true,
+        logisticsBills: {
+          where: { deletedAt: null },
+          select: { billOfLadingNo: true, createdAt: true },
+          orderBy: [{ createdAt: "asc" }],
+        },
         payments: {
           where: { deletedAt: null, status: "已到账" },
           select: { amountCny: true, status: true, deletedAt: true },

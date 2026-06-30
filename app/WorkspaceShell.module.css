@@ -520,6 +520,16 @@
 .taxCompletenessTooltip { composes: taxCompletenessTooltip from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxCompletenessTooltipAnchor { composes: taxCompletenessTooltipAnchor from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxCompletenessTooltipTrigger { composes: taxCompletenessTooltipTrigger from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundActionColumn { composes: taxRefundActionColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundBlNoColumn { composes: taxRefundBlNoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundBlNoList { composes: taxRefundBlNoList from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundDateColumn { composes: taxRefundDateColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundStatusColumn { composes: taxRefundStatusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundTable { composes: taxRefundTable from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundTableWrap { composes: taxRefundTableWrap from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxDropdownActions { composes: taxDropdownActions from "./styles/workspace-shell/logistics-fees.module.css"; }
 .taxDropdownGrid { composes: taxDropdownGrid from "./styles/workspace-shell/logistics-fees.module.css"; composes: taxDropdownGrid from "./styles/workspace-shell/responsive-main.module.css"; }
 .taxDropdownMenu { composes: taxDropdownMenu from "./styles/workspace-shell/logistics-fees.module.css"; }
