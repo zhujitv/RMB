@@ -153,8 +153,12 @@ function logisticsExpenseDetailText(expenses: LogisticsExpenseLike[] = []) {
 function logisticsInvoiceGroupsWithTotals(expenses: LogisticsExpenseLike[] = []) {
   return logisticsInvoiceGroupsForExpenses(expenses).map((group) => {
     const groupRows = expenses.filter((expense) => logisticsInvoiceGroupForExpense(expense)?.key === group.key);
+    const includedFeeTypes = [...new Set(groupRows
+      .map((row) => normalizedCostType(nonEmpty(row.costType)))
+      .filter(Boolean))];
     return {
       ...group,
+      includedFeeTypes,
       amountCny: groupRows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
       currencyTotals: summarizeCurrencyTotals(groupRows),
       itemIds: groupRows.map((row) => row.id).filter(Boolean),

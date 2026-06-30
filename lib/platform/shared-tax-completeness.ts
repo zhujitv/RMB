@@ -14,6 +14,7 @@ import {
   TAX_REFUND_SUPPLIER_TYPES,
   normalizedCostType,
 } from "./shared-constants";
+import { logisticsInvoiceGroupForExpense } from "./logistics-invoice-groups";
 import { serializeDomesticLogisticsInfo } from "./shared-serialization";
 
 type NumericLike = number | string | { toString(): string };
@@ -53,6 +54,8 @@ type DomesticLogisticsInfoLike = {
   remarkText?: string | null;
 };
 type TaxOrderLike = {
+  id?: string | null;
+  orderNo?: string | null;
   documents?: OrderDocumentLike[] | null;
   costs?: CostLike[] | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
@@ -77,6 +80,14 @@ type SupplierEntry = {
   costIds: string[];
   earliestCostCreatedAt: Date | string | null | undefined;
   missingFactoryCost?: boolean;
+};
+type LogisticsInvoiceCoverage = {
+  documentId: string;
+  logisticsExpenseId: string;
+  invoiceGroupId: string;
+  invoiceGroupLabel: string;
+  includedFeeTypes: string[];
+  costIds: string[];
 };
 type MissingEntry = Record<string, unknown> & {
   label: string;
@@ -200,6 +211,105 @@ export function logisticsInvoiceLabelForCost(cost: CostLike = {}) {
   return logisticsInvoiceRequirementForCost(cost)?.label || "物流资料";
 }
 
+function logisticsInvoiceGroupForCost(cost: CostLike = {}) {
+  return logisticsInvoiceGroupForExpense({
+    costType: normalizedCostType(String(cost.costType || "")),
+    currency: cost.currency,
+  });
+}
+
+function uniqueNormalizedCostTypes(costs: CostLike[] = []) {
+  return [...new Set(costs
+    .map((cost) => normalizedCostType(String(cost.costType || "")))
+    .filter(Boolean))];
+}
+
+function logisticsInvoiceGroupCoverages(documents: OrderDocumentLike[] = [], logisticsInvoiceCosts: CostLike[] = []) {
+  const costsById = new Map<string, CostLike>(
+    logisticsInvoiceCosts
+      .map((cost): [string, CostLike] => [cost.id || "", cost])
+      .filter(([id]) => Boolean(id)),
+  );
+  return documents
+    .filter((document) => (
+      document.documentType === "SUPPLIER_INVOICE"
+      && document.relatedModule === "SUPPLIER"
+    ))
+    .map((document): LogisticsInvoiceCoverage | null => {
+      const documentCost = (document.cost && isTaxRefundLogisticsInvoiceCost(document.cost))
+        ? document.cost
+        : costsById.get(document.costId || "") || null;
+      if (!documentCost || !isTaxRefundLogisticsInvoiceCost(documentCost)) return null;
+      const group = logisticsInvoiceGroupForCost(documentCost);
+      if (!group) return null;
+      const groupCosts = logisticsInvoiceCosts.filter((cost) => logisticsInvoiceGroupForCost(cost)?.key === group.key);
+      return {
+        documentId: document.id || "",
+        logisticsExpenseId: documentCost.sourceId || documentCost.id || "",
+        invoiceGroupId: group.key,
+        invoiceGroupLabel: group.label,
+        includedFeeTypes: uniqueNormalizedCostTypes(groupCosts.length ? groupCosts : [documentCost]),
+        costIds: groupCosts.map((cost) => cost.id || "").filter(Boolean),
+      };
+    })
+    .filter((item): item is LogisticsInvoiceCoverage => Boolean(item));
+}
+
+function logisticsRequirementMatchesCoverage(requirement: { costTypes?: string[] } = {}, coverage: LogisticsInvoiceCoverage) {
+  const requiredTypes = new Set((requirement.costTypes || []).map((type) => normalizedCostType(String(type || ""))).filter(Boolean));
+  return coverage.includedFeeTypes.some((costType) => requiredTypes.has(costType));
+}
+
+function logTaxRefundLogisticsInvoiceDecision({
+  order,
+  requirement,
+  costs,
+  directCompleted,
+  matchedCoverages,
+  completed,
+}: {
+  order: TaxOrderLike;
+  requirement: { key?: string; label?: string; costTypes?: string[] };
+  costs: CostLike[];
+  directCompleted: boolean;
+  matchedCoverages: LogisticsInvoiceCoverage[];
+  completed: boolean;
+}) {
+  const truckingCosts = costs.filter((cost) => normalizedCostType(String(cost.costType || "")) === "拖车费");
+  const hasTruckingCost = truckingCosts.length > 0;
+  const candidateLogisticsExpenseIds = costs.map((cost) => cost.sourceId || cost.id || "").filter(Boolean);
+  const candidateInvoiceGroupIds = [...new Set(costs.map((cost) => logisticsInvoiceGroupForCost(cost)?.key || "").filter(Boolean))];
+  const candidateIncludedFeeTypes = uniqueNormalizedCostTypes(costs);
+  const directTruckingCompleted = directCompleted && truckingCosts.some((cost) => (
+    cost.id && matchedCoverages.some((coverage) => coverage.costIds.includes(cost.id || ""))
+  ));
+  const truckingCoveredByGroup = matchedCoverages.some((coverage) => coverage.includedFeeTypes.includes("拖车费"));
+  if (requirement.key !== "TRUCKING" && !hasTruckingCost && !truckingCoveredByGroup) return;
+  const orderRecord = order as Record<string, unknown>;
+  console.info("tax-refund-logistics-invoice-decision", {
+    orderId: orderRecord.id || "",
+    orderNo: orderRecord.orderNo || "",
+    requirementKey: requirement.key || "",
+    requirementLabel: requirement.label || "",
+    logisticsExpenseIds: matchedCoverages.map((coverage) => coverage.logisticsExpenseId).filter(Boolean),
+    candidateLogisticsExpenseIds,
+    invoiceGroupIds: matchedCoverages.map((coverage) => coverage.invoiceGroupId).filter(Boolean),
+    candidateInvoiceGroupIds,
+    invoiceGroups: matchedCoverages.map((coverage) => ({
+      documentId: coverage.documentId,
+      logisticsExpenseId: coverage.logisticsExpenseId,
+      invoiceGroupId: coverage.invoiceGroupId,
+      includedFeeTypes: coverage.includedFeeTypes,
+    })),
+    includedFeeTypes: [...new Set(matchedCoverages.flatMap((coverage) => coverage.includedFeeTypes))],
+    candidateIncludedFeeTypes,
+    costIds: costs.map((cost) => cost.id || "").filter(Boolean),
+    directCostInvoiceMatched: directCompleted,
+    "拖车费": directTruckingCompleted || truckingCoveredByGroup,
+    completed,
+  });
+}
+
 export function isTaxRefundFactoryDocument(document: OrderDocumentLike) {
   const supplierType = document.supplier?.supplierType || document.cost?.supplier?.supplierType || "";
   return TAX_REFUND_SUPPLIER_TYPES.includes(supplierType);
@@ -257,6 +367,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const factoryCosts = activeCosts.filter(isTaxRefundFactoryCost);
   const logisticsInvoiceCosts = activeCosts.filter((cost) => !isTaxRefundFactoryCost(cost) && isTaxRefundLogisticsInvoiceCost(cost) && isActualApprovedLogisticsCost(cost));
   const successDocs = documents.filter(successDocument);
+  const logisticsInvoiceCoverages = logisticsInvoiceGroupCoverages(successDocs, logisticsInvoiceCosts);
   const hasOrderType = (type: string) => successDocs.some((doc) => doc.documentType === type && !doc.costId && doc.relatedModule !== "SUPPLIER");
   const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
   const customsMissing = DOMESTIC_LOGISTICS_DOCUMENT_TYPES.filter((type) => !hasOrderType(type));
@@ -364,12 +475,22 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const logisticsMissing: MissingEntry[] = [];
   const logisticsRequirements = taxRefundLogisticsInvoiceRequirementsForOrder(order, logisticsInvoiceCosts);
   const logisticsRequirementRows = logisticsRequirements.map((requirement) => {
-    const costs = logisticsInvoiceCosts.filter((cost) => requirement.costTypes.includes(String(cost.costType || "")));
-    const completed = costs.some((cost) => successDocs.some((doc) => (
+    const costs = logisticsInvoiceCosts.filter((cost) => requirement.costTypes.includes(normalizedCostType(String(cost.costType || ""))));
+    const directCompleted = costs.some((cost) => successDocs.some((doc) => (
       doc.documentType === "SUPPLIER_INVOICE"
       && doc.relatedModule === "SUPPLIER"
       && doc.costId === cost.id
     )));
+    const matchedCoverages = logisticsInvoiceCoverages.filter((coverage) => logisticsRequirementMatchesCoverage(requirement, coverage));
+    const completed = directCompleted || matchedCoverages.length > 0;
+    logTaxRefundLogisticsInvoiceDecision({
+      order,
+      requirement,
+      costs,
+      directCompleted,
+      matchedCoverages,
+      completed,
+    });
     if (!costs.length) {
       logisticsMissing.push({
         requirementKey: requirement.key,
@@ -419,6 +540,14 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         amountCny: Number(cost.amountCny || 0),
         currency: cost.currency || "CNY",
         invoiceLabel: requirement.label,
+      })),
+      invoiceGroups: matchedCoverages.map((coverage) => ({
+        documentId: coverage.documentId,
+        logisticsExpenseId: coverage.logisticsExpenseId,
+        invoiceGroupId: coverage.invoiceGroupId,
+        invoiceGroupLabel: coverage.invoiceGroupLabel,
+        includedFeeTypes: coverage.includedFeeTypes,
+        costIds: coverage.costIds,
       })),
     };
   });

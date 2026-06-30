@@ -1077,6 +1077,7 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
     backend,
     /const targetRows = rows\.filter\(\(row\) => logisticsInvoiceExpenseMatchesGroup\(row, invoiceGroup\)\)/,
   );
+  assert.match(backend, /includedFeeTypes/);
   assert.match(
     logisticsModule,
     /logisticsInvoiceGroupForExpense\(item\)\?\.key === group\.key/,

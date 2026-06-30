@@ -16,19 +16,37 @@ function contentDispositionHeader(disposition = "inline", fileName = "汇款水�
   return `${normalizedDisposition}; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(safeFileName)}`;
 }
 
+function paymentVoucherHeaders(request: NextRequest, bodyLength: number, mimeType = "application/octet-stream", fileName = "汇款水单.jpg") {
+  const disposition = request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline";
+  return {
+    "Content-Type": mimeType || "application/octet-stream",
+    "Content-Length": String(bodyLength),
+    "Content-Disposition": contentDispositionHeader(disposition, fileName),
+    "Cache-Control": "private, max-age=300",
+    "X-Content-Type-Options": "nosniff",
+  };
+}
+
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await requireApiActor(request);
     const { body, mimeType, fileName } = await getProductSupplierCostPaymentVoucher(request, actor, id);
     return new Response(body, {
-      headers: {
-        "Content-Type": mimeType || "application/octet-stream",
-        "Content-Length": String(body.length),
-        "Content-Disposition": contentDispositionHeader("inline", fileName),
-        "Cache-Control": "private, max-age=300",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers: paymentVoucherHeaders(request, body.length, mimeType, fileName),
+    });
+  } catch (error: unknown) {
+    return apiError(error, "读取付款凭证失败");
+  }
+}
+
+export async function HEAD(request: NextRequest, { params }: RouteContext) {
+  try {
+    const { id } = await params;
+    const actor = await requireApiActor(request);
+    const { body, mimeType, fileName } = await getProductSupplierCostPaymentVoucher(request, actor, id);
+    return new Response(null, {
+      headers: paymentVoucherHeaders(request, body.length, mimeType, fileName),
     });
   } catch (error: unknown) {
     return apiError(error, "读取付款凭证失败");

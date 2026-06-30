@@ -1133,6 +1133,9 @@ export function logisticsInvoiceGroupsForBill(
     const groupItems = items.filter(
       (item) => logisticsInvoiceGroupForExpense(item)?.key === group.key,
     );
+    const includedFeeTypes = [...new Set(groupItems
+      .map((item) => String(item.costType || "").trim())
+      .filter(Boolean))];
     const uploaded =
       groupItems.length > 0 &&
       groupItems.every((item) =>
@@ -1155,6 +1158,7 @@ export function logisticsInvoiceGroupsForBill(
       key: group.key,
       label: group.label,
       costTypes: group.costTypes,
+      includedFeeTypes,
       amountCny: groupItems.reduce(
         (sum, item) => sum + Number(item.amountCny || 0),
         0,

@@ -154,6 +154,7 @@ export type LogisticsInvoiceGroupSummary = {
   key: string;
   label: string;
   costTypes?: readonly string[];
+  includedFeeTypes?: readonly string[];
   amountCny?: number;
   currencyTotals?: LogisticsExpenseCurrencySummary;
   itemIds?: string[];

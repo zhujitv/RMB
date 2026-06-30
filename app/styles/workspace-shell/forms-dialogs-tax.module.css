@@ -669,6 +669,111 @@
   font-size: 13px;
 }
 
+.paymentVoucherModal {
+  position: relative;
+  z-index: 9999;
+  width: min(900px, 94vw);
+  max-height: min(80vh, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid #dbe1ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.paymentVoucherModal .modalHeader,
+.paymentVoucherModal .modalFooter {
+  padding: 16px 18px;
+}
+
+.paymentVoucherMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 18px 14px;
+}
+
+.paymentVoucherMeta span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 9px 10px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.paymentVoucherMeta strong {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.paymentVoucherPreviewBody {
+  min-height: 320px;
+  max-height: calc(80vh - 190px);
+  overflow: auto;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.paymentVoucherImageFrame {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 18px;
+}
+
+.paymentVoucherImageFrame img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(80vh - 230px);
+  object-fit: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.paymentVoucherFrame {
+  display: block;
+  width: 100%;
+  height: min(560px, calc(80vh - 210px));
+  min-height: 360px;
+  border: 0;
+  background: #fff;
+}
+
+.paymentVoucherFallback {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #475569;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .paymentVoucherMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .paymentVoucherPreviewBody,
+  .paymentVoucherFallback {
+    min-height: 260px;
+  }
+
+  .paymentVoucherFrame,
+  .paymentVoucherImageFrame {
+    min-height: 280px;
+  }
+}
+
 .shippingDocsForm {
   display: grid;
   gap: 12px;

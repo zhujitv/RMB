@@ -176,6 +176,9 @@ type CostPaymentResponse = {
   message?: string;
 };
 
+type PaymentVoucherPreviewState = "checking" | "ready" | "failed";
+type PaymentVoucherPreviewKind = "image" | "pdf";
+
 type CostOrderOption = {
   id: string;
   orderNo?: string;
@@ -340,6 +343,7 @@ export function CostsModule({
   const [uploadingKey, setUploadingKey] = useState("");
   const [paymentSavingId, setPaymentSavingId] = useState("");
   const [voucherUploadingKey, setVoucherUploadingKey] = useState("");
+  const [voucherPreviewCost, setVoucherPreviewCost] = useState<CostRow | null>(null);
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -367,6 +371,11 @@ export function CostsModule({
     setDetailInvoiceGroup(null);
     setDocumentCost(null);
     setCostFormDrawer({ mode: "edit", cost });
+  }
+
+  function openPaymentVoucherPreview(cost: CostRow) {
+    if (!hasPaymentVoucher(cost)) return;
+    setVoucherPreviewCost(cost);
   }
 
   function closeCostFormDrawer() {
@@ -697,6 +706,7 @@ export function CostsModule({
                     showException={costView === "invoiceExceptions"}
                     onViewDetail={() => setDetailInvoiceGroup(group)}
                     onOpenDocuments={() => openInvoiceGroupDocuments(group)}
+                    onOpenPaymentVoucher={openPaymentVoucherPreview}
                   />
                 ))
               : rows.map((cost) => (
@@ -708,6 +718,7 @@ export function CostsModule({
                   onEdit={() => openEditCostDrawer(cost)}
                   onDelete={() => void deleteCost(cost)}
                   onOpenDocuments={() => void openCostDocuments(cost.id)}
+                  onOpenPaymentVoucher={openPaymentVoucherPreview}
                 />
               ))
             ) : (
@@ -725,6 +736,7 @@ export function CostsModule({
           cost={detailCost}
           deleting={deletingId === detailCost.id}
           onOpenDocuments={() => void openCostDocuments(detailCost.id)}
+          onOpenPaymentVoucher={openPaymentVoucherPreview}
           onEdit={() => openEditCostDrawer(detailCost)}
           onDelete={() => void deleteCost(detailCost)}
           onClose={() => setDetailCost(null)}
@@ -754,6 +766,7 @@ export function CostsModule({
         <CostOrderSummaryDrawer
           order={detailOrderSummary}
           onOpenDocuments={(costId) => void openCostDocuments(costId)}
+          onOpenPaymentVoucher={openPaymentVoucherPreview}
           deletingId={deletingId}
           onDelete={(cost) => void deleteCost(cost)}
           onClose={() => setDetailOrderSummary(null)}
@@ -763,6 +776,7 @@ export function CostsModule({
         <CostInvoiceGroupDrawer
           group={detailInvoiceGroup}
           onOpenDocuments={(costId) => void openCostDocuments(costId)}
+          onOpenPaymentVoucher={openPaymentVoucherPreview}
           onClose={() => setDetailInvoiceGroup(null)}
         />
       ) : null}
@@ -790,7 +804,14 @@ export function CostsModule({
           onUpload={(cost, documentType, file) => void uploadCostDocument(cost, documentType, file)}
           onUpdatePayment={(cost, paid, paidAt) => void updateProductSupplierCostPayment(cost, paid, paidAt)}
           onUploadPaymentVoucher={(cost, file) => void uploadPaymentVoucher(cost, file)}
+          onOpenPaymentVoucher={openPaymentVoucherPreview}
           onDelete={(cost, document) => void deleteCostDocument(cost, document)}
+        />
+      ) : null}
+      {voucherPreviewCost ? (
+        <PaymentVoucherPreviewModal
+          cost={voucherPreviewCost}
+          onClose={() => setVoucherPreviewCost(null)}
         />
       ) : null}
       {confirmation ? (
@@ -812,6 +833,7 @@ export function CostsModule({
     setRows((current) => current.map((item) => item.id === cost.id ? { ...item, ...cost } : item));
     setDetailCost((current) => current?.id === cost.id ? { ...current, ...cost } : current);
     setDocumentCost((current) => current?.id === cost.id ? { ...current, ...cost } : current);
+    setVoucherPreviewCost((current) => current?.id === cost.id ? { ...current, ...cost } : current);
     setCostFormDrawer((current) => current?.cost?.id === cost.id ? { ...current, cost: { ...current.cost, ...cost } } : current);
     return cost;
   }
@@ -1045,6 +1067,7 @@ export function CostsModule({
     });
     setDetailCost((current) => current?.id === cost.id ? null : current);
     setDocumentCost((current) => current?.id === cost.id ? null : current);
+    setVoucherPreviewCost((current) => current?.id === cost.id ? null : current);
     setCostFormDrawer((current) => current?.cost?.id === cost.id ? null : current);
   }
 
@@ -1508,6 +1531,7 @@ function CostTableRows({
   onEdit,
   onDelete,
   onOpenDocuments,
+  onOpenPaymentVoucher,
 }: {
   cost: CostRow;
   onViewDetail: () => void;
@@ -1515,6 +1539,7 @@ function CostTableRows({
   onEdit: () => void;
   onDelete: () => void;
   onOpenDocuments: () => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   return (
@@ -1528,7 +1553,7 @@ function CostTableRows({
         <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td className={styles.costInvoiceActionColumn}>
-          <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} />
+          <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
         </td>
       </tr>
     </>
@@ -1575,14 +1600,17 @@ function CostInvoiceGroupRows({
   showException,
   onViewDetail,
   onOpenDocuments,
+  onOpenPaymentVoucher,
 }: {
   group: CostInvoiceGroupRow;
   showException: boolean;
   onViewDetail: () => void;
   onOpenDocuments: () => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const supplierName = group.supplierName || group.supplierNameSnapshot || group.vendorName || "-";
   const exceptionLabel = group.invoiceExceptionLabel || "";
+  const voucherCost = singlePaymentVoucherCost(group.costs || []);
   return (
     <tr className={styles.clickableRow} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
@@ -1604,6 +1632,9 @@ function CostInvoiceGroupRows({
       <td className={styles.costInvoiceActionColumn}>
         <div className={styles.costInvoiceActions}>
           <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button>
+          {voucherCost ? (
+            <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenPaymentVoucher(voucherCost); }}>查看付款凭证</button>
+          ) : null}
           <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>资料维护</button>
         </div>
       </td>
@@ -1730,6 +1761,7 @@ function CostDetailDrawer({
   cost,
   deleting,
   onOpenDocuments,
+  onOpenPaymentVoucher,
   onEdit,
   onDelete,
   onClose,
@@ -1737,6 +1769,7 @@ function CostDetailDrawer({
   cost: CostRow;
   deleting: boolean;
   onOpenDocuments: () => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -1802,7 +1835,12 @@ function CostDetailDrawer({
             <>
               <DetailField label="产品货款付款" value={isProductSupplierPaid(cost) ? "已付款" : "未付款"} />
               <DetailField label="付款时间" value={formatDateTime(cost.paidAt || cost.paymentDate)} />
-              <DetailField label="付款凭证" value={cost.paymentVoucherFileName ? "已上传" : isProductSupplierPaid(cost) ? "未上传水单" : "-"} />
+              <DetailField
+                label="付款凭证"
+                value={hasPaymentVoucher(cost)
+                  ? <button className={styles.fileActionButton} type="button" onClick={() => onOpenPaymentVoucher(cost)}>查看付款凭证</button>
+                  : isProductSupplierPaid(cost) ? "未上传水单" : "-"}
+              />
             </>
           ) : null}
           <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
@@ -1847,12 +1885,14 @@ function DetailMoneyField({ label, cost }: { label: string; cost: CostRow }) {
 function CostOrderSummaryDrawer({
   order,
   onOpenDocuments,
+  onOpenPaymentVoucher,
   deletingId,
   onDelete,
   onClose,
 }: {
   order: CostOrderSummary;
   onOpenDocuments: (costId: string) => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
   deletingId: string;
   onDelete: (cost: CostRow) => void;
   onClose: () => void;
@@ -1880,6 +1920,7 @@ function CostOrderSummaryDrawer({
         costs={order.costs || []}
         deletingId={deletingId}
         onOpenDocuments={onOpenDocuments}
+        onOpenPaymentVoucher={onOpenPaymentVoucher}
         onDelete={onDelete}
       />
     </SideDetailDrawer>
@@ -1890,11 +1931,13 @@ function CostOrderItemsTable({
   costs,
   deletingId,
   onOpenDocuments,
+  onOpenPaymentVoucher,
   onDelete,
 }: {
   costs: CostRow[];
   deletingId: string;
   onOpenDocuments: (costId: string) => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
   onDelete: (cost: CostRow) => void;
 }) {
   return (
@@ -1929,7 +1972,7 @@ function CostOrderItemsTable({
                 <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
                 <td className={styles.costInvoiceActionColumn}>
                   <div className={styles.costInvoiceActions}>
-                    <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} />
+                    <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} onOpenPaymentVoucher={onOpenPaymentVoucher} />
                     <button
                       className={styles.secondaryButton}
                       type="button"
@@ -1957,10 +2000,12 @@ function CostOrderItemsTable({
 function CostInvoiceGroupDrawer({
   group,
   onOpenDocuments,
+  onOpenPaymentVoucher,
   onClose,
 }: {
   group: CostInvoiceGroupRow;
   onOpenDocuments: (costId: string) => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState("basic");
@@ -2015,7 +2060,7 @@ function CostInvoiceGroupDrawer({
           <CostInvoiceGroupTotals group={group} />
         </>
       ) : null}
-      {activeTab === "items" ? <CostInvoiceGroupItemsTable costs={costs} /> : null}
+      {activeTab === "items" ? <CostInvoiceGroupItemsTable costs={costs} onOpenPaymentVoucher={onOpenPaymentVoucher} /> : null}
       {activeTab === "documents" ? (
         <CostInvoiceGroupDocuments
           documents={documents}
@@ -2044,7 +2089,13 @@ function CostInvoiceGroupTotals({ group }: { group: Pick<CostInvoiceGroupRow, "c
   );
 }
 
-function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
+function CostInvoiceGroupItemsTable({
+  costs,
+  onOpenPaymentVoucher,
+}: {
+  costs: CostRow[];
+  onOpenPaymentVoucher: (cost: CostRow) => void;
+}) {
   return (
     <div className={styles.logisticsDrawerSection}>
       <div className={styles.logisticsDrawerSectionHeader}>
@@ -2063,6 +2114,7 @@ function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
               <th className={styles.amountColumn}>原币金额</th>
               <th className={styles.amountColumn}>折人民币</th>
               <th>付款状态</th>
+              <th>付款凭证</th>
               <th>发票状态</th>
               <th>备注</th>
             </tr>
@@ -2076,11 +2128,16 @@ function CostInvoiceGroupItemsTable({ costs }: { costs: CostRow[] }) {
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount("CNY", cost.amountCny ?? 0)}</td>
                 <td><span className={costPaymentStatusClass(cost.paymentStatus)}>{cost.paymentStatus || "-"}</span></td>
+                <td>
+                  {hasPaymentVoucher(cost) ? (
+                    <button className={styles.fileActionButton} type="button" onClick={() => onOpenPaymentVoucher(cost)}>查看付款凭证</button>
+                  ) : isProductSupplierPaid(cost) && isProductSupplierPaymentEnabled(cost) ? "未上传水单" : "-"}
+                </td>
                 <td><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
                 <td title={cost.remark || ""}>{cost.remark || "-"}</td>
               </tr>
             )) : (
-              <tr><td colSpan={8}><div className={styles.emptyState}>暂无费用明细</div></td></tr>
+              <tr><td colSpan={9}><div className={styles.emptyState}>暂无费用明细</div></td></tr>
             )}
           </tbody>
         </table>
@@ -2126,12 +2183,15 @@ function CostInvoiceGroupDocuments({
 function CostInvoiceActions({
   cost,
   onOpenDocuments,
+  onOpenPaymentVoucher,
 }: {
   cost: CostRow;
   onOpenDocuments: () => void;
+  onOpenPaymentVoucher?: (cost: CostRow) => void;
 }) {
   const invoiceReceived = cost.invoiceStatus === "已收到";
   const logisticsGenerated = isLogisticsGeneratedCost(cost);
+  const voucherAvailable = hasPaymentVoucher(cost);
   return (
     <div className={styles.costInvoiceActions}>
       {logisticsGenerated ? (
@@ -2148,6 +2208,9 @@ function CostInvoiceActions({
       ) : (
         <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>上传发票</button>
       )}
+      {voucherAvailable && onOpenPaymentVoucher ? (
+        <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenPaymentVoucher(cost); }}>查看付款凭证</button>
+      ) : null}
     </div>
   );
 }
@@ -2167,6 +2230,7 @@ function CostDocumentsDrawer({
   onUpload,
   onUpdatePayment,
   onUploadPaymentVoucher,
+  onOpenPaymentVoucher,
   onDelete,
 }: {
   cost: CostRow;
@@ -2183,6 +2247,7 @@ function CostDocumentsDrawer({
   onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
   onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
   onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
   onDelete: (cost: CostRow, document: CostDocument) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
@@ -2254,6 +2319,7 @@ function CostDocumentsDrawer({
                 voucherProgress={uploadProgressByKey[paymentVoucherKey] || 0}
                 onUpdatePayment={onUpdatePayment}
                 onUploadPaymentVoucher={onUploadPaymentVoucher}
+                onOpenPaymentVoucher={onOpenPaymentVoucher}
               />
             ) : null}
             {documentTypes.map((documentType) => (
@@ -2287,6 +2353,7 @@ function ProductSupplierPaymentPanel({
   voucherProgress,
   onUpdatePayment,
   onUploadPaymentVoucher,
+  onOpenPaymentVoucher,
 }: {
   cost: CostRow;
   canManage: boolean;
@@ -2295,10 +2362,10 @@ function ProductSupplierPaymentPanel({
   voucherProgress: number;
   onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
   onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
+  onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const paid = isProductSupplierPaid(cost);
   const [paidAtInput, setPaidAtInput] = useState(() => dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));
-  const voucherUrl = cost.paymentVoucherUrl || (cost.paymentVoucherFileName ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : "");
   const voucherLabel = cost.paymentVoucherFileName ? "查看付款凭证" : paid ? "未上传水单" : "未上传";
 
   useEffect(() => {
@@ -2315,7 +2382,11 @@ function ProductSupplierPaymentPanel({
       <div>
         <span>产品货款付款</span>
         <small>{paid ? `已付款 ｜ ${formatDateTime(cost.paidAt || cost.paymentDate)}` : "未付款，可先不上传凭证"}</small>
-        <small>付款凭证：{voucherUrl ? <a className={styles.fileActionButton} href={voucherUrl} target="_blank" rel="noreferrer">{voucherLabel}</a> : voucherLabel}</small>
+        <small>
+          付款凭证：{hasPaymentVoucher(cost)
+            ? <button className={styles.fileActionButton} type="button" onClick={() => onOpenPaymentVoucher(cost)}>{voucherLabel}</button>
+            : voucherLabel}
+        </small>
       </div>
       <div className={styles.fileListItemActions}>
         {canManage ? (
@@ -2358,6 +2429,123 @@ function ProductSupplierPaymentPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function PaymentVoucherPreviewModal({
+  cost,
+  onClose,
+}: {
+  cost: CostRow;
+  onClose: () => void;
+}) {
+  const [previewState, setPreviewState] = useState<PaymentVoucherPreviewState>("checking");
+  const [previewKind, setPreviewKind] = useState<PaymentVoucherPreviewKind>(() => inferPaymentVoucherPreviewKind(cost) || "image");
+  const previewUrl = paymentVoucherDownloadUrl(cost);
+  const downloadUrl = paymentVoucherDownloadUrl(cost, "attachment");
+  const supplierName = costSupplierName(cost);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyPreview() {
+      setPreviewState("checking");
+      const inferredKind = inferPaymentVoucherPreviewKind(cost);
+      if (!previewUrl) {
+        setPreviewState("failed");
+        return;
+      }
+      try {
+        const response = await fetch(previewUrl, {
+          method: "HEAD",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error("preview unavailable");
+        const contentKind = previewKindFromContentType(response.headers.get("Content-Type") || "") || inferredKind;
+        if (!contentKind) throw new Error("unsupported preview type");
+        if (!cancelled) {
+          setPreviewKind(contentKind);
+          setPreviewState("ready");
+        }
+      } catch {
+        if (cancelled) return;
+        if (inferredKind) {
+          setPreviewKind(inferredKind);
+          setPreviewState("ready");
+          return;
+        }
+        setPreviewState("failed");
+      }
+    }
+
+    void verifyPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [cost.id, cost.paymentVoucherFileName, cost.paymentVoucherMimeType, previewUrl]);
+
+  return (
+    <DismissibleLayer
+      ariaLabel="付款凭证"
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={styles.paymentVoucherModal}
+      dismissible
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+          <header className={styles.modalHeader}>
+            <div>
+              <strong>付款凭证</strong>
+              <span>{cost.paymentVoucherFileName || "汇款水单"}</span>
+            </div>
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+          </header>
+          <div className={styles.paymentVoucherMeta}>
+            <span><strong>订单号</strong>{cost.orderNo || "-"}</span>
+            <span><strong>供应商</strong>{supplierName}</span>
+            <span><strong>付款时间</strong>{formatDateTime(cost.paidAt || cost.paymentDate)}</span>
+          </div>
+          <div className={styles.paymentVoucherPreviewBody}>
+            {previewState === "checking" ? (
+              <div className={styles.pdfPreviewLoading}>正在加载付款凭证...</div>
+            ) : null}
+            {previewState === "ready" && previewKind === "image" ? (
+              <div className={styles.paymentVoucherImageFrame}>
+                <img
+                  src={previewUrl}
+                  alt={cost.paymentVoucherFileName || "付款凭证"}
+                  onError={() => setPreviewState("failed")}
+                />
+              </div>
+            ) : null}
+            {previewState === "ready" && previewKind === "pdf" ? (
+              <iframe
+                src={previewUrl}
+                title="付款凭证"
+                className={styles.paymentVoucherFrame}
+                onError={() => setPreviewState("failed")}
+              />
+            ) : null}
+            {previewState === "failed" ? (
+              <div className={styles.paymentVoucherFallback}>
+                文件暂时无法预览，请下载查看。
+              </div>
+            ) : null}
+          </div>
+          <footer className={styles.modalFooter}>
+            <span aria-hidden="true" />
+            <div className={styles.detailActions}>
+              <a className={styles.primaryButtonCompact} href={downloadUrl} download>
+                下载凭证
+              </a>
+              <button className={styles.secondaryButton} type="button" onClick={requestClose}>关闭</button>
+            </div>
+          </footer>
+        </>
+      )}
+    </DismissibleLayer>
   );
 }
 
@@ -2505,6 +2693,37 @@ function costUploadKey(cost: CostRow, documentType: string) {
 
 function paymentVoucherUploadKey(cost: CostRow) {
   return [cost.id, "payment-voucher"].join(":");
+}
+
+function paymentVoucherDownloadUrl(cost: Pick<CostRow, "id" | "paymentVoucherUrl" | "paymentVoucherFileName">, disposition: "inline" | "attachment" = "inline") {
+  const baseUrl = cost.paymentVoucherUrl || (cost.paymentVoucherFileName ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : "");
+  if (!baseUrl || disposition === "inline") return baseUrl;
+  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}download=1`;
+}
+
+function hasPaymentVoucher(cost: Pick<CostRow, "id" | "paymentVoucherUrl" | "paymentVoucherFileName">) {
+  return Boolean(paymentVoucherDownloadUrl(cost));
+}
+
+function singlePaymentVoucherCost(costs: CostRow[]) {
+  const voucherCosts = costs.filter(hasPaymentVoucher);
+  return voucherCosts.length === 1 ? voucherCosts[0] : null;
+}
+
+function previewKindFromContentType(contentType = ""): PaymentVoucherPreviewKind | null {
+  const normalized = contentType.toLowerCase();
+  if (normalized.includes("application/pdf")) return "pdf";
+  if (normalized.startsWith("image/")) return "image";
+  return null;
+}
+
+function inferPaymentVoucherPreviewKind(cost: Pick<CostRow, "paymentVoucherFileName" | "paymentVoucherMimeType">): PaymentVoucherPreviewKind | null {
+  const mimeKind = previewKindFromContentType(cost.paymentVoucherMimeType || "");
+  if (mimeKind) return mimeKind;
+  const fileName = String(cost.paymentVoucherFileName || "").toLowerCase();
+  if (fileName.endsWith(".pdf")) return "pdf";
+  if (/\.(jpe?g|png|webp)$/.test(fileName)) return "image";
+  return null;
 }
 
 function dateTimeLocalValue(value?: string | null) {

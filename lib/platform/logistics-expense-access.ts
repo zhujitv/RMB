@@ -492,6 +492,9 @@ export function logisticsExpenseBillAuditStatus(rows: LogisticsExpenseLike[] = [
 export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []) {
   return logisticsInvoiceGroupsForExpenses(items).map((group) => {
     const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
+    const includedFeeTypes = [...new Set(groupItems
+      .map((item) => nonEmpty(item.costType))
+      .filter(Boolean))];
     const currencyTotals = summarizeCurrencyTotals(groupItems);
     const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(logisticsExpenseDetailInvoiceStatusValue(item)));
     const confirmed = groupItems.length > 0 && groupItems.every((item) => logisticsExpenseDetailInvoiceStatusValue(item) === "已确认");
@@ -501,6 +504,7 @@ export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []
       key: group.key,
       label: group.label,
       costTypes: group.costTypes,
+      includedFeeTypes,
       amountCny: groupItems.reduce((sum, item) => sum + Number(item.amountCny || 0), 0),
       currencyTotals,
       itemIds: groupItems.map((item) => item.id).filter(Boolean),

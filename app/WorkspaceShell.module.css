@@ -349,6 +349,12 @@
 .modalFooter { composes: modalFooter from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .modalHeader { composes: modalHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: modalHeader from "./styles/workspace-shell/responsive-typography.module.css"; }
 .modalOverlay { composes: modalOverlay from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherFallback { composes: paymentVoucherFallback from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherFrame { composes: paymentVoucherFrame from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherImageFrame { composes: paymentVoucherImageFrame from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherMeta { composes: paymentVoucherMeta from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherModal { composes: paymentVoucherModal from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.paymentVoucherPreviewBody { composes: paymentVoucherPreviewBody from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .module { composes: module from "./styles/workspace-shell/auth-controls.module.css"; composes: module from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: module from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: module from "./styles/workspace-shell/logistics-fees.module.css"; composes: module from "./styles/workspace-shell/manual-table.module.css"; composes: module from "./styles/workspace-shell/responsive-main.module.css"; composes: module from "./styles/workspace-shell/responsive-typography.module.css"; composes: module from "./styles/workspace-shell/settings-permissions-transport.module.css"; composes: module from "./styles/workspace-shell/shell-account.module.css"; composes: module from "./styles/workspace-shell/shipsgo-control-tower.module.css"; composes: module from "./styles/workspace-shell/supplier-documents.module.css"; composes: module from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .moduleCard { composes: moduleCard from "./styles/workspace-shell/responsive-typography.module.css"; composes: moduleCard from "./styles/workspace-shell/shell-account.module.css"; }
 .moduleHeader { composes: moduleHeader from "./styles/workspace-shell/responsive-typography.module.css"; composes: moduleHeader from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
