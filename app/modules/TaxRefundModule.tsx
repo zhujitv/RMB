@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { CheckboxOptionRow, ConfirmationDialog, DetailField, DismissibleLayer, ExportInvoiceRemarkView, PaginationBar, PdfPreviewButton, useConfirmationDialog, type ExportInvoiceRemark } from "../components";
@@ -39,6 +39,8 @@ type DocumentCompleteness = {
       supplierName?: string;
       documentType?: string;
       invoiceLabel?: string;
+      requirementKey?: string;
+      missingBucket?: string;
       costType?: string;
       label?: string;
       missingCost?: boolean;
@@ -1271,13 +1273,55 @@ function TaxRefundTableRow({
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
   const currentStatus = taxRowStatus(row);
+  const missingGroups = taxCompletenessTooltipGroups(completeness, percent);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipId = `tax-completeness-tooltip-${row.id}`;
+
+  const showCompletenessTooltip = (event: MouseEvent<HTMLElement>) => {
+    if (!missingGroups.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tooltipHalfWidth = 150;
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2, tooltipHalfWidth + 16),
+      window.innerWidth - tooltipHalfWidth - 16,
+    );
+    setTooltipPosition({ top: rect.bottom + 8, left });
+  };
 
   return (
     <tr className={styles.clickableRow} onClick={onViewDetail}>
       <td>{row.orderNo || "-"}</td>
       <td title={customerLegalName(row)}>{customerDisplayName(row)}</td>
       <td>{declarationDate}</td>
-      <td><span className={`${styles.statusPill} ${completenessClass(percent)}`}>{percent}%</span></td>
+      <td>
+        <span className={styles.taxCompletenessTooltipAnchor}>
+          <span
+            className={`${styles.statusPill} ${completenessClass(percent)} ${missingGroups.length ? styles.taxCompletenessTooltipTrigger : ""}`}
+            aria-describedby={missingGroups.length && tooltipPosition ? tooltipId : undefined}
+            onMouseEnter={showCompletenessTooltip}
+            onMouseLeave={() => setTooltipPosition(null)}
+          >
+            {percent}%
+          </span>
+        </span>
+        {missingGroups.length && tooltipPosition ? (
+          <div
+            id={tooltipId}
+            className={styles.taxCompletenessTooltip}
+            role="tooltip"
+            style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+          >
+            <strong>缺失资料：</strong>
+            <ul>
+              {missingGroups.map((group) => (
+                <li key={group.category}>
+                  <span>{group.category}：</span>{group.items.join("、")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </td>
       <td>
         {canUpdateStatus ? (
           <select
@@ -2521,6 +2565,66 @@ function LogisticsInvoiceUploadItem({
 function normalizedMissingLabels(completeness: DocumentCompleteness) {
   const labels = completeness.missingLabels || completeness.missing || [];
   return labels.map((label) => String(label || "").trim()).filter(Boolean);
+}
+
+function taxCompletenessTooltipGroups(completeness: DocumentCompleteness, percent: number) {
+  if (percent >= 100 || Number(completeness.completed || 0) >= Number(completeness.total || 0)) return [];
+  const groups: Array<{ category: string; items: string[] }> = [
+    { category: "报关资料", items: [] },
+    { category: "工厂合同", items: [] },
+    { category: "工厂发票", items: [] },
+    { category: "物流费用发票", items: [] },
+    { category: "报关费", items: [] },
+    { category: "拖车费", items: [] },
+    { category: "港杂费", items: [] },
+    { category: "海运费", items: [] },
+  ];
+  const groupByCategory = new Map(groups.map((group) => [group.category, group]));
+  const pushItem = (category: string, item: string) => {
+    const group = groupByCategory.get(category);
+    const text = String(item || "").trim();
+    if (!group || !text || group.items.includes(text)) return;
+    group.items.push(text);
+  };
+
+  [...(completeness.customs?.missingTypes || []), ...(completeness.export?.missingTypes || [])].forEach((documentType) => {
+    pushItem("报关资料", taxDocumentTypeLabel(documentType));
+  });
+
+  (completeness.supplier?.missing || []).forEach((item) => {
+    if (item.missingFactoryCost) {
+      pushItem("工厂合同", "产品供应商成本记录");
+      return;
+    }
+    if (item.documentType === "SUPPLIER_PURCHASE_CONTRACT") {
+      pushItem("工厂合同", "工厂合同");
+    } else if (item.documentType === "SUPPLIER_INVOICE") {
+      pushItem("工厂发票", "工厂增值税发票");
+    } else if (item.label) {
+      pushItem("工厂发票", item.label);
+    }
+  });
+
+  (completeness.logistics?.missing || []).forEach((item) => {
+    const bucket = String(item.missingBucket || item.requirementKey || "").toUpperCase();
+    const missingInvoiceText = item.missingCost ? "记录" : "发票";
+    if (bucket === "CUSTOMS") {
+      pushItem("报关费", `报关费${missingInvoiceText}`);
+    } else if (bucket === "TRUCKING" || bucket === "DOMESTIC_LOGISTICS") {
+      pushItem("拖车费", `拖车费${missingInvoiceText}`);
+    } else if (bucket === "PORT") {
+      pushItem("港杂费", `港杂费${missingInvoiceText}`);
+    } else if (bucket === "SEA") {
+      pushItem("海运费", `海运费${missingInvoiceText}`);
+    } else {
+      pushItem("物流费用发票", item.invoiceLabel || item.label || "物流费用发票");
+    }
+  });
+
+  if (!groups.some((group) => group.items.length)) {
+    normalizedMissingLabels(completeness).forEach((label) => pushItem("报关资料", label));
+  }
+  return groups.filter((group) => group.items.length);
 }
 
 function taxMissingTargets(completeness: DocumentCompleteness) {

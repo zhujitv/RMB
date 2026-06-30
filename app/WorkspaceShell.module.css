@@ -517,6 +517,9 @@
 .tableSortButton { composes: tableSortButton from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: tableSortButton from "./styles/workspace-shell/responsive-typography.module.css"; }
 .tableWrap { composes: tableWrap from "./styles/workspace-shell/manual-table.module.css"; composes: tableWrap from "./styles/workspace-shell/responsive-main.module.css"; }
 .taxDetailPanel { composes: taxDetailPanel from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxCompletenessTooltip { composes: taxCompletenessTooltip from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxCompletenessTooltipAnchor { composes: taxCompletenessTooltipAnchor from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxCompletenessTooltipTrigger { composes: taxCompletenessTooltipTrigger from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxDropdownActions { composes: taxDropdownActions from "./styles/workspace-shell/logistics-fees.module.css"; }
 .taxDropdownGrid { composes: taxDropdownGrid from "./styles/workspace-shell/logistics-fees.module.css"; composes: taxDropdownGrid from "./styles/workspace-shell/responsive-main.module.css"; }
 .taxDropdownMenu { composes: taxDropdownMenu from "./styles/workspace-shell/logistics-fees.module.css"; }
