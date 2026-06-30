@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readCostsModuleSource } from "./source-helpers.ts";
 import test from "node:test";
 import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
@@ -7,7 +8,7 @@ const components = readFileSync("app/components.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
 const paymentsModule = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
-const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const costsModule = readCostsModuleSource();
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const logisticsFeesModule = [
   "app/modules/LogisticsFeesModule.tsx",

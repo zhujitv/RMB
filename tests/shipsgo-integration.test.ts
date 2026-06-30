@@ -8,7 +8,7 @@ import {
   formatShipsgoTrackingMethodForLocale,
   normalizeShipsgoDisplayLocale,
 } from "../lib/shipsgo-display.ts";
-import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readDomesticLogisticsModuleSource, readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
@@ -30,7 +30,7 @@ const vercelConfig = readFileSync("vercel.json", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
 const settingsModule = readSettingsModuleSource();
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
-const logisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const logisticsModule = readDomesticLogisticsModuleSource();
 const trackingMapPage = readFileSync("app/tracking-map/page.tsx", "utf8");
 const trackingMapClient = readFileSync("app/tracking-map/tracking-map-client.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();

@@ -13,8 +13,53 @@ const SETTINGS_MODULE_FILES = [
   "app/modules/settings/user-edit-panel.tsx",
 ];
 
+const DOMESTIC_LOGISTICS_MODULE_FILES = [
+  "app/modules/DomesticLogisticsModule.tsx",
+  "app/modules/domestic-logistics/model.ts",
+  "app/modules/domestic-logistics/helpers.ts",
+  "app/modules/domestic-logistics/shipsgo-format.ts",
+  "app/modules/domestic-logistics/control-tower.tsx",
+  "app/modules/domestic-logistics/customs-documents-panel.tsx",
+  "app/modules/domestic-logistics/edit-panel.tsx",
+  "app/modules/domestic-logistics/order-tracking-panel.tsx",
+  "app/modules/domestic-logistics/rows.tsx",
+];
+
+const TAX_REFUND_MODULE_FILES = [
+  "app/modules/TaxRefundModule.tsx",
+  "app/modules/tax-refund/model.ts",
+  "app/modules/tax-refund/helpers.ts",
+  "app/modules/tax-refund/dialogs.tsx",
+  "app/modules/tax-refund/detail-components.tsx",
+  "app/modules/tax-refund/table-row.tsx",
+  "app/modules/tax-refund/upload-components.tsx",
+];
+
+const COSTS_MODULE_FILES = [
+  "app/modules/CostsModule.tsx",
+  "app/modules/costs/model.ts",
+  "app/modules/costs/cost-form-drawer.tsx",
+  "app/modules/costs/cost-table.tsx",
+  "app/modules/costs/detail-drawers.tsx",
+  "app/modules/costs/invoice-actions.tsx",
+  "app/modules/costs/documents-drawer.tsx",
+  "app/modules/costs/helpers.ts",
+];
+
 export function readSettingsModuleSource() {
   return SETTINGS_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
+export function readCostsModuleSource() {
+  return COSTS_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
+export function readDomesticLogisticsModuleSource() {
+  return DOMESTIC_LOGISTICS_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
+export function readTaxRefundModuleSource() {
+  return TAX_REFUND_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
 }
 
 export function readWorkspaceStylesSource() {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { preventEnterFormSubmit } from "../app/formGuards.ts";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 function keyboardEvent(key: string, tagName: string) {
   let defaultPrevented = false;
@@ -32,12 +33,9 @@ const logisticsFeesModule = [
 ]
   .map((file) => readFileSync(file, "utf8"))
   .join("\n");
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync(
-  "app/modules/DomesticLogisticsModule.tsx",
-  "utf8",
-);
-const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
+const domesticLogisticsModule = readDomesticLogisticsModuleSource();
+const costsModule = readCostsModuleSource();
 const sharedSerialization = readFileSync(
   "lib/platform/shared-serialization.ts",
   "utf8",

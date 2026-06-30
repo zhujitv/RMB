@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readDomesticLogisticsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const moduleSource = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
-const taxModuleSource = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const moduleSource = readDomesticLogisticsModuleSource();
+const taxModuleSource = readTaxRefundModuleSource();
 const css = readWorkspaceStylesSource();
 const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
 const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const completeness = readFileSync("lib/platform/shared-tax-completeness.ts", "utf8");
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
@@ -8,7 +9,7 @@ const reportService = readFileSync("lib/report-service.ts", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs", "utf8");
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
 
 test("tax refund completeness adapts FOB LCL logistics invoice requirements to actual costs", () => {
   assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "GROUPED_INVOICE_INCLUDED_FEES_20260630"/);

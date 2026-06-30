@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const previewRoute = readFileSync(
   "app/api/order-documents/[id]/preview/route.ts",
@@ -28,12 +28,9 @@ const taxRefundRecognizeRoute = readFileSync(
   "app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts",
   "utf8",
 );
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync(
-  "app/modules/DomesticLogisticsModule.tsx",
-  "utf8",
-);
-const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
+const domesticLogisticsModule = readDomesticLogisticsModuleSource();
+const costsModule = readCostsModuleSource();
 const logisticsModule = [
   "app/modules/LogisticsFeesModule.tsx",
   "app/modules/logistics-fees/invoice-groups-panel.tsx",

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readCostsModuleSource } from "./source-helpers.ts";
 import test from "node:test";
 import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const costsModule = readCostsModuleSource();
 const costsMutation = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
 const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "utf8");

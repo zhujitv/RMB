@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const nextConfig = readFileSync("next.config.mjs", "utf8");
 const proxy = readFileSync("proxy.ts", "utf8");
@@ -20,12 +21,9 @@ const uploadValidation = readFileSync(
   "utf8",
 );
 const appUtils = readFileSync("app/utils.ts", "utf8");
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync(
-  "app/modules/DomesticLogisticsModule.tsx",
-  "utf8",
-);
-const costsUiModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
+const domesticLogisticsModule = readDomesticLogisticsModuleSource();
+const costsUiModule = readCostsModuleSource();
 const logisticsFeesModule = [
   "app/modules/LogisticsFeesModule.tsx",
   "app/modules/logistics-fees/invoice-groups-panel.tsx",

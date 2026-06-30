@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
+import { readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
@@ -19,7 +20,7 @@ const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
 const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
 const reportService = readFileSync("lib/report-service.ts", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
 
 const SECURITY_ROLE_MATRIX = [

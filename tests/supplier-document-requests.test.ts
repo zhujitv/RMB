@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource } from "./source-helpers.ts";
+import { readSettingsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readFileSync("lib/platform/supplier-document-requests.ts", "utf8");
 const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
 const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");
 const supplierRequestDocumentRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/route.ts", "utf8");
-const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const taxModule = readTaxRefundModuleSource();
 const settingsModule = readSettingsModuleSource();
 const menu = readFileSync("app/menu.ts", "utf8");
 const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8");

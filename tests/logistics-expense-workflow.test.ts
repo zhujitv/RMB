@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource, readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const backend = [
   readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
@@ -207,10 +207,7 @@ const logisticsExpenseBatchSaveRoute = readFileSync(
   "utf8",
 );
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
-const domesticLogisticsModule = readFileSync(
-  "app/modules/DomesticLogisticsModule.tsx",
-  "utf8",
-);
+const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
 const notificationTemplateCardSource =
@@ -225,7 +222,7 @@ const notificationTemplateFormSource =
   settingsModule.match(
     /export function notificationTemplateFormFromSettings[\s\S]*?\n}\n/,
   )?.[0] || "";
-const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+const costsModule = readCostsModuleSource();
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 const logisticsExpenseQueries = readFileSync(

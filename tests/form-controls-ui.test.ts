@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readSettingsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const components = readFileSync("app/components.tsx", "utf8");
 const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const globalStyles = readFileSync("app/globals.css", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const taxRoute = readFileSync("app/api/tax-refunds/route.ts", "utf8");
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const profitRoute = readFileSync("app/api/profit/route.ts", "utf8");
-const taxModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
-const logisticsModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
+const taxModule = readTaxRefundModuleSource();
+const logisticsModule = readDomesticLogisticsModuleSource();
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
 const sharedOrderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
