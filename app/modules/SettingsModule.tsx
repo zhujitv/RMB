@@ -51,6 +51,7 @@ import {
   ExchangeSettingsCard,
   NotificationTemplateSettingsCard,
   ShipsgoIntegrationSettingsCard,
+  SystemBackupSettingsCard,
 } from "./settings/settings-cards";
 import { SettingsTable } from "./settings/settings-table";
 import type {
@@ -75,6 +76,7 @@ import type {
   ShipsgoIntegrationSettings,
   SupplierForm,
   SupplierRow,
+  SystemBackupSettings,
   UserForm,
   UserRow,
 } from "./settings/types";
@@ -103,6 +105,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [notificationTemplateForm, setNotificationTemplateForm] = useState<NotificationTemplateForm | null>(null);
   const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
+  const [systemBackupSettings, setSystemBackupSettings] = useState<SystemBackupSettings | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
@@ -115,6 +118,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     commissionFormula: emptyPagination(PAGE_SIZE),
     notificationTemplates: emptyPagination(PAGE_SIZE),
     shipsgoIntegration: emptyPagination(PAGE_SIZE),
+    systemBackups: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -141,6 +145,8 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [notificationTemplateMessage, setNotificationTemplateMessage] = useState("");
   const [shipsgoIntegrationSaving, setShipsgoIntegrationSaving] = useState(false);
   const [shipsgoIntegrationMessage, setShipsgoIntegrationMessage] = useState("");
+  const [systemBackupSaving, setSystemBackupSaving] = useState(false);
+  const [systemBackupMessage, setSystemBackupMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -211,6 +217,12 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         markLoaded(tab);
         return;
       }
+      if (tab === "systemBackups") {
+        const result = await apiJson<{ settings: SystemBackupSettings }>("/api/settings/backups");
+        setSystemBackupSettings(result.settings || {});
+        markLoaded(tab);
+        return;
+      }
       if (tab === "users") {
         await ensurePermissionConfig();
       }
@@ -269,6 +281,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     setCommissionFormulaMessage("");
     setNotificationTemplateMessage("");
     setShipsgoIntegrationMessage("");
+    setSystemBackupMessage("");
   }
 
   function submitSearch() {
@@ -744,6 +757,25 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
     }
   }
 
+  async function createSystemBackup() {
+    setSystemBackupSaving(true);
+    setSystemBackupMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: SystemBackupSettings; message?: string }>(
+        "/api/settings/backups",
+        { method: "POST", timeoutMs: 120000 },
+      );
+      if (result.success !== true) throw new Error(result.message || "系统备份生成失败");
+      setSystemBackupSettings(result.settings || {});
+      markLoaded("systemBackups");
+      setSystemBackupMessage(result.message || "系统备份已生成");
+    } catch (saveError) {
+      setSystemBackupMessage(saveError instanceof Error ? saveError.message : "系统备份生成失败");
+    } finally {
+      setSystemBackupSaving(false);
+    }
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -779,7 +811,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         ))}
       </div>
 
-      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" ? (
+      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" && activeTab !== "systemBackups" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -956,6 +988,18 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
             setShipsgoIntegrationMessage("");
           }}
           onSubmit={saveShipsgoIntegrationSettings}
+        />
+      ) : activeTab === "systemBackups" ? (
+        <SystemBackupSettingsCard
+          settings={systemBackupSettings}
+          loading={loading && !systemBackupSettings}
+          saving={systemBackupSaving}
+          message={systemBackupMessage}
+          onCreate={() => void createSystemBackup()}
+          onRefresh={() => {
+            setSystemBackupMessage("");
+            void loadTab("systemBackups", 1, filtersForTab(filters, "systemBackups"));
+          }}
         />
       ) : (
         <>

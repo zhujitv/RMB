@@ -213,5 +213,6 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "commissionFormula", label: "提成公式" },
   { key: "notificationTemplates", label: "通知模板" },
   { key: "shipsgoIntegration", label: "第三方接口" },
+  { key: "systemBackups", label: "系统备份" },
   { key: "auditLogs", label: "操作日志" },
 ];

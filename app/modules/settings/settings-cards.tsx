@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import { PermissionSelectItem, UiSwitch } from "../../components";
+import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../../types";
 import { BooleanSelect } from "./common-controls";
@@ -33,6 +34,7 @@ import type {
   NotificationTemplateSettings,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
+  SystemBackupSettings,
 } from "./types";
 
 export function CompanyProfileSettingsCard({
@@ -628,5 +630,116 @@ export function ShipsgoIntegrationSettingsCard({
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
       </div>
     </form>
+  );
+}
+
+export function SystemBackupSettingsCard({
+  settings,
+  loading,
+  saving,
+  message,
+  onCreate,
+  onRefresh,
+}: {
+  settings: SystemBackupSettings | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onCreate: () => void;
+  onRefresh: () => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载系统备份</div>;
+  const backups = settings.backups || [];
+  const tableCount = settings.tables?.length || 0;
+
+  return (
+    <section className={styles.quickCreatePanel}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>系统备份中心</strong>
+        </div>
+        <div className={styles.headerActions}>
+          <button className={styles.primaryButtonCompact} type="button" onClick={onCreate} disabled={saving || settings.storageConfigured === false}>
+            {saving ? "生成中..." : "生成系统备份"}
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={onRefresh} disabled={saving}>
+            刷新
+          </button>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("未配置") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      {settings.storageConfigured === false ? (
+        <div className={styles.inlineError}>对象存储未配置，暂时无法生成或下载系统备份。</div>
+      ) : null}
+
+      <section className={styles.documentGroupCard}>
+        <strong>备份范围</strong>
+        <div className={styles.quickCreateMeta}>
+          <span>业务数据表：{tableCount} 个</span>
+          <span>保留策略：最近 {settings.retentionCount || 20} 份</span>
+          <span>上次备份：{settings.lastBackupAt ? formatDateTime(settings.lastBackupAt) : "暂无"}</span>
+          <span>存储位置：Cloudflare R2 / S3 私有桶</span>
+        </div>
+        <div className={styles.quickCreateMeta}>
+          {(settings.excluded || []).map((item) => (
+            <span key={item}>不导出：{item}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.documentGroupCard}>
+        <div className={styles.quickCreateHeader}>
+          <div>
+            <strong>备份记录</strong>
+          </div>
+        </div>
+        {backups.length ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.dataTable}>
+              <thead>
+                <tr>
+                  <th>备份文件</th>
+                  <th>生成时间</th>
+                  <th>生成人</th>
+                  <th>大小</th>
+                  <th>数据表</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((backup) => (
+                  <tr key={backup.id}>
+                    <td><strong>{backup.fileName}</strong></td>
+                    <td>{formatDateTime(backup.createdAt)}</td>
+                    <td>{backup.createdByName || "-"}</td>
+                    <td>{backup.sizeLabel || "-"}</td>
+                    <td>{backup.tables?.length || Object.keys(backup.rowCounts || {}).length || 0}</td>
+                    <td><span className={styles.statusBadgeSuccess}>成功</span></td>
+                    <td>
+                      <a
+                        className={styles.secondaryButton}
+                        href={`/api/settings/backups/${encodeURIComponent(backup.id)}/download`}
+                      >
+                        下载
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={styles.emptyState}>暂无系统备份记录</div>
+        )}
+      </section>
+    </section>
   );
 }

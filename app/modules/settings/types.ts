@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 
-export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs";
+export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "systemBackups" | "auditLogs";
 
 export type SettingsFilters = {
   customers: {
@@ -133,6 +133,30 @@ export type ExchangeRateSettings = Record<string, unknown>;
 export type CommissionFormulaSettings = Record<string, unknown>;
 export type NotificationTemplateSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
+
+export type SystemBackupRecord = {
+  id: string;
+  fileName: string;
+  storageKey?: string;
+  sizeBytes?: number;
+  sizeLabel?: string;
+  createdAt: string;
+  createdByName?: string;
+  status?: string;
+  scope?: string;
+  tables?: string[];
+  rowCounts?: Record<string, number>;
+};
+
+export type SystemBackupSettings = {
+  retentionCount?: number;
+  storageConfigured?: boolean;
+  lastBackupAt?: string;
+  backups?: SystemBackupRecord[];
+  scope?: string;
+  tables?: Array<{ key: string; label: string }>;
+  excluded?: string[];
+};
 
 export type ExchangeRateForm = {
   source: string;
