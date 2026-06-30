@@ -18,18 +18,34 @@ const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8")
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
-  const tableHead = moduleSource.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th>详情<\/th>/)?.[0] || "";
+  const tableHead = moduleSource.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th className=\{styles\.detailActionColumn\}>详情<\/th>/)?.[0] || "";
   assert.match(tableHead, /订单号/);
   assert.match(tableHead, /提单号 \/ B\/L No\./);
   assert.match(tableHead, /客户简称/);
   assert.ok(tableHead.indexOf("订单号") < tableHead.indexOf("提单号 / B/L No."));
   assert.ok(tableHead.indexOf("提单号 / B/L No.") < tableHead.indexOf("客户简称"));
-  for (const label of ["到达地", "运输货物名称", "物流状态", "费用录入状态", "详情"]) {
-    assert.match(tableHead, new RegExp(`<th>${label}</th>`));
-  }
+  assert.match(tableHead, /<th className=\{styles\.destinationColumn\}>到达地<\/th>/);
+  assert.match(tableHead, /<th className=\{styles\.cargoColumn\}>运输货物名称<\/th>/);
+  assert.match(tableHead, /<th className=\{styles\.logisticsStatusColumn\}>物流状态<\/th>/);
+  assert.match(tableHead, /<th className=\{styles\.logisticsExpenseStatusColumn\}>费用录入状态<\/th>/);
+  assert.match(tableHead, /<th className=\{styles\.detailActionColumn\}>详情<\/th>/);
   assert.match(moduleSource, /const tableColSpan = canArchiveDomesticLogistics \? 9 : 8;/);
   assert.match(moduleSource, /<td colSpan=\{tableColSpan\}>/);
+  assert.match(moduleSource, /<col className=\{styles\.blNoColumn\} \/>/);
+  assert.match(moduleSource, /const destinationText = info\?\.destinationPlace \|\| firstItemValue\(info, "arrivalPlace"\) \|\| "-";/);
+  assert.match(moduleSource, /const cargoText = info\?\.cargoDescription \|\| firstItemValue\(info, "cargoName"\) \|\| "-";/);
   assert.match(moduleSource, /<td className=\{styles\.blNoColumn\}>\{row\.blNo \|\| row\.billOfLadingNo \|\| "-"\}<\/td>/);
+  assert.match(moduleSource, /<td className=\{styles\.destinationColumn\} title=\{destinationText\}>\{destinationText\}<\/td>/);
+  assert.match(moduleSource, /<td className=\{styles\.cargoColumn\} title=\{cargoText\}>\{cargoText\}<\/td>/);
+  assert.match(css, /\.logisticsCompactTable \{[\s\S]*min-width: 1108px;[\s\S]*table-layout: fixed;/);
+  assert.match(css, /\.logisticsCompactTable th\.blNoColumn,\n\.logisticsCompactTable td\.blNoColumn \{[\s\S]*width: 250px;[\s\S]*min-width: 250px;/);
+  assert.match(css, /\.logisticsCompactTable col\.destinationColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
+  assert.match(css, /\.logisticsCompactTable col\.cargoColumn,[\s\S]*width: 140px;[\s\S]*min-width: 140px;/);
+  assert.match(css, /\.logisticsCompactTable col\.logisticsStatusColumn,[\s\S]*width: 90px;[\s\S]*min-width: 90px;[\s\S]*text-align: center;/);
+  assert.match(css, /\.logisticsCompactTable col\.logisticsExpenseStatusColumn,[\s\S]*width: 120px;[\s\S]*min-width: 120px;[\s\S]*text-align: center;/);
+  assert.match(css, /\.logisticsCompactTable col\.detailActionColumn,[\s\S]*width: 70px;[\s\S]*min-width: 70px;[\s\S]*text-align: center;/);
+  assert.match(css, /\.logisticsCompactTable td\.destinationColumn,[\s\S]*\.logisticsCompactTable td\.cargoColumn,[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
+  assert.match(css, /\.logisticsCompactTableWrap \{[\s\S]*max-width: 100%;[\s\S]*overflow-x: auto;/);
   assert.match(domesticLogisticsApi, /\{ blNo: \{ contains: keyword, mode: "insensitive" \} \}/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);

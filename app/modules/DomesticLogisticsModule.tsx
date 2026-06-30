@@ -943,6 +943,17 @@ export function DomesticLogisticsModule({
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
       <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
         <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
+          <colgroup>
+            {canArchiveDomesticLogistics ? <col className={styles.selectionColumn} /> : null}
+            <col className={styles.orderNoColumn} />
+            <col className={styles.blNoColumn} />
+            <col className={styles.customerColumn} />
+            <col className={styles.destinationColumn} />
+            <col className={styles.cargoColumn} />
+            <col className={styles.logisticsStatusColumn} />
+            <col className={styles.logisticsExpenseStatusColumn} />
+            <col className={styles.detailActionColumn} />
+          </colgroup>
           <thead>
             <tr>
               {canArchiveDomesticLogistics ? (
@@ -960,11 +971,11 @@ export function DomesticLogisticsModule({
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.blNoColumn}>提单号 / B/L No.</th>
               <th className={styles.customerColumn}>客户简称</th>
-              <th>到达地</th>
-              <th>运输货物名称</th>
-              <th>物流状态</th>
-              <th>费用录入状态</th>
-              <th>详情</th>
+              <th className={styles.destinationColumn}>到达地</th>
+              <th className={styles.cargoColumn}>运输货物名称</th>
+              <th className={styles.logisticsStatusColumn}>物流状态</th>
+              <th className={styles.logisticsExpenseStatusColumn}>费用录入状态</th>
+              <th className={styles.detailActionColumn}>详情</th>
             </tr>
           </thead>
           <tbody>
@@ -1992,6 +2003,8 @@ function DomesticLogisticsRows({
   onSelect: (checked: boolean) => void;
 }) {
   const info = row.domesticLogisticsInfo;
+  const destinationText = info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-";
+  const cargoText = info?.cargoDescription || firstItemValue(info, "cargoName") || "-";
   return (
     <>
       <tr className={styles.clickableRow} onClick={onToggle}>
@@ -2010,11 +2023,11 @@ function DomesticLogisticsRows({
         <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
         <td className={styles.blNoColumn}>{row.blNo || row.billOfLadingNo || "-"}</td>
         <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
-        <td>{info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-"}</td>
-        <td>{info?.cargoDescription || firstItemValue(info, "cargoName") || "-"}</td>
-        <td><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
-        <td><DomesticLogisticsExpenseStatusButton row={row} onOpen={onOpenExpenseStatus} /></td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
+        <td className={styles.destinationColumn} title={destinationText}>{destinationText}</td>
+        <td className={styles.cargoColumn} title={cargoText}>{cargoText}</td>
+        <td className={styles.logisticsStatusColumn}><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
+        <td className={styles.logisticsExpenseStatusColumn}><DomesticLogisticsExpenseStatusButton row={row} onOpen={onOpenExpenseStatus} /></td>
+        <td className={styles.detailActionColumn}><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
         <tr className={styles.detailRow}>

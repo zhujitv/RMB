@@ -129,6 +129,7 @@
 .currencyAmount { composes: currencyAmount from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .currencyTotalsList { composes: currencyTotalsList from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .currencyTotalsRow { composes: currencyTotalsRow from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.cargoColumn { composes: cargoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .customerColumn { composes: customerColumn from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: customerColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .customerShippingHeader { composes: customerShippingHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: customerShippingHeader from "./styles/workspace-shell/responsive-typography.module.css"; }
 .customerShippingPanel { composes: customerShippingPanel from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
@@ -153,6 +154,7 @@
 .dataTable { composes: dataTable from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: dataTable from "./styles/workspace-shell/manual-table.module.css"; composes: dataTable from "./styles/workspace-shell/responsive-main.module.css"; composes: dataTable from "./styles/workspace-shell/responsive-typography.module.css"; composes: dataTable from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .desktopOnly { composes: desktopOnly from "./styles/workspace-shell/manual-table.module.css"; composes: desktopOnly from "./styles/workspace-shell/responsive-main.module.css"; }
 .detailActions { composes: detailActions from "./styles/workspace-shell/logistics-fees.module.css"; }
+.detailActionColumn { composes: detailActionColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .detailAmountCell { composes: detailAmountCell from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .detailCard { composes: detailCard from "./styles/workspace-shell/manual-table.module.css"; }
 .detailField { composes: detailField from "./styles/workspace-shell/responsive-typography.module.css"; composes: detailField from "./styles/workspace-shell/tables-dashboard.module.css"; }
@@ -161,6 +163,7 @@
 .detailRow { composes: detailRow from "./styles/workspace-shell/manual-table.module.css"; }
 .dialogLayerClosing { composes: dialogLayerClosing from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .dialogSurfaceClosing { composes: dialogSurfaceClosing from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.destinationColumn { composes: destinationColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .documentFileTable { composes: documentFileTable from "./styles/workspace-shell/responsive-main.module.css"; composes: documentFileTable from "./styles/workspace-shell/supplier-documents.module.css"; }
 .documentFileTableWrap { composes: documentFileTableWrap from "./styles/workspace-shell/supplier-documents.module.css"; }
 .documentGroupCard { composes: documentGroupCard from "./styles/workspace-shell/responsive-typography.module.css"; composes: documentGroupCard from "./styles/workspace-shell/tables-dashboard.module.css"; }
@@ -272,6 +275,7 @@
 .logisticsDrawerSectionHeader { composes: logisticsDrawerSectionHeader from "./styles/workspace-shell/logistics-fees.module.css"; }
 .logisticsEditBtn { composes: logisticsEditBtn from "./styles/workspace-shell/logistics-fees.module.css"; }
 .logisticsExpenseDrawer { composes: logisticsExpenseDrawer from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: logisticsExpenseDrawer from "./styles/workspace-shell/logistics-fees.module.css"; }
+.logisticsExpenseStatusColumn { composes: logisticsExpenseStatusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .logisticsFeeStatusApproved { composes: logisticsFeeStatusApproved from "./styles/workspace-shell/manual-table.module.css"; }
 .logisticsFeeStatusBadge { composes: logisticsFeeStatusBadge from "./styles/workspace-shell/manual-table.module.css"; }
 .logisticsFeeStatusDraft { composes: logisticsFeeStatusDraft from "./styles/workspace-shell/manual-table.module.css"; }
@@ -283,6 +287,7 @@
 .logisticsFeeStatusPending { composes: logisticsFeeStatusPending from "./styles/workspace-shell/manual-table.module.css"; }
 .logisticsFeeStatusRejected { composes: logisticsFeeStatusRejected from "./styles/workspace-shell/manual-table.module.css"; }
 .logisticsFeeStatusUploaded { composes: logisticsFeeStatusUploaded from "./styles/workspace-shell/manual-table.module.css"; }
+.logisticsStatusColumn { composes: logisticsStatusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .logisticsInvoiceFileList { composes: logisticsInvoiceFileList from "./styles/workspace-shell/logistics-fees.module.css"; }
 .logisticsInvoiceFileName { composes: logisticsInvoiceFileName from "./styles/workspace-shell/logistics-fees.module.css"; }
 .logisticsInvoiceFileRow { composes: logisticsInvoiceFileRow from "./styles/workspace-shell/logistics-fees.module.css"; }

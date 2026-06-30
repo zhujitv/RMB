@@ -101,11 +101,21 @@
 .logisticsCompactTableWrap {
   width: 100%;
   max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .logisticsCompactTable {
-  min-width: 1080px;
+  min-width: 1108px;
   table-layout: fixed;
+}
+
+.logisticsCompactTable col.selectionColumn,
+.logisticsCompactTable th.selectionColumn,
+.logisticsCompactTable td.selectionColumn {
+  width: 48px;
+  min-width: 48px;
 }
 
 .logisticsCompactTable th.orderNoColumn,
@@ -114,16 +124,66 @@
   min-width: 150px;
 }
 
+.logisticsCompactTable col.orderNoColumn {
+  width: 150px;
+}
+
 .logisticsCompactTable th.blNoColumn,
 .logisticsCompactTable td.blNoColumn {
-  width: 150px;
-  min-width: 150px;
+  width: 250px;
+  min-width: 250px;
+}
+
+.logisticsCompactTable col.blNoColumn {
+  width: 250px;
 }
 
 .logisticsCompactTable th.customerColumn,
 .logisticsCompactTable td.customerColumn {
+  width: 140px;
+  min-width: 140px;
+}
+
+.logisticsCompactTable col.customerColumn {
+  width: 140px;
+}
+
+.logisticsCompactTable col.destinationColumn,
+.logisticsCompactTable th.destinationColumn,
+.logisticsCompactTable td.destinationColumn {
+  width: 110px;
+  min-width: 110px;
+}
+
+.logisticsCompactTable col.cargoColumn,
+.logisticsCompactTable th.cargoColumn,
+.logisticsCompactTable td.cargoColumn {
+  width: 140px;
+  min-width: 140px;
+}
+
+.logisticsCompactTable col.logisticsStatusColumn,
+.logisticsCompactTable th.logisticsStatusColumn,
+.logisticsCompactTable td.logisticsStatusColumn {
+  width: 90px;
+  min-width: 90px;
+  text-align: center;
+}
+
+.logisticsCompactTable col.logisticsExpenseStatusColumn,
+.logisticsCompactTable th.logisticsExpenseStatusColumn,
+.logisticsCompactTable td.logisticsExpenseStatusColumn {
   width: 120px;
   min-width: 120px;
+  text-align: center;
+}
+
+.logisticsCompactTable col.detailActionColumn,
+.logisticsCompactTable th.detailActionColumn,
+.logisticsCompactTable td.detailActionColumn {
+  width: 70px;
+  min-width: 70px;
+  text-align: center;
 }
 
 .logisticsCompactTable thead th {
@@ -145,10 +205,24 @@
 .logisticsCompactTable td.orderNoColumn,
 .logisticsCompactTable td.blNoColumn,
 .logisticsCompactTable td.customerColumn,
+.logisticsCompactTable td.destinationColumn,
+.logisticsCompactTable td.cargoColumn,
 .logisticsCompactTable td.containerTypeColumn {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.logisticsCompactTable td.logisticsStatusColumn,
+.logisticsCompactTable td.logisticsExpenseStatusColumn,
+.logisticsCompactTable td.detailActionColumn {
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.logisticsCompactTable td.logisticsExpenseStatusColumn > button {
+  max-width: 100%;
 }
 
 .logisticsCompactTable td.amountColumn {
