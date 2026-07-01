@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 
-export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs";
+export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs" | "apiPerformance";
 
 export type SettingsFilters = {
   customers: {
@@ -20,6 +20,12 @@ export type SettingsFilters = {
     keyword: string;
     action: string;
   };
+  apiPerformance: {
+    keyword: string;
+    source: string;
+    minDurationMs: string;
+    windowHours: string;
+  };
 };
 
 export type FiltersFor<T extends SettingsTabKey> =
@@ -27,7 +33,8 @@ export type FiltersFor<T extends SettingsTabKey> =
     : T extends "suppliers" ? SettingsFilters["suppliers"]
       : T extends "users" ? SettingsFilters["users"]
         : T extends "auditLogs" ? SettingsFilters["auditLogs"]
-          : never;
+          : T extends "apiPerformance" ? SettingsFilters["apiPerformance"]
+            : never;
 
 export type TableColumn<T> = {
   key: keyof T | string;
@@ -127,6 +134,20 @@ export type AuditLogRow = {
   entityLabel?: string;
   ipAddress?: string;
   createdAt?: string;
+};
+
+export type ApiPerformanceRow = {
+  id: string;
+  source?: string;
+  method?: string;
+  path?: string;
+  count?: number;
+  avgDurationMs?: number;
+  p95DurationMs?: number;
+  maxDurationMs?: number;
+  errorCount?: number;
+  lastStatusCode?: number | null;
+  lastSeenAt?: string;
 };
 
 export type ExchangeRateSettings = Record<string, unknown>;

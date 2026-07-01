@@ -70,7 +70,7 @@ const COST_INVOICE_GROUP_DETAIL_LIMIT = 3000;
 
 function includeCostInvoiceGroupRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
-    ...includeCostRelations(),
+    ...includeCostListRelations(),
     generatedLogisticsExpense: {
       include: {
         bill: true,
@@ -80,6 +80,18 @@ function includeCostInvoiceGroupRelations() {
 }
 
 type CostWithInvoiceGroupRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostInvoiceGroupRelations> }>;
+
+function includeCostListRelations() {
+  return Prisma.validator<Prisma.OrderCostInclude>()({
+    order: { include: { customer: true, salesperson: true } },
+    supplier: true,
+    documents: {
+      where: { deletedAt: null },
+      include: { uploadedBy: true, supplier: true },
+      orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    },
+  });
+}
 
 function insensitiveContains(value: unknown): Prisma.StringFilter | null {
   const text = nonEmpty(value);
@@ -221,7 +233,7 @@ export async function listCosts(query: CostQuery, actor: ActorLike = null): Prom
   );
   const rows = await prisma.orderCost.findMany({
     where,
-    include: includeCostRelations(),
+    include: includeCostListRelations(),
     orderBy: [{ createdAt: "desc" }],
     take,
   });
@@ -238,7 +250,7 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
     prisma.orderCost.count({ where }),
     prisma.orderCost.findMany({
       where,
-      include: includeCostRelations(),
+      include: includeCostListRelations(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,

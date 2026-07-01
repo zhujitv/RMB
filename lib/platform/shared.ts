@@ -8,6 +8,7 @@ export * from "./shared-exchange";
 export * from "./company-profile";
 export * from "./shipsgo-integration";
 export * from "./shipsgo-tracking";
+export * from "./api-performance";
 export * from "./commission-formula";
 export * from "./notification-templates";
 export * from "./notification-engine";

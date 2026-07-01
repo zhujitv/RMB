@@ -1110,6 +1110,25 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model ApiPerformanceLog {
+  id         String   @id @default(cuid())
+  source     String   @default("server")
+  method     String
+  path       String
+  statusCode Int?     @map("status_code")
+  durationMs Int      @map("duration_ms")
+  userId     String?  @map("user_id")
+  role       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([path, createdAt])
+  @@index([durationMs])
+  @@index([source, createdAt])
+  @@index([statusCode, createdAt])
+  @@map("api_performance_logs")
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?  @map("user_id")

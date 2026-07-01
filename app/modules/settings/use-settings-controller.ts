@@ -4,6 +4,7 @@ import { apiJson } from "../../api";
 import type { CompanyProfileSettings } from "../../types";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/password-policy";
 import {
+  API_PERFORMANCE_PAGE_SIZE,
   AUDIT_PAGE_SIZE,
   DEFAULT_SHIPSGO_INTEGRATION_FORM,
   FACTORY_SUPPLIER_ACCOUNT_ROLES,
@@ -34,6 +35,7 @@ import {
   userFormFromRow,
 } from "./helpers";
 import type {
+  ApiPerformanceRow,
   AuditLogRow,
   CommissionFormulaForm,
   CommissionFormulaSettings,
@@ -67,12 +69,14 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     suppliers: { keyword: "", type: "", status: "" },
     users: { keyword: "", role: "", status: "" },
     auditLogs: { keyword: "", action: "" },
+    apiPerformance: { keyword: "", source: "", minDurationMs: "", windowHours: "24" },
   });
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
+  const [apiPerformance, setApiPerformance] = useState<ApiPerformanceRow[]>([]);
   const [companyProfileSettings, setCompanyProfileSettings] = useState<CompanyProfileSettings | null>(null);
   const [companyProfileForm, setCompanyProfileForm] = useState<CompanyProfileForm | null>(null);
   const [exchangeSettings, setExchangeSettings] = useState<ExchangeRateSettings | null>(null);
@@ -97,9 +101,10 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     notificationTemplates: emptyPagination(PAGE_SIZE),
     shipsgoIntegration: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
+    apiPerformance: emptyPagination(API_PERFORMANCE_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
-  const [detailRow, setDetailRow] = useState<CustomerRow | SupplierRow | UserRow | AuditLogRow | null>(null);
+  const [detailRow, setDetailRow] = useState<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm | null>(null);
   const [customerSaving, setCustomerSaving] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
@@ -128,14 +133,16 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
 
   const activePagination = pagination[activeTab] || emptyPagination(PAGE_SIZE);
   const listColumns = useMemo(() => columnsFor(activeTab), [activeTab]);
-  const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs }), [activeTab, customers, suppliers, users, logs]);
+  const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs, apiPerformance }), [activeTab, customers, suppliers, users, logs, apiPerformance]);
   const activeFilter = activeTab === "customers"
     ? filters.customers
     : activeTab === "suppliers"
       ? filters.suppliers
       : activeTab === "users"
         ? filters.users
-        : filters.auditLogs;
+        : activeTab === "apiPerformance"
+          ? filters.apiPerformance
+          : filters.auditLogs;
   const userEditPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -200,7 +207,11 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
       if (tab === "users") {
         await ensurePermissionConfig();
       }
-      const pageSize = tab === "auditLogs" ? AUDIT_PAGE_SIZE : PAGE_SIZE;
+      const pageSize = tab === "auditLogs"
+        ? AUDIT_PAGE_SIZE
+        : tab === "apiPerformance"
+          ? API_PERFORMANCE_PAGE_SIZE
+          : PAGE_SIZE;
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
       appendFilterParams(params, tab, nextFilters);
       const result = await apiJson<{
@@ -208,6 +219,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
         suppliers?: SupplierRow[];
         users?: UserRow[];
         logs?: AuditLogRow[];
+        metrics?: ApiPerformanceRow[];
         pagination?: Pagination;
       }>(`/api/settings/${kebabTab(tab)}?${params}`);
       if (tab === "customers") {
@@ -217,6 +229,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
       if (tab === "suppliers") setSuppliers(result.suppliers || []);
       if (tab === "users") setUsers(result.users || []);
       if (tab === "auditLogs") setLogs(result.logs || []);
+      if (tab === "apiPerformance") setApiPerformance(result.metrics || []);
       setPagination((current) => ({
         ...current,
         [tab]: result.pagination || emptyPagination(pageSize),
@@ -768,6 +781,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
       if (tab === "customers") return { ...current, customers: { ...current.customers, [key]: value } };
       if (tab === "suppliers") return { ...current, suppliers: { ...current.suppliers, [key]: value } };
       if (tab === "users") return { ...current, users: { ...current.users, [key]: value } };
+      if (tab === "apiPerformance") return { ...current, apiPerformance: { ...current.apiPerformance, [key]: value } };
       return { ...current, auditLogs: { ...current.auditLogs, [key]: value } };
     });
   }
@@ -779,6 +793,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     suppliers,
     users,
     logs,
+    apiPerformance,
     companyProfileSettings,
     companyProfileForm,
     exchangeSettings,

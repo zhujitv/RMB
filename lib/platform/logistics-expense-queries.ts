@@ -12,6 +12,7 @@ import { orderAccessWhere } from "./order-access";
 import {
   assertCanReadLogisticsExpenses,
   includeLogisticsExpenseRelations,
+  includeLogisticsExpenseListRelations,
   insensitiveContains,
   logisticsExpenseAccessWhere,
   logisticsExpenseOrderSummary,
@@ -144,7 +145,7 @@ export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQu
       deletedAt: null,
       ...logisticsExpenseAccessWhere(actor),
     },
-    include: includeLogisticsExpenseRelations(),
+    include: includeLogisticsExpenseListRelations(),
     orderBy: [{ createdAt: "asc" }],
     take: billIds.length * 100,
   });

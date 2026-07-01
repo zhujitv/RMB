@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { apiError, logServerTiming } from "./platform/shared-base-utils";
 import { assertRead, assertWrite, type AccessUser } from "./platform/shared-access";
 import { getActor } from "./platform/shared-auth";
+import { recordApiPerformanceLog } from "./platform/api-performance";
 
 type GetActorOptions = Parameters<typeof getActor>[1];
 type ApiActorRequest = Parameters<typeof getActor>[0];
@@ -40,17 +41,33 @@ export function withApiAuth<Context = RouteContext>(
   return async function guardedApiRoute(request: NextRequest, context: Context) {
     const startedAt = Date.now();
     const path = new URL(request.url).pathname;
+    let currentActor: AccessUser | null = null;
+    let statusCode = 500;
     try {
       const actor = await getActor(request, {
         allowPasswordChangeRequired: options.allowPasswordChangeRequired,
       });
-      return await handler(request, actor, context);
+      currentActor = actor;
+      const response = await handler(request, actor, context);
+      statusCode = response.status;
+      return response;
     } catch (error: unknown) {
-      return apiError(error, options.errorMessage);
+      const response = apiError(error, options.errorMessage);
+      statusCode = response.status;
+      return response;
     } finally {
-      logServerTiming("api-route-timing", startedAt, {
+      const durationMs = logServerTiming("api-route-timing", startedAt, {
         method: request.method,
         path,
+      });
+      recordApiPerformanceLog({
+        source: "server",
+        method: request.method,
+        path,
+        statusCode,
+        durationMs,
+        userId: currentActor?.id,
+        role: currentActor?.role,
       });
     }
   };

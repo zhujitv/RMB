@@ -58,6 +58,37 @@ export function includeLogisticsExpenseRelations() {
   });
 }
 
+export function includeLogisticsExpenseListRelations() {
+  return Prisma.validator<Prisma.LogisticsExpenseInclude>()({
+    bill: {
+      include: {
+        submittedBy: true,
+        reviewedBy: true,
+        createdBy: true,
+        updatedBy: true,
+      },
+    },
+    order: {
+      include: {
+        customer: true,
+        salesperson: true,
+        domesticLogisticsInfos: {
+          include: { transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+          orderBy: [{ updatedAt: "desc" }],
+          take: 1,
+        },
+      },
+    },
+    supplier: true,
+    createdBy: true,
+    updatedBy: true,
+    reviewedBy: true,
+    invoiceDocument: { include: { uploadedBy: true, supplier: true } },
+    invoiceUploadedBy: true,
+    invoiceConfirmedBy: true,
+  });
+}
+
 export function logisticsExpenseBillOfLadingNo(order: LogisticsOrderLike = {}) {
   return nonEmpty(order.blNo || order.orderNo || "no-bl");
 }

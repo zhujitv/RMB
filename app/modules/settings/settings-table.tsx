@@ -1,6 +1,6 @@
 import { DetailField, PaginationBar, SideDetailDrawer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
-import type { AuditLogRow, CustomerRow, Pagination, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
+import type { ApiPerformanceRow, AuditLogRow, CustomerRow, Pagination, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
 import { detailFieldsFor, drawerSubtitleFor, drawerTitleFor, valueFor } from "./helpers";
 
 export function SettingsTable({
@@ -19,12 +19,12 @@ export function SettingsTable({
   onPage,
 }: {
   tab: SettingsTabKey;
-  rows: Array<CustomerRow | SupplierRow | UserRow | AuditLogRow>;
-  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  rows: Array<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>;
+  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
   loading: boolean;
   pagination: Pagination;
-  detailRow: CustomerRow | SupplierRow | UserRow | AuditLogRow | null;
-  onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow) => void;
+  detailRow: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null;
+  onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow) => void;
   onCloseDetail: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onEditUser: (user: UserRow) => void;
@@ -99,8 +99,8 @@ export function SettingsRows({
   onEditUser,
 }: {
   tab: SettingsTabKey;
-  row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
-  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
+  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
   onViewDetail: () => void;
   onEditUser: (user: UserRow) => void;
 }) {
@@ -151,7 +151,7 @@ export function SettingsDetailDrawer({
   onDeleteCustomer,
 }: {
   tab: SettingsTabKey;
-  row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
+  row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
   onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;

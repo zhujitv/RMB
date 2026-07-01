@@ -15,6 +15,7 @@ type ApiJsonInit = RequestInit & {
 };
 
 let apiRequestTimingSeq = 0;
+const API_PERFORMANCE_REPORT_PATH = "/api/settings/api-performance";
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
@@ -33,9 +34,59 @@ function endApiRequestTimer(label: string) {
   console.timeEnd(label);
 }
 
+function normalizedApiPath(path: string) {
+  if (typeof window === "undefined") return "";
+  try {
+    const url = new URL(path, window.location.origin);
+    if (url.origin !== window.location.origin) return "";
+    return url.pathname;
+  } catch {
+    return path.split("?")[0] || path;
+  }
+}
+
+function shouldReportApiRequestTiming(path: string) {
+  const pathname = normalizedApiPath(path);
+  return pathname.startsWith("/api/") && pathname !== API_PERFORMANCE_REPORT_PATH;
+}
+
+function reportApiRequestTiming(input: {
+  path: string;
+  method: string;
+  statusCode: number;
+  durationMs: number;
+  errorCode?: string;
+}) {
+  if (typeof window === "undefined" || !shouldReportApiRequestTiming(input.path)) return;
+  const payload = JSON.stringify({
+    source: "client",
+    path: normalizedApiPath(input.path),
+    method: input.method,
+    statusCode: input.statusCode,
+    durationMs: input.durationMs,
+    errorCode: input.errorCode || "",
+  });
+  if (navigator.sendBeacon) {
+    const blob = new Blob([payload], { type: "application/json" });
+    navigator.sendBeacon(API_PERFORMANCE_REPORT_PATH, blob);
+    return;
+  }
+  void fetch(API_PERFORMANCE_REPORT_PATH, {
+    method: "POST",
+    credentials: "include",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+  }).catch(() => undefined);
+}
+
 export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
   const timingLabel = startApiRequestTimer(path, init);
   const { timeoutMs, signal, ...fetchInit } = init || {};
+  const requestStartedAt = Date.now();
+  const method = String(fetchInit.method || "GET").toUpperCase();
+  let statusCode = 0;
+  let errorCode = "";
   const controller = typeof AbortController !== "undefined" && timeoutMs ? new AbortController() : null;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let abortListener: (() => void) | undefined;
@@ -65,8 +116,11 @@ export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
         ...fetchInit,
         signal: controller?.signal || signal,
       });
+      statusCode = response.status;
     } catch (error) {
       if (isAbortError(error)) {
+        statusCode = 408;
+        errorCode = "REQUEST_TIMEOUT";
         throw new ApiRequestError("请求超时，请检查本地数据库、网络或权限初始化接口。", 408, "REQUEST_TIMEOUT");
       }
       throw error;
@@ -84,12 +138,20 @@ export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
       const code = data && typeof data === "object" && "code" in data && typeof data.code === "string"
         ? data.code
         : undefined;
+      errorCode = code || "";
       throw new ApiRequestError(message, response.status, code);
     }
     return data as T;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
     if (signal && abortListener) signal.removeEventListener("abort", abortListener);
+    reportApiRequestTiming({
+      path,
+      method,
+      statusCode,
+      durationMs: Date.now() - requestStartedAt,
+      errorCode,
+    });
     endApiRequestTimer(timingLabel);
   }
 }
