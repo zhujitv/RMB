@@ -12,7 +12,7 @@ import { writeAudit } from "./shared-audit";
 type SettingsActor = Parameters<typeof assertRead>[0];
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
-export type OcrFeatureKey = "customsDeclaration" | "invoiceText";
+export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "supplierDocumentReturn";
 
 type OcrIntegrationInput = {
   enabled?: unknown;
@@ -23,6 +23,7 @@ type OcrIntegrationInput = {
   appCode?: unknown;
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
+  supplierDocumentReturnEnabled?: unknown;
   fallbackToPdfText?: unknown;
   timeoutMs?: unknown;
 };
@@ -76,6 +77,7 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     appCode: cleanSecret(input.appCode),
     customsDeclarationEnabled: input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
+    supplierDocumentReturnEnabled: input.supplierDocumentReturnEnabled === true,
     fallbackToPdfText: input.fallbackToPdfText !== false,
     timeoutMs: cleanTimeoutMs(input.timeoutMs),
   };
@@ -103,6 +105,7 @@ export function serializeOcrFeatureFlags(setting: unknown) {
     provider: normalized.provider,
     customsDeclarationEnabled: enabled && normalized.customsDeclarationEnabled,
     invoiceTextEnabled: enabled && normalized.invoiceTextEnabled,
+    supplierDocumentReturnEnabled: enabled && normalized.supplierDocumentReturnEnabled,
     fallbackToPdfText: normalized.fallbackToPdfText,
     timeoutMs: normalized.timeoutMs,
   };
@@ -114,11 +117,13 @@ function ocrFeatureEnabled(settings: ReturnType<typeof normalizeOcrIntegrationSe
   if (!credentialsConfigured) return false;
   if (feature === "customsDeclaration") return settings.customsDeclarationEnabled;
   if (feature === "invoiceText") return settings.invoiceTextEnabled;
+  if (feature === "supplierDocumentReturn") return settings.supplierDocumentReturnEnabled;
   return false;
 }
 
 function ocrFeatureLabel(feature: OcrFeatureKey) {
   if (feature === "customsDeclaration") return "报关单识别";
+  if (feature === "supplierDocumentReturn") return "产品供应商资料回传 OCR";
   return "发票识别";
 }
 

@@ -3,6 +3,12 @@ import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
 import {
+  createSupplierDocumentOcrTaskForUpload,
+  refreshSupplierDocumentRequestQualification,
+  runSupplierDocumentOcrTask,
+  serializeSupplierDocumentOcrTask,
+} from "./supplier-document-ocr";
+import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
@@ -100,7 +106,16 @@ function supplierDocumentRequestInclude() {
     requestedBy: { select: { id: true, name: true, email: true } },
     documents: {
       where: { deletedAt: null },
-      include: { uploadedBy: true, supplier: true, cost: { include: { supplier: true } } },
+      include: {
+        uploadedBy: true,
+        supplier: true,
+        cost: { include: { supplier: true } },
+        ocrTasks: {
+          orderBy: [{ createdAt: "desc" }],
+          take: 1,
+          include: { results: true },
+        },
+      },
       orderBy: [{ createdAt: "desc" }],
     },
   });
@@ -364,6 +379,10 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
 
 function serializeSupplierDocument(document: unknown) {
   const row = serializeOrderDocument(document);
+  const documentRecord = document as { ocrTasks?: unknown[] } | null | undefined;
+  const ocrTask = Array.isArray(documentRecord?.ocrTasks)
+    ? serializeSupplierDocumentOcrTask(documentRecord.ocrTasks[0] as Parameters<typeof serializeSupplierDocumentOcrTask>[0])
+    : null;
   return {
     id: row.id,
     orderId: row.orderId,
@@ -384,6 +403,7 @@ function serializeSupplierDocument(document: unknown) {
     source: row.source,
     uploadedByName: row.uploadedByName,
     uploadedAt: row.uploadedAt,
+    ocrTask,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -759,6 +779,14 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
+  const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
+  if (ocrTask?.id) {
+    void runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
+      await runSupplierDocumentOcrTask(ocrTask.id);
+    }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
+  } else {
+    await refreshSupplierDocumentRequestQualification(row.id);
+  }
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
       const costs = uniqueFactoryCost

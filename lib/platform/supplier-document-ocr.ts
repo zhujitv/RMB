@@ -1,0 +1,711 @@
+import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
+import { readR2Object } from "../r2";
+import { prisma } from "../prisma";
+import {
+  DEFAULT_COMPANY_PROFILE_SETTINGS,
+  FACTORY_SUPPLIER_COST_TYPES,
+  runNonCriticalTask,
+} from "./shared-constants";
+import {
+  codedError,
+  logServerError,
+  nonEmpty,
+  num,
+} from "./shared-base-utils";
+import { assertRead, assertWrite } from "./shared-auth";
+import { writeAudit } from "./shared-audit";
+import { getCompanyProfileSettings } from "./company-profile";
+import { isOcrFeatureEnabled, recognizePdfTextWithOcr } from "./ocr-integration";
+
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+} | null | undefined;
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type OcrDocumentRow = Prisma.OrderDocumentGetPayload<{
+  include: {
+    order: { include: { businessEntity: true } };
+    supplier: true;
+    cost: true;
+    factoryDocumentRequest: {
+      include: {
+        order: {
+          include: {
+            businessEntity: true;
+            costs: { where: { deletedAt: null }; include: { supplier: true } };
+          };
+        };
+        supplier: true;
+      };
+    };
+  };
+}>;
+type OcrTaskRow = Prisma.OcrTaskGetPayload<{ include: { results: true } }>;
+
+const SUPPLIER_DOCUMENT_OCR_MODULE = "SUPPLIER_DOCUMENT_RETURN";
+const SUPPLIER_DOCUMENT_OCR_FEATURE = "supplierDocumentReturn";
+const SUPPLIER_DOCUMENT_OCR_TYPES = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
+const OCR_STATUS_PROCESSING = "OCR识别中";
+const OCR_STATUS_PASSED = "OCR识别成功，校验通过";
+const OCR_STATUS_EXCEPTION = "OCR识别成功，存在异常";
+const OCR_STATUS_FAILED = "OCR识别失败，需人工核对";
+const OCR_STATUS_MANUAL = "待人工确认";
+const VALIDATION_PASSED = "PASSED";
+const VALIDATION_EXCEPTION = "EXCEPTION";
+const VALIDATION_FAILED = "FAILED";
+const VALIDATION_MANUAL = "PENDING_MANUAL";
+const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
+const VALIDATION_REJECTED = "REJECTED";
+const SUPPLIER_DOCUMENT_QUALIFIED_STATUSES = [OCR_STATUS_PASSED];
+const INTERNAL_OCR_ROLES = ["管理员", "财务", "业务员", "采购"];
+
+type ValidationIssue = {
+  level: "error" | "warning" | "manual";
+  message: string;
+  field?: string;
+};
+type FieldResult = {
+  key: string;
+  label: string;
+  value: string;
+};
+type OcrValidationContext = {
+  document: OcrDocumentRow;
+  supplierName: string;
+  businessEntityName: string;
+  orderNo: string;
+  purchaseOrderNo: string;
+  expectedAmount: number;
+};
+
+function cleanText(value: unknown) {
+  return String(value || "")
+    .replace(/\u3000/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function normalizeComparable(value: unknown) {
+  return cleanText(value)
+    .toUpperCase()
+    .replace(/[（）()【】\[\]{}《》<>，,。.\s·\-_/\\:：;；"'“”‘’]/g, "");
+}
+
+function looselyMatches(left: unknown, right: unknown) {
+  const a = normalizeComparable(left);
+  const b = normalizeComparable(right);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+function firstMatch(text: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const value = cleanText(match?.[1]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function moneyValue(value: unknown) {
+  const text = String(value || "")
+    .replace(/[人民币¥￥,\s]/g, "")
+    .replace(/[^\d.-]/g, "");
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseAmount(text: string, patterns: RegExp[]) {
+  return moneyValue(firstMatch(text, patterns));
+}
+
+function parseDateText(text: string, patterns: RegExp[]) {
+  const value = firstMatch(text, patterns);
+  const normalized = value
+    .replace(/[年月.]/g, "-")
+    .replace(/[日号]/g, "")
+    .replace(/--+/g, "-")
+    .trim();
+  return normalized || value;
+}
+
+function amountMatches(actual: number, expected: number) {
+  if (!actual || !expected) return false;
+  const diff = Math.abs(actual - expected);
+  const percentTolerance = Math.abs(expected) * 0.005;
+  return diff <= Math.max(1, percentTolerance);
+}
+
+function shortRawText(text = "") {
+  return text.slice(0, 120000);
+}
+
+function visibleResultFields(fields: Record<string, unknown>, labels: Record<string, string>): FieldResult[] {
+  return Object.entries(labels)
+    .map(([key, label]) => ({ key, label, value: cleanText(fields[key]) }))
+    .filter((field) => field.value);
+}
+
+function parseInvoiceFields(text: string) {
+  const invoiceNo = firstMatch(text, [
+    /发票号码[:：]?\s*([A-Z0-9\-]{6,30})/i,
+    /发票号[:：]?\s*([A-Z0-9\-]{6,30})/i,
+    /No\.?\s*[:：]?\s*([A-Z0-9\-]{6,30})/i,
+  ]);
+  const invoiceDate = parseDateText(text, [
+    /开票日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
+    /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
+  ]);
+  const amountWithTax = parseAmount(text, [
+    /价税合计(?:\s*[(（]小写[)）])?[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+  ]);
+  const amountWithoutTax = parseAmount(text, [
+    /不含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s+税率/,
+  ]);
+  const taxAmount = parseAmount(text, [
+    /税额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+  ]);
+  const taxRate = firstMatch(text, [
+    /税率[:：]?\s*([0-9]{1,2}(?:\.[0-9]+)?%)/,
+    /([0-9]{1,2}(?:\.[0-9]+)?%)\s+税额/,
+  ]);
+  const seller = firstMatch(text, [
+    /销售方(?:名称)?[:：]\s*([^\n\r]+)/,
+    /销\s*售\s*方[:：]\s*([^\n\r]+)/,
+  ]);
+  const buyer = firstMatch(text, [
+    /购买方(?:名称)?[:：]\s*([^\n\r]+)/,
+    /购\s*买\s*方[:：]\s*([^\n\r]+)/,
+  ]);
+  const productName = firstMatch(text, [
+    /货物或应税劳务、服务名称[:：]?\s*([^\n\r]+)/,
+    /\*?[^\n\r]*\*\s*([^\n\r]{2,80})/,
+    /产品名称[:：]\s*([^\n\r]+)/,
+    /服务名称[:：]\s*([^\n\r]+)/,
+  ]);
+  return {
+    invoiceNo,
+    invoiceDate,
+    amountWithTax,
+    amountWithoutTax,
+    taxAmount,
+    taxRate,
+    seller,
+    buyer,
+    productName,
+  };
+}
+
+function parseContractFields(text: string) {
+  const supplier = firstMatch(text, [
+    /供(?:货|应)方[:：]\s*([^\n\r]+)/,
+    /卖方[:：]\s*([^\n\r]+)/,
+    /乙方[:：]\s*([^\n\r]+)/,
+  ]);
+  const buyer = firstMatch(text, [
+    /采购方[:：]\s*([^\n\r]+)/,
+    /买方[:：]\s*([^\n\r]+)/,
+    /甲方[:：]\s*([^\n\r]+)/,
+  ]);
+  const orderNo = firstMatch(text, [
+    /(?:订单号|合同号|采购单号|PO)[:：]?\s*([A-Z0-9_\-\/]{3,40})/i,
+  ]);
+  const contractAmount = parseAmount(text, [
+    /合同金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /总金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /价税合计[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+  ]);
+  const productName = firstMatch(text, [
+    /产品名称[:：]\s*([^\n\r]+)/,
+    /品名[:：]\s*([^\n\r]+)/,
+    /货物名称[:：]\s*([^\n\r]+)/,
+  ]);
+  const specModel = firstMatch(text, [
+    /规格型号[:：]\s*([^\n\r]+)/,
+    /规格[:：]\s*([^\n\r]+)/,
+  ]);
+  const quantity = firstMatch(text, [
+    /数量[:：]\s*([0-9,]+(?:\.[0-9]+)?)/,
+  ]);
+  const unitPrice = firstMatch(text, [
+    /单价[:：]\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,4})?)/,
+  ]);
+  const signDate = parseDateText(text, [
+    /签订日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
+    /签署日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
+  ]);
+  return {
+    supplier,
+    buyer,
+    orderNo,
+    contractNo: orderNo,
+    contractAmount,
+    productName,
+    specModel,
+    quantity,
+    unitPrice,
+    signDate,
+  };
+}
+
+function supplierDocumentLabels(documentType: string) {
+  if (documentType === "SUPPLIER_INVOICE") {
+    return {
+      invoiceNo: "发票号",
+      invoiceDate: "开票日期",
+      amountWithTax: "含税金额",
+      amountWithoutTax: "不含税金额",
+      taxAmount: "税额",
+      taxRate: "税率",
+      seller: "销售方",
+      buyer: "购买方",
+      productName: "产品名称 / 服务名称",
+    };
+  }
+  return {
+    supplier: "供应商",
+    buyer: "采购方",
+    orderNo: "订单号 / 合同号",
+    contractAmount: "合同金额",
+    productName: "产品名称",
+    specModel: "规格型号",
+    quantity: "数量",
+    unitPrice: "单价",
+    signDate: "签订日期",
+  };
+}
+
+function expectedAmountFromDocument(document: OcrDocumentRow) {
+  if (document.cost) {
+    const currency = String(document.cost.currency || "CNY").toUpperCase();
+    const amount = currency === "CNY" ? num(document.cost.amount, 0) : num(document.cost.amountCny, 0);
+    if (amount > 0) return amount;
+  }
+  const request = document.factoryDocumentRequest;
+  const costs = request?.order?.costs || [];
+  return costs
+    .filter((cost) => cost.orderId === document.orderId
+      && cost.supplierId === document.supplierId
+      && FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType)
+      && cost.deletedAt == null)
+    .reduce((sum, cost) => sum + num(cost.currency === "CNY" ? cost.amount : cost.amountCny, 0), 0);
+}
+
+async function ocrValidationContext(document: OcrDocumentRow): Promise<OcrValidationContext> {
+  const profile = await runNonCriticalTask("OCR校验公司资料读取", () => getCompanyProfileSettings(), { track: false });
+  const supplierName = document.supplier?.supplierName || document.factoryDocumentRequest?.supplier?.supplierName || "";
+  const businessEntityName = document.order.businessEntity?.name
+    || document.order.businessEntityNameSnapshot
+    || document.factoryDocumentRequest?.order?.businessEntity?.name
+    || document.factoryDocumentRequest?.order?.businessEntityNameSnapshot
+    || profile?.companyNameZh
+    || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
+  const orderNo = document.order.orderNo || document.factoryDocumentRequest?.order?.orderNo || "";
+  return {
+    document,
+    supplierName,
+    businessEntityName,
+    orderNo,
+    purchaseOrderNo: orderNo,
+    expectedAmount: expectedAmountFromDocument(document),
+  };
+}
+
+async function validateInvoice(fields: ReturnType<typeof parseInvoiceFields>, context: OcrValidationContext, documentId: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
+  if (!fields.seller) {
+    issues.push({ level: "manual", field: "seller", message: "未识别到发票销售方，需人工确认" });
+  } else if (!looselyMatches(fields.seller, context.supplierName)) {
+    issues.push({ level: "error", field: "seller", message: "发票销售方与供应商不一致" });
+  }
+  if (!fields.buyer) {
+    issues.push({ level: "manual", field: "buyer", message: "未识别到发票购买方，需人工确认" });
+  } else if (!looselyMatches(fields.buyer, context.businessEntityName)) {
+    issues.push({ level: "error", field: "buyer", message: "发票购买方与业务主体不一致" });
+  }
+  if (!fields.amountWithTax) {
+    issues.push({ level: "manual", field: "amountWithTax", message: "未识别到发票含税金额，需人工确认" });
+  } else if (context.expectedAmount > 0 && !amountMatches(fields.amountWithTax, context.expectedAmount)) {
+    issues.push({ level: "error", field: "amountWithTax", message: "发票金额与采购订单金额不一致" });
+  } else if (!context.expectedAmount) {
+    issues.push({ level: "manual", field: "amountWithTax", message: "系统未找到可比对的采购订单金额，需人工确认" });
+  }
+  if (!fields.taxRate) {
+    issues.push({ level: "manual", field: "taxRate", message: "未识别到税率，需人工确认" });
+  } else if (!/^13(?:\.0+)?%$/.test(String(fields.taxRate).trim())) {
+    issues.push({ level: "warning", field: "taxRate", message: "发票税率不是 13%，请人工确认" });
+  }
+  if (!fields.invoiceNo) {
+    issues.push({ level: "manual", field: "invoiceNo", message: "未识别到发票号码，需人工确认" });
+  } else {
+    const duplicated = await prisma.ocrResult.findFirst({
+      where: {
+        fieldKey: "invoiceNo",
+        value: fields.invoiceNo,
+        task: {
+          documentId: { not: documentId },
+          documentType: "SUPPLIER_INVOICE",
+        },
+      },
+      select: { id: true, task: { select: { documentId: true, orderId: true } } },
+    });
+    if (duplicated) {
+      issues.push({ level: "error", field: "invoiceNo", message: "发票号码已存在，请核查" });
+    }
+  }
+  return issues;
+}
+
+function validateContract(fields: ReturnType<typeof parseContractFields>, context: OcrValidationContext): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!fields.supplier) {
+    issues.push({ level: "manual", field: "supplier", message: "未识别到合同供应商，需人工确认" });
+  } else if (!looselyMatches(fields.supplier, context.supplierName)) {
+    issues.push({ level: "error", field: "supplier", message: "合同供应商与当前供应商不一致" });
+  }
+  if (!fields.buyer) {
+    issues.push({ level: "manual", field: "buyer", message: "未识别到合同采购方，需人工确认" });
+  } else if (!looselyMatches(fields.buyer, context.businessEntityName)) {
+    issues.push({ level: "error", field: "buyer", message: "合同采购方与业务主体不一致" });
+  }
+  if (!fields.orderNo) {
+    issues.push({ level: "manual", field: "orderNo", message: "未识别到合同订单号，需人工确认" });
+  } else if (!looselyMatches(fields.orderNo, context.purchaseOrderNo)) {
+    issues.push({ level: "error", field: "orderNo", message: "合同订单号与采购订单号不一致" });
+  }
+  if (!fields.contractAmount) {
+    issues.push({ level: "manual", field: "contractAmount", message: "未识别到合同金额，需人工确认" });
+  } else if (context.expectedAmount > 0 && !amountMatches(fields.contractAmount, context.expectedAmount)) {
+    issues.push({ level: "error", field: "contractAmount", message: "合同金额与采购订单金额不一致" });
+  } else if (!context.expectedAmount) {
+    issues.push({ level: "manual", field: "contractAmount", message: "系统未找到可比对的采购订单金额，需人工确认" });
+  }
+  if (!fields.productName || !fields.specModel || !fields.quantity) {
+    issues.push({ level: "manual", field: "productDetail", message: "产品名称、规格或数量无法准确判断，需人工确认" });
+  }
+  return issues;
+}
+
+function taskStatusFromIssues(issues: ValidationIssue[]) {
+  if (issues.some((issue) => issue.level === "error")) {
+    return { status: OCR_STATUS_EXCEPTION, validationStatus: VALIDATION_EXCEPTION };
+  }
+  if (issues.some((issue) => issue.level === "warning" || issue.level === "manual")) {
+    return { status: OCR_STATUS_MANUAL, validationStatus: VALIDATION_MANUAL };
+  }
+  return { status: OCR_STATUS_PASSED, validationStatus: VALIDATION_PASSED };
+}
+
+function assertInternalOcrManager(actor: ActorLike) {
+  if (!actor?.id || !INTERNAL_OCR_ROLES.includes(String(actor.role || ""))) {
+    throw codedError("没有权限处理 OCR 校验结果。", 403, "OCR_MANAGE_PERMISSION_DENIED");
+  }
+}
+
+async function loadSupplierReturnDocument(documentId: string, requestId = ""): Promise<OcrDocumentRow> {
+  const document = await prisma.orderDocument.findFirst({
+    where: {
+      id: documentId,
+      deletedAt: null,
+      relatedModule: "SUPPLIER",
+      documentType: { in: SUPPLIER_DOCUMENT_OCR_TYPES as OrderDocumentType[] },
+      ...(requestId ? { factoryDocumentRequestId: requestId } : {}),
+    },
+    include: {
+      order: { include: { businessEntity: true } },
+      supplier: true,
+      cost: true,
+      factoryDocumentRequest: {
+        include: {
+          order: {
+            include: {
+              businessEntity: true,
+              costs: { where: { deletedAt: null }, include: { supplier: true } },
+            },
+          },
+          supplier: true,
+        },
+      },
+    },
+  });
+  if (!document) {
+    throw codedError("回传资料文件不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_NOT_FOUND");
+  }
+  return document;
+}
+
+export async function createSupplierDocumentOcrTaskForUpload(documentId: string) {
+  if (!(await isOcrFeatureEnabled(SUPPLIER_DOCUMENT_OCR_FEATURE))) return null;
+  const document = await loadSupplierReturnDocument(documentId);
+  const task = await prisma.ocrTask.create({
+    data: {
+      module: SUPPLIER_DOCUMENT_OCR_MODULE,
+      documentId: document.id,
+      requestId: document.factoryDocumentRequestId,
+      orderId: document.orderId,
+      supplierId: document.supplierId,
+      documentType: document.documentType,
+      status: OCR_STATUS_PROCESSING,
+      validationStatus: "PROCESSING",
+    },
+    include: { results: true },
+  });
+  if (document.factoryDocumentRequestId) {
+    await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+  }
+  return task;
+}
+
+export async function runSupplierDocumentOcrTask(taskId: string) {
+  const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
+  if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+  return runSupplierDocumentOcrForDocument(task.documentId, null, { taskId, requestId: task.requestId || "" });
+}
+
+export async function runSupplierDocumentOcrForDocument(
+  documentId: string,
+  actor: ActorLike = null,
+  options: { taskId?: string; requestId?: string } = {},
+) {
+  if (actor) {
+    assertRead(actor, "supplierDocuments");
+    assertInternalOcrManager(actor);
+  }
+  const document = await loadSupplierReturnDocument(documentId, options.requestId || "");
+  const task = options.taskId
+    ? await prisma.ocrTask.update({
+        where: { id: options.taskId },
+        data: { status: OCR_STATUS_PROCESSING, validationStatus: "PROCESSING", errorMessage: null },
+        include: { results: true },
+      })
+    : await createSupplierDocumentOcrTaskForUpload(document.id);
+  if (!task) return null;
+  try {
+    const fileBuffer = await readR2Object(document.storageKey);
+    const recognized = await recognizePdfTextWithOcr(fileBuffer, SUPPLIER_DOCUMENT_OCR_FEATURE, { requireText: false });
+    const text = cleanText(recognized.text);
+    if (!text) throw codedError("OCR未识别到可用文字，需人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
+    const context = await ocrValidationContext(document);
+    const fields = document.documentType === "SUPPLIER_INVOICE"
+      ? parseInvoiceFields(text)
+      : parseContractFields(text);
+    const labels = supplierDocumentLabels(document.documentType) as unknown as Record<string, string>;
+    const issues = document.documentType === "SUPPLIER_INVOICE"
+      ? await validateInvoice(fields as ReturnType<typeof parseInvoiceFields>, context, document.id)
+      : validateContract(fields as ReturnType<typeof parseContractFields>, context);
+    const status = taskStatusFromIssues(issues);
+    const fieldRows = visibleResultFields(fields as Record<string, unknown>, labels);
+    const saved = await prisma.$transaction(async (tx) => {
+      await tx.ocrResult.deleteMany({ where: { taskId: task.id } });
+      if (fieldRows.length) {
+        await tx.ocrResult.createMany({
+          data: fieldRows.map((field) => ({
+            taskId: task.id,
+            fieldKey: field.key,
+            label: field.label,
+            value: field.value,
+            rawValue: field.value,
+          })),
+        });
+      }
+      return tx.ocrTask.update({
+        where: { id: task.id },
+        data: {
+          status: status.status,
+          validationStatus: status.validationStatus,
+          errorMessage: null,
+          rawText: shortRawText(text),
+          resultJson: fields as Prisma.InputJsonValue,
+          validationJson: {
+            issues,
+            expectedAmount: context.expectedAmount,
+            supplierName: context.supplierName,
+            businessEntityName: context.businessEntityName,
+            orderNo: context.orderNo,
+            source: recognized.source,
+            provider: recognized.provider,
+          },
+        },
+        include: { results: true },
+      });
+    });
+    if (document.factoryDocumentRequestId) {
+      await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+    }
+    return saved;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "OCR识别失败，需人工核对";
+    const saved = await prisma.ocrTask.update({
+      where: { id: task.id },
+      data: {
+        status: OCR_STATUS_FAILED,
+        validationStatus: VALIDATION_FAILED,
+        errorMessage: message.slice(0, 1000),
+        validationJson: { issues: [{ level: "manual", message: "OCR识别失败，需人工核对" }] },
+      },
+      include: { results: true },
+    });
+    logServerError("产品供应商回传资料OCR识别失败", error, { documentId, taskId: task.id });
+    if (document.factoryDocumentRequestId) {
+      await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+    }
+    return saved;
+  }
+}
+
+export async function refreshSupplierDocumentRequestQualification(requestId: string) {
+  const row = await prisma.supplierDocumentRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      documents: {
+        where: { deletedAt: null, uploadStatus: "SUCCESS" },
+        include: {
+          ocrTasks: {
+            orderBy: [{ createdAt: "desc" }],
+            take: 1,
+            include: { results: true },
+          },
+        },
+      },
+    },
+  });
+  if (!row) return null;
+  const requiredTypes = Array.isArray(row.requiredDocumentTypes)
+    ? row.requiredDocumentTypes.map((item) => String(item || ""))
+    : [];
+  const qualified = requiredTypes.every((type) => {
+    const document = row.documents.find((item) => item.documentType === type);
+    if (!document) return false;
+    const task = document.ocrTasks[0];
+    if (!task) return true;
+    return SUPPLIER_DOCUMENT_QUALIFIED_STATUSES.includes(task.status)
+      || task.validationStatus === VALIDATION_CONFIRMED;
+  });
+  const uploadedTypes = new Set(row.documents.map((document) => document.documentType));
+  const nextStatus = qualified && requiredTypes.length
+    ? "已完成"
+    : uploadedTypes.size
+      ? "部分上传"
+      : "待上传";
+  if (row.status === nextStatus) return row;
+  return prisma.supplierDocumentRequest.update({
+    where: { id: row.id },
+    data: { status: nextStatus },
+  });
+}
+
+export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
+  assertWrite(actor, "supplierDocuments");
+  assertInternalOcrManager(actor);
+  const before = await prisma.ocrTask.findFirst({
+    where: { documentId, requestId },
+    orderBy: [{ createdAt: "desc" }],
+  });
+  const task = await createSupplierDocumentOcrTaskForUpload(documentId);
+  if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
+  const result = await runSupplierDocumentOcrTask(task.id);
+  await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
+  return serializeSupplierDocumentOcrTask(result);
+}
+
+export async function confirmSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
+  assertWrite(actor, "supplierDocuments");
+  assertInternalOcrManager(actor);
+  const before = await prisma.ocrTask.findFirst({
+    where: { documentId, requestId },
+    orderBy: [{ createdAt: "desc" }],
+    include: { results: true },
+  });
+  if (!before) throw codedError("没有可确认的 OCR 结果。", 404, "OCR_TASK_NOT_FOUND");
+  const saved = await prisma.ocrTask.update({
+    where: { id: before.id },
+    data: {
+      status: OCR_STATUS_PASSED,
+      validationStatus: VALIDATION_CONFIRMED,
+      confirmedById: actor?.id || null,
+      confirmedAt: new Date(),
+      rejectedById: null,
+      rejectedAt: null,
+      rejectReason: null,
+    },
+    include: { results: true },
+  });
+  await refreshSupplierDocumentRequestQualification(requestId);
+  await runNonCriticalTask("资料回传OCR人工确认日志写入", () => writeAudit(request, actor, "人工确认供应商回传资料OCR", "ocr_tasks", saved.id, before, saved));
+  return serializeSupplierDocumentOcrTask(saved);
+}
+
+export async function rejectSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string, input: unknown = {}) {
+  assertWrite(actor, "supplierDocuments");
+  assertInternalOcrManager(actor);
+  const reason = nonEmpty((input as { reason?: unknown } | null)?.reason).slice(0, 500);
+  if (!reason) throw codedError("请填写驳回原因。", 400, "OCR_REJECT_REASON_REQUIRED");
+  const before = await prisma.ocrTask.findFirst({
+    where: { documentId, requestId },
+    orderBy: [{ createdAt: "desc" }],
+    include: { results: true },
+  });
+  if (!before) throw codedError("没有可驳回的 OCR 结果。", 404, "OCR_TASK_NOT_FOUND");
+  const saved = await prisma.ocrTask.update({
+    where: { id: before.id },
+    data: {
+      status: OCR_STATUS_MANUAL,
+      validationStatus: VALIDATION_REJECTED,
+      rejectedById: actor?.id || null,
+      rejectedAt: new Date(),
+      rejectReason: reason,
+      validationJson: {
+        ...(before.validationJson && typeof before.validationJson === "object" && !Array.isArray(before.validationJson) ? before.validationJson : {}),
+        issues: [{ level: "error", message: reason }],
+      },
+    },
+    include: { results: true },
+  });
+  await refreshSupplierDocumentRequestQualification(requestId);
+  await runNonCriticalTask("资料回传OCR驳回日志写入", () => writeAudit(request, actor, "驳回供应商回传资料OCR", "ocr_tasks", saved.id, before, saved));
+  return serializeSupplierDocumentOcrTask(saved);
+}
+
+export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undefined) {
+  if (!task) return null;
+  const validationJson = task.validationJson && typeof task.validationJson === "object" && !Array.isArray(task.validationJson)
+    ? task.validationJson as Record<string, unknown>
+    : {};
+  const issues = Array.isArray(validationJson.issues)
+    ? validationJson.issues.map((issue) => {
+        const record = issue && typeof issue === "object" ? issue as Record<string, unknown> : {};
+        return {
+          level: String(record.level || "manual"),
+          message: String(record.message || ""),
+          field: String(record.field || ""),
+        };
+      }).filter((issue) => issue.message)
+    : [];
+  return {
+    id: task.id,
+    documentId: task.documentId,
+    requestId: task.requestId,
+    documentType: task.documentType,
+    status: task.status,
+    validationStatus: task.validationStatus || "",
+    errorMessage: task.errorMessage || "",
+    rejectReason: task.rejectReason || "",
+    confirmedAt: task.confirmedAt,
+    rejectedAt: task.rejectedAt,
+    fields: (task.results || []).map((result) => ({
+      key: result.fieldKey,
+      label: result.label,
+      value: result.value || "",
+      confidence: result.confidence == null ? null : Number(result.confidence),
+    })),
+    issues,
+    expectedAmount: validationJson.expectedAmount == null ? null : Number(validationJson.expectedAmount),
+    supplierName: String(validationJson.supplierName || ""),
+    businessEntityName: String(validationJson.businessEntityName || ""),
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  };
+}

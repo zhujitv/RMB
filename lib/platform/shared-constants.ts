@@ -560,6 +560,7 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   appCode: "",
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
+  supplierDocumentReturnEnabled: false,
   fallbackToPdfText: true,
   timeoutMs: 15000,
 };

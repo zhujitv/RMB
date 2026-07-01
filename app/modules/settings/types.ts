@@ -283,6 +283,7 @@ export type OcrIntegrationForm = {
   appCodeConfigured: boolean;
   customsDeclarationEnabled: boolean;
   invoiceTextEnabled: boolean;
+  supplierDocumentReturnEnabled: boolean;
   fallbackToPdfText: boolean;
   timeoutMs: string;
 };

@@ -15,10 +15,12 @@ const settingsModule = readSettingsModuleSource();
 test("OCR integration settings are modular and stored in system settings", () => {
   assert.match(constants, /OCR_INTEGRATION_SETTING_KEY = "ocr_integration"/);
   assert.match(constants, /DEFAULT_OCR_INTEGRATION_SETTINGS/);
+  assert.match(constants, /supplierDocumentReturnEnabled: false/);
   assert.match(service, /prisma\.systemSetting\.findUnique\(\{ where: \{ key: OCR_INTEGRATION_SETTING_KEY \} \}\)/);
   assert.match(service, /prisma\.systemSetting\.upsert/);
   assert.match(service, /assertRead\(actor, "settings"\)/);
   assert.match(service, /assertWrite\(actor, "settings"\)/);
+  assert.match(service, /supplierDocumentReturnEnabled: input\.supplierDocumentReturnEnabled === true/);
   assert.match(service, /accessKeyIdConfigured: Boolean\(normalized\.accessKeyId\)/);
   assert.match(service, /accessKeySecretConfigured: Boolean\(normalized\.accessKeySecret\)/);
   assert.match(service, /appCodeConfigured: Boolean\(normalized\.appCode\)/);
@@ -41,6 +43,7 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /OcrIntegrationSettingsCard/);
   assert.match(settingsModule, /保存OCR设置/);
   assert.match(settingsModule, /OCR_FEATURE_OPTIONS/);
+  assert.match(settingsModule, /产品供应商资料回传 OCR/);
   assert.match(settingsModule, /placeholder=\{currentForm\.appCodeConfigured \? "已配置，留空则保持不变"/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);

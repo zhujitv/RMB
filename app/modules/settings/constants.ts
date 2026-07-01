@@ -173,6 +173,7 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   appCodeConfigured: false,
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
+  supplierDocumentReturnEnabled: false,
   fallbackToPdfText: true,
   timeoutMs: "15000",
 };
@@ -188,6 +189,11 @@ export const OCR_FEATURE_OPTIONS = [
     description: "为后续发票号码、金额、税率等识别能力预留入口。",
   },
   {
+    key: "supplierDocumentReturnEnabled",
+    label: "产品供应商资料回传 OCR",
+    description: "供应商上传采购合同和增值税发票后自动识别并校验内容。",
+  },
+  {
     key: "fallbackToPdfText",
     label: "本地 PDF 文本兜底",
     description: "阿里云适配器不可用时，允许继续使用系统现有 PDF 文本解析能力。",
@@ -195,7 +201,7 @@ export const OCR_FEATURE_OPTIONS = [
 ] satisfies Array<{
   key: keyof Pick<
     OcrIntegrationForm,
-    "customsDeclarationEnabled" | "invoiceTextEnabled" | "fallbackToPdfText"
+    "customsDeclarationEnabled" | "invoiceTextEnabled" | "supplierDocumentReturnEnabled" | "fallbackToPdfText"
   >;
   label: string;
   description: string;

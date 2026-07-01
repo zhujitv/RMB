@@ -44,71 +44,73 @@ enum DomesticLogisticsDocumentCategory {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         String   @default("业务员")
-  phone        String?
-  englishName  String?   @map("english_name")
-  department   String?
-  avatarInitials String? @map("avatar_initials")
-  avatarUrl    String?   @map("avatar_url")
-  defaultLanguage String? @map("default_language")
-  defaultHome  String?   @map("default_home")
-  pageSize     Int?      @map("page_size")
-  loginAlertEnabled Boolean @default(true) @map("login_alert_enabled")
-  customPermissions Json? @map("custom_permissions")
-  supplierId    String?   @map("supplier_id")
-  mustChangePassword Boolean @default(false) @map("must_change_password")
-  passwordPolicyPassed Boolean @default(false) @map("password_policy_passed")
-  passwordChangedAt DateTime? @map("password_changed_at")
-  emailVerified Boolean @default(false) @map("email_verified")
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  approvalStatus String @default("APPROVED") @map("approval_status")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  passwordHash         String    @map("password_hash")
+  role                 String    @default("业务员")
+  phone                String?
+  englishName          String?   @map("english_name")
+  department           String?
+  avatarInitials       String?   @map("avatar_initials")
+  avatarUrl            String?   @map("avatar_url")
+  defaultLanguage      String?   @map("default_language")
+  defaultHome          String?   @map("default_home")
+  pageSize             Int?      @map("page_size")
+  loginAlertEnabled    Boolean   @default(true) @map("login_alert_enabled")
+  customPermissions    Json?     @map("custom_permissions")
+  supplierId           String?   @map("supplier_id")
+  mustChangePassword   Boolean   @default(false) @map("must_change_password")
+  passwordPolicyPassed Boolean   @default(false) @map("password_policy_passed")
+  passwordChangedAt    DateTime? @map("password_changed_at")
+  emailVerified        Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt      DateTime? @map("email_verified_at")
+  approvalStatus       String    @default("APPROVED") @map("approval_status")
+  isActive             Boolean   @default(true) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  salesOrders   ReceivableOrder[] @relation("SalesOrders")
-  responsibleCustomers Customer[] @relation("CustomerSalesperson")
-  createdOrders ReceivableOrder[] @relation("OrdersCreated")
-  updatedOrders ReceivableOrder[] @relation("OrdersUpdated")
-  createdPayments Payment[] @relation("PaymentsCreated")
-  updatedPayments Payment[] @relation("PaymentsUpdated")
-  createdCosts OrderCost[] @relation("CostsCreated")
-  updatedCosts OrderCost[] @relation("CostsUpdated")
-  createdSuppliers Supplier[] @relation("SuppliersCreated")
-  updatedSuppliers Supplier[] @relation("SuppliersUpdated")
-  uploadedDocuments OrderDocument[] @relation("DocumentsUploaded")
-  commissionSettlements ReceivableOrder[] @relation("CommissionSettlements")
-  commissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSettledBy")
-  salespersonCommissionSettlementRecords CommissionSettlement[] @relation("CommissionSettlementSalesperson")
-  archivedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundArchivedBy")
-  submittedTaxRefundOrders ReceivableOrder[] @relation("TaxRefundSubmittedBy")
-  sessions    UserSession[]
-  loginAttempts LoginAttempt[]
-  emailVerificationTokens EmailVerificationToken[]
-  auditLogs   AuditLog[]
-  supplierOperator Supplier? @relation("SupplierOperators", fields: [supplierId], references: [id])
-  submittedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsSubmittedBy")
-  confirmedDomesticLogistics DomesticLogisticsInfo[] @relation("DomesticLogisticsFinanceConfirmedBy")
-  uploadedDomesticLogisticsDocuments DomesticLogisticsDocument[]
-  sentShippingDocumentNotifications ShippingDocumentNotification[] @relation("ShippingDocumentNotificationSentBy")
-  createdLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseCreatedBy")
-  updatedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseUpdatedBy")
-  reviewedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseReviewedBy")
-  invoiceUploadedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceUploadedBy")
-  invoiceConfirmedLogisticsExpenses LogisticsExpense[] @relation("LogisticsExpenseInvoiceConfirmedBy")
-  submittedLogisticsBills LogisticsBill[] @relation("LogisticsBillSubmittedBy")
-  reviewedLogisticsBills LogisticsBill[] @relation("LogisticsBillReviewedBy")
-  createdLogisticsBills LogisticsBill[] @relation("LogisticsBillCreatedBy")
-  updatedLogisticsBills LogisticsBill[] @relation("LogisticsBillUpdatedBy")
-  sentSupplierDocumentRequests SupplierDocumentRequest[] @relation("SupplierDocumentRequestRequestedBy")
-  assignedOrderLogisticsSuppliers OrderLogisticsSupplier[] @relation("OrderLogisticsSupplierAssignedBy")
-  createdShipsgoTrackings ShipsgoTracking[] @relation("ShipsgoTrackingCreatedBy")
-  updatedShipsgoTrackings ShipsgoTracking[] @relation("ShipsgoTrackingUpdatedBy")
-  todoReminderLogs TodoReminderLog[] @relation("TodoReminderLogOwner")
+  salesOrders                            ReceivableOrder[]              @relation("SalesOrders")
+  responsibleCustomers                   Customer[]                     @relation("CustomerSalesperson")
+  createdOrders                          ReceivableOrder[]              @relation("OrdersCreated")
+  updatedOrders                          ReceivableOrder[]              @relation("OrdersUpdated")
+  createdPayments                        Payment[]                      @relation("PaymentsCreated")
+  updatedPayments                        Payment[]                      @relation("PaymentsUpdated")
+  createdCosts                           OrderCost[]                    @relation("CostsCreated")
+  updatedCosts                           OrderCost[]                    @relation("CostsUpdated")
+  createdSuppliers                       Supplier[]                     @relation("SuppliersCreated")
+  updatedSuppliers                       Supplier[]                     @relation("SuppliersUpdated")
+  uploadedDocuments                      OrderDocument[]                @relation("DocumentsUploaded")
+  confirmedOcrTasks                      OcrTask[]                      @relation("OcrTaskConfirmedBy")
+  rejectedOcrTasks                       OcrTask[]                      @relation("OcrTaskRejectedBy")
+  commissionSettlements                  ReceivableOrder[]              @relation("CommissionSettlements")
+  commissionSettlementRecords            CommissionSettlement[]         @relation("CommissionSettlementSettledBy")
+  salespersonCommissionSettlementRecords CommissionSettlement[]         @relation("CommissionSettlementSalesperson")
+  archivedTaxRefundOrders                ReceivableOrder[]              @relation("TaxRefundArchivedBy")
+  submittedTaxRefundOrders               ReceivableOrder[]              @relation("TaxRefundSubmittedBy")
+  sessions                               UserSession[]
+  loginAttempts                          LoginAttempt[]
+  emailVerificationTokens                EmailVerificationToken[]
+  auditLogs                              AuditLog[]
+  supplierOperator                       Supplier?                      @relation("SupplierOperators", fields: [supplierId], references: [id])
+  submittedDomesticLogistics             DomesticLogisticsInfo[]        @relation("DomesticLogisticsSubmittedBy")
+  confirmedDomesticLogistics             DomesticLogisticsInfo[]        @relation("DomesticLogisticsFinanceConfirmedBy")
+  uploadedDomesticLogisticsDocuments     DomesticLogisticsDocument[]
+  sentShippingDocumentNotifications      ShippingDocumentNotification[] @relation("ShippingDocumentNotificationSentBy")
+  createdLogisticsExpenses               LogisticsExpense[]             @relation("LogisticsExpenseCreatedBy")
+  updatedLogisticsExpenses               LogisticsExpense[]             @relation("LogisticsExpenseUpdatedBy")
+  reviewedLogisticsExpenses              LogisticsExpense[]             @relation("LogisticsExpenseReviewedBy")
+  invoiceUploadedLogisticsExpenses       LogisticsExpense[]             @relation("LogisticsExpenseInvoiceUploadedBy")
+  invoiceConfirmedLogisticsExpenses      LogisticsExpense[]             @relation("LogisticsExpenseInvoiceConfirmedBy")
+  submittedLogisticsBills                LogisticsBill[]                @relation("LogisticsBillSubmittedBy")
+  reviewedLogisticsBills                 LogisticsBill[]                @relation("LogisticsBillReviewedBy")
+  createdLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillCreatedBy")
+  updatedLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillUpdatedBy")
+  sentSupplierDocumentRequests           SupplierDocumentRequest[]      @relation("SupplierDocumentRequestRequestedBy")
+  assignedOrderLogisticsSuppliers        OrderLogisticsSupplier[]       @relation("OrderLogisticsSupplierAssignedBy")
+  createdShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingCreatedBy")
+  updatedShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingUpdatedBy")
+  todoReminderLogs                       TodoReminderLog[]              @relation("TodoReminderLogOwner")
 
   @@index([supplierId])
   @@index([approvalStatus])
@@ -178,29 +180,29 @@ model LoginAttempt {
 }
 
 model Customer {
-  id              String    @id @default(cuid())
-  name            String
-  shortName       String?   @map("short_name")
-  country         String?
-  defaultCurrency String?   @map("default_currency")
-  salespersonUserId String?   @map("salesperson_user_id")
-  commissionRate Decimal   @default(0) @map("commission_rate") @db.Decimal(8, 2)
-  commissionStatus String  @default("启用") @map("commission_status")
-  contactPerson   String?   @map("contact_person")
-  contactEmail    String?   @map("contact_email")
-  contactPhone    String?   @map("contact_phone")
-  enableAutoShippingDocsNotification Boolean @default(false) @map("enable_auto_shipping_docs_notification")
-  shippingDocsEmails Json? @map("shipping_docs_emails")
-  shippingDocsCcEmails Json? @map("shipping_docs_cc_emails")
-  autoSendDocumentTypes Json? @map("auto_send_document_types")
-  clearanceEmailLanguage String @default("EN") @map("clearance_email_language")
-  remark          String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  id                                 String    @id @default(cuid())
+  name                               String
+  shortName                          String?   @map("short_name")
+  country                            String?
+  defaultCurrency                    String?   @map("default_currency")
+  salespersonUserId                  String?   @map("salesperson_user_id")
+  commissionRate                     Decimal   @default(0) @map("commission_rate") @db.Decimal(8, 2)
+  commissionStatus                   String    @default("启用") @map("commission_status")
+  contactPerson                      String?   @map("contact_person")
+  contactEmail                       String?   @map("contact_email")
+  contactPhone                       String?   @map("contact_phone")
+  enableAutoShippingDocsNotification Boolean   @default(false) @map("enable_auto_shipping_docs_notification")
+  shippingDocsEmails                 Json?     @map("shipping_docs_emails")
+  shippingDocsCcEmails               Json?     @map("shipping_docs_cc_emails")
+  autoSendDocumentTypes              Json?     @map("auto_send_document_types")
+  clearanceEmailLanguage             String    @default("EN") @map("clearance_email_language")
+  remark                             String?
+  createdAt                          DateTime  @default(now()) @map("created_at")
+  updatedAt                          DateTime  @updatedAt @map("updated_at")
+  deletedAt                          DateTime? @map("deleted_at")
 
-  salesperson User? @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
-  orders ReceivableOrder[]
+  salesperson                   User?                          @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
+  orders                        ReceivableOrder[]
   shippingDocumentNotifications ShippingDocumentNotification[]
 
   @@index([name])
@@ -232,41 +234,42 @@ model BusinessEntity {
 }
 
 model Supplier {
-  id            String    @id @default(cuid())
-  supplierName  String    @map("supplier_name")
-  supplierType  String    @default("其他供应商") @map("supplier_type")
-  country       String?
-  contactPerson String?   @map("contact_person")
-  phone         String?
-  email         String?
-  address       String?
-  invoiceTitle  String?   @map("invoice_title")
-  taxNumber     String?   @map("tax_number")
-  bankName      String?   @map("bank_name")
-  bankAccount   String?   @map("bank_account")
-  remark        String?
-  status        String    @default("启用")
-  allowDomesticLogisticsEntry Boolean @default(false) @map("allow_domestic_logistics_entry")
-  allowLogisticsExpenseEntry Boolean @default(false) @map("allow_logistics_expense_entry")
-  allowLogisticsInvoiceUpload Boolean @default(false) @map("allow_logistics_invoice_upload")
-  allowFactoryDocumentUpload Boolean @default(false) @map("allow_factory_document_upload")
-  isDefaultLogisticsSupplier Boolean @default(false) @map("is_default_logistics_supplier")
-  allowedLogisticsCostTypes Json? @map("allowed_logistics_cost_types")
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  id                          String    @id @default(cuid())
+  supplierName                String    @map("supplier_name")
+  supplierType                String    @default("其他供应商") @map("supplier_type")
+  country                     String?
+  contactPerson               String?   @map("contact_person")
+  phone                       String?
+  email                       String?
+  address                     String?
+  invoiceTitle                String?   @map("invoice_title")
+  taxNumber                   String?   @map("tax_number")
+  bankName                    String?   @map("bank_name")
+  bankAccount                 String?   @map("bank_account")
+  remark                      String?
+  status                      String    @default("启用")
+  allowDomesticLogisticsEntry Boolean   @default(false) @map("allow_domestic_logistics_entry")
+  allowLogisticsExpenseEntry  Boolean   @default(false) @map("allow_logistics_expense_entry")
+  allowLogisticsInvoiceUpload Boolean   @default(false) @map("allow_logistics_invoice_upload")
+  allowFactoryDocumentUpload  Boolean   @default(false) @map("allow_factory_document_upload")
+  isDefaultLogisticsSupplier  Boolean   @default(false) @map("is_default_logistics_supplier")
+  allowedLogisticsCostTypes   Json?     @map("allowed_logistics_cost_types")
+  createdById                 String?   @map("created_by")
+  updatedById                 String?   @map("updated_by")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
 
-  createdBy User?      @relation("SuppliersCreated", fields: [createdById], references: [id])
-  updatedBy User?      @relation("SuppliersUpdated", fields: [updatedById], references: [id])
-  costs     OrderCost[]
-  documents OrderDocument[]
-  operatorUsers User[] @relation("SupplierOperators")
-  logisticsExpenses LogisticsExpense[]
-  logisticsBills LogisticsBill[]
-  assignedOrders OrderLogisticsSupplier[]
+  createdBy               User?                     @relation("SuppliersCreated", fields: [createdById], references: [id])
+  updatedBy               User?                     @relation("SuppliersUpdated", fields: [updatedById], references: [id])
+  costs                   OrderCost[]
+  documents               OrderDocument[]
+  operatorUsers           User[]                    @relation("SupplierOperators")
+  logisticsExpenses       LogisticsExpense[]
+  logisticsBills          LogisticsBill[]
+  assignedOrders          OrderLogisticsSupplier[]
   factoryDocumentRequests SupplierDocumentRequest[]
+  ocrTasks                OcrTask[]
 
   @@index([supplierName])
   @@index([supplierType])
@@ -281,90 +284,91 @@ model Supplier {
 }
 
 model ReceivableOrder {
-  id                  String    @id @default(cuid())
-  orderNo             String    @map("order_no")
-  blNo                String?   @map("bl_no")
-  customerId          String    @map("customer_id")
-  customerNameSnapshot String   @map("customer_name_snapshot")
-  businessEntityId    String?   @map("business_entity_id")
-  businessEntityNameSnapshot String? @map("business_entity_name_snapshot")
-  salespersonUserId   String?   @map("salesperson_user_id")
-  salespersonCommissionRate Decimal @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
-  commissionStatus     String    @default("未结算") @map("commission_status")
-  commissionSettledById String?  @map("commission_settled_by")
-  commissionSettledAt  DateTime? @map("commission_settled_at")
-  commissionSettlementRemark String? @map("commission_settlement_remark")
-  country             String?
-  currency            String
-  exchangeRate        Decimal   @map("exchange_rate") @db.Decimal(18, 6)
-  exchangeRateDate    DateTime? @map("exchange_rate_date") @db.Date
-  exchangeRateSource  String?   @map("exchange_rate_source")
-  exchangeRateType    String?   @map("exchange_rate_type")
-  receivableAmount    Decimal   @map("receivable_amount") @db.Decimal(18, 2)
-  receivableAmountCny Decimal   @map("receivable_amount_cny") @db.Decimal(18, 2)
-  estimatedReceivableAmount    Decimal   @map("estimated_receivable_amount") @db.Decimal(18, 2)
-  estimatedReceivableAmountCny Decimal   @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
-  actualShipmentAmount         Decimal?  @map("actual_shipment_amount") @db.Decimal(18, 2)
-  actualShipmentAmountCny      Decimal?  @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
-  actualShipmentDate           DateTime? @map("actual_shipment_date") @db.Date
-  finalReceivableAmount        Decimal   @map("final_receivable_amount") @db.Decimal(18, 2)
-  finalReceivableAmountCny     Decimal   @map("final_receivable_amount_cny") @db.Decimal(18, 2)
-  tradeTerm           String    @default("FOB") @map("trade_term")
-  paymentTerm         String    @default("OA账期") @map("payment_term")
-  paymentTermType     PaymentTermType? @map("payment_term_type")
-  depositRatio        Decimal?  @map("deposit_ratio") @db.Decimal(8, 4)
-  expectedPaymentDate DateTime? @map("expected_payment_date") @db.Date
-  expectedArrivalDate DateTime? @map("expected_arrival_date") @db.Date
-  expectedShipmentDate DateTime? @map("expected_shipment_date") @db.Date
-  blDate              DateTime? @map("bl_date") @db.Date
-  paymentInstallments Json?     @map("payment_installments")
-  taxRefundStatus      String    @default("NOT_READY") @map("tax_refund_status")
-  taxRefundCompleteness Json?    @map("tax_refund_completeness")
-  taxRefundCompletenessUpdatedAt DateTime? @map("tax_refund_completeness_updated_at")
-  taxArchived          Boolean   @default(false) @map("tax_archived")
-  isArchived           Boolean   @default(false) @map("is_archived")
-  taxRefundArchivedById String?  @map("tax_refund_archived_by")
-  taxRefundArchivedAt DateTime?  @map("tax_refund_archived_at")
-  taxRefundArchiveRemark String? @map("tax_refund_archive_remark")
-  taxSubmittedById     String?   @map("tax_submitted_by")
-  taxSubmittedAt       DateTime? @map("tax_submitted_at")
-  customsDeclarationNo String?   @map("customs_declaration_no")
-  customsDeclarationDate DateTime? @map("customs_declaration_date") @db.Date
-  customsParsedAt      DateTime? @map("customs_parsed_at")
-  customsParseStatus   String?   @map("customs_parse_status")
-  customsParseMessage  String?   @map("customs_parse_message")
-  customsDeclarationParseSource String? @map("customs_declaration_parse_source")
-  creditDays          Int?      @map("credit_days")
-  dueDate             DateTime? @map("due_date") @db.Date
-  reminderDays        Int       @default(7) @map("reminder_days")
-  status              String    @default("草稿")
-  remark              String?
-  createdById         String?   @map("created_by")
-  updatedById         String?   @map("updated_by")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  deletedAt           DateTime? @map("deleted_at")
+  id                             String           @id @default(cuid())
+  orderNo                        String           @map("order_no")
+  blNo                           String?          @map("bl_no")
+  customerId                     String           @map("customer_id")
+  customerNameSnapshot           String           @map("customer_name_snapshot")
+  businessEntityId               String?          @map("business_entity_id")
+  businessEntityNameSnapshot     String?          @map("business_entity_name_snapshot")
+  salespersonUserId              String?          @map("salesperson_user_id")
+  salespersonCommissionRate      Decimal          @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
+  commissionStatus               String           @default("未结算") @map("commission_status")
+  commissionSettledById          String?          @map("commission_settled_by")
+  commissionSettledAt            DateTime?        @map("commission_settled_at")
+  commissionSettlementRemark     String?          @map("commission_settlement_remark")
+  country                        String?
+  currency                       String
+  exchangeRate                   Decimal          @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate               DateTime?        @map("exchange_rate_date") @db.Date
+  exchangeRateSource             String?          @map("exchange_rate_source")
+  exchangeRateType               String?          @map("exchange_rate_type")
+  receivableAmount               Decimal          @map("receivable_amount") @db.Decimal(18, 2)
+  receivableAmountCny            Decimal          @map("receivable_amount_cny") @db.Decimal(18, 2)
+  estimatedReceivableAmount      Decimal          @map("estimated_receivable_amount") @db.Decimal(18, 2)
+  estimatedReceivableAmountCny   Decimal          @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
+  actualShipmentAmount           Decimal?         @map("actual_shipment_amount") @db.Decimal(18, 2)
+  actualShipmentAmountCny        Decimal?         @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
+  actualShipmentDate             DateTime?        @map("actual_shipment_date") @db.Date
+  finalReceivableAmount          Decimal          @map("final_receivable_amount") @db.Decimal(18, 2)
+  finalReceivableAmountCny       Decimal          @map("final_receivable_amount_cny") @db.Decimal(18, 2)
+  tradeTerm                      String           @default("FOB") @map("trade_term")
+  paymentTerm                    String           @default("OA账期") @map("payment_term")
+  paymentTermType                PaymentTermType? @map("payment_term_type")
+  depositRatio                   Decimal?         @map("deposit_ratio") @db.Decimal(8, 4)
+  expectedPaymentDate            DateTime?        @map("expected_payment_date") @db.Date
+  expectedArrivalDate            DateTime?        @map("expected_arrival_date") @db.Date
+  expectedShipmentDate           DateTime?        @map("expected_shipment_date") @db.Date
+  blDate                         DateTime?        @map("bl_date") @db.Date
+  paymentInstallments            Json?            @map("payment_installments")
+  taxRefundStatus                String           @default("NOT_READY") @map("tax_refund_status")
+  taxRefundCompleteness          Json?            @map("tax_refund_completeness")
+  taxRefundCompletenessUpdatedAt DateTime?        @map("tax_refund_completeness_updated_at")
+  taxArchived                    Boolean          @default(false) @map("tax_archived")
+  isArchived                     Boolean          @default(false) @map("is_archived")
+  taxRefundArchivedById          String?          @map("tax_refund_archived_by")
+  taxRefundArchivedAt            DateTime?        @map("tax_refund_archived_at")
+  taxRefundArchiveRemark         String?          @map("tax_refund_archive_remark")
+  taxSubmittedById               String?          @map("tax_submitted_by")
+  taxSubmittedAt                 DateTime?        @map("tax_submitted_at")
+  customsDeclarationNo           String?          @map("customs_declaration_no")
+  customsDeclarationDate         DateTime?        @map("customs_declaration_date") @db.Date
+  customsParsedAt                DateTime?        @map("customs_parsed_at")
+  customsParseStatus             String?          @map("customs_parse_status")
+  customsParseMessage            String?          @map("customs_parse_message")
+  customsDeclarationParseSource  String?          @map("customs_declaration_parse_source")
+  creditDays                     Int?             @map("credit_days")
+  dueDate                        DateTime?        @map("due_date") @db.Date
+  reminderDays                   Int              @default(7) @map("reminder_days")
+  status                         String           @default("草稿")
+  remark                         String?
+  createdById                    String?          @map("created_by")
+  updatedById                    String?          @map("updated_by")
+  createdAt                      DateTime         @default(now()) @map("created_at")
+  updatedAt                      DateTime         @updatedAt @map("updated_at")
+  deletedAt                      DateTime?        @map("deleted_at")
 
-  customer    Customer @relation(fields: [customerId], references: [id])
-  businessEntity BusinessEntity? @relation(fields: [businessEntityId], references: [id])
-  salesperson User?    @relation("SalesOrders", fields: [salespersonUserId], references: [id])
-  commissionSettledBy User? @relation("CommissionSettlements", fields: [commissionSettledById], references: [id])
-  taxRefundArchivedBy User? @relation("TaxRefundArchivedBy", fields: [taxRefundArchivedById], references: [id])
-  taxSubmittedBy User? @relation("TaxRefundSubmittedBy", fields: [taxSubmittedById], references: [id])
-  createdBy   User?    @relation("OrdersCreated", fields: [createdById], references: [id])
-  updatedBy   User?    @relation("OrdersUpdated", fields: [updatedById], references: [id])
-  payments    Payment[]
-  costs       OrderCost[]
-  documents   OrderDocument[]
-  domesticLogisticsInfos DomesticLogisticsInfo[]
-  domesticLogisticsDocuments DomesticLogisticsDocument[]
-  commissionSettlementRecords CommissionSettlement[]
+  customer                      Customer                       @relation(fields: [customerId], references: [id])
+  businessEntity                BusinessEntity?                @relation(fields: [businessEntityId], references: [id])
+  salesperson                   User?                          @relation("SalesOrders", fields: [salespersonUserId], references: [id])
+  commissionSettledBy           User?                          @relation("CommissionSettlements", fields: [commissionSettledById], references: [id])
+  taxRefundArchivedBy           User?                          @relation("TaxRefundArchivedBy", fields: [taxRefundArchivedById], references: [id])
+  taxSubmittedBy                User?                          @relation("TaxRefundSubmittedBy", fields: [taxSubmittedById], references: [id])
+  createdBy                     User?                          @relation("OrdersCreated", fields: [createdById], references: [id])
+  updatedBy                     User?                          @relation("OrdersUpdated", fields: [updatedById], references: [id])
+  payments                      Payment[]
+  costs                         OrderCost[]
+  documents                     OrderDocument[]
+  domesticLogisticsInfos        DomesticLogisticsInfo[]
+  domesticLogisticsDocuments    DomesticLogisticsDocument[]
+  commissionSettlementRecords   CommissionSettlement[]
   shippingDocumentNotifications ShippingDocumentNotification[]
-  logisticsExpenses LogisticsExpense[]
-  logisticsBills LogisticsBill[]
-  logisticsSuppliers OrderLogisticsSupplier[]
-  supplierDocumentRequests SupplierDocumentRequest[]
-  shipsgoTrackings ShipsgoTracking[]
+  logisticsExpenses             LogisticsExpense[]
+  logisticsBills                LogisticsBill[]
+  logisticsSuppliers            OrderLogisticsSupplier[]
+  supplierDocumentRequests      SupplierDocumentRequest[]
+  shipsgoTrackings              ShipsgoTracking[]
+  ocrTasks                      OcrTask[]
 
   @@index([orderNo])
   @@index([blNo])
@@ -396,38 +400,38 @@ model ReceivableOrder {
 }
 
 model DomesticLogisticsInfo {
-  id                    String    @id @default(cuid())
-  orderId               String    @map("order_id")
-  transportType         String    @map("transport_type")
-  truckPlateNo          String?   @map("truck_plate_no")
-  trailerPlateNo        String?   @map("trailer_plate_no")
-  departurePlace        String?   @map("departure_place")
-  destinationPlace      String?   @map("destination_place")
-  departureDate         DateTime? @map("departure_date") @db.Date
-  expressTrackingNo     String?   @map("express_tracking_no")
-  cargoDescription      String?   @map("cargo_description")
+  id                     String    @id @default(cuid())
+  orderId                String    @map("order_id")
+  transportType          String    @map("transport_type")
+  truckPlateNo           String?   @map("truck_plate_no")
+  trailerPlateNo         String?   @map("trailer_plate_no")
+  departurePlace         String?   @map("departure_place")
+  destinationPlace       String?   @map("destination_place")
+  departureDate          DateTime? @map("departure_date") @db.Date
+  expressTrackingNo      String?   @map("express_tracking_no")
+  cargoDescription       String?   @map("cargo_description")
   remarkTextManualEdited Boolean   @default(false) @map("remark_text_manual_edited")
-  remarkText            String?   @map("remark_text")
-  exportInvoice         Json?     @map("customs_export_invoice")
-  submittedByUserId     String?   @map("submitted_by_user_id")
-  submittedAt           DateTime? @map("submitted_at")
-  submitterRole         String?   @map("submitter_role")
-  financeStatus         String    @default("PENDING") @map("finance_status")
-  financeConfirmedById  String?   @map("finance_confirmed_by")
-  financeConfirmedAt    DateTime? @map("finance_confirmed_at")
-  rejectReason          String?   @map("reject_reason")
-  unlockedByUserId      String?   @map("unlocked_by_user_id")
-  unlockedAt            DateTime? @map("unlocked_at")
-  correctionRequested   Boolean   @default(false) @map("correction_requested")
-  correctionReason      String?   @map("correction_reason")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  deletedAt             DateTime? @map("deleted_at")
+  remarkText             String?   @map("remark_text")
+  exportInvoice          Json?     @map("customs_export_invoice")
+  submittedByUserId      String?   @map("submitted_by_user_id")
+  submittedAt            DateTime? @map("submitted_at")
+  submitterRole          String?   @map("submitter_role")
+  financeStatus          String    @default("PENDING") @map("finance_status")
+  financeConfirmedById   String?   @map("finance_confirmed_by")
+  financeConfirmedAt     DateTime? @map("finance_confirmed_at")
+  rejectReason           String?   @map("reject_reason")
+  unlockedByUserId       String?   @map("unlocked_by_user_id")
+  unlockedAt             DateTime? @map("unlocked_at")
+  correctionRequested    Boolean   @default(false) @map("correction_requested")
+  correctionReason       String?   @map("correction_reason")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  deletedAt              DateTime? @map("deleted_at")
 
-  order ReceivableOrder @relation(fields: [orderId], references: [id])
-  submittedBy User? @relation("DomesticLogisticsSubmittedBy", fields: [submittedByUserId], references: [id])
-  financeConfirmedBy User? @relation("DomesticLogisticsFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
-  transportItems DomesticLogisticsTransportItem[]
+  order              ReceivableOrder                  @relation(fields: [orderId], references: [id])
+  submittedBy        User?                            @relation("DomesticLogisticsSubmittedBy", fields: [submittedByUserId], references: [id])
+  financeConfirmedBy User?                            @relation("DomesticLogisticsFinanceConfirmedBy", fields: [financeConfirmedById], references: [id])
+  transportItems     DomesticLogisticsTransportItem[]
 
   @@index([orderId])
   @@index([submittedByUserId])
@@ -438,21 +442,21 @@ model DomesticLogisticsInfo {
 }
 
 model DomesticLogisticsTransportItem {
-  id                String   @id @default(cuid())
-  logisticsInfoId   String   @map("logistics_info_id")
-  containerNo       String?  @map("container_no")
-  containerType     String?  @map("container_type")
-  sealNo            String?  @map("seal_no")
-  truckPlateNo      String?  @map("truck_plate_no")
-  trailerPlateNo    String?  @map("trailer_plate_no")
-  departureDate     DateTime? @map("departure_date") @db.Date
-  departurePlace    String?  @map("departure_place")
-  arrivalPlace      String?  @map("arrival_place")
-  cargoName         String?  @map("cargo_name")
-  remark            String?
-  sortOrder         Int      @default(0) @map("sort_order")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(cuid())
+  logisticsInfoId String    @map("logistics_info_id")
+  containerNo     String?   @map("container_no")
+  containerType   String?   @map("container_type")
+  sealNo          String?   @map("seal_no")
+  truckPlateNo    String?   @map("truck_plate_no")
+  trailerPlateNo  String?   @map("trailer_plate_no")
+  departureDate   DateTime? @map("departure_date") @db.Date
+  departurePlace  String?   @map("departure_place")
+  arrivalPlace    String?   @map("arrival_place")
+  cargoName       String?   @map("cargo_name")
+  remark          String?
+  sortOrder       Int       @default(0) @map("sort_order")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   logisticsInfo DomesticLogisticsInfo @relation(fields: [logisticsInfoId], references: [id], onDelete: Cascade)
 
@@ -462,19 +466,19 @@ model DomesticLogisticsTransportItem {
 }
 
 model DomesticLogisticsDocument {
-  id               String   @id @default(cuid())
-  orderId          String   @map("order_id")
+  id               String                            @id @default(cuid())
+  orderId          String                            @map("order_id")
   documentCategory DomesticLogisticsDocumentCategory @map("document_category")
-  fileName         String   @map("file_name")
-  filePath         String   @map("file_path")
-  fileSize         Int      @map("file_size")
-  fileType         String   @map("file_type")
-  uploadedById     String?  @map("uploaded_by")
-  uploadedAt       DateTime @default(now()) @map("uploaded_at")
-  version          Int      @default(1)
-  status           String   @default("UPLOADED")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  fileName         String                            @map("file_name")
+  filePath         String                            @map("file_path")
+  fileSize         Int                               @map("file_size")
+  fileType         String                            @map("file_type")
+  uploadedById     String?                           @map("uploaded_by")
+  uploadedAt       DateTime                          @default(now()) @map("uploaded_at")
+  version          Int                               @default(1)
+  status           String                            @default("UPLOADED")
+  createdAt        DateTime                          @default(now()) @map("created_at")
+  updatedAt        DateTime                          @updatedAt @map("updated_at")
 
   order      ReceivableOrder @relation(fields: [orderId], references: [id])
   uploadedBy User?           @relation(fields: [uploadedById], references: [id])
@@ -525,9 +529,9 @@ model ShipsgoTracking {
   updatedAt              DateTime  @updatedAt @map("updated_at")
   deletedAt              DateTime? @map("deleted_at")
 
-  order     ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  createdBy User?           @relation("ShipsgoTrackingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?           @relation("ShipsgoTrackingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  order      ReceivableOrder            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy  User?                      @relation("ShipsgoTrackingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy  User?                      @relation("ShipsgoTrackingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   containers ShipsgoTrackingContainer[]
 
   @@index([orderId])
@@ -563,18 +567,18 @@ model ShipsgoTrackingContainer {
 }
 
 model CommissionSettlement {
-  id                    String   @id @default(cuid())
-  orderId               String   @map("order_id")
-  salespersonUserId     String?  @map("salesperson_user_id")
-  commissionRate        Decimal  @map("commission_rate") @db.Decimal(8, 2)
-  paidAmountCny         Decimal  @map("paid_amount_cny") @db.Decimal(18, 2)
-  logisticsCostCny      Decimal  @map("logistics_cost_cny") @db.Decimal(18, 2)
-  commissionBaseCny     Decimal  @map("commission_base_cny") @db.Decimal(18, 2)
-  commissionAmountCny   Decimal  @map("commission_amount_cny") @db.Decimal(18, 2)
-  settledById           String   @map("settled_by")
-  settledAt             DateTime @default(now()) @map("settled_at")
-  remark                String?
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                  String   @id @default(cuid())
+  orderId             String   @map("order_id")
+  salespersonUserId   String?  @map("salesperson_user_id")
+  commissionRate      Decimal  @map("commission_rate") @db.Decimal(8, 2)
+  paidAmountCny       Decimal  @map("paid_amount_cny") @db.Decimal(18, 2)
+  logisticsCostCny    Decimal  @map("logistics_cost_cny") @db.Decimal(18, 2)
+  commissionBaseCny   Decimal  @map("commission_base_cny") @db.Decimal(18, 2)
+  commissionAmountCny Decimal  @map("commission_amount_cny") @db.Decimal(18, 2)
+  settledById         String   @map("settled_by")
+  settledAt           DateTime @default(now()) @map("settled_at")
+  remark              String?
+  createdAt           DateTime @default(now()) @map("created_at")
 
   order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   salesperson User?           @relation("CommissionSettlementSalesperson", fields: [salespersonUserId], references: [id])
@@ -588,36 +592,37 @@ model CommissionSettlement {
 }
 
 model OrderDocument {
-  id             String            @id @default(cuid())
-  orderId        String            @map("order_id")
-  costId         String?           @map("cost_id")
-  supplierId     String?           @map("supplier_id")
-  factoryDocumentRequestId String? @map("factory_document_request_id")
-  relatedModule  String            @default("EXPORT") @map("related_module")
-  documentType   OrderDocumentType @map("document_type")
-  fileName       String            @map("file_name")
-  originalName   String?           @map("original_name")
-  originalFilename String?         @map("original_filename")
-  standardFilename String?         @map("standard_filename")
-  fileSize       Int               @map("file_size")
-  mimeType       String            @map("mime_type")
-  r2Bucket       String            @map("r2_bucket")
-  storageKey     String            @map("r2_key")
-  fileUrl        String?           @map("file_url")
-  uploadStatus   UploadStatus      @default(PENDING) @map("upload_status")
-  uploadProgress Int               @default(0) @map("upload_progress")
-  uploadedById   String?           @map("uploaded_by")
-  uploadedAt     DateTime?         @map("uploaded_at")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
-  deletedAt      DateTime?         @map("deleted_at")
+  id                       String            @id @default(cuid())
+  orderId                  String            @map("order_id")
+  costId                   String?           @map("cost_id")
+  supplierId               String?           @map("supplier_id")
+  factoryDocumentRequestId String?           @map("factory_document_request_id")
+  relatedModule            String            @default("EXPORT") @map("related_module")
+  documentType             OrderDocumentType @map("document_type")
+  fileName                 String            @map("file_name")
+  originalName             String?           @map("original_name")
+  originalFilename         String?           @map("original_filename")
+  standardFilename         String?           @map("standard_filename")
+  fileSize                 Int               @map("file_size")
+  mimeType                 String            @map("mime_type")
+  r2Bucket                 String            @map("r2_bucket")
+  storageKey               String            @map("r2_key")
+  fileUrl                  String?           @map("file_url")
+  uploadStatus             UploadStatus      @default(PENDING) @map("upload_status")
+  uploadProgress           Int               @default(0) @map("upload_progress")
+  uploadedById             String?           @map("uploaded_by")
+  uploadedAt               DateTime?         @map("uploaded_at")
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+  deletedAt                DateTime?         @map("deleted_at")
 
-  order      ReceivableOrder @relation(fields: [orderId], references: [id])
-  cost       OrderCost?      @relation(fields: [costId], references: [id])
-  supplier   Supplier?       @relation(fields: [supplierId], references: [id])
-  factoryDocumentRequest SupplierDocumentRequest? @relation(fields: [factoryDocumentRequestId], references: [id], onDelete: SetNull)
-  uploadedBy User?           @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
-  logisticsExpenseInvoices LogisticsExpense[] @relation("LogisticsExpenseInvoiceDocument")
+  order                    ReceivableOrder          @relation(fields: [orderId], references: [id])
+  cost                     OrderCost?               @relation(fields: [costId], references: [id])
+  supplier                 Supplier?                @relation(fields: [supplierId], references: [id])
+  factoryDocumentRequest   SupplierDocumentRequest? @relation(fields: [factoryDocumentRequestId], references: [id], onDelete: SetNull)
+  uploadedBy               User?                    @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
+  logisticsExpenseInvoices LogisticsExpense[]       @relation("LogisticsExpenseInvoiceDocument")
+  ocrTasks                 OcrTask[]
 
   @@index([orderId])
   @@index([costId])
@@ -634,32 +639,32 @@ model OrderDocument {
 }
 
 model FileAsset {
-  id String @id @default(cuid())
-  fileUrl String? @map("file_url")
-  fileName String @map("file_name")
-  originalFileName String? @map("original_file_name")
-  mimeType String @map("mime_type")
-  fileSize Int? @map("file_size")
-  storageKey String @map("storage_key")
-  bucket String?
-  uploadedAt DateTime? @map("uploaded_at")
-  uploadedById String? @map("uploaded_by")
-  bindingType String @map("binding_type")
-  sourceTable String @map("source_table")
-  sourceId String @map("source_id")
-  fileRole String @map("file_role")
-  orderId String? @map("order_id")
-  costId String? @map("cost_id")
-  supplierId String? @map("supplier_id")
-  logisticsExpenseId String? @map("logistics_expense_id")
-  supplierDocumentRequestId String? @map("supplier_document_request_id")
-  orderDocumentId String? @map("order_document_id")
-  taxRefundDocumentType String? @map("tax_refund_document_type")
-  relatedModule String? @map("related_module")
-  isDeleted Boolean @default(false) @map("is_deleted")
-  deletedAt DateTime? @map("deleted_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                        String    @id @default(cuid())
+  fileUrl                   String?   @map("file_url")
+  fileName                  String    @map("file_name")
+  originalFileName          String?   @map("original_file_name")
+  mimeType                  String    @map("mime_type")
+  fileSize                  Int?      @map("file_size")
+  storageKey                String    @map("storage_key")
+  bucket                    String?
+  uploadedAt                DateTime? @map("uploaded_at")
+  uploadedById              String?   @map("uploaded_by")
+  bindingType               String    @map("binding_type")
+  sourceTable               String    @map("source_table")
+  sourceId                  String    @map("source_id")
+  fileRole                  String    @map("file_role")
+  orderId                   String?   @map("order_id")
+  costId                    String?   @map("cost_id")
+  supplierId                String?   @map("supplier_id")
+  logisticsExpenseId        String?   @map("logistics_expense_id")
+  supplierDocumentRequestId String?   @map("supplier_document_request_id")
+  orderDocumentId           String?   @map("order_document_id")
+  taxRefundDocumentType     String?   @map("tax_refund_document_type")
+  relatedModule             String?   @map("related_module")
+  isDeleted                 Boolean   @default(false) @map("is_deleted")
+  deletedAt                 DateTime? @map("deleted_at")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
 
   @@unique([sourceTable, sourceId, fileRole], map: "file_assets_source_unique")
   @@index([bindingType])
@@ -708,6 +713,7 @@ model SupplierDocumentRequest {
   supplier    Supplier        @relation(fields: [supplierId], references: [id])
   requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   documents   OrderDocument[]
+  ocrTasks    OcrTask[]
 
   @@index([orderId])
   @@index([supplierId])
@@ -719,6 +725,64 @@ model SupplierDocumentRequest {
   @@index([deletedAt, status, dueDate], map: "supplier_document_requests_status_due_idx")
   @@index([deletedAt, supplierId, status], map: "supplier_document_requests_supplier_status_idx")
   @@map("supplier_document_requests")
+}
+
+model OcrTask {
+  id               String    @id @default(cuid())
+  module           String
+  documentId       String    @map("document_id")
+  requestId        String?   @map("request_id")
+  orderId          String?   @map("order_id")
+  supplierId       String?   @map("supplier_id")
+  documentType     String    @map("document_type")
+  status           String    @default("OCR识别中")
+  validationStatus String?   @map("validation_status")
+  errorMessage     String?   @map("error_message")
+  rawText          String?   @map("raw_text")
+  resultJson       Json?     @map("result_json")
+  validationJson   Json?     @map("validation_json")
+  confirmedById    String?   @map("confirmed_by_id")
+  confirmedAt      DateTime? @map("confirmed_at")
+  rejectedById     String?   @map("rejected_by_id")
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectReason     String?   @map("reject_reason")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  document    OrderDocument            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  request     SupplierDocumentRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  order       ReceivableOrder?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  supplier    Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  confirmedBy User?                    @relation("OcrTaskConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  rejectedBy  User?                    @relation("OcrTaskRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  results     OcrResult[]
+
+  @@index([module])
+  @@index([documentId])
+  @@index([requestId])
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([validationStatus])
+  @@index([documentType])
+  @@map("ocr_tasks")
+}
+
+model OcrResult {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  fieldKey   String   @map("field_key")
+  label      String
+  value      String?
+  rawValue   String?  @map("raw_value")
+  confidence Decimal? @db.Decimal(8, 4)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  task OcrTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([fieldKey])
+  @@map("ocr_results")
 }
 
 model ShippingDocumentNotification {
@@ -756,25 +820,25 @@ model ShippingDocumentNotification {
 }
 
 model Payment {
-  id            String    @id @default(cuid())
-  orderId       String    @map("order_id")
-  paymentDate   DateTime  @map("payment_date") @db.Date
-  currency      String    @default("USD")
-  exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  id                 String    @id @default(cuid())
+  orderId            String    @map("order_id")
+  paymentDate        DateTime  @map("payment_date") @db.Date
+  currency           String    @default("USD")
+  exchangeRate       Decimal   @map("exchange_rate") @db.Decimal(18, 6)
   exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
   exchangeRateSource String?   @map("exchange_rate_source")
   exchangeRateType   String?   @map("exchange_rate_type")
-  amount        Decimal   @db.Decimal(18, 2)
-  amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
-  paymentType   String    @default("尾款") @map("payment_type")
-  status        String    @default("待确认")
-  bankReference String?   @map("bank_reference")
-  remark        String?
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  amount             Decimal   @db.Decimal(18, 2)
+  amountCny          Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  paymentType        String    @default("尾款") @map("payment_type")
+  status             String    @default("待确认")
+  bankReference      String?   @map("bank_reference")
+  remark             String?
+  createdById        String?   @map("created_by")
+  updatedById        String?   @map("updated_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   order     ReceivableOrder @relation(fields: [orderId], references: [id])
   createdBy User?           @relation("PaymentsCreated", fields: [createdById], references: [id])
@@ -790,48 +854,49 @@ model Payment {
 }
 
 model OrderCost {
-  id            String    @id @default(cuid())
-  orderId       String    @map("order_id")
-  supplierId    String?   @map("supplier_id")
-  supplierNameSnapshot String @default("") @map("supplier_name_snapshot")
-  costType      String    @map("cost_type")
-  vendorName    String    @map("vendor_name")
-  currency      String    @default("CNY")
-  exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
-  exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
-  exchangeRateSource String?   @map("exchange_rate_source")
-  exchangeRateType   String?   @map("exchange_rate_type")
-  amount        Decimal   @db.Decimal(18, 2)
-  amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
-  paymentStatus String    @default("待支付") @map("payment_status")
-  costConfirmed Boolean   @default(false) @map("cost_confirmed")
-  costConfirmedAt DateTime? @map("cost_confirmed_at")
-  paymentDate   DateTime? @map("payment_date") @db.Date
-  paid          Boolean   @default(false)
-  paidAt        DateTime? @map("paid_at")
-  paymentVoucherUrl String? @map("payment_voucher_url")
-  paymentVoucherFileName String? @map("payment_voucher_file_name")
-  paymentVoucherMimeType String? @map("payment_voucher_mime_type")
+  id                       String    @id @default(cuid())
+  orderId                  String    @map("order_id")
+  supplierId               String?   @map("supplier_id")
+  supplierNameSnapshot     String    @default("") @map("supplier_name_snapshot")
+  costType                 String    @map("cost_type")
+  vendorName               String    @map("vendor_name")
+  currency                 String    @default("CNY")
+  exchangeRate             Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate         DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource       String?   @map("exchange_rate_source")
+  exchangeRateType         String?   @map("exchange_rate_type")
+  amount                   Decimal   @db.Decimal(18, 2)
+  amountCny                Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  paymentStatus            String    @default("待支付") @map("payment_status")
+  costConfirmed            Boolean   @default(false) @map("cost_confirmed")
+  costConfirmedAt          DateTime? @map("cost_confirmed_at")
+  paymentDate              DateTime? @map("payment_date") @db.Date
+  paid                     Boolean   @default(false)
+  paidAt                   DateTime? @map("paid_at")
+  paymentVoucherUrl        String?   @map("payment_voucher_url")
+  paymentVoucherFileName   String?   @map("payment_voucher_file_name")
+  paymentVoucherMimeType   String?   @map("payment_voucher_mime_type")
   paymentVoucherUploadedAt DateTime? @map("payment_voucher_uploaded_at")
-  paymentVoucherStorageKey String? @map("payment_voucher_storage_key")
-  paymentVoucherBucket String? @map("payment_voucher_bucket")
-  invoiceStatus String    @default("未收到") @map("invoice_status")
-  sourceType    String    @default("MANUAL") @map("source_type")
-  sourceId      String?   @map("source_id")
-  remark        String?
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  paymentVoucherStorageKey String?   @map("payment_voucher_storage_key")
+  paymentVoucherBucket     String?   @map("payment_voucher_bucket")
+  invoiceStatus            String    @default("未收到") @map("invoice_status")
+  sourceType               String    @default("MANUAL") @map("source_type")
+  sourceId                 String?   @map("source_id")
+  remark                   String?
+  createdById              String?   @map("created_by")
+  updatedById              String?   @map("updated_by")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
 
-  order     ReceivableOrder @relation(fields: [orderId], references: [id])
-  supplier  Supplier?       @relation(fields: [supplierId], references: [id])
-  createdBy User?           @relation("CostsCreated", fields: [createdById], references: [id])
-  updatedBy User?           @relation("CostsUpdated", fields: [updatedById], references: [id])
-  documents OrderDocument[]
+  order                     ReceivableOrder   @relation(fields: [orderId], references: [id])
+  supplier                  Supplier?         @relation(fields: [supplierId], references: [id])
+  createdBy                 User?             @relation("CostsCreated", fields: [createdById], references: [id])
+  updatedBy                 User?             @relation("CostsUpdated", fields: [updatedById], references: [id])
+  documents                 OrderDocument[]
   generatedLogisticsExpense LogisticsExpense? @relation("LogisticsExpenseGeneratedCost")
 
+  @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@index([orderId])
   @@index([supplierId])
   @@index([costType])
@@ -843,7 +908,6 @@ model OrderCost {
   @@index([sourceId])
   @@index([orderId, supplierId, costType, amount, createdById, createdAt], map: "order_costs_duplicate_lookup_idx")
   @@index([deletedAt])
-  @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@index([deletedAt, updatedAt, createdAt], map: "order_costs_list_sort_idx")
   @@index([deletedAt, invoiceStatus, paymentStatus, updatedAt], map: "order_costs_invoice_payment_idx")
   @@index([deletedAt, sourceType, orderId, supplierId, currency], map: "order_costs_source_group_idx")
@@ -852,35 +916,35 @@ model OrderCost {
 }
 
 model LogisticsBill {
-  id            String    @id @default(cuid())
-  billKey       String    @unique @map("bill_key")
-  orderId       String    @map("order_id")
-  supplierId    String?   @map("supplier_id")
-  billOfLadingNo String   @default("") @map("bill_of_lading_no")
-  auditStatus   String    @default("草稿") @map("audit_status")
-  invoiceStatus String    @default("未通知") @map("invoice_status")
-  paymentStatus String    @default("待开票") @map("payment_status")
-  submittedById String?   @map("submitted_by")
-  submittedAt   DateTime? @map("submitted_at")
-  reviewedById  String?   @map("reviewed_by")
-  reviewedAt    DateTime? @map("reviewed_at")
-  reviewRemark  String?   @map("review_remark")
-  rejectReason  String?   @map("reject_reason")
-  invoiceNotifiedAt DateTime? @map("invoice_notified_at")
-  invoiceNotificationError String? @map("invoice_notification_error")
-  paymentDate  DateTime? @map("payment_date") @db.Date
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  id                       String    @id @default(cuid())
+  billKey                  String    @unique @map("bill_key")
+  orderId                  String    @map("order_id")
+  supplierId               String?   @map("supplier_id")
+  billOfLadingNo           String    @default("") @map("bill_of_lading_no")
+  auditStatus              String    @default("草稿") @map("audit_status")
+  invoiceStatus            String    @default("未通知") @map("invoice_status")
+  paymentStatus            String    @default("待开票") @map("payment_status")
+  submittedById            String?   @map("submitted_by")
+  submittedAt              DateTime? @map("submitted_at")
+  reviewedById             String?   @map("reviewed_by")
+  reviewedAt               DateTime? @map("reviewed_at")
+  reviewRemark             String?   @map("review_remark")
+  rejectReason             String?   @map("reject_reason")
+  invoiceNotifiedAt        DateTime? @map("invoice_notified_at")
+  invoiceNotificationError String?   @map("invoice_notification_error")
+  paymentDate              DateTime? @map("payment_date") @db.Date
+  createdById              String?   @map("created_by")
+  updatedById              String?   @map("updated_by")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
 
-  order       ReceivableOrder @relation(fields: [orderId], references: [id])
-  supplier    Supplier?       @relation(fields: [supplierId], references: [id])
-  submittedBy User?           @relation("LogisticsBillSubmittedBy", fields: [submittedById], references: [id])
-  reviewedBy  User?           @relation("LogisticsBillReviewedBy", fields: [reviewedById], references: [id])
-  createdBy   User?           @relation("LogisticsBillCreatedBy", fields: [createdById], references: [id])
-  updatedBy   User?           @relation("LogisticsBillUpdatedBy", fields: [updatedById], references: [id])
+  order       ReceivableOrder    @relation(fields: [orderId], references: [id])
+  supplier    Supplier?          @relation(fields: [supplierId], references: [id])
+  submittedBy User?              @relation("LogisticsBillSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy  User?              @relation("LogisticsBillReviewedBy", fields: [reviewedById], references: [id])
+  createdBy   User?              @relation("LogisticsBillCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?              @relation("LogisticsBillUpdatedBy", fields: [updatedById], references: [id])
   expenses    LogisticsExpense[]
 
   @@index([orderId])
@@ -903,57 +967,57 @@ model LogisticsBill {
 }
 
 model LogisticsExpense {
-  id            String    @id @default(cuid())
-  billId        String?   @map("bill_id")
-  orderId       String    @map("order_id")
-  supplierId    String    @map("supplier_id")
-  costId        String?   @unique @map("cost_id")
-  supplierNameSnapshot String @default("") @map("supplier_name_snapshot")
-  costType      String    @map("cost_type")
-  currency      String    @default("CNY")
-  exchangeRate  Decimal   @map("exchange_rate") @db.Decimal(18, 6)
-  exchangeRateDate   DateTime? @map("exchange_rate_date") @db.Date
-  exchangeRateSource String?   @map("exchange_rate_source")
-  exchangeRateType   String?   @map("exchange_rate_type")
-  amount        Decimal   @db.Decimal(18, 2)
-  amountCny     Decimal   @map("amount_cny") @db.Decimal(18, 2)
-  containerType String?   @map("container_type")
-  appliedContainerCount Int? @map("applied_container_count")
-  billingMethod String?   @map("billing_method")
-  billingQuantity Decimal? @map("billing_quantity") @db.Decimal(18, 4)
-  remark        String?
-  auditStatus   String    @default("草稿") @map("audit_status")
-  invoiceStatus String    @default("未通知") @map("invoice_status")
-  paymentStatus String    @default("待开票") @map("payment_status")
-  submittedAt   DateTime? @map("submitted_at")
-  reviewedById  String?   @map("reviewed_by")
-  reviewedAt    DateTime? @map("reviewed_at")
-  reviewRemark  String?   @map("review_remark")
-  rejectReason  String?   @map("reject_reason")
-  invoiceNotifiedAt DateTime? @map("invoice_notified_at")
-  invoiceNotificationError String? @map("invoice_notification_error")
-  invoiceDocumentId String? @map("invoice_document_id")
-  invoiceUploadedById String? @map("invoice_uploaded_by")
-  invoiceUploadedAt DateTime? @map("invoice_uploaded_at")
-  invoiceConfirmedById String? @map("invoice_confirmed_by")
-  invoiceConfirmedAt DateTime? @map("invoice_confirmed_at")
-  forceConfirmReason String? @map("force_confirm_reason")
-  createdById   String?   @map("created_by")
-  updatedById   String?   @map("updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  id                       String    @id @default(cuid())
+  billId                   String?   @map("bill_id")
+  orderId                  String    @map("order_id")
+  supplierId               String    @map("supplier_id")
+  costId                   String?   @unique @map("cost_id")
+  supplierNameSnapshot     String    @default("") @map("supplier_name_snapshot")
+  costType                 String    @map("cost_type")
+  currency                 String    @default("CNY")
+  exchangeRate             Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate         DateTime? @map("exchange_rate_date") @db.Date
+  exchangeRateSource       String?   @map("exchange_rate_source")
+  exchangeRateType         String?   @map("exchange_rate_type")
+  amount                   Decimal   @db.Decimal(18, 2)
+  amountCny                Decimal   @map("amount_cny") @db.Decimal(18, 2)
+  containerType            String?   @map("container_type")
+  appliedContainerCount    Int?      @map("applied_container_count")
+  billingMethod            String?   @map("billing_method")
+  billingQuantity          Decimal?  @map("billing_quantity") @db.Decimal(18, 4)
+  remark                   String?
+  auditStatus              String    @default("草稿") @map("audit_status")
+  invoiceStatus            String    @default("未通知") @map("invoice_status")
+  paymentStatus            String    @default("待开票") @map("payment_status")
+  submittedAt              DateTime? @map("submitted_at")
+  reviewedById             String?   @map("reviewed_by")
+  reviewedAt               DateTime? @map("reviewed_at")
+  reviewRemark             String?   @map("review_remark")
+  rejectReason             String?   @map("reject_reason")
+  invoiceNotifiedAt        DateTime? @map("invoice_notified_at")
+  invoiceNotificationError String?   @map("invoice_notification_error")
+  invoiceDocumentId        String?   @map("invoice_document_id")
+  invoiceUploadedById      String?   @map("invoice_uploaded_by")
+  invoiceUploadedAt        DateTime? @map("invoice_uploaded_at")
+  invoiceConfirmedById     String?   @map("invoice_confirmed_by")
+  invoiceConfirmedAt       DateTime? @map("invoice_confirmed_at")
+  forceConfirmReason       String?   @map("force_confirm_reason")
+  createdById              String?   @map("created_by")
+  updatedById              String?   @map("updated_by")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
 
-  bill      LogisticsBill? @relation(fields: [billId], references: [id])
-  order     ReceivableOrder @relation(fields: [orderId], references: [id])
-  supplier  Supplier        @relation(fields: [supplierId], references: [id])
-  cost      OrderCost?      @relation("LogisticsExpenseGeneratedCost", fields: [costId], references: [id])
-  createdBy User?           @relation("LogisticsExpenseCreatedBy", fields: [createdById], references: [id])
-  updatedBy User?           @relation("LogisticsExpenseUpdatedBy", fields: [updatedById], references: [id])
-  reviewedBy User?          @relation("LogisticsExpenseReviewedBy", fields: [reviewedById], references: [id])
-  invoiceDocument OrderDocument? @relation("LogisticsExpenseInvoiceDocument", fields: [invoiceDocumentId], references: [id])
-  invoiceUploadedBy User?   @relation("LogisticsExpenseInvoiceUploadedBy", fields: [invoiceUploadedById], references: [id])
-  invoiceConfirmedBy User?  @relation("LogisticsExpenseInvoiceConfirmedBy", fields: [invoiceConfirmedById], references: [id])
+  bill               LogisticsBill?  @relation(fields: [billId], references: [id])
+  order              ReceivableOrder @relation(fields: [orderId], references: [id])
+  supplier           Supplier        @relation(fields: [supplierId], references: [id])
+  cost               OrderCost?      @relation("LogisticsExpenseGeneratedCost", fields: [costId], references: [id])
+  createdBy          User?           @relation("LogisticsExpenseCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User?           @relation("LogisticsExpenseUpdatedBy", fields: [updatedById], references: [id])
+  reviewedBy         User?           @relation("LogisticsExpenseReviewedBy", fields: [reviewedById], references: [id])
+  invoiceDocument    OrderDocument?  @relation("LogisticsExpenseInvoiceDocument", fields: [invoiceDocumentId], references: [id])
+  invoiceUploadedBy  User?           @relation("LogisticsExpenseInvoiceUploadedBy", fields: [invoiceUploadedById], references: [id])
+  invoiceConfirmedBy User?           @relation("LogisticsExpenseInvoiceConfirmedBy", fields: [invoiceConfirmedById], references: [id])
 
   @@index([billId])
   @@index([orderId])
@@ -1033,24 +1097,24 @@ model TodoReminderLog {
 }
 
 model NotificationTemplate {
-  id                 String   @id @default(cuid())
-  type               String   @unique
-  name               String
-  module             String
-  description        String?
-  enabled            Boolean  @default(true)
-  editable           Boolean  @default(true)
-  supportsAttachments Boolean @default(false) @map("supports_attachments")
-  securitySensitive  Boolean  @default(false) @map("security_sensitive")
-  subjectTemplate    String   @map("subject_template")
-  bodyTemplate       String   @map("body_template")
-  variables          Json?
-  recipientConfig    Json?    @map("recipient_config")
-  ccEmails           Json?    @map("cc_emails")
-  ccAdminEmails      Boolean  @default(false) @map("cc_admin_emails")
-  extraConfig        Json?    @map("extra_config")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(cuid())
+  type                String   @unique
+  name                String
+  module              String
+  description         String?
+  enabled             Boolean  @default(true)
+  editable            Boolean  @default(true)
+  supportsAttachments Boolean  @default(false) @map("supports_attachments")
+  securitySensitive   Boolean  @default(false) @map("security_sensitive")
+  subjectTemplate     String   @map("subject_template")
+  bodyTemplate        String   @map("body_template")
+  variables           Json?
+  recipientConfig     Json?    @map("recipient_config")
+  ccEmails            Json?    @map("cc_emails")
+  ccAdminEmails       Boolean  @default(false) @map("cc_admin_emails")
+  extraConfig         Json?    @map("extra_config")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   outboxRows   NotificationOutbox[]
   deliveryLogs NotificationDeliveryLog[]
@@ -1083,7 +1147,7 @@ model NotificationOutbox {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  template    NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  template     NotificationTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([type])

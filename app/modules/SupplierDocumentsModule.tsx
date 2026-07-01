@@ -15,6 +15,33 @@ type SupplierDocument = {
   fileName?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+  ocrTask?: SupplierDocumentOcrTask | null;
+};
+
+type SupplierDocumentOcrIssue = {
+  level?: string;
+  message?: string;
+  field?: string;
+};
+
+type SupplierDocumentOcrField = {
+  key?: string;
+  label?: string;
+  value?: string;
+};
+
+type SupplierDocumentOcrTask = {
+  id?: string;
+  status?: string;
+  validationStatus?: string;
+  errorMessage?: string;
+  rejectReason?: string;
+  fields?: SupplierDocumentOcrField[];
+  issues?: SupplierDocumentOcrIssue[];
+  expectedAmount?: number | null;
+  supplierName?: string;
+  businessEntityName?: string;
+  updatedAt?: string;
 };
 
 type SupplierFactoryCostSlot = {
@@ -71,6 +98,12 @@ type SupplierDocumentDeleteResponse = {
   message?: string;
 };
 
+type SupplierDocumentOcrResponse = {
+  success?: boolean;
+  ocrTask?: SupplierDocumentOcrTask | null;
+  message?: string;
+};
+
 const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
@@ -101,6 +134,7 @@ export function SupplierDocumentsModule({
   const [totalPages, setTotalPages] = useState(1);
   const [pendingCount, setPendingCount] = useState(0);
   const [deletingTaskId, setDeletingTaskId] = useState("");
+  const [ocrBusyKey, setOcrBusyKey] = useState("");
   const {
     confirmation,
     requestConfirmation,
@@ -208,6 +242,93 @@ export function SupplierDocumentsModule({
     }
   }
 
+  function updateDocumentOcrTask(taskId: string, documentId: string, ocrTask: SupplierDocumentOcrTask | null | undefined) {
+    if (!ocrTask) return;
+    setRows((current) => current.map((row) => {
+      if (row.id !== taskId) return row;
+      return {
+        ...row,
+        documents: (row.documents || []).map((document) => (
+          document.id === documentId ? { ...document, ocrTask } : document
+        )),
+      };
+    }));
+  }
+
+  async function rerunOcr(task: SupplierDocumentTask, document: SupplierDocument) {
+    const busyKey = supplierOcrActionKey(task.id, document.id, "rerun");
+    setOcrBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const data = await apiJson<SupplierDocumentOcrResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr`,
+        { method: "POST" },
+      );
+      updateDocumentOcrTask(task.id, document.id, data.ocrTask);
+      setNotice(data.message || "已重新识别");
+    } catch (ocrError) {
+      setError(ocrError instanceof Error ? ocrError.message : "重新识别失败");
+    } finally {
+      setOcrBusyKey("");
+    }
+  }
+
+  async function confirmOcr(task: SupplierDocumentTask, document: SupplierDocument) {
+    const busyKey = supplierOcrActionKey(task.id, document.id, "confirm");
+    setOcrBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const data = await apiJson<SupplierDocumentOcrResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr/confirm`,
+        { method: "POST" },
+      );
+      updateDocumentOcrTask(task.id, document.id, data.ocrTask);
+      setNotice(data.message || "已人工确认通过");
+      void loadRows(page, pageSize);
+    } catch (ocrError) {
+      setError(ocrError instanceof Error ? ocrError.message : "人工确认失败");
+    } finally {
+      setOcrBusyKey("");
+    }
+  }
+
+  async function rejectOcr(task: SupplierDocumentTask, document: SupplierDocument) {
+    const result = await requestConfirmation({
+      title: "驳回重传",
+      message: "请填写供应商可见的驳回原因。",
+      requireInput: true,
+      inputLabel: "驳回原因",
+      inputPlaceholder: "例如：发票销售方与供应商不一致，请重新上传。",
+      inputRequiredMessage: "请填写驳回原因。",
+      confirmLabel: "确认驳回",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!result.confirmed) return;
+    const busyKey = supplierOcrActionKey(task.id, document.id, "reject");
+    setOcrBusyKey(busyKey);
+    setError("");
+    setNotice("");
+    try {
+      const data = await apiJson<SupplierDocumentOcrResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr/reject`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason: result.inputValue || "" }),
+        },
+      );
+      updateDocumentOcrTask(task.id, document.id, data.ocrTask);
+      setNotice(data.message || "已驳回重传");
+      void loadRows(page, pageSize);
+    } catch (ocrError) {
+      setError(ocrError instanceof Error ? ocrError.message : "驳回失败");
+    } finally {
+      setOcrBusyKey("");
+    }
+  }
+
   const isAdmin = currentUser.role === "管理员";
   const safePage = Math.min(page, totalPages);
 
@@ -286,13 +407,18 @@ export function SupplierDocumentsModule({
                 task={task}
                 uploadingKey={uploadingKey}
                 progressByKey={progressByKey}
+                ocrBusyKey={ocrBusyKey}
                 isExpanded={expandedTaskId === task.id}
                 isAdmin={isAdmin}
+                canManageOcr={canManageSupplierDocumentOcr(currentUser.role)}
                 deleting={deletingTaskId === task.id}
                 onToggle={() => setExpandedTaskId((current) => (current === task.id ? "" : task.id))}
                 onOpen={() => setExpandedTaskId(task.id)}
                 onUpload={uploadDocument}
                 onDelete={deleteTask}
+                onRerunOcr={rerunOcr}
+                onConfirmOcr={confirmOcr}
+                onRejectOcr={rejectOcr}
               />
             ))}
           </div>
@@ -326,24 +452,34 @@ function SupplierDocumentTaskCard({
   task,
   uploadingKey,
   progressByKey,
+  ocrBusyKey,
   isExpanded,
   isAdmin,
+  canManageOcr,
   deleting,
   onToggle,
   onOpen,
   onUpload,
   onDelete,
+  onRerunOcr,
+  onConfirmOcr,
+  onRejectOcr,
 }: {
   task: SupplierDocumentTask;
   uploadingKey: string;
   progressByKey: Record<string, number>;
+  ocrBusyKey: string;
   isExpanded: boolean;
   isAdmin: boolean;
+  canManageOcr: boolean;
   deleting: boolean;
   onToggle: () => void;
   onOpen: () => void;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;
+  onRerunOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onConfirmOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onRejectOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const factoryCostSlots = task.factoryCostSlots || [];
@@ -427,6 +563,15 @@ function SupplierDocumentTaskCard({
                             <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
                             <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
                           </div>
+                          <SupplierDocumentOcrPanel
+                            task={task}
+                            document={document}
+                            canManageOcr={canManageOcr}
+                            busyKey={ocrBusyKey}
+                            onRerun={onRerunOcr}
+                            onConfirm={onConfirmOcr}
+                            onReject={onRejectOcr}
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -468,6 +613,14 @@ function supplierUploadKey(taskId: string, documentType: string, costId = "") {
   return [taskId, documentType, costId].join(":");
 }
 
+function supplierOcrActionKey(taskId: string, documentId: string, action: string) {
+  return [taskId, documentId, action].join(":");
+}
+
+function canManageSupplierDocumentOcr(role = "") {
+  return ["管理员", "财务", "业务员", "采购"].includes(role);
+}
+
 function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
   const amountCny = Number(slot.amountCny || 0);
   const amount = Number(slot.amount || 0);
@@ -477,10 +630,121 @@ function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
 }
 
 function supplierDocumentStatusClass(status: string) {
-  if (status === "已完成" || status === "已上传") return styles.statusSuccess;
-  if (status === "部分上传" || status === "上传中") return styles.statusWarning;
+  if (status === "已完成" || status === "已上传" || status === "OCR识别成功，校验通过") return styles.statusSuccess;
+  if (status === "部分上传" || status === "上传中" || status === "OCR识别中" || status === "待人工确认") return styles.statusWarning;
+  if (status === "OCR识别成功，存在异常" || status === "OCR识别失败，需人工核对") return styles.statusDanger;
   if (status === "已关闭") return styles.statusMuted;
   return styles.statusMuted;
+}
+
+function SupplierDocumentOcrPanel({
+  task,
+  document,
+  canManageOcr,
+  busyKey,
+  onRerun,
+  onConfirm,
+  onReject,
+}: {
+  task: SupplierDocumentTask;
+  document: SupplierDocument;
+  canManageOcr: boolean;
+  busyKey: string;
+  onRerun: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onConfirm: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onReject: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+}) {
+  const ocrTask = document.ocrTask;
+  if (!ocrTask) {
+    return (
+      <div className={styles.supplierDocumentOcrPanel}>
+        <div className={styles.supplierDocumentOcrHeader}>
+          <strong>OCR 校验结果</strong>
+          <span className={`${styles.statusPill} ${styles.statusMuted}`}>未识别</span>
+        </div>
+        <p className={styles.supplierDocumentUploadHint}>该文件暂未生成 OCR 校验结果。</p>
+        {canManageOcr ? (
+          <div className={styles.supplierDocumentOcrActions}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => onRerun(task, document)}
+              disabled={busyKey === supplierOcrActionKey(task.id, document.id, "rerun")}
+            >
+              {busyKey === supplierOcrActionKey(task.id, document.id, "rerun") ? "识别中..." : "重新识别"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+  const fields = ocrTask.fields || [];
+  const issues = ocrTask.issues || [];
+  const status = ocrTask.status || "待人工确认";
+  return (
+    <div className={styles.supplierDocumentOcrPanel}>
+      <div className={styles.supplierDocumentOcrHeader}>
+        <strong>OCR 校验结果</strong>
+        <span className={`${styles.statusPill} ${supplierDocumentStatusClass(status)}`}>{status}</span>
+      </div>
+      <div className={styles.supplierDocumentOcrMeta}>
+        <span>文件类型：{DOCUMENT_LABELS[document.documentType || ""] || document.documentType || "-"}</span>
+        <span>更新时间：{formatDateTime(ocrTask.updatedAt)}</span>
+      </div>
+      {ocrTask.errorMessage ? <div className={styles.inlineError}>{ocrTask.errorMessage}</div> : null}
+      {ocrTask.rejectReason ? <div className={styles.inlineError}>驳回原因：{ocrTask.rejectReason}</div> : null}
+      {fields.length ? (
+        <div className={styles.supplierDocumentOcrFields}>
+          {fields.map((field) => (
+            <span key={`${ocrTask.id}-${field.key}`}>
+              <small>{field.label || field.key}</small>
+              <b>{field.value || "-"}</b>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className={styles.supplierDocumentOcrIssues}>
+        <strong>校验结果</strong>
+        {issues.length ? (
+          issues.map((issue, index) => (
+            <span key={`${issue.message}-${index}`} data-level={issue.level || "manual"}>
+              {issue.message}
+            </span>
+          ))
+        ) : (
+          <span data-level="success">未发现异常</span>
+        )}
+      </div>
+      {canManageOcr ? (
+        <div className={styles.supplierDocumentOcrActions}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onRerun(task, document)}
+            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "rerun")}
+          >
+            {busyKey === supplierOcrActionKey(task.id, document.id, "rerun") ? "识别中..." : "重新识别"}
+          </button>
+          <button
+            className={styles.primaryButtonCompact}
+            type="button"
+            onClick={() => onConfirm(task, document)}
+            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "confirm")}
+          >
+            {busyKey === supplierOcrActionKey(task.id, document.id, "confirm") ? "确认中..." : "人工确认通过"}
+          </button>
+          <button
+            className={styles.dangerButton}
+            type="button"
+            onClick={() => onReject(task, document)}
+            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "reject")}
+          >
+            {busyKey === supplierOcrActionKey(task.id, document.id, "reject") ? "驳回中..." : "驳回重传"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function UploadProgressInline({ progress }: { progress: number }) {

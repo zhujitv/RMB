@@ -29,7 +29,7 @@ test("business entities are modeled as order-level markers", () => {
   assert.match(schema, /@@map\("business_entities"\)/);
   assert.match(schema, /businessEntityId\s+String\?\s+@map\("business_entity_id"\)/);
   assert.match(schema, /businessEntityNameSnapshot\s+String\?\s+@map\("business_entity_name_snapshot"\)/);
-  assert.match(schema, /businessEntity BusinessEntity\? @relation/);
+  assert.match(schema, /businessEntity\s+BusinessEntity\?\s+@relation/);
   assert.match(schema, /receivable_orders_business_entity_idx/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "business_entities"/);
   assert.match(migration, /business_entities_single_default_idx/);

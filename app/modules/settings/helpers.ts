@@ -407,6 +407,7 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     appCodeConfigured: settings?.appCodeConfigured === true,
     customsDeclarationEnabled: settings?.customsDeclarationEnabled !== false,
     invoiceTextEnabled: settings?.invoiceTextEnabled === true,
+    supplierDocumentReturnEnabled: settings?.supplierDocumentReturnEnabled === true,
     fallbackToPdfText: settings?.fallbackToPdfText !== false,
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };
