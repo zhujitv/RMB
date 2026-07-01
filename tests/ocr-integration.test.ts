@@ -65,6 +65,53 @@ test("OCR integration uses Aliyun structured APIs for supplier documents with PD
   assert.match(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
 });
 
+test("Aliyun invoice parser reads official Data payload and invoiceDetails", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractAliyunInvoiceRecognitionData } = await import("../lib/platform/aliyun-invoice-ocr-parser.ts");
+  const payload = {
+    Data: JSON.stringify({
+      data: {
+        invoiceNumber: "26342000002030743666",
+        invoiceDate: "2026-06-29",
+        purchaserName: "浙江莱诺建材有限公司",
+        purchaserTaxNumber: "91330681MA2D86XM28",
+        sellerName: "安徽科蓝特铝业股份有限公司",
+        sellerTaxNumber: "91341822070917615C",
+        invoiceAmountPreTax: "101480.27",
+        invoiceTax: "13192.44",
+        totalAmount: "114672.71",
+        invoiceDetails: [
+          {
+            itemName: "*有色金属压延材*铝制工程结构件",
+            specification: "",
+            unit: "套",
+            quantity: "1",
+            unitPrice: "101480.27",
+            amount: "101480.27",
+            taxRate: "13%",
+            tax: "13192.44",
+          },
+        ],
+      },
+      prism_keyValueInfo: [
+        { key: "invoiceDetails", value: "[{\"itemName\":\"*有色金属压延材*铝制工程结构件\"}]" },
+      ],
+    }),
+  };
+  const result = extractAliyunInvoiceRecognitionData(payload);
+  assert.equal(result.extractedFields.invoiceNo, "26342000002030743666");
+  assert.equal(result.extractedFields.invoiceDate, "2026-06-29");
+  assert.equal(result.extractedFields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(result.extractedFields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(result.extractedFields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(result.extractedFields.sellerTaxNo, "91341822070917615C");
+  assert.equal(result.extractedFields.amountWithoutTax, "101480.27");
+  assert.equal(result.extractedFields.taxAmount, "13192.44");
+  assert.equal(result.extractedFields.amountWithTax, "114672.71");
+  assert.equal(result.extractedFields.productName, "*有色金属压延材*铝制工程结构件");
+  assert.match(result.text, /安徽科蓝特铝业股份有限公司/);
+});
+
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.match(customsRecognition, /customsDeclarationParser\.parseCustomsDeclarationText\(recognized\.text\)/);

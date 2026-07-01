@@ -14,6 +14,7 @@ import {
 import { assertJsonObject, codedError, isPlainRecord, nonEmpty, num } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
+import { extractAliyunInvoiceRecognitionData } from "./aliyun-invoice-ocr-parser";
 
 type SettingsActor = Parameters<typeof assertRead>[0];
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -56,24 +57,6 @@ const SUPPLIER_CONTRACT_KEYS = [
   "单价",
   "签订日期",
 ];
-
-const INVOICE_FIELD_ALIASES: Record<string, string[]> = {
-  invoiceNo: ["发票号码", "发票号", "invoiceNo", "invoiceNumber", "InvoiceNo", "InvoiceNumber"],
-  invoiceDate: ["开票日期", "日期", "invoiceDate", "InvoiceDate"],
-  buyer: ["购买方名称", "购买方", "购方名称", "buyerName", "BuyerName", "PurchaserName"],
-  buyerTaxNo: ["购买方纳税人识别号", "购方税号", "buyerTaxNo", "BuyerTaxNo", "PurchaserTaxNo"],
-  seller: ["销售方名称", "销售方", "销方名称", "sellerName", "SellerName"],
-  sellerTaxNo: ["销售方纳税人识别号", "销方税号", "sellerTaxNo", "SellerTaxNo"],
-  amountWithTax: ["价税合计", "价税合计小写", "小写金额", "含税金额", "totalAmount", "TotalAmount", "AmountWithTax"],
-  amountWithoutTax: ["不含税金额", "金额合计", "合计金额", "amountWithoutTax", "AmountWithoutTax", "SumAmount"],
-  taxAmount: ["税额合计", "合计税额", "税额", "taxAmount", "TaxAmount", "SumTax"],
-  taxRate: ["税率", "taxRate", "TaxRate"],
-  productName: ["货物或应税劳务、服务名称", "货物或应税劳务服务名称", "项目名称", "商品名称", "产品名称", "服务名称", "ItemName", "CommodityName", "ProductName"],
-  specModel: ["规格型号", "Spec", "Specification", "Model"],
-  unit: ["单位", "Unit"],
-  quantity: ["数量", "Quantity"],
-  unitPrice: ["单价", "UnitPrice"],
-};
 
 const CONTRACT_FIELD_ALIASES: Record<string, string[]> = {
   supplier: ["供应商", "供方", "卖方", "乙方", "Supplier", "Seller"],
@@ -178,6 +161,17 @@ function parseJsonMaybe(value: unknown) {
   }
 }
 
+function responseField(record: unknown, key: string) {
+  if (!isPlainRecord(record)) return undefined;
+  const direct = record[key];
+  if (direct != null) return direct;
+  const pascal = `${key.slice(0, 1).toUpperCase()}${key.slice(1)}`;
+  if (record[pascal] != null) return record[pascal];
+  const upper = key.toUpperCase();
+  if (record[upper] != null) return record[upper];
+  return undefined;
+}
+
 function toPlainJson(value: unknown): unknown {
   if (value == null) return value;
   try {
@@ -191,6 +185,8 @@ function collectText(value: unknown, output: string[] = [], depth = 0) {
   if (depth > 8 || value == null) return output;
   if (typeof value === "string") {
     const text = value.trim();
+    const parsed = parseJsonMaybe(text);
+    if (parsed !== text) return collectText(parsed, output, depth + 1);
     if (text && text.length <= 1000) output.push(text);
     return output;
   }
@@ -263,6 +259,8 @@ function collectFieldsFromObject(
   depth = 0,
 ) {
   if (depth > 8 || value == null) return output;
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return collectFieldsFromObject(parsed, aliases, output, path, depth + 1);
   if (Array.isArray(value)) {
     value.forEach((item) => collectFieldsFromObject(item, aliases, output, path, depth + 1));
     return output;
@@ -285,27 +283,6 @@ function collectFieldsFromObject(
     collectFieldsFromObject(item, aliases, output, [...path, key], depth + 1);
   }
   return output;
-}
-
-function collectProductNames(rawData: unknown) {
-  const names = new Set<string>();
-  function walk(value: unknown, depth = 0) {
-    if (depth > 8 || value == null) return;
-    if (Array.isArray(value)) {
-      value.forEach((item) => walk(item, depth + 1));
-      return;
-    }
-    if (!isPlainRecord(value)) return;
-    for (const [key, item] of Object.entries(value)) {
-      if (matchAliases(key, INVOICE_FIELD_ALIASES.productName)) {
-        const text = normalizeFieldValue(item);
-        if (text) names.add(text);
-      }
-      walk(item, depth + 1);
-    }
-  }
-  walk(rawData);
-  return Array.from(names).join("；");
 }
 
 function aliyunEndpointFromUrl(value: string) {
@@ -364,11 +341,7 @@ async function recognizeAliyunVatInvoice(
   }));
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
-  const data = parseJsonMaybe(isPlainRecord(responseBody) ? responseBody.data : undefined);
-  const extractedFields = collectFieldsFromObject(data, INVOICE_FIELD_ALIASES);
-  const productName = collectProductNames(data);
-  if (productName && !extractedFields.productName) extractedFields.productName = productName;
-  const text = collectText(data).join("\n");
+  const { extractedFields, text } = extractAliyunInvoiceRecognitionData(responseBody);
   return {
     text,
     source: "ALIYUN_RECOGNIZE_INVOICE",
@@ -390,7 +363,7 @@ async function recognizeAliyunSupplierContract(
   }));
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
-  const data = isPlainRecord(responseBody) ? responseBody.data : undefined;
+  const data = parseJsonMaybe(responseField(responseBody, "data"));
   const extractedFields = collectFieldsFromObject(data, CONTRACT_FIELD_ALIASES);
   const text = collectText(data).join("\n");
   return {
