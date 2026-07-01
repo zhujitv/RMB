@@ -38,6 +38,14 @@ export type SupplierOption = {
   isDefaultLogisticsSupplier?: boolean;
 };
 
+export type BusinessEntityOption = {
+  id: string;
+  name: string;
+  shortName?: string;
+  isDefault?: boolean;
+  status?: string;
+};
+
 export type PaymentInstallment = {
   ratio: string;
   condition: string;
@@ -52,6 +60,11 @@ export type OrderRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityId?: string;
+  businessEntityName?: string;
+  businessEntityShortName?: string;
+  businessEntityNameSnapshot?: string;
+  businessEntity?: BusinessEntityOption | null;
   currency?: string;
   exchangeRate?: number;
   exchangeRateDate?: string;
@@ -144,6 +157,7 @@ export type QuickOrderForm = {
   creditDays: string;
   reminderDays: string;
   status: string;
+  businessEntityId: string;
   logisticsSupplierIds: string[];
   paymentInstallments: PaymentInstallment[];
   remark: string;
@@ -173,6 +187,7 @@ export const emptyQuickOrderForm: QuickOrderForm = {
   creditDays: "30",
   reminderDays: "7",
   status: "草稿",
+  businessEntityId: "",
   logisticsSupplierIds: [],
   paymentInstallments: [{ ratio: "100", condition: "按约定付款" }],
   remark: "",

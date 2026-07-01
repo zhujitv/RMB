@@ -97,7 +97,7 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
       prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
-        include: { order: { include: { customer: true, salesperson: true } }, createdBy: true, updatedBy: true },
+        include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true },
         orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -144,7 +144,7 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
   }
   const rows = await prisma.payment.findMany({
     where: paymentListWhere(filters, accessWhere),
-    include: { order: { include: { customer: true, salesperson: true } }, createdBy: true, updatedBy: true },
+    include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true },
     orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
     take: PAYMENT_UNPAGINATED_SCAN_LIMIT,
   });
@@ -244,8 +244,8 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
     ...(id ? {} : { createdById: currentActorId }),
   };
   const payment = id
-    ? await prisma.payment.update({ where: { id }, data, include: { order: { include: { customer: true, salesperson: true } }, createdBy: true, updatedBy: true } })
-    : await prisma.payment.create({ data, include: { order: { include: { customer: true, salesperson: true } }, createdBy: true, updatedBy: true } });
+    ? await prisma.payment.update({ where: { id }, data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } })
+    : await prisma.payment.create({ data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } });
   await syncOrderStatus(order.id);
   if (before?.orderId && before.orderId !== order.id) await syncOrderStatus(before.orderId);
   const auditAction = id && before?.status !== requestedStatus ? `修改收款状态：${before?.status || ""}→${requestedStatus}` : (id ? "更新收款" : "新增收款");

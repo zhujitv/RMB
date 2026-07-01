@@ -14,6 +14,7 @@ import {
   serializeOrderDocument,
   serializeSupplier,
 } from "./shared";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import { serializeShipsgoTrackingSummary } from "./shipsgo-tracking";
 import {
   isExternalLogisticsSupplierAccount,
@@ -166,7 +167,7 @@ export function domesticLogisticsSelectWithRelations() {
 export function domesticLogisticsSelectWithOrder() {
   return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
     ...domesticLogisticsSelectWithRelations(),
-    order: { include: { customer: true, salesperson: true } },
+    order: { include: { customer: true, businessEntity: true, salesperson: true } },
   });
 }
 
@@ -174,6 +175,7 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
   const includeShipsgoTrackings = options.shipsgoTrackings !== false;
   const include: Prisma.ReceivableOrderInclude = {
     customer: true,
+    businessEntity: true,
     salesperson: true,
     domesticLogisticsInfos: {
       select: domesticLogisticsSelectWithRelations(),
@@ -594,6 +596,7 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     customerShortName: shortCustomerName || fullCustomerName,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
+    ...businessEntityFieldsFromOrder(order),
     destinationCountry: order.customer?.country || order.country || "",
     destinationPort: "",
     logisticsStatus: domesticLogisticsStatusText(info),

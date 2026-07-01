@@ -21,6 +21,7 @@ import {
 } from "./helpers";
 import {
   CommissionFormulaSettingsCard,
+  BusinessEntitySettingsCard,
   CompanyProfileSettingsCard,
   ExchangeSettingsCard,
   NotificationTemplateSettingsCard,
@@ -37,6 +38,7 @@ export function SettingsModuleView(settings: SettingsController) {
   const {
     activeTab,
     filters,
+    businessEntities,
     companyProfileSettings,
     companyProfileForm,
     exchangeSettings,
@@ -55,6 +57,9 @@ export function SettingsModuleView(settings: SettingsController) {
     customerForm,
     customerSaving,
     customerMessage,
+    businessEntityForm,
+    businessEntitySaving,
+    businessEntityMessage,
     supplierForm,
     supplierPanelMode,
     supplierSaving,
@@ -89,6 +94,9 @@ export function SettingsModuleView(settings: SettingsController) {
     refreshExchangeRatesManually,
     deleteRecord,
     startCreateCustomer,
+    startCreateBusinessEntity,
+    startEditBusinessEntity,
+    cancelBusinessEntityEdit,
     startCreateSupplier,
     startCreateUser,
     startEditCustomer,
@@ -97,6 +105,7 @@ export function SettingsModuleView(settings: SettingsController) {
     cancelSupplierEdit,
     startEditUser,
     saveCustomerForm,
+    saveBusinessEntityForm,
     saveSupplierForm,
     saveUserForm,
     saveCompanyProfileSettings,
@@ -110,6 +119,8 @@ export function SettingsModuleView(settings: SettingsController) {
     setDetailRow,
     setCustomerForm,
     setCustomerMessage,
+    setBusinessEntityForm,
+    setBusinessEntityMessage,
     setSupplierForm,
     setSupplierPanelMode,
     setSupplierMessage,
@@ -163,7 +174,7 @@ export function SettingsModuleView(settings: SettingsController) {
         ))}
       </div>
 
-      {activeTab !== "companyProfile" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" ? (
+      {activeTab !== "companyProfile" && activeTab !== "businessEntities" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" ? (
         <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
@@ -308,6 +319,19 @@ export function SettingsModuleView(settings: SettingsController) {
             setCompanyProfileMessage("");
           }}
           onSubmit={saveCompanyProfileSettings}
+        />
+      ) : activeTab === "businessEntities" ? (
+        <BusinessEntitySettingsCard
+          entities={businessEntities}
+          form={businessEntityForm}
+          loading={loading && !loadedTabs.has("businessEntities")}
+          saving={businessEntitySaving}
+          message={businessEntityMessage}
+          onChange={setBusinessEntityForm}
+          onCreate={startCreateBusinessEntity}
+          onEdit={startEditBusinessEntity}
+          onCancel={cancelBusinessEntityEdit}
+          onSubmit={saveBusinessEntityForm}
         />
       ) : activeTab === "exchangeRates" ? (
         <ExchangeSettingsCard

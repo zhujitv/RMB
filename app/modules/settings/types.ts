@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 
-export type SettingsTabKey = "companyProfile" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs" | "apiPerformance";
+export type SettingsTabKey = "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs" | "apiPerformance";
 
 export type SettingsFilters = {
   customers: {
@@ -103,6 +103,16 @@ export type SupplierRow = {
   allowFactoryDocumentUpload?: boolean;
   isDefaultLogisticsSupplier?: boolean;
   allowedLogisticsCostTypes?: string[];
+  remark?: string;
+};
+
+export type BusinessEntityRow = {
+  id: string;
+  name?: string;
+  shortName?: string;
+  isDefault?: boolean;
+  status?: string;
+  sortOrder?: number;
   remark?: string;
 };
 
@@ -337,6 +347,16 @@ export type SupplierForm = {
   allowFactoryDocumentUpload: boolean;
   isDefaultLogisticsSupplier: boolean;
   allowedLogisticsCostTypes: string[];
+  remark: string;
+};
+
+export type BusinessEntityForm = {
+  id: string;
+  name: string;
+  shortName: string;
+  isDefault: boolean;
+  status: string;
+  sortOrder: string;
   remark: string;
 };
 

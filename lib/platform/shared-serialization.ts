@@ -16,6 +16,7 @@ import {
   supplierTypeDisplayName,
 } from "./shared-constants";
 import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark, normalizeExportInvoiceRemark } from "./export-invoice-remark";
 import { managedFileDownloadPath } from "./file-center";
 
@@ -404,6 +405,7 @@ export function serializePayment(paymentInput: unknown) {
     customerName: customerBusinessName(payment.order?.customer, payment.order?.customerNameSnapshot),
     customerFullName: customerFullName(payment.order?.customer, payment.order?.customerNameSnapshot),
     customerShortName: customerShortName(payment.order?.customer),
+    ...businessEntityFieldsFromOrder(payment.order),
     country: payment.order?.customer?.country || payment.order?.country || "",
     salespersonName: payment.order?.salesperson?.name || "",
     taxArchived: Boolean(payment.order?.taxArchived || payment.order?.taxRefundStatus === "SUBMITTED"),
@@ -499,6 +501,7 @@ export function serializeCost(costInput: unknown) {
     customerName: customerBusinessName(cost.order?.customer, cost.order?.customerNameSnapshot),
     customerFullName: customerFullName(cost.order?.customer, cost.order?.customerNameSnapshot),
     customerShortName: customerShortName(cost.order?.customer),
+    ...businessEntityFieldsFromOrder(cost.order),
     country: cost.order?.customer?.country || cost.order?.country || "",
     salespersonName: cost.order?.salesperson?.name || "",
     orderCurrency: cost.order?.currency || "",

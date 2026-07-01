@@ -12,10 +12,12 @@ import {
 } from "./constants";
 import {
   appendFilterParams,
+  businessEntityFormFromRow,
   columnsFor,
   commissionFormulaFormFromSettings,
   companyProfileFormFromSettings,
   customerFormFromRow,
+  emptyBusinessEntityForm,
   emptyCustomerForm,
   emptyFiltersForTab,
   emptyPagination,
@@ -37,6 +39,8 @@ import {
 import type {
   ApiPerformanceRow,
   AuditLogRow,
+  BusinessEntityForm,
+  BusinessEntityRow,
   CommissionFormulaForm,
   CommissionFormulaSettings,
   CompanyProfileForm,
@@ -73,6 +77,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   });
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [businessEntities, setBusinessEntities] = useState<BusinessEntityRow[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
@@ -93,6 +98,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
 
   const [pagination, setPagination] = useState<Record<SettingsTabKey, Pagination>>({
     companyProfile: emptyPagination(PAGE_SIZE),
+    businessEntities: emptyPagination(PAGE_SIZE),
     customers: emptyPagination(PAGE_SIZE),
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
@@ -108,6 +114,9 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [customerForm, setCustomerForm] = useState<CustomerForm | null>(null);
   const [customerSaving, setCustomerSaving] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
+  const [businessEntityForm, setBusinessEntityForm] = useState<BusinessEntityForm | null>(null);
+  const [businessEntitySaving, setBusinessEntitySaving] = useState(false);
+  const [businessEntityMessage, setBusinessEntityMessage] = useState("");
   const [supplierForm, setSupplierForm] = useState<SupplierForm | null>(null);
   const [supplierPanelMode, setSupplierPanelMode] = useState<"view" | "edit">("view");
   const [supplierSaving, setSupplierSaving] = useState(false);
@@ -165,6 +174,12 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
         const settings = result.settings || {};
         setCompanyProfileSettings(settings);
         setCompanyProfileForm(companyProfileFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "businessEntities") {
+        const result = await apiJson<{ entities?: BusinessEntityRow[] }>("/api/settings/business-entities");
+        setBusinessEntities(result.entities || []);
         markLoaded(tab);
         return;
       }
@@ -257,6 +272,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setDetailRow(null);
     setCustomerForm(null);
     setCustomerMessage("");
+    setBusinessEntityForm(null);
+    setBusinessEntityMessage("");
     setSupplierForm(null);
     setSupplierPanelMode("view");
     setSupplierMessage("");
@@ -349,6 +366,25 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setSupplierMessage("");
     setSupplierPanelMode("edit");
     setSupplierForm(emptySupplierForm());
+  }
+
+  function startCreateBusinessEntity() {
+    setActiveTab("businessEntities");
+    setDetailRow(null);
+    setBusinessEntityMessage("");
+    setBusinessEntityForm(emptyBusinessEntityForm());
+  }
+
+  function startEditBusinessEntity(entity: BusinessEntityRow) {
+    setActiveTab("businessEntities");
+    setDetailRow(null);
+    setBusinessEntityMessage("");
+    setBusinessEntityForm(businessEntityFormFromRow(entity));
+  }
+
+  function cancelBusinessEntityEdit() {
+    setBusinessEntityForm(null);
+    setBusinessEntityMessage("");
   }
 
   async function ensureActiveSuppliers() {
@@ -521,6 +557,56 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
       setSupplierMessage(saveError instanceof Error ? saveError.message : "供应商资料保存失败");
     } finally {
       setSupplierSaving(false);
+    }
+  }
+
+  async function saveBusinessEntityForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!businessEntityForm) return;
+    if (!businessEntityForm.name.trim()) {
+      setBusinessEntityMessage("请填写业务主体名称");
+      return;
+    }
+    setBusinessEntitySaving(true);
+    setBusinessEntityMessage("");
+    try {
+      const isEdit = Boolean(businessEntityForm.id);
+      const result = await apiJson<{ success?: boolean; message?: string; entity?: BusinessEntityRow }>(
+        "/api/settings/business-entities",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          body: JSON.stringify({
+            id: businessEntityForm.id || undefined,
+            name: businessEntityForm.name,
+            shortName: businessEntityForm.shortName,
+            isDefault: businessEntityForm.isDefault,
+            status: businessEntityForm.status,
+            sortOrder: Number(businessEntityForm.sortOrder || 0),
+            remark: businessEntityForm.remark,
+          }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "业务主体保存失败");
+      const savedEntity = result.entity;
+      if (savedEntity?.id) {
+        setBusinessEntities((current) => {
+          const withoutSaved = current.filter((entity) => entity.id !== savedEntity.id);
+          const normalized = savedEntity.isDefault
+            ? withoutSaved.map((entity) => ({ ...entity, isDefault: false }))
+            : withoutSaved;
+          return [savedEntity, ...normalized].sort((a, b) => {
+            if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+            return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+          });
+        });
+        setBusinessEntityForm(businessEntityFormFromRow(savedEntity));
+      }
+      setBusinessEntityMessage(result.message || "业务主体已保存");
+      markLoaded("businessEntities");
+    } catch (saveError) {
+      setBusinessEntityMessage(saveError instanceof Error ? saveError.message : "业务主体保存失败");
+    } finally {
+      setBusinessEntitySaving(false);
     }
   }
 
@@ -790,6 +876,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     activeTab,
     filters,
     customers,
+    businessEntities,
     suppliers,
     users,
     logs,
@@ -813,6 +900,9 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     customerForm,
     customerSaving,
     customerMessage,
+    businessEntityForm,
+    businessEntitySaving,
+    businessEntityMessage,
     supplierForm,
     supplierPanelMode,
     supplierSaving,
@@ -848,6 +938,9 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     refreshExchangeRatesManually,
     deleteRecord,
     startCreateCustomer,
+    startCreateBusinessEntity,
+    startEditBusinessEntity,
+    cancelBusinessEntityEdit,
     startCreateSupplier,
     startCreateUser,
     startEditCustomer,
@@ -856,6 +949,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     cancelSupplierEdit,
     startEditUser,
     saveCustomerForm,
+    saveBusinessEntityForm,
     saveSupplierForm,
     saveUserForm,
     saveCompanyProfileSettings,
@@ -869,6 +963,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setDetailRow,
     setCustomerForm,
     setCustomerMessage,
+    setBusinessEntityForm,
+    setBusinessEntityMessage,
     setSupplierForm,
     setSupplierPanelMode,
     setSupplierMessage,

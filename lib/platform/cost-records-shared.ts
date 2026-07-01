@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import { attachBusinessDocumentsToCost } from "./business-documents";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
@@ -54,6 +55,9 @@ type CostSummaryOrderLike = {
   customerId: string;
   customer?: unknown;
   customerNameSnapshot?: string | null;
+  businessEntityId?: string | null;
+  businessEntityNameSnapshot?: string | null;
+  businessEntity?: unknown;
   receivableAmountCny?: NumericLike | null;
   finalReceivableAmountCny?: NumericLike | null;
   costs?: CostLike[] | null;
@@ -198,6 +202,7 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
+    ...businessEntityFieldsFromOrder(order),
     receivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny ?? 0),
     costConfirmProgress: costConfirmedProgress(summaryCosts),
     documentProgress: costDocumentProgress(summaryCosts),
@@ -210,7 +215,7 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
 
 export function includeCostRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
-    order: { include: { customer: true, salesperson: true } },
+    order: { include: { customer: true, businessEntity: true, salesperson: true } },
     supplier: true,
     createdBy: true,
     updatedBy: true,

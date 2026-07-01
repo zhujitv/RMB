@@ -21,6 +21,8 @@ import {
 import type {
   ApiPerformanceRow,
   AuditLogRow,
+  BusinessEntityForm,
+  BusinessEntityRow,
   CommissionFormulaForm,
   CommissionFormulaSettings,
   CompanyProfileForm,
@@ -233,6 +235,7 @@ export function placeholderFor(tab: SettingsTabKey) {
 }
 
 export function kebabTab(tab: SettingsTabKey) {
+  if (tab === "businessEntities") return "business-entities";
   if (tab === "exchangeRates") return "exchange-rates";
   if (tab === "commissionFormula") return "commission-formula";
   if (tab === "auditLogs") return "audit-logs";
@@ -657,6 +660,30 @@ export function emptySupplierForm(): SupplierForm {
     isDefaultLogisticsSupplier: false,
     allowedLogisticsCostTypes: [],
     remark: "",
+  };
+}
+
+export function emptyBusinessEntityForm(): BusinessEntityForm {
+  return {
+    id: "",
+    name: "",
+    shortName: "",
+    isDefault: false,
+    status: "启用",
+    sortOrder: "0",
+    remark: "",
+  };
+}
+
+export function businessEntityFormFromRow(entity: BusinessEntityRow): BusinessEntityForm {
+  return {
+    id: entity.id || "",
+    name: entity.name || "",
+    shortName: entity.shortName || "",
+    isDefault: Boolean(entity.isDefault),
+    status: entity.status || "启用",
+    sortOrder: String(entity.sortOrder ?? 0),
+    remark: entity.remark || "",
   };
 }
 

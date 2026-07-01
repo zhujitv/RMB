@@ -41,7 +41,7 @@ const logisticsQueries = readFileSync(
 test("api performance logs are persisted and exposed through settings", () => {
   assert.match(schema, /model ApiPerformanceLog/);
   assert.match(schema, /@@map\("api_performance_logs"\)/);
-  assert.match(migration, /CREATE TABLE "api_performance_logs"/);
+  assert.match(migration, /CREATE TABLE(?: IF NOT EXISTS)? "api_performance_logs"/);
   assert.match(apiPerformance, /export function recordApiPerformanceLog/);
   assert.match(apiPerformance, /export async function listApiPerformanceMetrics/);
   assert.match(apiPerformance, /"background"/);

@@ -45,6 +45,16 @@ type ReportResponse = {
   };
 };
 
+type BusinessEntityOption = {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+};
+
+type BusinessEntitiesResponse = {
+  entities?: BusinessEntityOption[];
+};
+
 type ExportScope = "currentPage" | "selected" | "allFiltered";
 type ExportFormat = "xlsx" | "csv";
 type SortDirection = "asc" | "desc";
@@ -60,6 +70,7 @@ const DEFAULT_REPORT_FILTERS = {
   currency: "",
   salespersonName: "",
   supplierName: "",
+  businessEntityId: "",
   orderStatus: "",
   paymentStatus: "",
   costType: "",
@@ -146,10 +157,24 @@ export function ReportsModule({
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
 
   const visibleColumns = useMemo(() => columns.slice(0, 5), [columns]);
   const allPageSelected = rows.length > 0 && rows.every((row) => row.id && selectedIds.has(String(row.id)));
   const showDeclarationMonth = reportType === "tax-refunds";
+
+  useEffect(() => {
+    void loadBusinessEntities();
+  }, []);
+
+  async function loadBusinessEntities() {
+    try {
+      const result = await apiJson<BusinessEntitiesResponse>("/api/business-entities");
+      setBusinessEntities(Array.isArray(result.entities) ? result.entities : []);
+    } catch {
+      setBusinessEntities([]);
+    }
+  }
 
   useEffect(() => {
     if (!visibleReportTypes.length) return;
@@ -358,6 +383,12 @@ export function ReportsModule({
         <label>币种<input value={filters.currency} onChange={(event) => updateFilter("currency", event.target.value.toUpperCase())} placeholder="CNY / USD" /></label>
         <label>业务员<input value={filters.salespersonName} onChange={(event) => updateFilter("salespersonName", event.target.value)} placeholder="业务员姓名" /></label>
         <label>供应商<input value={filters.supplierName} onChange={(event) => updateFilter("supplierName", event.target.value)} placeholder="供应商名称" /></label>
+        <label>业务主体
+          <select value={filters.businessEntityId} onChange={(event) => updateFilter("businessEntityId", event.target.value)}>
+            <option value="">全部业务主体</option>
+            {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}
+          </select>
+        </label>
         <label>订单状态
           <select value={filters.orderStatus} onChange={(event) => updateFilter("orderStatus", event.target.value)}>
             {ORDER_STATUSES.map((status) => <option key={status || "all"} value={status}>{status || "全部"}</option>)}

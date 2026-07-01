@@ -14,6 +14,7 @@ import {
   assertRead,
   assertWrite,
   canWrite,
+  businessEntityWhereFromQuery,
   codedError,
   confirmedPayment,
   customerBusinessName,
@@ -36,6 +37,7 @@ import {
   requirePositive,
   requireText,
   resolveExchangeRateSnapshot,
+  resolveBusinessEntityForOrderInput,
   resolvePaymentTerm,
   runNonCriticalTask,
   serializeOrder,
@@ -88,6 +90,7 @@ type PageResult<T> = {
 
 type OrderListFilters = {
   keyword: string;
+  businessEntityId: string;
   country: string;
   currency: string;
   orderStatus: string;
@@ -157,6 +160,7 @@ function orderListFiltersFromQuery(query: QueryLike): OrderListFilters {
   const keyword = nonEmpty(query?.get("keyword"));
   return {
     keyword,
+    businessEntityId: nonEmpty(query?.get("businessEntityId") || query?.get("businessEntity")),
     country: nonEmpty(query?.get("country")),
     currency: nonEmpty(query?.get("currency")),
     orderStatus: nonEmpty(query?.get("orderStatus")),
@@ -179,6 +183,8 @@ function orderListWhere(filters: OrderListFilters, actor: ActorLike): Prisma.Rec
     orderAccessWhere(actor),
     orderArchiveWhere(filters.archiveScope),
   ];
+  const businessEntityWhere = businessEntityWhereFromQuery(filters.businessEntityId);
+  if (Object.keys(businessEntityWhere).length) clauses.push(businessEntityWhere);
   if (filters.currency) clauses.push({ currency: filters.currency });
   if (filters.orderStatus) clauses.push({ status: filters.orderStatus });
   if (filters.month && /^\d{4}-\d{2}$/.test(filters.month)) {
@@ -382,6 +388,10 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     ? Number(before.salespersonCommissionRate || 0)
     : Math.max(0, Number(customer.commissionStatus === "停用" ? 0 : customer.commissionRate || 0));
   const createdAt = before?.createdAt || new Date();
+  const businessEntity = await resolveBusinessEntityForOrderInput(inputData, before);
+  if (before && before.businessEntityId && businessEntity.id !== before.businessEntityId) {
+    throw codedError("已有订单如需变更业务主体，请使用业务主体转移操作。", 400, "BUSINESS_ENTITY_TRANSFER_REQUIRED");
+  }
   const baseCreatedDate = dateFromInput(createdAt.toISOString().slice(0, 10));
   const expectedArrivalDate = paymentTermType === "AFTER_ARRIVAL"
     ? dateFromInput(inputData.expectedArrivalDate || inputData.expectedPaymentDate)
@@ -419,6 +429,8 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     blNo,
     customerId: customer.id,
     customerNameSnapshot: before && before.customerId === customer.id ? before.customerNameSnapshot : customer.name,
+    businessEntityId: businessEntity.id,
+    businessEntityNameSnapshot: businessEntity.name,
     salespersonUserId,
     salespersonCommissionRate,
     country: optional(customer.country),

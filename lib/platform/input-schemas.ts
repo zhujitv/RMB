@@ -12,6 +12,7 @@ function hasAny(input: Record<string, unknown>, keys: string[]) {
 
 export const RECEIVABLE_ORDER_INPUT_SCHEMA: InputSchema = {
   customerId: { label: "客户", kind: "text", required: true },
+  businessEntityId: { label: "业务主体", kind: "text" },
   orderNo: { label: "订单号", kind: "text", required: true },
   estimatedReceivableAmount: {
     label: "预计应收金额",

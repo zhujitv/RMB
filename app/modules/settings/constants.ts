@@ -231,6 +231,7 @@ export const API_PERFORMANCE_WINDOW_OPTIONS = [
 ];
 export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "companyProfile", label: "公司资料" },
+  { key: "businessEntities", label: "业务主体" },
   { key: "customers", label: "客户资料" },
   { key: "suppliers", label: "供应商资料" },
   { key: "users", label: "用户与权限" },

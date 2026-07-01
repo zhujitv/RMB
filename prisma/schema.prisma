@@ -211,6 +211,26 @@ model Customer {
   @@map("customers")
 }
 
+model BusinessEntity {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  shortName String?   @map("short_name")
+  isDefault Boolean   @default(false) @map("is_default")
+  status    String    @default("启用")
+  sortOrder Int       @default(0) @map("sort_order")
+  remark    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  orders ReceivableOrder[]
+
+  @@index([status])
+  @@index([isDefault])
+  @@index([deletedAt])
+  @@map("business_entities")
+}
+
 model Supplier {
   id            String    @id @default(cuid())
   supplierName  String    @map("supplier_name")
@@ -266,6 +286,8 @@ model ReceivableOrder {
   blNo                String?   @map("bl_no")
   customerId          String    @map("customer_id")
   customerNameSnapshot String   @map("customer_name_snapshot")
+  businessEntityId    String?   @map("business_entity_id")
+  businessEntityNameSnapshot String? @map("business_entity_name_snapshot")
   salespersonUserId   String?   @map("salesperson_user_id")
   salespersonCommissionRate Decimal @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
   commissionStatus     String    @default("未结算") @map("commission_status")
@@ -324,6 +346,7 @@ model ReceivableOrder {
   deletedAt           DateTime? @map("deleted_at")
 
   customer    Customer @relation(fields: [customerId], references: [id])
+  businessEntity BusinessEntity? @relation(fields: [businessEntityId], references: [id])
   salesperson User?    @relation("SalesOrders", fields: [salespersonUserId], references: [id])
   commissionSettledBy User? @relation("CommissionSettlements", fields: [commissionSettledById], references: [id])
   taxRefundArchivedBy User? @relation("TaxRefundArchivedBy", fields: [taxRefundArchivedById], references: [id])
@@ -346,6 +369,7 @@ model ReceivableOrder {
   @@index([orderNo])
   @@index([blNo])
   @@index([customerId])
+  @@index([businessEntityId])
   @@index([customerId, status], map: "receivable_orders_customer_status_idx")
   @@index([salespersonUserId])
   @@index([commissionStatus])
@@ -367,6 +391,7 @@ model ReceivableOrder {
   @@index([deletedAt, taxArchived, taxRefundStatus, updatedAt], map: "receivable_orders_tax_list_idx")
   @@index([deletedAt, isArchived, updatedAt], map: "receivable_orders_archive_updated_idx")
   @@index([deletedAt, actualShipmentDate, blDate, createdAt], map: "receivable_orders_list_sort_idx")
+  @@index([deletedAt, businessEntityId, updatedAt], map: "receivable_orders_business_entity_idx")
   @@map("receivable_orders")
 }
 

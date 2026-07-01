@@ -18,9 +18,14 @@ import { OrderTableRows } from "./orders/table";
 import {
   ORDER_STATUSES,
   PAGE_SIZE,
+  type BusinessEntityOption,
   type OrderRow,
   type OrdersResponse,
 } from "./orders/model";
+
+type BusinessEntitiesResponse = {
+  entities?: BusinessEntityOption[];
+};
 
 export function OrdersModule({
   currentUser,
@@ -39,6 +44,9 @@ export function OrdersModule({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [orderStatus, setOrderStatus] = useState("");
   const [submittedOrderStatus, setSubmittedOrderStatus] = useState("");
+  const [businessEntityId, setBusinessEntityId] = useState("");
+  const [submittedBusinessEntityId, setSubmittedBusinessEntityId] = useState("");
+  const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -58,7 +66,7 @@ export function OrdersModule({
   } = useConfirmationDialog();
   const canWriteOrders = canWritePermission(currentUser, permissions, "orders", ["管理员", "业务员"]);
 
-  async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus) {
+  async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus, nextBusinessEntityId = submittedBusinessEntityId) {
     setLoading(true);
     setError("");
     try {
@@ -69,6 +77,7 @@ export function OrdersModule({
       });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       if (nextOrderStatus) params.set("orderStatus", nextOrderStatus);
+      if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
       const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
       const data = result.data || {};
       setOrders(Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : []);
@@ -85,7 +94,17 @@ export function OrdersModule({
 
   useEffect(() => {
     void loadOrders(1, "");
+    void loadBusinessEntities();
   }, []);
+
+  async function loadBusinessEntities() {
+    try {
+      const result = await apiJson<BusinessEntitiesResponse>("/api/business-entities");
+      setBusinessEntities(Array.isArray(result.entities) ? result.entities : []);
+    } catch {
+      setBusinessEntities([]);
+    }
+  }
 
   useEffect(() => {
     const value = initialKeyword.trim();
@@ -94,7 +113,7 @@ export function OrdersModule({
     setSubmittedKeyword(value);
     setDetailOrder(null);
     setNotice("");
-    void loadOrders(1, value, submittedOrderStatus);
+    void loadOrders(1, value, submittedOrderStatus, submittedBusinessEntityId);
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
@@ -103,20 +122,22 @@ export function OrdersModule({
     const timer = window.setTimeout(() => {
       setSubmittedKeyword(value);
       setSubmittedOrderStatus(orderStatus);
+      setSubmittedBusinessEntityId(businessEntityId);
       setDetailOrder(null);
       setNotice("");
-      void loadOrders(1, value, orderStatus);
+      void loadOrders(1, value, orderStatus, businessEntityId);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [keyword, orderStatus, submittedKeyword]);
+  }, [keyword, orderStatus, businessEntityId, submittedKeyword]);
 
   function submitSearch() {
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setSubmittedOrderStatus(orderStatus);
+    setSubmittedBusinessEntityId(businessEntityId);
     setDetailOrder(null);
     setNotice("");
-    void loadOrders(1, value, orderStatus);
+    void loadOrders(1, value, orderStatus, businessEntityId);
   }
 
   function resetSearch() {
@@ -124,15 +145,23 @@ export function OrdersModule({
     setSubmittedKeyword("");
     setOrderStatus("");
     setSubmittedOrderStatus("");
+    setBusinessEntityId("");
+    setSubmittedBusinessEntityId("");
     setDetailOrder(null);
     setNotice("");
-    void loadOrders(1, "", "");
+    void loadOrders(1, "", "", "");
   }
 
   function gotoPage(nextPage: number) {
     setDetailOrder(null);
     setNotice("");
-    void loadOrders(nextPage, submittedKeyword, submittedOrderStatus);
+    void loadOrders(nextPage, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
+  }
+
+  function applyOrderPatch(orderId: string, patch: Partial<OrderRow>) {
+    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, ...patch } : order));
+    setDetailOrder((current) => current && current.id === orderId ? { ...current, ...patch } : current);
+    setEditOrder((current) => current && current.id === orderId ? { ...current, ...patch } : current);
   }
 
   async function deleteOrder(order: OrderRow) {
@@ -161,7 +190,7 @@ export function OrdersModule({
       setDetailOrder(null);
       setEditOrder(null);
       setCreateOpen(false);
-      await loadOrders(page, submittedKeyword);
+      await loadOrders(page, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
       setNotice(result.message || "订单已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除应收订单失败");
@@ -196,7 +225,7 @@ export function OrdersModule({
             disabled={loading}
             onClick={() => {
               setNotice("");
-              void loadOrders(page, submittedKeyword, submittedOrderStatus);
+            void loadOrders(page, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
             }}
           >
             {loading ? "刷新中..." : "刷新"}
@@ -216,7 +245,7 @@ export function OrdersModule({
             setCreateOpen(false);
             setEditOrder(null);
             setDetailOrder(null);
-            void loadOrders(1, submittedKeyword, submittedOrderStatus);
+            void loadOrders(1, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
           }}
         />
       ) : null}
@@ -249,6 +278,10 @@ export function OrdersModule({
           <option value="">全部订单状态</option>
           {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
         </select>
+        <select value={businessEntityId} onChange={(event) => setBusinessEntityId(event.target.value)} disabled={loading}>
+          <option value="">全部业务主体</option>
+          {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
       </div>
@@ -262,6 +295,7 @@ export function OrdersModule({
             <tr>
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.customerColumn}>客户简称</th>
+              <th>业务主体</th>
               <th className={styles.blNoColumn}>提单号</th>
               <th className={styles.amountColumn}>最终应收</th>
               <th className={styles.amountColumn}>已收</th>
@@ -273,7 +307,7 @@ export function OrdersModule({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={9}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : orders.length ? orders.map((order) => (
               <OrderTableRows
@@ -292,7 +326,7 @@ export function OrdersModule({
               />
             )) : (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的应收订单</div></td>
+                <td colSpan={9}><div className={styles.emptyState}>未找到匹配的应收订单</div></td>
               </tr>
             )}
           </tbody>
@@ -304,6 +338,8 @@ export function OrdersModule({
         <OrderDetailDrawer
           order={detailOrder}
           canWrite={canWriteOrders}
+          canTransferBusinessEntity={currentUser.role === "管理员"}
+          businessEntities={businessEntities}
           deleting={deletingId === detailOrder.id}
           onEdit={() => {
             if (!canWriteOrders) return;
@@ -311,6 +347,7 @@ export function OrdersModule({
             setEditOrder(detailOrder);
           }}
           onDelete={() => void deleteOrder(detailOrder)}
+          onBusinessEntityTransferred={(patch) => applyOrderPatch(detailOrder.id, patch)}
           onClose={() => setDetailOrder(null)}
         />
       ) : null}

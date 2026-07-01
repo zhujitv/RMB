@@ -513,6 +513,7 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
       where,
       include: {
         customer: true,
+        businessEntity: true,
         costs: {
           where: costWhere,
           include: {

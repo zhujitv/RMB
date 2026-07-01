@@ -39,6 +39,9 @@ type ReportFilterKey =
   | "salesperson"
   | "supplierName"
   | "supplier"
+  | "businessEntityId"
+  | "businessEntityName"
+  | "businessEntity"
   | "currency"
   | "orderStatus"
   | "paymentStatus"
@@ -153,6 +156,8 @@ function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
   const blNo = lower(filters.blNo || filters.billOfLadingNo);
   const salesperson = lower(filters.salespersonName || filters.salesperson);
   const supplier = lower(filters.supplierName || filters.supplier);
+  const businessEntityId = text(filters.businessEntityId);
+  const businessEntity = lower(filters.businessEntityName || filters.businessEntity);
   const currency = text(filters.currency);
   const orderStatus = text(filters.orderStatus);
   const paymentStatus = text(filters.paymentStatus);
@@ -171,6 +176,8 @@ function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
       row.customerFullName,
       row.customerShortName,
       row.supplierName,
+      row.businessEntityName,
+      row.businessEntityNameSnapshot,
       row.salespersonName,
       row.country,
       row.currency,
@@ -186,6 +193,8 @@ function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
     if (blNo && !lower(row.blNo || row.billOfLadingNo).includes(blNo)) return false;
     if (salesperson && !lower(row.salespersonName).includes(salesperson)) return false;
     if (supplier && !lower(row.supplierName).includes(supplier)) return false;
+    if (businessEntityId && row.businessEntityId !== businessEntityId) return false;
+    if (businessEntity && !lower([row.businessEntityName, row.businessEntityNameSnapshot, row.businessEntityShortName].join(" ")).includes(businessEntity)) return false;
     if (currency && row.currency !== currency) return false;
     if (orderStatus && row.status !== orderStatus && row.orderStatus !== orderStatus) return false;
     if (paymentStatus && row.paymentStatus !== paymentStatus && row.status !== paymentStatus) return false;
@@ -232,16 +241,16 @@ function moneyNumber(value: unknown) {
 
 const columnSets = {
   receivables: [
-    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
+    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
   ],
   payments: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["paymentDate", "收款日期"], ["paymentType", "收款类型"], ["currency", "币种"], ["amount", "原币收款金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["status", "收款状态"], ["bankReference", "银行流水号"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["paymentDate", "收款日期"], ["paymentType", "收款类型"], ["currency", "币种"], ["amount", "原币收款金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["status", "收款状态"], ["bankReference", "银行流水号"],
   ],
   costs: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["costType", "成本类型"], ["supplierName", "供应商"], ["supplierType", "供应商类型"], ["currency", "币种"], ["amount", "原币成本金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["paymentStatus", "付款状态"], ["invoiceStatus", "发票状态"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["costType", "成本类型"], ["supplierName", "供应商"], ["supplierType", "供应商类型"], ["currency", "币种"], ["amount", "原币成本金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["paymentStatus", "付款状态"], ["invoiceStatus", "发票状态"],
   ],
   profits: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["netCashFlowCny", "净现金流"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["netCashFlowCny", "净现金流"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
   ],
   commissions: [
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["commissionRate", "提成比例"], ["receivedAmountCny", "已到账收款"], ["logisticsCostCny", "物流成本"], ["commissionBaseCny", "提成基数"], ["commissionAmountCny", "提成金额"], ["commissionStatus", "提成状态"], ["commissionSettledAt", "结算时间"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
@@ -286,6 +295,9 @@ function orderToReceivable(order: BusinessReportRow) {
     customerName: displayCustomerName(order.customerName || order.customerShortName || order.customerNameSnapshot || customer.name || ""),
     customerFullName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || customer.name || ""),
     customerShortName: displayCustomerName(order.customerShortName || ""),
+    businessEntityId: order.businessEntityId || "",
+    businessEntityName: order.businessEntityName || order.businessEntityNameSnapshot || "",
+    businessEntityShortName: order.businessEntityShortName || "",
     salespersonName: order.salespersonName,
     country: order.country,
     currency: order.currency,
@@ -501,6 +513,8 @@ function queryFilters(query: URLSearchParams): ReportFilters {
     currency: query.get("currency") || "",
     salespersonName: query.get("salespersonName") || "",
     supplierName: query.get("supplierName") || "",
+    businessEntityId: query.get("businessEntityId") || "",
+    businessEntityName: query.get("businessEntityName") || query.get("businessEntity") || "",
     orderStatus: query.get("orderStatus") || "",
     paymentStatus: query.get("paymentStatus") || "",
     costType: query.get("costType") || "",

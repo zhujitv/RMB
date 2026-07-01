@@ -25,6 +25,7 @@ import { taxDocumentCompleteness, derivedTaxRefundStatus } from "./shared-tax";
 import { serializeUser } from "./shared-users";
 import { paymentTermLabel } from "./shared-utils";
 import { summarizeOrder } from "./shared-order-calculations";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 
 type ShippingCustomerLike = {
   country?: string | null;
@@ -93,6 +94,15 @@ type ShippingOrderLike = Record<string, unknown> & {
   orderNo?: string | null;
   customerId?: string | null;
   customerNameSnapshot?: string;
+  businessEntityId?: string | null;
+  businessEntityNameSnapshot?: string | null;
+  businessEntity?: {
+    id?: string | null;
+    name?: string | null;
+    shortName?: string | null;
+    isDefault?: boolean | null;
+    status?: string | null;
+  } | null;
   salespersonUserId?: string | null;
   salesperson?: UserLike | null;
   salespersonCommissionRate?: unknown;
@@ -271,6 +281,7 @@ export function serializeOrder(orderInput: unknown) {
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
     customerNameSnapshot: fullCustomerName,
+    ...businessEntityFieldsFromOrder(order),
     salespersonId: order.salespersonUserId || "",
     salespersonUserId: order.salespersonUserId || "",
     salespersonName: order.salesperson?.name || "",

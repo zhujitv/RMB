@@ -34,6 +34,7 @@ function domesticLogisticsInfoSafeSelect() {
 export function includeOrderRelations() {
   return Prisma.validator<Prisma.ReceivableOrderInclude>()({
     customer: true,
+    businessEntity: true,
     salesperson: true,
     commissionSettledBy: true,
     taxRefundArchivedBy: true,

@@ -10,6 +10,7 @@ import {
   serializeOrderDocument,
   serializeUser,
 } from "./shared";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import {
   logisticsInvoiceGroupForExpense,
   logisticsInvoiceGroupsForExpenses,
@@ -38,6 +39,7 @@ export function includeLogisticsExpenseRelations() {
     order: {
       include: {
         customer: true,
+        businessEntity: true,
         salesperson: true,
         logisticsSuppliers: { include: { supplier: true } },
         domesticLogisticsInfos: {
@@ -71,6 +73,7 @@ export function includeLogisticsExpenseListRelations() {
     order: {
       include: {
         customer: true,
+        businessEntity: true,
         salesperson: true,
         domesticLogisticsInfos: {
           include: { transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
@@ -173,6 +176,7 @@ export function logisticsExpenseOrderSummary(order: LogisticsOrderLike = {}) {
     billOfLadingNo: order.blNo || "",
     customerShortName: customerShortName(order.customer),
     customerName: customerBusinessName(order.customer, nonEmpty(order.customerNameSnapshot)),
+    ...businessEntityFieldsFromOrder(order),
     vesselVoyage: resolveLogisticsExpenseVesselVoyage(order),
     containerType: containerTypes.length === 1 ? containerTypes[0] : "",
     containerTypes,

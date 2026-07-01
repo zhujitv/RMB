@@ -27,6 +27,7 @@ export function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     creditDays: order.creditDays == null || order.creditDays === "" ? "30" : String(order.creditDays),
     reminderDays: order.reminderDays == null || order.reminderDays === "" ? "7" : String(order.reminderDays),
     status: order.status || "草稿",
+    businessEntityId: order.businessEntityId || order.businessEntity?.id || "",
     logisticsSupplierIds: order.logisticsSupplierIds || [],
     paymentInstallments: order.paymentInstallments?.length
       ? order.paymentInstallments.map((row) => ({ ratio: String(row.ratio || ""), condition: row.condition || "" }))

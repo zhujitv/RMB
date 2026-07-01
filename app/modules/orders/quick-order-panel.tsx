@@ -12,6 +12,7 @@ import {
   PAYMENT_TERMS,
   TRADE_TERMS,
   emptyQuickOrderForm,
+  type BusinessEntityOption,
   type ExchangeRateResponse,
   type QuickOrderForm,
   type SettingsResponse,
@@ -27,6 +28,10 @@ import {
   supplierName,
 } from "./utils";
 
+type BusinessEntitiesResponse = {
+  entities?: BusinessEntityOption[];
+};
+
 export function QuickCreateOrderPanel({
   initialOrder,
   onCancel,
@@ -39,6 +44,7 @@ export function QuickCreateOrderPanel({
   const [form, setForm] = useState<QuickOrderForm>(() => orderFormFromRow(initialOrder));
   const [customers, setCustomers] = useState<CustomerAutocompleteOption[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
   const [allowMultipleLogisticsSuppliers, setAllowMultipleLogisticsSuppliers] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,6 +56,9 @@ export function QuickCreateOrderPanel({
   const defaultLogisticsSupplier = useMemo(() => (
     logisticsSuppliers.find((supplier) => supplier.isDefaultLogisticsSupplier) || null
   ), [logisticsSuppliers]);
+  const defaultBusinessEntity = useMemo(() => (
+    businessEntities.find((entity) => entity.isDefault) || businessEntities[0] || null
+  ), [businessEntities]);
 
   useEffect(() => {
     setForm(orderFormFromRow(initialOrder));
@@ -79,6 +88,15 @@ export function QuickCreateOrderPanel({
   }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id]);
 
   useEffect(() => {
+    if (initialOrder?.id) return;
+    if (!defaultBusinessEntity?.id) return;
+    setForm((current) => current.businessEntityId ? current : ({
+      ...current,
+      businessEntityId: defaultBusinessEntity.id,
+    }));
+  }, [defaultBusinessEntity?.id, initialOrder?.id]);
+
+  useEffect(() => {
     if (form.paymentTermType === "INSTALLMENT") return;
     const nextDueDate = derivedDueDate(form);
     if (nextDueDate !== form.dueDate) setFormValue("dueDate", nextDueDate);
@@ -86,12 +104,14 @@ export function QuickCreateOrderPanel({
 
   async function loadFormOptions() {
     try {
-      const [settingsResult, suppliersResult] = await Promise.all([
+      const [settingsResult, suppliersResult, businessEntitiesResult] = await Promise.all([
         apiJson<SettingsResponse>("/api/exchange-rates/settings").catch(() => null),
         apiJson<SuppliersResponse>("/api/suppliers/available").catch(() => null),
+        apiJson<BusinessEntitiesResponse>("/api/business-entities").catch(() => null),
       ]);
       setAllowMultipleLogisticsSuppliers(Boolean(settingsResult?.settings?.allowMultipleOrderLogisticsSuppliers));
       setSuppliers(Array.isArray(suppliersResult?.suppliers) ? suppliersResult.suppliers : []);
+      setBusinessEntities(Array.isArray(businessEntitiesResult?.entities) ? businessEntitiesResult.entities : []);
     } catch (optionError) {
       setMessage(optionError instanceof Error ? optionError.message : "读取订单配置失败");
     }
@@ -284,6 +304,7 @@ export function QuickCreateOrderPanel({
           : undefined,
         reminderDays: Number(form.reminderDays || 7),
         status: form.status,
+        businessEntityId: form.businessEntityId || undefined,
         logisticsSupplierIds: selectedLogisticsSupplierIds(),
         remark: form.remark.trim(),
       };
@@ -332,6 +353,22 @@ export function QuickCreateOrderPanel({
         <label>
           提单号
           <input value={form.blNo} onChange={(event) => setFormValue("blNo", event.target.value)} placeholder="可稍后补充" />
+        </label>
+        <label>
+          业务主体
+          <select
+            value={form.businessEntityId}
+            onChange={(event) => setFormValue("businessEntityId", event.target.value)}
+            disabled={Boolean(initialOrder?.id)}
+          >
+            <option value="">使用系统默认业务主体</option>
+            {businessEntities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.name}{entity.isDefault ? " · 默认" : ""}
+              </option>
+            ))}
+          </select>
+          {initialOrder?.id ? <small className={styles.mutedText}>已有订单需通过详情里的业务主体转移操作修改。</small> : null}
         </label>
         <label>
           订单状态
