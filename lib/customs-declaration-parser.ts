@@ -111,6 +111,11 @@ export function parseCustomsDeclarationText(text = ""): CustomsParseResult {
 }
 
 export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
+  const normalizedText = await extractPdfTextFromPdfBuffer(buffer, options);
+  return parseCustomsDeclarationText(normalizedText);
+}
+
+export async function extractPdfTextFromPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
   const pdfData = Buffer.isBuffer(buffer)
     ? buffer
     : buffer instanceof Uint8Array
@@ -122,7 +127,7 @@ export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuf
   if (options.requireText && !normalizedText) {
     throw parserError("PDF未提取到文字，请手工填写报关单号和申报日期。", 422, "CUSTOMS_PDF_NO_TEXT");
   }
-  return parseCustomsDeclarationText(normalizedText);
+  return normalizedText;
 }
 
 export function customsParseStatusFromFields(fields: Partial<CustomsFields> = {}): CustomsParseStatus {

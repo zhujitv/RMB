@@ -6,6 +6,7 @@ import { readSettingsModuleSource } from "./source-helpers.ts";
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const service = readFileSync("lib/platform/ocr-integration.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
+const customsParser = readFileSync("lib/customs-declaration-parser.ts", "utf8");
 const settingsRoute = readFileSync("app/api/settings/ocr/route.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
@@ -48,6 +49,7 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.match(customsRecognition, /customsDeclarationParser\.parseCustomsDeclarationText\(recognized\.text\)/);
+  assert.match(customsParser, /export async function extractPdfTextFromPdfBuffer/);
   assert.match(orderDocuments, /isOcrFeatureEnabled\("customsDeclaration"\)/);
   assert.match(orderDocuments, /shouldAutoRecognizeCustoms/);
   assert.match(service, /ensureOcrFeatureEnabled/);
