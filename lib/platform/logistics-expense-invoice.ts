@@ -20,8 +20,8 @@ import {
 import { logisticsExpenseOrderSummary } from "./logistics-expense-access";
 import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { logisticsInvoiceGroupForExpense, logisticsInvoiceGroupsForExpenses } from "./logistics-invoice-groups";
-import { getLogisticsInvoiceNotificationSettings, logisticsInvoiceNotificationCcEmails, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
-import { sendShippingDocumentsEmail } from "./shipping-documents";
+import { getLogisticsInvoiceNotificationSettings, renderLogisticsInvoiceNotificationEmail } from "./notification-templates";
+import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { summarizeCurrencyTotals, type CurrencyTotals } from "./currency-totals";
 
 type UnknownRecord = Record<string, unknown>;
@@ -274,15 +274,20 @@ export async function notifyLogisticsSupplierInvoice(expense: LogisticsExpenseLi
     expense.supplierNameSnapshot || expense.supplier?.supplierName || "供应商",
     bills,
   );
-  const ccEmails = await logisticsInvoiceNotificationCcEmails(settings, resolved.emails);
-  await sendShippingDocumentsEmail({
+  const delivery = await sendNotificationEmail({
+    type: NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE,
     recipientEmails: resolved.emails,
-    ccEmails,
-    attachments: [],
-    subject,
-    body,
-    notificationId: `logistics-expense-${expense.id}`,
+    subjectOverride: subject,
+    bodyOverride: body,
+    idempotencyKey: `logistics-expense-${expense.id}`,
+    relatedEntityType: "logistics_expenses",
+    relatedEntityId: expense.id || "",
+    relatedOrderId: expense.orderId || "",
+    context: { supplierId: expense.supplierId || "", bills },
   });
+  if (delivery.skipped || delivery.sent !== true) {
+    throw codedError(delivery.error || "物流费用开票通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+  }
 }
 
 export async function notifyLogisticsSupplierInvoiceBills(expenses: LogisticsExpenseLike[] = []): Promise<InvoiceNotificationResult[]> {
@@ -329,15 +334,25 @@ export async function notifyLogisticsSupplierInvoiceBills(expenses: LogisticsExp
     }
     const { subject, body } = await renderLogisticsInvoiceNotificationEmail(group.supplierName, group.bills);
     try {
-      const ccEmails = await logisticsInvoiceNotificationCcEmails(settings, resolved.emails);
-      await sendShippingDocumentsEmail({
+      const delivery = await sendNotificationEmail({
+        type: NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE,
         recipientEmails: resolved.emails,
-        ccEmails,
-        attachments: [],
-        subject,
-        body,
-        notificationId: `logistics-expense-invoice-${group.supplierId || resolved.email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
+        subjectOverride: subject,
+        bodyOverride: body,
+        idempotencyKey: `logistics-expense-invoice-${group.supplierId || resolved.email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
+        relatedEntityType: "logistics_expense_invoice_notice",
+        relatedEntityId: group.supplierId || resolved.email,
+        relatedOrderId: group.expenses[0]?.orderId || "",
+        context: {
+          supplierId: group.supplierId || "",
+          supplierName: group.supplierName || "",
+          expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
+          bills: group.bills.map((bill) => ({ orderNo: bill.orderNo, blNo: bill.blNo })),
+        },
       });
+      if (delivery.skipped || delivery.sent !== true) {
+        throw codedError(delivery.error || "物流费用开票通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+      }
       results.push({
         supplierId: group.supplierId || "",
         supplierName: group.supplierName || "供应商",

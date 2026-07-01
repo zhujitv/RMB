@@ -7,11 +7,9 @@ import {
   COMMISSION_FORMULA_DEDUCTIONS,
   COMMISSION_FORMULA_PRESETS,
   COMMISSION_FORMULA_SOURCES,
-  DEFAULT_NOTIFICATION_TEMPLATE_FORM,
   EXCHANGE_RATE_SOURCES,
   EXCHANGE_RATE_TYPES,
   NOTIFICATION_RECIPIENT_EMAIL_OPTIONS,
-  NOTIFICATION_TEMPLATE_VARIABLES,
   SHIPSGO_FEATURE_OPTIONS,
 } from "./constants";
 import {
@@ -19,8 +17,10 @@ import {
   commissionFormulaPreview,
   companyProfileFormFromSettings,
   exchangeFormFromSettings,
+  notificationDeliveryLogs,
   notificationTemplateFormFromSettings,
   notificationTemplatePreview,
+  notificationTemplateRows,
   shipsgoIntegrationFormFromSettings,
 } from "./helpers";
 import type {
@@ -350,47 +350,70 @@ export function CommissionFormulaSettingsCard({
 export function NotificationTemplateSettingsCard({
   settings,
   form,
+  selectedType,
   loading,
   saving,
   message,
   onChange,
+  onSelectType,
   onReset,
-  onRestoreDefault,
+  onTestSend,
   onSubmit,
 }: {
   settings: NotificationTemplateSettings | null;
   form: NotificationTemplateForm | null;
+  selectedType: string;
   loading: boolean;
   saving: boolean;
   message: string;
   onChange: (form: NotificationTemplateForm) => void;
+  onSelectType: (type: string) => void;
   onReset: () => void;
-  onRestoreDefault: () => void;
+  onTestSend: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
-  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载通知模板</div>;
-  const currentForm = form || notificationTemplateFormFromSettings(settings);
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载邮件通知中心</div>;
+  const templates = notificationTemplateRows(settings);
+  const logs = notificationDeliveryLogs(settings);
+  const currentForm = form || notificationTemplateFormFromSettings(settings, selectedType);
   const preview = notificationTemplatePreview(currentForm);
+  const editable = currentForm.editable && !currentForm.securitySensitive;
+  const extraConfig = currentForm.extraConfig || {};
+  const recipientConfig = currentForm.recipientConfig || {};
+  const recipientEmailFields = Array.isArray(recipientConfig.recipientEmailFields)
+    ? recipientConfig.recipientEmailFields as string[]
+    : [];
 
   function setField<K extends keyof NotificationTemplateForm>(key: K, value: NotificationTemplateForm[K]) {
     onChange({ ...currentForm, [key]: value });
   }
 
+  function setExtraField(key: string, value: unknown) {
+    setField("extraConfig", { ...(currentForm.extraConfig || {}), [key]: value });
+  }
+
+  function setRecipientConfigField(key: string, value: unknown) {
+    setField("recipientConfig", { ...(currentForm.recipientConfig || {}), [key]: value });
+  }
+
   function toggleRecipientEmailField(value: string) {
-    const current = currentForm.recipientEmailFields || [];
+    const current = recipientEmailFields;
     const next = current.includes(value)
       ? current.filter((item) => item !== value)
       : [...current, value];
     if (!next.length) return;
-    setField("recipientEmailFields", next);
+    setRecipientConfigField("recipientEmailFields", next);
   }
 
   return (
     <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>物流费用开票通知模板</strong>
+          <strong>邮件通知中心</strong>
+          <div className={styles.quickCreateMeta}>
+            <span>统一管理系统邮件模板、变量、发送测试和最近发送记录。</span>
+          </div>
         </div>
       </div>
 
@@ -401,38 +424,69 @@ export function NotificationTemplateSettingsCard({
       ) : null}
 
       <div className={styles.reportFilterGrid}>
+        <label>
+          邮件类型
+          <select value={currentForm.type} onChange={(event) => onSelectType(event.target.value)}>
+            {templates.map((template) => (
+              <option key={template.type} value={template.type}>{template.module} / {template.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          来源模块
+          <input value={currentForm.module} readOnly />
+        </label>
+        <label>
+          是否支持附件
+          <input value={currentForm.supportsAttachments ? "支持附件" : "无附件"} readOnly />
+        </label>
         <UiSwitch
-          label="审核通过后自动发送"
-          description="关闭后，审核仍会通过，但不会自动发开票通知，可在账单中手工重发。"
-          checked={currentForm.autoSendOnApproval}
-          onChange={(value) => setField("autoSendOnApproval", value)}
+          label="启用通知"
+          description={currentForm.securitySensitive ? "安全类邮件必须保持启用，只允许查看模板。" : "关闭后该类型邮件不会自动发送。"}
+          checked={currentForm.enabled}
+          disabled={currentForm.securitySensitive}
+          onChange={(value) => setField("enabled", value)}
         />
       </div>
 
       <section className={styles.documentGroupCard}>
-        <strong>物流公司收件邮箱来源</strong>
+        <strong>模板说明</strong>
         <div className={styles.quickCreateMeta}>
-          <span>邮件收件人直接读取系统里的物流供应商资料，不在发送时手工输入。</span>
-        </div>
-        <div className={styles.commissionDeductionGrid}>
-          {NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => (
-            <PermissionSelectItem
-              key={item.value}
-              label={item.label}
-              description={item.description}
-              checked={(currentForm.recipientEmailFields || []).includes(item.value)}
-              onChange={() => toggleRecipientEmailField(item.value)}
-            />
-          ))}
+          <span>{currentForm.description || "该通知由业务模块自动触发。"}</span>
+          {currentForm.securitySensitive ? <span>安全敏感模板：标题和正文不可编辑。</span> : null}
         </div>
       </section>
+
+      {currentForm.type === "LOGISTICS_INVOICE_NOTICE" ? (
+        <section className={styles.documentGroupCard}>
+          <strong>物流开票触发与收件人</strong>
+          <UiSwitch
+            label="审核通过后自动发送"
+            description="关闭后，审核仍会通过，但不会自动发开票通知，可在账单中手工重发。"
+            checked={extraConfig.autoSendOnApproval !== false}
+            onChange={(value) => setExtraField("autoSendOnApproval", value)}
+          />
+          <div className={styles.commissionDeductionGrid}>
+            {NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => (
+              <PermissionSelectItem
+                key={item.value}
+                label={item.label}
+                description={item.description}
+                checked={recipientEmailFields.includes(item.value)}
+                onChange={() => toggleRecipientEmailField(item.value)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className={styles.documentGroupCard}>
         <strong>抄送设置</strong>
         <UiSwitch
           label="默认抄送管理员"
-          description="发送物流费用开票通知时，自动抄送系统中已启用的管理员邮箱。"
+          description="发送该类型通知时，自动抄送系统中已启用的管理员邮箱。"
           checked={currentForm.ccAdminEmails}
+          disabled={currentForm.securitySensitive}
           onChange={(value) => setField("ccAdminEmails", value)}
         />
         <label className={styles.notificationTemplateField}>
@@ -441,6 +495,7 @@ export function NotificationTemplateSettingsCard({
             value={currentForm.ccEmails}
             onChange={(event) => setField("ccEmails", event.target.value)}
             placeholder="多个邮箱可用逗号、分号或换行分隔"
+            disabled={currentForm.securitySensitive}
             rows={3}
           />
         </label>
@@ -448,37 +503,11 @@ export function NotificationTemplateSettingsCard({
 
       <div className={styles.reportFilterGrid}>
         <label>
-          发票上传入口
+          邮件标题
           <input
-            value={currentForm.uploadUrl}
-            onChange={(event) => setField("uploadUrl", event.target.value)}
-            placeholder="为空时使用系统访问地址"
-          />
-        </label>
-        <label>
-          单票邮件标题
-          <input
-            value={currentForm.singleSubjectTemplate}
-            onChange={(event) => setField("singleSubjectTemplate", event.target.value)}
-          />
-        </label>
-        <label>
-          批量邮件标题
-          <input
-            value={currentForm.batchSubjectTemplate}
-            onChange={(event) => setField("batchSubjectTemplate", event.target.value)}
-          />
-        </label>
-        <label>
-          邮件落款
-          <input value={currentForm.signature} onChange={(event) => setField("signature", event.target.value)} />
-        </label>
-        <label>
-          开票要求
-          <textarea
-            value={currentForm.invoiceRequirements}
-            onChange={(event) => setField("invoiceRequirements", event.target.value)}
-            rows={6}
+            value={currentForm.subjectTemplate}
+            onChange={(event) => setField("subjectTemplate", event.target.value)}
+            readOnly={!editable}
           />
         </label>
         <label>
@@ -486,16 +515,49 @@ export function NotificationTemplateSettingsCard({
           <textarea
             value={currentForm.bodyTemplate}
             onChange={(event) => setField("bodyTemplate", event.target.value)}
+            readOnly={!editable}
             rows={11}
           />
         </label>
       </div>
 
+      {currentForm.type === "LOGISTICS_INVOICE_NOTICE" ? (
+        <div className={styles.reportFilterGrid}>
+          <label>
+            批量邮件标题
+            <input
+              value={String(extraConfig.batchSubjectTemplate || "")}
+              onChange={(event) => setExtraField("batchSubjectTemplate", event.target.value)}
+            />
+          </label>
+          <label>
+            发票上传入口
+            <input
+              value={String(extraConfig.uploadUrl || "")}
+              onChange={(event) => setExtraField("uploadUrl", event.target.value)}
+              placeholder="为空时使用系统访问地址"
+            />
+          </label>
+          <label>
+            邮件落款
+            <input value={String(extraConfig.signature || "")} onChange={(event) => setExtraField("signature", event.target.value)} />
+          </label>
+          <label>
+            开票要求
+            <textarea
+              value={String(extraConfig.invoiceRequirements || "")}
+              onChange={(event) => setExtraField("invoiceRequirements", event.target.value)}
+              rows={6}
+            />
+          </label>
+        </div>
+      ) : null}
+
       <section className={styles.documentGroupCard}>
         <strong>可用变量</strong>
         <div className={styles.quickCreateMeta}>
-          {NOTIFICATION_TEMPLATE_VARIABLES.map(([token, label]) => (
-            <span key={token}>{token}：{label}</span>
+          {(currentForm.variables || []).map((item) => (
+            <span key={item.key}>{`{${item.key}}`}：{item.label}</span>
           ))}
         </div>
       </section>
@@ -508,8 +570,42 @@ export function NotificationTemplateSettingsCard({
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存通知模板"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
-        <button className={styles.secondaryButton} type="button" onClick={onRestoreDefault} disabled={saving}>恢复默认模板</button>
+        <button className={styles.secondaryButton} type="button" onClick={onTestSend} disabled={saving}>发送测试邮件</button>
       </div>
+
+      <section className={styles.documentGroupCard}>
+        <strong>最近发送记录</strong>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>状态</th>
+                <th>收件人</th>
+                <th>标题</th>
+                <th>错误</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.length ? logs.map((log) => (
+                <tr key={log.id}>
+                  <td>{log.createdAt ? new Date(log.createdAt).toLocaleString("zh-CN", { hour12: false }) : "-"}</td>
+                  <td>{log.templateName || log.type}</td>
+                  <td>{log.status === "sent" ? "已发送" : log.status === "failed" ? "失败" : log.status}</td>
+                  <td>{(log.recipientEmails || []).join("，") || "-"}</td>
+                  <td>{log.subject || "-"}</td>
+                  <td>{log.errorMessage || "-"}</td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={6}>暂无发送记录</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </form>
   );
 }

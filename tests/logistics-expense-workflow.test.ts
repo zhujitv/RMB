@@ -26,6 +26,7 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
+  readFileSync("lib/platform/notification-engine.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
   readFileSync("lib/platform/logistics-bill-state-machine.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-queries.ts", "utf8"),
@@ -643,12 +644,13 @@ test("settings include configurable logistics invoice notification template", ()
   assert.match(backend, /applyTemplate\(settings\.bodyTemplate/);
   assert.match(
     notificationTemplateRoute,
-    /readLogisticsInvoiceNotificationSettings\(actor\)/,
+    /readNotificationCenterSettings\(actor\)/,
   );
   assert.match(
     notificationTemplateRoute,
-    /saveLogisticsInvoiceNotificationSettings\(request, actor, body\)/,
+    /saveNotificationCenterTemplate\(request, actor, body\)/,
   );
+  assert.match(notificationTemplateRoute, /saveLogisticsInvoiceNotificationSettings\(request, actor, body\)/);
   assert.match(
     settingsModule,
     /type SettingsTabKey = "companyProfile"[\s\S]*"notificationTemplates"/,
@@ -656,14 +658,16 @@ test("settings include configurable logistics invoice notification template", ()
   assert.match(settingsModule, /label: "通知模板"/);
   assert.match(settingsModule, /\/api\/settings\/notification-templates/);
   assert.match(settingsModule, /NotificationTemplateSettingsCard/);
-  assert.match(settingsModule, /物流费用开票通知模板/);
-  assert.match(settingsModule, /物流公司收件邮箱来源/);
+  assert.match(settingsModule, /邮件通知中心/);
+  assert.match(settingsModule, /物流开票触发与收件人/);
   assert.match(settingsModule, /默认抄送管理员/);
   assert.match(settingsModule, /额外抄送邮箱/);
   assert.match(settingsModule, /recipientEmailFields/);
   assert.match(settingsModule, /ccAdminEmails/);
   assert.match(settingsModule, /ccEmails/);
   assert.match(settingsModule, /保存通知模板/);
+  assert.match(settingsModule, /发送测试邮件/);
+  assert.match(settingsModule, /最近发送记录/);
   assert.match(settingsModule, /可用变量/);
   assert.match(settingsModule, /模板预览/);
   assert.match(settingsModule, /审核通过后自动发送/);
@@ -672,11 +676,11 @@ test("settings include configurable logistics invoice notification template", ()
 test("notification template editor keeps formal fields editable and persists current state", () => {
   assert.match(
     notificationTemplateCardSource,
-    /value=\{currentForm\.invoiceRequirements\}/,
+    /value=\{String\(extraConfig\.invoiceRequirements \|\| ""\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /onChange=\{\(event\) => setField\("invoiceRequirements", event\.target\.value\)\}/,
+    /onChange=\{\(event\) => setExtraField\("invoiceRequirements", event\.target\.value\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
@@ -696,35 +700,35 @@ test("notification template editor keeps formal fields editable and persists cur
   );
   assert.match(
     notificationTemplateCardSource,
-    /value=\{currentForm\.uploadUrl\}/,
+    /value=\{String\(extraConfig\.uploadUrl \|\| ""\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /onChange=\{\(event\) => setField\("uploadUrl", event\.target\.value\)\}/,
+    /onChange=\{\(event\) => setExtraField\("uploadUrl", event\.target\.value\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /value=\{currentForm\.singleSubjectTemplate\}/,
+    /value=\{currentForm\.subjectTemplate\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /onChange=\{\(event\) => setField\("singleSubjectTemplate", event\.target\.value\)\}/,
+    /onChange=\{\(event\) => setField\("subjectTemplate", event\.target\.value\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /value=\{currentForm\.batchSubjectTemplate\}/,
+    /value=\{String\(extraConfig\.batchSubjectTemplate \|\| ""\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /onChange=\{\(event\) => setField\("batchSubjectTemplate", event\.target\.value\)\}/,
+    /onChange=\{\(event\) => setExtraField\("batchSubjectTemplate", event\.target\.value\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /value=\{currentForm\.signature\}/,
+    /value=\{String\(extraConfig\.signature \|\| ""\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
-    /onChange=\{\(event\) => setField\("signature", event\.target\.value\)\}/,
+    /onChange=\{\(event\) => setExtraField\("signature", event\.target\.value\)\}/,
   );
   assert.match(
     notificationTemplateCardSource,
@@ -732,7 +736,7 @@ test("notification template editor keeps formal fields editable and persists cur
   );
   assert.doesNotMatch(
     notificationTemplateCardSource,
-    /value=\{currentForm\.(invoiceRequirements|bodyTemplate|ccEmails|uploadUrl|singleSubjectTemplate|batchSubjectTemplate|signature)\}[\s\S]{0,120}(readOnly|disabled)/,
+    /value=\{currentForm\.(bodyTemplate|ccEmails|subjectTemplate)\}[\s\S]{0,120}disabled/,
   );
   assert.match(
     saveNotificationTemplateSource,
@@ -749,11 +753,11 @@ test("notification template editor keeps formal fields editable and persists cur
   );
   assert.match(
     notificationTemplateFormSource,
-    /templateStringSetting\(settings, "bodyTemplate"/,
+    /notificationTemplateRows\(settings\)/,
   );
   assert.match(
     notificationTemplateFormSource,
-    /templateStringSetting\(settings, "invoiceRequirements"/,
+    /notificationTemplateFormFromTemplate\(selected\)/,
   );
   assert.match(
     backend,
@@ -915,9 +919,11 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /group\.bills\.push\(bill\)/);
   assert.match(
     backend,
-    /sendShippingDocumentsEmail\(\{[\s\S]*recipientEmails: resolved\.emails/,
+    /sendNotificationEmail\(\{[\s\S]*recipientEmails: resolved\.emails/,
   );
-  assert.match(backend, /sendShippingDocumentsEmail\(\{[\s\S]*ccEmails/);
+  assert.match(backend, /NOTIFICATION_TEMPLATE_TYPES\.LOGISTICS_INVOICE_NOTICE/);
+  assert.match(schema, /notification_outbox/);
+  assert.match(schema, /notification_delivery_logs/);
   assert.match(backend, /待开票费用清单/);
   assert.match(backend, /订单号：/);
   assert.match(backend, /提单号：/);

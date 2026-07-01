@@ -10,6 +10,7 @@ export * from "./shipsgo-integration";
 export * from "./shipsgo-tracking";
 export * from "./commission-formula";
 export * from "./notification-templates";
+export * from "./notification-engine";
 export * from "./shared-serialization";
 export * from "./shared-tax";
 export * from "./shared-order-summary";

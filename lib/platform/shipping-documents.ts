@@ -24,6 +24,11 @@ import {
   writeAudit,
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
+import {
+  notificationTemplateTypeForShippingLanguage,
+  renderNotificationTemplate,
+  sendNotificationEmail,
+} from "./notification-engine";
 
 type ActorLike = {
   id?: string | null;
@@ -102,6 +107,13 @@ type SendShippingDocumentsEmailInput = {
   notificationId?: string | null;
 };
 type ManualShippingEmailInput = Record<string, unknown>;
+type RenderedShippingEmail = {
+  language: string;
+  type: string;
+  subject: string;
+  body: string;
+  variables: Record<string, unknown>;
+};
 type NotificationRecordOptions = {
   sentById?: string;
   documentTypes?: string[];
@@ -269,10 +281,41 @@ function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: Sh
   };
 }
 
-function shippingDocumentDraft(order: ShippingOrderLike = {}) {
+function shippingDocumentTemplateVariables(order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order), language = "EN") {
+  const normalizedLanguage = normalizeClearanceEmailLanguage(language, order.customer?.country || order.country || "");
+  const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
+  const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
+  const labels = (bundle.items || [])
+    .filter((item) => item.document)
+    .map((item) => item.emailLabel);
+  const fallbackLabels = ["Commercial Invoice", "Packing List", "Customs Declaration"];
+  return {
+    language: normalizedLanguage,
+    customerName: customerFullName(order.customer || {}, order.customerNameSnapshot || "") || customerShortName(order.customer || {}) || "Customer",
+    orderNo: order.orderNo || "-",
+    blNo: billOfLadingNo,
+    customsDeclarationDate,
+    documentLines: (labels.length ? labels : fallbackLabels).map((label) => `- ${label}`).join("\n"),
+  };
+}
+
+async function renderShippingDocumentEmail(order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order), language = "EN"): Promise<RenderedShippingEmail> {
+  const variables = shippingDocumentTemplateVariables(order, bundle, language);
+  const type = notificationTemplateTypeForShippingLanguage(variables.language);
+  const rendered = await renderNotificationTemplate(type, variables);
+  return {
+    language: variables.language,
+    type,
+    subject: rendered.subject,
+    body: rendered.body,
+    variables,
+  };
+}
+
+async function shippingDocumentDraft(order: ShippingOrderLike = {}) {
   const customer = order.customer || {};
   const bundle = shippingDocumentManualBundle(order);
-  const template = shippingDocumentEmailTemplate(order, bundle, customer.clearanceEmailLanguage || "EN");
+  const template = await renderShippingDocumentEmail(order, bundle, customer.clearanceEmailLanguage || "EN");
   const recipientEmails = parseEmailList(customer.shippingDocsEmails || []);
   const ccEmails = parseEmailList(customer.shippingDocsCcEmails || []);
   return {
@@ -307,16 +350,16 @@ function normalizeShippingEmailLanguage(value = "", order: ShippingOrderLike = {
   return normalizeClearanceEmailLanguage(String(value || ""), order.customer?.country || order.country || "");
 }
 
-function normalizeManualShippingEmailInput(input: ManualShippingEmailInput = {}, order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order)) {
+async function normalizeManualShippingEmailInput(input: ManualShippingEmailInput = {}, order: ShippingOrderLike = {}, bundle: ShippingBundle = shippingDocumentBundle(order)) {
   const language = normalizeShippingEmailLanguage(String(input.emailLanguage || input.language || order.customer?.clearanceEmailLanguage || "EN"), order);
-  const template = shippingDocumentEmailTemplate(order, bundle, language);
+  const template = await renderShippingDocumentEmail(order, bundle, language);
   const recipientEmails = requireValidEmailList(input.recipientEmails, "收件邮箱");
   const ccEmails = requireValidEmailList(input.ccEmails, "抄送邮箱");
   const subject = nonEmpty(input.emailSubject || input.subject || template.subject);
   const body = nonEmpty(input.emailBody || input.body || template.body);
   if (!subject) throw codedError("邮件标题不能为空", 400, "SHIPPING_EMAIL_SUBJECT_REQUIRED");
   if (!body) throw codedError("邮件正文不能为空", 400, "SHIPPING_EMAIL_BODY_REQUIRED");
-  return { language, recipientEmails, ccEmails, subject, body };
+  return { language, recipientEmails, ccEmails, subject, body, type: template.type, variables: template.variables };
 }
 
 export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, attachments, subject, body, notificationId }: SendShippingDocumentsEmailInput) {
@@ -434,15 +477,24 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
         contentType: item.document.mimeType || "application/pdf",
       };
     }));
-    const template = shippingDocumentEmailTemplate(order, bundle, customer.clearanceEmailLanguage || "EN");
-    await sendShippingDocumentsEmail({
+    const template = await renderShippingDocumentEmail(order, bundle, customer.clearanceEmailLanguage || "EN");
+    const delivery = await sendNotificationEmail({
+      type: template.type,
       recipientEmails,
       ccEmails,
       attachments,
-      subject: template.subject,
-      body: template.body,
-      notificationId: row.id,
+      variables: template.variables,
+      subjectOverride: template.subject,
+      bodyOverride: template.body,
+      idempotencyKey: row.id,
+      relatedEntityType: "shipping_document_notifications",
+      relatedEntityId: row.id || "",
+      relatedOrderId: order.id || "",
+      context: { sendMode, documentTypes: bundle.documentTypes, language: template.language },
     });
+    if (delivery.skipped || delivery.sent !== true) {
+      throw codedError(delivery.error || "清关资料通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+    }
     const sent = await prisma.shippingDocumentNotification.update({
       where: { id: row.id },
       data: { sendStatus: "sent", emailLanguage: template.language, emailSubject: template.subject, emailBody: template.body, errorMessage: null, sentAt: new Date() },
@@ -498,7 +550,7 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
   if (missingLabels.length && input.confirmIncomplete !== true) {
     throw codedError(`当前资料不完整，缺少${missingLabels.join("、")}。`, 409, "SHIPPING_DOCUMENTS_INCOMPLETE");
   }
-  const emailInput = normalizeManualShippingEmailInput(input, order, bundle);
+  const emailInput = await normalizeManualShippingEmailInput(input, order, bundle);
   if (!emailInput.recipientEmails.length) {
     throw codedError("收件邮箱不能为空。", 400, "SHIPPING_RECIPIENT_REQUIRED");
   }
@@ -525,14 +577,23 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
       content: await readR2Object(item.document.storageKey),
       contentType: item.document.mimeType || "application/pdf",
     })));
-    await sendShippingDocumentsEmail({
+    const delivery = await sendNotificationEmail({
+      type: emailInput.type,
       recipientEmails: emailInput.recipientEmails,
       ccEmails: emailInput.ccEmails,
       attachments,
-      subject: emailInput.subject,
-      body: emailInput.body,
-      notificationId: row.id,
+      variables: emailInput.variables,
+      subjectOverride: emailInput.subject,
+      bodyOverride: emailInput.body,
+      idempotencyKey: row.id,
+      relatedEntityType: "shipping_document_notifications",
+      relatedEntityId: row.id || "",
+      relatedOrderId: order.id || "",
+      context: { sendMode: "manual", documentTypes: bundle.documentTypes, language: emailInput.language },
     });
+    if (delivery.skipped || delivery.sent !== true) {
+      throw codedError(delivery.error || "清关资料通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+    }
     const sent = await prisma.shippingDocumentNotification.update({
       where: { id: row.id },
       data: { sendStatus: "SUCCESS", errorMessage: null, sentAt: new Date() },

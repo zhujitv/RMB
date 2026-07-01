@@ -13,6 +13,7 @@ const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
 const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");
 const workbenchSource = readFileSync("lib/platform/workbench-todos.ts", "utf8");
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
+const notificationEngineSource = readFileSync("lib/platform/notification-engine.ts", "utf8");
 const sharedConstantsSource = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const sharedExchangeSource = readFileSync("lib/platform/shared-exchange.ts", "utf8");
 const settingsHelpersSource = readFileSync("app/modules/settings/helpers.ts", "utf8");
@@ -124,9 +125,10 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
   assert.match(reminderSource, /function reminderOwnerUserIds\(todo: WorkbenchTodo\)/);
   assert.match(reminderSource, /reminderOwnerUserIds\(todo\)\.map\(\(ownerUserId\) => \(\{ todo, overdueDays, ownerUserId \}\)\)/);
   assert.match(reminderSource, /todoId_ownerUserId_reminderDate/);
-  assert.match(reminderSource, /sendSystemEmail/);
+  assert.match(reminderSource, /sendNotificationEmail/);
+  assert.match(reminderSource, /WORKBENCH_TODO_OVERDUE/);
   assert.match(reminderSource, /emailStatus: "SKIPPED"/);
-  assert.match(reminderSource, /【NEXTWOOD ERP】待办事项已逾期超过 5 天/);
+  assert.match(notificationEngineSource, /【NEXTWOOD ERP】待办事项已逾期超过 5 天/);
   assert.match(vercelConfig, /\/api\/cron\/workbench-overdue-todos/);
 });
 

@@ -41,7 +41,7 @@ import {
   revokeUserSessions,
   timingSafeEqualText,
 } from "./shared-auth";
-import { sendSystemEmail } from "./system-email";
+import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 
 type UserInput = Record<string, unknown>;
 type UserListQuery = { get(name: string): string | null } | null;
@@ -557,22 +557,21 @@ async function sendEmailVerification(request: AuditRequestLike, user: { id: stri
   const { token, idempotencyKey } = await createEmailVerificationToken(user.id);
   const origin = requestOriginFromAuditRequest(request);
   const verifyUrl = `${origin || ""}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
-  await sendSystemEmail({
+  const delivery = await sendNotificationEmail({
+    type: NOTIFICATION_TEMPLATE_TYPES.USER_EMAIL_VERIFICATION,
     recipientEmails: [user.email],
-    subject: "NEXTWOOD 供应链协同平台邮箱验证",
-    body: [
-      `${user.name || "您好"}：`,
-      "",
-      "请点击以下链接完成邮箱验证。",
-      "",
+    variables: {
+      name: user.name || "您好",
       verifyUrl,
-      "",
-      "邮箱验证完成后，管理员审核通过后方可登录平台。",
-      "",
-      "如果您并未申请注册 NEXTWOOD 供应链协同平台，请忽略本邮件。",
-    ].join("\n"),
+    },
     idempotencyKey,
+    relatedEntityType: "users",
+    relatedEntityId: user.id,
+    context: { purpose: "email_verification" },
   });
+  if (delivery.skipped || delivery.sent !== true) {
+    throw codedError(delivery.error || "邮箱验证通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+  }
 }
 
 export async function verifyRegistrationEmail(token: unknown, request: AuditRequestLike = null) {

@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { startOfChinaDay } from "./workbench-todo-rules";
 import { listWorkbenchTodos, type WorkbenchTodo } from "./workbench-todos";
-import { sendSystemEmail } from "./system-email";
+import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { nonEmpty } from "./shared";
 
 type ActorLike = {
@@ -50,18 +50,17 @@ function overdueDaysForTodo(todo: WorkbenchTodo, today: Date) {
   return Math.floor((today.getTime() - dueDay.getTime()) / DAY_MS);
 }
 
-function reminderBody(todo: WorkbenchTodo, overdueDays: number) {
-  return [
-    "以下待办事项已逾期超过 5 天，请尽快处理。",
-    "",
-    `待办事项标题：${todo.title}`,
-    `来源模块：${todo.module || "-"}`,
-    `关联订单号：${todo.orderNo || "-"}`,
-    `客户简称：${todo.customerShortName || "-"}`,
-    `截止时间：${todo.dueAt ? new Date(todo.dueAt).toLocaleString("zh-CN", { hour12: false }) : "-"}`,
-    `已逾期天数：${overdueDays}`,
-    `处理入口：${todoHref(todo)}`,
-  ].join("\n");
+function reminderVariables(todo: WorkbenchTodo, overdueDays: number) {
+  return {
+    ownerName: todo.ownerName || "-",
+    todoTitle: todo.title || "-",
+    module: todo.module || "-",
+    orderNo: todo.orderNo || "-",
+    customerShortName: todo.customerShortName || "-",
+    dueAt: todo.dueAt ? new Date(todo.dueAt).toLocaleString("zh-CN", { hour12: false }) : "-",
+    overdueDays: String(overdueDays),
+    actionUrl: todoHref(todo),
+  };
 }
 
 async function alreadyRemindedToday(todo: WorkbenchTodo, ownerUserId: string, reminderDate: Date) {
@@ -164,12 +163,29 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
       overdueDays,
     };
     try {
-      await sendSystemEmail({
+      const delivery = await sendNotificationEmail({
+        type: NOTIFICATION_TEMPLATE_TYPES.WORKBENCH_TODO_OVERDUE,
         recipientEmails: [ownerEmail],
-        subject: "【NEXTWOOD ERP】待办事项已逾期超过 5 天",
-        body: reminderBody(todo, overdueDays),
+        variables: reminderVariables(todo, overdueDays),
         idempotencyKey: `todo-reminder-${todo.id}-${ownerUserId}-${reminderDate.toISOString().slice(0, 10)}`,
+        relatedEntityType: "workbench_todos",
+        relatedEntityId: todo.id,
+        relatedOrderId: todo.orderId || "",
+        context: { todoType: todo.type, ownerUserId },
       });
+      if (delivery.skipped || delivery.sent !== true) {
+        const message = delivery.error || "Work Center 逾期待办提醒模板已停用";
+        await prisma.todoReminderLog.create({
+          data: {
+            ...baseLog,
+            emailStatus: "SKIPPED",
+            errorMessage: message,
+          },
+        });
+        result.skipped += 1;
+        result.logs.push({ todoId: todo.id, todoType: todo.type, ownerUserId, ownerEmail, overdueDays, emailStatus: "SKIPPED", errorMessage: message });
+        continue;
+      }
       await prisma.todoReminderLog.create({
         data: {
           ...baseLog,

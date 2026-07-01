@@ -9,7 +9,6 @@ import type { CompanyProfileSettings } from "../types";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../lib/password-policy";
 import {
   AUDIT_PAGE_SIZE,
-  DEFAULT_NOTIFICATION_TEMPLATE_FORM,
   DEFAULT_SHIPSGO_INTEGRATION_FORM,
   FACTORY_SUPPLIER_ACCOUNT_ROLES,
   PAGE_SIZE,
@@ -37,6 +36,7 @@ import {
   isSupplierAccountRole,
   kebabTab,
   notificationTemplateFormFromSettings,
+  notificationTemplateRows,
   placeholderFor,
   resetFilters,
   rowsFor,
@@ -101,6 +101,7 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
   const [commissionFormulaForm, setCommissionFormulaForm] = useState<CommissionFormulaForm | null>(null);
   const [notificationTemplateSettings, setNotificationTemplateSettings] = useState<NotificationTemplateSettings | null>(null);
   const [notificationTemplateForm, setNotificationTemplateForm] = useState<NotificationTemplateForm | null>(null);
+  const [selectedNotificationTemplateType, setSelectedNotificationTemplateType] = useState("");
   const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
@@ -198,8 +199,13 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       }
       if (tab === "notificationTemplates") {
         const settings = await fetchNotificationTemplateSettings();
+        const templates = notificationTemplateRows(settings);
+        const nextType = selectedNotificationTemplateType && templates.some((template) => template.type === selectedNotificationTemplateType)
+          ? selectedNotificationTemplateType
+          : templates[0]?.type || "";
         setNotificationTemplateSettings(settings);
-        setNotificationTemplateForm(notificationTemplateFormFromSettings(settings));
+        setSelectedNotificationTemplateType(nextType);
+        setNotificationTemplateForm(notificationTemplateFormFromSettings(settings, nextType));
         markLoaded(tab);
         return;
       }
@@ -704,12 +710,44 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
       );
       if (result.success !== true) throw new Error(result.message || "通知模板保存失败");
       const nextSettings = await fetchNotificationTemplateSettings();
+      const nextType = notificationTemplateForm.type || selectedNotificationTemplateType;
       setNotificationTemplateSettings(nextSettings);
-      setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings));
+      setSelectedNotificationTemplateType(nextType);
+      setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings, nextType));
       markLoaded("notificationTemplates");
       setNotificationTemplateMessage(result.message || "通知模板已保存");
     } catch (saveError) {
       setNotificationTemplateMessage(saveError instanceof Error ? saveError.message : "通知模板保存失败");
+    } finally {
+      setNotificationTemplateSaving(false);
+    }
+  }
+
+  function selectNotificationTemplate(type: string) {
+    setSelectedNotificationTemplateType(type);
+    setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings, type));
+    setNotificationTemplateMessage("");
+  }
+
+  async function testNotificationTemplate() {
+    if (!notificationTemplateForm) return;
+    setNotificationTemplateSaving(true);
+    setNotificationTemplateMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(
+        "/api/settings/notification-templates/test",
+        {
+          method: "POST",
+          body: JSON.stringify(notificationTemplateForm),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "测试邮件发送失败");
+      const nextSettings = await fetchNotificationTemplateSettings();
+      setNotificationTemplateSettings(nextSettings);
+      setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings, notificationTemplateForm.type));
+      setNotificationTemplateMessage(result.message || "测试邮件已发送");
+    } catch (sendError) {
+      setNotificationTemplateMessage(sendError instanceof Error ? sendError.message : "测试邮件发送失败");
     } finally {
       setNotificationTemplateSaving(false);
     }
@@ -929,18 +967,17 @@ export function SettingsModule({ onCompanyProfileSaved }: SettingsModuleProps = 
         <NotificationTemplateSettingsCard
           settings={notificationTemplateSettings}
           form={notificationTemplateForm}
+          selectedType={selectedNotificationTemplateType}
           loading={loading && !notificationTemplateSettings}
           saving={notificationTemplateSaving}
           message={notificationTemplateMessage}
           onChange={setNotificationTemplateForm}
+          onSelectType={selectNotificationTemplate}
           onReset={() => {
-            setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings));
+            setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings, selectedNotificationTemplateType));
             setNotificationTemplateMessage("");
           }}
-          onRestoreDefault={() => {
-            setNotificationTemplateForm({ ...DEFAULT_NOTIFICATION_TEMPLATE_FORM });
-            setNotificationTemplateMessage("已恢复默认模板，请保存后生效");
-          }}
+          onTestSend={() => void testNotificationTemplate()}
           onSubmit={saveNotificationTemplateSettings}
         />
       ) : activeTab === "shipsgoIntegration" ? (

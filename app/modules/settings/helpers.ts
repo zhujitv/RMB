@@ -27,7 +27,9 @@ import type {
   CustomerRow,
   ExchangeRateForm,
   ExchangeRateSettings,
+  NotificationDeliveryLogRow,
   NotificationTemplateForm,
+  NotificationTemplateRow,
   NotificationTemplateSettings,
   Pagination,
   PermissionConfig,
@@ -282,23 +284,39 @@ export function commissionFormulaFormFromSettings(settings: CommissionFormulaSet
   };
 }
 
-export function notificationTemplateFormFromSettings(settings: NotificationTemplateSettings | null): NotificationTemplateForm {
+export function notificationTemplateRows(settings: NotificationTemplateSettings | null): NotificationTemplateRow[] {
+  return Array.isArray(settings?.templates) ? settings.templates : [];
+}
+
+export function notificationDeliveryLogs(settings: NotificationTemplateSettings | null): NotificationDeliveryLogRow[] {
+  return Array.isArray(settings?.logs) ? settings.logs : [];
+}
+
+export function notificationTemplateFormFromTemplate(template: NotificationTemplateRow | null | undefined): NotificationTemplateForm {
+  const row = template || DEFAULT_NOTIFICATION_TEMPLATE_FORM;
   return {
-    autoSendOnApproval: settings?.autoSendOnApproval !== false,
-    recipientEmailFields: stringArraySetting(
-      settings,
-      "recipientEmailFields",
-      DEFAULT_NOTIFICATION_TEMPLATE_FORM.recipientEmailFields,
-    ),
-    ccAdminEmails: settings?.ccAdminEmails !== false,
-    ccEmails: emailListSettingText(settings, "ccEmails"),
-    singleSubjectTemplate: templateStringSetting(settings, "singleSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.singleSubjectTemplate),
-    batchSubjectTemplate: templateStringSetting(settings, "batchSubjectTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.batchSubjectTemplate),
-    bodyTemplate: templateStringSetting(settings, "bodyTemplate", DEFAULT_NOTIFICATION_TEMPLATE_FORM.bodyTemplate),
-    invoiceRequirements: templateStringSetting(settings, "invoiceRequirements", DEFAULT_NOTIFICATION_TEMPLATE_FORM.invoiceRequirements),
-    uploadUrl: optionalStringSetting(settings, "uploadUrl"),
-    signature: templateStringSetting(settings, "signature", DEFAULT_NOTIFICATION_TEMPLATE_FORM.signature),
+    type: String(row.type || DEFAULT_NOTIFICATION_TEMPLATE_FORM.type),
+    name: String(row.name || DEFAULT_NOTIFICATION_TEMPLATE_FORM.name),
+    module: String(row.module || DEFAULT_NOTIFICATION_TEMPLATE_FORM.module),
+    description: String(row.description || ""),
+    enabled: row.enabled !== false,
+    editable: row.editable !== false,
+    supportsAttachments: Boolean(row.supportsAttachments),
+    securitySensitive: Boolean(row.securitySensitive),
+    subjectTemplate: String(row.subjectTemplate || DEFAULT_NOTIFICATION_TEMPLATE_FORM.subjectTemplate),
+    bodyTemplate: String(row.bodyTemplate || DEFAULT_NOTIFICATION_TEMPLATE_FORM.bodyTemplate),
+    variables: Array.isArray(row.variables) ? row.variables : DEFAULT_NOTIFICATION_TEMPLATE_FORM.variables,
+    recipientConfig: row.recipientConfig && typeof row.recipientConfig === "object" ? row.recipientConfig : {},
+    extraConfig: row.extraConfig && typeof row.extraConfig === "object" ? row.extraConfig : {},
+    ccAdminEmails: Boolean(row.ccAdminEmails),
+    ccEmails: Array.isArray(row.ccEmails) ? row.ccEmails.join("\n") : "",
   };
+}
+
+export function notificationTemplateFormFromSettings(settings: NotificationTemplateSettings | null, selectedType = ""): NotificationTemplateForm {
+  const rows = notificationTemplateRows(settings);
+  const selected = rows.find((row) => row.type === selectedType) || rows[0] || null;
+  return notificationTemplateFormFromTemplate(selected);
 }
 
 export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationSettings | null): ShipsgoIntegrationForm {
@@ -330,11 +348,17 @@ export function commissionFormulaPreview(form: CommissionFormulaForm) {
 }
 
 export function notificationTemplatePreview(form: NotificationTemplateForm) {
-  const uploadUrl = form.uploadUrl || "https://www.nextwood.net";
-  const recipientLabels = form.recipientEmailFields
+  const extraConfig = form.extraConfig || {};
+  const recipientEmailFields = Array.isArray(extraConfig.recipientEmailFields)
+    ? extraConfig.recipientEmailFields
+    : Array.isArray(form.recipientConfig?.recipientEmailFields)
+      ? form.recipientConfig.recipientEmailFields as string[]
+      : [];
+  const uploadUrl = String(extraConfig.uploadUrl || "https://www.nextwood.net");
+  const recipientLabels = recipientEmailFields
     .map((value) => NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.find((item) => item.value === value)?.label || "")
     .filter(Boolean)
-    .join("、") || "未选择";
+    .join("、") || "按业务规则解析";
   const extraCcText = form.ccEmails
     .split(/[\n,;；]+/g)
     .map((item) => item.trim())
@@ -364,6 +388,9 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
     "   - 拖车及其他费用合并发票：CNY ¥2,650.00",
   ].join("\n");
   const variables: Record<string, string> = {
+    name: "张三",
+    verifyUrl: "https://www.nextwood.net/api/auth/verify-email?token=example",
+    customerName: "ABC Customer",
     supplierName: "浙江迈奇克国际货运代理有限公司",
     billCount: "1",
     orderNo: "PV252",
@@ -375,13 +402,27 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
     invoiceGroups: "港杂费发票：CNY ¥800.00\n海运费发票：USD $1,825.00 / 折人民币 CNY ¥12,193.75\n拖车及其他费用合并发票：CNY ¥2,650.00",
     remark: "2650*1",
     billRows: sampleBillRows,
-    invoiceRequirements: form.invoiceRequirements,
+    invoiceRequirements: String(extraConfig.invoiceRequirements || ""),
     uploadUrl,
-    signature: form.signature,
+    signature: String(extraConfig.signature || "NEXTWOOD 供应链协同平台"),
+    documentLines: "- Commercial Invoice\n- Packing List\n- Customs Declaration",
+    customsDeclarationDate: "2026-07-01",
+    requiredDocumentLines: "    * 工厂采购合同\n    * 工厂增值税发票",
+    dueDate: "2026-07-08",
+    sampleInstruction: "1. 本邮件已附上预填好的 Excel 合同样本，请打印合同并加盖公司公章，扫描后回传。",
+    paymentVoucherInstruction: "5. 已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。",
+    messageBlock: "补充说明\n\n请优先回传盖章合同。",
+    companyName: "浙江莱诺",
+    ownerName: "李四",
+    todoTitle: "物流费用待审核",
+    module: "物流费用",
+    dueAt: "2026-07-01 23:59",
+    overdueDays: "6",
+    actionUrl: "https://www.nextwood.net/workbench",
   };
-  const subject = applyNotificationTemplate(form.singleSubjectTemplate, variables);
+  const subject = applyNotificationTemplate(form.subjectTemplate, variables);
   const body = applyNotificationTemplate(form.bodyTemplate, variables);
-  return [`收件来源：${recipientLabels}`, `抄送：${ccText}`, "", `标题：${subject}`, "", body].join("\n");
+  return [`邮件类型：${form.name}`, `收件来源：${recipientLabels}`, `抄送：${ccText}`, "", `标题：${subject}`, "", body].join("\n");
 }
 
 export function applyNotificationTemplate(template: string, variables: Record<string, string>) {

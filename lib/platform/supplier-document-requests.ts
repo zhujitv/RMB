@@ -1,7 +1,7 @@
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
-import { sendShippingDocumentsEmail } from "./shipping-documents";
+import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
@@ -247,7 +247,7 @@ async function latestProductSupplierPaymentVoucherAttachment(orderId: string, su
   };
 }
 
-function buildSupplierDocumentRequestEmailBody({
+function supplierDocumentRequestTemplateVariables({
   supplierName,
   orderNo,
   requiredTypes,
@@ -270,37 +270,18 @@ function buildSupplierDocumentRequestEmailBody({
   const sampleInstruction = templateAttached
     ? "1. 本邮件已附上预填好的 Excel 合同样本，请打印合同并加盖公司公章，扫描后回传。"
     : "1. 请登录平台下载预填好的合同样本，打印合同并加盖公司公章，扫描后回传。";
-  return [
-    `尊敬的 ${supplierName}：`,
-    "",
-    "您好！",
-    "",
-    "您有一份订单资料需要回传，请按以下要求及时办理。",
-    "",
-    "订单信息",
-    "",
-    `* 订单号： ${orderNo}`,
-    "* 需回传资料：",
-    ...documentLines,
-    `* 截止日期： ${dueDate ? dateToInput(dueDate) : "-"}`,
-    "",
-    "操作要求",
-    "",
+  return {
+    supplierName,
+    orderNo,
+    requiredDocumentLines: documentLines.join("\n"),
+    dueDate: dueDate ? dateToInput(dueDate) : "-",
     sampleInstruction,
-    "2. 请严格按照附件中的合同内容开具工厂增值税发票，确保发票内容与合同内容一致。",
-    `3. 登录 ${companyName}供应链协同平台，进入 「资料回传」 模块上传资料。`,
-    "4. 所有上传文件仅支持 PDF 格式。",
-    paymentVoucherAttached ? "5. 已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。" : null,
-    message ? "" : null,
-    message ? "补充说明" : null,
-    message ? "" : null,
-    message ? message : null,
-    "",
-    "感谢您的配合！",
-    "",
+    paymentVoucherInstruction: paymentVoucherAttached
+      ? "5. 已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。"
+      : "",
+    messageBlock: message ? ["", "补充说明", "", message].join("\n") : "",
     companyName,
-    "本邮件由系统自动发送，请勿直接回复。",
-  ].filter((line): line is string => line !== null).join("\n");
+  };
 }
 
 async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUploadFile | null> {
@@ -580,11 +561,10 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
     await uploadToR2({ key: templateStorageKey, body: template.body, contentType: template.mimeType });
   }
 
-  const subject = `NEXTWOOD 产品供应商资料回传通知：${order.orderNo}`;
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
   const paymentVoucherAttachment = await latestProductSupplierPaymentVoucherAttachment(order.id, supplier.id);
-  const body = buildSupplierDocumentRequestEmailBody({
+  const templateVariables = supplierDocumentRequestTemplateVariables({
     supplierName: supplier.supplierName,
     orderNo: order.orderNo || order.id,
     requiredTypes,
@@ -594,6 +574,9 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
     companyName,
     message,
   });
+  const renderedEmail = await renderNotificationTemplate(NOTIFICATION_TEMPLATE_TYPES.SUPPLIER_DOCUMENT_REQUEST, templateVariables);
+  const subject = renderedEmail.subject;
+  const body = renderedEmail.body;
 
   let created;
   try {
@@ -630,14 +613,23 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
       ...(template ? [{ filename: template.originalFileName, content: template.body, contentType: template.mimeType }] : []),
       ...(paymentVoucherAttachment ? [paymentVoucherAttachment] : []),
     ];
-    await sendShippingDocumentsEmail({
+    const delivery = await sendNotificationEmail({
+      type: NOTIFICATION_TEMPLATE_TYPES.SUPPLIER_DOCUMENT_REQUEST,
       recipientEmails: recipients,
       ccEmails,
-      subject,
-      body,
-      notificationId: created.id,
+      variables: templateVariables,
+      subjectOverride: subject,
+      bodyOverride: body,
+      idempotencyKey: created.id,
+      relatedEntityType: "supplier_document_requests",
+      relatedEntityId: created.id,
+      relatedOrderId: order.id,
+      context: { supplierId: supplier.id, requiredDocumentTypes: requiredTypes },
       attachments,
     });
+    if (delivery.skipped || delivery.sent !== true) {
+      throw codedError(delivery.error || "供应商资料回传通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+    }
     created = await prisma.supplierDocumentRequest.update({
       where: { id: created.id },
       data: { sendStatus: "sent", sentAt: new Date(), sendError: null },

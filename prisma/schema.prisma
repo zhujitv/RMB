@@ -941,6 +941,101 @@ model TodoReminderLog {
   @@map("todo_reminder_logs")
 }
 
+model NotificationTemplate {
+  id                 String   @id @default(cuid())
+  type               String   @unique
+  name               String
+  module             String
+  description        String?
+  enabled            Boolean  @default(true)
+  editable           Boolean  @default(true)
+  supportsAttachments Boolean @default(false) @map("supports_attachments")
+  securitySensitive  Boolean  @default(false) @map("security_sensitive")
+  subjectTemplate    String   @map("subject_template")
+  bodyTemplate       String   @map("body_template")
+  variables          Json?
+  recipientConfig    Json?    @map("recipient_config")
+  ccEmails           Json?    @map("cc_emails")
+  ccAdminEmails      Boolean  @default(false) @map("cc_admin_emails")
+  extraConfig        Json?    @map("extra_config")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  outboxRows   NotificationOutbox[]
+  deliveryLogs NotificationDeliveryLog[]
+
+  @@index([module])
+  @@index([enabled])
+  @@map("notification_templates")
+}
+
+model NotificationOutbox {
+  id                String    @id @default(cuid())
+  type              String
+  templateId        String?   @map("template_id")
+  idempotencyKey    String?   @unique @map("idempotency_key")
+  status            String    @default("pending")
+  recipientEmails   Json      @map("recipient_emails")
+  ccEmails          Json?     @map("cc_emails")
+  subject           String
+  body              String
+  attachments       Json?
+  context           Json?
+  relatedEntityType String?   @map("related_entity_type")
+  relatedEntityId   String?   @map("related_entity_id")
+  relatedOrderId    String?   @map("related_order_id")
+  attempts          Int       @default(0)
+  scheduledAt       DateTime  @default(now()) @map("scheduled_at")
+  sentAt            DateTime? @map("sent_at")
+  failedAt          DateTime? @map("failed_at")
+  lastError         String?   @map("last_error")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  template    NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  deliveryLogs NotificationDeliveryLog[]
+
+  @@index([type])
+  @@index([templateId])
+  @@index([status])
+  @@index([relatedOrderId])
+  @@index([relatedEntityType, relatedEntityId])
+  @@index([scheduledAt])
+  @@map("notification_outbox")
+}
+
+model NotificationDeliveryLog {
+  id                String    @id @default(cuid())
+  outboxId          String?   @map("outbox_id")
+  templateId        String?   @map("template_id")
+  type              String
+  status            String
+  recipientEmails   Json      @map("recipient_emails")
+  ccEmails          Json?     @map("cc_emails")
+  subject           String
+  bodyPreview       String?   @map("body_preview")
+  relatedEntityType String?   @map("related_entity_type")
+  relatedEntityId   String?   @map("related_entity_id")
+  relatedOrderId    String?   @map("related_order_id")
+  errorMessage      String?   @map("error_message")
+  provider          String?
+  sentAt            DateTime? @map("sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  outbox   NotificationOutbox?   @relation(fields: [outboxId], references: [id], onDelete: SetNull)
+  template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([outboxId])
+  @@index([templateId])
+  @@index([type])
+  @@index([status])
+  @@index([relatedOrderId])
+  @@index([relatedEntityType, relatedEntityId])
+  @@index([sentAt])
+  @@index([createdAt])
+  @@map("notification_delivery_logs")
+}
+
 model SystemSetting {
   key       String   @id
   value     Json

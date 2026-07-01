@@ -11,6 +11,12 @@ import { assertJsonObject, isPlainRecord, nonEmpty, normalizeEmail, parseEmailLi
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import type { CurrencyTotals } from "./currency-totals";
+import {
+  getNotificationTemplate,
+  NOTIFICATION_TEMPLATE_TYPES,
+  saveNotificationCenterTemplate,
+  serializeNotificationTemplate,
+} from "./notification-engine";
 
 const TEXT_LIMITS = {
   subject: 220,
@@ -134,16 +140,27 @@ export function serializeLogisticsInvoiceNotificationSetting(setting: SystemSett
   return normalizeLogisticsInvoiceNotificationSettings(setting?.value || setting || {});
 }
 
-export async function getLogisticsInvoiceNotificationSettings() {
-  const setting = await prisma.systemSetting.findUnique({ where: { key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY } });
-  if (setting) return serializeLogisticsInvoiceNotificationSetting(setting);
-  const created = await prisma.systemSetting.create({
-    data: {
-      key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY,
-      value: DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS,
-    },
+function logisticsSettingsFromNotificationTemplate(row: unknown = {}) {
+  const template = serializeNotificationTemplate(row);
+  const recipientConfig = isPlainRecord(template.recipientConfig) ? template.recipientConfig : {};
+  const extraConfig = isPlainRecord(template.extraConfig) ? template.extraConfig : {};
+  return normalizeLogisticsInvoiceNotificationSettings({
+    autoSendOnApproval: template.enabled !== false && extraConfig.autoSendOnApproval !== false,
+    recipientEmailFields: recipientConfig.recipientEmailFields,
+    ccAdminEmails: template.ccAdminEmails,
+    ccEmails: template.ccEmails,
+    singleSubjectTemplate: template.subjectTemplate,
+    batchSubjectTemplate: extraConfig.batchSubjectTemplate,
+    bodyTemplate: template.bodyTemplate,
+    invoiceRequirements: extraConfig.invoiceRequirements,
+    uploadUrl: extraConfig.uploadUrl,
+    signature: extraConfig.signature,
   });
-  return serializeLogisticsInvoiceNotificationSetting(created);
+}
+
+export async function getLogisticsInvoiceNotificationSettings() {
+  const template = await getNotificationTemplate(NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE);
+  return logisticsSettingsFromNotificationTemplate(template);
 }
 
 export async function readLogisticsInvoiceNotificationSettings(actor: SettingsActor) {
@@ -157,16 +174,32 @@ export async function saveLogisticsInvoiceNotificationSettings(request: AuditReq
   const value = data.resetToDefault === true
     ? normalizeLogisticsInvoiceNotificationSettings(DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS)
     : normalizeLogisticsInvoiceNotificationSettings(data);
-  const before = await prisma.systemSetting.findUnique({ where: { key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY } });
-  const setting = await prisma.systemSetting.upsert({
+  const saved = await saveNotificationCenterTemplate(request, actor, {
+    type: NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE,
+    enabled: value.autoSendOnApproval,
+    subjectTemplate: value.singleSubjectTemplate,
+    bodyTemplate: value.bodyTemplate,
+    ccEmails: value.ccEmails,
+    ccAdminEmails: value.ccAdminEmails,
+    recipientConfig: { recipientEmailFields: value.recipientEmailFields },
+    extraConfig: {
+      autoSendOnApproval: value.autoSendOnApproval,
+      batchSubjectTemplate: value.batchSubjectTemplate,
+      invoiceRequirements: value.invoiceRequirements,
+      uploadUrl: value.uploadUrl,
+      signature: value.signature,
+      recipientEmailOptions: LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELD_OPTIONS,
+    },
+  });
+  await runNonCriticalTask("物流费用通知模板兼容设置写入", () => prisma.systemSetting.upsert({
     where: { key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY },
     update: { value },
     create: { key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY, value },
-  });
+  }));
   await runNonCriticalTask("物流费用通知模板操作日志写入", () => (
-    writeAudit(request, actor, "更新物流费用通知模板", "system_settings", LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY, before, setting)
+    writeAudit(request, actor, "更新物流费用通知模板", "system_settings", LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY, null, saved)
   ));
-  return serializeLogisticsInvoiceNotificationSetting(setting);
+  return logisticsSettingsFromNotificationTemplate(saved);
 }
 
 export async function logisticsInvoiceNotificationAdminEmails() {
