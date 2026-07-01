@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readFileSync("lib/platform/supplier-document-ocr.ts", "utf8");
+const vatParser = readFileSync("lib/platform/supplier-vat-invoice-parser.ts", "utf8");
 const supplierRequests = readFileSync("lib/platform/supplier-document-requests.ts", "utf8");
 const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
@@ -43,14 +45,19 @@ test("supplier OCR validates invoice and contract against supplier, business ent
 
 test("supplier VAT invoice OCR uses structured parser and preserves raw text", () => {
   assert.match(service, /recognizeSupplierDocumentWithOcr/);
-  assert.match(service, /function parseVatInvoiceFields\(text: string, structuredFields: Record<string, unknown> = \{\}\)/);
-  assert.match(service, /structuredText\(structuredFields, "seller"\)/);
-  assert.match(service, /structuredAmount\(structuredFields, "amountWithTax"\)/);
-  assert.match(service, /function extractPartyName\(section: string, partyLabel: string\)/);
-  assert.match(service, /function extractInvoiceAmountWithTax\(text: string\)/);
-  assert.match(service, /function extractInvoiceProductName\(text: string\)/);
-  assert.match(service, /extractPartyTaxNo\(sellerSection\)/);
-  assert.match(service, /extractPartyTaxNo\(buyerSection\)/);
+  assert.match(service, /export function parseVatInvoiceFields\(text: string, structuredFields: Record<string, unknown> = \{\}\)/);
+  assert.match(service, /parseVatInvoiceFieldsCore\(text, structuredFields\)/);
+  assert.match(vatParser, /structuredPartyFallback\(structuredFields, "seller"\)/);
+  assert.match(vatParser, /extractInvoiceNameSequence\(text\)/);
+  assert.match(vatParser, /extractInvoiceTaxNoSequence\(text\)/);
+  assert.match(vatParser, /structuredAmount\(structuredFields, "amountWithTax"\)/);
+  assert.match(vatParser, /function extractPartyName\(section: string, partyLabel: string\)/);
+  assert.match(vatParser, /function extractInvoiceAmountWithTax\(text: string\)/);
+  assert.match(vatParser, /function extractInvoiceProductName\(text: string\)/);
+  assert.match(vatParser, /extractPartyTaxNo\(sellerSection\)/);
+  assert.match(vatParser, /extractPartyTaxNo\(buyerSection\)/);
+  assert.match(service, /invoiceParserIssues/);
+  assert.match(service, /发票购买方解析异常，请人工确认/);
   assert.match(service, /structuredFields: structuredFields as Prisma\.InputJsonValue/);
   assert.match(service, /parser: recognized\.parser \|\| \(document\.documentType === "SUPPLIER_INVOICE" \? "VAT_INVOICE" : "PURCHASE_CONTRACT"\)/);
   assert.match(service, /rawJson: \(recognized\.rawJson \|\| \{ source: recognized\.source, provider: recognized\.provider, textLength: text\.length \}\)/);
@@ -62,6 +69,48 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(supplierModule, /查看 OCR 原始文本/);
   assert.match(supplierModule, /ocrTask\.rawText/);
   assert.match(supplierModule, /styles\.supplierDocumentOcrRawText/);
+});
+
+test("VAT invoice parser extracts buyer seller totals and item from Aliyun raw text", () => {
+  const rawText = `
+电子发票（增值税专用发票）
+发票号码: 26342000002030743666
+开票日期: 2026年06月29日
+购买方信息
+名称: 浙江莱诺建材有限公司 名称: 安徽科蓝特铝业股份有限公司
+纳税人识别号: 91330681MA2D86XM28 纳税人识别号: 91341822070917615C
+地址、电话: 浙江省诸暨市
+开户行及账号: 中国银行
+项目名称 规格型号 单位 数量 单价 金额 税率 税额
+*有色金属压延材*铝制工
+程结构件 套 1 101480.27 101480.27 13% 13192.44
+合计 ¥101480.27 ¥13192.44
+价税合计（大写）壹拾壹万肆仟陆佰柒拾贰圆柒角壹分 ¥ 114672.71
+销售方信息
+备注
+`;
+  const fields = parseVatInvoiceFields(rawText, {
+    buyer: "浙江省诸暨市",
+    seller: "浙江莱诺建材有限公司 名称: 安徽科蓝特铝业股份有限公司",
+    productName: "浙江莱诺建材有限公司 91330681MA2D86XM28 安徽科蓝特铝业股份有限公司 91341822070917615C",
+  });
+  assert.deepEqual(fields, {
+    invoiceNo: "26342000002030743666",
+    invoiceDate: "2026-06-29",
+    amountWithTax: 114672.71,
+    amountWithoutTax: 101480.27,
+    taxAmount: 13192.44,
+    taxRate: "13%",
+    seller: "安徽科蓝特铝业股份有限公司",
+    sellerTaxNo: "91341822070917615C",
+    buyer: "浙江莱诺建材有限公司",
+    buyerTaxNo: "91330681MA2D86XM28",
+    productName: "*有色金属压延材*铝制工程结构件",
+    specModel: "",
+    unit: "",
+    quantity: "",
+    unitPrice: "",
+  });
 });
 
 test("supplier document UI shows OCR result and protects internal actions", () => {

@@ -16,6 +16,11 @@ import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import { getCompanyProfileSettings } from "./company-profile";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
+import {
+  isSuspiciousInvoiceParty as isSuspiciousInvoicePartyCore,
+  isSuspiciousInvoiceProduct as isSuspiciousInvoiceProductCore,
+  parseVatInvoiceFields as parseVatInvoiceFieldsCore,
+} from "./supplier-vat-invoice-parser";
 
 type ActorLike = {
   id?: string | null;
@@ -130,145 +135,6 @@ function parseDateText(text: string, patterns: RegExp[]) {
   return normalized || value;
 }
 
-function normalizeOcrLines(text: string) {
-  return String(text || "")
-    .replace(/\r/g, "\n")
-    .replace(/[ \t]+/g, " ")
-    .split("\n")
-    .map((line) => cleanText(line))
-    .filter(Boolean);
-}
-
-function stripInvoiceFieldNoise(value: unknown) {
-  return cleanText(value)
-    .replace(/^(名称|纳税人识别号|地址、电话|开户行及账号|开户行账号)[:：]\s*/g, "")
-    .replace(/\s*(纳税人识别号|地址、电话|开户行及账号|开户行账号)[:：].*$/g, "")
-    .replace(/\s*(密码区|货物或应税劳务|项目名称|规格型号|单位|数量|单价|金额|税率|税额).*$/g, "")
-    .trim();
-}
-
-function sectionBetween(text: string, startPatterns: RegExp[], endPatterns: RegExp[]) {
-  const source = String(text || "");
-  let start = -1;
-  for (const pattern of startPatterns) {
-    const match = pattern.exec(source);
-    if (match && (start < 0 || match.index < start)) start = match.index;
-  }
-  if (start < 0) return "";
-  let end = source.length;
-  const tail = source.slice(start + 1);
-  for (const pattern of endPatterns) {
-    const match = pattern.exec(tail);
-    if (match) end = Math.min(end, start + 1 + match.index);
-  }
-  return source.slice(start, end);
-}
-
-function extractPartyName(section: string, partyLabel: string) {
-  const sectionText = section || "";
-  const direct = firstMatch(sectionText, [
-    /名称[:：]\s*([^\n\r]+)/,
-    new RegExp(`${partyLabel}\\s*(?:名称)?[:：]?\\s*([^\\n\\r]+)`),
-  ]);
-  if (direct) return stripInvoiceFieldNoise(direct);
-  const lines = normalizeOcrLines(sectionText);
-  const labelIndex = lines.findIndex((line) => line.includes(partyLabel));
-  for (let index = Math.max(0, labelIndex); index < Math.min(lines.length, labelIndex + 6); index += 1) {
-    const line = lines[index] || "";
-    const value = firstMatch(line, [/名称[:：]\s*(.+)$/]);
-    if (value) return stripInvoiceFieldNoise(value);
-    if (labelIndex >= 0 && index > labelIndex && !/(纳税人识别号|地址|电话|开户行|账号)/.test(line)) {
-      const cleaned = stripInvoiceFieldNoise(line);
-      if (cleaned && /[\u4e00-\u9fa5]/.test(cleaned)) return cleaned;
-    }
-  }
-  return "";
-}
-
-function extractPartyTaxNo(section: string) {
-  return firstMatch(section, [
-    /纳税人识别号[:：]\s*([A-Z0-9]{8,30})/i,
-    /统一社会信用代码[:：]\s*([A-Z0-9]{8,30})/i,
-  ]);
-}
-
-function extractInvoiceAmountWithTax(text: string) {
-  const normalized = text.replace(/[ \t]+/g, " ");
-  return parseAmount(normalized, [
-    /价税合计[\s\S]{0,30}小写[\s\S]{0,20}[¥￥]?([0-9,]+(?:\.[0-9]{1,2})?)/,
-    /小写[\s\S]{0,20}[¥￥]?([0-9,]+(?:\.[0-9]{1,2})?)/,
-    /含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-  ]);
-}
-
-function extractInvoiceTotals(text: string) {
-  const totalLine = normalizeOcrLines(text).find((line) => /合计/.test(line) && /[0-9]/.test(line) && !/价税合计/.test(line)) || "";
-  const amounts = Array.from(totalLine.matchAll(/[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/g))
-    .map((match) => moneyValue(match[1]))
-    .filter((value) => value > 0);
-  return {
-    amountWithoutTax: amounts[0] || parseAmount(text, [
-      /不含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-      /金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s+税率/,
-    ]),
-    taxAmount: amounts[1] || parseAmount(text, [
-      /税额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-    ]),
-  };
-}
-
-function stripInvoiceItemColumns(line: string) {
-  return cleanText(line)
-    .replace(/\s+[A-Za-z0-9\-_.#/]{1,30}\s+(套|个|件|只|批|吨|千克|公斤|米|平方米|立方米|PCS|SET)\b.*$/i, "")
-    .replace(/\s+(套|个|件|只|批|吨|千克|公斤|米|平方米|立方米|PCS|SET)\b.*$/i, "")
-    .replace(/\s+[0-9,]+(?:\.[0-9]+)?\s+[0-9,]+(?:\.[0-9]+)?\s+[0-9,]+(?:\.[0-9]{1,2})?\s+[0-9]{1,2}%.*$/i, "")
-    .replace(/\s+[0-9,]+(?:\.[0-9]{1,2})?\s+[0-9]{1,2}%.*$/i, "")
-    .replace(/\s+(税率|税额|金额|单价|数量|单位|规格型号).*$/g, "")
-    .replace(/^[*＊]\s*/, "")
-    .trim();
-}
-
-function extractInvoiceProductName(text: string) {
-  const lines = normalizeOcrLines(text);
-  const startIndex = lines.findIndex((line) => /(货物或应税劳务|服务名称|项目名称)/.test(line));
-  const candidates: string[] = [];
-  const scanLines = startIndex >= 0 ? lines.slice(startIndex + 1) : lines;
-  for (const line of scanLines) {
-    if (/(合计|价税合计|销售方|备注|收款人|复核|开票人)/.test(line)) break;
-    if (!/[\u4e00-\u9fa5A-Za-z]/.test(line)) continue;
-    if (/(规格型号|单位|数量|单价|金额|税率|税额)/.test(line) && line.length < 20) continue;
-    const cleaned = stripInvoiceItemColumns(line);
-    if (cleaned && !/(购买方|销售方|纳税人识别号|地址|电话|开户行|密码区)/.test(cleaned)) {
-      candidates.push(cleaned);
-    }
-    if (candidates.length >= 4) break;
-  }
-  const starItems = Array.from(text.matchAll(/[*＊][^*＊\n\r]{1,40}[*＊]\s*([^\n\r]+)/g))
-    .map((match) => stripInvoiceItemColumns(match[1]))
-    .filter(Boolean);
-  const merged = [...starItems, ...candidates]
-    .map((item) => item.replace(/^[*＊][^*＊]+[*＊]/, "").trim())
-    .filter((item, index, arr) => item && arr.indexOf(item) === index);
-  return merged.join("；");
-}
-
-function extractInvoiceTaxRate(text: string) {
-  const itemSection = sectionBetween(text, [
-    /货物或应税劳务/,
-    /项目名称/,
-  ], [
-    /合计/,
-    /价税合计/,
-    /销售方/,
-  ]);
-  const source = itemSection || text;
-  return firstMatch(source, [
-    /(13(?:\.0+)?%|9(?:\.0+)?%|6(?:\.0+)?%|0(?:\.0+)?%|免税)/,
-  ]) || firstMatch(text, [
-    /税率[:：]?\s*(13(?:\.0+)?%|9(?:\.0+)?%|6(?:\.0+)?%|0(?:\.0+)?%|免税)/,
-  ]);
-}
-
 function amountMatches(actual: number, expected: number) {
   if (!actual || !expected) return false;
   const diff = Math.abs(actual - expected);
@@ -294,67 +160,8 @@ function structuredAmount(fields: Record<string, unknown> | null | undefined, ke
   return moneyValue(fields?.[key]);
 }
 
-function parseVatInvoiceFields(text: string, structuredFields: Record<string, unknown> = {}) {
-  const buyerSection = sectionBetween(text, [
-    /购买方/,
-    /购\s*买\s*方/,
-  ], [
-    /密码区/,
-    /货物或应税劳务/,
-    /项目名称/,
-    /销售方/,
-  ]);
-  const sellerSection = sectionBetween(text, [
-    /销售方/,
-    /销\s*售\s*方/,
-  ], [
-    /备注/,
-    /收款人/,
-    /复核/,
-    /开票人/,
-  ]);
-  const invoiceNo = structuredText(structuredFields, "invoiceNo") || firstMatch(text, [
-    /发票号码[:：]?\s*([A-Z0-9\-]{6,30})/i,
-    /发票号[:：]?\s*([A-Z0-9\-]{6,30})/i,
-    /No\.?\s*[:：]?\s*([A-Z0-9\-]{6,30})/i,
-  ]);
-  const invoiceDate = structuredText(structuredFields, "invoiceDate") || parseDateText(text, [
-    /开票日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
-    /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
-  ]);
-  const amountWithTax = structuredAmount(structuredFields, "amountWithTax") || extractInvoiceAmountWithTax(text);
-  const totals = extractInvoiceTotals(text);
-  const taxRate = structuredText(structuredFields, "taxRate") || extractInvoiceTaxRate(text);
-  const seller = structuredText(structuredFields, "seller") || extractPartyName(sellerSection, "销售方") || firstMatch(text, [
-    /销售方(?:名称)?[:：]\s*([^\n\r]+)/,
-    /销\s*售\s*方[:：]\s*([^\n\r]+)/,
-  ]);
-  const buyer = structuredText(structuredFields, "buyer") || extractPartyName(buyerSection, "购买方") || firstMatch(text, [
-    /购买方(?:名称)?[:：]\s*([^\n\r]+)/,
-    /购\s*买\s*方[:：]\s*([^\n\r]+)/,
-  ]);
-  const productName = structuredText(structuredFields, "productName") || extractInvoiceProductName(text) || firstMatch(text, [
-    /货物或应税劳务、服务名称[:：]?\s*([^\n\r]+)/,
-    /产品名称[:：]\s*([^\n\r]+)/,
-    /服务名称[:：]\s*([^\n\r]+)/,
-  ]);
-  return {
-    invoiceNo,
-    invoiceDate,
-    amountWithTax,
-    amountWithoutTax: structuredAmount(structuredFields, "amountWithoutTax") || totals.amountWithoutTax,
-    taxAmount: structuredAmount(structuredFields, "taxAmount") || totals.taxAmount,
-    taxRate,
-    seller,
-    sellerTaxNo: structuredText(structuredFields, "sellerTaxNo") || extractPartyTaxNo(sellerSection),
-    buyer,
-    buyerTaxNo: structuredText(structuredFields, "buyerTaxNo") || extractPartyTaxNo(buyerSection),
-    productName,
-    specModel: structuredText(structuredFields, "specModel"),
-    unit: structuredText(structuredFields, "unit"),
-    quantity: structuredText(structuredFields, "quantity"),
-    unitPrice: structuredText(structuredFields, "unitPrice"),
-  };
+export function parseVatInvoiceFields(text: string, structuredFields: Record<string, unknown> = {}) {
+  return parseVatInvoiceFieldsCore(text, structuredFields);
 }
 
 function parseContractFields(text: string, structuredFields: Record<string, unknown> = {}) {
@@ -519,6 +326,20 @@ async function validateInvoice(fields: ReturnType<typeof parseVatInvoiceFields>,
     if (duplicated) {
       issues.push({ level: "error", field: "invoiceNo", message: "发票号码已存在，请核查" });
     }
+  }
+  return issues;
+}
+
+function invoiceParserIssues(fields: ReturnType<typeof parseVatInvoiceFields>): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (isSuspiciousInvoicePartyCore(fields.buyer)) {
+    issues.push({ level: "error", field: "buyer", message: "发票购买方解析异常，请人工确认" });
+  }
+  if (isSuspiciousInvoicePartyCore(fields.seller)) {
+    issues.push({ level: "error", field: "seller", message: "发票销售方解析异常，请人工确认" });
+  }
+  if (isSuspiciousInvoiceProductCore(fields.productName)) {
+    issues.push({ level: "error", field: "productName", message: "发票产品名称解析异常，请人工确认" });
   }
   return issues;
 }
@@ -735,9 +556,14 @@ export async function runSupplierDocumentOcrForDocument(
       ? parseVatInvoiceFields(text, structuredFields)
       : parseContractFields(text, structuredFields);
     const labels = supplierDocumentLabels(document.documentType) as unknown as Record<string, string>;
-    const issues = document.documentType === "SUPPLIER_INVOICE"
-      ? await validateInvoice(fields as ReturnType<typeof parseVatInvoiceFields>, context, document.id)
-      : validateContract(fields as ReturnType<typeof parseContractFields>, context);
+    const parserIssues = document.documentType === "SUPPLIER_INVOICE"
+      ? invoiceParserIssues(fields as ReturnType<typeof parseVatInvoiceFields>)
+      : [];
+    const issues = parserIssues.length
+      ? parserIssues
+      : document.documentType === "SUPPLIER_INVOICE"
+        ? await validateInvoice(fields as ReturnType<typeof parseVatInvoiceFields>, context, document.id)
+        : validateContract(fields as ReturnType<typeof parseContractFields>, context);
     const status = taskStatusFromIssues(issues);
     const fieldRows = visibleResultFields(fields as Record<string, unknown>, labels);
     if (!fieldRows.length) {
