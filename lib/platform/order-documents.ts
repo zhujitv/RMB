@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
-import { buildOrderDocumentKey, headR2Object, readR2Object, safeFileName } from "../r2";
+import { buildOrderDocumentKey, readR2Object, safeFileName } from "../r2";
 import { parseAndApplyCustomsDocument } from "./customs-recognition";
 import { isOcrFeatureEnabled } from "./ocr-integration";
 import {
@@ -164,17 +164,32 @@ function relatedModuleForDocumentType(documentType: string) {
   return "EXPORT";
 }
 
-function canReadDocument(actor: ActorLike, document: DocumentLike) {
+function canReadSupplierReturnDocument(actor: ActorLike, document: DocumentLike) {
+  if (
+    document.relatedModule !== "SUPPLIER"
+    || !document.factoryDocumentRequestId
+    || !document.supplierId
+  ) {
+    return false;
+  }
   if (
     isProductSupplierOperatorRole(actorRole(actor))
-    && document.relatedModule === "SUPPLIER"
-    && document.factoryDocumentRequestId
-    && document.supplierId
     && document.supplierId === actor?.supplierId
     && canRead(actor, "supplierDocuments")
   ) {
     return true;
   }
+  if (["管理员", "财务", "采购"].includes(actorRole(actor)) && (canRead(actor, "documents") || canRead(actor, "supplierDocuments"))) {
+    return true;
+  }
+  if (actorRole(actor) === "业务员" && canRead(actor, "documents") && canAccessOrder(actor, document.order)) {
+    return true;
+  }
+  return false;
+}
+
+function canReadDocument(actor: ActorLike, document: DocumentLike) {
+  if (canReadSupplierReturnDocument(actor, document)) return true;
   if (!canRead(actor, "documents")) return false;
   if (canUseDomesticLogisticsDocumentScope(actor, String(document.documentType || "")) && canAccessDomesticLogisticsOrder(actor, document.order)) return true;
   if (
@@ -621,10 +636,6 @@ export async function getOrderDocumentPreviewMetadata(request: AuditRequestLike,
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
   if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
-  await headR2Object(fileDocument.storageKey).catch((error) => {
-    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
-    throw error;
-  });
   const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
   return serializeOrderDocument({ ...fileDocument, standardFilename });
 }

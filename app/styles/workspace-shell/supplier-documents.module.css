@@ -398,6 +398,32 @@
   font-size: 12px;
 }
 
+.supplierDocumentOcrRawText {
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.supplierDocumentOcrRawText summary {
+  cursor: pointer;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.supplierDocumentOcrRawText pre {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 8px 0 0;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .supplierDocumentUploadButton {
   width: 100%;
   min-height: 42px;

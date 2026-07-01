@@ -44,6 +44,7 @@ type SupplierDocumentOcrTask = {
   validationStatus?: string;
   errorMessage?: string;
   rejectReason?: string;
+  rawText?: string;
   fields?: SupplierDocumentOcrField[];
   issues?: SupplierDocumentOcrIssue[];
   expectedAmount?: number | null;
@@ -804,6 +805,12 @@ function SupplierDocumentOcrPanel({
           <span data-level="success">未发现异常</span>
         )}
       </div>
+      {canManageOcr && ocrTask.rawText ? (
+        <details className={styles.supplierDocumentOcrRawText}>
+          <summary>查看 OCR 原始文本</summary>
+          <pre>{ocrTask.rawText}</pre>
+        </details>
+      ) : null}
       {canManageOcr ? (
         <div className={styles.supplierDocumentOcrActions}>
           <button

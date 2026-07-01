@@ -194,5 +194,10 @@ export async function recognizePdfTextWithOcr(
     text,
     source: "OCR_PDF_TEXT_FALLBACK",
     provider: settings.provider,
+    rawJson: {
+      source: "OCR_PDF_TEXT_FALLBACK",
+      provider: settings.provider,
+      textLength: text.length,
+    },
   };
 }

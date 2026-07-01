@@ -562,6 +562,7 @@
 .supplierDocumentOcrIssues { composes: supplierDocumentOcrIssues from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentOcrMeta { composes: supplierDocumentOcrMeta from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentOcrPanel { composes: supplierDocumentOcrPanel from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentOcrRawText { composes: supplierDocumentOcrRawText from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierLogisticsCostGrid { composes: supplierLogisticsCostGrid from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: supplierLogisticsCostGrid from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierLogisticsCostGrid from "./styles/workspace-shell/responsive-typography.module.css"; }
 .tableCheckbox { composes: tableCheckbox from "./styles/workspace-shell/responsive-typography.module.css"; composes: tableCheckbox from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .tablePinnedTwoCols { composes: tablePinnedTwoCols from "./styles/workspace-shell/responsive-main.module.css"; composes: tablePinnedTwoCols from "./styles/workspace-shell/tables-dashboard.module.css"; }

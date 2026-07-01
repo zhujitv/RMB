@@ -612,8 +612,12 @@ type FilePreviewMetaItem = {
 };
 
 function pdfPreviewStatusMessage(response: Response) {
+  const code = response.headers.get("X-Preview-Error-Code") || "";
   if (response.status === 403) return "权限不足，无法预览该文件。";
   if (response.status === 404) return "文件不存在或已删除。";
+  if (code === "R2_OBJECT_NOT_FOUND") return "文件地址失效，请重新上传或联系管理员。";
+  if (code === "INVALID_FILE_TYPE") return "当前文件类型不支持在线预览。";
+  if (code === "STORAGE_NETWORK_TIMEOUT") return "文件存储读取超时，请稍后重试。";
   return "文件暂时无法预览，请下载查看。";
 }
 
@@ -660,11 +664,13 @@ export function FilePreviewModal({
   const [previewState, setPreviewState] = useState<PdfPreviewState>("checking");
   const [previewError, setPreviewError] = useState("");
   const [previewKind, setPreviewKind] = useState<PreviewContentKind>("pdf");
+  const [zoom, setZoom] = useState(100);
   const encodedKind = encodeURIComponent(fileKind);
   const encodedId = encodeURIComponent(fileId);
   const metadataUrl = `/api/files/${encodedKind}/${encodedId}`;
   const previewUrl = filePreviewUrl(fileKind, fileId);
   const downloadUrl = fileDownloadUrl(fileKind, fileId);
+  const previewSource = previewKind === "pdf" ? `${previewUrl}#zoom=${zoom}` : previewUrl;
 
   useEffect(() => {
     let cancelled = false;
@@ -766,6 +772,7 @@ export function FilePreviewModal({
                   <img
                     src={previewUrl}
                     alt={fileName}
+                    style={{ width: `${zoom}%`, maxWidth: zoom > 100 ? "none" : "100%" }}
                     onError={() => {
                       setPreviewState("failed");
                       setPreviewError("文件暂时无法预览，请下载查看。");
@@ -774,7 +781,7 @@ export function FilePreviewModal({
                 </div>
               ) : (
                 <iframe
-                  src={previewUrl}
+                  src={previewSource}
                   title={fileName}
                   className={styles.paymentVoucherFrame}
                   onError={() => {
@@ -791,6 +798,23 @@ export function FilePreviewModal({
             ) : null}
           </div>
           <footer className={styles.modalFooter}>
+            <button
+              className={styles.ghostButton}
+              type="button"
+              onClick={() => setZoom((current) => Math.max(75, current - 25))}
+              disabled={zoom <= 75}
+            >
+              缩小
+            </button>
+            <span>{zoom}%</span>
+            <button
+              className={styles.ghostButton}
+              type="button"
+              onClick={() => setZoom((current) => Math.min(200, current + 25))}
+              disabled={zoom >= 200}
+            >
+              放大
+            </button>
             <a className={styles.primaryButtonCompact} href={downloadUrl}>{downloadLabel}</a>
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
           </footer>

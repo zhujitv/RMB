@@ -91,7 +91,7 @@ test("preview route returns inline file streams with cache and nosniff headers",
     orderDocumentsService,
     /export async function getOrderDocumentPreviewMetadata/,
   );
-  assert.match(orderDocumentsService, /headR2Object\(fileDocument\.storageKey\)/);
+  assert.doesNotMatch(orderDocumentsService, /headR2Object\(fileDocument\.storageKey\)/);
   assert.match(
     fileCenter,
     /filename="[^`]*"; filename\*=UTF-8''\$\{encodeURIComponent\(safeFileName\)\}/,
@@ -150,7 +150,12 @@ test("workspace modules use one file preview modal instead of preview tabs", () 
   assert.match(sharedComponents, /image\/jpeg/);
   assert.match(sharedComponents, /image\/png/);
   assert.match(sharedComponents, /image\/webp/);
-  assert.match(sharedComponents, /<iframe[\s\S]*src=\{previewUrl\}/);
+  assert.match(sharedComponents, /<iframe[\s\S]*src=\{previewSource\}/);
+  assert.match(sharedComponents, /setZoom/);
+  assert.match(sharedComponents, /缩小/);
+  assert.match(sharedComponents, /放大/);
+  assert.match(sharedComponents, /X-Preview-Error-Code/);
+  assert.match(sharedComponents, /文件地址失效，请重新上传或联系管理员。/);
   assert.match(sharedComponents, /styles\.paymentVoucherImageFrame/);
   assert.doesNotMatch(sharedComponents, /<object/);
   assert.doesNotMatch(sharedComponents, /data=\{previewUrl\}/);

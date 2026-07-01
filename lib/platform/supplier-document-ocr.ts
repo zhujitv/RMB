@@ -130,6 +130,145 @@ function parseDateText(text: string, patterns: RegExp[]) {
   return normalized || value;
 }
 
+function normalizeOcrLines(text: string) {
+  return String(text || "")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .split("\n")
+    .map((line) => cleanText(line))
+    .filter(Boolean);
+}
+
+function stripInvoiceFieldNoise(value: unknown) {
+  return cleanText(value)
+    .replace(/^(名称|纳税人识别号|地址、电话|开户行及账号|开户行账号)[:：]\s*/g, "")
+    .replace(/\s*(纳税人识别号|地址、电话|开户行及账号|开户行账号)[:：].*$/g, "")
+    .replace(/\s*(密码区|货物或应税劳务|项目名称|规格型号|单位|数量|单价|金额|税率|税额).*$/g, "")
+    .trim();
+}
+
+function sectionBetween(text: string, startPatterns: RegExp[], endPatterns: RegExp[]) {
+  const source = String(text || "");
+  let start = -1;
+  for (const pattern of startPatterns) {
+    const match = pattern.exec(source);
+    if (match && (start < 0 || match.index < start)) start = match.index;
+  }
+  if (start < 0) return "";
+  let end = source.length;
+  const tail = source.slice(start + 1);
+  for (const pattern of endPatterns) {
+    const match = pattern.exec(tail);
+    if (match) end = Math.min(end, start + 1 + match.index);
+  }
+  return source.slice(start, end);
+}
+
+function extractPartyName(section: string, partyLabel: string) {
+  const sectionText = section || "";
+  const direct = firstMatch(sectionText, [
+    /名称[:：]\s*([^\n\r]+)/,
+    new RegExp(`${partyLabel}\\s*(?:名称)?[:：]?\\s*([^\\n\\r]+)`),
+  ]);
+  if (direct) return stripInvoiceFieldNoise(direct);
+  const lines = normalizeOcrLines(sectionText);
+  const labelIndex = lines.findIndex((line) => line.includes(partyLabel));
+  for (let index = Math.max(0, labelIndex); index < Math.min(lines.length, labelIndex + 6); index += 1) {
+    const line = lines[index] || "";
+    const value = firstMatch(line, [/名称[:：]\s*(.+)$/]);
+    if (value) return stripInvoiceFieldNoise(value);
+    if (labelIndex >= 0 && index > labelIndex && !/(纳税人识别号|地址|电话|开户行|账号)/.test(line)) {
+      const cleaned = stripInvoiceFieldNoise(line);
+      if (cleaned && /[\u4e00-\u9fa5]/.test(cleaned)) return cleaned;
+    }
+  }
+  return "";
+}
+
+function extractPartyTaxNo(section: string) {
+  return firstMatch(section, [
+    /纳税人识别号[:：]\s*([A-Z0-9]{8,30})/i,
+    /统一社会信用代码[:：]\s*([A-Z0-9]{8,30})/i,
+  ]);
+}
+
+function extractInvoiceAmountWithTax(text: string) {
+  const normalized = text.replace(/[ \t]+/g, " ");
+  return parseAmount(normalized, [
+    /价税合计[\s\S]{0,30}小写[\s\S]{0,20}[¥￥]?([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /小写[\s\S]{0,20}[¥￥]?([0-9,]+(?:\.[0-9]{1,2})?)/,
+    /含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+  ]);
+}
+
+function extractInvoiceTotals(text: string) {
+  const totalLine = normalizeOcrLines(text).find((line) => /合计/.test(line) && /[0-9]/.test(line) && !/价税合计/.test(line)) || "";
+  const amounts = Array.from(totalLine.matchAll(/[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/g))
+    .map((match) => moneyValue(match[1]))
+    .filter((value) => value > 0);
+  return {
+    amountWithoutTax: amounts[0] || parseAmount(text, [
+      /不含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+      /金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s+税率/,
+    ]),
+    taxAmount: amounts[1] || parseAmount(text, [
+      /税额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
+    ]),
+  };
+}
+
+function stripInvoiceItemColumns(line: string) {
+  return cleanText(line)
+    .replace(/\s+[A-Za-z0-9\-_.#/]{1,30}\s+(套|个|件|只|批|吨|千克|公斤|米|平方米|立方米|PCS|SET)\b.*$/i, "")
+    .replace(/\s+(套|个|件|只|批|吨|千克|公斤|米|平方米|立方米|PCS|SET)\b.*$/i, "")
+    .replace(/\s+[0-9,]+(?:\.[0-9]+)?\s+[0-9,]+(?:\.[0-9]+)?\s+[0-9,]+(?:\.[0-9]{1,2})?\s+[0-9]{1,2}%.*$/i, "")
+    .replace(/\s+[0-9,]+(?:\.[0-9]{1,2})?\s+[0-9]{1,2}%.*$/i, "")
+    .replace(/\s+(税率|税额|金额|单价|数量|单位|规格型号).*$/g, "")
+    .replace(/^[*＊]\s*/, "")
+    .trim();
+}
+
+function extractInvoiceProductName(text: string) {
+  const lines = normalizeOcrLines(text);
+  const startIndex = lines.findIndex((line) => /(货物或应税劳务|服务名称|项目名称)/.test(line));
+  const candidates: string[] = [];
+  const scanLines = startIndex >= 0 ? lines.slice(startIndex + 1) : lines;
+  for (const line of scanLines) {
+    if (/(合计|价税合计|销售方|备注|收款人|复核|开票人)/.test(line)) break;
+    if (!/[\u4e00-\u9fa5A-Za-z]/.test(line)) continue;
+    if (/(规格型号|单位|数量|单价|金额|税率|税额)/.test(line) && line.length < 20) continue;
+    const cleaned = stripInvoiceItemColumns(line);
+    if (cleaned && !/(购买方|销售方|纳税人识别号|地址|电话|开户行|密码区)/.test(cleaned)) {
+      candidates.push(cleaned);
+    }
+    if (candidates.length >= 4) break;
+  }
+  const starItems = Array.from(text.matchAll(/[*＊][^*＊\n\r]{1,40}[*＊]\s*([^\n\r]+)/g))
+    .map((match) => stripInvoiceItemColumns(match[1]))
+    .filter(Boolean);
+  const merged = [...starItems, ...candidates]
+    .map((item) => item.replace(/^[*＊][^*＊]+[*＊]/, "").trim())
+    .filter((item, index, arr) => item && arr.indexOf(item) === index);
+  return merged.join("；");
+}
+
+function extractInvoiceTaxRate(text: string) {
+  const itemSection = sectionBetween(text, [
+    /货物或应税劳务/,
+    /项目名称/,
+  ], [
+    /合计/,
+    /价税合计/,
+    /销售方/,
+  ]);
+  const source = itemSection || text;
+  return firstMatch(source, [
+    /(13(?:\.0+)?%|9(?:\.0+)?%|6(?:\.0+)?%|0(?:\.0+)?%|免税)/,
+  ]) || firstMatch(text, [
+    /税率[:：]?\s*(13(?:\.0+)?%|9(?:\.0+)?%|6(?:\.0+)?%|0(?:\.0+)?%|免税)/,
+  ]);
+}
+
 function amountMatches(actual: number, expected: number) {
   if (!actual || !expected) return false;
   const diff = Math.abs(actual - expected);
@@ -147,7 +286,25 @@ function visibleResultFields(fields: Record<string, unknown>, labels: Record<str
     .filter((field) => field.value);
 }
 
-function parseInvoiceFields(text: string) {
+function parseVatInvoiceFields(text: string) {
+  const buyerSection = sectionBetween(text, [
+    /购买方/,
+    /购\s*买\s*方/,
+  ], [
+    /密码区/,
+    /货物或应税劳务/,
+    /项目名称/,
+    /销售方/,
+  ]);
+  const sellerSection = sectionBetween(text, [
+    /销售方/,
+    /销\s*售\s*方/,
+  ], [
+    /备注/,
+    /收款人/,
+    /复核/,
+    /开票人/,
+  ]);
   const invoiceNo = firstMatch(text, [
     /发票号码[:：]?\s*([A-Z0-9\-]{6,30})/i,
     /发票号[:：]?\s*([A-Z0-9\-]{6,30})/i,
@@ -157,32 +314,19 @@ function parseInvoiceFields(text: string) {
     /开票日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
     /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
   ]);
-  const amountWithTax = parseAmount(text, [
-    /价税合计(?:\s*[(（]小写[)）])?[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-    /含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-  ]);
-  const amountWithoutTax = parseAmount(text, [
-    /不含税金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-    /金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s+税率/,
-  ]);
-  const taxAmount = parseAmount(text, [
-    /税额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
-  ]);
-  const taxRate = firstMatch(text, [
-    /税率[:：]?\s*([0-9]{1,2}(?:\.[0-9]+)?%)/,
-    /([0-9]{1,2}(?:\.[0-9]+)?%)\s+税额/,
-  ]);
-  const seller = firstMatch(text, [
+  const amountWithTax = extractInvoiceAmountWithTax(text);
+  const totals = extractInvoiceTotals(text);
+  const taxRate = extractInvoiceTaxRate(text);
+  const seller = extractPartyName(sellerSection, "销售方") || firstMatch(text, [
     /销售方(?:名称)?[:：]\s*([^\n\r]+)/,
     /销\s*售\s*方[:：]\s*([^\n\r]+)/,
   ]);
-  const buyer = firstMatch(text, [
+  const buyer = extractPartyName(buyerSection, "购买方") || firstMatch(text, [
     /购买方(?:名称)?[:：]\s*([^\n\r]+)/,
     /购\s*买\s*方[:：]\s*([^\n\r]+)/,
   ]);
-  const productName = firstMatch(text, [
+  const productName = extractInvoiceProductName(text) || firstMatch(text, [
     /货物或应税劳务、服务名称[:：]?\s*([^\n\r]+)/,
-    /\*?[^\n\r]*\*\s*([^\n\r]{2,80})/,
     /产品名称[:：]\s*([^\n\r]+)/,
     /服务名称[:：]\s*([^\n\r]+)/,
   ]);
@@ -190,11 +334,13 @@ function parseInvoiceFields(text: string) {
     invoiceNo,
     invoiceDate,
     amountWithTax,
-    amountWithoutTax,
-    taxAmount,
+    amountWithoutTax: totals.amountWithoutTax,
+    taxAmount: totals.taxAmount,
     taxRate,
     seller,
+    sellerTaxNo: extractPartyTaxNo(sellerSection),
     buyer,
+    buyerTaxNo: extractPartyTaxNo(buyerSection),
     productName,
   };
 }
@@ -261,7 +407,9 @@ function supplierDocumentLabels(documentType: string) {
       taxAmount: "税额",
       taxRate: "税率",
       seller: "销售方",
+      sellerTaxNo: "销售方纳税人识别号",
       buyer: "购买方",
+      buyerTaxNo: "购买方纳税人识别号",
       productName: "产品名称 / 服务名称",
     };
   }
@@ -314,7 +462,7 @@ async function ocrValidationContext(document: OcrDocumentRow): Promise<OcrValida
   };
 }
 
-async function validateInvoice(fields: ReturnType<typeof parseInvoiceFields>, context: OcrValidationContext, documentId: string): Promise<ValidationIssue[]> {
+async function validateInvoice(fields: ReturnType<typeof parseVatInvoiceFields>, context: OcrValidationContext, documentId: string): Promise<ValidationIssue[]> {
   const issues: ValidationIssue[] = [];
   if (!fields.seller) {
     issues.push({ level: "manual", field: "seller", message: "未识别到发票销售方，需人工确认" });
@@ -553,21 +701,36 @@ export async function runSupplierDocumentOcrForDocument(
     throw error;
   }
   if (!task) return null;
+  let latestRawText = "";
   try {
     const fileBuffer = await readR2Object(document.storageKey);
     const recognized = await recognizePdfTextWithOcr(fileBuffer, SUPPLIER_DOCUMENT_OCR_FEATURE, { requireText: false });
     const text = cleanText(recognized.text);
-    if (!text) throw codedError("OCR未识别到可用文字，需人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
+    latestRawText = text;
+    if (!text) throw codedError("OCR原文未识别，请人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
     const context = await ocrValidationContext(document);
     const fields = document.documentType === "SUPPLIER_INVOICE"
-      ? parseInvoiceFields(text)
+      ? parseVatInvoiceFields(text)
       : parseContractFields(text);
     const labels = supplierDocumentLabels(document.documentType) as unknown as Record<string, string>;
     const issues = document.documentType === "SUPPLIER_INVOICE"
-      ? await validateInvoice(fields as ReturnType<typeof parseInvoiceFields>, context, document.id)
+      ? await validateInvoice(fields as ReturnType<typeof parseVatInvoiceFields>, context, document.id)
       : validateContract(fields as ReturnType<typeof parseContractFields>, context);
     const status = taskStatusFromIssues(issues);
     const fieldRows = visibleResultFields(fields as Record<string, unknown>, labels);
+    if (!fieldRows.length) {
+      throw codedError("OCR原文已识别但解析失败，请人工核对。", 422, "SUPPLIER_DOCUMENT_PARSE_FAILED");
+    }
+    console.info("supplier-document-ocr-parse", {
+      documentId,
+      taskId: task.id,
+      documentType: document.documentType,
+      rawText: shortRawText(text).slice(0, 4000),
+      rawJson: recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length },
+      parser: document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT",
+      extractedFields: fields,
+      validationResult: { status, issues },
+    });
     const saved = await prisma.$transaction(async (tx) => {
       await tx.ocrResult.deleteMany({ where: { taskId: task.id } });
       if (fieldRows.length) {
@@ -597,6 +760,9 @@ export async function runSupplierDocumentOcrForDocument(
             orderNo: context.orderNo,
             source: recognized.source,
             provider: recognized.provider,
+            rawJson: (recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length }) as Prisma.InputJsonValue,
+            parser: document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT",
+            extractedFields: fields as Prisma.InputJsonValue,
           },
         },
         include: { results: true },
@@ -617,7 +783,11 @@ export async function runSupplierDocumentOcrForDocument(
           status: OCR_STATUS_FAILED,
           validationStatus: VALIDATION_FAILED,
           errorMessage: message.slice(0, 1000),
-          validationJson: { issues: [{ level: "manual", message: "OCR识别失败，需人工核对" }] },
+          rawText: latestRawText ? shortRawText(latestRawText) : null,
+          validationJson: {
+            issues: [{ level: "manual", message }],
+            parserStatus: latestRawText ? "OCR原文已识别但解析失败" : "OCR原文未识别",
+          },
         },
         include: { results: true },
       });
@@ -790,6 +960,7 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
     validationStatus: task.validationStatus || "",
     errorMessage: task.errorMessage || "",
     rejectReason: task.rejectReason || "",
+    rawText: task.rawText || "",
     confirmedAt: task.confirmedAt,
     rejectedAt: task.rejectedAt,
     fields: (task.results || []).map((result) => ({
