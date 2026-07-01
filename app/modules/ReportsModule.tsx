@@ -48,7 +48,7 @@ type ReportResponse = {
 type ExportScope = "currentPage" | "selected" | "allFiltered";
 type ExportFormat = "xlsx" | "csv";
 type SortDirection = "asc" | "desc";
-type OpenMenuTarget = "orders" | "payments" | "costs" | "taxRefund";
+type OpenMenuTarget = "orders" | "payments" | "costs" | "profit" | "taxRefund";
 
 const PAGE_SIZE = 20;
 const DEFAULT_REPORT_FILTERS = {

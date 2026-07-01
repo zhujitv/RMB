@@ -27,11 +27,15 @@ import {
 export function ShipsgoControlTowerView({
   features,
   canManage,
+  initialKeyword = "",
+  initialOpenToken = 0,
   initialFullScreen = false,
   onOpenOrder,
 }: {
   features: ShipsgoFeatureFlags;
   canManage: boolean;
+  initialKeyword?: string;
+  initialOpenToken?: number;
   initialFullScreen?: boolean;
   onOpenOrder: (row: ShipsgoControlTowerRow) => void;
 }) {
@@ -78,8 +82,21 @@ export function ShipsgoControlTowerView({
   }
 
   useEffect(() => {
+    if (initialOpenToken && initialKeyword.trim()) return;
     void loadControlTower(EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS);
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    const nextFilters = { ...EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS, orderNo: value };
+    setFilters(nextFilters);
+    setSubmittedFilters(nextFilters);
+    setExpandedId("");
+    setSelectedId("");
+    setNotice("");
+    void loadControlTower(nextFilters);
+  }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
     if (!fullScreen) return undefined;

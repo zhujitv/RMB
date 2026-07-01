@@ -161,8 +161,10 @@ export function WorkspaceShell() {
   const [ordersFocus, setOrdersFocus] = useState({ keyword: "", token: 0 });
   const [paymentsFocus, setPaymentsFocus] = useState({ keyword: "", token: 0 });
   const [costsFocus, setCostsFocus] = useState({ keyword: "", token: 0 });
+  const [profitFocus, setProfitFocus] = useState({ keyword: "", token: 0 });
   const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
+  const [oceanControlTowerFocus, setOceanControlTowerFocus] = useState({ keyword: "", token: 0 });
   const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
   const [supplierDocumentsFocus, setSupplierDocumentsFocus] = useState({ keyword: "", requestId: "", token: 0 });
   const [loginBusy, setLoginBusy] = useState(false);
@@ -461,9 +463,19 @@ export function WorkspaceShell() {
       setActiveMenu("costs");
       return;
     }
+    if (path === "profit") {
+      setProfitFocus({ keyword, token });
+      setActiveMenu("profit");
+      return;
+    }
     if (path === "domestic-logistics") {
       setDomesticLogisticsFocus({ keyword, token });
       setActiveMenu("domesticLogistics");
+      return;
+    }
+    if (path === "ocean-control-tower") {
+      setOceanControlTowerFocus({ keyword, token });
+      setActiveMenu("oceanControlTower");
       return;
     }
     if (path === "logistics-fees") {
@@ -582,6 +594,8 @@ export function WorkspaceShell() {
         <DomesticLogisticsModule
           currentUser={payload.user}
           permissions={payload.permissions}
+          initialKeyword={oceanControlTowerFocus.keyword}
+          initialOpenToken={oceanControlTowerFocus.token}
           initialView="controlTower"
           initialControlTowerFullscreen
         />
@@ -593,7 +607,11 @@ export function WorkspaceShell() {
           initialOpenToken={supplierDocumentsFocus.token}
         />
       ) : activeMenu === "profit" ? (
-        <ProfitModule currentUser={payload.user} />
+        <ProfitModule
+          currentUser={payload.user}
+          initialKeyword={profitFocus.keyword}
+          initialOpenToken={profitFocus.token}
+        />
       ) : activeMenu === "taxRefund" ? (
         <TaxRefundModule
           currentUser={payload.user}
@@ -617,6 +635,8 @@ export function WorkspaceShell() {
               setPaymentsFocus({ keyword: value, token: Date.now() });
             } else if (targetMenu === "costs") {
               setCostsFocus({ keyword: value, token: Date.now() });
+            } else if (targetMenu === "profit") {
+              setProfitFocus({ keyword: value, token: Date.now() });
             } else if (targetMenu === "taxRefund") {
               setTaxRefundFocus({ keyword: value, token: Date.now() });
             }

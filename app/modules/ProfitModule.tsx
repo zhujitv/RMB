@@ -59,7 +59,15 @@ type ProfitResponse = {
 
 const PAGE_SIZE = 20;
 
-export function ProfitModule({ currentUser }: { currentUser: User }) {
+export function ProfitModule({
+  currentUser,
+  initialKeyword = "",
+  initialOpenToken = 0,
+}: {
+  currentUser: User;
+  initialKeyword?: string;
+  initialOpenToken?: number;
+}) {
   const [rows, setRows] = useState<ProfitRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -91,21 +99,42 @@ export function ProfitModule({ currentUser }: { currentUser: User }) {
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<ProfitResponse>(`/api/profit?${params}`);
       const data = result.data || {};
-      setRows(Array.isArray(data.rows) ? data.rows : []);
+      const nextRows = Array.isArray(data.rows) ? data.rows : [];
+      setRows(nextRows);
       setTotal(Number(data.total || 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
       if (result.error) setError(result.error || "读取资料失败");
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取利润分析失败");
+      return [];
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (initialOpenToken && initialKeyword.trim()) return;
     void loadRows(1, "");
   }, []);
+
+  useEffect(() => {
+    const value = initialKeyword.trim();
+    if (!initialOpenToken || !value) return;
+    setKeyword(value);
+    setSubmittedKeyword(value);
+    setDetailRow(null);
+    setNotice("");
+    void loadRows(1, value).then((nextRows) => {
+      const matched = nextRows.find((row) => (
+        row.orderNo === value
+        || row.blNo === value
+        || row.id === value
+      )) || nextRows[0] || null;
+      setDetailRow(matched);
+    });
+  }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
     const value = keyword.trim();

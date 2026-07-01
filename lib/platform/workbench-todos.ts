@@ -14,14 +14,22 @@ import {
   FACTORY_SUPPLIER_COST_TYPES,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
+  PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   cachedTaxRefundCompleteness,
   customerShortName,
+  getCommissionFormulaSettings,
+  includeOrderRelations,
+  isLogisticsCostType,
   isProductSupplierOperatorRole,
+  isProductSupplierType,
+  listShipsgoControlTowerTrackings,
   needsTaxRefundCompletenessRefresh,
   nonEmpty,
   refreshTaxRefundCompleteness,
+  summarizeOrder,
   taxRefundStatusFromCompleteness,
+  validCost,
 } from "./shared";
 
 export type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
@@ -68,6 +76,53 @@ type TodoOrder = {
 const TODO_LIMIT_PER_SOURCE = 80;
 const PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE = ["已完成", "已关闭"];
 const LOGISTICS_INVOICE_DONE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
+const LOGISTICS_INVOICE_REVIEW_STATUSES = ["已上传发票", "部分上传发票", "部分已确认"];
+const LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
+const LOGISTICS_PAYMENT_DONE_STATUSES = ["已付款"];
+const NEGATIVE_PROFIT_THRESHOLD = 0;
+const PROFIT_COST_REVIEW_STATUSES = ["生产中", "已发货", "部分收款", "已收齐", "多收款"];
+const PROFIT_COST_REQUIRED_STATUSES = ["已发货", "部分收款", "已收齐", "多收款"];
+
+type TodoCost = {
+  id: string;
+  order: TodoOrder;
+  supplier?: { supplierName?: string | null; supplierType?: string | null } | null;
+  supplierNameSnapshot?: string | null;
+  vendorName?: string | null;
+  costType?: string | null;
+  sourceType?: string | null;
+  paymentStatus?: string | null;
+  paid?: boolean | null;
+  paidAt?: Date | string | null;
+  paymentDate?: Date | string | null;
+  paymentVoucherUrl?: string | null;
+  paymentVoucherStorageKey?: string | null;
+  paymentVoucherUploadedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+
+type TodoPayment = {
+  id: string;
+  order: TodoOrder;
+  paymentDate?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+
+type TodoLogisticsBill = {
+  id: string;
+  order: TodoOrder;
+  supplier?: { supplierName?: string | null } | null;
+  billOfLadingNo?: string | null;
+  submittedAt?: Date | string | null;
+  reviewedAt?: Date | string | null;
+  paymentDate?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+
+type ProfitOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 
 function actorRole(actor: ActorLike) {
   return nonEmpty(actor?.role);
@@ -91,6 +146,10 @@ function isSalesperson(actor: ActorLike) {
 
 function isFinance(actor: ActorLike) {
   return actorRole(actor) === "财务";
+}
+
+function isFinanceOperator(actor: ActorLike) {
+  return isAdmin(actor) || isFinance(actor);
 }
 
 function isLogisticsOperator(actor: ActorLike) {
@@ -133,6 +192,7 @@ function orderHref(modulePath: string, order: Pick<TodoOrder, "id" | "orderNo">,
 }
 
 function todoForOrder(input: {
+  id?: string;
   type: string;
   title: string;
   module: string;
@@ -145,7 +205,7 @@ function todoForOrder(input: {
 }): WorkbenchTodo {
   const dueAt = iso(endOfChinaDay(input.dueAt || null));
   return {
-    id: `${input.type.toLowerCase()}-${input.order.id}`,
+    id: input.id || `${input.type.toLowerCase()}-${input.order.id}`,
     type: input.type,
     title: input.title,
     module: input.module,
@@ -160,6 +220,110 @@ function todoForOrder(input: {
     createdAt: iso(input.createdAt || input.order.createdAt),
     updatedAt: iso(input.updatedAt || input.order.updatedAt),
   };
+}
+
+function supplierNameForCost(cost: TodoCost) {
+  return nonEmpty(cost.supplier?.supplierName) || nonEmpty(cost.supplierNameSnapshot) || nonEmpty(cost.vendorName) || "产品供应商";
+}
+
+function productSupplierPaymentCostWhere(): Prisma.OrderCostWhereInput {
+  return {
+    sourceType: { not: "LOGISTICS_EXPENSE" },
+    OR: [
+      { costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
+      { supplier: { is: { supplierType: { in: PRODUCT_SUPPLIER_TYPES } } } },
+    ],
+  };
+}
+
+function isProductSupplierPaymentCost(cost: {
+  costType?: string | null;
+  sourceType?: string | null;
+  supplier?: { supplierType?: string | null } | null;
+}) {
+  if (cost.sourceType === "LOGISTICS_EXPENSE" || isLogisticsCostType(cost.costType || "")) return false;
+  return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType || "") || isProductSupplierType(cost.supplier?.supplierType);
+}
+
+function paidCostWhere(): Prisma.OrderCostWhereInput {
+  return {
+    OR: [
+      { paid: true },
+      { paymentStatus: { in: ["已支付", "部分支付"] } },
+    ],
+  };
+}
+
+function todoForCost(input: {
+  type: string;
+  title: string;
+  module: string;
+  cost: TodoCost;
+  dueAt?: Date | string | null;
+  href?: string;
+  ownerName?: string;
+}) {
+  return todoForOrder({
+    id: `${input.type.toLowerCase()}-${input.cost.id}`,
+    type: input.type,
+    title: input.title,
+    module: input.module,
+    order: input.cost.order,
+    dueAt: input.dueAt,
+    href: input.href || orderHref("/costs", input.cost.order, {
+      costId: input.cost.id,
+      keyword: input.cost.order.orderNo,
+    }),
+    ownerName: input.ownerName || supplierNameForCost(input.cost),
+    createdAt: input.cost.createdAt,
+    updatedAt: input.cost.updatedAt,
+  });
+}
+
+function todoForPayment(input: {
+  type: string;
+  title: string;
+  payment: TodoPayment;
+}) {
+  return todoForOrder({
+    id: `${input.type.toLowerCase()}-${input.payment.id}`,
+    type: input.type,
+    title: input.title,
+    module: "收款管理",
+    order: input.payment.order,
+    dueAt: input.payment.paymentDate || input.payment.createdAt,
+    href: orderHref("/payments", input.payment.order, {
+      paymentId: input.payment.id,
+      keyword: input.payment.order.orderNo,
+    }),
+    ownerName: "财务/管理员",
+    createdAt: input.payment.createdAt,
+    updatedAt: input.payment.updatedAt,
+  });
+}
+
+function todoForLogisticsBill(input: {
+  type: string;
+  title: string;
+  bill: TodoLogisticsBill;
+  dueAt?: Date | string | null;
+  ownerName?: string;
+}) {
+  return todoForOrder({
+    id: `${input.type.toLowerCase()}-${input.bill.id}`,
+    type: input.type,
+    title: input.title,
+    module: "物流费用",
+    order: input.bill.order,
+    dueAt: input.dueAt || input.bill.updatedAt,
+    href: orderHref("/logistics-fees", input.bill.order, {
+      billId: input.bill.id,
+      keyword: input.bill.billOfLadingNo || input.bill.order.orderNo,
+    }),
+    ownerName: input.ownerName || input.bill.supplier?.supplierName || "财务/管理员",
+    createdAt: input.bill.createdAt,
+    updatedAt: input.bill.updatedAt,
+  });
 }
 
 function activeOrderBaseWhere(actor: ActorLike): Prisma.ReceivableOrderWhereInput {
@@ -185,6 +349,18 @@ function logisticsBillAccessWhere(actor: ActorLike): Prisma.LogisticsBillWhereIn
   if (role === LOGISTICS_OPERATOR_ROLE) return supplierId ? { supplierId } : { id: "__no_supplier_bound__" };
   if (role === LEGACY_LOGISTICS_OPERATOR_ROLE) return {};
   return { id: "__no_logistics_bill_access__" };
+}
+
+function shipsgoTrackingAccessWhere(actor: ActorLike): Prisma.ShipsgoTrackingWhereInput {
+  const role = actorRole(actor);
+  const supplierId = actorSupplierId(actor);
+  if (role === "管理员") return {};
+  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId(actor) } } } } };
+  if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && supplierId) {
+    return { order: { is: { logisticsSuppliers: { some: { supplierId } } } } };
+  }
+  if (role === LEGACY_LOGISTICS_OPERATOR_ROLE) return {};
+  return { id: "__no_shipsgo_tracking_access__" };
 }
 
 async function listOrderTodos(actor: ActorLike) {
@@ -317,7 +493,7 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
   if (!canRead(actor, "domesticLogistics") && !canRead(actor, "costs")) return [];
   if (!(isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) return [];
   const accessWhere = logisticsBillAccessWhere(actor);
-  const [reviewBills, invoiceBills] = await Promise.all([
+  const [reviewBills, invoiceBills, invoiceReviewBills, paymentBills] = await Promise.all([
     prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
@@ -349,35 +525,73 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
       orderBy: [{ reviewedAt: "asc" }, { updatedAt: "asc" }],
       take: TODO_LIMIT_PER_SOURCE,
     }),
+    isFinanceOperator(actor)
+      ? prisma.logisticsBill.findMany({
+          where: {
+            deletedAt: null,
+            AND: [
+              { auditStatus: "审核通过" },
+              { invoiceStatus: { in: LOGISTICS_INVOICE_REVIEW_STATUSES } },
+              { expenses: { some: { deletedAt: null, invoiceStatus: "已上传" } } },
+              accessWhere,
+            ],
+          },
+          include: {
+            order: { include: { customer: true, salesperson: { select: { name: true } } } },
+            supplier: { select: { supplierName: true } },
+          },
+          orderBy: [{ updatedAt: "asc" }],
+          take: TODO_LIMIT_PER_SOURCE,
+        })
+      : Promise.resolve([]),
+    isFinanceOperator(actor)
+      ? prisma.logisticsBill.findMany({
+          where: {
+            deletedAt: null,
+            AND: [
+              { auditStatus: "审核通过" },
+              { invoiceStatus: { in: LOGISTICS_PAYMENT_READY_INVOICE_STATUSES } },
+              { paymentStatus: { notIn: LOGISTICS_PAYMENT_DONE_STATUSES } },
+              accessWhere,
+            ],
+          },
+          include: {
+            order: { include: { customer: true, salesperson: { select: { name: true } } } },
+            supplier: { select: { supplierName: true } },
+          },
+          orderBy: [{ paymentDate: "asc" }, { updatedAt: "asc" }],
+          take: TODO_LIMIT_PER_SOURCE,
+        })
+      : Promise.resolve([]),
   ]);
   return [
-    ...reviewBills.map((bill) => todoForOrder({
+    ...reviewBills.map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_FEE_REVIEW",
       title: "物流费用待审核",
-      module: "物流费用",
-      order: bill.order,
+      bill,
       dueAt: bill.submittedAt || bill.updatedAt,
-      href: orderHref("/logistics-fees", bill.order, {
-        billId: bill.id,
-        keyword: bill.billOfLadingNo || bill.order.orderNo,
-      }),
       ownerName: isLogisticsSupplier(actor) ? (bill.supplier?.supplierName || "物流供应商") : "财务/管理员",
-      createdAt: bill.createdAt,
-      updatedAt: bill.updatedAt,
     })),
-    ...invoiceBills.map((bill) => todoForOrder({
+    ...invoiceBills.map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_INVOICE_UPLOAD",
       title: "物流发票待上传",
-      module: "物流费用",
-      order: bill.order,
+      bill,
       dueAt: bill.reviewedAt || bill.updatedAt,
-      href: orderHref("/logistics-fees", bill.order, {
-        billId: bill.id,
-        keyword: bill.billOfLadingNo || bill.order.orderNo,
-      }),
       ownerName: bill.supplier?.supplierName || "物流供应商",
-      createdAt: bill.createdAt,
-      updatedAt: bill.updatedAt,
+    })),
+    ...invoiceReviewBills.map((bill) => todoForLogisticsBill({
+      type: "LOGISTICS_INVOICE_REVIEW",
+      title: "发票待审核",
+      bill,
+      dueAt: bill.updatedAt,
+      ownerName: "财务/管理员",
+    })),
+    ...paymentBills.map((bill) => todoForLogisticsBill({
+      type: "LOGISTICS_PAYMENT_REGISTER",
+      title: "物流付款待登记",
+      bill,
+      dueAt: bill.paymentDate || bill.updatedAt,
+      ownerName: "财务/管理员",
     })),
   ];
 }
@@ -419,6 +633,115 @@ async function listSupplierDocumentTodos(actor: ActorLike) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));
+}
+
+async function listCustomerPaymentTodos(actor: ActorLike) {
+  if (!canRead(actor, "payments") || !isFinanceOperator(actor)) return [];
+  const rows = await prisma.payment.findMany({
+    where: {
+      deletedAt: null,
+      status: "待确认",
+      order: { is: orderAccessWhere(actor) },
+    },
+    include: {
+      order: { include: { customer: true, salesperson: { select: { name: true } } } },
+    },
+    orderBy: [{ paymentDate: "asc" }, { createdAt: "asc" }],
+    take: TODO_LIMIT_PER_SOURCE,
+  });
+  return rows.map((payment) => todoForPayment({
+    type: "CUSTOMER_PAYMENT_CONFIRMATION",
+    title: "客户回款待确认",
+    payment,
+  }));
+}
+
+async function listFactoryPaymentTodos(actor: ActorLike) {
+  if (!canRead(actor, "costs") || !isFinanceOperator(actor)) return [];
+  const baseWhere = productSupplierPaymentCostWhere();
+  const include = {
+    order: { include: { customer: true, salesperson: { select: { name: true } } } },
+    supplier: { select: { supplierName: true, supplierType: true } },
+  } satisfies Prisma.OrderCostInclude;
+  const [unpaidCosts, missingVoucherCosts, missingPaidAtCosts] = await Promise.all([
+    prisma.orderCost.findMany({
+      where: {
+        deletedAt: null,
+        paymentStatus: { not: "已取消" },
+        AND: [
+          baseWhere,
+          {
+            OR: [
+              { paid: false },
+              { paymentStatus: { in: ["待支付", "部分支付"] } },
+            ],
+          },
+        ],
+      },
+      include,
+      orderBy: [{ paymentDate: "asc" }, { updatedAt: "asc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+    prisma.orderCost.findMany({
+      where: {
+        deletedAt: null,
+        paymentStatus: { not: "已取消" },
+        AND: [
+          baseWhere,
+          paidCostWhere(),
+          { paymentVoucherStorageKey: null },
+          { paymentVoucherUrl: null },
+        ],
+      },
+      include,
+      orderBy: [{ paidAt: "asc" }, { updatedAt: "asc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+    prisma.orderCost.findMany({
+      where: {
+        deletedAt: null,
+        paymentStatus: { not: "已取消" },
+        paidAt: null,
+        AND: [
+          baseWhere,
+          paidCostWhere(),
+        ],
+      },
+      include,
+      orderBy: [{ updatedAt: "asc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+  ]);
+  const todos: WorkbenchTodo[] = [];
+  const handledCostIds = new Set<string>();
+  function addCostTodo(cost: TodoCost, buildTodo: () => WorkbenchTodo) {
+    if (!isProductSupplierPaymentCost(cost) || handledCostIds.has(cost.id)) return;
+    handledCostIds.add(cost.id);
+    todos.push(buildTodo());
+  }
+
+  missingPaidAtCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
+    type: "PAID_WITHOUT_PAYMENT_TIME",
+    title: "已付款但缺付款时间",
+    module: "成本管理",
+    cost,
+    dueAt: cost.updatedAt,
+  })));
+  missingVoucherCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
+    type: "PAYMENT_VOUCHER_UPLOAD",
+    title: "付款凭证待上传",
+    module: "成本管理",
+    cost,
+    dueAt: cost.paidAt || cost.paymentDate || cost.updatedAt,
+  })));
+  unpaidCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
+    type: "FACTORY_PAYMENT_REGISTER",
+    title: "工厂付款待登记",
+    module: "成本管理",
+    cost,
+    dueAt: cost.paymentDate || cost.order.expectedShipmentDate || cost.order.dueDate,
+  })));
+  return todos;
 }
 
 function missingTaxRefundTodos(order: TodoOrder, missingLabels: string[] = []) {
@@ -499,10 +822,183 @@ async function listTaxRefundTodos(actor: ActorLike) {
   return todos;
 }
 
+function isCommissionSettled(order: { commissionStatus?: string | null }) {
+  return ["已结算", "SETTLED"].includes(nonEmpty(order.commissionStatus));
+}
+
+function profitOrderDueDate(order: ProfitOrder) {
+  return order.dueDate || order.expectedPaymentDate || order.updatedAt;
+}
+
+function shouldCreateProfitCostIncompleteTodo(
+  order: { status?: string | null },
+  validCosts: unknown[],
+  summary: { allCostsConfirmed?: boolean },
+) {
+  const status = nonEmpty(order.status);
+  if (!PROFIT_COST_REVIEW_STATUSES.includes(status)) return false;
+  if (validCosts.length > 0) return !summary.allCostsConfirmed;
+  return PROFIT_COST_REQUIRED_STATUSES.includes(status);
+}
+
+async function listProfitTodos(actor: ActorLike) {
+  if (!isFinanceOperator(actor) || !canRead(actor, "orders") || !canRead(actor, "costs") || !canRead(actor, "commissions")) return [];
+  const [rows, commissionFormulaSettings] = await Promise.all([
+    prisma.receivableOrder.findMany({
+      where: {
+        deletedAt: null,
+        status: { notIn: ["已关闭", "已取消"] },
+        AND: [orderAccessWhere(actor)],
+      },
+      include: includeOrderRelations(),
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+    getCommissionFormulaSettings(),
+  ]);
+  const todos: WorkbenchTodo[] = [];
+  for (const order of rows) {
+    const summary = summarizeOrder(order, commissionFormulaSettings);
+    const validCosts = (order.costs || []).filter(validCost);
+    if (shouldCreateProfitCostIncompleteTodo(order, validCosts, summary)) {
+      todos.push(todoForOrder({
+        type: "PROFIT_COST_INCOMPLETE",
+        title: "成本未完整录入",
+        module: "利润分析",
+        order,
+        dueAt: order.expectedShipmentDate || profitOrderDueDate(order),
+        href: orderHref("/profit", order),
+        updatedAt: order.updatedAt,
+      }));
+    }
+    if (summary.commissionCanSettle && !isCommissionSettled(order)) {
+      todos.push(todoForOrder({
+        type: "COMMISSION_SETTLEMENT",
+        title: "提成待结算",
+        module: "利润分析",
+        order,
+        dueAt: order.commissionSettledAt || order.updatedAt,
+        href: orderHref("/profit", order),
+        ownerName: order.salesperson?.name || "财务/管理员",
+        updatedAt: order.updatedAt,
+      }));
+    }
+    const expectedProfit = Number(summary.expectedGrossProfit || 0);
+    const realizedProfit = Number(summary.realizedGrossProfit || 0);
+    const expectedMargin = summary.expectedGrossMargin == null ? null : Number(summary.expectedGrossMargin);
+    const realizedMargin = summary.realizedGrossMargin == null ? null : Number(summary.realizedGrossMargin);
+    const hasProfitException = expectedProfit < NEGATIVE_PROFIT_THRESHOLD
+      || realizedProfit < NEGATIVE_PROFIT_THRESHOLD
+      || (expectedMargin != null && expectedMargin < NEGATIVE_PROFIT_THRESHOLD)
+      || (realizedMargin != null && realizedMargin < NEGATIVE_PROFIT_THRESHOLD);
+    if (hasProfitException) {
+      todos.push(todoForOrder({
+        type: "PROFIT_EXCEPTION_REVIEW",
+        title: "利润异常订单待复核",
+        module: "利润分析",
+        order,
+        dueAt: order.updatedAt,
+        href: orderHref("/profit", order),
+        updatedAt: order.updatedAt,
+      }));
+    }
+  }
+  return todos;
+}
+
+function trackingTodoOrder(row: {
+  orderId?: string;
+  orderNo?: string;
+  customerName?: string;
+  customerShortName?: string;
+  updatedAt?: string;
+}): TodoOrder | null {
+  const orderId = nonEmpty(row.orderId);
+  const orderNo = nonEmpty(row.orderNo);
+  if (!orderId || !orderNo) return null;
+  return {
+    id: orderId,
+    orderNo,
+    customerNameSnapshot: nonEmpty(row.customerName) || nonEmpty(row.customerShortName),
+    customer: { shortName: nonEmpty(row.customerShortName) },
+    updatedAt: row.updatedAt,
+  };
+}
+
+async function listOceanTrackingTodos(actor: ActorLike) {
+  if (!canRead(actor, "domesticLogistics") || !(isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) return [];
+  const result = await listShipsgoControlTowerTrackings(new URLSearchParams(), actor);
+  const todos: WorkbenchTodo[] = [];
+  for (const row of result.rows || []) {
+    const order = trackingTodoOrder(row);
+    if (!order) continue;
+    const href = orderHref("/ocean-control-tower", order, {
+      trackingId: row.id,
+      keyword: order.orderNo,
+    });
+    if (row.isSoonArriving || row.isEtaOverdue) {
+      todos.push(todoForOrder({
+        id: `eta-arrival-${row.id}`,
+        type: "ETA_ARRIVAL_ALERT",
+        title: row.isEtaOverdue ? "ETA 已过期" : "ETA 即将到港",
+        module: "运输监控",
+        order,
+        dueAt: row.eta || row.predictedDischargeDate || row.dateOfDischarge,
+        href,
+        ownerName: "物流/业务",
+        updatedAt: row.updatedAt,
+      }));
+    }
+    if (row.isSyncFailed || row.isSyncStale) {
+      todos.push(todoForOrder({
+        id: `container-tracking-exception-${row.id}`,
+        type: "CONTAINER_TRACKING_EXCEPTION",
+        title: "集装箱跟踪异常",
+        module: "运输监控",
+        order,
+        dueAt: row.isSyncFailed ? new Date() : (row.lastSyncTime || row.lastSyncedAt || row.updatedAt),
+        href,
+        ownerName: "物流/业务",
+        updatedAt: row.updatedAt,
+      }));
+    }
+  }
+  return todos;
+}
+
 async function completedTodayCount(actor: ActorLike, now = new Date()) {
   const today = startOfChinaDay(now);
   const tomorrow = addDays(today, 1);
   const counts: Promise<number>[] = [];
+  const productCostWhere = productSupplierPaymentCostWhere();
+  if (canRead(actor, "payments") && isFinanceOperator(actor)) {
+    counts.push(prisma.payment.count({
+      where: {
+        deletedAt: null,
+        status: "已到账",
+        updatedAt: { gte: today, lt: tomorrow },
+        order: { is: orderAccessWhere(actor) },
+      },
+    }));
+  }
+  if (canRead(actor, "costs") && isFinanceOperator(actor)) {
+    counts.push(prisma.orderCost.count({
+      where: {
+        deletedAt: null,
+        paymentStatus: { not: "已取消" },
+        AND: [
+          productCostWhere,
+          {
+            OR: [
+              { paidAt: { gte: today, lt: tomorrow } },
+              { paymentVoucherUploadedAt: { gte: today, lt: tomorrow } },
+              { updatedAt: { gte: today, lt: tomorrow }, ...paidCostWhere() },
+            ],
+          },
+        ],
+      },
+    }));
+  }
   if (canRead(actor, "supplierDocuments") && (isAdmin(actor) || isProductSupplierOperatorRole(actorRole(actor)))) {
     counts.push(prisma.supplierDocumentRequest.count({
       where: {
@@ -527,6 +1023,17 @@ async function completedTodayCount(actor: ActorLike, now = new Date()) {
       },
     }));
   }
+  if (canRead(actor, "domesticLogistics") && isFinanceOperator(actor)) {
+    counts.push(prisma.logisticsBill.count({
+      where: {
+        deletedAt: null,
+        auditStatus: "审核通过",
+        paymentStatus: "已付款",
+        updatedAt: { gte: today, lt: tomorrow },
+        ...logisticsBillAccessWhere(actor),
+      },
+    }));
+  }
   if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
     counts.push(prisma.receivableOrder.count({
       where: {
@@ -534,6 +1041,27 @@ async function completedTodayCount(actor: ActorLike, now = new Date()) {
         taxArchived: true,
         taxRefundArchivedAt: { gte: today, lt: tomorrow },
         AND: [orderAccessWhere(actor)],
+      },
+    }));
+  }
+  if (canRead(actor, "commissions") && isFinanceOperator(actor)) {
+    counts.push(prisma.receivableOrder.count({
+      where: {
+        deletedAt: null,
+        commissionStatus: { in: ["已结算", "SETTLED"] },
+        commissionSettledAt: { gte: today, lt: tomorrow },
+        AND: [orderAccessWhere(actor)],
+      },
+    }));
+  }
+  if (canRead(actor, "domesticLogistics") && (isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) {
+    counts.push(prisma.shipsgoTracking.count({
+      where: {
+        deletedAt: null,
+        provider: "SHIPSGO",
+        mode: "OCEAN",
+        lastSyncTime: { gte: today, lt: tomorrow },
+        ...shipsgoTrackingAccessWhere(actor),
       },
     }));
   }
@@ -566,12 +1094,27 @@ function uniqueTodos(todos: WorkbenchTodo[]) {
 }
 
 export async function listWorkbenchTodos(actor: ActorLike) {
-  const [orderTodos, domesticLogisticsTodos, logisticsFeeTodos, supplierDocumentTodos, taxRefundTodos, completed] = await Promise.all([
+  const [
+    orderTodos,
+    domesticLogisticsTodos,
+    logisticsFeeTodos,
+    supplierDocumentTodos,
+    customerPaymentTodos,
+    factoryPaymentTodos,
+    taxRefundTodos,
+    profitTodos,
+    oceanTrackingTodos,
+    completed,
+  ] = await Promise.all([
     listOrderTodos(actor),
     listDomesticLogisticsTodos(actor),
     listLogisticsFeeTodos(actor),
     listSupplierDocumentTodos(actor),
+    listCustomerPaymentTodos(actor),
+    listFactoryPaymentTodos(actor),
     listTaxRefundTodos(actor),
+    listProfitTodos(actor),
+    listOceanTrackingTodos(actor),
     completedTodayCount(actor),
   ]);
   const todos = uniqueTodos([
@@ -579,7 +1122,11 @@ export async function listWorkbenchTodos(actor: ActorLike) {
     ...domesticLogisticsTodos,
     ...logisticsFeeTodos,
     ...supplierDocumentTodos,
+    ...customerPaymentTodos,
+    ...factoryPaymentTodos,
     ...taxRefundTodos,
+    ...profitTodos,
+    ...oceanTrackingTodos,
   ]).sort(sortWorkbenchTodos);
   return {
     todos,
@@ -590,7 +1137,11 @@ export async function listWorkbenchTodos(actor: ActorLike) {
       "domesticLogistics",
       "logisticsFees",
       "supplierDocuments",
+      "payments",
+      "factoryPayments",
       "taxRefund",
+      "profit",
+      "oceanTracking",
     ],
     supportedDocumentTypes: SUPPLIER_DOCUMENT_TYPES,
   };

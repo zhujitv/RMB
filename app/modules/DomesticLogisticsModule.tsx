@@ -536,6 +536,8 @@ export function DomesticLogisticsModule({
         <ShipsgoControlTowerView
           features={shipsgoFeatures}
           canManage={canManageShipsgoTracking}
+          initialKeyword={initialKeyword}
+          initialOpenToken={initialOpenToken}
           initialFullScreen={initialControlTowerFullscreen}
           onOpenOrder={openControlTowerOrder}
         />
