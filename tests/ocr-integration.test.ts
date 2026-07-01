@@ -112,6 +112,38 @@ test("Aliyun invoice parser reads official Data payload and invoiceDetails", asy
   assert.match(result.text, /安徽科蓝特铝业股份有限公司/);
 });
 
+test("Aliyun invoice parser falls back to prism key value pairs without merging parties", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractAliyunInvoiceRecognitionData } = await import("../lib/platform/aliyun-invoice-ocr-parser.ts");
+  const payload = {
+    Data: JSON.stringify({
+      prism_keyValueInfo: [
+        { key: "发票号码", value: "26342000002030743666" },
+        { key: "开票日期", value: "2026年06月29日" },
+        { key: "购买方名称", value: "浙江莱诺建材有限公司" },
+        { key: "销售方名称", value: "安徽科蓝特铝业股份有限公司" },
+        { key: "购买方纳税人识别号", value: "91330681MA2D86XM28" },
+        { key: "销售方纳税人识别号", value: "91341822070917615C" },
+        { key: "金额合计", value: "101480.27" },
+        { key: "税额合计", value: "13192.44" },
+        { key: "价税合计", value: "114672.71" },
+        { key: "税率", value: "13%" },
+        { key: "invoiceDetails", value: "[{\"itemName\":\"*有色金属压延材*铝制工程结构件\",\"taxRate\":\"13%\"}]" },
+      ],
+    }),
+  };
+  const result = extractAliyunInvoiceRecognitionData(payload);
+  assert.equal(result.extractedFields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(result.extractedFields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(result.extractedFields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(result.extractedFields.sellerTaxNo, "91341822070917615C");
+  assert.equal(result.extractedFields.amountWithTax, "114672.71");
+  assert.equal(result.extractedFields.amountWithoutTax, "101480.27");
+  assert.equal(result.extractedFields.taxAmount, "13192.44");
+  assert.equal(result.extractedFields.taxRate, "13%");
+  assert.equal(result.extractedFields.productName, "*有色金属压延材*铝制工程结构件");
+});
+
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.match(customsRecognition, /customsDeclarationParser\.parseCustomsDeclarationText\(recognized\.text\)/);

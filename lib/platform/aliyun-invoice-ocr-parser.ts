@@ -1,20 +1,117 @@
 const INVOICE_FIELD_ALIASES: Record<string, string[]> = {
-  invoiceNo: ["发票号码", "发票号", "invoiceNo", "invoiceNumber", "InvoiceNo", "InvoiceNumber"],
-  invoiceDate: ["开票日期", "日期", "invoiceDate", "InvoiceDate"],
-  buyer: ["购买方名称", "购买方", "购方名称", "受票方名称", "buyerName", "BuyerName", "PurchaserName", "purchaserName"],
-  buyerTaxNo: ["购买方纳税人识别号", "购方税号", "受票方税号", "buyerTaxNo", "BuyerTaxNo", "PurchaserTaxNo", "purchaserTaxNumber"],
-  seller: ["销售方名称", "销售方", "销方名称", "sellerName", "SellerName"],
-  sellerTaxNo: ["销售方纳税人识别号", "销方税号", "sellerTaxNo", "SellerTaxNo", "sellerTaxNumber"],
-  amountWithTax: ["价税合计", "价税合计小写", "小写金额", "含税金额", "发票金额", "totalAmount", "TotalAmount", "AmountWithTax"],
-  amountWithoutTax: ["不含税金额", "金额合计", "合计金额", "发票金额不含税", "amountWithoutTax", "AmountWithoutTax", "SumAmount", "invoiceAmountPreTax"],
-  taxAmount: ["税额合计", "合计税额", "税额", "发票税额", "taxAmount", "TaxAmount", "SumTax", "invoiceTax"],
-  taxRate: ["税率", "taxRate", "TaxRate"],
-  productName: ["货物或应税劳务、服务名称", "货物或应税劳务服务名称", "项目名称", "商品名称", "产品名称", "服务名称", "ItemName", "itemName", "CommodityName", "ProductName"],
-  specModel: ["规格型号", "Spec", "Specification", "specification", "Model"],
-  unit: ["单位", "Unit"],
-  quantity: ["数量", "Quantity"],
-  unitPrice: ["单价", "UnitPrice"],
+  invoiceNo: [
+    "invoiceNumber",
+    "invoiceNo",
+    "invoiceNum",
+    "invoice_num",
+    "发票号码",
+    "发票号",
+  ],
+  invoiceDate: [
+    "invoiceDate",
+    "invoice_date",
+    "date",
+    "开票日期",
+  ],
+  buyer: [
+    "purchaserName",
+    "buyerName",
+    "purchaser",
+    "buyer",
+    "购方名称",
+    "购买方名称",
+    "购买方",
+  ],
+  buyerTaxNo: [
+    "purchaserTaxNumber",
+    "purchaserRegisterNum",
+    "purchaserTaxNo",
+    "buyerTaxNumber",
+    "buyerRegisterNum",
+    "buyerTaxNo",
+    "购方税号",
+    "购买方纳税人识别号",
+    "购买方税号",
+  ],
+  seller: [
+    "sellerName",
+    "seller",
+    "销方名称",
+    "销售方名称",
+    "销售方",
+  ],
+  sellerTaxNo: [
+    "sellerTaxNumber",
+    "sellerRegisterNum",
+    "sellerTaxNo",
+    "销方税号",
+    "销售方纳税人识别号",
+    "销售方税号",
+  ],
+  amountWithTax: [
+    "totalAmount",
+    "amountInFiguers",
+    "amountInFigures",
+    "totalAmountInFigures",
+    "totalAmountWithTax",
+    "amountWithTax",
+    "价税合计",
+    "价税合计小写",
+    "小写金额",
+    "含税金额",
+  ],
+  amountWithoutTax: [
+    "invoiceAmountPreTax",
+    "amountWithoutTax",
+    "totalAmountWithoutTax",
+    "sumAmount",
+    "totalAmountPreTax",
+    "合计金额",
+    "金额合计",
+    "不含税金额",
+  ],
+  taxAmount: [
+    "invoiceTax",
+    "totalTax",
+    "taxAmount",
+    "sumTax",
+    "合计税额",
+    "税额合计",
+  ],
+  taxRate: [
+    "taxRate",
+    "commodityTaxRate",
+    "itemTaxRate",
+    "税率",
+  ],
+  productName: [
+    "itemName",
+    "commodityName",
+    "productName",
+    "goodsName",
+    "serviceName",
+    "货物或应税劳务、服务名称",
+    "货物或应税劳务服务名称",
+    "项目名称",
+    "商品名称",
+    "产品名称",
+    "服务名称",
+  ],
+  specModel: ["specification", "specModel", "model", "规格型号"],
+  unit: ["unit", "单位"],
+  quantity: ["quantity", "数量"],
+  unitPrice: ["unitPrice", "price", "单价"],
 };
+
+const DETAIL_ARRAY_KEYS = [
+  "invoiceDetails",
+  "details",
+  "items",
+  "commodities",
+  "invoiceItems",
+  "货物明细",
+  "明细",
+];
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -40,7 +137,7 @@ function normalizeFieldValue(value: unknown) {
   return "";
 }
 
-function parseJsonMaybe(value: unknown) {
+function parseJsonMaybe(value: unknown): unknown {
   if (typeof value !== "string") return value;
   const text = value.trim();
   if (!text.startsWith("{") && !text.startsWith("[")) return value;
@@ -61,118 +158,173 @@ function responseField(record: unknown, key: string) {
   return undefined;
 }
 
-function matchAliases(fieldName: unknown, aliases: string[]) {
-  const normalized = normalizeKey(fieldName);
+function normalizedAliasSet(aliases: string[]) {
+  return new Set(aliases.map(normalizeKey).filter(Boolean));
+}
+
+function matchesAlias(key: unknown, aliases: string[]) {
+  const normalized = normalizeKey(key);
   if (!normalized) return false;
+  const exactAliases = normalizedAliasSet(aliases);
+  if (exactAliases.has(normalized)) return true;
   return aliases.some((alias) => {
     const candidate = normalizeKey(alias);
-    return normalized === candidate || normalized.includes(candidate) || candidate.includes(normalized);
+    return Boolean(candidate) && normalized.endsWith(candidate);
   });
 }
 
-function addMatchedField(fields: Record<string, unknown>, canonicalKey: string, value: unknown) {
-  const text = normalizeFieldValue(value);
-  if (!text || fields[canonicalKey]) return;
-  fields[canonicalKey] = text;
-}
-
-function maybeFieldName(record: Record<string, unknown>) {
-  return normalizeFieldValue(
-    record.key
-    || record.Key
-    || record.field
-    || record.Field
-    || record.fieldName
-    || record.FieldName
-    || record.name
-    || record.Name
-    || record.label
-    || record.Label,
-  );
-}
-
-function maybeFieldValue(record: Record<string, unknown>) {
-  return (
-    record.value
-    || record.Value
-    || record.fieldValue
-    || record.FieldValue
-    || record.text
-    || record.Text
-    || record.content
-    || record.Content
-    || record.word
-    || record.Word
-    || record.data
-    || record.Data
-  );
-}
-
-function collectFieldsFromObject(
-  value: unknown,
-  output: Record<string, unknown> = {},
-  path: string[] = [],
-  depth = 0,
-) {
-  if (depth > 8 || value == null) return output;
-  const parsed = parseJsonMaybe(value);
-  if (parsed !== value) return collectFieldsFromObject(parsed, output, path, depth + 1);
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectFieldsFromObject(item, output, path, depth + 1));
-    return output;
-  }
-  if (!isPlainRecord(value)) return output;
-
-  const namedField = maybeFieldName(value);
-  if (namedField) {
-    for (const [canonicalKey, aliases] of Object.entries(INVOICE_FIELD_ALIASES)) {
-      if (matchAliases(namedField, aliases)) addMatchedField(output, canonicalKey, maybeFieldValue(value));
-    }
-  }
-
-  for (const [key, item] of Object.entries(value)) {
-    for (const [canonicalKey, aliases] of Object.entries(INVOICE_FIELD_ALIASES)) {
-      if (matchAliases([...path, key].join("."), aliases) || matchAliases(key, aliases)) {
-        addMatchedField(output, canonicalKey, item);
+function officialDataCandidates(payload: unknown) {
+  const candidates: unknown[] = [];
+  const parsed = parseJsonMaybe(payload);
+  if (isPlainRecord(parsed)) {
+    if (isPlainRecord(parsed.data)) candidates.push(parsed.data);
+    if (Array.isArray(parsed.data)) candidates.push(...parsed.data);
+    if (Array.isArray(parsed.subImages)) {
+      for (const image of parsed.subImages) {
+        if (isPlainRecord(image) && isPlainRecord(image.data)) candidates.push(image.data);
       }
     }
-    collectFieldsFromObject(item, output, [...path, key], depth + 1);
+    candidates.push(parsed);
+  } else if (Array.isArray(parsed)) {
+    candidates.push(...parsed);
   }
-  return output;
+  return candidates;
 }
 
-function collectProductNames(rawData: unknown) {
-  const names = new Set<string>();
+function keyValuePairsFromPayload(payload: unknown) {
+  const pairs = new Map<string, unknown>();
+  function addPair(key: unknown, value: unknown) {
+    const normalized = normalizeKey(key);
+    if (!normalized || value == null || pairs.has(normalized)) return;
+    pairs.set(normalized, value);
+  }
   function walk(value: unknown, depth = 0) {
-    if (depth > 8 || value == null) return;
+    if (depth > 7 || value == null) return;
     const parsed = parseJsonMaybe(value);
     if (parsed !== value) {
       walk(parsed, depth + 1);
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item) => walk(item, depth + 1));
+      for (const item of value) walk(item, depth + 1);
+      return;
+    }
+    if (!isPlainRecord(value)) return;
+
+    const key = value.key ?? value.Key ?? value.field ?? value.Field ?? value.fieldName ?? value.FieldName ?? value.name ?? value.Name ?? value.label ?? value.Label;
+    const val = value.value ?? value.Value ?? value.fieldValue ?? value.FieldValue ?? value.text ?? value.Text ?? value.content ?? value.Content ?? value.word ?? value.Word;
+    if (key != null && val != null) addPair(key, val);
+
+    for (const nestedKey of ["prism_keyValueInfo", "keyValueInfo", "keyValueInfos", "kvInfo", "kvDetails", "keyValues"]) {
+      const nested = value[nestedKey];
+      if (Array.isArray(nested)) walk(nested, depth + 1);
+    }
+    for (const item of Object.values(value)) walk(item, depth + 1);
+  }
+  walk(payload);
+  return pairs;
+}
+
+function valueByAliasesFromRecord(record: unknown, aliases: string[]) {
+  if (!isPlainRecord(record)) return "";
+  for (const [key, value] of Object.entries(record)) {
+    if (matchesAlias(key, aliases)) {
+      const text = normalizeFieldValue(value);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function valueByAliasesFromPairs(pairs: Map<string, unknown>, aliases: string[]) {
+  const aliasKeys = aliases.map(normalizeKey).filter(Boolean);
+  for (const alias of aliasKeys) {
+    const direct = pairs.get(alias);
+    const text = normalizeFieldValue(direct);
+    if (text) return text;
+  }
+  for (const [key, value] of pairs) {
+    if (aliasKeys.some((alias) => key === alias || key.endsWith(alias))) {
+      const text = normalizeFieldValue(value);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function detailRowsFromPayload(payload: unknown, candidates: unknown[], pairs: Map<string, unknown>) {
+  const rows: Record<string, unknown>[] = [];
+  function addRows(value: unknown) {
+    const parsed = parseJsonMaybe(value);
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) if (isPlainRecord(item)) rows.push(item);
+      return;
+    }
+    if (isPlainRecord(parsed)) rows.push(parsed);
+  }
+  for (const candidate of candidates) {
+    if (!isPlainRecord(candidate)) continue;
+    for (const key of DETAIL_ARRAY_KEYS) {
+      if (candidate[key] != null) addRows(candidate[key]);
+    }
+  }
+  for (const key of DETAIL_ARRAY_KEYS) {
+    const value = pairs.get(normalizeKey(key));
+    if (value != null) addRows(value);
+  }
+  if (!rows.length && isPlainRecord(payload)) {
+    for (const value of Object.values(payload)) {
+      const parsed = parseJsonMaybe(value);
+      if (isPlainRecord(parsed) || Array.isArray(parsed)) rows.push(...detailRowsFromPayload(parsed, officialDataCandidates(parsed), keyValuePairsFromPayload(parsed)));
+    }
+  }
+  return rows;
+}
+
+function fieldFromDetails(rows: Record<string, unknown>[], canonicalKey: string) {
+  const aliases = INVOICE_FIELD_ALIASES[canonicalKey] || [];
+  const values = rows
+    .map((row) => valueByAliasesFromRecord(row, aliases))
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  return Array.from(new Set(values)).join("；");
+}
+
+function genericFieldFallback(payload: unknown, aliases: string[]) {
+  let found = "";
+  function walk(value: unknown, depth = 0) {
+    if (found || depth > 7 || value == null) return;
+    const parsed = parseJsonMaybe(value);
+    if (parsed !== value) {
+      walk(parsed, depth + 1);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth + 1);
       return;
     }
     if (!isPlainRecord(value)) return;
     for (const [key, item] of Object.entries(value)) {
-      if (matchAliases(key, INVOICE_FIELD_ALIASES.productName)) {
+      if (matchesAlias(key, aliases)) {
         const text = normalizeFieldValue(item);
-        if (text) names.add(text);
+        if (text) {
+          found = text;
+          return;
+        }
       }
-      walk(item, depth + 1);
     }
+    for (const item of Object.values(value)) walk(item, depth + 1);
   }
-  walk(rawData);
-  return Array.from(names).join("；");
+  walk(payload);
+  return found;
 }
 
 function collectText(value: unknown, output: string[] = [], depth = 0) {
   if (depth > 8 || value == null) return output;
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return collectText(parsed, output, depth + 1);
   if (typeof value === "string") {
     const text = value.trim();
-    const parsed = parseJsonMaybe(text);
-    if (parsed !== text) return collectText(parsed, output, depth + 1);
     if (text && text.length <= 1000) output.push(text);
     return output;
   }
@@ -192,9 +344,22 @@ function collectText(value: unknown, output: string[] = [], depth = 0) {
 
 export function extractAliyunInvoiceRecognitionData(responseBody: unknown) {
   const data = parseJsonMaybe(responseField(responseBody, "data"));
-  const extractedFields = collectFieldsFromObject(data);
-  const productName = collectProductNames(data);
-  if (productName && !extractedFields.productName) extractedFields.productName = productName;
+  const candidates = officialDataCandidates(data);
+  const pairs = keyValuePairsFromPayload(data);
+  const details = detailRowsFromPayload(data, candidates, pairs);
+  const extractedFields: Record<string, unknown> = {};
+
+  for (const [canonicalKey, aliases] of Object.entries(INVOICE_FIELD_ALIASES)) {
+    const official = candidates.map((candidate) => valueByAliasesFromRecord(candidate, aliases)).find(Boolean);
+    const detail = canonicalKey === "productName" || canonicalKey === "taxRate" || canonicalKey === "specModel" || canonicalKey === "unit" || canonicalKey === "quantity" || canonicalKey === "unitPrice"
+      ? fieldFromDetails(details, canonicalKey)
+      : "";
+    const kv = valueByAliasesFromPairs(pairs, aliases);
+    const fallback = genericFieldFallback(data, aliases);
+    const value = official || detail || kv || fallback;
+    if (value) extractedFields[canonicalKey] = value;
+  }
+
   return {
     data,
     extractedFields,

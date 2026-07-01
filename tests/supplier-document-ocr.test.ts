@@ -113,6 +113,80 @@ test("VAT invoice parser extracts buyer seller totals and item from Aliyun raw t
   });
 });
 
+test("VAT invoice parser prefers trusted structured fields over noisy raw party text", () => {
+  const rawText = `
+名称: 浙江莱诺建材有限公司 名称: 安徽科蓝特铝业股份有限公司
+地址、电话: 浙江省诸暨市 暂无
+项目名称 规格型号 单位 数量 单价 金额 税率 税额
+*有色金属压延材*铝制工
+程结构件 套 1 101480.27 101480.27 13% 13192.44
+价税合计（小写）¥ 114672.71
+`;
+  const fields = parseVatInvoiceFields(rawText, {
+    buyer: "浙江莱诺建材有限公司",
+    seller: "安徽科蓝特铝业股份有限公司",
+    buyerTaxNo: "91330681MA2D86XM28",
+    sellerTaxNo: "91341822070917615C",
+    amountWithTax: "114672.71",
+    amountWithoutTax: "101480.27",
+    taxAmount: "13192.44",
+    taxRate: "13%",
+    productName: "*有色金属压延材*铝制工程结构件",
+  });
+  assert.equal(fields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(fields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(fields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(fields.sellerTaxNo, "91341822070917615C");
+  assert.equal(fields.amountWithTax, 114672.71);
+  assert.equal(fields.amountWithoutTax, 101480.27);
+  assert.equal(fields.taxAmount, 13192.44);
+  assert.equal(fields.taxRate, "13%");
+  assert.equal(fields.productName, "*有色金属压延材*铝制工程结构件");
+});
+
+test("VAT invoice parser handles reversed PDF fallback text from supplier invoice", () => {
+  const rawText = `
+刘明涵
+开票人: 刘明涵
+PO24-3
+销方开户银行:中国工商银行股份有限公司广德开发区支行; 银行账号:1317087309100003323;
+销售方地址:广德县经济开发区; 电话:-;
+购方开户银行:中国银行诸暨支行; 银行账号:384477815827;
+购买方地址:浙江省诸暨市东和乡王家宅村东一自然村; 电话:0575 87996781;
+价税合计(大写) (小写)
+壹拾壹万肆仟陆佰柒拾贰圆柒角壹分 ¥ 114672.71
+合 计
+101480.27 13192.44
+¥ ¥
+程结构件
+千克 4374.35 23.1989379762212 101480.27 13% 13192.44
+*有色金属压延材*铝制工
+项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额
+息 息
+统一社会信用代码/纳税人识别号: 统一社会信用代码/纳税人识别号:
+91330681MA2D86XM28 91341822070917615C
+信 信
+方 方
+买 售
+名称: 浙江莱诺建材有限公司 名称: 安徽科蓝特铝业股份有限公司
+购 销
+开票日期: 2026年06月29日
+发票号码: 26342000002030743666
+`;
+  const fields = parseVatInvoiceFields(rawText, {});
+  assert.equal(fields.invoiceNo, "26342000002030743666");
+  assert.equal(fields.invoiceDate, "2026-06-29");
+  assert.equal(fields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(fields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(fields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(fields.sellerTaxNo, "91341822070917615C");
+  assert.equal(fields.amountWithTax, 114672.71);
+  assert.equal(fields.amountWithoutTax, 101480.27);
+  assert.equal(fields.taxAmount, 13192.44);
+  assert.equal(fields.taxRate, "13%");
+  assert.equal(fields.productName, "*有色金属压延材*铝制工程结构件");
+});
+
 test("supplier document UI shows OCR result and protects internal actions", () => {
   assert.match(supplierModule, /SupplierDocumentOcrPanel/);
   assert.match(supplierModule, /OCR 校验结果/);
