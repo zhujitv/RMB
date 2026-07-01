@@ -3,25 +3,117 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { includeOrderRelations } from "./shared-order-relations";
 import { taxDocumentCompleteness, taxRefundStatusFromCompleteness } from "./shared-tax-completeness";
 import { hasCostBusinessDocument } from "./business-documents";
+import { runNonCriticalTask } from "./shared-constants";
 
-export async function refreshTaxRefundCompleteness(orderId: string | null | undefined) {
-  if (!orderId) return null;
-  const order = await prisma.receivableOrder.findFirst({
+type TaxRefundCompletenessOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
+type TaxRefundCompletenessResult = ReturnType<typeof taxDocumentCompleteness>;
+
+const TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3;
+const pendingTaxRefundCompletenessRefreshes = new Map<string, Promise<TaxRefundCompletenessResult | null>>();
+
+function normalizedOrderId(orderId: string | null | undefined) {
+  return String(orderId || "").trim();
+}
+
+async function loadTaxRefundCompletenessOrder(orderId: string) {
+  return prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
     include: includeOrderRelations(),
   });
-  if (!order) return null;
-  const completeness = JSON.parse(JSON.stringify(taxDocumentCompleteness(order))) as ReturnType<typeof taxDocumentCompleteness>;
+}
+
+function safeCompletenessJson(value: unknown) {
+  try {
+    return JSON.stringify(value || null);
+  } catch {
+    return "";
+  }
+}
+
+async function computeAndPersistTaxRefundCompleteness(order: TaxRefundCompletenessOrder) {
+  const completeness = JSON.parse(JSON.stringify(taxDocumentCompleteness(order))) as TaxRefundCompletenessResult;
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
+  const completenessChanged = safeCompletenessJson(order.taxRefundCompleteness) !== safeCompletenessJson(completeness);
+  const statusChanged = status !== order.taxRefundStatus;
+  if (!completenessChanged && !statusChanged && order.taxRefundCompletenessUpdatedAt) {
+    return completeness;
+  }
   await prisma.receivableOrder.update({
     where: { id: order.id },
     data: {
       taxRefundCompleteness: completeness as Prisma.InputJsonValue,
       taxRefundCompletenessUpdatedAt: new Date(),
-      ...(status !== order.taxRefundStatus ? { taxRefundStatus: status } : {}),
+      ...(statusChanged ? { taxRefundStatus: status } : {}),
     },
   });
   return completeness;
+}
+
+function runDedupedTaxRefundCompletenessRefresh(
+  orderId: string,
+  task: () => Promise<TaxRefundCompletenessResult | null>,
+) {
+  const pending = pendingTaxRefundCompletenessRefreshes.get(orderId);
+  if (pending) return pending;
+  const promise = task().finally(() => {
+    pendingTaxRefundCompletenessRefreshes.delete(orderId);
+  });
+  pendingTaxRefundCompletenessRefreshes.set(orderId, promise);
+  return promise;
+}
+
+export async function refreshTaxRefundCompletenessForOrder(order: TaxRefundCompletenessOrder | null | undefined) {
+  const orderId = normalizedOrderId(order?.id);
+  if (!orderId || !order) return null;
+  return runDedupedTaxRefundCompletenessRefresh(orderId, () => computeAndPersistTaxRefundCompleteness(order));
+}
+
+export async function refreshTaxRefundCompleteness(orderId: string | null | undefined) {
+  const id = normalizedOrderId(orderId);
+  if (!id) return null;
+  return runDedupedTaxRefundCompletenessRefresh(id, async () => {
+    const order = await loadTaxRefundCompletenessOrder(id);
+    if (!order) return null;
+    return computeAndPersistTaxRefundCompleteness(order);
+  });
+}
+
+export async function refreshTaxRefundCompletenessBatch(
+  orderIds: Array<string | null | undefined>,
+  options: { concurrency?: number } = {},
+) {
+  const ids = [...new Set(orderIds.map(normalizedOrderId).filter(Boolean))];
+  const results = new Map<string, TaxRefundCompletenessResult | null>();
+  if (!ids.length) return results;
+  const concurrency = Math.min(
+    Math.max(1, Math.round(options.concurrency || TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY)),
+    TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY,
+  );
+  let index = 0;
+  async function worker() {
+    while (index < ids.length) {
+      const orderId = ids[index++];
+      if (!orderId) continue;
+      results.set(orderId, await refreshTaxRefundCompleteness(orderId));
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
+  return results;
+}
+
+export function scheduleTaxRefundCompletenessRefresh(orderId: string | null | undefined, label = "退税资料完整度刷新") {
+  const id = normalizedOrderId(orderId);
+  if (!id) return;
+  void runNonCriticalTask(label, () => refreshTaxRefundCompleteness(id));
+}
+
+export function scheduleTaxRefundCompletenessRefreshBatch(
+  orderIds: Array<string | null | undefined>,
+  label = "退税资料完整度批量刷新",
+) {
+  const ids = [...new Set(orderIds.map(normalizedOrderId).filter(Boolean))];
+  if (!ids.length) return;
+  void runNonCriticalTask(label, () => refreshTaxRefundCompletenessBatch(ids));
 }
 
 export async function syncCostInvoiceStatus(costId: string | null | undefined) {

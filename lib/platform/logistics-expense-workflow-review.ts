@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { codedError, nonEmpty, optional, refreshTaxRefundCompleteness, requireText, runNonCriticalTask, writeAudit } from "./shared";
+import { codedError, nonEmpty, optional, refreshTaxRefundCompletenessBatch, requireText, runNonCriticalTask, writeAudit } from "./shared";
 import {
   assertCanReviewLogisticsExpense,
   aggregateLogisticsExpenseInvoiceStatus,
@@ -337,9 +337,7 @@ function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestLike, ac
         expenseIds: result.expenseIds,
       });
     }
-    for (const orderId of [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))]) {
-      await refreshTaxRefundCompleteness(String(orderId));
-    }
+    await refreshTaxRefundCompletenessBatch(finalRows.map((row) => row.orderId));
   });
 }
 

@@ -41,12 +41,12 @@ import {
   managedFileMetadata,
   managedPreviewableMimeType,
   readManagedUploadFile,
-  refreshTaxRefundCompleteness,
   requirePositive,
   requireText,
   resolveExchangeRateSnapshot,
   runNonCriticalTask,
   safeSerializeCost,
+  scheduleTaxRefundCompletenessRefresh,
   softDeleteFileAssetBySource,
   syncCostInvoiceStatus,
   todayInputInChina,
@@ -407,7 +407,7 @@ export async function saveCost(request: AuditRequestLike, actor: CostActorInput,
       : "新增成本";
     await runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, action, "order_costs", cost.id, before, cost));
   }
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(cost.orderId));
+  scheduleTaxRefundCompletenessRefresh(cost.orderId);
   return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
 }
 
@@ -446,7 +446,7 @@ export async function saveCosts(request: AuditRequestLike, actor: CostActorInput
   const costs = results.map((result) => result.cost);
   const createdCosts = results.filter((result) => !result.reused).map((result) => result.cost);
   await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost))));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
+  scheduleTaxRefundCompletenessRefresh(order.id);
   return (await attachBusinessDocumentsToCosts(costs)).map(safeSerializeCost);
 }
 
@@ -501,7 +501,7 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
     before,
     { ...auditPayload, costId: id },
   ));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
+  scheduleTaxRefundCompletenessRefresh(before.orderId);
   return {
     action,
     cost: safeSerializeCost(cost),

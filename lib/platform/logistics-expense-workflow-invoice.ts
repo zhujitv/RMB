@@ -6,8 +6,8 @@ import {
   nonEmpty,
   optional,
   permissionError,
-  refreshTaxRefundCompleteness,
   runNonCriticalTask,
+  scheduleTaxRefundCompletenessRefresh,
   softDeleteFileAssetBySource,
   writeAudit,
 } from "./shared";
@@ -94,7 +94,7 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     updatedIds: savedRows.map((row) => row.id),
   }));
   for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(String(orderId)));
+    scheduleTaxRefundCompletenessRefresh(String(orderId));
   }
   const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   await refreshLogisticsBillWorkflowStatus(billRows, actor);
@@ -166,7 +166,7 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
     updatedIds: targetDocumentRows.map((row) => row.id),
   }));
   for (const orderId of [...new Set(targetDocumentRows.map((row) => row.orderId).filter(Boolean))]) {
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(String(orderId)));
+    scheduleTaxRefundCompletenessRefresh(String(orderId));
   }
   await refreshLogisticsBillWorkflowStatus(savedRows, actor, { paymentStatus: "待开票" });
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
@@ -196,7 +196,7 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
   });
   if (before.costId) await prisma.orderCost.update({ where: { id: before.costId }, data: { invoiceStatus: "已收到" } }).catch(() => null);
   await runNonCriticalTask("物流发票确认日志写入", () => writeAudit(request, actor, "确认物流发票", "logistics_expenses", id, before, saved));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(saved.orderId));
+  scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);
   await refreshLogisticsBillWorkflowStatus(billRows, actor, { paymentStatus: "待付款" });
   const reloadedRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);

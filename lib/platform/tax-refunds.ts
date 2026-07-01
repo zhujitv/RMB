@@ -25,7 +25,8 @@ import {
   num,
   optional,
   permissionError,
-  refreshTaxRefundCompleteness,
+  refreshTaxRefundCompletenessForOrder,
+  scheduleTaxRefundCompletenessRefreshBatch,
   roundMoney,
   runNonCriticalTask,
   serializeOrder,
@@ -276,9 +277,7 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
     .map((order) => order.id)
     .slice(0, filters.pageSize);
   if (staleCompletenessOrderIds.length) {
-    void runNonCriticalTask("退税列表完整度后台刷新", async () => {
-      await Promise.all(staleCompletenessOrderIds.map((orderId) => refreshTaxRefundCompleteness(orderId)));
-    });
+    scheduleTaxRefundCompletenessRefreshBatch(staleCompletenessOrderIds, "退税列表完整度后台刷新");
   }
   const hydratedRows = rows.sort(sortTaxRefundOrders);
   const pagedRows = hydratedRows.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
@@ -302,12 +301,14 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
     include: includeOrderRelations(),
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  await refreshTaxRefundCompleteness(order.id);
-  const refreshed = await prisma.receivableOrder.findUnique({
-    where: { id: order.id },
-    include: includeOrderRelations(),
+  const completeness = await refreshTaxRefundCompletenessForOrder(order);
+  const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
+  return serializeOrder({
+    ...order,
+    taxRefundCompleteness: completeness || order.taxRefundCompleteness,
+    taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
+    taxRefundStatus: status,
   });
-  return serializeOrder(refreshed || order);
 }
 
 export async function updateTaxRefundStatus(request: AuditRequestLike, actor: ActorLike, orderId: string, status: string, input: TaxRefundActionInput = {}) {

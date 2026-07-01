@@ -10,9 +10,9 @@ import {
   logServerError,
   nonEmpty,
   optional,
-  refreshTaxRefundCompleteness,
   requireText,
   runNonCriticalTask,
+  scheduleTaxRefundCompletenessRefresh,
   serializeDomesticLogisticsInfo,
   writeAudit,
 } from "./shared";
@@ -316,7 +316,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
   });
   if (!row) throw codedError("物流信息保存失败，请重试。", 500, "DOMESTIC_LOGISTICS_SAVE_FAILED");
   await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, currentActor, before ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, before, row));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
+  scheduleTaxRefundCompletenessRefresh(order.id);
   return serializeDomesticLogisticsInfo(row);
 }
 
@@ -334,7 +334,7 @@ export async function deleteDomesticLogisticsInfo(request: AuditRequestLike, act
     select: domesticLogisticsSelectWithOrder(),
   });
   await runNonCriticalTask("物流信息删除操作日志写入", () => writeAudit(request, currentActor, "删除物流信息", "domestic_logistics_infos", row.id, before, row));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
+  scheduleTaxRefundCompletenessRefresh(row.orderId);
 }
 
 export async function requestDomesticLogisticsCorrection(request: AuditRequestLike, actor: DomesticLogisticsActorInput, id: string, input: unknown = {}) {

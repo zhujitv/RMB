@@ -12,7 +12,7 @@ import {
   nonEmpty,
   needsTaxRefundCompletenessRefresh,
   cachedTaxRefundCompleteness,
-  refreshTaxRefundCompleteness,
+  refreshTaxRefundCompletenessBatch,
   summarizeOrder,
   taxRefundStatusFromCompleteness,
   validCost,
@@ -538,12 +538,9 @@ export async function listTaxRefundTodos(context: WorkbenchTodoContext) {
     orderBy: [{ updatedAt: "desc" }],
     take: TODO_LIMIT_PER_SOURCE,
   });
-  const refreshedEntries = await Promise.all(
-    rows
-      .filter(needsTaxRefundCompletenessRefresh)
-      .map(async (order) => [order.id, await refreshTaxRefundCompleteness(order.id)] as const),
+  const refreshedById = await refreshTaxRefundCompletenessBatch(
+    rows.filter(needsTaxRefundCompletenessRefresh).map((order) => order.id),
   );
-  const refreshedById = new Map(refreshedEntries.filter(([, completeness]) => completeness));
   const todos: WorkbenchTodo[] = [];
   const owner = roleOwner(context, "FINANCE");
   for (const order of rows) {

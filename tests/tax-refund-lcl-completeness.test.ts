@@ -9,6 +9,12 @@ const reportService = readFileSync("lib/report-service.ts", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs", "utf8");
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
+const taxSync = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");
+const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
+const costMutations = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
+const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
+const logisticsExpenseMutations = readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 
 test("tax refund completeness adapts FOB LCL logistics invoice requirements to actual costs", () => {
@@ -65,6 +71,25 @@ test("historical tax refund completeness refresh and report wording use the shar
   assert.match(refreshScript, /receivableOrder\.findMany/);
   assert.match(reportService, /缺失已发生费用资料明细/);
   assert.doesNotMatch(reportService, /缺失港杂费发票明细/);
+});
+
+test("tax refund completeness cache refresh is deduped batched and non-blocking for mutation side effects", () => {
+  assert.match(taxSync, /pendingTaxRefundCompletenessRefreshes = new Map/);
+  assert.match(taxSync, /export async function refreshTaxRefundCompletenessForOrder/);
+  assert.match(taxSync, /export async function refreshTaxRefundCompletenessBatch/);
+  assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
+  assert.match(taxSync, /TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3/);
+  assert.match(taxRefundService, /scheduleTaxRefundCompletenessRefreshBatch\(staleCompletenessOrderIds/);
+  assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(order\)/);
+  assert.doesNotMatch(taxRefundService, /Promise\.all\(staleCompletenessOrderIds\.map/);
+  assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
+  assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);
+  assert.match(costMutations, /scheduleTaxRefundCompletenessRefresh\(cost\.orderId\)/);
+  assert.match(domesticLogisticsApi, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
+  assert.match(logisticsExpenseMutations, /scheduleTaxRefundCompletenessRefresh\(orderId\)/);
+  assert.doesNotMatch(orderDocuments, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
+  assert.doesNotMatch(costMutations, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
+  assert.doesNotMatch(domesticLogisticsApi, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
 });
 
 test("factory tax refund documents are calculated per cost slot", () => {

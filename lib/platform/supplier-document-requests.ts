@@ -25,9 +25,9 @@ import {
   pageParams,
   pageResult,
   readManagedUploadFile,
-  refreshTaxRefundCompleteness,
   requireText,
   runNonCriticalTask,
+  scheduleTaxRefundCompletenessRefresh,
   serializeOrderDocument,
   softDeleteFileAssetBySource,
   syncCostInvoiceStatus,
@@ -758,7 +758,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
+  scheduleTaxRefundCompletenessRefresh(row.orderId);
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
       const costs = uniqueFactoryCost

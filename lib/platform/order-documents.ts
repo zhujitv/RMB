@@ -41,11 +41,11 @@ import {
   managedPreviewableMimeType,
   mergeFileAssetMetadata,
   readManagedUploadFile,
-  refreshTaxRefundCompleteness,
   requireText,
   resolveStandardFilenameForPersistedDocument,
   runNonCriticalTask,
   SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES,
+  scheduleTaxRefundCompletenessRefresh,
   serializeOrderDocument,
   softDeleteFileAssetBySource,
   standardFilenameForDocument,
@@ -463,7 +463,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   if (["COMMERCIAL_INVOICE", "PACKING_LIST", "CUSTOMS_ENTRY_FORM"].includes(documentType)) {
     await tryAutoShippingDocumentsNotification(request, actor, order.id);
   }
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(order.id));
+  scheduleTaxRefundCompletenessRefresh(order.id);
   return {
     ...serializeOrderDocument(document),
     ...(customsRecognition ? { customsRecognition } : {}),
@@ -516,7 +516,7 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
     fileName: standardFilenameForDocument(before),
     clearedCustomsRecognition: isCustomsDeclarationDocumentType(before.documentType),
   }));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(before.orderId));
+  scheduleTaxRefundCompletenessRefresh(before.orderId);
   return serializeOrderDocument(document);
 }
 

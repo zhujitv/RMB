@@ -289,7 +289,7 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /supplier: cost\.supplierNameSnapshot/);
   assert.match(costsMutation, /amount: Number\(cost\.amount\)/);
   assert.match(costsMutation, /orderSummary: await costOrderSummaryForMutation\(before\.orderId, currentActor\)/);
-  assert.match(costsMutation, /refreshTaxRefundCompleteness\(before\.orderId\)/);
+  assert.match(costsMutation, /scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);
 });
 
 test("cost create and edit interactions use right side drawers instead of inline panels", () => {

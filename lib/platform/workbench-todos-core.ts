@@ -31,7 +31,6 @@ import {
   needsTaxRefundCompletenessRefresh,
   nonEmpty,
   normalizeDateText,
-  refreshTaxRefundCompleteness,
   summarizeOrder,
   taxRefundStatusFromCompleteness,
   validCost,

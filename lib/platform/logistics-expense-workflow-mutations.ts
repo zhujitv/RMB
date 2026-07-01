@@ -9,8 +9,8 @@ import {
   normalizedCostType,
   optional,
   permissionError,
-  refreshTaxRefundCompleteness,
   runNonCriticalTask,
+  scheduleTaxRefundCompletenessRefresh,
   todayInputInChina,
   writeAudit,
 } from "./shared";
@@ -284,7 +284,7 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
     await runNonCriticalTask("物流费用批量修改日志写入", () => writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
   }
   for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
-    await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+    scheduleTaxRefundCompletenessRefresh(orderId);
   }
   return savedRows.map(serializeLogisticsExpense);
 }
@@ -408,7 +408,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     ...preparedDeletes.map((row) => row.orderId),
   ].filter(Boolean);
   for (const orderId of [...new Set(affectedOrderIds)]) {
-    void runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(orderId));
+    scheduleTaxRefundCompletenessRefresh(orderId);
   }
   void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", billId, {
     bill: serializeLogisticsExpenseBill(billRows),
@@ -453,7 +453,7 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
     include: includeLogisticsExpenseRelations(),
   });
   await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, before, saved));
-  await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(saved.orderId));
+  scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   if (!billRows.length && before.billId) {
     await prisma.logisticsBill.update({

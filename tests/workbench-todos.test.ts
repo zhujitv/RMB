@@ -68,7 +68,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /orderAccessWhere\(actor\)/);
   assert.match(workbenchSource, /supplierId: actorSupplierId\(actor\) \|\| "__no_supplier_bound__"/);
   assert.match(workbenchSource, /status: \{ notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE \}/);
-  assert.match(workbenchSource, /refreshTaxRefundCompleteness\(order\.id\)/);
+  assert.match(workbenchSource, /refreshTaxRefundCompletenessBatch/);
   assert.match(workbenchSource, /listCustomerPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listFactoryPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listProfitTodos\(context\)/);

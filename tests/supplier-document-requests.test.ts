@@ -27,7 +27,7 @@ test("supplier document request schema links supplier uploads to tax refund docu
 test("supplier document workflow uses existing factory tax document types", () => {
   assert.match(service, /SUPPLIER_PURCHASE_CONTRACT/);
   assert.match(service, /SUPPLIER_INVOICE/);
-  assert.match(service, /refreshTaxRefundCompleteness\(row\.orderId\)/);
+  assert.match(service, /scheduleTaxRefundCompletenessRefresh\(row\.orderId\)/);
   assert.match(service, /syncCostInvoiceStatus/);
   assert.match(service, /readManagedUploadFile\(input\.file, "pdf", "supplier-document\.pdf"\)/);
   assert.match(service, /readValidatedExcelTemplate/);
