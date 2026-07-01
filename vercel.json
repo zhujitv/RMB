@@ -5,6 +5,10 @@
       "schedule": "0 1 * * *"
     },
     {
+      "path": "/api/cron/workbench-overdue-todos",
+      "schedule": "30 1 * * *"
+    },
+    {
       "path": "/api/cron/exchange-rates",
       "schedule": "30 2 * * *"
     },

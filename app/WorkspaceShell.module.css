@@ -92,7 +92,9 @@
 .todoPriorityUrgent { composes: todoPriorityUrgent from "./styles/workspace-shell/workbench.module.css"; }
 .todoStatusPill { composes: todoStatusPill from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchActionButton { composes: workbenchActionButton from "./styles/workspace-shell/workbench.module.css"; }
+.workbenchFilters { composes: workbenchFilters from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchHero { composes: workbenchHero from "./styles/workspace-shell/workbench.module.css"; }
+.workbenchOwnerRole { composes: workbenchOwnerRole from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchPage { composes: workbenchPage from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchPanel { composes: workbenchPanel from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchPanelHeader { composes: workbenchPanelHeader from "./styles/workspace-shell/workbench.module.css"; }

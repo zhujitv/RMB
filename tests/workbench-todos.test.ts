@@ -7,9 +7,14 @@ const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const welcomePanel = readFileSync("app/WelcomePanel.tsx", "utf8");
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
+const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const controlTower = readFileSync("app/modules/domestic-logistics/control-tower.tsx", "utf8");
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
+const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");
 const workbenchSource = readFileSync("lib/platform/workbench-todos.ts", "utf8");
+const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+const vercelConfig = readFileSync("vercel.json", "utf8");
 const styles = readFileSync("app/styles/workspace-shell/workbench.module.css", "utf8");
 
 test("workbench todo priority follows due date rules", () => {
@@ -53,10 +58,12 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /supplierId: actorSupplierId\(actor\) \|\| "__no_supplier_bound__"/);
   assert.match(workbenchSource, /status: \{ notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE \}/);
   assert.match(workbenchSource, /refreshTaxRefundCompleteness\(order\.id\)/);
-  assert.match(workbenchSource, /listCustomerPaymentTodos\(actor\)/);
-  assert.match(workbenchSource, /listFactoryPaymentTodos\(actor\)/);
-  assert.match(workbenchSource, /listProfitTodos\(actor\)/);
-  assert.match(workbenchSource, /listOceanTrackingTodos\(actor\)/);
+  assert.match(workbenchSource, /listCustomerPaymentTodos\(context\)/);
+  assert.match(workbenchSource, /listFactoryPaymentTodos\(context\)/);
+  assert.match(workbenchSource, /listProfitTodos\(context\)/);
+  assert.match(workbenchSource, /listOceanTrackingTodos\(context\)/);
+  assert.match(workbenchSource, /completedTodayTodos\(context\)/);
+  assert.match(workbenchSource, /completedTodos/);
   assert.match(workbenchSource, /CUSTOMER_PAYMENT_CONFIRMATION/);
   assert.match(workbenchSource, /PAYMENT_VOUCHER_UPLOAD/);
   assert.match(workbenchSource, /handledCostIds/);
@@ -67,14 +74,65 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /sourceTypes:[\s\S]*"payments"[\s\S]*"factoryPayments"[\s\S]*"profit"[\s\S]*"oceanTracking"/);
 });
 
+test("workbench todos distinguish ownership from visibility", () => {
+  assert.match(workbenchSource, /ownerUserId\?: string \| null/);
+  assert.match(workbenchSource, /ownerUserIds\?: string\[\]/);
+  assert.match(workbenchSource, /ownerRole\?: WorkbenchTodoOwnerRole/);
+  assert.match(workbenchSource, /visibleToUserIds: string\[\]/);
+  assert.match(workbenchSource, /isMine: boolean/);
+  assert.match(workbenchSource, /function logisticsOwnerForOrder\(context: WorkbenchTodoContext, order: TodoOrder\)/);
+  assert.match(workbenchSource, /supplierOwner\(context, assigned\.supplier, "LOGISTICS_SUPPLIER", "物流供应商"\)/);
+  assert.match(workbenchSource, /owner: logisticsOwner/);
+  assert.match(workbenchSource, /owner: bill\.supplier \? supplierOwner\(context, bill\.supplier, "LOGISTICS_SUPPLIER", "物流供应商"\) : logisticsOwnerForOrder\(context, bill\.order\)/);
+  assert.match(workbenchSource, /function taxRefundArchiveOwner\(context: WorkbenchTodoContext, order\?: TodoOrder\): TodoOwner/);
+  assert.match(workbenchSource, /function taxRefundArchiveCompanyKeysForOrder\(context: WorkbenchTodoContext, order: TodoOrder\)/);
+  assert.match(workbenchSource, /taxRefundArchiveCompanyOwnerUsersByKey: Map<string, TodoUser\[\]>/);
+  assert.match(workbenchSource, /taxRefundArchiveFinanceUsers = users\.filter\(\(user\) => user\.role === "财务" && canWrite\(user, "taxRefund"\)\)/);
+  assert.match(workbenchSource, /taxRefundArchiveConfiguredOwnerUsers/);
+  assert.match(workbenchSource, /taxRefundArchiveCompanyOwnerEntriesFromSetting/);
+  assert.match(workbenchSource, /systemCompanyKeysFromProfile\(companyProfileSetting\?\.value\)/);
+  assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, orderWithCompleteness\)/);
+  assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, order\)/);
+  assert.match(workbenchSource, /type: "TAX_REFUND_READY_NOT_ARCHIVED"[\s\S]*title: "已满足退税条件但未归档"[\s\S]*module: "退税资料"/);
+  assert.match(workbenchSource, /dueAt: order\.taxRefundCompletenessUpdatedAt \|\| order\.updatedAt/);
+  assert.match(workbenchSource, /status: "READY"[\s\S]*action: "submitTaxArchive"/);
+  assert.match(workbenchSource, /isMine: Boolean\(actorUserId && \(owner\.ownerUserId === actorUserId \|\| \(owner\.ownerUserIds \|\| \[\]\)\.includes\(actorUserId\)\)\)/);
+});
+
+test("workbench overdue reminder cron sends one email per owner per day", () => {
+  assert.match(schema, /model TodoReminderLog/);
+  assert.match(schema, /@@unique\(\[todoId, ownerUserId, reminderDate\]/);
+  assert.match(overdueRoute, /assertCronSecret\(request\)/);
+  assert.match(overdueRoute, /sendOverdueWorkbenchTodoReminders\(actor\)/);
+  assert.match(reminderSource, /listWorkbenchTodos\(actor\)/);
+  assert.match(reminderSource, /todo\.status === "pending"/);
+  assert.match(reminderSource, /overdueDays > OVERDUE_REMINDER_DAYS/);
+  assert.match(reminderSource, /MULTI_OWNER_REMINDER_TODO_TYPES = new Set\(\["TAX_REFUND_READY_NOT_ARCHIVED"\]\)/);
+  assert.match(reminderSource, /function reminderOwnerUserIds\(todo: WorkbenchTodo\)/);
+  assert.match(reminderSource, /reminderOwnerUserIds\(todo\)\.map\(\(ownerUserId\) => \(\{ todo, overdueDays, ownerUserId \}\)\)/);
+  assert.match(reminderSource, /todoId_ownerUserId_reminderDate/);
+  assert.match(reminderSource, /sendSystemEmail/);
+  assert.match(reminderSource, /emailStatus: "SKIPPED"/);
+  assert.match(reminderSource, /【NEXTWOOD ERP】待办事项已逾期超过 5 天/);
+  assert.match(vercelConfig, /\/api\/cron\/workbench-overdue-todos/);
+});
+
 test("workbench home and topbar consume unified todo DTO without opening new windows", () => {
   assert.match(workspaceShell, /apiJson<Partial<WorkbenchTodosState>>\("\/api\/workbench\/todos"/);
+  assert.match(workspaceShell, /completedTodos: Array\.isArray\(result\.completedTodos\) \? result\.completedTodos : \[\]/);
   assert.match(workspaceShell, /function openWorkbenchTodo\(todo: WorkbenchTodo\)/);
   assert.match(workspaceShell, /setActiveMenu\("logisticsFees"\)/);
   assert.match(workspaceShell, /setActiveMenu\("profit"\)/);
   assert.match(workspaceShell, /setActiveMenu\("oceanControlTower"\)/);
   assert.match(workspaceShell, /setActiveMenu\("supplierDocuments"\)/);
   assert.match(workspaceShell, /path === "ocean-control-tower"/);
+  assert.match(workspaceShell, /setTaxRefundFocus\(\{ keyword, action: parsed\.searchParams\.get\("action"\) \|\| "", token \}\)/);
+  assert.match(workspaceShell, /initialAction=\{taxRefundFocus\.action\}/);
+  assert.match(workspaceShell, /setTaxRefundFocus\(\{ keyword: value, action: "", token: Date\.now\(\) \}\)/);
+  assert.match(taxRefundModule, /initialAction = ""/);
+  assert.match(taxRefundModule, /initialAction === "submitTaxArchive" \? "READY" : statusFilter/);
+  assert.match(taxRefundModule, /if \(initialAction === "submitTaxArchive"\) setStatusFilter\("READY"\)/);
+  assert.match(taxRefundModule, /const matched = nextRows\.find\(\(row\) => row\.orderNo === value\) \|\| nextRows\[0\]/);
   assert.match(profitModule, /initialKeyword = ""/);
   assert.match(profitModule, /setDetailRow\(matched\)/);
   assert.match(controlTower, /initialKeyword = ""/);
@@ -87,6 +145,12 @@ test("workbench home and topbar consume unified todo DTO without opening new win
   assert.match(welcomePanel, /今日到期/);
   assert.match(welcomePanel, /已逾期/);
   assert.match(welcomePanel, /已完成/);
+  assert.match(welcomePanel, /workScope === "mine" && !todo\.isMine/);
+  assert.match(welcomePanel, /\(todosState\.completedTodos \|\| \[\]\)\.filter\(\(todo\) => todoMatchesFilters\(todo, filters\)\)/);
+  assert.match(welcomePanel, /completed: filteredCompletedTodos\.length/);
+  assert.match(welcomePanel, /负责人角色/);
+  assert.match(welcomePanel, /当前筛选 \$\{summary\.pending\} 条待处理事项/);
   assert.match(styles, /overflow: hidden;/);
   assert.match(styles, /table-layout: fixed;/);
+  assert.match(styles, /\.workbenchFilters/);
 });

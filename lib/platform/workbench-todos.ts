@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import { orderAccessWhere } from "./order-access";
-import { canRead } from "./shared-access";
+import { canRead, canWrite } from "./shared-access";
 import {
   addDays,
   startOfChinaDay,
@@ -11,6 +11,8 @@ import {
 import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
+  COMPANY_PROFILE_SETTING_KEY,
+  DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
@@ -34,6 +36,7 @@ import {
 
 export type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 export type WorkbenchTodoStatus = "pending" | "completed";
+export type WorkbenchTodoOwnerRole = "LOGISTICS_SUPPLIER" | "SALESPERSON" | "ADMIN" | "FINANCE" | "PURCHASE" | "PRODUCT_SUPPLIER";
 export type WorkbenchTodo = {
   id: string;
   type: string;
@@ -45,7 +48,12 @@ export type WorkbenchTodo = {
   priority: WorkbenchTodoPriority;
   status: WorkbenchTodoStatus;
   dueAt?: string | null;
+  ownerUserId?: string | null;
+  ownerUserIds?: string[];
   ownerName?: string;
+  ownerRole?: WorkbenchTodoOwnerRole;
+  visibleToUserIds: string[];
+  isMine: boolean;
   action: {
     label: string;
     href: string;
@@ -69,11 +77,65 @@ type TodoOrder = {
   expectedArrivalDate?: Date | string | null;
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
+  taxRefundCompletenessUpdatedAt?: Date | string | null;
+  taxRefundArchivedAt?: Date | string | null;
+  taxSubmittedAt?: Date | string | null;
+  salespersonUserId?: string | null;
   customer?: { shortName?: string | null; salespersonUserId?: string | null } | null;
-  salesperson?: { name?: string | null } | null;
+  salesperson?: { id?: string | null; name?: string | null; email?: string | null; role?: string | null } | null;
+  logisticsSuppliers?: TodoLogisticsSupplierAssignment[] | null;
+};
+
+type TodoUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+};
+
+type TodoSupplier = {
+  id?: string | null;
+  supplierName?: string | null;
+  supplierType?: string | null;
+  email?: string | null;
+  operatorUsers?: TodoUser[] | null;
+};
+
+type TodoLogisticsSupplierAssignment = {
+  supplierId?: string | null;
+  supplier?: TodoSupplier | null;
+};
+
+type TodoOwner = {
+  ownerUserId?: string | null;
+  ownerName?: string | null;
+  ownerRole: WorkbenchTodoOwnerRole;
+  ownerUserIds?: string[];
+  visibleToUserIds?: string[];
+};
+
+type WorkbenchTodoContext = {
+  actor: ActorLike;
+  actorUserId: string;
+  users: TodoUser[];
+  adminUserIds: string[];
+  financeUsers: TodoUser[];
+  taxRefundArchiveFinanceUsers: TodoUser[];
+  taxRefundArchiveConfiguredOwnerUsers: TodoUser[];
+  taxRefundArchiveCompanyOwnerUsersByKey: Map<string, TodoUser[]>;
+  systemCompanyKeys: string[];
+  purchaseUsers: TodoUser[];
+  usersBySupplierId: Map<string, TodoUser[]>;
 };
 
 const TODO_LIMIT_PER_SOURCE = 80;
+const WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS = [
+  "workbench_tax_refund_archive_finance_owner",
+  "tax_refund_archive_finance_owner",
+  "workbench_default_finance_owner",
+];
 const PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE = ["已完成", "已关闭"];
 const LOGISTICS_INVOICE_DONE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
 const LOGISTICS_INVOICE_REVIEW_STATUSES = ["已上传发票", "部分上传发票", "部分已确认"];
@@ -86,7 +148,7 @@ const PROFIT_COST_REQUIRED_STATUSES = ["已发货", "部分收款", "已收齐",
 type TodoCost = {
   id: string;
   order: TodoOrder;
-  supplier?: { supplierName?: string | null; supplierType?: string | null } | null;
+  supplier?: { id?: string | null; supplierName?: string | null; supplierType?: string | null } | null;
   supplierNameSnapshot?: string | null;
   vendorName?: string | null;
   costType?: string | null;
@@ -113,8 +175,12 @@ type TodoPayment = {
 type TodoLogisticsBill = {
   id: string;
   order: TodoOrder;
-  supplier?: { supplierName?: string | null } | null;
+  supplierId?: string | null;
+  supplier?: TodoSupplier | null;
   billOfLadingNo?: string | null;
+  auditStatus?: string | null;
+  invoiceStatus?: string | null;
+  paymentStatus?: string | null;
   submittedAt?: Date | string | null;
   reviewedAt?: Date | string | null;
   paymentDate?: Date | string | null;
@@ -164,6 +230,188 @@ function isPurchase(actor: ActorLike) {
   return actorRole(actor) === "采购";
 }
 
+function configuredOwnerIdsFromValue(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return uniqueIds(value.map((item) => nonEmpty(item)));
+  if (typeof value === "string") {
+    return uniqueIds(value.split(/[,，\s]+/).map((item) => nonEmpty(item)));
+  }
+  if (typeof value !== "object") return [];
+  const input = value as Record<string, unknown>;
+  return uniqueIds([
+    ...configuredOwnerIdsFromValue(input.defaultFinanceUserId),
+    ...configuredOwnerIdsFromValue(input.defaultFinanceUserIds),
+    ...configuredOwnerIdsFromValue(input.financeUserId),
+    ...configuredOwnerIdsFromValue(input.financeUserIds),
+    ...configuredOwnerIdsFromValue(input.taxRefundArchiveFinanceUserId),
+    ...configuredOwnerIdsFromValue(input.taxRefundArchiveFinanceUserIds),
+    ...configuredOwnerIdsFromValue(input.ownerUserId),
+    ...configuredOwnerIdsFromValue(input.ownerUserIds),
+    ...configuredOwnerIdsFromValue(input.userId),
+    ...configuredOwnerIdsFromValue(input.userIds),
+    ...configuredOwnerIdsFromValue(input.defaultUserId),
+    ...configuredOwnerIdsFromValue(input.defaultUserIds),
+  ]);
+}
+
+function taxRefundArchiveOwnerIdsFromSetting(value: unknown) {
+  return configuredOwnerIdsFromValue(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function ownerCompanyKey(value: unknown) {
+  return nonEmpty(value).toLowerCase();
+}
+
+function uniqueCompanyKeys(values: unknown[]) {
+  return values.map(ownerCompanyKey).filter((value, index, arr) => value && arr.indexOf(value) === index);
+}
+
+function companyKeysFromRecord(input: Record<string, unknown>) {
+  return uniqueCompanyKeys([
+    input.companyId,
+    input.company_id,
+    input.companyCode,
+    input.companyKey,
+    input.companyName,
+    input.companyNameZh,
+    input.companyNameEn,
+    input.shortName,
+    input.name,
+    input.ownerCompanyId,
+    input.ownerCompanyName,
+    input.businessCompanyId,
+    input.businessCompanyName,
+  ]);
+}
+
+function companyOwnerEntriesFromMapping(value: unknown): Array<{ companyKeys: string[]; ownerIds: string[] }> {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap((item) => companyOwnerEntriesFromMapping(item));
+  if (!isRecord(value)) return [];
+  return Object.entries(value).flatMap(([companyKey, ownerConfig]) => {
+    const ownerIds = configuredOwnerIdsFromValue(ownerConfig);
+    const extraCompanyKeys = isRecord(ownerConfig) ? companyKeysFromRecord(ownerConfig) : [];
+    const companyKeys = uniqueCompanyKeys([companyKey, ...extraCompanyKeys]);
+    return ownerIds.length && companyKeys.length ? [{ companyKeys, ownerIds }] : [];
+  });
+}
+
+function taxRefundArchiveCompanyOwnerEntriesFromSetting(value: unknown): Array<{ companyKeys: string[]; ownerIds: string[] }> {
+  if (!isRecord(value)) return [];
+  const directCompanyKeys = companyKeysFromRecord(value);
+  const directOwnerIds = configuredOwnerIdsFromValue(value);
+  const entries: Array<{ companyKeys: string[]; ownerIds: string[] }> = [];
+  if (directCompanyKeys.length && directOwnerIds.length) {
+    entries.push({ companyKeys: directCompanyKeys, ownerIds: directOwnerIds });
+  }
+  const companyMappings = [
+    value.byCompany,
+    value.companies,
+    value.companyOwners,
+    value.companyFinanceOwners,
+    value.defaultFinanceByCompany,
+    value.defaultFinanceOwnersByCompany,
+    value.taxRefundArchiveFinanceOwnersByCompany,
+  ];
+  for (const mapping of companyMappings) {
+    entries.push(...companyOwnerEntriesFromMapping(mapping));
+  }
+  return entries;
+}
+
+function systemCompanyKeysFromProfile(value: unknown) {
+  const profile = isRecord(value) ? value : {};
+  return uniqueCompanyKeys([
+    profile.companyId,
+    profile.companyCode,
+    profile.companyKey,
+    profile.companyName,
+    profile.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh,
+    profile.companyNameEn || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameEn,
+    profile.shortName || DEFAULT_COMPANY_PROFILE_SETTINGS.shortName,
+    profile.brandName || DEFAULT_COMPANY_PROFILE_SETTINGS.brandName,
+  ]);
+}
+
+function taxRefundArchiveOwnerUsersFromIds(users: TodoUser[], ownerIds: string[]) {
+  const result: TodoUser[] = [];
+  for (const ownerId of uniqueIds(ownerIds)) {
+    const user = users.find((item) => item.id === ownerId && canWrite(item, "taxRefund"));
+    if (user && !result.some((item) => item.id === user.id)) result.push(user);
+  }
+  return result;
+}
+
+async function createWorkbenchTodoContext(actor: ActorLike): Promise<WorkbenchTodoContext> {
+  const [users, taxRefundFinanceOwnerSettings] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        isActive: true,
+        approvalStatus: "APPROVED",
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        supplierId: true,
+        customPermissions: true,
+      },
+      orderBy: [{ updatedAt: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.systemSetting.findMany({
+      where: { key: { in: [...WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS, COMPANY_PROFILE_SETTING_KEY] } },
+      select: { key: true, value: true },
+    }).catch(() => []),
+  ]);
+  const usersBySupplierId = new Map<string, TodoUser[]>();
+  for (const user of users) {
+    const supplierId = nonEmpty(user.supplierId);
+    if (!supplierId) continue;
+    const rows = usersBySupplierId.get(supplierId) || [];
+    rows.push(user);
+    usersBySupplierId.set(supplierId, rows);
+  }
+  const taxRefundArchiveFinanceUsers = users.filter((user) => user.role === "财务" && canWrite(user, "taxRefund"));
+  const taxRefundOwnerSettings = taxRefundFinanceOwnerSettings
+    .filter((setting) => setting.key !== COMPANY_PROFILE_SETTING_KEY);
+  const companyProfileSetting = taxRefundFinanceOwnerSettings
+    .find((setting) => setting.key === COMPANY_PROFILE_SETTING_KEY);
+  const configuredTaxRefundFinanceOwnerIds = taxRefundOwnerSettings
+    .flatMap((setting) => taxRefundArchiveOwnerIdsFromSetting(setting.value));
+  const taxRefundArchiveConfiguredOwnerUsers = taxRefundArchiveOwnerUsersFromIds(users, configuredTaxRefundFinanceOwnerIds);
+  const taxRefundArchiveCompanyOwnerUsersByKey = new Map<string, TodoUser[]>();
+  for (const entry of taxRefundOwnerSettings.flatMap((setting) => taxRefundArchiveCompanyOwnerEntriesFromSetting(setting.value))) {
+    const ownerUsers = taxRefundArchiveOwnerUsersFromIds(users, entry.ownerIds);
+    if (!ownerUsers.length) continue;
+    for (const companyKey of entry.companyKeys) {
+      const existing = taxRefundArchiveCompanyOwnerUsersByKey.get(companyKey) || [];
+      for (const user of ownerUsers) {
+        if (!existing.some((item) => item.id === user.id)) existing.push(user);
+      }
+      taxRefundArchiveCompanyOwnerUsersByKey.set(companyKey, existing);
+    }
+  }
+  const systemCompanyKeys = systemCompanyKeysFromProfile(companyProfileSetting?.value);
+  return {
+    actor,
+    actorUserId: actorId(actor),
+    users,
+    adminUserIds: users.filter((user) => user.role === "管理员").map((user) => user.id),
+    financeUsers: users.filter((user) => user.role === "财务"),
+    taxRefundArchiveFinanceUsers,
+    taxRefundArchiveConfiguredOwnerUsers,
+    taxRefundArchiveCompanyOwnerUsersByKey,
+    systemCompanyKeys,
+    purchaseUsers: users.filter((user) => user.role === "采购"),
+    usersBySupplierId,
+  };
+}
+
 function endOfChinaDay(value: Date | string | null | undefined) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(String(value));
@@ -186,6 +434,135 @@ function orderOwnerName(order: TodoOrder) {
   return nonEmpty(order.salesperson?.name) || "未分配";
 }
 
+function uniqueIds(values: Array<string | null | undefined>) {
+  return values.map((value) => nonEmpty(value)).filter((value, index, arr) => value && arr.indexOf(value) === index);
+}
+
+function userOwner(user: TodoUser | null | undefined, fallbackName: string, ownerRole: WorkbenchTodoOwnerRole): TodoOwner {
+  return {
+    ownerUserId: nonEmpty(user?.id) || null,
+    ownerName: nonEmpty(user?.name) || fallbackName,
+    ownerRole,
+    ownerUserIds: uniqueIds([user?.id]),
+  };
+}
+
+function roleOwner(context: WorkbenchTodoContext, role: WorkbenchTodoOwnerRole): TodoOwner {
+  if (role === "FINANCE") {
+    const user = context.financeUsers[0];
+    return {
+      ownerUserId: nonEmpty(user?.id) || null,
+      ownerName: nonEmpty(user?.name) || "财务",
+      ownerRole: "FINANCE",
+      ownerUserIds: uniqueIds(context.financeUsers.map((item) => item.id)),
+    };
+  }
+  if (role === "PURCHASE") {
+    const user = context.purchaseUsers[0];
+    return {
+      ownerUserId: nonEmpty(user?.id) || null,
+      ownerName: nonEmpty(user?.name) || "采购",
+      ownerRole: "PURCHASE",
+      ownerUserIds: uniqueIds(context.purchaseUsers.map((item) => item.id)),
+    };
+  }
+  const admin = context.users.find((user) => user.role === "管理员");
+  return {
+    ownerUserId: nonEmpty(admin?.id) || null,
+    ownerName: nonEmpty(admin?.name) || "管理员",
+    ownerRole: "ADMIN",
+    ownerUserIds: uniqueIds(context.adminUserIds),
+  };
+}
+
+function ownerFromUsers(ownerUsers: TodoUser[], fallbackName: string, ownerRole: WorkbenchTodoOwnerRole): TodoOwner {
+  const primaryUser = ownerUsers[0];
+  const ownerUserIds = uniqueIds(ownerUsers.map((user) => user.id));
+  const primaryRole = primaryUser?.role === "管理员" ? "ADMIN" : "FINANCE";
+  return {
+    ownerUserId: nonEmpty(primaryUser?.id) || null,
+    ownerName: ownerUsers.length > 1
+      ? `${nonEmpty(primaryUser?.name) || fallbackName}等${ownerUsers.length}人`
+      : nonEmpty(primaryUser?.name) || fallbackName,
+    ownerRole: primaryUser ? primaryRole : ownerRole,
+    ownerUserIds,
+  };
+}
+
+function taxRefundArchiveCompanyKeysForOrder(context: WorkbenchTodoContext, order: TodoOrder) {
+  const input = order as TodoOrder & Record<string, unknown>;
+  return uniqueCompanyKeys([
+    input.companyId,
+    input.company_id,
+    input.companyCode,
+    input.companyKey,
+    input.companyName,
+    input.companyNameZh,
+    input.companyNameSnapshot,
+    input.ownerCompanyId,
+    input.ownerCompanyName,
+    input.businessCompanyId,
+    input.businessCompanyName,
+    ...context.systemCompanyKeys,
+  ]);
+}
+
+function taxRefundArchiveOwner(context: WorkbenchTodoContext, order?: TodoOrder): TodoOwner {
+  const companyKeys = order ? taxRefundArchiveCompanyKeysForOrder(context, order) : context.systemCompanyKeys;
+  for (const companyKey of companyKeys) {
+    const companyOwnerUsers = context.taxRefundArchiveCompanyOwnerUsersByKey.get(companyKey) || [];
+    if (companyOwnerUsers.length) return ownerFromUsers(companyOwnerUsers, "财务", "FINANCE");
+  }
+  const configuredUsers = context.taxRefundArchiveConfiguredOwnerUsers;
+  const ownerUsers = configuredUsers.length ? configuredUsers : context.taxRefundArchiveFinanceUsers;
+  return ownerFromUsers(ownerUsers, "财务", "FINANCE");
+}
+
+function salespersonOwner(order: TodoOrder): TodoOwner {
+  const ownerUserId = nonEmpty(order.salesperson?.id) || nonEmpty(order.salespersonUserId) || nonEmpty(order.customer?.salespersonUserId) || null;
+  return {
+    ownerUserId,
+    ownerName: orderOwnerName(order),
+    ownerRole: "SALESPERSON",
+    ownerUserIds: uniqueIds([ownerUserId]),
+  };
+}
+
+function supplierOwner(context: WorkbenchTodoContext, supplier: TodoSupplier | null | undefined, ownerRole: "LOGISTICS_SUPPLIER" | "PRODUCT_SUPPLIER", fallbackName: string): TodoOwner {
+  const supplierId = nonEmpty(supplier?.id);
+  const operatorUsers = [
+    ...(supplier?.operatorUsers || []),
+    ...(supplierId ? context.usersBySupplierId.get(supplierId) || [] : []),
+  ].filter((user, index, arr) => user.id && arr.findIndex((item) => item.id === user.id) === index);
+  const primaryUser = operatorUsers[0];
+  return {
+    ownerUserId: nonEmpty(primaryUser?.id) || null,
+    ownerName: nonEmpty(supplier?.supplierName) || fallbackName,
+    ownerRole,
+    ownerUserIds: uniqueIds(operatorUsers.map((user) => user.id)),
+  };
+}
+
+function logisticsOwnerForOrder(context: WorkbenchTodoContext, order: TodoOrder) {
+  const assigned = (order.logisticsSuppliers || []).find((row) => row?.supplier?.id || row?.supplierId);
+  if (assigned?.supplier) {
+    return supplierOwner(context, assigned.supplier, "LOGISTICS_SUPPLIER", "物流供应商");
+  }
+  return salespersonOwner(order);
+}
+
+function visibleUserIds(context: WorkbenchTodoContext, order: TodoOrder, owner?: TodoOwner | null) {
+  return uniqueIds([
+    ...context.adminUserIds,
+    ...(owner?.ownerUserIds || []),
+    ...(owner?.visibleToUserIds || []),
+    order.salesperson?.id,
+    order.salespersonUserId,
+    order.customer?.salespersonUserId,
+    context.actorUserId,
+  ]);
+}
+
 function orderHref(modulePath: string, order: Pick<TodoOrder, "id" | "orderNo">, extra: Record<string, string> = {}) {
   const params = new URLSearchParams({ orderId: order.id, keyword: order.orderNo, ...extra });
   return `${modulePath}?${params.toString()}`;
@@ -197,13 +574,23 @@ function todoForOrder(input: {
   title: string;
   module: string;
   order: TodoOrder;
+  context?: WorkbenchTodoContext;
   dueAt?: Date | string | null;
+  status?: WorkbenchTodoStatus;
   href: string;
+  owner?: TodoOwner;
   ownerName?: string;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }): WorkbenchTodo {
   const dueAt = iso(endOfChinaDay(input.dueAt || null));
+  const owner = input.owner || {
+    ...salespersonOwner(input.order),
+    ownerName: input.ownerName || orderOwnerName(input.order),
+  };
+  const visibleToUserIds = input.context ? visibleUserIds(input.context, input.order, owner) : uniqueIds(owner.ownerUserIds || []);
+  const actorUserId = input.context?.actorUserId || "";
+  const ownerUserIds = uniqueIds(owner.ownerUserIds || [owner.ownerUserId]);
   return {
     id: input.id || `${input.type.toLowerCase()}-${input.order.id}`,
     type: input.type,
@@ -213,9 +600,14 @@ function todoForOrder(input: {
     orderNo: input.order.orderNo,
     customerShortName: orderCustomerShortName(input.order),
     priority: todoPriorityFromDueAt(dueAt),
-    status: "pending",
+    status: input.status || "pending",
     dueAt,
-    ownerName: input.ownerName || orderOwnerName(input.order),
+    ownerUserId: owner.ownerUserId || null,
+    ownerUserIds,
+    ownerName: input.ownerName || owner.ownerName || orderOwnerName(input.order),
+    ownerRole: owner.ownerRole,
+    visibleToUserIds,
+    isMine: Boolean(actorUserId && (owner.ownerUserId === actorUserId || (owner.ownerUserIds || []).includes(actorUserId))),
     action: { label: "处理", href: input.href },
     createdAt: iso(input.createdAt || input.order.createdAt),
     updatedAt: iso(input.updatedAt || input.order.updatedAt),
@@ -259,9 +651,12 @@ function todoForCost(input: {
   title: string;
   module: string;
   cost: TodoCost;
+  context?: WorkbenchTodoContext;
   dueAt?: Date | string | null;
   href?: string;
+  owner?: TodoOwner;
   ownerName?: string;
+  status?: WorkbenchTodoStatus;
 }) {
   return todoForOrder({
     id: `${input.type.toLowerCase()}-${input.cost.id}`,
@@ -269,12 +664,15 @@ function todoForCost(input: {
     title: input.title,
     module: input.module,
     order: input.cost.order,
+    context: input.context,
     dueAt: input.dueAt,
     href: input.href || orderHref("/costs", input.cost.order, {
       costId: input.cost.id,
       keyword: input.cost.order.orderNo,
     }),
+    owner: input.owner,
     ownerName: input.ownerName || supplierNameForCost(input.cost),
+    status: input.status,
     createdAt: input.cost.createdAt,
     updatedAt: input.cost.updatedAt,
   });
@@ -284,6 +682,9 @@ function todoForPayment(input: {
   type: string;
   title: string;
   payment: TodoPayment;
+  context?: WorkbenchTodoContext;
+  owner?: TodoOwner;
+  status?: WorkbenchTodoStatus;
 }) {
   return todoForOrder({
     id: `${input.type.toLowerCase()}-${input.payment.id}`,
@@ -291,12 +692,15 @@ function todoForPayment(input: {
     title: input.title,
     module: "收款管理",
     order: input.payment.order,
+    context: input.context,
     dueAt: input.payment.paymentDate || input.payment.createdAt,
     href: orderHref("/payments", input.payment.order, {
       paymentId: input.payment.id,
       keyword: input.payment.order.orderNo,
     }),
-    ownerName: "财务/管理员",
+    owner: input.owner,
+    ownerName: input.owner?.ownerName || "财务/管理员",
+    status: input.status,
     createdAt: input.payment.createdAt,
     updatedAt: input.payment.updatedAt,
   });
@@ -306,21 +710,28 @@ function todoForLogisticsBill(input: {
   type: string;
   title: string;
   bill: TodoLogisticsBill;
+  context?: WorkbenchTodoContext;
   dueAt?: Date | string | null;
+  owner?: TodoOwner;
   ownerName?: string;
+  status?: WorkbenchTodoStatus;
 }) {
+  const owner = input.owner || (input.context ? supplierOwner(input.context, input.bill.supplier, "LOGISTICS_SUPPLIER", "物流供应商") : undefined);
   return todoForOrder({
     id: `${input.type.toLowerCase()}-${input.bill.id}`,
     type: input.type,
     title: input.title,
     module: "物流费用",
     order: input.bill.order,
+    context: input.context,
     dueAt: input.dueAt || input.bill.updatedAt,
     href: orderHref("/logistics-fees", input.bill.order, {
       billId: input.bill.id,
       keyword: input.bill.billOfLadingNo || input.bill.order.orderNo,
     }),
-    ownerName: input.ownerName || input.bill.supplier?.supplierName || "财务/管理员",
+    owner,
+    ownerName: input.ownerName || owner?.ownerName || input.bill.supplier?.supplierName || "财务/管理员",
+    status: input.status,
     createdAt: input.bill.createdAt,
     updatedAt: input.bill.updatedAt,
   });
@@ -363,7 +774,8 @@ function shipsgoTrackingAccessWhere(actor: ActorLike): Prisma.ShipsgoTrackingWhe
   return { id: "__no_shipsgo_tracking_access__" };
 }
 
-async function listOrderTodos(actor: ActorLike) {
+async function listOrderTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "orders") || !(isAdmin(actor) || isSalesperson(actor) || isPurchase(actor))) return [];
   const [draftOrders, purchasePendingOrders] = await Promise.all([
     prisma.receivableOrder.findMany({
@@ -372,7 +784,7 @@ async function listOrderTodos(actor: ActorLike) {
         status: { in: ["草稿", "待审核"] },
         AND: [orderAccessWhere(actor)],
       },
-      include: { customer: true, salesperson: { select: { name: true } } },
+      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
       orderBy: [{ createdAt: "desc" }],
       take: TODO_LIMIT_PER_SOURCE,
     }),
@@ -388,7 +800,7 @@ async function listOrderTodos(actor: ActorLike) {
           },
         },
       },
-      include: { customer: true, salesperson: { select: { name: true } } },
+      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
       orderBy: [{ updatedAt: "desc" }],
       take: TODO_LIMIT_PER_SOURCE,
     }),
@@ -399,28 +811,46 @@ async function listOrderTodos(actor: ActorLike) {
       title: "新订单待审核",
       module: "应收订单",
       order,
+      context,
       dueAt: order.dueDate || order.expectedShipmentDate,
       href: orderHref("/orders", order),
+      owner: roleOwner(context, "ADMIN"),
     })),
     ...purchasePendingOrders.map((order) => todoForOrder({
       type: "PURCHASE_ORDER_PENDING",
       title: "采购订单待下达",
       module: "应收订单",
       order,
+      context,
       dueAt: order.expectedShipmentDate || order.dueDate,
       href: orderHref("/orders", order),
+      owner: roleOwner(context, "PURCHASE"),
     })),
   ];
 }
 
-async function listDomesticLogisticsTodos(actor: ActorLike) {
+async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "domesticLogistics") || !(isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) return [];
   const where = activeOrderBaseWhere(actor);
   const orders = await prisma.receivableOrder.findMany({
     where,
     include: {
       customer: true,
-      salesperson: { select: { name: true } },
+      salesperson: { select: { id: true, name: true, email: true, role: true } },
+      logisticsSuppliers: {
+        include: {
+          supplier: {
+            include: {
+              operatorUsers: {
+                where: { isActive: true, approvalStatus: "APPROVED" },
+                select: { id: true, name: true, email: true, role: true, supplierId: true },
+              },
+            },
+          },
+        },
+        orderBy: [{ assignedAt: "desc" }],
+      },
       logisticsBills: {
         where: { deletedAt: null },
         select: { id: true, billOfLadingNo: true },
@@ -441,14 +871,17 @@ async function listDomesticLogisticsTodos(actor: ActorLike) {
   });
   const todos: WorkbenchTodo[] = [];
   for (const order of orders) {
+    const logisticsOwner = logisticsOwnerForOrder(context, order);
     if (!order.domesticLogisticsInfos.length) {
       todos.push(todoForOrder({
         type: "LOGISTICS_INFO_MISSING",
         title: "物流信息待录入",
         module: "物流信息",
         order,
+        context,
         dueAt: order.expectedShipmentDate || order.dueDate,
         href: orderHref("/domestic-logistics", order),
+        owner: logisticsOwner,
       }));
     }
     const hasBillNo = Boolean(nonEmpty(order.blNo) || order.logisticsBills.some((bill) => nonEmpty(bill.billOfLadingNo)));
@@ -458,8 +891,10 @@ async function listDomesticLogisticsTodos(actor: ActorLike) {
         title: "提单号缺失",
         module: "物流信息",
         order,
+        context,
         dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
         href: orderHref("/domestic-logistics", order),
+        owner: logisticsOwner,
       }));
     }
     const hasContainerMissing = order.domesticLogisticsInfos.some((info) => (
@@ -471,8 +906,10 @@ async function listDomesticLogisticsTodos(actor: ActorLike) {
         title: "柜号缺失",
         module: "物流信息",
         order,
+        context,
         dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
         href: orderHref("/domestic-logistics", order),
+        owner: logisticsOwner,
       }));
     }
     if (!order.logisticsExpenses.length && (isAdmin(actor) || isSalesperson(actor) || isLogisticsSupplier(actor))) {
@@ -481,15 +918,18 @@ async function listDomesticLogisticsTodos(actor: ActorLike) {
         title: "物流费用待录入",
         module: "物流费用",
         order,
+        context,
         dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
         href: orderHref("/logistics-fees", order),
+        owner: logisticsOwner,
       }));
     }
   }
   return todos;
 }
 
-async function listLogisticsFeeTodos(actor: ActorLike) {
+async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "domesticLogistics") && !canRead(actor, "costs")) return [];
   if (!(isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) return [];
   const accessWhere = logisticsBillAccessWhere(actor);
@@ -503,8 +943,8 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
         ],
       },
       include: {
-        order: { include: { customer: true, salesperson: { select: { name: true } } } },
-        supplier: { select: { supplierName: true } },
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+        supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
       },
       orderBy: [{ submittedAt: "asc" }, { updatedAt: "asc" }],
       take: TODO_LIMIT_PER_SOURCE,
@@ -519,8 +959,8 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
         ],
       },
       include: {
-        order: { include: { customer: true, salesperson: { select: { name: true } } } },
-        supplier: { select: { supplierName: true } },
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+        supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
       },
       orderBy: [{ reviewedAt: "asc" }, { updatedAt: "asc" }],
       take: TODO_LIMIT_PER_SOURCE,
@@ -537,8 +977,8 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
             ],
           },
           include: {
-            order: { include: { customer: true, salesperson: { select: { name: true } } } },
-            supplier: { select: { supplierName: true } },
+            order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+            supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
           },
           orderBy: [{ updatedAt: "asc" }],
           take: TODO_LIMIT_PER_SOURCE,
@@ -556,8 +996,8 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
             ],
           },
           include: {
-            order: { include: { customer: true, salesperson: { select: { name: true } } } },
-            supplier: { select: { supplierName: true } },
+            order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+            supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
           },
           orderBy: [{ paymentDate: "asc" }, { updatedAt: "asc" }],
           take: TODO_LIMIT_PER_SOURCE,
@@ -569,34 +1009,42 @@ async function listLogisticsFeeTodos(actor: ActorLike) {
       type: "LOGISTICS_FEE_REVIEW",
       title: "物流费用待审核",
       bill,
+      context,
       dueAt: bill.submittedAt || bill.updatedAt,
-      ownerName: isLogisticsSupplier(actor) ? (bill.supplier?.supplierName || "物流供应商") : "财务/管理员",
+      owner: roleOwner(context, "FINANCE"),
     })),
     ...invoiceBills.map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_INVOICE_UPLOAD",
       title: "物流发票待上传",
       bill,
+      context,
       dueAt: bill.reviewedAt || bill.updatedAt,
+      owner: bill.supplier ? supplierOwner(context, bill.supplier, "LOGISTICS_SUPPLIER", "物流供应商") : logisticsOwnerForOrder(context, bill.order),
       ownerName: bill.supplier?.supplierName || "物流供应商",
     })),
     ...invoiceReviewBills.map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_INVOICE_REVIEW",
       title: "发票待审核",
       bill,
+      context,
       dueAt: bill.updatedAt,
+      owner: roleOwner(context, "FINANCE"),
       ownerName: "财务/管理员",
     })),
     ...paymentBills.map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_PAYMENT_REGISTER",
       title: "物流付款待登记",
       bill,
+      context,
       dueAt: bill.paymentDate || bill.updatedAt,
+      owner: roleOwner(context, "FINANCE"),
       ownerName: "财务/管理员",
     })),
   ];
 }
 
-async function listSupplierDocumentTodos(actor: ActorLike) {
+async function listSupplierDocumentTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "supplierDocuments")) return [];
   const productSupplier = isProductSupplierOperatorRole(actorRole(actor));
   const where: Prisma.SupplierDocumentRequestWhereInput = {
@@ -613,8 +1061,15 @@ async function listSupplierDocumentTodos(actor: ActorLike) {
   const rows = await prisma.supplierDocumentRequest.findMany({
     where,
     include: {
-      order: { include: { customer: true, salesperson: { select: { name: true } } } },
-      supplier: { select: { supplierName: true } },
+      order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+      supplier: {
+        include: {
+          operatorUsers: {
+            where: { isActive: true, approvalStatus: "APPROVED" },
+            select: { id: true, name: true, email: true, role: true, supplierId: true },
+          },
+        },
+      },
     },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     take: TODO_LIMIT_PER_SOURCE,
@@ -624,18 +1079,21 @@ async function listSupplierDocumentTodos(actor: ActorLike) {
     title: "供应商资料待回传",
     module: "资料回传",
     order: row.order,
+    context,
     dueAt: row.dueDate,
     href: orderHref("/supplier-documents", row.order, {
       requestId: row.id,
       keyword: row.order.orderNo,
     }),
-    ownerName: productSupplier ? "当前供应商" : (row.supplier?.supplierName || "产品供应商"),
+    owner: supplierOwner(context, row.supplier, "PRODUCT_SUPPLIER", "产品供应商"),
+    ownerName: row.supplier?.supplierName || (productSupplier ? "当前供应商" : "产品供应商"),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));
 }
 
-async function listCustomerPaymentTodos(actor: ActorLike) {
+async function listCustomerPaymentTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "payments") || !isFinanceOperator(actor)) return [];
   const rows = await prisma.payment.findMany({
     where: {
@@ -644,7 +1102,7 @@ async function listCustomerPaymentTodos(actor: ActorLike) {
       order: { is: orderAccessWhere(actor) },
     },
     include: {
-      order: { include: { customer: true, salesperson: { select: { name: true } } } },
+      order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
     },
     orderBy: [{ paymentDate: "asc" }, { createdAt: "asc" }],
     take: TODO_LIMIT_PER_SOURCE,
@@ -653,15 +1111,18 @@ async function listCustomerPaymentTodos(actor: ActorLike) {
     type: "CUSTOMER_PAYMENT_CONFIRMATION",
     title: "客户回款待确认",
     payment,
+    context,
+    owner: roleOwner(context, "FINANCE"),
   }));
 }
 
-async function listFactoryPaymentTodos(actor: ActorLike) {
+async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "costs") || !isFinanceOperator(actor)) return [];
   const baseWhere = productSupplierPaymentCostWhere();
   const include = {
-    order: { include: { customer: true, salesperson: { select: { name: true } } } },
-    supplier: { select: { supplierName: true, supplierType: true } },
+    order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+    supplier: { select: { id: true, supplierName: true, supplierType: true } },
   } satisfies Prisma.OrderCostInclude;
   const [unpaidCosts, missingVoucherCosts, missingPaidAtCosts] = await Promise.all([
     prisma.orderCost.findMany({
@@ -725,26 +1186,33 @@ async function listFactoryPaymentTodos(actor: ActorLike) {
     title: "已付款但缺付款时间",
     module: "成本管理",
     cost,
+    context,
     dueAt: cost.updatedAt,
+    owner: roleOwner(context, "FINANCE"),
   })));
   missingVoucherCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
     type: "PAYMENT_VOUCHER_UPLOAD",
     title: "付款凭证待上传",
     module: "成本管理",
     cost,
+    context,
     dueAt: cost.paidAt || cost.paymentDate || cost.updatedAt,
+    owner: roleOwner(context, "FINANCE"),
   })));
   unpaidCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
     type: "FACTORY_PAYMENT_REGISTER",
     title: "工厂付款待登记",
     module: "成本管理",
     cost,
+    context,
     dueAt: cost.paymentDate || cost.order.expectedShipmentDate || cost.order.dueDate,
+    owner: roleOwner(context, "FINANCE"),
   })));
   return todos;
 }
 
-function missingTaxRefundTodos(order: TodoOrder, missingLabels: string[] = []) {
+function missingTaxRefundTodos(context: WorkbenchTodoContext, order: TodoOrder, missingLabels: string[] = []) {
+  const owner = roleOwner(context, "FINANCE");
   const rules = [
     { type: "TAX_TRUCKING_INVOICE_MISSING", title: "拖车发票缺失", pattern: /拖车|物流费资料|物流费发票/ },
     { type: "TAX_CUSTOMS_DECLARATION_MISSING", title: "报关单缺失", pattern: /报关单/ },
@@ -758,7 +1226,9 @@ function missingTaxRefundTodos(order: TodoOrder, missingLabels: string[] = []) {
       title: rule.title,
       module: "退税资料",
       order,
+      context,
       href: orderHref("/tax-refund", order),
+      owner,
       updatedAt: order.updatedAt,
     }));
 }
@@ -769,7 +1239,8 @@ function normalizedMissingLabels(value: unknown) {
     : [];
 }
 
-async function listTaxRefundTodos(actor: ActorLike) {
+async function listTaxRefundTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "taxRefund") || !(isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) return [];
   const rows = await prisma.receivableOrder.findMany({
     where: {
@@ -778,7 +1249,7 @@ async function listTaxRefundTodos(actor: ActorLike) {
       taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES },
       AND: [orderAccessWhere(actor)],
     },
-    include: { customer: true, salesperson: { select: { name: true } } },
+    include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
     orderBy: [{ updatedAt: "desc" }],
     take: TODO_LIMIT_PER_SOURCE,
   });
@@ -789,6 +1260,7 @@ async function listTaxRefundTodos(actor: ActorLike) {
   );
   const refreshedById = new Map(refreshedEntries.filter(([, completeness]) => completeness));
   const todos: WorkbenchTodo[] = [];
+  const owner = roleOwner(context, "FINANCE");
   for (const order of rows) {
     const completeness = refreshedById.get(order.id) || cachedTaxRefundCompleteness(order);
     const total = Number(completeness.total || 0);
@@ -804,17 +1276,25 @@ async function listTaxRefundTodos(actor: ActorLike) {
         title: `退税资料完整度不足 100%（${percent}%）`,
         module: "退税资料",
         order: orderWithCompleteness,
+        context,
         href: orderHref("/tax-refund", order),
+        owner,
         updatedAt: order.updatedAt,
       }));
-      todos.push(...missingTaxRefundTodos(orderWithCompleteness, normalizedMissingLabels(completeness.missingLabels)));
-    } else if (total > 0 && status !== "SUBMITTED") {
+      todos.push(...missingTaxRefundTodos(context, orderWithCompleteness, normalizedMissingLabels(completeness.missingLabels)));
+    } else if (total > 0 && status !== "SUBMITTED" && !order.taxSubmittedAt && !order.taxRefundArchivedAt) {
       todos.push(todoForOrder({
         type: "TAX_REFUND_READY_NOT_ARCHIVED",
         title: "已满足退税条件但未归档",
         module: "退税资料",
         order: orderWithCompleteness,
-        href: orderHref("/tax-refund", order),
+        context,
+        dueAt: order.taxRefundCompletenessUpdatedAt || order.updatedAt,
+        href: orderHref("/tax-refund", order, {
+          status: "READY",
+          action: "submitTaxArchive",
+        }),
+        owner: taxRefundArchiveOwner(context, orderWithCompleteness),
         updatedAt: order.updatedAt,
       }));
     }
@@ -841,7 +1321,8 @@ function shouldCreateProfitCostIncompleteTodo(
   return PROFIT_COST_REQUIRED_STATUSES.includes(status);
 }
 
-async function listProfitTodos(actor: ActorLike) {
+async function listProfitTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!isFinanceOperator(actor) || !canRead(actor, "orders") || !canRead(actor, "costs") || !canRead(actor, "commissions")) return [];
   const [rows, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.findMany({
@@ -857,6 +1338,7 @@ async function listProfitTodos(actor: ActorLike) {
     getCommissionFormulaSettings(),
   ]);
   const todos: WorkbenchTodo[] = [];
+  const financeOwner = roleOwner(context, "FINANCE");
   for (const order of rows) {
     const summary = summarizeOrder(order, commissionFormulaSettings);
     const validCosts = (order.costs || []).filter(validCost);
@@ -866,8 +1348,10 @@ async function listProfitTodos(actor: ActorLike) {
         title: "成本未完整录入",
         module: "利润分析",
         order,
+        context,
         dueAt: order.expectedShipmentDate || profitOrderDueDate(order),
         href: orderHref("/profit", order),
+        owner: financeOwner,
         updatedAt: order.updatedAt,
       }));
     }
@@ -877,9 +1361,10 @@ async function listProfitTodos(actor: ActorLike) {
         title: "提成待结算",
         module: "利润分析",
         order,
+        context,
         dueAt: order.commissionSettledAt || order.updatedAt,
         href: orderHref("/profit", order),
-        ownerName: order.salesperson?.name || "财务/管理员",
+        owner: financeOwner,
         updatedAt: order.updatedAt,
       }));
     }
@@ -897,8 +1382,10 @@ async function listProfitTodos(actor: ActorLike) {
         title: "利润异常订单待复核",
         module: "利润分析",
         order,
+        context,
         dueAt: order.updatedAt,
         href: orderHref("/profit", order),
+        owner: financeOwner,
         updatedAt: order.updatedAt,
       }));
     }
@@ -925,13 +1412,15 @@ function trackingTodoOrder(row: {
   };
 }
 
-async function listOceanTrackingTodos(actor: ActorLike) {
+async function listOceanTrackingTodos(context: WorkbenchTodoContext) {
+  const actor = context.actor;
   if (!canRead(actor, "domesticLogistics") || !(isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) return [];
   const result = await listShipsgoControlTowerTrackings(new URLSearchParams(), actor);
   const todos: WorkbenchTodo[] = [];
   for (const row of result.rows || []) {
     const order = trackingTodoOrder(row);
     if (!order) continue;
+    const owner = salespersonOwner(order);
     const href = orderHref("/ocean-control-tower", order, {
       trackingId: row.id,
       keyword: order.orderNo,
@@ -943,9 +1432,10 @@ async function listOceanTrackingTodos(actor: ActorLike) {
         title: row.isEtaOverdue ? "ETA 已过期" : "ETA 即将到港",
         module: "运输监控",
         order,
+        context,
         dueAt: row.eta || row.predictedDischargeDate || row.dateOfDischarge,
         href,
-        ownerName: "物流/业务",
+        owner,
         updatedAt: row.updatedAt,
       }));
     }
@@ -956,9 +1446,10 @@ async function listOceanTrackingTodos(actor: ActorLike) {
         title: "集装箱跟踪异常",
         module: "运输监控",
         order,
+        context,
         dueAt: row.isSyncFailed ? new Date() : (row.lastSyncTime || row.lastSyncedAt || row.updatedAt),
         href,
-        ownerName: "物流/业务",
+        owner,
         updatedAt: row.updatedAt,
       }));
     }
@@ -966,23 +1457,36 @@ async function listOceanTrackingTodos(actor: ActorLike) {
   return todos;
 }
 
-async function completedTodayCount(actor: ActorLike, now = new Date()) {
+async function completedTodayTodos(context: WorkbenchTodoContext, now = new Date()) {
+  const actor = context.actor;
   const today = startOfChinaDay(now);
   const tomorrow = addDays(today, 1);
-  const counts: Promise<number>[] = [];
+  const batches: Promise<WorkbenchTodo[]>[] = [];
   const productCostWhere = productSupplierPaymentCostWhere();
   if (canRead(actor, "payments") && isFinanceOperator(actor)) {
-    counts.push(prisma.payment.count({
+    batches.push(prisma.payment.findMany({
       where: {
         deletedAt: null,
         status: "已到账",
         updatedAt: { gte: today, lt: tomorrow },
         order: { is: orderAccessWhere(actor) },
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((payment) => todoForPayment({
+      type: "CUSTOMER_PAYMENT_CONFIRMED",
+      title: "客户回款已确认",
+      payment,
+      context,
+      owner: roleOwner(context, "FINANCE"),
+      status: "completed",
+    }))));
   }
   if (canRead(actor, "costs") && isFinanceOperator(actor)) {
-    counts.push(prisma.orderCost.count({
+    batches.push(prisma.orderCost.findMany({
       where: {
         deletedAt: null,
         paymentStatus: { not: "已取消" },
@@ -997,10 +1501,25 @@ async function completedTodayCount(actor: ActorLike, now = new Date()) {
           },
         ],
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+        supplier: { select: { id: true, supplierName: true, supplierType: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((cost) => todoForCost({
+      type: "FACTORY_PAYMENT_COMPLETED",
+      title: "工厂付款已登记",
+      module: "成本管理",
+      cost,
+      context,
+      dueAt: cost.paidAt || cost.paymentDate || cost.updatedAt,
+      owner: roleOwner(context, "FINANCE"),
+      status: "completed",
+    }))));
   }
   if (canRead(actor, "supplierDocuments") && (isAdmin(actor) || isProductSupplierOperatorRole(actorRole(actor)))) {
-    counts.push(prisma.supplierDocumentRequest.count({
+    batches.push(prisma.supplierDocumentRequest.findMany({
       where: {
         deletedAt: null,
         status: "已完成",
@@ -1009,64 +1528,189 @@ async function completedTodayCount(actor: ActorLike, now = new Date()) {
           ? { supplierId: actorSupplierId(actor) || "__no_supplier_bound__" }
           : {}),
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+        supplier: {
+          include: {
+            operatorUsers: {
+              where: { isActive: true, approvalStatus: "APPROVED" },
+              select: { id: true, name: true, email: true, role: true, supplierId: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((row) => todoForOrder({
+      id: `supplier-document-return-completed-${row.id}`,
+      type: "SUPPLIER_DOCUMENT_RETURN_COMPLETED",
+      title: "供应商资料已回传",
+      module: "资料回传",
+      order: row.order,
+      context,
+      dueAt: row.dueDate || row.updatedAt,
+      href: orderHref("/supplier-documents", row.order, {
+        requestId: row.id,
+        keyword: row.order.orderNo,
+      }),
+      owner: supplierOwner(context, row.supplier, "PRODUCT_SUPPLIER", "产品供应商"),
+      status: "completed",
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }))));
   }
   if ((canRead(actor, "domesticLogistics") || canRead(actor, "costs")) && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) {
-    counts.push(prisma.logisticsBill.count({
+    const accessWhere = logisticsBillAccessWhere(actor);
+    batches.push(prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
-        OR: [
-          { auditStatus: "审核通过", reviewedAt: { gte: today, lt: tomorrow } },
-          { invoiceStatus: { in: LOGISTICS_INVOICE_DONE_STATUSES }, updatedAt: { gte: today, lt: tomorrow } },
+        AND: [
+          accessWhere,
+          {
+            OR: [
+              { auditStatus: "审核通过", reviewedAt: { gte: today, lt: tomorrow } },
+              { invoiceStatus: { in: LOGISTICS_INVOICE_DONE_STATUSES }, updatedAt: { gte: today, lt: tomorrow } },
+            ],
+          },
         ],
-        ...logisticsBillAccessWhere(actor),
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+        supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((bill) => {
+      const invoiceDone = LOGISTICS_INVOICE_DONE_STATUSES.includes(bill.invoiceStatus || "");
+      const owner = invoiceDone
+        ? (bill.supplier ? supplierOwner(context, bill.supplier, "LOGISTICS_SUPPLIER", "物流供应商") : logisticsOwnerForOrder(context, bill.order))
+        : roleOwner(context, "FINANCE");
+      return todoForLogisticsBill({
+        type: invoiceDone ? "LOGISTICS_INVOICE_UPLOAD_COMPLETED" : "LOGISTICS_FEE_REVIEW_COMPLETED",
+        title: invoiceDone ? "物流发票已上传" : "物流费用已审核",
+        bill,
+        context,
+        dueAt: invoiceDone ? bill.updatedAt : (bill.reviewedAt || bill.updatedAt),
+        owner,
+        ownerName: owner.ownerName || (invoiceDone ? "物流供应商" : "财务/管理员"),
+        status: "completed",
+      });
+    })));
   }
   if (canRead(actor, "domesticLogistics") && isFinanceOperator(actor)) {
-    counts.push(prisma.logisticsBill.count({
+    batches.push(prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
-        auditStatus: "审核通过",
-        paymentStatus: "已付款",
-        updatedAt: { gte: today, lt: tomorrow },
-        ...logisticsBillAccessWhere(actor),
+        AND: [
+          logisticsBillAccessWhere(actor),
+          { auditStatus: "审核通过" },
+          { paymentStatus: "已付款" },
+          { updatedAt: { gte: today, lt: tomorrow } },
+        ],
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
+        supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((bill) => todoForLogisticsBill({
+      type: "LOGISTICS_PAYMENT_REGISTER_COMPLETED",
+      title: "物流付款已登记",
+      bill,
+      context,
+      dueAt: bill.paymentDate || bill.updatedAt,
+      owner: roleOwner(context, "FINANCE"),
+      ownerName: "财务/管理员",
+      status: "completed",
+    }))));
   }
   if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
-    counts.push(prisma.receivableOrder.count({
+    batches.push(prisma.receivableOrder.findMany({
       where: {
         deletedAt: null,
         taxArchived: true,
         taxRefundArchivedAt: { gte: today, lt: tomorrow },
         AND: [orderAccessWhere(actor)],
       },
-    }));
+      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
+      orderBy: [{ taxRefundArchivedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((order) => todoForOrder({
+      type: "TAX_REFUND_ARCHIVED",
+      title: "退税资料已归档",
+      module: "退税资料",
+      order,
+      context,
+      dueAt: order.taxRefundArchivedAt || order.updatedAt,
+      href: orderHref("/tax-refund", order),
+      owner: taxRefundArchiveOwner(context, order),
+      status: "completed",
+      updatedAt: order.updatedAt,
+    }))));
   }
   if (canRead(actor, "commissions") && isFinanceOperator(actor)) {
-    counts.push(prisma.receivableOrder.count({
+    batches.push(prisma.receivableOrder.findMany({
       where: {
         deletedAt: null,
         commissionStatus: { in: ["已结算", "SETTLED"] },
         commissionSettledAt: { gte: today, lt: tomorrow },
         AND: [orderAccessWhere(actor)],
       },
-    }));
+      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
+      orderBy: [{ commissionSettledAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((order) => todoForOrder({
+      type: "COMMISSION_SETTLED",
+      title: "提成已结算",
+      module: "利润分析",
+      order,
+      context,
+      dueAt: order.commissionSettledAt || order.updatedAt,
+      href: orderHref("/profit", order),
+      owner: roleOwner(context, "FINANCE"),
+      status: "completed",
+      updatedAt: order.updatedAt,
+    }))));
   }
   if (canRead(actor, "domesticLogistics") && (isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) {
-    counts.push(prisma.shipsgoTracking.count({
+    batches.push(prisma.shipsgoTracking.findMany({
       where: {
-        deletedAt: null,
-        provider: "SHIPSGO",
-        mode: "OCEAN",
-        lastSyncTime: { gte: today, lt: tomorrow },
-        ...shipsgoTrackingAccessWhere(actor),
+        AND: [
+          shipsgoTrackingAccessWhere(actor),
+          {
+            deletedAt: null,
+            provider: "SHIPSGO",
+            mode: "OCEAN",
+            lastSyncTime: { gte: today, lt: tomorrow },
+          },
+        ],
       },
-    }));
+      include: {
+        order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } },
+      },
+      orderBy: [{ lastSyncTime: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }).then((rows) => rows.map((row) => todoForOrder({
+      id: `container-tracking-synced-${row.id}`,
+      type: "CONTAINER_TRACKING_SYNCED",
+      title: "集装箱跟踪已同步",
+      module: "运输监控",
+      order: row.order,
+      context,
+      dueAt: row.lastSyncTime || row.lastSyncedAt || row.updatedAt,
+      href: orderHref("/ocean-control-tower", row.order, {
+        trackingId: row.id,
+        keyword: row.order.orderNo,
+      }),
+      owner: salespersonOwner(row.order),
+      status: "completed",
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }))));
   }
-  const values = await Promise.all(counts);
-  return values.reduce((sum, value) => sum + value, 0);
+  const values = await Promise.all(batches);
+  return uniqueTodos(values.flat()).sort(sortWorkbenchTodos);
 }
 
 function priorityRank(priority: WorkbenchTodoPriority) {
@@ -1094,6 +1738,7 @@ function uniqueTodos(todos: WorkbenchTodo[]) {
 }
 
 export async function listWorkbenchTodos(actor: ActorLike) {
+  const context = await createWorkbenchTodoContext(actor);
   const [
     orderTodos,
     domesticLogisticsTodos,
@@ -1104,18 +1749,18 @@ export async function listWorkbenchTodos(actor: ActorLike) {
     taxRefundTodos,
     profitTodos,
     oceanTrackingTodos,
-    completed,
+    completedTodos,
   ] = await Promise.all([
-    listOrderTodos(actor),
-    listDomesticLogisticsTodos(actor),
-    listLogisticsFeeTodos(actor),
-    listSupplierDocumentTodos(actor),
-    listCustomerPaymentTodos(actor),
-    listFactoryPaymentTodos(actor),
-    listTaxRefundTodos(actor),
-    listProfitTodos(actor),
-    listOceanTrackingTodos(actor),
-    completedTodayCount(actor),
+    listOrderTodos(context),
+    listDomesticLogisticsTodos(context),
+    listLogisticsFeeTodos(context),
+    listSupplierDocumentTodos(context),
+    listCustomerPaymentTodos(context),
+    listFactoryPaymentTodos(context),
+    listTaxRefundTodos(context),
+    listProfitTodos(context),
+    listOceanTrackingTodos(context),
+    completedTodayTodos(context),
   ]);
   const todos = uniqueTodos([
     ...orderTodos,
@@ -1130,7 +1775,8 @@ export async function listWorkbenchTodos(actor: ActorLike) {
   ]).sort(sortWorkbenchTodos);
   return {
     todos,
-    summary: summarizeWorkbenchTodos(todos, completed),
+    completedTodos,
+    summary: summarizeWorkbenchTodos(todos, completedTodos.length),
     generatedAt: new Date().toISOString(),
     sourceTypes: [
       "orders",

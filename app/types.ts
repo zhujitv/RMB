@@ -81,6 +81,7 @@ export type LoginResponse = {
 };
 
 export type WorkbenchTodoPriority = "urgent" | "important" | "normal";
+export type WorkbenchTodoOwnerRole = "LOGISTICS_SUPPLIER" | "SALESPERSON" | "ADMIN" | "FINANCE" | "PURCHASE" | "PRODUCT_SUPPLIER";
 
 export type WorkbenchTodo = {
   id: string;
@@ -93,7 +94,12 @@ export type WorkbenchTodo = {
   priority: WorkbenchTodoPriority;
   status: "pending" | "completed";
   dueAt?: string | null;
+  ownerUserId?: string | null;
+  ownerUserIds?: string[];
   ownerName?: string;
+  ownerRole?: WorkbenchTodoOwnerRole;
+  visibleToUserIds: string[];
+  isMine: boolean;
   action: {
     label: string;
     href: string;
@@ -113,6 +119,7 @@ export type WorkbenchTodoSummary = {
 
 export type WorkbenchTodosState = {
   todos: WorkbenchTodo[];
+  completedTodos?: WorkbenchTodo[];
   summary: WorkbenchTodoSummary;
   loading: boolean;
   error: string;

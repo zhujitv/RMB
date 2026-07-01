@@ -24,6 +24,7 @@ const WORKBENCH_TODOS_TIMEOUT_MS = 12000;
 
 const EMPTY_WORKBENCH_TODOS: WorkbenchTodosState = {
   todos: [],
+  completedTodos: [],
   summary: {
     pending: 0,
     todayDue: 0,
@@ -162,7 +163,7 @@ export function WorkspaceShell() {
   const [paymentsFocus, setPaymentsFocus] = useState({ keyword: "", token: 0 });
   const [costsFocus, setCostsFocus] = useState({ keyword: "", token: 0 });
   const [profitFocus, setProfitFocus] = useState({ keyword: "", token: 0 });
-  const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
+  const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", action: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
   const [oceanControlTowerFocus, setOceanControlTowerFocus] = useState({ keyword: "", token: 0 });
   const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
@@ -227,6 +228,7 @@ export function WorkspaceShell() {
       const result = await apiJson<Partial<WorkbenchTodosState>>("/api/workbench/todos", { timeoutMs: WORKBENCH_TODOS_TIMEOUT_MS });
       setWorkbenchTodos({
         todos: Array.isArray(result.todos) ? result.todos : [],
+        completedTodos: Array.isArray(result.completedTodos) ? result.completedTodos : [],
         summary: {
           ...EMPTY_WORKBENCH_TODOS.summary,
           ...(result.summary || {}),
@@ -497,7 +499,7 @@ export function WorkspaceShell() {
       return;
     }
     if (path === "tax-refund") {
-      setTaxRefundFocus({ keyword, token });
+      setTaxRefundFocus({ keyword, action: parsed.searchParams.get("action") || "", token });
       setActiveMenu("taxRefund");
       return;
     }
@@ -617,6 +619,7 @@ export function WorkspaceShell() {
           currentUser={payload.user}
           permissions={payload.permissions}
           initialKeyword={taxRefundFocus.keyword}
+          initialAction={taxRefundFocus.action}
           initialOpenToken={taxRefundFocus.token}
           onOpenDomesticLogistics={(keyword) => {
             setDomesticLogisticsFocus({ keyword, token: Date.now() });
@@ -638,7 +641,7 @@ export function WorkspaceShell() {
             } else if (targetMenu === "profit") {
               setProfitFocus({ keyword: value, token: Date.now() });
             } else if (targetMenu === "taxRefund") {
-              setTaxRefundFocus({ keyword: value, token: Date.now() });
+              setTaxRefundFocus({ keyword: value, action: "", token: Date.now() });
             }
             setActiveMenu(targetMenu);
           }}

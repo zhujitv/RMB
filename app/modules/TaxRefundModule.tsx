@@ -53,12 +53,14 @@ export function TaxRefundModule({
   currentUser,
   permissions,
   initialKeyword = "",
+  initialAction = "",
   initialOpenToken = 0,
   onOpenDomesticLogistics,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
+  initialAction?: string;
   initialOpenToken?: number;
   onOpenDomesticLogistics?: (keyword: string) => void;
 }) {
@@ -134,14 +136,17 @@ export function TaxRefundModule({
       if (nextEndMonth) params.set("declarationEndMonth", nextEndMonth);
       if (nextStatus) params.set("status", nextStatus);
       const result = await apiJson<TaxRefundResponse>(`/api/tax-refunds?${params}`);
+      const nextRows = Array.isArray(result.orders) ? result.orders : [];
       const pagination = result.pagination || {};
-      setRows(Array.isArray(result.orders) ? result.orders : []);
-      setTotal(Number(pagination.total || result.orders?.length || 0));
+      setRows(nextRows);
+      setTotal(Number(pagination.total || nextRows.length || 0));
       setPage(Number(pagination.page || nextPage));
       setTotalPages(Math.max(1, Number(pagination.totalPages || 1)));
       if (result.error) setError(result.error || "读取资料失败");
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取退税资料失败");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -157,8 +162,15 @@ export function TaxRefundModule({
     setKeyword(value);
     setSubmittedKeyword(value);
     setNotice("");
-    void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
-  }, [initialKeyword, initialOpenToken]);
+    void (async () => {
+      const nextStatus = initialAction === "submitTaxArchive" ? "READY" : statusFilter;
+      if (initialAction === "submitTaxArchive") setStatusFilter("READY");
+      const nextRows = await loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, nextStatus);
+      if (initialAction !== "submitTaxArchive") return;
+      const matched = nextRows.find((row) => row.orderNo === value) || nextRows[0];
+      if (matched) await loadDetail(matched);
+    })();
+  }, [initialAction, initialKeyword, initialOpenToken]);
 
   useEffect(() => {
     const value = keyword.trim();

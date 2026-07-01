@@ -284,6 +284,39 @@
   font-size: 13px;
 }
 
+.workbenchFilters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.workbenchFilters label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workbenchFilters span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workbenchFilters select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 .workbenchTableWrap {
   overflow: hidden;
   border: 1px solid #e2e8f0;
@@ -364,6 +397,13 @@
   font-weight: 700;
 }
 
+.workbenchOwnerRole {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .todoPriorityBadge,
 .todoStatusPill {
   display: inline-flex;
@@ -425,6 +465,10 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .workbenchFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .workbenchTable th:nth-child(5),
   .workbenchTable td:nth-child(5),
   .workbenchTable th:nth-child(8),
@@ -450,6 +494,10 @@
   .workbenchPanelHeader {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .workbenchFilters {
+    grid-template-columns: 1fr;
   }
 
   .workbenchTable th:nth-child(3),

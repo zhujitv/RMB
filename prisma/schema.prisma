@@ -108,6 +108,7 @@ model User {
   assignedOrderLogisticsSuppliers OrderLogisticsSupplier[] @relation("OrderLogisticsSupplierAssignedBy")
   createdShipsgoTrackings ShipsgoTracking[] @relation("ShipsgoTrackingCreatedBy")
   updatedShipsgoTrackings ShipsgoTracking[] @relation("ShipsgoTrackingUpdatedBy")
+  todoReminderLogs TodoReminderLog[] @relation("TodoReminderLogOwner")
 
   @@index([supplierId])
   @@index([approvalStatus])
@@ -913,6 +914,31 @@ model ExchangeRate {
   @@unique([currency, rateDate, source, rateType])
   @@index([currency, rateDate])
   @@map("exchange_rates")
+}
+
+model TodoReminderLog {
+  id             String   @id @default(cuid())
+  todoId         String   @map("todo_id")
+  todoType       String   @map("todo_type")
+  relatedOrderId String?  @map("related_order_id")
+  ownerUserId    String   @map("owner_user_id")
+  ownerEmail     String   @map("owner_email")
+  remindedAt     DateTime @map("reminded_at")
+  reminderDate   DateTime @map("reminder_date") @db.Date
+  overdueDays    Int      @map("overdue_days")
+  emailStatus    String   @map("email_status")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  owner User @relation("TodoReminderLogOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([todoId, ownerUserId, reminderDate], map: "todo_reminder_logs_daily_unique")
+  @@index([todoType])
+  @@index([relatedOrderId])
+  @@index([ownerUserId])
+  @@index([reminderDate])
+  @@index([emailStatus])
+  @@map("todo_reminder_logs")
 }
 
 model SystemSetting {
