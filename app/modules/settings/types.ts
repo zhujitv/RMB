@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 
-export type SettingsTabKey = "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "shipsgoIntegration" | "auditLogs" | "apiPerformance";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs" | "apiPerformance";
 
 export type SettingsFilters = {
   customers: {

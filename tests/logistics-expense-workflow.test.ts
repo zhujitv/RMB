@@ -659,7 +659,7 @@ test("settings include configurable logistics invoice notification template", ()
   assert.match(notificationTemplateRoute, /saveLogisticsInvoiceNotificationSettings\(request, actor, body\)/);
   assert.match(
     settingsModule,
-    /type SettingsTabKey = "companyProfile"[\s\S]*"notificationTemplates"/,
+    /type SettingsTabKey = "home"[\s\S]*"notificationTemplates"/,
   );
   assert.match(settingsModule, /label: "通知模板"/);
   assert.match(settingsModule, /\/api\/settings\/notification-templates/);

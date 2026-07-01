@@ -39,9 +39,12 @@ test("OCR settings API supports authenticated read and admin write", () => {
 });
 
 test("settings module exposes OCR configuration without leaking secrets", () => {
+  assert.match(settingsModule, /"ocrIntegration"/);
+  assert.match(settingsModule, /label: "OCR识别"/);
   assert.match(settingsModule, /\/api\/settings\/ocr/);
   assert.match(settingsModule, /OcrIntegrationSettingsCard/);
-  assert.match(settingsModule, /保存OCR设置/);
+  assert.match(settingsModule, /title="OCR识别"/);
+  assert.match(settingsModule, /SecretField/);
   assert.match(settingsModule, /OCR_FEATURE_OPTIONS/);
   assert.match(settingsModule, /发票结构化识别/);
   assert.match(settingsModule, /产品供应商资料回传 OCR/);
@@ -49,6 +52,7 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /结构化识别需要 AccessKey ID \/ Secret/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);
+  assert.match(settingsModule, /markLoaded\("ocrIntegration"\)/);
 });
 
 test("OCR integration uses Aliyun structured APIs for supplier documents with PDF fallback", () => {

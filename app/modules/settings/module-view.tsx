@@ -30,11 +30,44 @@ import {
   ShipsgoIntegrationSettingsCard,
 } from "./settings-cards";
 import { SettingsTable } from "./settings-table";
-import type { SupplierRow } from "./types";
+import type { SettingsTabKey, SupplierRow } from "./types";
 import { UserEditPanel } from "./user-edit-panel";
 import type { useSettingsController } from "./use-settings-controller";
 
 type SettingsController = ReturnType<typeof useSettingsController>;
+
+const SETTINGS_HOME_CARDS: Array<{ tab: SettingsTabKey; title: string; description: string; icon: string }> = [
+  { tab: "companyProfile", title: "公司资料", description: "公司信息、Logo、联系信息", icon: "企" },
+  { tab: "businessEntities", title: "业务主体", description: "业务主体管理", icon: "主" },
+  { tab: "customers", title: "客户资料", description: "客户管理", icon: "客" },
+  { tab: "suppliers", title: "供应商资料", description: "供应商管理", icon: "供" },
+  { tab: "users", title: "用户与权限", description: "角色权限", icon: "权" },
+  { tab: "ocrIntegration", title: "OCR识别", description: "OCR 服务配置", icon: "OCR" },
+  { tab: "shipsgoIntegration", title: "物流接口", description: "大掌柜、ShipsGo", icon: "船" },
+  { tab: "notificationTemplates", title: "通知模板", description: "邮件模板", icon: "邮" },
+  { tab: "exchangeRates", title: "汇率设置", description: "汇率", icon: "汇" },
+  { tab: "commissionFormula", title: "提成公式", description: "提成计算", icon: "提" },
+  { tab: "auditLogs", title: "系统日志", description: "日志", icon: "志" },
+  { tab: "apiPerformance", title: "后台任务", description: "慢任务", icon: "任" },
+];
+
+const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
+  home: "按模块进入配置，减少长表单堆叠，保持系统设置清晰可维护。",
+  companyProfile: "维护平台展示所需的公司基础信息。",
+  businessEntities: "管理业务主体简称、全称和默认主体。",
+  customers: "维护客户资料、自动通知和负责业务员。",
+  suppliers: "维护产品供应商、物流供应商和业务权限。",
+  users: "维护用户账号、角色权限和供应商绑定。",
+  ocrIntegration: "维护 OCR 服务配置、密钥和识别能力。",
+  shipsgoIntegration: "维护大掌柜海运跟踪接口和同步能力。",
+  notificationTemplates: "维护系统邮件模板和发送规则。",
+  exchangeRates: "维护汇率来源、手动刷新和基础业务开关。",
+  commissionFormula: "维护业务员提成计算规则。",
+  auditLogs: "查看关键操作日志。",
+  apiPerformance: "查看慢接口和后台任务执行情况。",
+};
+
+const TABLE_SETTING_TABS = new Set<SettingsTabKey>(["customers", "suppliers", "users", "auditLogs", "apiPerformance"]);
 
 export function SettingsModuleView(settings: SettingsController) {
   const {
@@ -147,44 +180,86 @@ export function SettingsModuleView(settings: SettingsController) {
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
   } = settings;
+  const activeTabLabel = SETTINGS_TABS.find((tab) => tab.key === activeTab)?.label || "系统设置";
+  const isTableTab = TABLE_SETTING_TABS.has(activeTab);
+  const showTopHeader = activeTab !== "ocrIntegration" && activeTab !== "shipsgoIntegration";
+  const headerActions = (
+    <>
+      {activeTab === "customers" ? (
+        <button className={styles.primaryButtonCompact} type="button" onClick={startCreateCustomer}>新建客户</button>
+      ) : null}
+      {activeTab === "suppliers" ? (
+        <button className={styles.primaryButtonCompact} type="button" onClick={startCreateSupplier}>新建供应商</button>
+      ) : null}
+      {activeTab === "users" ? (
+        <button className={styles.primaryButtonCompact} type="button" onClick={startCreateUser}>新建用户</button>
+      ) : null}
+      {activeTab !== "home" ? (
+        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={refreshCurrent}>
+          {loading ? "刷新中..." : "刷新当前页"}
+        </button>
+      ) : null}
+    </>
+  );
 
   return (
-    <section className={styles.moduleCard}>
-      <div className={styles.moduleHeader}>
-        <div>
-          <h2>系统设置</h2>
+    <section className={`${styles.moduleCard} ${styles.settingsCenterShell}`}>
+      <aside className={styles.settingsCenterNav}>
+        <div className={styles.settingsCenterNavHeader}>
+          <strong>系统设置菜单</strong>
+          <span>Settings</span>
         </div>
-        <div className={styles.headerActions}>
-          {activeTab === "customers" ? (
-            <button className={styles.primaryButtonCompact} type="button" onClick={startCreateCustomer}>新建客户</button>
-          ) : null}
-          {activeTab === "suppliers" ? (
-            <button className={styles.primaryButtonCompact} type="button" onClick={startCreateSupplier}>新建供应商</button>
-          ) : null}
-          {activeTab === "users" ? (
-            <button className={styles.primaryButtonCompact} type="button" onClick={startCreateUser}>新建用户</button>
-          ) : null}
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={refreshCurrent}>
-            {loading ? "刷新中..." : "刷新当前页"}
-          </button>
-        </div>
-      </div>
+        <nav>
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`${styles.settingsCenterNavButton} ${tab.key === activeTab ? styles.settingsCenterNavButtonActive : ""}`}
+              type="button"
+              onClick={() => selectTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-      <div className={styles.reportTabs}>
-        {SETTINGS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            className={tab.key === activeTab ? styles.reportTabActive : ""}
-            type="button"
-            onClick={() => selectTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <div className={styles.settingsCenterMain}>
+        {showTopHeader ? (
+          <div className={styles.settingsPageHeader}>
+            <div>
+              <h2>{activeTab === "home" ? "系统设置中心" : activeTabLabel}</h2>
+              <p>{SETTINGS_PAGE_DESCRIPTIONS[activeTab]}</p>
+              <div className={styles.settingsPageMeta}>
+                <span>最后修改：-</span>
+                <span>保存状态：待操作</span>
+              </div>
+            </div>
+            <div className={styles.settingsHeaderActions}>{headerActions}</div>
+          </div>
+        ) : null}
 
-      {activeTab !== "companyProfile" && activeTab !== "businessEntities" && activeTab !== "exchangeRates" && activeTab !== "commissionFormula" && activeTab !== "notificationTemplates" && activeTab !== "shipsgoIntegration" ? (
-        <div className={styles.listToolbar}>
+        {activeTab === "home" ? (
+          <div className={styles.settingsHomeGrid}>
+            {SETTINGS_HOME_CARDS.map((card) => (
+              <button
+                key={card.title}
+                type="button"
+                className={styles.settingsHomeCard}
+                onClick={() => selectTab(card.tab)}
+              >
+                <span className={styles.settingsHomeIcon}>{card.icon}</span>
+                <span>
+                  <strong>{card.title}</strong>
+                  <small>{card.description}</small>
+                </span>
+                <span className={styles.settingsHomeArrow}>进入</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {isTableTab ? (
+          <div className={styles.listToolbar}>
           <input
             value={activeFilter.keyword || ""}
             onChange={(event) => updateFilter(activeTab, "keyword", event.target.value)}
@@ -271,8 +346,8 @@ export function SettingsModuleView(settings: SettingsController) {
           ) : null}
           <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
           <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {customerForm && activeTab === "customers" ? (
@@ -315,7 +390,7 @@ export function SettingsModuleView(settings: SettingsController) {
           onCancel={cancelSupplierEdit}
         />
       ) : null}
-      {activeTab === "companyProfile" ? (
+      {activeTab === "home" ? null : activeTab === "companyProfile" ? (
         <CompanyProfileSettingsCard
           settings={companyProfileSettings}
           form={companyProfileForm}
@@ -389,35 +464,34 @@ export function SettingsModuleView(settings: SettingsController) {
           onTestSend={() => void testNotificationTemplate()}
           onSubmit={saveNotificationTemplateSettings}
         />
+      ) : activeTab === "ocrIntegration" ? (
+        <OcrIntegrationSettingsCard
+          settings={ocrIntegrationSettings}
+          form={ocrIntegrationForm}
+          loading={loading && !ocrIntegrationSettings}
+          saving={ocrIntegrationSaving}
+          message={ocrIntegrationMessage}
+          onChange={setOcrIntegrationForm}
+          onReset={() => {
+            setOcrIntegrationForm(ocrIntegrationFormFromSettings(ocrIntegrationSettings));
+            setOcrIntegrationMessage("");
+          }}
+          onSubmit={saveOcrIntegrationSettings}
+        />
       ) : activeTab === "shipsgoIntegration" ? (
-        <>
-          <OcrIntegrationSettingsCard
-            settings={ocrIntegrationSettings}
-            form={ocrIntegrationForm}
-            loading={loading && !ocrIntegrationSettings}
-            saving={ocrIntegrationSaving}
-            message={ocrIntegrationMessage}
-            onChange={setOcrIntegrationForm}
-            onReset={() => {
-              setOcrIntegrationForm(ocrIntegrationFormFromSettings(ocrIntegrationSettings));
-              setOcrIntegrationMessage("");
-            }}
-            onSubmit={saveOcrIntegrationSettings}
-          />
-          <ShipsgoIntegrationSettingsCard
-            settings={shipsgoIntegrationSettings}
-            form={shipsgoIntegrationForm}
-            loading={loading && !shipsgoIntegrationSettings}
-            saving={shipsgoIntegrationSaving}
-            message={shipsgoIntegrationMessage}
-            onChange={setShipsgoIntegrationForm}
-            onReset={() => {
-              setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
-              setShipsgoIntegrationMessage("");
-            }}
-            onSubmit={saveShipsgoIntegrationSettings}
-          />
-        </>
+        <ShipsgoIntegrationSettingsCard
+          settings={shipsgoIntegrationSettings}
+          form={shipsgoIntegrationForm}
+          loading={loading && !shipsgoIntegrationSettings}
+          saving={shipsgoIntegrationSaving}
+          message={shipsgoIntegrationMessage}
+          onChange={setShipsgoIntegrationForm}
+          onReset={() => {
+            setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
+            setShipsgoIntegrationMessage("");
+          }}
+          onSubmit={saveShipsgoIntegrationSettings}
+        />
       ) : (
         <>
           <SettingsTable
@@ -461,6 +535,7 @@ export function SettingsModuleView(settings: SettingsController) {
           ) : null}
         </>
       )}
+      </div>
     </section>
   );
 }

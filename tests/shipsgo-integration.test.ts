@@ -68,14 +68,15 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
 
 test("settings module exposes third-party API configuration without leaking secrets", () => {
   assert.match(settingsModule, /"shipsgoIntegration"/);
-  assert.match(settingsModule, /label: "第三方接口"/);
+  assert.match(settingsModule, /label: "物流接口"/);
   assert.match(settingsModule, /\/api\/settings\/shipsgo/);
   assert.match(settingsModule, /ShipsgoIntegrationSettingsCard/);
-  assert.match(settingsModule, /保存大掌櫃设置/);
+  assert.match(settingsModule, /title="物流接口"/);
+  assert.match(settingsModule, /SecretField/);
   assert.match(settingsModule, /placeholder=\{currentForm\.apiKeyConfigured \? "已配置，留空则保持不变"/);
   assert.doesNotMatch(settingsModule, /Live Map Embed Token|iframe 授权 Token|liveMapEmbedToken/);
   assert.match(settingsModule, /SHIPSGO_FEATURE_OPTIONS/);
-  assert.match(settingsModule, /activeTab !== "shipsgoIntegration"/);
+  assert.match(settingsModule, /markLoaded\("shipsgoIntegration"\)/);
 });
 
 test("domestic logistics only receives safe ShipsGo feature flags", () => {

@@ -62,17 +62,18 @@ test("workspace auth payload exposes company profile for brand display", () => {
 });
 
 test("settings module includes company profile tab and form", () => {
-  assert.match(settingsModule, /type SettingsTabKey = "companyProfile"/);
+  assert.match(settingsModule, /type SettingsTabKey = "home"[\s\S]*"companyProfile"/);
   assert.match(settingsModule, /label: "公司资料"/);
+  assert.match(settingsModule, /title: "公司资料"/);
+  assert.match(settingsModule, /系统设置中心/);
   assert.match(settingsModule, /\/api\/settings\/company-profile/);
   assert.match(settingsModule, /CompanyProfileSettingsCard/);
-  assert.match(settingsModule, /公司资料 \/ 系统品牌配置/);
   assert.match(settingsModule, /保存公司资料/);
   assert.match(settingsModule, /onCompanyProfileSaved\?\.\(nextSettings\)/);
   assert.match(settingsModule, /companyNameEn: optionalStringSetting\(settings, "companyNameEn"\)/);
   assert.match(settingsModule, /footerText: optionalStringSetting\(settings, "footerText"\)/);
   assert.doesNotMatch(settingsModule, /generatedCompanyFooterText|isAutoCompanyFooterText/);
-  assert.match(settingsModule, /activeTab !== "companyProfile"/);
+  assert.match(settingsModule, /TABLE_SETTING_TABS/);
 });
 
 test("login and sidebar consume configured logo and footer text", () => {

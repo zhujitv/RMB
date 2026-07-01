@@ -26,6 +26,15 @@ import {
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
 } from "./helpers";
+import {
+  SecretField,
+  SettingsCard,
+  SettingsField,
+  SettingsPage,
+  SettingsSection,
+  SettingsStatusTag,
+  SettingsSwitch,
+} from "./settings-layout";
 import type {
   BusinessEntityForm,
   BusinessEntityRow,
@@ -809,6 +818,14 @@ export function OcrIntegrationSettingsCard({
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
   if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
   const currentForm = form || ocrIntegrationFormFromSettings(settings);
+  const hasCredential = Boolean(
+    currentForm.appCodeConfigured ||
+    currentForm.appCode ||
+    currentForm.accessKeyIdConfigured ||
+    currentForm.accessKeyId,
+  );
+  const statusTone = currentForm.enabled ? (hasCredential ? "success" : "warning") : "muted";
+  const statusLabel = currentForm.enabled ? (hasCredential ? "已启用" : "待填写密钥") : "已关闭";
 
   function setField<K extends keyof OcrIntegrationForm>(key: K, value: OcrIntegrationForm[K]) {
     onChange({ ...currentForm, [key]: value });
@@ -819,109 +836,100 @@ export function OcrIntegrationSettingsCard({
   }
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
-      <div className={styles.quickCreateHeader}>
-        <div>
-          <strong>OCR识别配置</strong>
-          <div className={styles.quickCreateMeta}>
-            <span>统一管理阿里云 OCR 开关、密钥和识别范围。</span>
-          </div>
-        </div>
-      </div>
-
+    <SettingsPage
+      title="OCR识别"
+      description="统一管理 OCR 服务配置、密钥和识别能力。"
+      status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
+      onSubmit={onSubmit}
+      actions={(
+        <>
+          <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存"}</button>
+          <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复</button>
+        </>
+      )}
+    >
       {message ? (
         <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
           {message}
         </div>
       ) : null}
 
-      <div className={styles.reportFilterGrid}>
-        <UiSwitch
-          label="启用 OCR"
-          description="关闭后，报关单识别等 OCR 能力不会执行。"
-          checked={currentForm.enabled}
-          onChange={(value) => setField("enabled", value)}
-        />
-        <label>
-          服务商
-          <select value={currentForm.provider} onChange={(event) => setField("provider", event.target.value)}>
-            <option value="ALIYUN">阿里云 OCR</option>
-          </select>
-        </label>
-        <label>
-          API Base URL
-          <input
-            value={currentForm.apiBaseUrl}
-            onChange={(event) => setField("apiBaseUrl", event.target.value)}
-            placeholder="https://ocr-api.cn-hangzhou.aliyuncs.com"
+      <SettingsCard title="基础配置" icon="OCR">
+        <div className={styles.settingsFieldGrid}>
+          <SettingsSwitch
+            label="启用 OCR 服务"
+            tooltip="关闭后 OCR 能力不会执行。"
+            checked={currentForm.enabled}
+            onChange={(value) => setField("enabled", value)}
           />
-        </label>
-        <label>
-          AppCode
-          <input
-            value={currentForm.appCode}
-            onChange={(event) => setField("appCode", event.target.value)}
-            placeholder={currentForm.appCodeConfigured ? "已配置，留空则保持不变" : "可选：旧版 AppCode"}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          AccessKey ID
-          <input
-            value={currentForm.accessKeyId}
-            onChange={(event) => setField("accessKeyId", event.target.value)}
-            placeholder={currentForm.accessKeyIdConfigured ? "已配置，留空则保持不变" : "可选：AccessKey ID"}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          AccessKey Secret
-          <input
-            value={currentForm.accessKeySecret}
-            onChange={(event) => setField("accessKeySecret", event.target.value)}
-            placeholder={currentForm.accessKeySecretConfigured ? "已配置，留空则保持不变" : "可选：AccessKey Secret"}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          请求超时
-          <input
-            value={currentForm.timeoutMs}
-            onChange={(event) => setField("timeoutMs", event.target.value)}
-            inputMode="numeric"
-            min={3000}
-            type="number"
-          />
-        </label>
-      </div>
-
-      <section className={styles.documentGroupCard}>
-        <strong>识别功能范围</strong>
-        <div className={styles.commissionDeductionGrid}>
-          {OCR_FEATURE_OPTIONS.map((item) => (
-            <PermissionSelectItem
-              key={item.key}
-              label={item.label}
-              description={item.description}
-              checked={Boolean(currentForm[item.key])}
-              onChange={() => toggleFeature(item.key)}
+          <SettingsField label="服务商">
+            <select value={currentForm.provider} onChange={(event) => setField("provider", event.target.value)}>
+              <option value="ALIYUN">阿里云 OCR</option>
+            </select>
+          </SettingsField>
+          <SettingsField label="API Base URL">
+            <input
+              value={currentForm.apiBaseUrl}
+              onChange={(event) => setField("apiBaseUrl", event.target.value)}
+              placeholder="https://ocr-api.cn-hangzhou.aliyuncs.com"
             />
-          ))}
+          </SettingsField>
+          <SettingsField label="请求超时">
+            <input
+              value={currentForm.timeoutMs}
+              onChange={(event) => setField("timeoutMs", event.target.value)}
+              inputMode="numeric"
+              min={3000}
+              type="number"
+            />
+          </SettingsField>
         </div>
-      </section>
+      </SettingsCard>
 
-      <div className={styles.emptyState}>
-        当前状态：{currentForm.enabled
-          ? (currentForm.appCodeConfigured || currentForm.appCode || currentForm.accessKeyIdConfigured || currentForm.accessKeyId ? "已启用" : "待填写密钥")
-          : "已关闭"}
-        。增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。
-      </div>
+      <SettingsCard title="API 密钥" icon="AK">
+        <div className={styles.settingsFieldGrid}>
+          <SettingsField label="AppCode">
+            <SecretField
+              value={currentForm.appCode}
+              onChange={(value) => setField("appCode", value)}
+              placeholder={currentForm.appCodeConfigured ? "已配置，留空则保持不变" : "可选：旧版 AppCode"}
+            />
+          </SettingsField>
+          <SettingsField label="AccessKey ID">
+            <SecretField
+              value={currentForm.accessKeyId}
+              onChange={(value) => setField("accessKeyId", value)}
+              placeholder={currentForm.accessKeyIdConfigured ? "已配置，留空则保持不变" : "可选：AccessKey ID"}
+            />
+          </SettingsField>
+          <SettingsField label="AccessKey Secret">
+            <SecretField
+              value={currentForm.accessKeySecret}
+              onChange={(value) => setField("accessKeySecret", value)}
+              placeholder={currentForm.accessKeySecretConfigured ? "已配置，留空则保持不变" : "可选：AccessKey Secret"}
+            />
+          </SettingsField>
+        </div>
+      </SettingsCard>
 
-      <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存OCR设置"}</button>
-        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
-      </div>
-    </form>
+      <SettingsCard title="识别能力" icon="能">
+        <SettingsSection title="启用范围">
+          <div className={styles.commissionDeductionGrid}>
+            {OCR_FEATURE_OPTIONS.map((item) => (
+              <PermissionSelectItem
+                key={item.key}
+                label={item.label}
+                description={item.description}
+                checked={Boolean(currentForm[item.key])}
+                onChange={() => toggleFeature(item.key)}
+              />
+            ))}
+          </div>
+        </SettingsSection>
+      </SettingsCard>
+
+      <div className={styles.emptyState}>增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。</div>
+    </SettingsPage>
   );
 }
 
@@ -945,8 +953,11 @@ export function ShipsgoIntegrationSettingsCard({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
-  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载第三方接口设置</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载物流接口设置</div>;
   const currentForm = form || shipsgoIntegrationFormFromSettings(settings);
+  const hasApiKey = Boolean(currentForm.apiKeyConfigured || currentForm.apiKey);
+  const statusTone = currentForm.enabled ? (hasApiKey ? "success" : "warning") : "muted";
+  const statusLabel = currentForm.enabled ? (hasApiKey ? "已启用" : "待填写 API Key") : "已关闭";
 
   function setField<K extends keyof ShipsgoIntegrationForm>(key: K, value: ShipsgoIntegrationForm[K]) {
     onChange({ ...currentForm, [key]: value });
@@ -957,95 +968,93 @@ export function ShipsgoIntegrationSettingsCard({
   }
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
-      <div className={styles.quickCreateHeader}>
-        <div>
-          <strong>大掌櫃接口配置</strong>
-        </div>
-      </div>
-
+    <SettingsPage
+      title="物流接口"
+      description="管理大掌櫃海运跟踪接口、同步策略和前台功能开关。"
+      status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
+      onSubmit={onSubmit}
+      actions={(
+        <>
+          <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存"}</button>
+          <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复</button>
+        </>
+      )}
+    >
       {message ? (
         <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
           {message}
         </div>
       ) : null}
 
-      <div className={styles.reportFilterGrid}>
-        <UiSwitch
-          label="启用大掌櫃"
-          description="关闭后，物流信息页面不显示大掌櫃相关入口。"
-          checked={currentForm.enabled}
-          onChange={(value) => setField("enabled", value)}
-        />
-        <label>
-          API Base URL
-          <input
-            value={currentForm.apiBaseUrl}
-            onChange={(event) => setField("apiBaseUrl", event.target.value)}
-            placeholder="https://api.shipsgo.com"
+      <SettingsCard title="基础配置" icon="船">
+        <div className={styles.settingsFieldGrid}>
+          <SettingsSwitch
+            label="启用大掌櫃"
+            tooltip="关闭后物流信息页面不显示大掌櫃相关入口。"
+            checked={currentForm.enabled}
+            onChange={(value) => setField("enabled", value)}
           />
-        </label>
-        <label>
-          API Key
-          <input
-            value={currentForm.apiKey}
-            onChange={(event) => setField("apiKey", event.target.value)}
-            placeholder={currentForm.apiKeyConfigured ? "已配置，留空则保持不变" : "请输入大掌櫃 API Key"}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          剩余 Credit 预警阈值
-          <input
-            value={currentForm.creditWarningThreshold}
-            onChange={(event) => setField("creditWarningThreshold", event.target.value)}
-            inputMode="numeric"
-            min={0}
-            type="number"
-          />
-        </label>
-        <label>
-          每日同步时间
-          <input
-            value={currentForm.dailySyncTime}
-            onChange={(event) => setField("dailySyncTime", event.target.value)}
-            type="time"
-          />
-        </label>
-        <label>
-          Webhook Secret
-          <input
-            value={currentForm.webhookSecret}
-            onChange={(event) => setField("webhookSecret", event.target.value)}
-            placeholder={currentForm.webhookSecretConfigured ? "已配置，留空则保持不变" : "用于校验大掌櫃 Webhook"}
-            autoComplete="off"
-          />
-        </label>
-      </div>
-
-      <section className={styles.documentGroupCard}>
-        <strong>前台功能显示</strong>
-        <div className={styles.commissionDeductionGrid}>
-          {SHIPSGO_FEATURE_OPTIONS.map((item) => (
-            <PermissionSelectItem
-              key={item.key}
-              label={item.label}
-              description={item.description}
-              checked={Boolean(currentForm[item.key])}
-              onChange={() => toggleFeature(item.key)}
+          <SettingsField label="API Base URL">
+            <input
+              value={currentForm.apiBaseUrl}
+              onChange={(event) => setField("apiBaseUrl", event.target.value)}
+              placeholder="https://api.shipsgo.com"
             />
-          ))}
+          </SettingsField>
+          <SettingsField label="剩余 Credit 预警阈值">
+            <input
+              value={currentForm.creditWarningThreshold}
+              onChange={(event) => setField("creditWarningThreshold", event.target.value)}
+              inputMode="numeric"
+              min={0}
+              type="number"
+            />
+          </SettingsField>
+          <SettingsField label="每日同步时间">
+            <input
+              value={currentForm.dailySyncTime}
+              onChange={(event) => setField("dailySyncTime", event.target.value)}
+              type="time"
+            />
+          </SettingsField>
         </div>
-      </section>
+      </SettingsCard>
 
-      <div className={styles.emptyState}>
-        当前状态：{currentForm.enabled ? (currentForm.apiKeyConfigured || currentForm.apiKey ? "已启用" : "待填写 API Key") : "已关闭"}
-      </div>
+      <SettingsCard title="API 密钥" icon="Key">
+        <div className={styles.settingsFieldGrid}>
+          <SettingsField label="API Key">
+            <SecretField
+              value={currentForm.apiKey}
+              onChange={(value) => setField("apiKey", value)}
+              placeholder={currentForm.apiKeyConfigured ? "已配置，留空则保持不变" : "请输入大掌櫃 API Key"}
+            />
+          </SettingsField>
+          <SettingsField label="Webhook Secret">
+            <SecretField
+              value={currentForm.webhookSecret}
+              onChange={(value) => setField("webhookSecret", value)}
+              placeholder={currentForm.webhookSecretConfigured ? "已配置，留空则保持不变" : "用于校验大掌櫃 Webhook"}
+            />
+          </SettingsField>
+        </div>
+      </SettingsCard>
 
-      <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存大掌櫃设置"}</button>
-        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
-      </div>
-    </form>
+      <SettingsCard title="前台功能显示" icon="显">
+        <SettingsSection title="启用范围">
+          <div className={styles.commissionDeductionGrid}>
+            {SHIPSGO_FEATURE_OPTIONS.map((item) => (
+              <PermissionSelectItem
+                key={item.key}
+                label={item.label}
+                description={item.description}
+                checked={Boolean(currentForm[item.key])}
+                onChange={() => toggleFeature(item.key)}
+              />
+            ))}
+          </div>
+        </SettingsSection>
+      </SettingsCard>
+
+    </SettingsPage>
   );
 }

@@ -71,7 +71,7 @@ import type {
 
 export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleProps = {}) {
 
-  const [activeTab, setActiveTab] = useState<SettingsTabKey>("companyProfile");
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>("home");
   const [filters, setFilters] = useState<SettingsFilters>({
     customers: { keyword: "" },
     suppliers: { keyword: "", type: "", status: "" },
@@ -103,11 +103,13 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
 
   const [pagination, setPagination] = useState<Record<SettingsTabKey, Pagination>>({
+    home: emptyPagination(PAGE_SIZE),
     companyProfile: emptyPagination(PAGE_SIZE),
     businessEntities: emptyPagination(PAGE_SIZE),
     customers: emptyPagination(PAGE_SIZE),
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
+    ocrIntegration: emptyPagination(PAGE_SIZE),
     exchangeRates: emptyPagination(PAGE_SIZE),
     commissionFormula: emptyPagination(PAGE_SIZE),
     notificationTemplates: emptyPagination(PAGE_SIZE),
@@ -177,6 +179,10 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setLoading(true);
     setError("");
     try {
+      if (tab === "home") {
+        markLoaded(tab);
+        return;
+      }
       if (tab === "companyProfile") {
         const result = await apiJson<{ settings: CompanyProfileSettings }>("/api/settings/company-profile");
         const settings = result.settings || {};
@@ -219,15 +225,17 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
         markLoaded(tab);
         return;
       }
-      if (tab === "shipsgoIntegration") {
-        const [ocrResult, shipsgoResult] = await Promise.all([
-          apiJson<{ settings: OcrIntegrationSettings }>("/api/settings/ocr"),
-          apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo"),
-        ]);
+      if (tab === "ocrIntegration") {
+        const ocrResult = await apiJson<{ settings: OcrIntegrationSettings }>("/api/settings/ocr");
         const ocrSettings = ocrResult.settings || {};
-        const settings = shipsgoResult.settings || {};
         setOcrIntegrationSettings(ocrSettings);
         setOcrIntegrationForm(ocrIntegrationFormFromSettings(ocrSettings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "shipsgoIntegration") {
+        const shipsgoResult = await apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo");
+        const settings = shipsgoResult.settings || {};
         setShipsgoIntegrationSettings(settings);
         setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(settings));
         markLoaded(tab);
@@ -303,15 +311,18 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   }
 
   function submitSearch() {
+    if (activeTab === "home") return;
     void loadTab(activeTab, 1, filtersForTab(filters, activeTab));
   }
 
   function resetSearch() {
+    if (activeTab === "home") return;
     setFilters((current) => resetFilters(current, activeTab));
     void loadTab(activeTab, 1, emptyFiltersForTab(activeTab));
   }
 
   function refreshCurrent() {
+    if (activeTab === "home") return;
     void loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
   }
 
@@ -896,7 +907,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
       const nextSettings = result.settings || ocrIntegrationForm;
       setOcrIntegrationSettings(nextSettings);
       setOcrIntegrationForm(ocrIntegrationFormFromSettings(nextSettings));
-      markLoaded("shipsgoIntegration");
+      markLoaded("ocrIntegration");
       setOcrIntegrationMessage(result.message || "OCR设置已保存");
     } catch (saveError) {
       setOcrIntegrationMessage(saveError instanceof Error ? saveError.message : "OCR设置保存失败");

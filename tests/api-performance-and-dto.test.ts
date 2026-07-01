@@ -59,7 +59,7 @@ test("api performance logs are persisted and exposed through settings", () => {
   assert.match(apiPerformanceRoute, /export async function GET/);
   assert.match(apiPerformanceRoute, /export async function POST/);
   assert.match(apiPerformanceRoute, /assertRead\(actor, "auditLogs"\)/);
-  assert.match(settingsConstants, /apiPerformance", label: "慢接口 \/ 后台任务"/);
+  assert.match(settingsConstants, /apiPerformance", label: "后台任务"/);
   assert.match(settingsConstants, /label: "后台任务", value: "background"/);
   assert.match(settingsHelpers, /API_PERFORMANCE_COLUMNS/);
   assert.match(settingsHelpers, /if \(source === "background"\) return "后台任务"/);

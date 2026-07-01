@@ -275,15 +275,17 @@ export const API_PERFORMANCE_WINDOW_OPTIONS = [
   { label: "最近 7 天", value: "168" },
 ];
 export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
+  { key: "home", label: "设置中心" },
   { key: "companyProfile", label: "公司资料" },
   { key: "businessEntities", label: "业务主体" },
   { key: "customers", label: "客户资料" },
   { key: "suppliers", label: "供应商资料" },
   { key: "users", label: "用户与权限" },
+  { key: "ocrIntegration", label: "OCR识别" },
+  { key: "shipsgoIntegration", label: "物流接口" },
+  { key: "notificationTemplates", label: "通知模板" },
   { key: "exchangeRates", label: "汇率设置" },
   { key: "commissionFormula", label: "提成公式" },
-  { key: "notificationTemplates", label: "通知模板" },
-  { key: "shipsgoIntegration", label: "第三方接口" },
-  { key: "auditLogs", label: "操作日志" },
-  { key: "apiPerformance", label: "慢接口 / 后台任务" },
+  { key: "auditLogs", label: "系统日志" },
+  { key: "apiPerformance", label: "后台任务" },
 ];
