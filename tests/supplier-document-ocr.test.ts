@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
+import {
+  contractOrderNoMatches,
+  normalizeContractOrderNoSet,
+  selectBestContractOrderNo,
+} from "../lib/platform/supplier-contract-order-match.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readFileSync("lib/platform/supplier-document-ocr.ts", "utf8");
@@ -41,6 +46,20 @@ test("supplier OCR validates invoice and contract against supplier, business ent
   assert.match(service, /合同订单号与采购订单号不一致/);
   assert.match(service, /产品名称、规格或数量无法准确判断，需人工确认/);
   assert.match(service, /amountMatches/);
+});
+
+test("supplier contract OCR compares purchase order numbers with normalization and OCR tolerance", () => {
+  assert.deepEqual(normalizeContractOrderNoSet("PO24-2 / PO24-12"), ["P024-12", "P024-2"]);
+  assert.equal(contractOrderNoMatches("PO24-2/P024-12", "PO24-2/PO24-12"), true);
+  assert.equal(contractOrderNoMatches("PO24-12 / PO24-2", "PO24-2/PO24-12"), true);
+  assert.equal(contractOrderNoMatches("PO24-2/PO24-13", "PO24-2/PO24-12"), false);
+  assert.equal(
+    selectBestContractOrderNo("合同编号：PO24-2/PO24-12\n其它编号：P024-12", "PO24-2/P024-12"),
+    "PO24-2/PO24-12",
+  );
+  assert.match(service, /supplier-contract-order-compare/);
+  assert.match(service, /normalizedSystemOrderNo/);
+  assert.match(service, /normalizedOcrOrderNo/);
 });
 
 test("supplier VAT invoice OCR uses structured parser and preserves raw text", () => {

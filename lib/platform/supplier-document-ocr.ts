@@ -18,6 +18,11 @@ import { getCompanyProfileSettings } from "./company-profile";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
 import { refreshSupplierDocumentRequestCompletion, type CompletionRefreshOptions } from "./supplier-document-request-completion";
 import {
+  contractOrderNoMatches,
+  contractOrderSetKey,
+  selectBestContractOrderNo,
+} from "./supplier-contract-order-match";
+import {
   isSuspiciousInvoiceParty as isSuspiciousInvoicePartyCore,
   isSuspiciousInvoiceProduct as isSuspiciousInvoiceProductCore,
   parseVatInvoiceFields as parseVatInvoiceFieldsCore,
@@ -175,9 +180,9 @@ function parseContractFields(text: string, structuredFields: Record<string, unkn
     /买方[:：]\s*([^\n\r]+)/,
     /甲方[:：]\s*([^\n\r]+)/,
   ]);
-  const orderNo = firstMatch(text, [
+  const orderNo = selectBestContractOrderNo(text, structuredText(structuredFields, "orderNo") || structuredText(structuredFields, "contractNo") || firstMatch(text, [
     /(?:订单号|合同号|采购单号|PO)[:：]?\s*([A-Z0-9_\-\/]{3,40})/i,
-  ]);
+  ]));
   const contractAmount = parseAmount(text, [
     /合同金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
     /总金额[:：]?\s*[¥￥]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/,
@@ -205,8 +210,8 @@ function parseContractFields(text: string, structuredFields: Record<string, unkn
   return {
     supplier: structuredText(structuredFields, "supplier") || supplier,
     buyer: structuredText(structuredFields, "buyer") || buyer,
-    orderNo: structuredText(structuredFields, "orderNo") || orderNo,
-    contractNo: structuredText(structuredFields, "contractNo") || structuredText(structuredFields, "orderNo") || orderNo,
+    orderNo,
+    contractNo: orderNo || structuredText(structuredFields, "contractNo"),
     contractAmount: structuredAmount(structuredFields, "amount") || contractAmount,
     productName: structuredText(structuredFields, "productName") || productName,
     specModel: structuredText(structuredFields, "specModel") || specModel,
@@ -358,8 +363,18 @@ function validateContract(fields: ReturnType<typeof parseContractFields>, contex
   }
   if (!fields.orderNo) {
     issues.push({ level: "manual", field: "orderNo", message: "未识别到合同订单号，需人工确认" });
-  } else if (!looselyMatches(fields.orderNo, context.purchaseOrderNo)) {
+  } else {
+    const matched = contractOrderNoMatches(fields.orderNo, context.purchaseOrderNo);
+    console.info("supplier-contract-order-compare", {
+      systemOrderNo: context.purchaseOrderNo,
+      ocrOrderNo: fields.orderNo,
+      normalizedSystemOrderNo: contractOrderSetKey(context.purchaseOrderNo),
+      normalizedOcrOrderNo: contractOrderSetKey(fields.orderNo),
+      matched,
+    });
+    if (!matched) {
     issues.push({ level: "error", field: "orderNo", message: "合同订单号与采购订单号不一致" });
+    }
   }
   if (!fields.contractAmount) {
     issues.push({ level: "manual", field: "contractAmount", message: "未识别到合同金额，需人工确认" });
