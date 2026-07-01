@@ -405,7 +405,19 @@ function assertInternalOcrManager(actor: ActorLike) {
   }
 }
 
+function normalizeSupplierReturnDocumentType(value: unknown) {
+  const type = String(value || "").trim().toUpperCase();
+  if (["SUPPLIER_PURCHASE_CONTRACT", "PURCHASE_CONTRACT", "FACTORY_PURCHASE_CONTRACT", "FACTORY_CONTRACT"].includes(type)) {
+    return "SUPPLIER_PURCHASE_CONTRACT";
+  }
+  if (["SUPPLIER_INVOICE", "VAT_INVOICE", "SUPPLIER_VAT_INVOICE", "FACTORY_INVOICE", "FACTORY_VAT_INVOICE"].includes(type)) {
+    return "SUPPLIER_INVOICE";
+  }
+  return type;
+}
+
 async function loadSupplierReturnDocument(documentId: string, requestId = ""): Promise<OcrDocumentRow> {
+  if (!documentId) throw codedError("缺少 supplierReturnDocumentId。", 400, "SUPPLIER_RETURN_DOCUMENT_ID_REQUIRED");
   const document = await prisma.orderDocument.findFirst({
     where: {
       id: documentId,
@@ -434,12 +446,20 @@ async function loadSupplierReturnDocument(documentId: string, requestId = ""): P
   if (!document) {
     throw codedError("回传资料文件不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_NOT_FOUND");
   }
+  if (requestId && document.factoryDocumentRequestId !== requestId) {
+    throw codedError("回传资料文件与当前任务不匹配。", 400, "SUPPLIER_DOCUMENT_REQUEST_MISMATCH");
+  }
+  if (!document.storageKey) {
+    throw codedError("文件记录存在，但文件地址无法访问。", 404, "SUPPLIER_DOCUMENT_FILE_MISSING");
+  }
+  if (document.uploadStatus && document.uploadStatus !== "SUCCESS") {
+    throw codedError("文件尚未上传完成，不能进行 OCR 识别。", 400, "SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE");
+  }
   return document;
 }
 
-export async function createSupplierDocumentOcrTaskForUpload(documentId: string) {
+async function createSupplierDocumentOcrTask(document: OcrDocumentRow) {
   if (!(await isOcrFeatureEnabled(SUPPLIER_DOCUMENT_OCR_FEATURE))) return null;
-  const document = await loadSupplierReturnDocument(documentId);
   const task = await prisma.ocrTask.create({
     data: {
       module: SUPPLIER_DOCUMENT_OCR_MODULE,
@@ -457,6 +477,11 @@ export async function createSupplierDocumentOcrTaskForUpload(documentId: string)
     await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
   }
   return task;
+}
+
+export async function createSupplierDocumentOcrTaskForUpload(documentId: string) {
+  const document = await loadSupplierReturnDocument(documentId);
+  return createSupplierDocumentOcrTask(document);
 }
 
 export async function runSupplierDocumentOcrTask(taskId: string) {
@@ -574,17 +599,17 @@ export async function refreshSupplierDocumentRequestQualification(requestId: str
   });
   if (!row) return null;
   const requiredTypes = Array.isArray(row.requiredDocumentTypes)
-    ? row.requiredDocumentTypes.map((item) => String(item || ""))
+    ? row.requiredDocumentTypes.map(normalizeSupplierReturnDocumentType)
     : [];
   const qualified = requiredTypes.every((type) => {
-    const document = row.documents.find((item) => item.documentType === type);
+    const document = row.documents.find((item) => normalizeSupplierReturnDocumentType(item.documentType) === type);
     if (!document) return false;
     const task = document.ocrTasks[0];
     if (!task) return true;
     return SUPPLIER_DOCUMENT_QUALIFIED_STATUSES.includes(task.status)
       || task.validationStatus === VALIDATION_CONFIRMED;
   });
-  const uploadedTypes = new Set(row.documents.map((document) => document.documentType));
+  const uploadedTypes = new Set(row.documents.map((document) => normalizeSupplierReturnDocumentType(document.documentType)));
   const nextStatus = qualified && requiredTypes.length
     ? "已完成"
     : uploadedTypes.size
@@ -600,11 +625,12 @@ export async function refreshSupplierDocumentRequestQualification(requestId: str
 export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
   assertWrite(actor, "supplierDocuments");
   assertInternalOcrManager(actor);
+  const document = await loadSupplierReturnDocument(documentId, requestId);
   const before = await prisma.ocrTask.findFirst({
     where: { documentId, requestId },
     orderBy: [{ createdAt: "desc" }],
   });
-  const task = await createSupplierDocumentOcrTaskForUpload(documentId);
+  const task = await createSupplierDocumentOcrTask(document);
   if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
   const result = await runSupplierDocumentOcrTask(task.id);
   await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));

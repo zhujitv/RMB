@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiJson } from "../api";
+import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, PaginationBar, PdfPreviewButton, fileDownloadUrl, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -12,6 +12,10 @@ type SupplierDocument = {
   id: string;
   costId?: string;
   documentType?: string;
+  requestItemType?: string;
+  supplierDocumentType?: string;
+  type?: string;
+  category?: string;
   fileName?: string;
   displayFileName?: string;
   downloadFileName?: string;
@@ -55,10 +59,6 @@ type SupplierFactoryCostSlot = {
   amount?: number;
   amountCny?: number;
   currency?: string;
-};
-
-type SupplierDocumentUploadSlot = SupplierFactoryCostSlot & {
-  isUploadedFallbackSlot?: boolean;
 };
 
 type SupplierDocumentTask = {
@@ -115,9 +115,10 @@ type SupplierDocumentOcrResponse = {
 const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
+  PURCHASE_CONTRACT: "工厂采购合同",
+  VAT_INVOICE: "工厂增值税发票",
 };
 const SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS = [10, 20, 50];
-const UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID = "__uploaded_supplier_documents__";
 
 export function SupplierDocumentsModule({
   currentUser,
@@ -279,9 +280,14 @@ export function SupplierDocumentsModule({
         { method: "POST" },
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
-      setNotice(data.message || "已重新识别");
+      const taskStatus = data.ocrTask?.status || "";
+      if (taskStatus.includes("失败")) {
+        setError(data.ocrTask?.errorMessage || data.message || "OCR识别失败，需人工核对");
+      } else {
+        setNotice(data.message || "已重新识别");
+      }
     } catch (ocrError) {
-      setError(ocrError instanceof Error ? ocrError.message : "重新识别失败");
+      setError(apiErrorMessage(ocrError, "重新识别失败"));
     } finally {
       setOcrBusyKey("");
     }
@@ -301,7 +307,7 @@ export function SupplierDocumentsModule({
       setNotice(data.message || "已人工确认通过");
       void loadRows(page, pageSize);
     } catch (ocrError) {
-      setError(ocrError instanceof Error ? ocrError.message : "人工确认失败");
+      setError(apiErrorMessage(ocrError, "人工确认失败"));
     } finally {
       setOcrBusyKey("");
     }
@@ -336,7 +342,7 @@ export function SupplierDocumentsModule({
       setNotice(data.message || "已驳回重传");
       void loadRows(page, pageSize);
     } catch (ocrError) {
-      setError(ocrError instanceof Error ? ocrError.message : "驳回失败");
+      setError(apiErrorMessage(ocrError, "驳回失败"));
     } finally {
       setOcrBusyKey("");
     }
@@ -508,8 +514,7 @@ function SupplierDocumentTaskCard({
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const factoryCostSlots = task.factoryCostSlots || [];
-  const uploadSlots = supplierDocumentUploadSlots(task);
-  const knownFactoryCostSlotIds = new Set(factoryCostSlots.map((slot) => slot.id).filter(Boolean));
+  const defaultUploadCostId = factoryCostSlots.length === 1 ? factoryCostSlots[0]?.id || "" : "";
   const taskStatus = task.status || "待上传";
   const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
   return (
@@ -562,22 +567,21 @@ function SupplierDocumentTaskCard({
             </a>
           ) : null}
           <div className={styles.supplierDocumentUploadGrid}>
-            {uploadSlots.flatMap((slot) => (
-              requiredTypes.map((documentType) => {
-                const document = latestDocumentByType(task.documents || [], documentType, slot, knownFactoryCostSlotIds);
-                const uploadCostId = slot.isUploadedFallbackSlot ? "" : slot.id;
+            {uniqueRequiredDocumentTypes(requiredTypes).map((documentType) => {
+                const document = latestDocumentByType(task.documents || [], documentType);
+                const uploadCostId = document?.costId || defaultUploadCostId;
                 const key = supplierUploadKey(task.id, documentType, uploadCostId);
                 const uploading = uploadingKey === key;
                 const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
                 const fileName = document ? supplierDocumentFileName(document) : "";
                 const fileWarning = document ? supplierDocumentFileWarning(document) : "";
                 return (
-                  <div className={styles.supplierDocumentUploadCard} key={`${slot.id || "task"}-${documentType}`}>
+                  <div className={styles.supplierDocumentUploadCard} key={documentType}>
                     <div className={styles.supplierDocumentUploadHeader}>
-                      <strong>{[slot.label, DOCUMENT_LABELS[documentType] || documentType].filter(Boolean).join(" / ")}</strong>
+                      <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
                       <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
                     </div>
-                    {slot.id && !slot.isUploadedFallbackSlot ? <span className={styles.supplierDocumentUploadHint}>{[slot.costType, formatFactoryCostSlotAmount(slot)].filter(Boolean).join(" · ")}</span> : null}
+                    {factoryCostSlots.length ? <span className={styles.supplierDocumentUploadHint}>{factoryCostSlotSummary(factoryCostSlots)}</span> : null}
                     <div className={styles.supplierDocumentUploadBody}>
                       {document ? (
                         <div className={styles.fileUploadFile}>
@@ -625,8 +629,7 @@ function SupplierDocumentTaskCard({
                     </div>
                   </div>
                 );
-              })
-            ))}
+              })}
           </div>
         </div>
       ) : null}
@@ -634,40 +637,47 @@ function SupplierDocumentTaskCard({
   );
 }
 
-function supplierDocumentUploadSlots(task: SupplierDocumentTask): SupplierDocumentUploadSlot[] {
-  const slots = task.factoryCostSlots || [];
-  if (!slots.length) return [{ id: "", label: "" }];
-  const knownSlotIds = new Set(slots.map((slot) => slot.id).filter(Boolean));
-  const hasUploadedDocumentOutsideCurrentSlots = (task.documents || []).some((document) => (
-    Boolean(document.documentType) && (!document.costId || !knownSlotIds.has(document.costId))
-  ));
-  if (!hasUploadedDocumentOutsideCurrentSlots) return slots;
-  return [
-    ...slots,
-    {
-      id: UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID,
-      label: "已上传资料",
-      isUploadedFallbackSlot: true,
-    },
-  ];
+function normalizeSupplierDocumentType(value: unknown) {
+  const type = String(value || "").trim().toUpperCase();
+  if (["SUPPLIER_PURCHASE_CONTRACT", "PURCHASE_CONTRACT", "FACTORY_PURCHASE_CONTRACT", "FACTORY_CONTRACT"].includes(type)) {
+    return "SUPPLIER_PURCHASE_CONTRACT";
+  }
+  if (["SUPPLIER_INVOICE", "VAT_INVOICE", "SUPPLIER_VAT_INVOICE", "FACTORY_INVOICE", "FACTORY_VAT_INVOICE"].includes(type)) {
+    return "SUPPLIER_INVOICE";
+  }
+  return type;
 }
 
-function latestDocumentByType(
-  documents: SupplierDocument[],
-  documentType: string,
-  slot: SupplierDocumentUploadSlot,
-  knownSlotIds = new Set<string>(),
-) {
+function supplierDocumentTypeCandidates(document: SupplierDocument) {
+  return [
+    document.documentType,
+    document.requestItemType,
+    document.supplierDocumentType,
+    document.type,
+    document.category,
+  ].map(normalizeSupplierDocumentType);
+}
+
+function uniqueRequiredDocumentTypes(requiredTypes: string[]) {
+  return requiredTypes
+    .map(normalizeSupplierDocumentType)
+    .filter(Boolean)
+    .filter((type, index, list) => list.indexOf(type) === index);
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    return error.code ? `${error.message}（${error.code}）` : error.message;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+function latestDocumentByType(documents: SupplierDocument[], documentType: string) {
+  const normalizedType = normalizeSupplierDocumentType(documentType);
   const matches = documents
-    .filter((document) => document.documentType === documentType)
+    .filter((document) => supplierDocumentTypeCandidates(document).includes(normalizedType))
     .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
-  if (slot.isUploadedFallbackSlot) {
-    return matches.find((document) => !document.costId || !knownSlotIds.has(document.costId)) || null;
-  }
-  if (slot.id) {
-    return matches.find((document) => document.costId === slot.id) || null;
-  }
-  return matches.find((document) => !document.costId) || matches[0] || null;
+  return matches[0] || null;
 }
 
 function supplierDocumentFileName(document: SupplierDocument) {
@@ -678,6 +688,14 @@ function supplierDocumentFileWarning(document: SupplierDocument) {
   if (document.uploadStatus && document.uploadStatus !== "SUCCESS") return "文件记录存在，但文件无法访问";
   if (!document.fileName && !document.displayFileName && !document.downloadFileName) return "文件记录存在，但文件名缺失";
   return "";
+}
+
+function factoryCostSlotSummary(slots: SupplierFactoryCostSlot[]) {
+  const labels = slots
+    .map((slot) => [slot.label, slot.costType, formatFactoryCostSlotAmount(slot)].filter(Boolean).join(" · "))
+    .filter(Boolean);
+  if (!labels.length) return "";
+  return labels.length === 1 ? labels[0] : `关联工厂货款：${labels.length} 项`;
 }
 
 function supplierUploadKey(taskId: string, documentType: string, costId = "") {

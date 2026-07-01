@@ -79,10 +79,14 @@ const SUPPLIER_DOCUMENT_REQUEST_STATUSES = ["待上传", "部分上传", "已完
 const SUPPLIER_DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
+  PURCHASE_CONTRACT: "工厂采购合同",
+  VAT_INVOICE: "工厂增值税发票",
 };
 const SUPPLIER_DOCUMENT_EMAIL_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同（盖章扫描件，PDF）",
   SUPPLIER_INVOICE: "工厂增值税发票（PDF）",
+  PURCHASE_CONTRACT: "工厂采购合同（盖章扫描件，PDF）",
+  VAT_INVOICE: "工厂增值税发票（PDF）",
 };
 const MAX_EXCEL_TEMPLATE_BYTES = 5 * 1024 * 1024;
 const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -141,13 +145,24 @@ function requiredDocumentTypes(value: unknown) {
       .map((item) => item.trim())
       .filter(Boolean);
   const types = raw
-    .map((item) => String(item || "").trim().toUpperCase())
+    .map(normalizeSupplierReturnDocumentType)
     .filter((item): item is OrderDocumentType => SUPPLIER_DOCUMENT_TYPES.includes(item as OrderDocumentType));
   const unique = types.filter((item, index, arr) => arr.indexOf(item) === index);
   if (!unique.length) {
     throw codedError("请至少选择一种需要供应商回传的资料。", 400, "SUPPLIER_DOCUMENT_TYPE_REQUIRED");
   }
   return unique;
+}
+
+function normalizeSupplierReturnDocumentType(value: unknown) {
+  const type = String(value || "").trim().toUpperCase();
+  if (["SUPPLIER_PURCHASE_CONTRACT", "PURCHASE_CONTRACT", "FACTORY_PURCHASE_CONTRACT", "FACTORY_CONTRACT"].includes(type)) {
+    return "SUPPLIER_PURCHASE_CONTRACT";
+  }
+  if (["SUPPLIER_INVOICE", "VAT_INVOICE", "SUPPLIER_VAT_INVOICE", "FACTORY_INVOICE", "FACTORY_VAT_INVOICE"].includes(type)) {
+    return "SUPPLIER_INVOICE";
+  }
+  return type;
 }
 
 function factoryCostSlotsForSupplierRequest(row: Pick<SupplierDocumentRequestRow, "orderId" | "supplierId" | "order">) {
@@ -347,7 +362,7 @@ async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUploadFil
 function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOptionalOcr, actor: ActorLike) {
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   const documents = (row.documents || [])
-    .filter((document) => requiredTypes.includes(document.documentType))
+    .filter((document) => requiredTypes.includes(normalizeSupplierReturnDocumentType(document.documentType) as OrderDocumentType))
     .map((document) => serializeSupplierDocument(document));
   const factoryCostSlots = factoryCostSlotsForSupplierRequest(row);
   const canDelete = actor?.role === "管理员"
@@ -460,7 +475,7 @@ async function refreshSupplierDocumentRequestStatus(tx: Prisma.TransactionClient
   });
   if (!row) return null;
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
-  const uploadedTypes = new Set(row.documents.map((document) => document.documentType));
+  const uploadedTypes = new Set(row.documents.map((document) => normalizeSupplierReturnDocumentType(document.documentType)));
   const nextStatus = requiredTypes.every((type) => uploadedTypes.has(type))
     ? "已完成"
     : uploadedTypes.size
@@ -766,7 +781,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   assertWrite(actor, "supplierDocuments");
   const uploadedById = actorId(actor);
   const row = await loadSupplierDocumentRequest(requestId, actor);
-  const documentType = nonEmpty(input.documentType).toUpperCase() as OrderDocumentType;
+  const documentType = normalizeSupplierReturnDocumentType(nonEmpty(input.documentType)) as OrderDocumentType;
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   if (!requiredTypes.includes(documentType)) {
     throw codedError("该任务不需要上传此类资料。", 400, "DOCUMENT_TYPE_NOT_ALLOWED");

@@ -56,3 +56,16 @@ test("supplier OCR routes expose re-recognize, confirm, and reject operations", 
   assert.match(rejectRoute, /rejectSupplierDocumentOcr/);
   assert.match(rejectRoute, /parseJsonBody\(request, \{ allowEmpty: true \}\)/);
 });
+
+test("supplier OCR rerun loads supplier return document and exposes actionable failures", () => {
+  assert.match(service, /loadSupplierReturnDocument\(documentId, requestId\)/);
+  assert.match(service, /缺少 supplierReturnDocumentId/);
+  assert.match(service, /SUPPLIER_DOCUMENT_REQUEST_MISMATCH/);
+  assert.match(service, /SUPPLIER_DOCUMENT_FILE_MISSING/);
+  assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
+  assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
+  assert.match(service, /normalizeSupplierReturnDocumentType/);
+  assert.match(service, /VAT_INVOICE/);
+  assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);
+  assert.match(supplierModule, /OCR识别失败，需人工核对/);
+});
