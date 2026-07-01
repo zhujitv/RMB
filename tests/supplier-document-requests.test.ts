@@ -22,6 +22,9 @@ test("supplier document request schema links supplier uploads to tax refund docu
   assert.match(schema, /allowFactoryDocumentUpload\s+Boolean\s+@default\(false\)\s+@map\("allow_factory_document_upload"\)/);
   assert.match(schema, /factoryDocumentRequestId\s+String\?\s+@map\("factory_document_request_id"\)/);
   assert.match(schema, /documents\s+OrderDocument\[\]/);
+  assert.match(schema, /completedAt\s+DateTime\?\s+@map\("completed_at"\)/);
+  assert.match(schema, /completedById\s+String\?\s+@map\("completed_by"\)/);
+  assert.match(schema, /completedBy\s+User\?\s+@relation\("SupplierDocumentRequestCompletedBy"/);
 });
 
 test("supplier document workflow uses existing factory tax document types", () => {
@@ -170,8 +173,20 @@ test("supplier document list failure is not rendered as an empty task list", () 
   assert.match(supplierModule, /重试/);
   assert.match(supplierModule, /!\s*loadError \? \(/);
   assert.match(supplierModule, /\) : loadError \? \(\s*null\s*\)/);
-  assert.match(service, /attachSupplierDocumentOcrTasks\(rows\)/);
+  assert.match(service, /attachSupplierDocumentOcrTasks\(reconciledRows\)/);
   assert.match(service, /供应商资料回传OCR状态读取失败，已跳过OCR附加信息/);
+});
+
+test("supplier document request completion requires OCR qualification or manual confirmation", () => {
+  const completionService = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
+  assert.match(completionService, /function isOcrQualified/);
+  assert.match(completionService, /OCR_STATUS_PASSED/);
+  assert.match(completionService, /VALIDATION_CONFIRMED/);
+  assert.match(completionService, /const uploaded = document\?\.uploadStatus === "SUCCESS"/);
+  assert.match(completionService, /const qualified = uploaded && isOcrQualified\(task\)/);
+  assert.match(completionService, /allQualified \? "已完成" : anyStarted \? "部分上传" : "待上传"/);
+  assert.match(service, /status: nextStatus, completedAt: null, completedById: null/);
+  assert.match(service, /safeRefreshSupplierDocumentRequestCompletion\(row\.id\)/);
 });
 
 test("supplier return repair script backfills business document associations", () => {

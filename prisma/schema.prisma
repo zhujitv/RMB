@@ -107,6 +107,7 @@ model User {
   createdLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillCreatedBy")
   updatedLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillUpdatedBy")
   sentSupplierDocumentRequests           SupplierDocumentRequest[]      @relation("SupplierDocumentRequestRequestedBy")
+  completedSupplierDocumentRequests      SupplierDocumentRequest[]      @relation("SupplierDocumentRequestCompletedBy")
   assignedOrderLogisticsSuppliers        OrderLogisticsSupplier[]       @relation("OrderLogisticsSupplierAssignedBy")
   createdShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingCreatedBy")
   updatedShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingUpdatedBy")
@@ -688,8 +689,10 @@ model SupplierDocumentRequest {
   orderId               String    @map("order_id")
   supplierId            String    @map("supplier_id")
   requestedById         String?   @map("requested_by")
+  completedById         String?   @map("completed_by")
   requiredDocumentTypes Json      @map("required_document_types")
   status                String    @default("待上传")
+  completedAt           DateTime? @map("completed_at")
   dueDate               DateTime? @map("due_date") @db.Date
   message               String?
   templateFileName      String?   @map("template_file_name")
@@ -712,12 +715,14 @@ model SupplierDocumentRequest {
   order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   supplier    Supplier        @relation(fields: [supplierId], references: [id])
   requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  completedBy User?           @relation("SupplierDocumentRequestCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
   documents   OrderDocument[]
   ocrTasks    OcrTask[]
 
   @@index([orderId])
   @@index([supplierId])
   @@index([requestedById])
+  @@index([completedById])
   @@index([status])
   @@index([sendStatus])
   @@index([dueDate])

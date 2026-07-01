@@ -8,6 +8,7 @@ import {
   runSupplierDocumentOcrTask,
   serializeSupplierDocumentOcrTask,
 } from "./supplier-document-ocr";
+import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
@@ -114,6 +115,7 @@ function supplierDocumentRequestInclude() {
       },
     },
     requestedBy: { select: { id: true, name: true, email: true } },
+    completedBy: { select: { id: true, name: true, email: true } },
     documents: {
       where: { deletedAt: null },
       include: {
@@ -385,6 +387,8 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOption
     sendStatus: row.sendStatus || "pending",
     sendError: row.sendError || "",
     sentAt: row.sentAt,
+    completedAt: row.completedAt,
+    completedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.completedBy?.name || ""),
     requestedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.requestedBy?.name || ""),
     canDelete,
     documents,
@@ -474,16 +478,11 @@ async function refreshSupplierDocumentRequestStatus(tx: Prisma.TransactionClient
     },
   });
   if (!row) return null;
-  const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   const uploadedTypes = new Set(row.documents.map((document) => normalizeSupplierReturnDocumentType(document.documentType)));
-  const nextStatus = requiredTypes.every((type) => uploadedTypes.has(type))
-    ? "已完成"
-    : uploadedTypes.size
-      ? "部分上传"
-      : "待上传";
+  const nextStatus = uploadedTypes.size ? "部分上传" : "待上传";
   return tx.supplierDocumentRequest.update({
     where: { id: requestId },
-    data: { status: nextStatus },
+    data: { status: nextStatus, completedAt: null, completedById: null },
   });
 }
 
@@ -512,8 +511,15 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
   if (isProductSupplierOperatorRole(actor?.role) && !row.supplier.allowFactoryDocumentUpload) {
     throw codedError("该供应商未开启资料回传权限。", 403, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
   }
+  await safeRefreshSupplierDocumentRequestCompletion(row.id);
+  const refreshed = await prisma.supplierDocumentRequest.findFirst({
+    where,
+    include: supplierDocumentRequestInclude(),
+  });
+  if (!refreshed) throw codedError("资料回传任务不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
   const [rowWithOcr] = await attachSupplierDocumentOcrTasks([row]);
-  return rowWithOcr;
+  const [refreshedWithOcr] = await attachSupplierDocumentOcrTasks([refreshed]);
+  return refreshedWithOcr || rowWithOcr;
 }
 
 export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
@@ -557,7 +563,11 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
       take: pageSize,
     }),
   ]);
-  const rowsWithOcr = await attachSupplierDocumentOcrTasks(rows);
+  const reconciledRows = await Promise.all(rows.map(async (row) => {
+    const refreshed = await safeRefreshSupplierDocumentRequestCompletion(row.id);
+    return refreshed ? { ...row, status: refreshed.status, completedAt: refreshed.completedAt, completedById: refreshed.completedById } : row;
+  }));
+  const rowsWithOcr = await attachSupplierDocumentOcrTasks(reconciledRows);
   return {
     ...pageResult(rowsWithOcr.map((row) => serializeSupplierDocumentRequest(row, actor)), total, page, pageSize),
     summary: { pendingCount },

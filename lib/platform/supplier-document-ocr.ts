@@ -16,6 +16,7 @@ import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import { getCompanyProfileSettings } from "./company-profile";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
+import { refreshSupplierDocumentRequestCompletion, type CompletionRefreshOptions } from "./supplier-document-request-completion";
 import {
   isSuspiciousInvoiceParty as isSuspiciousInvoicePartyCore,
   isSuspiciousInvoiceProduct as isSuspiciousInvoiceProductCore,
@@ -62,7 +63,6 @@ const VALIDATION_FAILED = "FAILED";
 const VALIDATION_MANUAL = "PENDING_MANUAL";
 const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
 const VALIDATION_REJECTED = "REJECTED";
-const SUPPLIER_DOCUMENT_QUALIFIED_STATUSES = [OCR_STATUS_PASSED];
 const INTERNAL_OCR_ROLES = ["管理员", "财务", "业务员", "采购"];
 
 type ValidationIssue = {
@@ -652,59 +652,13 @@ export async function runSupplierDocumentOcrForDocument(
   }
 }
 
-export async function refreshSupplierDocumentRequestQualification(requestId: string) {
-  let row: Prisma.SupplierDocumentRequestGetPayload<{
-    include: {
-      documents: {
-        include: {
-          ocrTasks: { include: { results: true } };
-        };
-      };
-    };
-  }> | null = null;
+export async function refreshSupplierDocumentRequestQualification(requestId: string, options: CompletionRefreshOptions = {}) {
   try {
-    row = await prisma.supplierDocumentRequest.findUnique({
-      where: { id: requestId },
-      include: {
-        documents: {
-          where: { deletedAt: null, uploadStatus: "SUCCESS" },
-          include: {
-            ocrTasks: {
-              orderBy: [{ createdAt: "desc" }],
-              take: 1,
-              include: { results: true },
-            },
-          },
-        },
-      },
-    });
+    return await refreshSupplierDocumentRequestCompletion(requestId, options);
   } catch (error: unknown) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
   }
-  if (!row) return null;
-  const requiredTypes = Array.isArray(row.requiredDocumentTypes)
-    ? row.requiredDocumentTypes.map(normalizeSupplierReturnDocumentType)
-    : [];
-  const qualified = requiredTypes.every((type) => {
-    const document = row.documents.find((item) => normalizeSupplierReturnDocumentType(item.documentType) === type);
-    if (!document) return false;
-    const task = document.ocrTasks[0];
-    if (!task) return true;
-    return SUPPLIER_DOCUMENT_QUALIFIED_STATUSES.includes(task.status)
-      || task.validationStatus === VALIDATION_CONFIRMED;
-  });
-  const uploadedTypes = new Set(row.documents.map((document) => normalizeSupplierReturnDocumentType(document.documentType)));
-  const nextStatus = qualified && requiredTypes.length
-    ? "已完成"
-    : uploadedTypes.size
-      ? "部分上传"
-      : "待上传";
-  if (row.status === nextStatus) return row;
-  return prisma.supplierDocumentRequest.update({
-    where: { id: row.id },
-    data: { status: nextStatus },
-  });
 }
 
 export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
@@ -749,7 +703,7 @@ export async function confirmSupplierDocumentOcr(request: AuditRequestLike, acto
     },
     include: { results: true },
   });
-  await refreshSupplierDocumentRequestQualification(requestId);
+  await refreshSupplierDocumentRequestQualification(requestId, { completedById: actor?.id || null });
   await runNonCriticalTask("资料回传OCR人工确认日志写入", () => writeAudit(request, actor, "人工确认供应商回传资料OCR", "ocr_tasks", saved.id, before, saved));
   return serializeSupplierDocumentOcrTask(saved);
 }
