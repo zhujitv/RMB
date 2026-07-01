@@ -1281,6 +1281,127 @@
   color: #0f172a;
 }
 
+.taxBasicInfoCard,
+.taxTransportSummaryCard {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-color: #e8eef7;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.taxBasicInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.taxInfoItem {
+  min-width: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.taxInfoItemWide {
+  grid-column: span 2;
+}
+
+.taxInfoItem span,
+.taxTransportFields span,
+.taxTransportCardTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.taxInfoItem strong,
+.taxTransportFields strong,
+.taxTransportCardTitle strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.taxTransportSummaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.taxTransportSummaryHeader > strong {
+  color: #0f172a;
+}
+
+.taxTransportCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.taxTransportCard {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff, #ffffff);
+  border: 1px solid #dbeafe;
+  padding: 12px;
+}
+
+.taxTransportCardTitle {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.taxTransportCardTitle strong {
+  color: #1d4ed8;
+}
+
+.taxTransportFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.taxTransportFields > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.taxTransportFieldWide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .taxBasicInfoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .taxBasicInfoGrid,
+  .taxTransportFields {
+    grid-template-columns: 1fr;
+  }
+
+  .taxInfoItemWide,
+  .taxTransportFieldWide {
+    grid-column: auto;
+  }
+}
+
 .moduleViewTabs {
   display: inline-flex;
   align-items: center;

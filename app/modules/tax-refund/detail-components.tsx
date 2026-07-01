@@ -1,4 +1,4 @@
-import { DetailField, DismissibleLayer, ExportInvoiceRemarkView } from "../../components";
+import { DetailField, DismissibleLayer } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
@@ -158,6 +158,72 @@ export function TaxRefundDetailDrawer({
   );
 }
 
+type TaxTransportSummaryItem = {
+  containerNo?: string;
+  containerType?: string;
+  truckPlateNo?: string;
+  trailerPlateNo?: string;
+  departureDate?: string;
+  departurePlace?: string;
+  arrivalPlace?: string;
+  cargoName?: string;
+};
+
+function taxLogisticsStatusLabel(value = "", hasDomesticLogistics = false) {
+  if (value.includes("已归档")) return "已归档";
+  if (hasDomesticLogistics) return "未归档";
+  return "未归档";
+}
+
+function taxTransportSummaryItems(detail: TaxRefundDetail): TaxTransportSummaryItem[] {
+  const transportItems = Array.isArray(detail.domesticLogisticsInfo?.transportItems)
+    ? detail.domesticLogisticsInfo.transportItems
+    : [];
+  if (transportItems.length) {
+    return transportItems.map((item) => ({
+      containerNo: item.containerNo || "",
+      containerType: item.containerType || "",
+      truckPlateNo: item.truckPlateNo || "",
+      trailerPlateNo: item.trailerPlateNo || "",
+      departureDate: item.departureDate || "",
+      departurePlace: item.departurePlace || "",
+      arrivalPlace: item.arrivalPlace || "",
+      cargoName: item.cargoName || "",
+    }));
+  }
+  const remarkContainers = Array.isArray(detail.domesticLogisticsInfo?.exportInvoice?.remark?.containers)
+    ? detail.domesticLogisticsInfo.exportInvoice.remark.containers
+    : [];
+  return remarkContainers.map((item) => ({
+    containerNo: item.containerNo || "",
+    containerType: item.type || "",
+    truckPlateNo: item.truckNo || "",
+    trailerPlateNo: item.trailerNo || "",
+    departureDate: item.shipDate || "",
+    departurePlace: item.origin || "",
+    arrivalPlace: item.destination || "",
+    cargoName: item.goods || "",
+  }));
+}
+
+function TaxInfoItem({ label, value, wide = false }: { label: string; value?: string | null; wide?: boolean }) {
+  return (
+    <div className={`${styles.taxInfoItem} ${wide ? styles.taxInfoItemWide : ""}`}>
+      <span>{label}</span>
+      <strong title={String(value || "")}>{value || "-"}</strong>
+    </div>
+  );
+}
+
+function TaxTransportField({ label, value, wide = false }: { label: string; value?: string | null; wide?: boolean }) {
+  return (
+    <div className={wide ? styles.taxTransportFieldWide : ""}>
+      <span>{label}</span>
+      <strong title={String(value || "")}>{value || "-"}</strong>
+    </div>
+  );
+}
+
 function TaxRefundDetailPanel({
   detail,
   loading,
@@ -208,6 +274,8 @@ function TaxRefundDetailPanel({
   const groups = groupDocuments(detail.documents || []);
   const domesticExportInvoiceRemark = detail.domesticLogisticsInfo?.exportInvoice?.remark || null;
   const domesticRemarkText = detail.domesticLogisticsInfo?.remarkText || "";
+  const logisticsArchiveStatus = taxLogisticsStatusLabel(detail.domesticLogisticsInfo?.archiveStatusLabel || "", Boolean(detail.domesticLogisticsInfo));
+  const transportCards = taxTransportSummaryItems(detail);
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail, fallback);
   const factoryCosts = factorySupplierCosts(detail.costs || []);
   const canRecognizeCustoms = canRecognizeTaxCustoms(currentUserRole, canWriteDocuments, readOnly);
@@ -235,29 +303,58 @@ function TaxRefundDetailPanel({
             </div>
           </div>
         ) : null}
-        <div className={styles.documentGroupCard}>
+        <div className={`${styles.documentGroupCard} ${styles.taxBasicInfoCard}`}>
           <strong>基础信息</strong>
-          <div className={styles.detailGrid}>
-            <DetailField label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
-            <DetailField label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
-            <DetailField label="提单号" value={displayBillOfLadingNo} />
-            <DetailField label="币种" value={detail.currency || fallback.currency || "-"} />
-            <DetailField label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
-            <DetailField label="物流信息" value={detail.domesticLogisticsInfo?.archiveStatusLabel || (domesticRemarkText ? "已提交" : "未提交")} />
+          <div className={styles.taxBasicInfoGrid}>
+            <TaxInfoItem label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
+            <TaxInfoItem label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
+            <TaxInfoItem label="提单号" value={displayBillOfLadingNo} />
+            <TaxInfoItem label="币种" value={detail.currency || fallback.currency || "-"} />
+            <TaxInfoItem label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
+            <div className={styles.taxInfoItem}>
+              <span>物流信息状态</span>
+              <strong>
+                <span className={`${styles.statusPill} ${logisticsArchiveStatus === "已归档" ? styles.statusSuccess : styles.statusWarning}`}>
+                  {logisticsArchiveStatus}
+                </span>
+              </strong>
+            </div>
           </div>
         </div>
-        <div className={styles.documentGroupCard} id={taxTargetDomId("domestic-logistics")}>
-          <strong>出口发票备注</strong>
-          <ExportInvoiceRemarkView
-            remark={domesticExportInvoiceRemark}
-            fallbackText={domesticRemarkText}
-            emptyText="暂无出口发票备注，请前往物流信息维护。"
-          />
-          {onOpenDomesticLogistics ? (
-            <button className={styles.secondaryButton} type="button" onClick={onOpenDomesticLogistics}>
-              去维护物流信息
-            </button>
-          ) : null}
+        <div className={`${styles.documentGroupCard} ${styles.taxTransportSummaryCard}`} id={taxTargetDomId("domestic-logistics")}>
+          <div className={styles.taxTransportSummaryHeader}>
+            <strong>运输信息摘要</strong>
+            {onOpenDomesticLogistics ? (
+              <button className={styles.secondaryButton} type="button" onClick={onOpenDomesticLogistics}>
+                去维护物流信息
+              </button>
+            ) : null}
+          </div>
+          {transportCards.length ? (
+            <div className={styles.taxTransportCardGrid}>
+              {transportCards.map((item, index) => (
+                <div className={styles.taxTransportCard} key={`${item.containerNo || item.truckPlateNo || "transport"}-${index}`}>
+                  <div className={styles.taxTransportCardTitle}>
+                    <span>集装箱号</span>
+                    <strong>{item.containerNo || "-"}</strong>
+                  </div>
+                  <div className={styles.taxTransportFields}>
+                    <TaxTransportField label="柜型" value={item.containerType} />
+                    <TaxTransportField label="车牌号" value={item.truckPlateNo} />
+                    <TaxTransportField label="挂车车牌" value={item.trailerPlateNo} />
+                    <TaxTransportField label="起运日期" value={formatDate(item.departureDate)} />
+                    <TaxTransportField label="起运地" value={item.departurePlace} />
+                    <TaxTransportField label="到达地" value={item.arrivalPlace} />
+                    <TaxTransportField label="运输货物名称" value={item.cargoName} wide />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptyState}>
+              {domesticRemarkText || domesticExportInvoiceRemark ? "暂无结构化集装箱明细，请前往物流信息维护。" : "暂无运输信息摘要，请前往物流信息维护。"}
+            </div>
+          )}
         </div>
         {canSendShippingDocuments ? (
           <div className={styles.documentGroupCard}>

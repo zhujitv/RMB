@@ -127,6 +127,16 @@ export type DomesticLogisticsInfo = {
   archiveStatusLabel?: string;
   remarkText?: string;
   exportInvoice?: { remark?: ExportInvoiceRemark | null };
+  transportItems?: Array<{
+    containerNo?: string;
+    containerType?: string;
+    truckPlateNo?: string;
+    trailerPlateNo?: string;
+    departureDate?: string;
+    departurePlace?: string;
+    arrivalPlace?: string;
+    cargoName?: string;
+  }>;
   submittedByName?: string;
   submittedAt?: string;
 };

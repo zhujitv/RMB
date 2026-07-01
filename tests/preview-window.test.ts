@@ -381,6 +381,7 @@ test("domestic logistics customs declaration keeps one current upload", () => {
 });
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {
+  const customsRecognitionFormSource = taxRefundModule.match(/export function CustomsRecognitionForm[\s\S]*?\n}\n\nexport function CustomsUploadCard/)?.[0] || "";
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
   assert.match(taxRefundModule, /UPLOAD_REPLACE_TEXT/);
   assert.doesNotMatch(
@@ -404,7 +405,7 @@ test("tax refund customs recognition stays focused on current declaration fields
     /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/,
   );
   assert.doesNotMatch(
-    taxRefundModule,
+    customsRecognitionFormSource,
     /运输方式|车牌号|起运地|到达地|货物名称/,
   );
 });

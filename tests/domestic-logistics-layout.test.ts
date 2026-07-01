@@ -113,12 +113,17 @@ test("export invoice remark is structured and hidden from logistics views", () =
   assert.match(moduleSource, /ALLOWED_LOGISTICS_FIELDS/);
   assert.match(moduleSource, /sanitizeDomesticLogisticsRowsForRender/);
   assert.doesNotMatch(moduleSource, /exportInvoiceRemark|exportInvoiceRemarkText|ExportInvoiceRemarkView|出口发票备注/);
-  assert.match(taxModuleSource, /出口发票备注/);
+  assert.match(taxModuleSource, /基础信息/);
+  assert.match(taxModuleSource, /运输信息摘要/);
+  assert.match(taxModuleSource, /taxTransportSummaryItems/);
   assert.match(taxModuleSource, /domesticLogisticsInfo\?\.exportInvoice\?\.remark/);
+  assert.match(taxModuleSource, /客户全称/);
+  assert.match(taxModuleSource, /物流信息状态/);
+  assert.match(taxModuleSource, /去维护物流信息/);
   assert.doesNotMatch(reportService.match(/receivables:\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
   assert.match(reportService.match(/"tax-refunds":\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
   assert.doesNotMatch(manualModule, /出口发票备注/);
-  for (const cssClass of ["exportInvoiceRemarkBlocks", "exportInvoiceRemarkBlock", "exportInvoiceRemarkBlockGrid"]) {
+  for (const cssClass of ["taxBasicInfoGrid", "taxTransportSummaryCard", "taxTransportCard", "taxTransportFields"]) {
     assert.match(css, new RegExp(`\\.${cssClass}`));
   }
 });
