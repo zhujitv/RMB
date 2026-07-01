@@ -311,6 +311,37 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
   });
 }
 
+export async function refreshTaxRefundCompletenessNow(request: AuditRequestLike, actor: ActorLike, orderId: string) {
+  if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限重新计算退税完整度", 403);
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    include: includeOrderRelations(),
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+
+  const beforeCompleteness = order.taxRefundCompleteness || null;
+  const completeness = await refreshTaxRefundCompletenessForOrder(order);
+  const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
+  const serialized = serializeOrder({
+    ...order,
+    taxRefundCompleteness: completeness || order.taxRefundCompleteness,
+    taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
+    taxRefundStatus: status,
+  });
+
+  await runNonCriticalTask("退税完整度手动重算日志写入", () => writeAudit(
+    request,
+    actor,
+    "手动重算退税完整度",
+    "receivable_orders",
+    order.id,
+    { orderNo: order.orderNo, taxRefundCompleteness: beforeCompleteness },
+    { orderNo: order.orderNo, taxRefundCompleteness: completeness, taxRefundStatus: status },
+  ), { context: { orderId: order.id } });
+
+  return serialized;
+}
+
 export async function updateTaxRefundStatus(request: AuditRequestLike, actor: ActorLike, orderId: string, status: string, input: TaxRefundActionInput = {}) {
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限修改退税状态", 403);
   const actorId = nonEmpty(actor?.id);

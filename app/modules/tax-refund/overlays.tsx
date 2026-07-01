@@ -30,6 +30,7 @@ type TaxRefundOverlaysProps = {
   packageDownloadingId: string;
   submittingTaxId: string;
   cancelingArchiveId: string;
+  refreshingCompletenessId: string;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
@@ -37,6 +38,7 @@ type TaxRefundOverlaysProps = {
   recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
   canCreateSupplierDocumentRequest: boolean;
+  canRefreshCompleteness: boolean;
   canWriteDocuments: boolean;
   currentUserRole: string;
   customsFilePicker: CustomsFilePickerState;
@@ -54,6 +56,7 @@ type TaxRefundOverlaysProps = {
   onDownloadPackage: (row: TaxRefundRow) => void;
   onSubmitTaxRefund: (row: TaxRefundRow) => void;
   onCancelArchive: (row: TaxRefundRow) => void;
+  onRefreshCompleteness: (row: TaxRefundRow) => void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
   onDelete: (orderId: string, document: TaxDocument) => Promise<void> | void;
@@ -86,6 +89,7 @@ export function TaxRefundOverlays({
   packageDownloadingId,
   submittingTaxId,
   cancelingArchiveId,
+  refreshingCompletenessId,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
@@ -93,6 +97,7 @@ export function TaxRefundOverlays({
   recognitionStatusByDocument,
   canSendShippingDocuments,
   canCreateSupplierDocumentRequest,
+  canRefreshCompleteness,
   canWriteDocuments,
   currentUserRole,
   customsFilePicker,
@@ -110,6 +115,7 @@ export function TaxRefundOverlays({
   onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
+  onRefreshCompleteness,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -143,16 +149,19 @@ export function TaxRefundOverlays({
           packageDownloading={packageDownloadingId === detailRow.id}
           submittingTax={submittingTaxId === detailRow.id}
           cancelingArchive={cancelingArchiveId === detailRow.id}
+          refreshingCompleteness={refreshingCompletenessId === detailRow.id}
           uploadingKey={uploadingKey}
           uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
           recognizingDocumentId={recognizingDocumentId}
           recognitionStatusByDocument={recognitionStatusByDocument}
           canSendShippingDocuments={canSendShippingDocuments}
+          canRefreshCompleteness={canRefreshCompleteness}
           onClose={onCloseDetailDrawer}
           onDownloadPackage={() => onDownloadPackage(detailRow)}
           onSubmitTaxRefund={() => onSubmitTaxRefund(detailRow)}
           onCancelArchive={() => onCancelArchive(detailRow)}
+          onRefreshCompleteness={() => onRefreshCompleteness(detailRow)}
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}
           onDelete={onDelete}

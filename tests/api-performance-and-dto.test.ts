@@ -8,6 +8,11 @@ const migration = readFileSync(
   "utf8",
 );
 const apiPerformance = readFileSync("lib/platform/api-performance.ts", "utf8");
+const backgroundTaskMetrics = readFileSync(
+  "lib/platform/background-task-metrics.ts",
+  "utf8",
+);
+const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const apiRouteGuard = readFileSync("lib/api-route-guard.ts", "utf8");
 const appApi = readFileSync("app/api.ts", "utf8");
 const apiPerformanceRoute = readFileSync(
@@ -39,6 +44,13 @@ test("api performance logs are persisted and exposed through settings", () => {
   assert.match(migration, /CREATE TABLE "api_performance_logs"/);
   assert.match(apiPerformance, /export function recordApiPerformanceLog/);
   assert.match(apiPerformance, /export async function listApiPerformanceMetrics/);
+  assert.match(apiPerformance, /"background"/);
+  assert.match(apiPerformance, /path\.startsWith\("\/background\/"\)/);
+  assert.match(apiPerformance, /track: false/);
+  assert.match(backgroundTaskMetrics, /source: "background"/);
+  assert.match(backgroundTaskMetrics, /method: "TASK"/);
+  assert.match(sharedConstants, /recordBackgroundTaskMetric/);
+  assert.match(sharedConstants, /background-task-slow-log/);
   assert.match(apiPerformance, /API_PERFORMANCE_MAX_SCAN_ROWS/);
   assert.match(apiPerformance, /pageResult\(pagedRows, rows\.length, page, pageSize\)/);
   assert.match(apiRouteGuard, /recordApiPerformanceLog\(\{/);
@@ -47,8 +59,10 @@ test("api performance logs are persisted and exposed through settings", () => {
   assert.match(apiPerformanceRoute, /export async function GET/);
   assert.match(apiPerformanceRoute, /export async function POST/);
   assert.match(apiPerformanceRoute, /assertRead\(actor, "auditLogs"\)/);
-  assert.match(settingsConstants, /apiPerformance", label: "慢接口榜单"/);
+  assert.match(settingsConstants, /apiPerformance", label: "慢接口 \/ 后台任务"/);
+  assert.match(settingsConstants, /label: "后台任务", value: "background"/);
   assert.match(settingsHelpers, /API_PERFORMANCE_COLUMNS/);
+  assert.match(settingsHelpers, /if \(source === "background"\) return "后台任务"/);
   assert.match(settingsController, /setApiPerformance\(result\.metrics \|\| \[\]\)/);
   assert.equal(
     existsSync("app/api/settings/api-performance/route.ts"),

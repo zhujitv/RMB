@@ -87,7 +87,7 @@ export const AUDIT_COLUMNS: TableColumn<AuditLogRow>[] = [
 ];
 
 export const API_PERFORMANCE_COLUMNS: TableColumn<ApiPerformanceRow>[] = [
-  { key: "path", label: "接口路径" },
+  { key: "path", label: "路径 / 任务" },
   { key: "method", label: "方法" },
   { key: "source", label: "来源", render: (row) => apiPerformanceSourceLabel(row.source) },
   { key: "count", label: "次数", render: (row) => String(row.count || 0) },
@@ -228,7 +228,7 @@ export function placeholderFor(tab: SettingsTabKey) {
   if (tab === "customers") return "搜索客户简称 / 全称 / 国家";
   if (tab === "suppliers") return "搜索供应商 / 类型 / 联系人 / 税号";
   if (tab === "users") return "搜索姓名 / 邮箱";
-  if (tab === "apiPerformance") return "搜索接口路径";
+  if (tab === "apiPerformance") return "搜索接口路径或后台任务";
   return "搜索操作人 / 动作 / 对象";
 }
 
@@ -532,6 +532,7 @@ export function userStatus(user: UserRow) {
 export function apiPerformanceSourceLabel(source: unknown) {
   if (source === "server") return "服务端包装器";
   if (source === "client") return "前端真实请求";
+  if (source === "background") return "后台任务";
   return source ? String(source) : "-";
 }
 

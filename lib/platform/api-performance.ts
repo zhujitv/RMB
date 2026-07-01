@@ -30,18 +30,23 @@ const API_PERFORMANCE_MAX_SCAN_ROWS = 5000;
 const API_PERFORMANCE_RETENTION_DAYS = 14;
 const API_PERFORMANCE_DEFAULT_WINDOW_HOURS = 24;
 const API_PERFORMANCE_MAX_WINDOW_HOURS = 168;
-const API_PERFORMANCE_SOURCE_VALUES = new Set(["server", "client"]);
+const API_PERFORMANCE_SOURCE_VALUES = new Set(["server", "client", "background"]);
 
-function normalizeApiPerformancePath(pathInput: unknown) {
+function normalizeApiPerformancePath(pathInput: unknown, sourceInput: unknown) {
   const raw = String(pathInput || "").trim();
   if (!raw) return "";
+  const source = normalizeApiPerformanceSource(sourceInput);
   let path = raw;
   try {
     path = new URL(raw, "http://local").pathname;
   } catch {
     path = raw.split("?")[0] || raw;
   }
-  if (!path.startsWith("/api/")) return "";
+  if (source === "background") {
+    if (!path.startsWith("/background/")) return "";
+  } else if (!path.startsWith("/api/")) {
+    return "";
+  }
   if (path === "/api/settings/api-performance") return "";
   return path.slice(0, API_PERFORMANCE_PATH_LIMIT);
 }
@@ -71,15 +76,15 @@ function maybePruneApiPerformanceLogs() {
   const cutoff = new Date(Date.now() - API_PERFORMANCE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   void runNonCriticalTask("API 性能日志清理", () => prisma.apiPerformanceLog.deleteMany({
     where: { createdAt: { lt: cutoff } },
-  }));
+  }), { track: false });
 }
 
 export function recordApiPerformanceLog(input: ApiPerformanceInput) {
-  const path = normalizeApiPerformancePath(input.path);
+  const source = normalizeApiPerformanceSource(input.source);
+  const path = normalizeApiPerformancePath(input.path, source);
   const durationMs = normalizeDurationMs(input.durationMs);
   if (!path || durationMs == null) return;
 
-  const source = normalizeApiPerformanceSource(input.source);
   const method = normalizeApiPerformanceMethod(input.method);
   const statusCode = normalizeStatusCode(input.statusCode);
   const userId = nonEmpty(input.userId);
@@ -95,7 +100,7 @@ export function recordApiPerformanceLog(input: ApiPerformanceInput) {
       userId: userId || null,
       role: role || null,
     },
-  }));
+  }), { track: false });
   maybePruneApiPerformanceLogs();
 }
 

@@ -11,6 +11,9 @@ const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs"
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const taxSync = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");
 const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const taxRefundRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
+const taxRefundController = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
+const taxRefundDetailComponents = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
 const costMutations = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
@@ -87,6 +90,13 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(costMutations, /scheduleTaxRefundCompletenessRefresh\(cost\.orderId\)/);
   assert.match(domesticLogisticsApi, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
   assert.match(logisticsExpenseMutations, /scheduleTaxRefundCompletenessRefresh\(orderId\)/);
+  assert.match(taxRefundService, /export async function refreshTaxRefundCompletenessNow/);
+  assert.match(taxRefundService, /"手动重算退税完整度"/);
+  assert.match(taxRefundRoute, /body\.action === "refreshCompleteness"/);
+  assert.match(taxRefundController, /async function refreshCompleteness/);
+  assert.match(taxRefundController, /setRefreshingCompletenessId/);
+  assert.match(taxRefundDetailComponents, /重新计算完整度/);
+  assert.match(taxRefundDetailComponents, /canRefreshCompleteness/);
   assert.doesNotMatch(orderDocuments, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
   assert.doesNotMatch(costMutations, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
   assert.doesNotMatch(domesticLogisticsApi, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);

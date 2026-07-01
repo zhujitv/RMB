@@ -51,6 +51,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         packageDownloadingId={taxRefund.packageDownloadingId}
         submittingTaxId={taxRefund.submittingTaxId}
         cancelingArchiveId={taxRefund.cancelingArchiveId}
+        refreshingCompletenessId={taxRefund.refreshingCompletenessId}
         uploadingKey={taxRefund.uploadingKey}
         uploadProgressByKey={taxRefund.uploadProgressByKey}
         deletingDocumentId={taxRefund.deletingDocumentId}
@@ -58,6 +59,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         recognitionStatusByDocument={taxRefund.recognitionStatusByDocument}
         canSendShippingDocuments={taxRefund.canSendShippingDocuments}
         canCreateSupplierDocumentRequest={taxRefund.canCreateSupplierDocumentRequest}
+        canRefreshCompleteness={taxRefund.canManageTaxRefund}
         canWriteDocuments={taxRefund.canWriteDocuments}
         currentUserRole={taxRefund.currentUserRole}
         customsFilePicker={taxRefund.customsFilePicker}
@@ -75,6 +77,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onDownloadPackage={(row) => void taxRefund.downloadPackage(row)}
         onSubmitTaxRefund={(row) => void taxRefund.submitTaxRefund(row)}
         onCancelArchive={(row) => void taxRefund.cancelTaxRefundArchive(row)}
+        onRefreshCompleteness={(row) => void taxRefund.refreshCompleteness(row)}
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}
         onDelete={taxRefund.deleteDocument}

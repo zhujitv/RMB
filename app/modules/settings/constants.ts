@@ -220,6 +220,7 @@ export const API_PERFORMANCE_SOURCE_OPTIONS = [
   { label: "全部来源", value: "" },
   { label: "服务端包装器", value: "server" },
   { label: "前端真实请求", value: "client" },
+  { label: "后台任务", value: "background" },
 ];
 export const API_PERFORMANCE_WINDOW_OPTIONS = [
   { label: "最近 1 小时", value: "1" },
@@ -238,5 +239,5 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "notificationTemplates", label: "通知模板" },
   { key: "shipsgoIntegration", label: "第三方接口" },
   { key: "auditLogs", label: "操作日志" },
-  { key: "apiPerformance", label: "慢接口榜单" },
+  { key: "apiPerformance", label: "慢接口 / 后台任务" },
 ];

@@ -22,16 +22,19 @@ export function TaxRefundDetailDrawer({
   packageDownloading,
   submittingTax,
   cancelingArchive,
+  refreshingCompleteness,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
   recognizingDocumentId,
   recognitionStatusByDocument,
   canSendShippingDocuments,
+  canRefreshCompleteness,
   onClose,
   onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
+  onRefreshCompleteness,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -52,16 +55,19 @@ export function TaxRefundDetailDrawer({
   packageDownloading: boolean;
   submittingTax: boolean;
   cancelingArchive: boolean;
+  refreshingCompleteness: boolean;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
+  canRefreshCompleteness: boolean;
   onClose: () => void;
   onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
+  onRefreshCompleteness: () => void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
@@ -100,6 +106,11 @@ export function TaxRefundDetailDrawer({
             <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
               {packageDownloading ? "下载中..." : "下载资料包"}
             </button>
+            {canRefreshCompleteness ? (
+              <button className={styles.secondaryButton} type="button" disabled={refreshingCompleteness || dismissLocked} onClick={onRefreshCompleteness}>
+                {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
+              </button>
+            ) : null}
             {readOnly ? (
               <button className={styles.secondaryButton} type="button" disabled={cancelingArchive} onClick={onCancelArchive}>
                 {cancelingArchive ? "处理中..." : "取消归档"}

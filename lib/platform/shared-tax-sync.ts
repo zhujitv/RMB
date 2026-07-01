@@ -104,7 +104,7 @@ export async function refreshTaxRefundCompletenessBatch(
 export function scheduleTaxRefundCompletenessRefresh(orderId: string | null | undefined, label = "退税资料完整度刷新") {
   const id = normalizedOrderId(orderId);
   if (!id) return;
-  void runNonCriticalTask(label, () => refreshTaxRefundCompleteness(id));
+  void runNonCriticalTask(label, () => refreshTaxRefundCompleteness(id), { context: { orderId: id } });
 }
 
 export function scheduleTaxRefundCompletenessRefreshBatch(
@@ -113,7 +113,9 @@ export function scheduleTaxRefundCompletenessRefreshBatch(
 ) {
   const ids = [...new Set(orderIds.map(normalizedOrderId).filter(Boolean))];
   if (!ids.length) return;
-  void runNonCriticalTask(label, () => refreshTaxRefundCompletenessBatch(ids));
+  void runNonCriticalTask(label, () => refreshTaxRefundCompletenessBatch(ids), {
+    context: { orderCount: ids.length, sampleOrderIds: ids.slice(0, 10) },
+  });
 }
 
 export async function syncCostInvoiceStatus(costId: string | null | undefined) {

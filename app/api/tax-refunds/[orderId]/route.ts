@@ -10,6 +10,7 @@ import {
   reparseCustomsRecognition,
   requireText,
   resendShippingDocumentsNotification,
+  refreshTaxRefundCompletenessNow,
   sendManualShippingDocumentsNotification,
   updateCustomsRecognition,
   updateTaxRefundStatus,
@@ -71,6 +72,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (body.action === "sendManualShippingDocuments") {
       const order = await sendManualShippingDocumentsNotification(request, actor, orderId, body);
       return ok({ success: true, order, message: "清关资料已发送" });
+    }
+    if (body.action === "refreshCompleteness") {
+      const order = await refreshTaxRefundCompletenessNow(request, actor, orderId);
+      return ok({ success: true, order, message: "退税完整度已重新计算" });
     }
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);

@@ -1,4 +1,5 @@
-import { logServerError, nonEmpty } from "./shared-base-utils";
+import { logServerError, nonEmpty, sanitizeForLog } from "./shared-base-utils";
+import { recordBackgroundTaskMetric } from "./background-task-metrics";
 import type { OrderDocumentType } from "../generated/prisma/client.js";
 import {
   LOGISTICS_COST_TYPE_ENGLISH_LABELS,
@@ -187,12 +188,46 @@ export function isLogisticsCostType(costType: string = "") {
   return LOGISTICS_COST_TYPES.includes(normalizedCostType(costType));
 }
 
-export async function runNonCriticalTask<T>(label: string, task: () => T | Promise<T>): Promise<T | null> {
+type NonCriticalTaskOptions = {
+  context?: Record<string, unknown>;
+  slowMs?: number;
+  track?: boolean;
+};
+
+function nonCriticalTaskSlowThresholdMs(value: unknown) {
+  const configured = Number.parseInt(String(value || process.env.BACKGROUND_TASK_SLOW_MS || ""), 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 1000;
+}
+
+export async function runNonCriticalTask<T>(
+  label: string,
+  task: () => T | Promise<T>,
+  options: NonCriticalTaskOptions = {},
+): Promise<T | null> {
+  const startedAt = Date.now();
+  let success = false;
   try {
-    return await task();
+    const result = await task();
+    success = true;
+    return result;
   } catch (error) {
-    logServerError(`${label}失败`, error);
+    logServerError(`${label}失败`, error, options.context || {});
     return null;
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    if (options.track !== false) {
+      recordBackgroundTaskMetric({ label, durationMs, success });
+    }
+    const slowMs = nonCriticalTaskSlowThresholdMs(options.slowMs);
+    if (durationMs >= slowMs) {
+      console.warn("background-task-slow-log", sanitizeForLog({
+        task: label,
+        durationMs,
+        slowMs,
+        success,
+        ...(options.context || {}),
+      }));
+    }
   }
 }
 export const PAYMENT_TERM_TYPES = Object.keys(PAYMENT_TERM_LABELS);

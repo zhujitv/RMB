@@ -76,6 +76,7 @@ export function useTaxRefundController({
   const [packageDownloadingId, setPackageDownloadingId] = useState("");
   const [submittingTaxId, setSubmittingTaxId] = useState("");
   const [cancelingArchiveId, setCancelingArchiveId] = useState("");
+  const [refreshingCompletenessId, setRefreshingCompletenessId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
@@ -541,6 +542,28 @@ export function useTaxRefundController({
     }
   }
 
+  async function refreshCompleteness(row: TaxRefundRow) {
+    setRefreshingCompletenessId(row.id);
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "refreshCompleteness" }),
+      });
+      if (result.success !== true || !result.order) throw new Error(result.message || "重新计算完整度失败");
+      patchDetailForOrder(row.id, result.order);
+      setNotice(result.message || "退税完整度已重新计算");
+    } catch (refreshError) {
+      const message = refreshError instanceof Error ? refreshError.message : "重新计算完整度失败";
+      if (detailOrderId === row.id) setDetailError(message);
+      else setError(message);
+    } finally {
+      setRefreshingCompletenessId("");
+    }
+  }
+
   async function cancelTaxRefundArchive(row: TaxRefundRow) {
     const result = await requestConfirmation({
       title: "确认取消归档？",
@@ -888,6 +911,7 @@ export function useTaxRefundController({
     detailError,
     packageDownloadingId,
     cancelingArchiveId,
+    refreshingCompletenessId,
     uploadingKey,
     uploadProgressByKey,
     deletingDocumentId,
@@ -918,6 +942,7 @@ export function useTaxRefundController({
     loadDetail,
     submitTaxRefund,
     cancelTaxRefundArchive,
+    refreshCompleteness,
     updateTaxRefundStatus,
     closeDetailDrawer,
     downloadPackage,
