@@ -215,6 +215,17 @@ test("supplier document UI shows OCR result and protects internal actions", () =
   assert.match(supplierModule, /canManageSupplierDocumentOcr/);
 });
 
+test("supplier document UI only shows manual OCR confirmation for abnormal results", () => {
+  assert.match(supplierModule, /function supplierOcrCleanlyPassed/);
+  assert.match(supplierModule, /OCR_STATUS_PASSED/);
+  assert.match(supplierModule, /VALIDATION_PASSED/);
+  assert.match(supplierModule, /VALIDATION_CONFIRMED/);
+  assert.match(supplierModule, /function supplierOcrRequiresManualReview/);
+  assert.match(supplierModule, /const requiresManualReview = supplierOcrRequiresManualReview\(ocrTask\)/);
+  assert.match(supplierModule, /requiresManualReview \? \(/);
+  assert.match(supplierModule, /void loadRows\(page, pageSize\)/);
+});
+
 test("supplier OCR routes expose re-recognize, confirm, and reject operations", () => {
   assert.match(ocrRoute, /rerunSupplierDocumentOcr/);
   assert.match(confirmRoute, /confirmSupplierDocumentOcr/);

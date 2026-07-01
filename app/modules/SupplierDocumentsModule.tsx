@@ -113,6 +113,10 @@ type SupplierDocumentOcrResponse = {
   message?: string;
 };
 
+const OCR_STATUS_PASSED = "OCR识别成功，校验通过";
+const VALIDATION_PASSED = "PASSED";
+const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
+
 const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
   SUPPLIER_INVOICE: "工厂增值税发票",
@@ -286,6 +290,7 @@ export function SupplierDocumentsModule({
         setError(data.ocrTask?.errorMessage || data.message || "OCR识别失败，需人工核对");
       } else {
         setNotice(data.message || "已重新识别");
+        void loadRows(page, pageSize);
       }
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "重新识别失败"));
@@ -720,11 +725,28 @@ function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
 }
 
 function supplierDocumentStatusClass(status: string) {
-  if (status === "已完成" || status === "已上传" || status === "OCR识别成功，校验通过") return styles.statusSuccess;
+  if (status === "已完成" || status === "已上传" || status === OCR_STATUS_PASSED) return styles.statusSuccess;
   if (status === "部分上传" || status === "上传中" || status === "OCR识别中" || status === "待人工确认") return styles.statusWarning;
   if (status === "OCR识别成功，存在异常" || status === "OCR识别失败，需人工核对") return styles.statusDanger;
   if (status === "已关闭") return styles.statusMuted;
   return styles.statusMuted;
+}
+
+function supplierOcrCleanlyPassed(ocrTask: SupplierDocumentOcrTask) {
+  const validationStatus = String(ocrTask.validationStatus || "");
+  const noIssues = !(ocrTask.issues || []).length;
+  const validationPassed = !validationStatus || [VALIDATION_PASSED, VALIDATION_CONFIRMED].includes(validationStatus);
+  return (
+    ocrTask.status === OCR_STATUS_PASSED
+    && validationPassed
+    && noIssues
+    && !ocrTask.errorMessage
+    && !ocrTask.rejectReason
+  );
+}
+
+function supplierOcrRequiresManualReview(ocrTask: SupplierDocumentOcrTask) {
+  return !supplierOcrCleanlyPassed(ocrTask) && ocrTask.validationStatus !== VALIDATION_CONFIRMED;
 }
 
 function SupplierDocumentOcrPanel({
@@ -771,6 +793,7 @@ function SupplierDocumentOcrPanel({
   const fields = ocrTask.fields || [];
   const issues = ocrTask.issues || [];
   const status = ocrTask.status || "待人工确认";
+  const requiresManualReview = supplierOcrRequiresManualReview(ocrTask);
   return (
     <div className={styles.supplierDocumentOcrPanel}>
       <div className={styles.supplierDocumentOcrHeader}>
@@ -821,22 +844,26 @@ function SupplierDocumentOcrPanel({
           >
             {busyKey === supplierOcrActionKey(task.id, document.id, "rerun") ? "识别中..." : "重新识别"}
           </button>
-          <button
-            className={styles.primaryButtonCompact}
-            type="button"
-            onClick={() => onConfirm(task, document)}
-            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "confirm")}
-          >
-            {busyKey === supplierOcrActionKey(task.id, document.id, "confirm") ? "确认中..." : "人工确认通过"}
-          </button>
-          <button
-            className={styles.dangerButton}
-            type="button"
-            onClick={() => onReject(task, document)}
-            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "reject")}
-          >
-            {busyKey === supplierOcrActionKey(task.id, document.id, "reject") ? "驳回中..." : "驳回重传"}
-          </button>
+          {requiresManualReview ? (
+            <>
+              <button
+                className={styles.primaryButtonCompact}
+                type="button"
+                onClick={() => onConfirm(task, document)}
+                disabled={busyKey === supplierOcrActionKey(task.id, document.id, "confirm")}
+              >
+                {busyKey === supplierOcrActionKey(task.id, document.id, "confirm") ? "确认中..." : "人工确认通过"}
+              </button>
+              <button
+                className={styles.dangerButton}
+                type="button"
+                onClick={() => onReject(task, document)}
+                disabled={busyKey === supplierOcrActionKey(task.id, document.id, "reject")}
+              >
+                {busyKey === supplierOcrActionKey(task.id, document.id, "reject") ? "驳回中..." : "驳回重传"}
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
