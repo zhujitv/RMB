@@ -49,6 +49,7 @@
 .brandCompany { composes: brandCompany from "./styles/workspace-shell/shell-account.module.css"; }
 .brandLogo { composes: brandLogo from "./styles/workspace-shell/shell-account.module.css"; }
 .brandPlatform { composes: brandPlatform from "./styles/workspace-shell/shell-account.module.css"; }
+.businessEntityColumn { composes: businessEntityColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .checkboxBox { composes: checkboxBox from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .checkboxContent { composes: checkboxContent from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .checkboxDesc { composes: checkboxDesc from "./styles/workspace-shell/settings-permissions-transport.module.css"; }

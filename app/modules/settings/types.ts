@@ -110,6 +110,7 @@ export type BusinessEntityRow = {
   id: string;
   name?: string;
   shortName?: string;
+  displayName?: string;
   isDefault?: boolean;
   status?: string;
   sortOrder?: number;

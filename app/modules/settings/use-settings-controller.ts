@@ -564,7 +564,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     event.preventDefault();
     if (!businessEntityForm) return;
     if (!businessEntityForm.name.trim()) {
-      setBusinessEntityMessage("请填写业务主体名称");
+      setBusinessEntityMessage("请填写公司全称");
       return;
     }
     setBusinessEntitySaving(true);

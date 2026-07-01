@@ -60,6 +60,23 @@
   min-width: 140px;
 }
 
+.dataTable th.businessEntityColumn,
+.dataTable td.businessEntityColumn {
+  width: 140px;
+  min-width: 120px;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dataTable th.businessEntityColumn button {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dataTable th.blNoColumn,
 .dataTable td.blNoColumn {
   width: 180px;

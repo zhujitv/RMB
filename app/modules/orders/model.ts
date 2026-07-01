@@ -42,6 +42,7 @@ export type BusinessEntityOption = {
   id: string;
   name: string;
   shortName?: string;
+  displayName?: string;
   isDefault?: boolean;
   status?: string;
 };
@@ -63,6 +64,7 @@ export type OrderRow = {
   businessEntityId?: string;
   businessEntityName?: string;
   businessEntityShortName?: string;
+  businessEntityDisplayName?: string;
   businessEntityNameSnapshot?: string;
   businessEntity?: BusinessEntityOption | null;
   currency?: string;

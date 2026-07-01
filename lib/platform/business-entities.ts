@@ -49,10 +49,13 @@ function activeBusinessEntityWhere(): Prisma.BusinessEntityWhereInput {
 }
 
 export function serializeBusinessEntity(entity: BusinessEntityLike | null | undefined) {
+  const name = nonEmpty(entity?.name || "");
+  const shortName = nonEmpty(entity?.shortName || "");
   return {
     id: entity?.id || "",
-    name: entity?.name || "",
-    shortName: entity?.shortName || "",
+    name,
+    shortName,
+    displayName: shortName || name,
     isDefault: Boolean(entity?.isDefault),
     status: entity?.status || "启用",
     sortOrder: Number(entity?.sortOrder || 0),
@@ -65,10 +68,12 @@ export function businessEntityFieldsFromOrder(order: BusinessEntityOrderLike | n
     ? order.businessEntity as BusinessEntityLike
     : null;
   const name = nonEmpty(order?.businessEntityNameSnapshot || entity?.name || "");
+  const shortName = nonEmpty(entity?.shortName || "");
   return {
     businessEntityId: nonEmpty(order?.businessEntityId || entity?.id || ""),
     businessEntityName: name,
-    businessEntityShortName: nonEmpty(entity?.shortName || ""),
+    businessEntityShortName: shortName,
+    businessEntityDisplayName: shortName || name,
     businessEntityNameSnapshot: name,
     businessEntity: entity ? serializeBusinessEntity(entity) : null,
   };
@@ -102,7 +107,7 @@ function businessEntitySortOrder(input: BusinessEntityInput) {
 }
 
 function businessEntityPayload(input: BusinessEntityInput) {
-  const name = requireText(input.name, "业务主体名称");
+  const name = requireText(input.name, "公司全称");
   const isDefault = Boolean(input.isDefault);
   const status = businessEntityStatus(input);
   if (isDefault && status === "停用") {
@@ -128,7 +133,7 @@ async function ensureBusinessEntityNameUnique(name: string, exceptId = "") {
     select: { id: true },
   });
   if (exists) {
-    throw codedError("业务主体名称已存在", 409, "BUSINESS_ENTITY_NAME_DUPLICATED");
+    throw codedError("公司全称已存在", 409, "BUSINESS_ENTITY_NAME_DUPLICATED");
   }
 }
 

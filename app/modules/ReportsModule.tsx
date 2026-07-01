@@ -28,6 +28,10 @@ type ReportRow = Record<string, unknown> & {
   customerFullName?: string;
   customerName?: string;
   customerShortName?: string;
+  businessEntityDisplayName?: string;
+  businessEntityShortName?: string;
+  businessEntityName?: string;
+  businessEntityNameSnapshot?: string;
   orderNo?: string;
   taxRefundStatus?: string;
 };
@@ -48,6 +52,8 @@ type ReportResponse = {
 type BusinessEntityOption = {
   id: string;
   name: string;
+  shortName?: string;
+  displayName?: string;
   isDefault?: boolean;
 };
 
@@ -386,7 +392,7 @@ export function ReportsModule({
         <label>业务主体
           <select value={filters.businessEntityId} onChange={(event) => updateFilter("businessEntityId", event.target.value)}>
             <option value="">全部业务主体</option>
-            {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}
+            {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.displayName || entity.shortName || entity.name}</option>)}
           </select>
         </label>
         <label>订单状态
@@ -464,7 +470,7 @@ export function ReportsModule({
                 />
               </th>
               {visibleColumns.map((column) => (
-                <th key={column.key}>
+                <th key={column.key} className={column.key === "businessEntityName" ? styles.businessEntityColumn : undefined}>
                   <button className={styles.tableSortButton} type="button" onClick={() => toggleSort(column.key)}>
                     {column.label}
                     {sortBy === column.key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
@@ -552,7 +558,15 @@ function ReportRows({
             />
           </span>
         </td>
-        {visibleColumns.map((column) => <td key={column.key}>{displayValue(row, column)}</td>)}
+        {visibleColumns.map((column) => (
+          <td
+            key={column.key}
+            className={column.key === "businessEntityName" ? styles.businessEntityColumn : undefined}
+            title={column.key === "businessEntityName" ? businessEntityFullName(row) : undefined}
+          >
+            {displayValue(row, column)}
+          </td>
+        ))}
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
@@ -587,10 +601,16 @@ function ReportRows({
 }
 
 function displayValue(row: ReportRow, column: ReportColumn) {
-  const value = column.label === "客户简称"
+  const value = column.key === "businessEntityName"
+    ? (row.businessEntityDisplayName || row.businessEntityShortName || businessEntityFullName(row))
+    : column.label === "客户简称"
     ? customerDisplayName(row)
     : row[column.key];
   return String(value ?? "-");
+}
+
+function businessEntityFullName(row: ReportRow) {
+  return String(row.businessEntityName || row.businessEntityNameSnapshot || "");
 }
 
 function reportFileName(type: string, format: string) {

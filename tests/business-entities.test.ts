@@ -40,6 +40,7 @@ test("business entities are modeled as order-level markers", () => {
 test("order APIs assign default business entity and protect transfers", () => {
   assert.match(shared, /export \* from "\.\/business-entities"/);
   assert.match(service, /DEFAULT_BUSINESS_ENTITY_NAME = "浙江莱诺建材有限公司"/);
+  assert.match(service, /displayName: shortName \|\| name/);
   assert.match(service, /getDefaultBusinessEntity/);
   assert.match(service, /resolveBusinessEntityForOrderInput/);
   assert.match(service, /businessEntityWhereFromQuery/);
@@ -57,14 +58,18 @@ test("order APIs assign default business entity and protect transfers", () => {
 
 test("orders UI can select filter display and transfer business entity", () => {
   assert.match(orderModel, /export type BusinessEntityOption/);
+  assert.match(orderModel, /businessEntityDisplayName\?: string/);
   assert.match(orderModel, /businessEntityId: string/);
   assert.match(quickOrderPanel, /\/api\/business-entities/);
   assert.match(quickOrderPanel, /业务主体/);
   assert.match(quickOrderPanel, /disabled=\{Boolean\(initialOrder\?\.id\)\}/);
   assert.match(quickOrderPanel, /businessEntityId: form\.businessEntityId/);
   assert.match(ordersModule, /全部业务主体/);
+  assert.match(ordersModule, /businessEntityColumn/);
+  assert.match(ordersModule, /entity\.displayName \|\| entity\.shortName \|\| entity\.name/);
   assert.match(ordersModule, /params\.set\("businessEntityId"/);
   assert.match(ordersModule, /onBusinessEntityTransferred/);
+  assert.match(quickOrderPanel, /entity\.displayName \|\| entity\.shortName \|\| entity\.name/);
   assert.match(orderDetailDrawer, /业务主体转移/);
   assert.match(orderDetailDrawer, /\/api\/orders\/\$\{encodeURIComponent\(order\.id\)\}\/business-entity/);
 });
@@ -72,11 +77,14 @@ test("orders UI can select filter display and transfer business entity", () => {
 test("reports expose business entity columns and filters", () => {
   assert.match(reportService, /"businessEntityId"/);
   assert.match(reportService, /"businessEntityName"/);
+  assert.match(reportService, /businessEntityDisplayName/);
   assert.match(reportService, /\["businessEntityName", "业务主体"\]/);
   assert.match(reportService, /row\.businessEntityId !== businessEntityId/);
   assert.match(reportsModule, /businessEntityId: ""/);
   assert.match(reportsModule, /\/api\/business-entities/);
   assert.match(reportsModule, /全部业务主体/);
+  assert.match(reportsModule, /businessEntityDisplayName/);
+  assert.match(reportsModule, /businessEntityFullName\(row\)/);
   assert.match(reportsModule, /updateFilter\("businessEntityId"/);
 });
 
@@ -92,7 +100,10 @@ test("settings can maintain business entities without making it multi tenant", (
   assert.match(settingsTypes, /export type BusinessEntityForm/);
   assert.match(settingsConstants, /业务主体/);
   assert.match(settingsCards, /BusinessEntitySettingsCard/);
+  assert.match(settingsCards, /公司全称/);
+  assert.match(settingsCards, /公司简称/);
   assert.match(settingsCards, /业务主体用于订单标记、筛选、报表和导出抬头，不改变权限隔离和业务流程/);
+  assert.match(settingsController, /请填写公司全称/);
   assert.match(settingsController, /\/api\/settings\/business-entities/);
   assert.match(settingsView, /activeTab === "businessEntities"/);
 });

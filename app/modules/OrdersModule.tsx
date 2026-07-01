@@ -280,7 +280,7 @@ export function OrdersModule({
         </select>
         <select value={businessEntityId} onChange={(event) => setBusinessEntityId(event.target.value)} disabled={loading}>
           <option value="">全部业务主体</option>
-          {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}
+          {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.displayName || entity.shortName || entity.name}</option>)}
         </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
@@ -295,7 +295,7 @@ export function OrdersModule({
             <tr>
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.customerColumn}>客户简称</th>
-              <th>业务主体</th>
+              <th className={styles.businessEntityColumn}>业务主体</th>
               <th className={styles.blNoColumn}>提单号</th>
               <th className={styles.amountColumn}>最终应收</th>
               <th className={styles.amountColumn}>已收</th>

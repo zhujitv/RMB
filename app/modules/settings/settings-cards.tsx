@@ -103,8 +103,8 @@ export function BusinessEntitySettingsCard({
         <table className={styles.dataTable}>
           <thead>
             <tr>
-              <th>业务主体</th>
-              <th>简称</th>
+              <th>公司全称</th>
+              <th>公司简称</th>
               <th>默认</th>
               <th>状态</th>
               <th>排序</th>
@@ -149,7 +149,7 @@ export function BusinessEntitySettingsCard({
           <strong>{currentForm.id ? "编辑业务主体" : "新增业务主体"}</strong>
           <div className={styles.reportFilterGrid}>
             <label>
-              业务主体名称
+              公司全称
               <input
                 value={currentForm.name}
                 onChange={(event) => setField("name", event.target.value)}
@@ -157,7 +157,7 @@ export function BusinessEntitySettingsCard({
               />
             </label>
             <label>
-              简称
+              公司简称
               <input value={currentForm.shortName} onChange={(event) => setField("shortName", event.target.value)} />
             </label>
             <label>

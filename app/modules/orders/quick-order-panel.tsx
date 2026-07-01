@@ -364,7 +364,7 @@ export function QuickCreateOrderPanel({
             <option value="">使用系统默认业务主体</option>
             {businessEntities.map((entity) => (
               <option key={entity.id} value={entity.id}>
-                {entity.name}{entity.isDefault ? " · 默认" : ""}
+                {entity.displayName || entity.shortName || entity.name}{entity.isDefault ? " · 默认" : ""}
               </option>
             ))}
           </select>

@@ -28,12 +28,14 @@ export function OrderTableRows({
   const displayedBalanceAmount = overpaidCny > 0
     ? orderCurrencyAmount(order, overpaidCny)
     : (order.summary?.outstandingAmount ?? orderCurrencyAmount(order, outstandingCny));
+  const businessEntityFullName = order.businessEntityName || order.businessEntityNameSnapshot || "";
+  const businessEntityDisplayName = order.businessEntityDisplayName || order.businessEntityShortName || businessEntityFullName;
   return (
     <>
       <tr className={styles.clickableRow} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
-        <td title={order.businessEntityName || order.businessEntityNameSnapshot || ""}>{order.businessEntityName || order.businessEntityNameSnapshot || "-"}</td>
+        <td className={styles.businessEntityColumn} title={businessEntityFullName || ""}>{businessEntityDisplayName || "-"}</td>
         <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={order.finalReceivableAmount} amountCny={order.finalReceivableAmountCny} /></td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={receivedAmount} amountCny={receivedCny} /></td>
