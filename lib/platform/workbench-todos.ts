@@ -18,7 +18,39 @@ import {
 export type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 export type { WorkbenchTodo, WorkbenchTodoOwnerRole, WorkbenchTodoStatus } from "./workbench-todos-core";
 
-export async function listWorkbenchTodos(actor: ActorLike) {
+type WorkbenchTodosResult = {
+  todos: ReturnType<typeof uniqueTodos>;
+  completedTodos: Awaited<ReturnType<typeof completedTodayTodos>>;
+  summary: WorkbenchTodoSummary;
+  generatedAt: string;
+  sourceTypes: string[];
+  supportedDocumentTypes: typeof SUPPLIER_DOCUMENT_TYPES;
+};
+
+type WorkbenchTodosCacheEntry = {
+  expiresAt: number;
+  value: WorkbenchTodosResult;
+};
+
+const WORKBENCH_TODOS_CACHE_MS = Math.max(0, Number(process.env.WORKBENCH_TODOS_CACHE_MS || 15000));
+
+function workbenchTodosCache() {
+  const store = globalThis as typeof globalThis & {
+    __nextwoodWorkbenchTodosCache?: Map<string, WorkbenchTodosCacheEntry>;
+  };
+  store.__nextwoodWorkbenchTodosCache ||= new Map<string, WorkbenchTodosCacheEntry>();
+  return store.__nextwoodWorkbenchTodosCache;
+}
+
+function workbenchTodosCacheKey(actor: ActorLike) {
+  return [
+    actor?.id || "",
+    actor?.role || "",
+    actor?.supplierId || "",
+  ].join(":");
+}
+
+async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResult> {
   const context = await createWorkbenchTodoContext(actor);
   const [
     orderTodos,
@@ -72,4 +104,19 @@ export async function listWorkbenchTodos(actor: ActorLike) {
     ],
     supportedDocumentTypes: SUPPLIER_DOCUMENT_TYPES,
   };
+}
+
+export async function listWorkbenchTodos(actor: ActorLike) {
+  const cacheKey = workbenchTodosCacheKey(actor);
+  const cache = workbenchTodosCache();
+  const cached = cache.get(cacheKey);
+  if (WORKBENCH_TODOS_CACHE_MS > 0 && cached && cached.expiresAt > Date.now()) return cached.value;
+  const value = await buildWorkbenchTodos(actor);
+  if (WORKBENCH_TODOS_CACHE_MS > 0) {
+    cache.set(cacheKey, {
+      expiresAt: Date.now() + WORKBENCH_TODOS_CACHE_MS,
+      value,
+    });
+  }
+  return value;
 }

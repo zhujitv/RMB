@@ -64,6 +64,9 @@ const SUCCESS_SUPPLIER_INVOICE_FILTER: Prisma.OrderDocumentWhereInput = {
   uploadStatus: "SUCCESS",
   deletedAt: null,
 };
+const COST_UNPAGINATED_SCAN_LIMIT = 5000;
+const COST_INVOICE_GROUP_SCAN_LIMIT = 1000;
+const COST_INVOICE_GROUP_DETAIL_LIMIT = 3000;
 
 function includeCostInvoiceGroupRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
@@ -211,10 +214,16 @@ export async function listCosts(query: CostQuery, actor: ActorLike = null): Prom
   const filters = costListFiltersFromQuery(query);
   const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
   const where = pagedCostWhere(filters, actor, invoicePairs);
+  const requestedPageSize = Number(query.get("pageSize") || query.get("limit") || 0);
+  const take = Math.min(
+    COST_UNPAGINATED_SCAN_LIMIT,
+    Math.max(Number.isFinite(requestedPageSize) && requestedPageSize > 0 ? requestedPageSize : 1000, 1),
+  );
   const rows = await prisma.orderCost.findMany({
     where,
     include: includeCostRelations(),
     orderBy: [{ createdAt: "desc" }],
+    take,
   });
   return (await attachBusinessDocumentsToCosts(rows)).map(safeSerializeCost);
 }
@@ -390,11 +399,20 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
   const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
-  const matchingRows = await prisma.orderCost.findMany({
-    where: pagedCostWhere(filters, actor, invoicePairs),
-    include: includeCostInvoiceGroupRelations(),
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-  });
+  const where = pagedCostWhere(filters, actor, invoicePairs);
+  const candidateTake = Math.min(
+    COST_INVOICE_GROUP_SCAN_LIMIT,
+    Math.max(page * pageSize * 4, pageSize * 8),
+  );
+  const [matchingCostCount, matchingRows] = await Promise.all([
+    prisma.orderCost.count({ where }),
+    prisma.orderCost.findMany({
+      where,
+      include: includeCostInvoiceGroupRelations(),
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: candidateTake,
+    }),
+  ]);
   const matchingRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(matchingRows);
   const groupMap = new Map<string, CostWithInvoiceGroupRelations[]>();
   matchingRowsWithBusinessDocuments.forEach((cost) => {
@@ -426,6 +444,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
       },
       include: includeCostInvoiceGroupRelations(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: COST_INVOICE_GROUP_DETAIL_LIMIT,
     })
     : [];
   const fullRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(fullRows);
@@ -444,9 +463,13 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
     .filter((group) => !options.exceptionsOnly || (group.invoiceStatus === "未收到" && Boolean(group.invoiceExceptionType)))
     .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
   const start = (page - 1) * pageSize;
+  const scannedAllCandidates = matchingRows.length < candidateTake || matchingRows.length >= matchingCostCount;
+  const totalGroups = scannedAllCandidates
+    ? groups.length
+    : Math.max(groups.length, start + pageSize + 1);
   return {
     rows: groups.slice(start, start + pageSize),
-    total: groups.length,
+    total: totalGroups,
     page,
     pageSize,
   };

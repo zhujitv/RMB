@@ -376,10 +376,12 @@ export async function createWorkbenchTodoContext(actor: ActorLike): Promise<Work
         customPermissions: true,
       },
       orderBy: [{ updatedAt: "asc" }, { createdAt: "asc" }],
+      take: 500,
     }),
     prisma.systemSetting.findMany({
       where: { key: { in: [...WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS, COMPANY_PROFILE_SETTING_KEY] } },
       select: { key: true, value: true },
+      take: WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS.length + 1,
     }).catch(() => []),
     getExchangeRateSettings(),
   ]);

@@ -80,6 +80,7 @@ export async function syncOrderLogisticsSuppliers(orderId: string, supplierIds: 
     const suppliers = await prisma.supplier.findMany({
       where: { id: { in: ids }, deletedAt: null, status: "启用" },
       select: { id: true, supplierType: true },
+      take: ids.length,
     });
     if (suppliers.length !== ids.length) throw codedError("请选择有效物流供应商。", 400, "LOGISTICS_SUPPLIER_INVALID");
     const invalid = suppliers.find((supplier) => !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType));

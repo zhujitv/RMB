@@ -19,8 +19,8 @@ const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole
 
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
-  assert.match(schema, /allowFactoryDocumentUpload Boolean @default\(false\) @map\("allow_factory_document_upload"\)/);
-  assert.match(schema, /factoryDocumentRequestId String\? @map\("factory_document_request_id"\)/);
+  assert.match(schema, /allowFactoryDocumentUpload\s+Boolean\s+@default\(false\)\s+@map\("allow_factory_document_upload"\)/);
+  assert.match(schema, /factoryDocumentRequestId\s+String\?\s+@map\("factory_document_request_id"\)/);
   assert.match(schema, /documents\s+OrderDocument\[\]/);
 });
 

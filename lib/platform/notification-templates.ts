@@ -211,6 +211,7 @@ export async function logisticsInvoiceNotificationAdminEmails() {
     },
     select: { email: true },
     orderBy: { createdAt: "asc" },
+    take: 50,
   });
   return users
     .map((user) => normalizeEmail(user.email))

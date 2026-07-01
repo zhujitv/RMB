@@ -49,6 +49,7 @@ type ProfitListFilters = {
 };
 
 type OverviewMetric = ReturnType<typeof overviewOrderMetrics>;
+const PROFIT_ANALYSIS_UNPAGINATED_SCAN_LIMIT = 1000;
 
 type OverviewGroup = {
   label: string;
@@ -82,6 +83,7 @@ export async function getProfitAnalysis(query: QueryLike, actor: ActorLike): Pro
       where,
       include: includeOrderRelations(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: PROFIT_ANALYSIS_UNPAGINATED_SCAN_LIMIT,
     }),
     getCommissionFormulaSettings(),
   ]);

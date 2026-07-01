@@ -74,6 +74,7 @@ const SUPPLIER_DOCUMENT_EMAIL_LABELS: Record<string, string> = {
 };
 const MAX_EXCEL_TEMPLATE_BYTES = 5 * 1024 * 1024;
 const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const SUPPLIER_INVOICE_SYNC_COST_LIMIT = 100;
 
 function supplierDocumentRequestInclude() {
   return Prisma.validator<Prisma.SupplierDocumentRequestInclude>()({
@@ -769,6 +770,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
               deletedAt: null,
             },
             select: { id: true },
+            take: SUPPLIER_INVOICE_SYNC_COST_LIMIT,
           });
       await Promise.all(costs.map((cost) => syncCostInvoiceStatus(cost.id)));
     });

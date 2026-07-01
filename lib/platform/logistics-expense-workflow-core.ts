@@ -68,6 +68,7 @@ import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
 export const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 export const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
 export const LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 };
+export const LOGISTICS_BILL_DETAIL_SCAN_LIMIT = 500;
 
 export type UnknownRecord = Record<string, unknown>;
 export type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -176,6 +177,7 @@ export async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [
       },
       include: includeLogisticsExpenseRelations(),
       orderBy: [{ billId: "asc" }, { createdAt: "asc" }],
+      take: directBillIds.length * LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     }));
   }
   for (const legacyBillId of uniqueBillIds.filter((billId) => billId.startsWith("bill:"))) {
@@ -402,6 +404,7 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
       },
       select: logisticsExpenseSubmitSelect(),
       orderBy: [{ createdAt: "asc" }],
+      take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     if (billRows.length) return billRows;
   }
@@ -416,6 +419,7 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
       },
       select: logisticsExpenseSubmitSelect(),
       orderBy: [{ createdAt: "asc" }],
+      take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     return rows.filter((row) => rowMatchesLegacyBillKey(row, text));
   }
@@ -437,6 +441,7 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
     },
     select: logisticsExpenseSubmitSelect(),
     orderBy: [{ createdAt: "asc" }],
+    take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   });
   return before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
 }
@@ -452,6 +457,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       },
       include: includeLogisticsExpenseRelations(),
       orderBy: [{ createdAt: "asc" }],
+      take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     if (billRows.length) return billRows;
   }
@@ -466,6 +472,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       },
       include: includeLogisticsExpenseRelations(),
       orderBy: [{ createdAt: "asc" }],
+      take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     return rows.filter((row) => rowMatchesLegacyBillKey(row, text));
   }
@@ -479,6 +486,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
     },
     include: includeLogisticsExpenseRelations(),
     orderBy: [{ createdAt: "asc" }],
+    take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   });
   return before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
 }

@@ -81,6 +81,7 @@ type PaginatedRows<T> = {
 };
 type PaginatedLogisticsExpenseShipments = PaginatedRows<LogisticsExpenseBillDto | LogisticsExpenseShipmentDto>;
 const LOGISTICS_EXPENSE_LIST_PAGE_SIZE_MAX = 20;
+const LOGISTICS_STATEMENT_SCAN_LIMIT = 3000;
 
 function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpenseListFilters {
   const keyword = insensitiveContains(query.get("keyword") || query.get("q"));
@@ -145,6 +146,7 @@ export async function listLogisticsExpenses(query: QueryLike, actor: LogisticsQu
     },
     include: includeLogisticsExpenseRelations(),
     orderBy: [{ createdAt: "asc" }],
+    take: billIds.length * 100,
   });
   const rowsByBillId = new Map<string, typeof rows>();
   for (const row of rows) {
@@ -294,7 +296,12 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
     ],
     ...logisticsExpenseAccessWhere(actor),
   };
-  const rows = await prisma.logisticsExpense.findMany({ where, include: includeLogisticsExpenseRelations(), orderBy: [{ updatedAt: "desc" }] });
+  const rows = await prisma.logisticsExpense.findMany({
+    where,
+    include: includeLogisticsExpenseRelations(),
+    orderBy: [{ updatedAt: "desc" }],
+    take: LOGISTICS_STATEMENT_SCAN_LIMIT,
+  });
   const shipmentRows = groupLogisticsStatementRowsByShipment(rows);
   return Object.values(shipmentRows.reduce<Record<string, SupplierStatementRow>>((acc, shipment) => {
     const key = shipment.supplierId;

@@ -97,6 +97,7 @@ type OrderListFilters = {
 };
 
 export type OrderListRow = SerializedOrderDto;
+const ORDER_UNPAGINATED_SCAN_LIMIT = 1000;
 
 type PaginatedOrderList = PageResult<OrderListRow> & {
   summary: ReturnType<typeof summarizeCurrencyTotals>;
@@ -110,7 +111,7 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
   const where = orderListWhere(filters, actor);
   if (options.paginated) {
     const { page, pageSize } = pageParams(query, 20, 20);
-    const [total, orders, summaryRows] = await Promise.all([
+    const [total, orders, summaryGroups] = await Promise.all([
       prisma.receivableOrder.count({ where }),
       prisma.receivableOrder.findMany({
         where,
@@ -119,24 +120,22 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.receivableOrder.findMany({
+      prisma.receivableOrder.groupBy({
+        by: ["currency"],
         where,
-        select: {
-          currency: true,
+        _sum: {
           finalReceivableAmount: true,
           finalReceivableAmountCny: true,
-          receivableAmount: true,
-          receivableAmountCny: true,
         },
       }),
     ]);
     const rows = sortReceivableRowsByShipmentDate(orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))));
     return {
       ...pageResult(rows, total, page, pageSize),
-      summary: summarizeCurrencyTotals(summaryRows.map((order) => ({
-        currency: order.currency,
-        amount: order.finalReceivableAmount ?? order.receivableAmount,
-        amountCny: order.finalReceivableAmountCny ?? order.receivableAmountCny,
+      summary: summarizeCurrencyTotals(summaryGroups.map((group) => ({
+        currency: group.currency,
+        amount: group._sum.finalReceivableAmount,
+        amountCny: group._sum.finalReceivableAmountCny,
       }))),
     };
   }
@@ -145,6 +144,7 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
     where,
     include: includeOrderRelations(),
     orderBy: [{ createdAt: "desc" }],
+    take: ORDER_UNPAGINATED_SCAN_LIMIT,
   });
   const sortedRows = sortReceivableRowsByShipmentDate(applyCommonFilters(
     orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),

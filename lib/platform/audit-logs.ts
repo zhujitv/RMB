@@ -21,6 +21,8 @@ type AuditQuery = {
   get: (key: string) => string | null;
 };
 
+const AUDIT_ACCESS_ID_SCAN_LIMIT = 1000;
+
 async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promise<Prisma.AuditLogWhereInput> {
   if (!actor) return {};
   const scope = effectivePermissions(actor).dataScope;
@@ -30,19 +32,21 @@ async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promis
       prisma.customer.findMany({
         where: { deletedAt: null, salespersonUserId: actor.id },
         select: { id: true },
+        take: AUDIT_ACCESS_ID_SCAN_LIMIT,
       }),
       prisma.receivableOrder.findMany({
         where: { deletedAt: null, ...orderAccessWhere(actor) },
         select: { id: true },
+        take: AUDIT_ACCESS_ID_SCAN_LIMIT,
       }),
     ]);
     const customerIds = customers.map((item) => item.id);
     const orderIds = orders.map((item) => item.id);
     const [payments, costs, documents, domesticLogisticsInfos] = orderIds.length ? await Promise.all([
-      prisma.payment.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
-      prisma.orderCost.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
-      prisma.orderDocument.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
-      prisma.domesticLogisticsInfo.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true } }),
+      prisma.payment.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
+      prisma.orderCost.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
+      prisma.orderDocument.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
+      prisma.domesticLogisticsInfo.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
     ]) : [[], [], [], []];
     const entityFilters: Prisma.AuditLogWhereInput[] = [];
     if (customerIds.length) entityFilters.push({ entityType: "customers", entityId: { in: customerIds } });

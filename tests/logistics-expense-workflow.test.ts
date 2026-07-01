@@ -393,8 +393,8 @@ test("supplier account data scope is supplier-based, not user-created fallback",
 });
 
 test("supplier settings include logistics expense and invoice permissions", () => {
-  assert.match(schema, /allowLogisticsExpenseEntry Boolean @default\(false\)/);
-  assert.match(schema, /allowedLogisticsCostTypes Json\?/);
+  assert.match(schema, /allowLogisticsExpenseEntry\s+Boolean\s+@default\(false\)/);
+  assert.match(schema, /allowedLogisticsCostTypes\s+Json\?/);
   assert.match(settingsModule, /label="允许物流费用录入"/);
   assert.match(settingsModule, /label="允许物流发票上传"/);
   assert.match(settingsModule, /允许录入的物流费用类型/);

@@ -183,6 +183,7 @@ export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, 
   const orders = await prisma.receivableOrder.findMany({
     where: { id: { in: requestedOrderIds }, deletedAt: null },
     include: domesticLogisticsOrderInclude({ shipsgoTrackings: false }),
+    take: requestedOrderIds.length,
   });
   const accessibleOrders = orders.filter((order) => canAccessDomesticLogisticsOrder(currentActor, order));
   const eligibleOrders = accessibleOrders.filter((order) => domesticLogisticsCanArchiveOrder(order, currentActor));

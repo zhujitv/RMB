@@ -68,6 +68,7 @@ type PageResult<T> = {
 };
 
 export type PaymentListRow = PaymentDto;
+const PAYMENT_UNPAGINATED_SCAN_LIMIT = 1000;
 
 type PaginatedPaymentList = PageResult<PaymentListRow> & {
   summary: {
@@ -92,7 +93,7 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
     const currentMonthStart = new Date(`${currentMonth}-01T00:00:00.000Z`);
     const currentMonthEnd = new Date(currentMonthStart);
     currentMonthEnd.setUTCMonth(currentMonthEnd.getUTCMonth() + 1);
-    const [total, rows, arrivedRows, pendingRows, currentMonthCount] = await Promise.all([
+    const [total, rows, arrivedGroups, pendingGroups, currentMonthCount] = await Promise.all([
       prisma.payment.count({ where }),
       prisma.payment.findMany({
         where,
@@ -101,13 +102,15 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.payment.findMany({
+      prisma.payment.groupBy({
+        by: ["currency"],
         where: withPaymentWhere(where, { status: "已到账" }),
-        select: { currency: true, amount: true, amountCny: true },
+        _sum: { amount: true, amountCny: true },
       }),
-      prisma.payment.findMany({
+      prisma.payment.groupBy({
+        by: ["currency"],
         where: withPaymentWhere(where, { status: "待确认" }),
-        select: { currency: true, amount: true, amountCny: true },
+        _sum: { amount: true, amountCny: true },
       }),
       prisma.payment.count({
         where: withPaymentWhere(where, {
@@ -118,13 +121,23 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
         }),
       }),
     ]);
+    const arrivedCurrencyTotals = summarizeCurrencyTotals(arrivedGroups.map((group) => ({
+      currency: group.currency,
+      amount: group._sum.amount,
+      amountCny: group._sum.amountCny,
+    })));
+    const pendingCurrencyTotals = summarizeCurrencyTotals(pendingGroups.map((group) => ({
+      currency: group.currency,
+      amount: group._sum.amount,
+      amountCny: group._sum.amountCny,
+    })));
     return {
       ...pageResult(rows.map(serializePayment), total, page, pageSize),
       summary: {
-        arrivedAmountCny: summarizeCurrencyTotals(arrivedRows).totalCny,
-        pendingAmountCny: summarizeCurrencyTotals(pendingRows).totalCny,
-        arrivedCurrencyTotals: summarizeCurrencyTotals(arrivedRows),
-        pendingCurrencyTotals: summarizeCurrencyTotals(pendingRows),
+        arrivedAmountCny: arrivedCurrencyTotals.totalCny,
+        pendingAmountCny: pendingCurrencyTotals.totalCny,
+        arrivedCurrencyTotals,
+        pendingCurrencyTotals,
         currentMonthCount,
       },
     };
@@ -133,6 +146,7 @@ export async function listPayments(query: QueryLike, actor: ActorLike | null = n
     where: paymentListWhere(filters, accessWhere),
     include: { order: { include: { customer: true, salesperson: true } }, createdBy: true, updatedBy: true },
     orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+    take: PAYMENT_UNPAGINATED_SCAN_LIMIT,
   });
   return rows.map(serializePayment);
 }

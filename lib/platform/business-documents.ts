@@ -2,6 +2,9 @@ import { prisma } from "../prisma";
 import { SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
 
 export const SUPPLIER_RETURN_DOCUMENT_SOURCE = "SUPPLIER_RETURN";
+const BUSINESS_DOCUMENTS_PER_ORDER_LIMIT = 200;
+const BUSINESS_DOCUMENTS_BATCH_LIMIT_PER_ORDER = 40;
+const SUPPLIER_INVOICE_PAIR_SCAN_LIMIT = 5000;
 
 type BusinessDocumentLike = {
   id?: string | null;
@@ -85,6 +88,7 @@ export async function getBusinessDocuments(orderId: string) {
       cost: { include: { supplier: true } },
     },
     orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    take: BUSINESS_DOCUMENTS_PER_ORDER_LIMIT,
   });
   return rows.map(withBusinessDocumentSource);
 }
@@ -137,6 +141,7 @@ export async function attachBusinessDocumentsToCosts<T extends CostDocumentCarri
       cost: { include: { supplier: true } },
     },
     orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    take: Math.max(BUSINESS_DOCUMENTS_BATCH_LIMIT_PER_ORDER, orderIds.length * BUSINESS_DOCUMENTS_BATCH_LIMIT_PER_ORDER),
   });
   const documentsByOrderId = documents.reduce<Map<string, BusinessDocumentLike[]>>((acc, document) => {
     const key = document.orderId || "";
@@ -180,6 +185,8 @@ export async function successfulSupplierInvoicePairs() {
       supplierId: { not: null },
     },
     select: { orderId: true, supplierId: true },
+    distinct: ["orderId", "supplierId"],
+    take: SUPPLIER_INVOICE_PAIR_SCAN_LIMIT,
   });
   const seen = new Set<string>();
   return rows.flatMap((row) => {

@@ -461,6 +461,7 @@ async function enabledAdminEmails() {
     where: { role: "管理员", approvalStatus: "APPROVED", isActive: true },
     select: { email: true },
     orderBy: { createdAt: "asc" },
+    take: 50,
   });
   return uniqueEmails(users.map((user) => user.email));
 }
@@ -593,7 +594,7 @@ export async function readNotificationCenterSettings(actor: ActorLike) {
   assertRead(actor, "settings");
   await Promise.all(NOTIFICATION_TYPE_DEFINITIONS.map((definition) => ensureNotificationTemplate(definition.type)));
   const [templates, logs] = await Promise.all([
-    prisma.notificationTemplate.findMany({ orderBy: [{ module: "asc" }, { name: "asc" }] }),
+    prisma.notificationTemplate.findMany({ orderBy: [{ module: "asc" }, { name: "asc" }], take: 100 }),
     prisma.notificationDeliveryLog.findMany({
       include: { template: { select: { name: true, module: true } } },
       orderBy: { createdAt: "desc" },

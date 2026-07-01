@@ -92,6 +92,7 @@ export async function listCustomers(query: CustomerQuery | null | undefined, act
     where,
     include: { salesperson: true },
     orderBy: [{ name: "asc" }],
+    take: 1000,
   });
   return customers.map(serializeCustomer);
 }
@@ -111,6 +112,7 @@ export async function listCustomerSalespeople(actor: CustomerActorInput) {
     },
     select: { id: true, name: true, role: true },
     orderBy: [{ name: "asc" }],
+    take: 200,
   });
   return users.map((user) => ({
     id: user.id,

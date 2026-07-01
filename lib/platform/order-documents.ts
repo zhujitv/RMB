@@ -309,6 +309,7 @@ export async function listOrderDocuments(query: QueryLike, actor: ActorLike) {
     where,
     include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
     orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    take: orderId ? 200 : 1000,
   });
   const documentsByOrderId = rows.reduce<Record<string, typeof rows>>((acc, document) => {
     acc[document.orderId] ||= [];
@@ -391,6 +392,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
             deletedAt: null,
           },
           select: { id: true, documentType: true },
+          take: 20,
         });
         const replaced = await tx.orderDocument.updateMany({
           where: {

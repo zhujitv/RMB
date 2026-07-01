@@ -27,6 +27,7 @@ import {
   permissionError,
   refreshTaxRefundCompleteness,
   roundMoney,
+  runNonCriticalTask,
   serializeOrder,
   serializeCustomsRecognition,
   standardFilenameForDocument,
@@ -237,10 +238,17 @@ type TaxRefundListResult = {
   mode: TaxRefundListMode;
 };
 
+const TAX_REFUND_LIST_SCAN_BUFFER = 80;
+const TAX_REFUND_LIST_SCAN_LIMIT = 600;
+
 export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): Promise<TaxRefundListResult> {
   assertRead(actor, "taxRefund");
   const filters = taxRefundListFiltersFromQuery(query);
   const where = taxRefundListWhere(filters, actor);
+  const scanTake = Math.min(
+    TAX_REFUND_LIST_SCAN_LIMIT,
+    Math.max(filters.page * filters.pageSize + TAX_REFUND_LIST_SCAN_BUFFER, filters.pageSize),
+  );
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
@@ -260,19 +268,19 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
         },
       },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: scanTake,
     }),
   ]);
-  const refreshedEntries = await Promise.all(
-    rows
-      .filter(needsTaxRefundCompletenessRefresh)
-      .map(async (order) => [order.id, await refreshTaxRefundCompleteness(order.id)]),
-  );
-  const refreshedById = Object.fromEntries(refreshedEntries.filter(([, completeness]) => completeness));
-  const hydratedRows = rows
-    .map((order) => (refreshedById[order.id]
-      ? { ...order, taxRefundCompleteness: refreshedById[order.id], taxRefundCompletenessUpdatedAt: new Date() }
-      : order))
-    .sort(sortTaxRefundOrders);
+  const staleCompletenessOrderIds = rows
+    .filter(needsTaxRefundCompletenessRefresh)
+    .map((order) => order.id)
+    .slice(0, filters.pageSize);
+  if (staleCompletenessOrderIds.length) {
+    void runNonCriticalTask("退税列表完整度后台刷新", async () => {
+      await Promise.all(staleCompletenessOrderIds.map((orderId) => refreshTaxRefundCompleteness(orderId)));
+    });
+  }
+  const hydratedRows = rows.sort(sortTaxRefundOrders);
   const pagedRows = hydratedRows.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   return {
     orders: pagedRows.map(serializeTaxRefundListOrder),

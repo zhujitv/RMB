@@ -185,6 +185,7 @@ export async function backfillMissingAvatarInitials() {
   try {
     const users = await timeServerStep("workbench-init-timing", "backfillMissingAvatarInitials.userLookup", () => prisma.user.findMany({
       select: { id: true, name: true, avatarInitials: true },
+      take: 1000,
     }));
     const usersNeedingInitials = users.filter((user) => !nonEmpty(user.avatarInitials));
     await timeServerStep("workbench-init-timing", "backfillMissingAvatarInitials.userUpdates", () => Promise.all(usersNeedingInitials.map((user) => prisma.user.update({
@@ -408,6 +409,7 @@ export async function listOwnLoginRecords(actor: ActorLike, limit = 10) {
         createdAt: true,
         userAgent: true,
       },
+      take: rows.length * 3,
     })
     : [];
   function fallbackSessionUserAgent(loginAt: Date | string) {
@@ -510,6 +512,7 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
     where,
     select: USER_PUBLIC_SELECT,
     orderBy: [{ createdAt: "asc" }],
+    take: 1000,
   });
   return users.map(serializeUser);
 }

@@ -100,9 +100,9 @@ test("ShipsGo tracking has an isolated model and migration", () => {
   assert.match(schema, /model ShipsgoTracking/);
   assert.match(schema, /model ShipsgoTrackingContainer/);
   assert.match(schema, /masterBlNo\s+String\?\s+@map\("master_bl_no"\)/);
-  assert.match(schema, /containers ShipsgoTrackingContainer\[\]/);
-  assert.match(schema, /shipsgoTrackings ShipsgoTracking\[\]/);
-  assert.match(schema, /createdShipsgoTrackings ShipsgoTracking\[\]/);
+  assert.match(schema, /containers\s+ShipsgoTrackingContainer\[\]/);
+  assert.match(schema, /shipsgoTrackings\s+ShipsgoTracking\[\]/);
+  assert.match(schema, /createdShipsgoTrackings\s+ShipsgoTracking\[\]/);
   assert.match(schema, /@@map\("shipsgo_trackings"\)/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS "shipsgo_trackings"/);
   assert.match(migration, /"raw_payload" JSONB/);

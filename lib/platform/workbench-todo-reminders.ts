@@ -105,6 +105,7 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
       approvalStatus: "APPROVED",
     },
     select: { id: true, email: true },
+    take: ownerIds.length,
   });
   const ownerEmailById = new Map(owners.map((owner) => [owner.id, owner.email]));
   const result: WorkbenchTodoReminderResult = {

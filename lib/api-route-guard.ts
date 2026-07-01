@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError } from "./platform/shared-base-utils";
+import { apiError, logServerTiming } from "./platform/shared-base-utils";
 import { assertRead, assertWrite, type AccessUser } from "./platform/shared-access";
 import { getActor } from "./platform/shared-auth";
 
@@ -38,6 +38,8 @@ export function withApiAuth<Context = RouteContext>(
   options: ApiGuardOptions,
 ) {
   return async function guardedApiRoute(request: NextRequest, context: Context) {
+    const startedAt = Date.now();
+    const path = new URL(request.url).pathname;
     try {
       const actor = await getActor(request, {
         allowPasswordChangeRequired: options.allowPasswordChangeRequired,
@@ -45,6 +47,11 @@ export function withApiAuth<Context = RouteContext>(
       return await handler(request, actor, context);
     } catch (error: unknown) {
       return apiError(error, options.errorMessage);
+    } finally {
+      logServerTiming("api-route-timing", startedAt, {
+        method: request.method,
+        path,
+      });
     }
   };
 }

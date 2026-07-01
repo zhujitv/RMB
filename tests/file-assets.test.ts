@@ -28,17 +28,17 @@ const logisticsWorkflow = [
 
 test("file asset schema stores shared metadata and explicit business bindings", () => {
   assert.match(schema, /model FileAsset \{/);
-  assert.match(schema, /fileUrl String\? @map\("file_url"\)/);
-  assert.match(schema, /fileName String @map\("file_name"\)/);
-  assert.match(schema, /mimeType String @map\("mime_type"\)/);
-  assert.match(schema, /storageKey String @map\("storage_key"\)/);
-  assert.match(schema, /bucket String\?/);
-  assert.match(schema, /uploadedAt DateTime\? @map\("uploaded_at"\)/);
-  assert.match(schema, /uploadedById String\? @map\("uploaded_by"\)/);
-  assert.match(schema, /orderId String\? @map\("order_id"\)/);
-  assert.match(schema, /costId String\? @map\("cost_id"\)/);
-  assert.match(schema, /supplierDocumentRequestId String\? @map\("supplier_document_request_id"\)/);
-  assert.match(schema, /orderDocumentId String\? @map\("order_document_id"\)/);
+  assert.match(schema, /fileUrl\s+String\?\s+@map\("file_url"\)/);
+  assert.match(schema, /fileName\s+String\s+@map\("file_name"\)/);
+  assert.match(schema, /mimeType\s+String\s+@map\("mime_type"\)/);
+  assert.match(schema, /storageKey\s+String\s+@map\("storage_key"\)/);
+  assert.match(schema, /bucket\s+String\?/);
+  assert.match(schema, /uploadedAt\s+DateTime\?\s+@map\("uploaded_at"\)/);
+  assert.match(schema, /uploadedById\s+String\?\s+@map\("uploaded_by"\)/);
+  assert.match(schema, /orderId\s+String\?\s+@map\("order_id"\)/);
+  assert.match(schema, /costId\s+String\?\s+@map\("cost_id"\)/);
+  assert.match(schema, /supplierDocumentRequestId\s+String\?\s+@map\("supplier_document_request_id"\)/);
+  assert.match(schema, /orderDocumentId\s+String\?\s+@map\("order_document_id"\)/);
   assert.match(schema, /@@unique\(\[sourceTable, sourceId, fileRole\], map: "file_assets_source_unique"\)/);
   assert.match(schema, /@@map\("file_assets"\)/);
 });

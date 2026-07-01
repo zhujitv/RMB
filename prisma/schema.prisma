@@ -364,6 +364,9 @@ model ReceivableOrder {
   @@index([customsParseStatus])
   @@index([dueDate])
   @@index([deletedAt])
+  @@index([deletedAt, taxArchived, taxRefundStatus, updatedAt], map: "receivable_orders_tax_list_idx")
+  @@index([deletedAt, isArchived, updatedAt], map: "receivable_orders_archive_updated_idx")
+  @@index([deletedAt, actualShipmentDate, blDate, createdAt], map: "receivable_orders_list_sort_idx")
   @@map("receivable_orders")
 }
 
@@ -515,6 +518,8 @@ model ShipsgoTracking {
   @@index([lastSyncedAt])
   @@index([lastSyncTime])
   @@index([deletedAt])
+  @@index([deletedAt, status, eta], map: "shipsgo_trackings_status_eta_idx")
+  @@index([deletedAt, syncStatus, lastSyncedAt], map: "shipsgo_trackings_sync_staleness_idx")
   @@map("shipsgo_trackings")
 }
 
@@ -598,6 +603,8 @@ model OrderDocument {
   @@index([uploadStatus])
   @@index([uploadedById])
   @@index([deletedAt])
+  @@index([deletedAt, orderId, relatedModule, documentType, uploadStatus], map: "order_documents_order_module_status_idx")
+  @@index([deletedAt, supplierId, documentType, uploadStatus], map: "order_documents_supplier_status_idx")
   @@map("order_documents")
 }
 
@@ -684,6 +691,8 @@ model SupplierDocumentRequest {
   @@index([sendStatus])
   @@index([dueDate])
   @@index([deletedAt])
+  @@index([deletedAt, status, dueDate], map: "supplier_document_requests_status_due_idx")
+  @@index([deletedAt, supplierId, status], map: "supplier_document_requests_supplier_status_idx")
   @@map("supplier_document_requests")
 }
 
@@ -750,6 +759,8 @@ model Payment {
   @@index([paymentDate])
   @@index([status])
   @@index([deletedAt])
+  @@index([deletedAt, status, paymentDate], map: "payments_status_date_idx")
+  @@index([deletedAt, orderId, status], map: "payments_order_status_idx")
   @@map("payments")
 }
 
@@ -808,6 +819,10 @@ model OrderCost {
   @@index([orderId, supplierId, costType, amount, createdById, createdAt], map: "order_costs_duplicate_lookup_idx")
   @@index([deletedAt])
   @@unique([sourceType, sourceId], map: "order_costs_source_unique")
+  @@index([deletedAt, updatedAt, createdAt], map: "order_costs_list_sort_idx")
+  @@index([deletedAt, invoiceStatus, paymentStatus, updatedAt], map: "order_costs_invoice_payment_idx")
+  @@index([deletedAt, sourceType, orderId, supplierId, currency], map: "order_costs_source_group_idx")
+  @@index([deletedAt, costType, updatedAt], map: "order_costs_type_updated_idx")
   @@map("order_costs")
 }
 
@@ -856,6 +871,9 @@ model LogisticsBill {
   @@index([submittedById])
   @@index([reviewedById])
   @@index([deletedAt])
+  @@index([deletedAt, auditStatus, invoiceStatus, paymentStatus, updatedAt], map: "logistics_bills_workflow_idx")
+  @@index([deletedAt, supplierId, auditStatus, updatedAt], map: "logistics_bills_supplier_workflow_idx")
+  @@index([deletedAt, orderId, updatedAt], map: "logistics_bills_order_updated_idx")
   @@map("logistics_bills")
 }
 
@@ -924,6 +942,9 @@ model LogisticsExpense {
   @@index([createdById])
   @@index([reviewedById])
   @@index([deletedAt])
+  @@index([deletedAt, billId, createdAt], map: "logistics_expenses_bill_rows_idx")
+  @@index([deletedAt, orderId, supplierId], map: "logistics_expenses_order_supplier_idx")
+  @@index([deletedAt, costType, updatedAt], map: "logistics_expenses_type_updated_idx")
   @@map("logistics_expenses")
 }
 
