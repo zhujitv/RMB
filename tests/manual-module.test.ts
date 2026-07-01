@@ -101,6 +101,8 @@ test("manual covers the complete workspace application map", () => {
   assert.match(manualModule, /正式合同、单据、导出和 PDF 使用业务主体公司全称/);
   assert.match(manualModule, /已有订单如需变更业务主体，必须通过详情里的业务主体转移操作处理/);
   assert.match(manualModule, /资料回传是产品供应商上传工厂采购合同和工厂增值税发票 PDF 的入口/);
+  assert.match(manualModule, /OCR 识别成功、校验通过、未发现异常时，任务自动变为已完成/);
+  assert.match(manualModule, /OCR 完全通过时不显示“人工确认通过”/);
   assert.match(manualModule, /上传文件最终归集到退税资料，资料回传不是独立资料库/);
   assert.match(manualModule, /经营总览展示核心经营指标、趋势、风险和绩效/);
   assert.match(manualModule, /利润分析按订单核算应收、已到账、成本、退税、毛利和业务员提成/);
