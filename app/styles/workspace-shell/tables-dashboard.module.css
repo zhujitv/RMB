@@ -155,7 +155,7 @@
 }
 
 .taxRefundTable.dataTable {
-  min-width: 1020px;
+  min-width: 1040px;
   table-layout: fixed;
 }
 
@@ -205,9 +205,25 @@
 .taxRefundTable col.taxRefundActionColumn,
 .taxRefundTable th.taxRefundActionColumn,
 .taxRefundTable td.taxRefundActionColumn {
-  width: 70px;
-  min-width: 70px;
+  width: 88px;
+  min-width: 88px;
   text-align: center;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.taxRefundTable th.taxRefundActionColumn,
+.taxRefundTable td.taxRefundActionColumn {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.taxRefundTable td.taxRefundActionColumn button {
+  min-width: 56px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 1.2;
 }
 
 .taxRefundTable th.taxRefundBlNoColumn,
