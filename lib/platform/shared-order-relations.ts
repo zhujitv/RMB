@@ -1,6 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 
-function domesticLogisticsInfoSafeSelect() {
+export function domesticLogisticsInfoSafeSelect() {
   return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
     id: true,
     orderId: true,
@@ -14,6 +14,7 @@ function domesticLogisticsInfoSafeSelect() {
     cargoDescription: true,
     remarkTextManualEdited: true,
     remarkText: true,
+    exportInvoice: true,
     submittedByUserId: true,
     submittedAt: true,
     submitterRole: true,
@@ -28,6 +29,7 @@ function domesticLogisticsInfoSafeSelect() {
     updatedAt: true,
     submittedBy: true,
     financeConfirmedBy: true,
+    transportItems: { orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }] },
   });
 }
 

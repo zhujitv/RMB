@@ -105,7 +105,7 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
   assert.match(taxSync, /TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3/);
   assert.match(taxRefundService, /scheduleTaxRefundCompletenessRefreshBatch\(staleCompletenessOrderIds/);
-  assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(order\)/);
+  assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(orderWithLogistics\)/);
   assert.doesNotMatch(taxRefundService, /Promise\.all\(staleCompletenessOrderIds\.map/);
   assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
   assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);

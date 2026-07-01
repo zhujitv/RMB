@@ -128,6 +128,21 @@ test("export invoice remark is structured and hidden from logistics views", () =
   }
 });
 
+test("tax refund detail hydrates archived logistics transport items by bill of lading", () => {
+  assert.match(taxRefundService, /hydrateTaxRefundOrderLogisticsInfo/);
+  assert.match(taxRefundService, /taxRefundDetailBillOfLadingNumbers/);
+  assert.match(taxRefundService, /prisma\.logisticsBill\.findMany\(\{[\s\S]*where: \{ orderId: order\.id, deletedAt: null/);
+  assert.match(taxRefundService, /\{ blNo: \{ in: billOfLadingNumbers \} \}/);
+  assert.match(taxRefundService, /logisticsBills: \{ some: \{ deletedAt: null, billOfLadingNo: \{ in: billOfLadingNumbers \} \} \}/);
+  assert.match(taxRefundService, /select: domesticLogisticsInfoSafeSelect\(\)/);
+  assert.match(taxRefundService, /combineTaxRefundDomesticLogisticsInfos/);
+  assert.match(taxRefundService, /transportItems = infos\.flatMap/);
+  assert.match(taxRefundService, /tax-refund-logistics-archived-without-transport-items/);
+  assert.match(taxRefundService, /const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo\(order\);/);
+  assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(orderWithLogistics\)/);
+  assert.match(taxRefundService, /\.\.\.orderWithLogistics,\s*taxRefundCompleteness/);
+});
+
 test("domestic logistics list exposes logistics fee entry status from backend", () => {
   assert.match(domesticLogisticsOps, /logisticsBills: \{/);
   assert.match(domesticLogisticsOps, /logisticsExpenses: \{/);

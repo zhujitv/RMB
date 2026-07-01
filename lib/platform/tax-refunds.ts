@@ -17,6 +17,7 @@ import {
   codedError,
   customerFullName,
   customerShortName,
+  domesticLogisticsInfoSafeSelect,
   getExchangeRateSettings,
   getCommissionFormulaSettings,
   includeOrderRelations,
@@ -81,6 +82,9 @@ type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
     };
   };
 }>;
+type TaxRefundOrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
+type TaxRefundDomesticLogisticsInfo = Prisma.DomesticLogisticsInfoGetPayload<{ select: ReturnType<typeof domesticLogisticsInfoSafeSelect> }>;
+type TaxRefundDomesticTransportItem = TaxRefundDomesticLogisticsInfo["transportItems"][number];
 
 function taxRefundBillOfLadingNumbers(order: TaxRefundListOrder) {
   const logisticsBillNos = (order.logisticsBills || [])
@@ -89,6 +93,112 @@ function taxRefundBillOfLadingNumbers(order: TaxRefundListOrder) {
   const fallbackOrderBlNo = nonEmpty(order.blNo);
   const values = logisticsBillNos.length ? logisticsBillNos : [fallbackOrderBlNo];
   return values.filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function taxRefundDetailBillOfLadingNumbers(order: Pick<TaxRefundOrderWithRelations, "blNo"> & { logisticsBills?: Array<{ billOfLadingNo?: string | null }> }) {
+  return [
+    nonEmpty(order.blNo),
+    ...(order.logisticsBills || []).map((bill) => nonEmpty(bill.billOfLadingNo)),
+  ].filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
+}
+
+function transportItemStableKey(item: TaxRefundDomesticTransportItem) {
+  return item.id || [
+    item.containerNo,
+    item.containerType,
+    item.truckPlateNo,
+    item.trailerPlateNo,
+    item.departureDate instanceof Date ? item.departureDate.toISOString() : item.departureDate,
+    item.departurePlace,
+    item.arrivalPlace,
+    item.cargoName,
+  ].map((value) => String(value || "")).join("|");
+}
+
+function exportInvoiceContainerCount(info: TaxRefundDomesticLogisticsInfo) {
+  const record = info.exportInvoice && typeof info.exportInvoice === "object" ? info.exportInvoice as Record<string, unknown> : {};
+  const remark = record.remark && typeof record.remark === "object" ? record.remark as Record<string, unknown> : {};
+  const containers = Array.isArray(remark.containers) ? remark.containers : [];
+  return containers.length;
+}
+
+function combineTaxRefundDomesticLogisticsInfos(infos: TaxRefundDomesticLogisticsInfo[]) {
+  if (!infos.length) return [];
+  const base = infos.find((info) => (info.transportItems || []).length) || infos[0];
+  const seen = new Set<string>();
+  const transportItems = infos.flatMap((info) => info.transportItems || []).filter((item) => {
+    const key = transportItemStableKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return [{
+    ...base,
+    exportInvoice: transportItems.length ? null : base.exportInvoice,
+    transportItems,
+  }];
+}
+
+function warnIfArchivedLogisticsHasNoTransportItems(order: TaxRefundOrderWithRelations, billOfLadingNumbers: string[], infos: TaxRefundDomesticLogisticsInfo[]) {
+  const transportItemCount = infos.reduce((sum, info) => sum + (info.transportItems || []).length, 0);
+  const structuredContainerCount = infos.reduce((sum, info) => sum + exportInvoiceContainerCount(info), 0);
+  const hasArchivedLogistics = infos.some((info) => (
+    nonEmpty(info.remarkText)
+    || Boolean(info.exportInvoice)
+    || info.submittedAt
+  ));
+  if (hasArchivedLogistics && transportItemCount === 0 && structuredContainerCount === 0) {
+    console.warn("tax-refund-logistics-archived-without-transport-items", {
+      orderId: order.id,
+      orderNo: order.orderNo,
+      billOfLadingNumbers,
+    });
+  }
+}
+
+async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelations): Promise<TaxRefundOrderWithRelations> {
+  const orderBills = await prisma.logisticsBill.findMany({
+    where: { orderId: order.id, deletedAt: null, NOT: { billOfLadingNo: "" } },
+    select: { billOfLadingNo: true },
+    orderBy: [{ createdAt: "asc" }],
+    take: 50,
+  });
+  const billOfLadingNumbers = taxRefundDetailBillOfLadingNumbers({ ...order, logisticsBills: orderBills });
+  const relatedOrders = billOfLadingNumbers.length
+    ? await prisma.receivableOrder.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { id: order.id },
+          { blNo: { in: billOfLadingNumbers } },
+          { logisticsBills: { some: { deletedAt: null, billOfLadingNo: { in: billOfLadingNumbers } } } },
+        ],
+      },
+      select: {
+        id: true,
+        domesticLogisticsInfos: {
+          where: { deletedAt: null },
+          select: domesticLogisticsInfoSafeSelect(),
+          orderBy: [{ updatedAt: "desc" }],
+        },
+      },
+      take: 100,
+    })
+    : [{
+      id: order.id,
+      domesticLogisticsInfos: order.domesticLogisticsInfos || [],
+    }];
+  const infoById = new Map<string, TaxRefundDomesticLogisticsInfo>();
+  for (const info of order.domesticLogisticsInfos || []) infoById.set(info.id, info);
+  for (const relatedOrder of relatedOrders) {
+    for (const info of relatedOrder.domesticLogisticsInfos || []) infoById.set(info.id, info);
+  }
+  const infos = [...infoById.values()];
+  warnIfArchivedLogisticsHasNoTransportItems(order, billOfLadingNumbers, infos);
+  return {
+    ...order,
+    domesticLogisticsInfos: combineTaxRefundDomesticLogisticsInfos(infos),
+  };
 }
 
 export function serializeTaxRefundListOrder(order: TaxRefundListOrder) {
@@ -301,10 +411,11 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
     include: includeOrderRelations(),
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const completeness = await refreshTaxRefundCompletenessForOrder(order);
+  const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(order);
+  const completeness = await refreshTaxRefundCompletenessForOrder(orderWithLogistics);
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
   return serializeOrder({
-    ...order,
+    ...orderWithLogistics,
     taxRefundCompleteness: completeness || order.taxRefundCompleteness,
     taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
     taxRefundStatus: status,
@@ -319,11 +430,12 @@ export async function refreshTaxRefundCompletenessNow(request: AuditRequestLike,
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
 
+  const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(order);
   const beforeCompleteness = order.taxRefundCompleteness || null;
-  const completeness = await refreshTaxRefundCompletenessForOrder(order);
+  const completeness = await refreshTaxRefundCompletenessForOrder(orderWithLogistics);
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
   const serialized = serializeOrder({
-    ...order,
+    ...orderWithLogistics,
     taxRefundCompleteness: completeness || order.taxRefundCompleteness,
     taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
     taxRefundStatus: status,
@@ -352,11 +464,12 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
     include: includeOrderRelations(),
   });
   if (!before) throw permissionError("应收订单不存在或已删除", 404);
+  const beforeWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(before);
   const beforeArchived = Boolean(before.taxArchived || before.taxRefundStatus === "SUBMITTED" || before.taxRefundArchivedAt);
   if (beforeArchived && status !== "SUBMITTED" && input.cancelArchive !== true) {
     throw permissionError("已提交退税档案只允许查看和下载资料。", 400);
   }
-  const completeness = taxDocumentCompleteness(before);
+  const completeness = taxDocumentCompleteness(beforeWithLogistics);
   if (status === "SUBMITTED" && before.taxRefundStatus === "SUBMITTED" && beforeArchived) {
     throw codedError("该订单已提交退税并归档，不能重复提交。", 400, "TAX_REFUND_ALREADY_SUBMITTED");
   }
@@ -418,7 +531,7 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
       forceReason: forceSubmit ? optional(input.forceReason) : undefined,
     },
   ).catch(() => null);
-  return serializeOrder(order);
+  return serializeOrder(await hydrateTaxRefundOrderLogisticsInfo(order));
 }
 
 export async function cancelTaxRefundArchive(request: AuditRequestLike, actor: ActorLike, orderId: string, nextStatus = "NOT_READY", input: TaxRefundActionInput = {}) {
@@ -431,7 +544,8 @@ export async function cancelTaxRefundArchive(request: AuditRequestLike, actor: A
     include: includeOrderRelations(),
   });
   if (!before) throw permissionError("应收订单不存在或已删除", 404);
-  const completeness = taxDocumentCompleteness(before);
+  const beforeWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(before);
+  const completeness = taxDocumentCompleteness(beforeWithLogistics);
   const finalStatus = restoredStatus === "READY" && !completeness.complete ? "NOT_READY" : restoredStatus;
   const order = await prisma.receivableOrder.update({
     where: { id: orderId },
@@ -465,7 +579,7 @@ export async function cancelTaxRefundArchive(request: AuditRequestLike, actor: A
       remark: optional(input.remark),
     },
   ).catch(() => null);
-  return serializeOrder(order);
+  return serializeOrder(await hydrateTaxRefundOrderLogisticsInfo(order));
 }
 
 export async function settleCommission(request: AuditRequestLike, actor: ActorLike, orderId: string, input: TaxRefundActionInput = {}) {

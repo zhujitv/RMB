@@ -40,6 +40,8 @@ test("domestic logistics reads use explicit safe selects so missing optional mig
   assert.match(readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"), /domesticLogisticsOrderInclude\(\{ shipsgoTrackings: false \}\)/);
   assert.match(sharedOrderRelations, /function domesticLogisticsInfoSafeSelect/);
   assert.match(sharedOrderRelations, /domesticLogisticsInfos: \{\s*where: \{ deletedAt: null \},\s*select: domesticLogisticsInfoSafeSelect\(\)/);
+  assert.match(sharedOrderRelations, /exportInvoice: true/);
+  assert.match(sharedOrderRelations, /transportItems: \{ orderBy: \[\{ sortOrder: "asc"/);
 });
 
 test("structured export invoice migration tolerates databases without the legacy remark column", () => {
