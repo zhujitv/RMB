@@ -151,7 +151,7 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(service, /prisma\.supplierDocumentRequest\.count\(\{ where \}\)/);
   assert.match(service, /skip: \(page - 1\) \* pageSize/);
   assert.match(service, /take: pageSize/);
-  assert.match(service, /pageResult\(rows\.map\(\(row\) => serializeSupplierDocumentRequest\(row, actor\)\), total, page, pageSize\)/);
+  assert.match(service, /pageResult\(rowsWithOcr\.map\(\(row\) => serializeSupplierDocumentRequest\(row, actor\)\), total, page, pageSize\)/);
   assert.doesNotMatch(service, /take: 100/);
   assert.match(supplierRequestListRoute, /requests: result\.rows/);
   assert.match(supplierRequestListRoute, /pagination: \{/);
@@ -161,6 +161,17 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(supplierModule, /total=\{total\}/);
   assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
   assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);
+});
+
+test("supplier document list failure is not rendered as an empty task list", () => {
+  assert.match(supplierModule, /const \[loadError, setLoadError\]/);
+  assert.match(supplierModule, /setLoadError\(message\)/);
+  assert.match(supplierModule, /读取失败：/);
+  assert.match(supplierModule, /重试/);
+  assert.match(supplierModule, /!\s*loadError \? \(/);
+  assert.match(supplierModule, /\) : loadError \? \(\s*null\s*\)/);
+  assert.match(service, /attachSupplierDocumentOcrTasks\(rows\)/);
+  assert.match(service, /供应商资料回传OCR状态读取失败，已跳过OCR附加信息/);
 });
 
 test("supplier return repair script backfills business document associations", () => {

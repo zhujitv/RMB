@@ -68,6 +68,12 @@ type ExcelUploadFile = {
 type SupplierDocumentRequestRow = Prisma.SupplierDocumentRequestGetPayload<{
   include: ReturnType<typeof supplierDocumentRequestInclude>;
 }>;
+type SupplierDocumentWithOptionalOcr = SupplierDocumentRequestRow["documents"][number] & {
+  ocrTasks?: unknown[];
+};
+type SupplierDocumentRequestWithOptionalOcr = Omit<SupplierDocumentRequestRow, "documents"> & {
+  documents: SupplierDocumentWithOptionalOcr[];
+};
 
 const SUPPLIER_DOCUMENT_REQUEST_STATUSES = ["待上传", "部分上传", "已完成", "已关闭"];
 const SUPPLIER_DOCUMENT_LABELS: Record<string, string> = {
@@ -110,11 +116,6 @@ function supplierDocumentRequestInclude() {
         uploadedBy: true,
         supplier: true,
         cost: { include: { supplier: true } },
-        ocrTasks: {
-          orderBy: [{ createdAt: "desc" }],
-          take: 1,
-          include: { results: true },
-        },
       },
       orderBy: [{ createdAt: "desc" }],
     },
@@ -343,7 +344,7 @@ async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUploadFil
   };
 }
 
-function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor: ActorLike) {
+function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOptionalOcr, actor: ActorLike) {
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   const documents = (row.documents || [])
     .filter((document) => requiredTypes.includes(document.documentType))
@@ -375,6 +376,44 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+async function attachSupplierDocumentOcrTasks(rows: SupplierDocumentRequestRow[]): Promise<SupplierDocumentRequestWithOptionalOcr[]> {
+  const documentIds = rows
+    .flatMap((row) => row.documents || [])
+    .map((document) => document.id)
+    .filter(Boolean);
+  if (!documentIds.length) {
+    return rows.map((row) => ({
+      ...row,
+      documents: (row.documents || []).map((document) => ({ ...document, ocrTasks: [] })),
+    }));
+  }
+  try {
+    const tasks = await prisma.ocrTask.findMany({
+      where: { documentId: { in: documentIds } },
+      include: { results: true },
+      orderBy: [{ createdAt: "desc" }],
+      take: Math.min(Math.max(documentIds.length * 3, 20), 500),
+    });
+    const latestByDocumentId = new Map<string, unknown>();
+    for (const task of tasks) {
+      if (!latestByDocumentId.has(task.documentId)) latestByDocumentId.set(task.documentId, task);
+    }
+    return rows.map((row) => ({
+      ...row,
+      documents: (row.documents || []).map((document) => ({
+        ...document,
+        ocrTasks: latestByDocumentId.has(document.id) ? [latestByDocumentId.get(document.id)] : [],
+      })),
+    }));
+  } catch (error: unknown) {
+    logServerError("供应商资料回传OCR状态读取失败，已跳过OCR附加信息", error, { documentCount: documentIds.length });
+    return rows.map((row) => ({
+      ...row,
+      documents: (row.documents || []).map((document) => ({ ...document, ocrTasks: [] })),
+    }));
+  }
 }
 
 function serializeSupplierDocument(document: unknown) {
@@ -458,7 +497,8 @@ async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
   if (isProductSupplierOperatorRole(actor?.role) && !row.supplier.allowFactoryDocumentUpload) {
     throw codedError("该供应商未开启资料回传权限。", 403, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
   }
-  return row;
+  const [rowWithOcr] = await attachSupplierDocumentOcrTasks([row]);
+  return rowWithOcr;
 }
 
 export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
@@ -502,8 +542,9 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
       take: pageSize,
     }),
   ]);
+  const rowsWithOcr = await attachSupplierDocumentOcrTasks(rows);
   return {
-    ...pageResult(rows.map((row) => serializeSupplierDocumentRequest(row, actor)), total, page, pageSize),
+    ...pageResult(rowsWithOcr.map((row) => serializeSupplierDocumentRequest(row, actor)), total, page, pageSize),
     summary: { pendingCount },
   };
 }

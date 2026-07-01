@@ -22,7 +22,10 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
 test("supplier document upload creates OCR task without changing tax refund module", () => {
   assert.match(supplierRequests, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
   assert.match(supplierRequests, /runSupplierDocumentOcrTask\(ocrTask\.id\)/);
-  assert.match(supplierRequests, /ocrTasks:\s*\{[\s\S]*take: 1[\s\S]*include: \{ results: true \}/);
+  assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
+  assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
+  assert.match(supplierRequests, /已跳过OCR附加信息/);
+  assert.doesNotMatch(supplierRequests, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
 });
 

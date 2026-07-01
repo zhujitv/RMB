@@ -133,6 +133,7 @@ export function SupplierDocumentsModule({
   const [rows, setRows] = useState<SupplierDocumentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [progressByKey, setProgressByKey] = useState<Record<string, number>>({});
@@ -159,6 +160,7 @@ export function SupplierDocumentsModule({
   async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "") {
     setLoading(true);
     setError("");
+    setLoadError("");
     try {
       const params = new URLSearchParams({ page: String(nextPage), pageSize: String(nextPageSize) });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
@@ -173,7 +175,9 @@ export function SupplierDocumentsModule({
       setPendingCount(Number(data.summary?.pendingCount || 0));
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取资料回传任务失败");
+      const message = loadError instanceof Error ? loadError.message : "读取资料回传任务失败";
+      setError(message);
+      setLoadError(message);
       return [];
     } finally {
       setLoading(false);
@@ -367,26 +371,38 @@ export function SupplierDocumentsModule({
         </button>
       </header>
 
-      <div className={styles.supplierDocumentsStats}>
-        <div className={styles.supplierDocumentsStatCard}>
-          <span>{isAdmin ? "查看范围" : "回传账号"}</span>
-          <strong>{isAdmin ? "全部资料" : (currentUser.name || "-")}</strong>
+      {!loadError ? (
+        <div className={styles.supplierDocumentsStats}>
+          <div className={styles.supplierDocumentsStatCard}>
+            <span>{isAdmin ? "查看范围" : "回传账号"}</span>
+            <strong>{isAdmin ? "全部资料" : (currentUser.name || "-")}</strong>
+          </div>
+          <div className={styles.supplierDocumentsStatCard}>
+            <span>待回传</span>
+            <strong>{pendingCount}</strong>
+          </div>
+          <div className={styles.supplierDocumentsStatCard}>
+            <span>全部任务</span>
+            <strong>{total}</strong>
+          </div>
         </div>
-        <div className={styles.supplierDocumentsStatCard}>
-          <span>待回传</span>
-          <strong>{pendingCount}</strong>
-        </div>
-        <div className={styles.supplierDocumentsStatCard}>
-          <span>全部任务</span>
-          <strong>{total}</strong>
-        </div>
-      </div>
+      ) : null}
 
       {notice ? <div className={styles.inlineSuccess}>{notice}</div> : null}
-      {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {loadError ? (
+        <div className={styles.inlineError}>
+          <strong>读取失败：</strong>
+          <span>{loadError}</span>
+          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
+            {loading ? "重试中..." : "重试"}
+          </button>
+        </div>
+      ) : error ? <div className={styles.inlineError}>{error}</div> : null}
 
       {loading ? (
         <div className={styles.emptyState}>正在加载产品供应商资料回传任务...</div>
+      ) : loadError ? (
+        null
       ) : rows.length ? (
         <>
           <div className={styles.supplierDocumentsListToolbar}>
