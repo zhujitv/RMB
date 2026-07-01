@@ -1,6 +1,6 @@
 import { PaginationBar } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
-import { TAX_REFUND_STATUS_OPTIONS, type TaxRefundMode, type TaxRefundRow } from "./model";
+import { TAX_REFUND_STATUS_OPTIONS, type BusinessEntityOption, type TaxRefundMode, type TaxRefundRow } from "./model";
 import { TaxRefundTableRow } from "./table-row";
 import { taxRowStatus } from "./helpers";
 
@@ -17,6 +17,10 @@ type TaxRefundListPanelProps = {
   declarationStartMonth: string;
   declarationEndMonth: string;
   statusFilter: string;
+  businessEntityId: string;
+  businessEntitySortDirection: "" | "asc" | "desc";
+  businessEntities: BusinessEntityOption[];
+  canSortBusinessEntity: boolean;
   canManageTaxRefund: boolean;
   canCancelArchive: boolean;
   submittingTaxId: string;
@@ -26,6 +30,8 @@ type TaxRefundListPanelProps = {
   onDeclarationStartMonthChange: (value: string) => void;
   onDeclarationEndMonthChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
+  onBusinessEntityChange: (value: string) => void;
+  onToggleBusinessEntitySort: () => void;
   onSubmitSearch: () => void;
   onResetSearch: () => void;
   onPage: (page: number) => void;
@@ -48,6 +54,10 @@ export function TaxRefundListPanel({
   declarationStartMonth,
   declarationEndMonth,
   statusFilter,
+  businessEntityId,
+  businessEntitySortDirection,
+  businessEntities,
+  canSortBusinessEntity,
   canManageTaxRefund,
   canCancelArchive,
   submittingTaxId,
@@ -57,6 +67,8 @@ export function TaxRefundListPanel({
   onDeclarationStartMonthChange,
   onDeclarationEndMonthChange,
   onStatusFilterChange,
+  onBusinessEntityChange,
+  onToggleBusinessEntitySort,
   onSubmitSearch,
   onResetSearch,
   onPage,
@@ -123,6 +135,12 @@ export function TaxRefundListPanel({
             <option key={option.value || "all"} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <select value={businessEntityId} onChange={(event) => onBusinessEntityChange(event.target.value)} title="业务主体">
+          <option value="">全部业务主体</option>
+          {businessEntities.map((entity) => (
+            <option key={entity.id} value={entity.id}>{entity.displayName || entity.shortName || entity.name}</option>
+          ))}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={onSubmitSearch} disabled={loading}>查询</button>
         <button className={styles.secondaryButton} type="button" onClick={onResetSearch} disabled={loading}>重置</button>
       </div>
@@ -136,6 +154,7 @@ export function TaxRefundListPanel({
             <col className={styles.taxRefundOrderNoColumn} />
             <col className={styles.taxRefundBlNoColumn} />
             <col className={styles.taxRefundCustomerColumn} />
+            <col className={styles.taxRefundBusinessEntityColumn} />
             <col className={styles.taxRefundDateColumn} />
             <col className={styles.taxRefundCompletenessColumn} />
             <col className={styles.taxRefundStatusColumn} />
@@ -146,6 +165,13 @@ export function TaxRefundListPanel({
               <th className={styles.taxRefundOrderNoColumn}>订单号</th>
               <th className={styles.taxRefundBlNoColumn}>提单号</th>
               <th className={styles.taxRefundCustomerColumn}>客户简称</th>
+              <th className={styles.taxRefundBusinessEntityColumn}>
+                {canSortBusinessEntity ? (
+                  <button type="button" className={styles.tableSortButton} onClick={onToggleBusinessEntitySort}>
+                    业务主体{businessEntitySortDirection === "asc" ? " ↑" : businessEntitySortDirection === "desc" ? " ↓" : ""}
+                  </button>
+                ) : "业务主体"}
+              </th>
               <th className={styles.taxRefundDateColumn}>申报日期</th>
               <th className={styles.taxRefundCompletenessColumn}>总体完整度</th>
               <th className={styles.taxRefundStatusColumn}>退税状态</th>
@@ -155,7 +181,7 @@ export function TaxRefundListPanel({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : rows.length ? rows.map((row) => {
               const rowStatus = taxRowStatus(row);
@@ -175,7 +201,7 @@ export function TaxRefundListPanel({
               );
             }) : (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
+                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
               </tr>
             )}
           </tbody>

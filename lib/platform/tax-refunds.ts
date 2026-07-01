@@ -40,6 +40,7 @@ import {
 } from "./shared";
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
+import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -59,12 +60,15 @@ type TaxRefundListFilters = {
   keyword: string;
   mode: TaxRefundListMode;
   statusFilter: string;
+  businessEntityId: string;
+  businessEntitySortDirection: "" | "asc" | "desc";
   declarationMonthStart: Date | null;
   declarationMonthEnd: Date | null;
 };
 type TaxRefundListOrder = Prisma.ReceivableOrderGetPayload<{
   include: {
     customer: true;
+    businessEntity: true;
     taxRefundArchivedBy: true;
     taxSubmittedBy: true;
     logisticsBills: { select: { billOfLadingNo: true; createdAt: true } };
@@ -77,6 +81,7 @@ type TaxRefundPackageDocument = Prisma.OrderDocumentGetPayload<{
 type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
   include: {
     customer: true;
+    businessEntity: true;
     documents: {
       include: { uploadedBy: true; cost: { include: { supplier: true } }; supplier: true };
     };
@@ -220,6 +225,7 @@ export function serializeTaxRefundListOrder(order: TaxRefundListOrder) {
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
+    ...businessEntityFieldsFromOrder(order),
     currency: order.currency,
     finalReceivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
     finalReceivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
@@ -280,6 +286,8 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
   const keyword = nonEmpty(query.get("keyword"));
   const mode = nonEmpty(query.get("mode")) === "archive" ? "archive" : "current";
   const statusFilter = nonEmpty(query.get("status"));
+  const businessEntityId = nonEmpty(query.get("businessEntityId") || query.get("businessEntity"));
+  const businessEntitySortDirection = nonEmpty(query.get("businessEntitySortDirection")) === "desc" ? "desc" : nonEmpty(query.get("businessEntitySortDirection")) === "asc" ? "asc" : "";
   const declarationStartMonth = nonEmpty(query.get("declarationStartMonth"));
   const declarationEndMonth = nonEmpty(query.get("declarationEndMonth"));
   const declarationStart = declarationStartMonth && /^\d{4}-\d{2}$/.test(declarationStartMonth) ? new Date(`${declarationStartMonth}-01T00:00:00.000Z`) : null;
@@ -290,6 +298,8 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
     keyword,
     mode,
     statusFilter,
+    businessEntityId,
+    businessEntitySortDirection,
     declarationMonthStart: declarationStart || null,
     declarationMonthEnd: declarationEnd ? new Date(Date.UTC(declarationEnd.getUTCFullYear(), declarationEnd.getUTCMonth() + 1, 1)) : null,
   };
@@ -323,6 +333,7 @@ function taxRefundListWhere(filters: TaxRefundListFilters, actor: ActorLike): Pr
     AND: [
       orderAccessWhere(actor),
       taxRefundKeywordWhere(filters.keyword),
+      businessEntityWhereFromQuery(filters.businessEntityId),
       ...(filters.mode === "archive"
         ? [{ OR: [{ taxArchived: true }, { taxRefundStatus: { in: ARCHIVE_TAX_REFUND_STATUSES } }] }]
         : [{ taxArchived: false }, { taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES } }]),
@@ -366,6 +377,7 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
       where,
       include: {
         customer: true,
+        businessEntity: true,
         taxRefundArchivedBy: true,
         taxSubmittedBy: true,
         logisticsBills: {
@@ -390,6 +402,19 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
     scheduleTaxRefundCompletenessRefreshBatch(staleCompletenessOrderIds, "退税列表完整度后台刷新");
   }
   const hydratedRows = rows.sort(sortTaxRefundOrders);
+  if (filters.businessEntitySortDirection) {
+    const direction = filters.businessEntitySortDirection === "desc" ? -1 : 1;
+    hydratedRows.sort((a, b) => {
+      const aFields = businessEntityFieldsFromOrder(a);
+      const bFields = businessEntityFieldsFromOrder(b);
+      const entityDiff = (aFields.businessEntityDisplayName || aFields.businessEntityName || "").localeCompare(
+        bFields.businessEntityDisplayName || bFields.businessEntityName || "",
+        "zh-Hans-CN",
+      );
+      if (entityDiff) return entityDiff * direction;
+      return sortTaxRefundOrders(a, b);
+    });
+  }
   const pagedRows = hydratedRows.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   return {
     orders: pagedRows.map(serializeTaxRefundListOrder),
@@ -684,6 +709,7 @@ export async function buildTaxRefundPackage(request: AuditRequestLike, actor: Ac
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
     include: {
       customer: true,
+      businessEntity: true,
       documents: {
         where: { deletedAt: null, uploadStatus: "SUCCESS" },
         include: { uploadedBy: true, cost: { include: { supplier: true } }, supplier: true },

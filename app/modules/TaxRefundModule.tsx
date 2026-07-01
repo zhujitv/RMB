@@ -23,6 +23,10 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         declarationStartMonth={taxRefund.declarationStartMonth}
         declarationEndMonth={taxRefund.declarationEndMonth}
         statusFilter={taxRefund.statusFilter}
+        businessEntityId={taxRefund.businessEntityId}
+        businessEntitySortDirection={taxRefund.businessEntitySortDirection}
+        businessEntities={taxRefund.businessEntities}
+        canSortBusinessEntity={taxRefund.currentUserRole === "管理员"}
         canManageTaxRefund={taxRefund.canManageTaxRefund}
         canCancelArchive={taxRefund.canCancelArchive}
         submittingTaxId={taxRefund.submittingTaxId}
@@ -32,6 +36,8 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onDeclarationStartMonthChange={taxRefund.setDeclarationStartMonth}
         onDeclarationEndMonthChange={taxRefund.setDeclarationEndMonth}
         onStatusFilterChange={taxRefund.setStatusFilter}
+        onBusinessEntityChange={taxRefund.setBusinessEntityId}
+        onToggleBusinessEntitySort={taxRefund.toggleBusinessEntitySort}
         onSubmitSearch={taxRefund.submitSearch}
         onResetSearch={taxRefund.resetSearch}
         onPage={taxRefund.gotoPage}

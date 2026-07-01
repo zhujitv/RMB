@@ -36,6 +36,8 @@ export function TaxRefundTableRow({
   const missingGroups = taxCompletenessTooltipGroups(completeness, percent);
   const billOfLadingNumbers = taxRefundBillOfLadingNumbers(row);
   const billOfLadingTitle = billOfLadingNumbers.join(" / ");
+  const businessEntityFullName = row.businessEntityName || row.businessEntityNameSnapshot || "";
+  const businessEntityDisplayName = row.businessEntityDisplayName || row.businessEntityShortName || businessEntityFullName;
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const tooltipId = `tax-completeness-tooltip-${row.id}`;
 
@@ -61,6 +63,9 @@ export function TaxRefundTableRow({
         ) : "-"}
       </td>
       <td className={styles.taxRefundCustomerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+      <td className={styles.taxRefundBusinessEntityColumn} title={businessEntityFullName || "-"}>
+        {businessEntityDisplayName || "-"}
+      </td>
       <td className={styles.taxRefundDateColumn}>{declarationDate}</td>
       <td className={styles.taxRefundCompletenessColumn}>
         <span className={styles.taxCompletenessTooltipAnchor}>
