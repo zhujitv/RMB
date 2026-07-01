@@ -13,6 +13,10 @@ type SupplierDocument = {
   costId?: string;
   documentType?: string;
   fileName?: string;
+  displayFileName?: string;
+  downloadFileName?: string;
+  uploadStatus?: string;
+  uploadStatusLabel?: string;
   uploadedByName?: string;
   uploadedAt?: string;
   ocrTask?: SupplierDocumentOcrTask | null;
@@ -51,6 +55,10 @@ type SupplierFactoryCostSlot = {
   amount?: number;
   amountCny?: number;
   currency?: string;
+};
+
+type SupplierDocumentUploadSlot = SupplierFactoryCostSlot & {
+  isUploadedFallbackSlot?: boolean;
 };
 
 type SupplierDocumentTask = {
@@ -109,6 +117,7 @@ const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_INVOICE: "工厂增值税发票",
 };
 const SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS = [10, 20, 50];
+const UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID = "__uploaded_supplier_documents__";
 
 export function SupplierDocumentsModule({
   currentUser,
@@ -483,6 +492,8 @@ function SupplierDocumentTaskCard({
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const factoryCostSlots = task.factoryCostSlots || [];
+  const uploadSlots = supplierDocumentUploadSlots(task);
+  const knownFactoryCostSlotIds = new Set(factoryCostSlots.map((slot) => slot.id).filter(Boolean));
   const taskStatus = task.status || "待上传";
   const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
   return (
@@ -535,29 +546,33 @@ function SupplierDocumentTaskCard({
             </a>
           ) : null}
           <div className={styles.supplierDocumentUploadGrid}>
-            {(factoryCostSlots.length ? factoryCostSlots : [{ id: "", label: "" }]).flatMap((slot) => (
+            {uploadSlots.flatMap((slot) => (
               requiredTypes.map((documentType) => {
-                const document = latestDocumentByType(task.documents || [], documentType, slot.id);
-                const key = supplierUploadKey(task.id, documentType, slot.id);
+                const document = latestDocumentByType(task.documents || [], documentType, slot, knownFactoryCostSlotIds);
+                const uploadCostId = slot.isUploadedFallbackSlot ? "" : slot.id;
+                const key = supplierUploadKey(task.id, documentType, uploadCostId);
                 const uploading = uploadingKey === key;
                 const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
+                const fileName = document ? supplierDocumentFileName(document) : "";
+                const fileWarning = document ? supplierDocumentFileWarning(document) : "";
                 return (
                   <div className={styles.supplierDocumentUploadCard} key={`${slot.id || "task"}-${documentType}`}>
                     <div className={styles.supplierDocumentUploadHeader}>
                       <strong>{[slot.label, DOCUMENT_LABELS[documentType] || documentType].filter(Boolean).join(" / ")}</strong>
                       <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
                     </div>
-                    {slot.id ? <span className={styles.supplierDocumentUploadHint}>{[slot.costType, formatFactoryCostSlotAmount(slot)].filter(Boolean).join(" · ")}</span> : null}
+                    {slot.id && !slot.isUploadedFallbackSlot ? <span className={styles.supplierDocumentUploadHint}>{[slot.costType, formatFactoryCostSlotAmount(slot)].filter(Boolean).join(" · ")}</span> : null}
                     <div className={styles.supplierDocumentUploadBody}>
                       {document ? (
                         <div className={styles.fileUploadFile}>
-                          <div className={styles.fileUploadFileName} title={document.fileName || "-"}>
-                            {document.fileName || "-"}
+                          <div className={styles.fileUploadFileName} title={fileName}>
+                            {fileName}
                           </div>
                           <div className={styles.fileUploadMeta}>
                             <span>上传人：{document.uploadedByName || "-"}</span>
                             <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
                           </div>
+                          {fileWarning ? <div className={styles.inlineError}>{fileWarning}</div> : null}
                           <div className={styles.fileUploadActions}>
                             <span className={styles.fileUploadActionLabel}>操作：</span>
                             <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
@@ -577,14 +592,14 @@ function SupplierDocumentTaskCard({
                     </div>
                     <div className={styles.supplierDocumentUploadControls}>
                       <label className={styles.supplierDocumentUploadButton}>
-                        {uploading ? "上传中..." : "选择 PDF 文件"}
+                        {uploading ? "上传中..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
                         <input
                           type="file"
                           accept={PDF_UPLOAD_ACCEPT}
                           disabled={uploading}
                           hidden
                           onChange={(event) => {
-                            onUpload(task, documentType, event.target.files?.[0] || null, slot.id);
+                            onUpload(task, documentType, event.target.files?.[0] || null, uploadCostId);
                             event.currentTarget.value = "";
                           }}
                         />
@@ -603,10 +618,50 @@ function SupplierDocumentTaskCard({
   );
 }
 
-function latestDocumentByType(documents: SupplierDocument[], documentType: string, costId = "") {
-  return documents
-    .filter((document) => document.documentType === documentType && (costId ? document.costId === costId : !document.costId))
-    .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())[0] || null;
+function supplierDocumentUploadSlots(task: SupplierDocumentTask): SupplierDocumentUploadSlot[] {
+  const slots = task.factoryCostSlots || [];
+  if (!slots.length) return [{ id: "", label: "" }];
+  const knownSlotIds = new Set(slots.map((slot) => slot.id).filter(Boolean));
+  const hasUploadedDocumentOutsideCurrentSlots = (task.documents || []).some((document) => (
+    Boolean(document.documentType) && (!document.costId || !knownSlotIds.has(document.costId))
+  ));
+  if (!hasUploadedDocumentOutsideCurrentSlots) return slots;
+  return [
+    ...slots,
+    {
+      id: UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID,
+      label: "已上传资料",
+      isUploadedFallbackSlot: true,
+    },
+  ];
+}
+
+function latestDocumentByType(
+  documents: SupplierDocument[],
+  documentType: string,
+  slot: SupplierDocumentUploadSlot,
+  knownSlotIds = new Set<string>(),
+) {
+  const matches = documents
+    .filter((document) => document.documentType === documentType)
+    .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
+  if (slot.isUploadedFallbackSlot) {
+    return matches.find((document) => !document.costId || !knownSlotIds.has(document.costId)) || null;
+  }
+  if (slot.id) {
+    return matches.find((document) => document.costId === slot.id) || null;
+  }
+  return matches.find((document) => !document.costId) || matches[0] || null;
+}
+
+function supplierDocumentFileName(document: SupplierDocument) {
+  return document.displayFileName || document.fileName || document.downloadFileName || "文件记录存在";
+}
+
+function supplierDocumentFileWarning(document: SupplierDocument) {
+  if (document.uploadStatus && document.uploadStatus !== "SUCCESS") return "文件记录存在，但文件无法访问";
+  if (!document.fileName && !document.displayFileName && !document.downloadFileName) return "文件记录存在，但文件名缺失";
+  return "";
 }
 
 function supplierUploadKey(taskId: string, documentType: string, costId = "") {

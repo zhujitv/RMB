@@ -185,7 +185,21 @@ test("supplier callback upload only auto-binds an unambiguous factory cost", () 
   assert.match(service, /factoryCostSlotsForSupplierRequest/);
   assert.match(service, /factoryCostSlots/);
   assert.match(supplierModule, /factoryCostSlots/);
-  assert.match(supplierModule, /supplierUploadKey\(task\.id, documentType, slot\.id\)/);
+  assert.match(supplierModule, /const uploadCostId = slot\.isUploadedFallbackSlot \? "" : slot\.id/);
+  assert.match(supplierModule, /supplierUploadKey\(task\.id, documentType, uploadCostId\)/);
   assert.match(supplierModule, /formData\.append\("costId", costId\)/);
   assert.match(supplierRequestDocumentRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
+});
+
+test("supplier document cards always render uploaded files alongside OCR status", () => {
+  assert.match(supplierModule, /function supplierDocumentUploadSlots/);
+  assert.match(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
+  assert.match(supplierModule, /!document\.costId \|\| !knownSlotIds\.has\(document\.costId\)/);
+  assert.match(supplierModule, /latestDocumentByType\(task\.documents \|\| \[\], documentType, slot, knownFactoryCostSlotIds\)/);
+  assert.match(supplierModule, /supplierDocumentFileName\(document\)/);
+  assert.match(supplierModule, /文件记录存在，但文件无法访问/);
+  assert.match(supplierModule, /重新上传 PDF 文件/);
+  assert.match(supplierModule, /<SupplierDocumentOcrPanel/);
+  assert.match(supplierModule, /<PdfPreviewButton documentId=\{document\.id\}/);
+  assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
 });
