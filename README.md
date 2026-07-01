@@ -807,18 +807,12 @@ vercel --prod
 
 若使用自动部署，请将本地改动提交并推送到已连接 Vercel 的 GitHub 仓库，由 Vercel 自动构建发布。
 
-GitHub Actions 已补充两条可用发布链路：
+当前生产发布以 Vercel Git Integration 为准：
 
-- PR 会触发 `.github/workflows/vercel-deploy.yml`，生成 preview 部署并回写 URL
-- 生产发布通过 `workflow_dispatch` 手动触发
-  - 不填 `deployment_url`：执行 `verify:release` 后构建并发布生产
-  - 填写 `deployment_url`：直接把已有 preview `promote` 到生产
-
-当前 Actions 需要的仓库 secrets：
-
-- `VERCEL_TOKEN`
-- `DATABASE_URL`
-- `CRON_SECRET`
+- 推送到 `main` 后，由 Vercel 自动构建并发布对应 commit。
+- GitHub Actions 的 `CI` workflow 只负责代码校验，不负责发布。
+- `.github/workflows/vercel-deploy.yml` 保留为手动说明入口，不再调用 Vercel CLI，也不再依赖 `VERCEL_TOKEN`。
+- 如果 Vercel 没有生成部署记录，优先检查 Vercel 项目的 GitHub 连接和分支配置。
 
 ## 安全注意事项
 
