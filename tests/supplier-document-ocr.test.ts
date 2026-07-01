@@ -69,3 +69,12 @@ test("supplier OCR rerun loads supplier return document and exposes actionable f
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);
   assert.match(supplierModule, /OCR识别失败，需人工核对/);
 });
+
+test("supplier OCR missing table errors are converted into migration guidance", () => {
+  assert.match(service, /isSupplierOcrTableMissingError/);
+  assert.match(service, /typedError\.code === "P2021"/);
+  assert.match(service, /OCR 数据表未初始化，请联系管理员执行数据库迁移/);
+  assert.match(service, /OCR_TABLE_NOT_INITIALIZED/);
+  assert.match(service, /throwIfSupplierOcrTableMissing\(error\)/);
+  assert.match(service, /throwIfSupplierOcrTableMissing\(updateError\)/);
+});

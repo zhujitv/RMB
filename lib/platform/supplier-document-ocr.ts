@@ -416,6 +416,35 @@ function normalizeSupplierReturnDocumentType(value: unknown) {
   return type;
 }
 
+function isSupplierOcrTableMissingError(error: unknown) {
+  const typedError = (error || {}) as { code?: string; meta?: { table?: unknown; modelName?: unknown }; message?: string };
+  const haystack = [
+    typedError.code,
+    typedError.meta?.table,
+    typedError.meta?.modelName,
+    typedError.message,
+  ].map((value) => String(value || "")).join(" ");
+  return typedError.code === "P2021" && /ocr_tasks|ocr_results|OcrTask|OcrResult/i.test(haystack);
+}
+
+function supplierOcrTableName(error: unknown) {
+  const typedError = (error || {}) as { meta?: { table?: unknown; modelName?: unknown }; message?: string };
+  const explicit = String(typedError.meta?.table || typedError.meta?.modelName || "").trim();
+  if (explicit) return explicit;
+  const match = String(typedError.message || "").match(/ocr_(?:tasks|results)|OcrTask|OcrResult/i);
+  return match?.[0] || "";
+}
+
+function throwIfSupplierOcrTableMissing(error: unknown): never | void {
+  if (!isSupplierOcrTableMissingError(error)) return;
+  const table = supplierOcrTableName(error);
+  throw codedError(
+    `OCR 数据表未初始化，请联系管理员执行数据库迁移${table ? `（缺少 ${table}）` : ""}。`,
+    503,
+    "OCR_TABLE_NOT_INITIALIZED",
+  );
+}
+
 async function loadSupplierReturnDocument(documentId: string, requestId = ""): Promise<OcrDocumentRow> {
   if (!documentId) throw codedError("缺少 supplierReturnDocumentId。", 400, "SUPPLIER_RETURN_DOCUMENT_ID_REQUIRED");
   const document = await prisma.orderDocument.findFirst({
@@ -460,23 +489,28 @@ async function loadSupplierReturnDocument(documentId: string, requestId = ""): P
 
 async function createSupplierDocumentOcrTask(document: OcrDocumentRow) {
   if (!(await isOcrFeatureEnabled(SUPPLIER_DOCUMENT_OCR_FEATURE))) return null;
-  const task = await prisma.ocrTask.create({
-    data: {
-      module: SUPPLIER_DOCUMENT_OCR_MODULE,
-      documentId: document.id,
-      requestId: document.factoryDocumentRequestId,
-      orderId: document.orderId,
-      supplierId: document.supplierId,
-      documentType: document.documentType,
-      status: OCR_STATUS_PROCESSING,
-      validationStatus: "PROCESSING",
-    },
-    include: { results: true },
-  });
-  if (document.factoryDocumentRequestId) {
-    await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+  try {
+    const task = await prisma.ocrTask.create({
+      data: {
+        module: SUPPLIER_DOCUMENT_OCR_MODULE,
+        documentId: document.id,
+        requestId: document.factoryDocumentRequestId,
+        orderId: document.orderId,
+        supplierId: document.supplierId,
+        documentType: document.documentType,
+        status: OCR_STATUS_PROCESSING,
+        validationStatus: "PROCESSING",
+      },
+      include: { results: true },
+    });
+    if (document.factoryDocumentRequestId) {
+      await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+    }
+    return task;
+  } catch (error: unknown) {
+    throwIfSupplierOcrTableMissing(error);
+    throw error;
   }
-  return task;
 }
 
 export async function createSupplierDocumentOcrTaskForUpload(documentId: string) {
@@ -485,9 +519,14 @@ export async function createSupplierDocumentOcrTaskForUpload(documentId: string)
 }
 
 export async function runSupplierDocumentOcrTask(taskId: string) {
-  const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
-  if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
-  return runSupplierDocumentOcrForDocument(task.documentId, null, { taskId, requestId: task.requestId || "" });
+  try {
+    const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
+    if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+    return runSupplierDocumentOcrForDocument(task.documentId, null, { taskId, requestId: task.requestId || "" });
+  } catch (error: unknown) {
+    throwIfSupplierOcrTableMissing(error);
+    throw error;
+  }
 }
 
 export async function runSupplierDocumentOcrForDocument(
@@ -500,13 +539,19 @@ export async function runSupplierDocumentOcrForDocument(
     assertInternalOcrManager(actor);
   }
   const document = await loadSupplierReturnDocument(documentId, options.requestId || "");
-  const task = options.taskId
-    ? await prisma.ocrTask.update({
-        where: { id: options.taskId },
-        data: { status: OCR_STATUS_PROCESSING, validationStatus: "PROCESSING", errorMessage: null },
-        include: { results: true },
-      })
-    : await createSupplierDocumentOcrTaskForUpload(document.id);
+  let task: OcrTaskRow | null = null;
+  try {
+    task = options.taskId
+      ? await prisma.ocrTask.update({
+          where: { id: options.taskId },
+          data: { status: OCR_STATUS_PROCESSING, validationStatus: "PROCESSING", errorMessage: null },
+          include: { results: true },
+        })
+      : await createSupplierDocumentOcrTaskForUpload(document.id);
+  } catch (error: unknown) {
+    throwIfSupplierOcrTableMissing(error);
+    throw error;
+  }
   if (!task) return null;
   try {
     const fileBuffer = await readR2Object(document.storageKey);
@@ -562,17 +607,24 @@ export async function runSupplierDocumentOcrForDocument(
     }
     return saved;
   } catch (error) {
+    throwIfSupplierOcrTableMissing(error);
     const message = error instanceof Error ? error.message : "OCR识别失败，需人工核对";
-    const saved = await prisma.ocrTask.update({
-      where: { id: task.id },
-      data: {
-        status: OCR_STATUS_FAILED,
-        validationStatus: VALIDATION_FAILED,
-        errorMessage: message.slice(0, 1000),
-        validationJson: { issues: [{ level: "manual", message: "OCR识别失败，需人工核对" }] },
-      },
-      include: { results: true },
-    });
+    let saved: OcrTaskRow;
+    try {
+      saved = await prisma.ocrTask.update({
+        where: { id: task.id },
+        data: {
+          status: OCR_STATUS_FAILED,
+          validationStatus: VALIDATION_FAILED,
+          errorMessage: message.slice(0, 1000),
+          validationJson: { issues: [{ level: "manual", message: "OCR识别失败，需人工核对" }] },
+        },
+        include: { results: true },
+      });
+    } catch (updateError: unknown) {
+      throwIfSupplierOcrTableMissing(updateError);
+      throw updateError;
+    }
     logServerError("产品供应商回传资料OCR识别失败", error, { documentId, taskId: task.id });
     if (document.factoryDocumentRequestId) {
       await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
@@ -582,21 +634,35 @@ export async function runSupplierDocumentOcrForDocument(
 }
 
 export async function refreshSupplierDocumentRequestQualification(requestId: string) {
-  const row = await prisma.supplierDocumentRequest.findUnique({
-    where: { id: requestId },
+  let row: Prisma.SupplierDocumentRequestGetPayload<{
     include: {
       documents: {
-        where: { deletedAt: null, uploadStatus: "SUCCESS" },
         include: {
-          ocrTasks: {
-            orderBy: [{ createdAt: "desc" }],
-            take: 1,
-            include: { results: true },
+          ocrTasks: { include: { results: true } };
+        };
+      };
+    };
+  }> | null = null;
+  try {
+    row = await prisma.supplierDocumentRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        documents: {
+          where: { deletedAt: null, uploadStatus: "SUCCESS" },
+          include: {
+            ocrTasks: {
+              orderBy: [{ createdAt: "desc" }],
+              take: 1,
+              include: { results: true },
+            },
           },
         },
       },
-    },
-  });
+    });
+  } catch (error: unknown) {
+    throwIfSupplierOcrTableMissing(error);
+    throw error;
+  }
   if (!row) return null;
   const requiredTypes = Array.isArray(row.requiredDocumentTypes)
     ? row.requiredDocumentTypes.map(normalizeSupplierReturnDocumentType)
@@ -625,16 +691,21 @@ export async function refreshSupplierDocumentRequestQualification(requestId: str
 export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
   assertWrite(actor, "supplierDocuments");
   assertInternalOcrManager(actor);
-  const document = await loadSupplierReturnDocument(documentId, requestId);
-  const before = await prisma.ocrTask.findFirst({
-    where: { documentId, requestId },
-    orderBy: [{ createdAt: "desc" }],
-  });
-  const task = await createSupplierDocumentOcrTask(document);
-  if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
-  const result = await runSupplierDocumentOcrTask(task.id);
-  await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
-  return serializeSupplierDocumentOcrTask(result);
+  try {
+    const document = await loadSupplierReturnDocument(documentId, requestId);
+    const before = await prisma.ocrTask.findFirst({
+      where: { documentId, requestId },
+      orderBy: [{ createdAt: "desc" }],
+    });
+    const task = await createSupplierDocumentOcrTask(document);
+    if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
+    const result = await runSupplierDocumentOcrTask(task.id);
+    await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
+    return serializeSupplierDocumentOcrTask(result);
+  } catch (error: unknown) {
+    throwIfSupplierOcrTableMissing(error);
+    throw error;
+  }
 }
 
 export async function confirmSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {

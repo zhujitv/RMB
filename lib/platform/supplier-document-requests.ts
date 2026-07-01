@@ -835,13 +835,19 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
-  const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
-  if (ocrTask?.id) {
-    void runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
-      await runSupplierDocumentOcrTask(ocrTask.id);
-    }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
-  } else {
-    await refreshSupplierDocumentRequestQualification(row.id);
+  let ocrWarning = "";
+  try {
+    const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
+    if (ocrTask?.id) {
+      void runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
+        await runSupplierDocumentOcrTask(ocrTask.id);
+      }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
+    } else {
+      await refreshSupplierDocumentRequestQualification(row.id);
+    }
+  } catch (error: unknown) {
+    ocrWarning = error instanceof Error ? error.message : "OCR任务创建失败，请稍后重试或联系管理员。";
+    logServerError("供应商回传资料上传成功但OCR任务创建失败", error, { documentId: document.id, requestId: row.id, documentType });
   }
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
@@ -870,6 +876,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   return {
     request: serializeSupplierDocumentRequest(refreshed, actor),
     document: serializeSupplierDocument(document),
+    message: ocrWarning ? `上传成功；${ocrWarning}` : "上传成功",
   };
 }
 
