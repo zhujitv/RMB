@@ -11,7 +11,7 @@ import { LoginPanel } from "./LoginPanel";
 import { PasswordChangePanel } from "./PasswordChangePanel";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
-import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse } from "./types";
+import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse, WorkbenchTodo, WorkbenchTodosState } from "./types";
 import { canWritePermission, normalizeEmail } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 import { WorkspaceLayout } from "./WorkspaceLayout";
@@ -20,6 +20,21 @@ import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-po
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 const AUTH_BOOT_TIMEOUT_MS = 15000;
 const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
+const WORKBENCH_TODOS_TIMEOUT_MS = 12000;
+
+const EMPTY_WORKBENCH_TODOS: WorkbenchTodosState = {
+  todos: [],
+  summary: {
+    pending: 0,
+    todayDue: 0,
+    overdue: 0,
+    completed: 0,
+    total: 0,
+    urgent: 0,
+  },
+  loading: false,
+  error: "",
+};
 
 function normalizeWorkspaceMenuKey(menuKey: string) {
   return menuKey === "logisticsReview" ? "logisticsFees" : menuKey;
@@ -149,11 +164,13 @@ export function WorkspaceShell() {
   const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
   const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
+  const [supplierDocumentsFocus, setSupplierDocumentsFocus] = useState({ keyword: "", requestId: "", token: 0 });
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [publicCompanyProfile, setPublicCompanyProfile] = useState<CompanyProfileSettings | null>(null);
+  const [workbenchTodos, setWorkbenchTodos] = useState<WorkbenchTodosState>(EMPTY_WORKBENCH_TODOS);
 
   async function loadCurrentUser() {
     setAuth({ status: "loading", message: "正在加载工作台..." });
@@ -202,6 +219,29 @@ export function WorkspaceShell() {
     }
   }
 
+  async function loadWorkbenchTodos() {
+    setWorkbenchTodos((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const result = await apiJson<Partial<WorkbenchTodosState>>("/api/workbench/todos", { timeoutMs: WORKBENCH_TODOS_TIMEOUT_MS });
+      setWorkbenchTodos({
+        todos: Array.isArray(result.todos) ? result.todos : [],
+        summary: {
+          ...EMPTY_WORKBENCH_TODOS.summary,
+          ...(result.summary || {}),
+        },
+        loading: false,
+        error: "",
+        generatedAt: result.generatedAt,
+      });
+    } catch (error) {
+      setWorkbenchTodos((current) => ({
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : "读取待办失败",
+      }));
+    }
+  }
+
   const readyPayload = auth.status === "ready" ? auth.payload : null;
   const activeCompanyProfile = readyPayload?.companyProfile || publicCompanyProfile;
   const menus = useMemo(() => {
@@ -230,6 +270,11 @@ export function WorkspaceShell() {
   useEffect(() => {
     document.title = activeCompanyProfile?.systemName?.trim() || "NEXTWOOD 供应链协同平台";
   }, [activeCompanyProfile?.systemName]);
+
+  useEffect(() => {
+    if (auth.status !== "ready") return;
+    void loadWorkbenchTodos();
+  }, [auth.status]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -332,6 +377,7 @@ export function WorkspaceShell() {
   async function handleLogout() {
     await apiJson("/api/auth/logout", { method: "POST" }).catch(() => null);
     setActiveMenu("welcome");
+    setWorkbenchTodos(EMPTY_WORKBENCH_TODOS);
     setAuth({ status: "guest" });
   }
 
@@ -394,6 +440,58 @@ export function WorkspaceShell() {
       : current);
   }
 
+  function openWorkbenchTodo(todo: WorkbenchTodo) {
+    const href = todo.action?.href || "";
+    const parsed = new URL(href || "/", "https://workspace.local");
+    const path = parsed.pathname.replace(/^\/+/, "");
+    const keyword = parsed.searchParams.get("keyword") || todo.orderNo || "";
+    const token = Date.now();
+    if (path === "orders") {
+      setOrdersFocus({ keyword, token });
+      setActiveMenu("orders");
+      return;
+    }
+    if (path === "payments") {
+      setPaymentsFocus({ keyword, token });
+      setActiveMenu("payments");
+      return;
+    }
+    if (path === "costs") {
+      setCostsFocus({ keyword, token });
+      setActiveMenu("costs");
+      return;
+    }
+    if (path === "domestic-logistics") {
+      setDomesticLogisticsFocus({ keyword, token });
+      setActiveMenu("domesticLogistics");
+      return;
+    }
+    if (path === "logistics-fees") {
+      setLogisticsFeesFocus({
+        keyword,
+        billId: parsed.searchParams.get("billId") || "",
+        token,
+      });
+      setActiveMenu("logisticsFees");
+      return;
+    }
+    if (path === "supplier-documents") {
+      setSupplierDocumentsFocus({
+        keyword,
+        requestId: parsed.searchParams.get("requestId") || "",
+        token,
+      });
+      setActiveMenu("supplierDocuments");
+      return;
+    }
+    if (path === "tax-refund") {
+      setTaxRefundFocus({ keyword, token });
+      setActiveMenu("taxRefund");
+      return;
+    }
+    setActiveMenu("welcome");
+  }
+
   const payload = publicCompanyProfile && !auth.payload.companyProfile
     ? { ...auth.payload, companyProfile: publicCompanyProfile }
     : auth.payload;
@@ -406,9 +504,19 @@ export function WorkspaceShell() {
       onSelectMenu={selectWorkspaceMenu}
       onLogout={handleLogout}
       onPasswordChange={(user) => setAuth({ status: "password-change", user })}
+      workbenchTodos={workbenchTodos}
+      onRefreshTodos={loadWorkbenchTodos}
+      onOpenTodo={openWorkbenchTodo}
     >
       {activeMenu === "welcome" ? (
-        <WelcomePanel payload={payload} menus={menus} onSelectMenu={selectWorkspaceMenu} />
+        <WelcomePanel
+          payload={payload}
+          menus={menus}
+          todosState={workbenchTodos}
+          onSelectMenu={selectWorkspaceMenu}
+          onRefreshTodos={loadWorkbenchTodos}
+          onOpenTodo={openWorkbenchTodo}
+        />
       ) : activeMenu === "account" ? (
         <AccountSettings
           user={payload.user}
@@ -478,7 +586,12 @@ export function WorkspaceShell() {
           initialControlTowerFullscreen
         />
       ) : activeMenu === "supplierDocuments" ? (
-        <SupplierDocumentsModule currentUser={payload.user} />
+        <SupplierDocumentsModule
+          currentUser={payload.user}
+          initialKeyword={supplierDocumentsFocus.keyword}
+          initialRequestId={supplierDocumentsFocus.requestId}
+          initialOpenToken={supplierDocumentsFocus.token}
+        />
       ) : activeMenu === "profit" ? (
         <ProfitModule currentUser={payload.user} />
       ) : activeMenu === "taxRefund" ? (

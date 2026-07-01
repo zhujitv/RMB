@@ -1,0 +1,597 @@
+import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
+import { orderAccessWhere } from "./order-access";
+import { canRead } from "./shared-access";
+import {
+  addDays,
+  startOfChinaDay,
+  summarizeWorkbenchTodos,
+  todoPriorityFromDueAt,
+} from "./workbench-todo-rules";
+import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
+import {
+  ACTIVE_TAX_REFUND_STATUSES,
+  FACTORY_SUPPLIER_COST_TYPES,
+  LEGACY_LOGISTICS_OPERATOR_ROLE,
+  LOGISTICS_OPERATOR_ROLE,
+  SUPPLIER_DOCUMENT_TYPES,
+  cachedTaxRefundCompleteness,
+  customerShortName,
+  isProductSupplierOperatorRole,
+  needsTaxRefundCompletenessRefresh,
+  nonEmpty,
+  refreshTaxRefundCompleteness,
+  taxRefundStatusFromCompleteness,
+} from "./shared";
+
+export type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
+export type WorkbenchTodoStatus = "pending" | "completed";
+export type WorkbenchTodo = {
+  id: string;
+  type: string;
+  title: string;
+  module: string;
+  orderId?: string;
+  orderNo?: string;
+  customerShortName?: string;
+  priority: WorkbenchTodoPriority;
+  status: WorkbenchTodoStatus;
+  dueAt?: string | null;
+  ownerName?: string;
+  action: {
+    label: string;
+    href: string;
+  };
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+type ActorLike = {
+  id?: string | null;
+  role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
+} | null | undefined;
+
+type TodoOrder = {
+  id: string;
+  orderNo: string;
+  customerNameSnapshot?: string | null;
+  dueDate?: Date | string | null;
+  expectedShipmentDate?: Date | string | null;
+  expectedArrivalDate?: Date | string | null;
+  updatedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  customer?: { shortName?: string | null; salespersonUserId?: string | null } | null;
+  salesperson?: { name?: string | null } | null;
+};
+
+const TODO_LIMIT_PER_SOURCE = 80;
+const PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE = ["已完成", "已关闭"];
+const LOGISTICS_INVOICE_DONE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
+
+function actorRole(actor: ActorLike) {
+  return nonEmpty(actor?.role);
+}
+
+function actorId(actor: ActorLike) {
+  return nonEmpty(actor?.id);
+}
+
+function actorSupplierId(actor: ActorLike) {
+  return nonEmpty(actor?.supplierId);
+}
+
+function isAdmin(actor: ActorLike) {
+  return actorRole(actor) === "管理员";
+}
+
+function isSalesperson(actor: ActorLike) {
+  return actorRole(actor) === "业务员";
+}
+
+function isFinance(actor: ActorLike) {
+  return actorRole(actor) === "财务";
+}
+
+function isLogisticsOperator(actor: ActorLike) {
+  return [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(actorRole(actor));
+}
+
+function isLogisticsSupplier(actor: ActorLike) {
+  return actorRole(actor) === LOGISTICS_OPERATOR_ROLE;
+}
+
+function isPurchase(actor: ActorLike) {
+  return actorRole(actor) === "采购";
+}
+
+function endOfChinaDay(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  const start = startOfChinaDay(date);
+  return new Date(addDays(start, 1).getTime() - 1);
+}
+
+function iso(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function orderCustomerShortName(order: TodoOrder) {
+  return customerShortName(order.customer) || nonEmpty(order.customerNameSnapshot);
+}
+
+function orderOwnerName(order: TodoOrder) {
+  return nonEmpty(order.salesperson?.name) || "未分配";
+}
+
+function orderHref(modulePath: string, order: Pick<TodoOrder, "id" | "orderNo">, extra: Record<string, string> = {}) {
+  const params = new URLSearchParams({ orderId: order.id, keyword: order.orderNo, ...extra });
+  return `${modulePath}?${params.toString()}`;
+}
+
+function todoForOrder(input: {
+  type: string;
+  title: string;
+  module: string;
+  order: TodoOrder;
+  dueAt?: Date | string | null;
+  href: string;
+  ownerName?: string;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+}): WorkbenchTodo {
+  const dueAt = iso(endOfChinaDay(input.dueAt || null));
+  return {
+    id: `${input.type.toLowerCase()}-${input.order.id}`,
+    type: input.type,
+    title: input.title,
+    module: input.module,
+    orderId: input.order.id,
+    orderNo: input.order.orderNo,
+    customerShortName: orderCustomerShortName(input.order),
+    priority: todoPriorityFromDueAt(dueAt),
+    status: "pending",
+    dueAt,
+    ownerName: input.ownerName || orderOwnerName(input.order),
+    action: { label: "处理", href: input.href },
+    createdAt: iso(input.createdAt || input.order.createdAt),
+    updatedAt: iso(input.updatedAt || input.order.updatedAt),
+  };
+}
+
+function activeOrderBaseWhere(actor: ActorLike): Prisma.ReceivableOrderWhereInput {
+  const role = actorRole(actor);
+  const supplierId = actorSupplierId(actor);
+  const filters: Prisma.ReceivableOrderWhereInput[] = [
+    { deletedAt: null },
+    { status: { notIn: ["已关闭", "已取消"] } },
+  ];
+  if (role === "业务员") filters.push(orderAccessWhere(actor));
+  if (role === LOGISTICS_OPERATOR_ROLE) {
+    filters.push(supplierId ? { logisticsSuppliers: { some: { supplierId } } } : { id: "__no_supplier_bound__" });
+  }
+  return { AND: filters };
+}
+
+function logisticsBillAccessWhere(actor: ActorLike): Prisma.LogisticsBillWhereInput {
+  const role = actorRole(actor);
+  const supplierId = actorSupplierId(actor);
+  if (role === "管理员") return {};
+  if (role === "财务") return { auditStatus: "审核通过" };
+  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId(actor) } } } } };
+  if (role === LOGISTICS_OPERATOR_ROLE) return supplierId ? { supplierId } : { id: "__no_supplier_bound__" };
+  if (role === LEGACY_LOGISTICS_OPERATOR_ROLE) return {};
+  return { id: "__no_logistics_bill_access__" };
+}
+
+async function listOrderTodos(actor: ActorLike) {
+  if (!canRead(actor, "orders") || !(isAdmin(actor) || isSalesperson(actor) || isPurchase(actor))) return [];
+  const [draftOrders, purchasePendingOrders] = await Promise.all([
+    prisma.receivableOrder.findMany({
+      where: {
+        deletedAt: null,
+        status: { in: ["草稿", "待审核"] },
+        AND: [orderAccessWhere(actor)],
+      },
+      include: { customer: true, salesperson: { select: { name: true } } },
+      orderBy: [{ createdAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+    prisma.receivableOrder.findMany({
+      where: {
+        deletedAt: null,
+        status: { in: ["已确认", "生产中"] },
+        AND: [orderAccessWhere(actor)],
+        costs: {
+          none: {
+            deletedAt: null,
+            costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+          },
+        },
+      },
+      include: { customer: true, salesperson: { select: { name: true } } },
+      orderBy: [{ updatedAt: "desc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+  ]);
+  return [
+    ...draftOrders.map((order) => todoForOrder({
+      type: "NEW_ORDER_REVIEW",
+      title: "新订单待审核",
+      module: "应收订单",
+      order,
+      dueAt: order.dueDate || order.expectedShipmentDate,
+      href: orderHref("/orders", order),
+    })),
+    ...purchasePendingOrders.map((order) => todoForOrder({
+      type: "PURCHASE_ORDER_PENDING",
+      title: "采购订单待下达",
+      module: "应收订单",
+      order,
+      dueAt: order.expectedShipmentDate || order.dueDate,
+      href: orderHref("/orders", order),
+    })),
+  ];
+}
+
+async function listDomesticLogisticsTodos(actor: ActorLike) {
+  if (!canRead(actor, "domesticLogistics") || !(isAdmin(actor) || isSalesperson(actor) || isLogisticsOperator(actor))) return [];
+  const where = activeOrderBaseWhere(actor);
+  const orders = await prisma.receivableOrder.findMany({
+    where,
+    include: {
+      customer: true,
+      salesperson: { select: { name: true } },
+      logisticsBills: {
+        where: { deletedAt: null },
+        select: { id: true, billOfLadingNo: true },
+      },
+      domesticLogisticsInfos: {
+        where: { deletedAt: null },
+        include: { transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+        orderBy: [{ updatedAt: "desc" }],
+      },
+      logisticsExpenses: {
+        where: { deletedAt: null },
+        select: { id: true },
+        take: 1,
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }],
+    take: TODO_LIMIT_PER_SOURCE,
+  });
+  const todos: WorkbenchTodo[] = [];
+  for (const order of orders) {
+    if (!order.domesticLogisticsInfos.length) {
+      todos.push(todoForOrder({
+        type: "LOGISTICS_INFO_MISSING",
+        title: "物流信息待录入",
+        module: "物流信息",
+        order,
+        dueAt: order.expectedShipmentDate || order.dueDate,
+        href: orderHref("/domestic-logistics", order),
+      }));
+    }
+    const hasBillNo = Boolean(nonEmpty(order.blNo) || order.logisticsBills.some((bill) => nonEmpty(bill.billOfLadingNo)));
+    if (!hasBillNo) {
+      todos.push(todoForOrder({
+        type: "BILL_OF_LADING_MISSING",
+        title: "提单号缺失",
+        module: "物流信息",
+        order,
+        dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
+        href: orderHref("/domestic-logistics", order),
+      }));
+    }
+    const hasContainerMissing = order.domesticLogisticsInfos.some((info) => (
+      !info.transportItems.length || info.transportItems.some((item) => !nonEmpty(item.containerNo))
+    ));
+    if (hasContainerMissing) {
+      todos.push(todoForOrder({
+        type: "CONTAINER_NO_MISSING",
+        title: "柜号缺失",
+        module: "物流信息",
+        order,
+        dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
+        href: orderHref("/domestic-logistics", order),
+      }));
+    }
+    if (!order.logisticsExpenses.length && (isAdmin(actor) || isSalesperson(actor) || isLogisticsSupplier(actor))) {
+      todos.push(todoForOrder({
+        type: "LOGISTICS_FEE_ENTRY",
+        title: "物流费用待录入",
+        module: "物流费用",
+        order,
+        dueAt: order.expectedShipmentDate || order.expectedArrivalDate,
+        href: orderHref("/logistics-fees", order),
+      }));
+    }
+  }
+  return todos;
+}
+
+async function listLogisticsFeeTodos(actor: ActorLike) {
+  if (!canRead(actor, "domesticLogistics") && !canRead(actor, "costs")) return [];
+  if (!(isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) return [];
+  const accessWhere = logisticsBillAccessWhere(actor);
+  const [reviewBills, invoiceBills] = await Promise.all([
+    prisma.logisticsBill.findMany({
+      where: {
+        deletedAt: null,
+        AND: [
+          { auditStatus: "待审核" },
+          accessWhere,
+        ],
+      },
+      include: {
+        order: { include: { customer: true, salesperson: { select: { name: true } } } },
+        supplier: { select: { supplierName: true } },
+      },
+      orderBy: [{ submittedAt: "asc" }, { updatedAt: "asc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+    prisma.logisticsBill.findMany({
+      where: {
+        deletedAt: null,
+        AND: [
+          { auditStatus: "审核通过" },
+          { invoiceStatus: { notIn: LOGISTICS_INVOICE_DONE_STATUSES } },
+          accessWhere,
+        ],
+      },
+      include: {
+        order: { include: { customer: true, salesperson: { select: { name: true } } } },
+        supplier: { select: { supplierName: true } },
+      },
+      orderBy: [{ reviewedAt: "asc" }, { updatedAt: "asc" }],
+      take: TODO_LIMIT_PER_SOURCE,
+    }),
+  ]);
+  return [
+    ...reviewBills.map((bill) => todoForOrder({
+      type: "LOGISTICS_FEE_REVIEW",
+      title: "物流费用待审核",
+      module: "物流费用",
+      order: bill.order,
+      dueAt: bill.submittedAt || bill.updatedAt,
+      href: orderHref("/logistics-fees", bill.order, {
+        billId: bill.id,
+        keyword: bill.billOfLadingNo || bill.order.orderNo,
+      }),
+      ownerName: isLogisticsSupplier(actor) ? (bill.supplier?.supplierName || "物流供应商") : "财务/管理员",
+      createdAt: bill.createdAt,
+      updatedAt: bill.updatedAt,
+    })),
+    ...invoiceBills.map((bill) => todoForOrder({
+      type: "LOGISTICS_INVOICE_UPLOAD",
+      title: "物流发票待上传",
+      module: "物流费用",
+      order: bill.order,
+      dueAt: bill.reviewedAt || bill.updatedAt,
+      href: orderHref("/logistics-fees", bill.order, {
+        billId: bill.id,
+        keyword: bill.billOfLadingNo || bill.order.orderNo,
+      }),
+      ownerName: bill.supplier?.supplierName || "物流供应商",
+      createdAt: bill.createdAt,
+      updatedAt: bill.updatedAt,
+    })),
+  ];
+}
+
+async function listSupplierDocumentTodos(actor: ActorLike) {
+  if (!canRead(actor, "supplierDocuments")) return [];
+  const productSupplier = isProductSupplierOperatorRole(actorRole(actor));
+  const where: Prisma.SupplierDocumentRequestWhereInput = {
+    deletedAt: null,
+    status: { notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE },
+    ...(productSupplier
+      ? {
+          supplierId: actorSupplierId(actor) || "__no_supplier_bound__",
+          supplier: { allowFactoryDocumentUpload: true, status: "启用", deletedAt: null },
+        }
+      : {}),
+  };
+  if (!isAdmin(actor) && !productSupplier) return [];
+  const rows = await prisma.supplierDocumentRequest.findMany({
+    where,
+    include: {
+      order: { include: { customer: true, salesperson: { select: { name: true } } } },
+      supplier: { select: { supplierName: true } },
+    },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    take: TODO_LIMIT_PER_SOURCE,
+  });
+  return rows.map((row) => todoForOrder({
+    type: "SUPPLIER_DOCUMENT_RETURN",
+    title: "供应商资料待回传",
+    module: "资料回传",
+    order: row.order,
+    dueAt: row.dueDate,
+    href: orderHref("/supplier-documents", row.order, {
+      requestId: row.id,
+      keyword: row.order.orderNo,
+    }),
+    ownerName: productSupplier ? "当前供应商" : (row.supplier?.supplierName || "产品供应商"),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
+}
+
+function missingTaxRefundTodos(order: TodoOrder, missingLabels: string[] = []) {
+  const rules = [
+    { type: "TAX_TRUCKING_INVOICE_MISSING", title: "拖车发票缺失", pattern: /拖车|物流费资料|物流费发票/ },
+    { type: "TAX_CUSTOMS_DECLARATION_MISSING", title: "报关单缺失", pattern: /报关单/ },
+    { type: "TAX_PURCHASE_CONTRACT_MISSING", title: "采购合同缺失", pattern: /采购合同|工厂合同/ },
+    { type: "TAX_VAT_INVOICE_MISSING", title: "增值税发票缺失", pattern: /增值税发票|工厂发票/ },
+  ];
+  return rules
+    .filter((rule) => missingLabels.some((label) => rule.pattern.test(label)))
+    .map((rule) => todoForOrder({
+      type: rule.type,
+      title: rule.title,
+      module: "退税资料",
+      order,
+      href: orderHref("/tax-refund", order),
+      updatedAt: order.updatedAt,
+    }));
+}
+
+function normalizedMissingLabels(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => nonEmpty(item)).filter(Boolean)
+    : [];
+}
+
+async function listTaxRefundTodos(actor: ActorLike) {
+  if (!canRead(actor, "taxRefund") || !(isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) return [];
+  const rows = await prisma.receivableOrder.findMany({
+    where: {
+      deletedAt: null,
+      taxArchived: false,
+      taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES },
+      AND: [orderAccessWhere(actor)],
+    },
+    include: { customer: true, salesperson: { select: { name: true } } },
+    orderBy: [{ updatedAt: "desc" }],
+    take: TODO_LIMIT_PER_SOURCE,
+  });
+  const refreshedEntries = await Promise.all(
+    rows
+      .filter(needsTaxRefundCompletenessRefresh)
+      .map(async (order) => [order.id, await refreshTaxRefundCompleteness(order.id)] as const),
+  );
+  const refreshedById = new Map(refreshedEntries.filter(([, completeness]) => completeness));
+  const todos: WorkbenchTodo[] = [];
+  for (const order of rows) {
+    const completeness = refreshedById.get(order.id) || cachedTaxRefundCompleteness(order);
+    const total = Number(completeness.total || 0);
+    const completed = Number(completeness.completed || 0);
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const orderWithCompleteness = refreshedById.has(order.id)
+      ? { ...order, taxRefundCompleteness: completeness }
+      : order;
+    const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
+    if (total > 0 && completed < total) {
+      todos.push(todoForOrder({
+        type: "TAX_REFUND_INCOMPLETE",
+        title: `退税资料完整度不足 100%（${percent}%）`,
+        module: "退税资料",
+        order: orderWithCompleteness,
+        href: orderHref("/tax-refund", order),
+        updatedAt: order.updatedAt,
+      }));
+      todos.push(...missingTaxRefundTodos(orderWithCompleteness, normalizedMissingLabels(completeness.missingLabels)));
+    } else if (total > 0 && status !== "SUBMITTED") {
+      todos.push(todoForOrder({
+        type: "TAX_REFUND_READY_NOT_ARCHIVED",
+        title: "已满足退税条件但未归档",
+        module: "退税资料",
+        order: orderWithCompleteness,
+        href: orderHref("/tax-refund", order),
+        updatedAt: order.updatedAt,
+      }));
+    }
+  }
+  return todos;
+}
+
+async function completedTodayCount(actor: ActorLike, now = new Date()) {
+  const today = startOfChinaDay(now);
+  const tomorrow = addDays(today, 1);
+  const counts: Promise<number>[] = [];
+  if (canRead(actor, "supplierDocuments") && (isAdmin(actor) || isProductSupplierOperatorRole(actorRole(actor)))) {
+    counts.push(prisma.supplierDocumentRequest.count({
+      where: {
+        deletedAt: null,
+        status: "已完成",
+        updatedAt: { gte: today, lt: tomorrow },
+        ...(isProductSupplierOperatorRole(actorRole(actor))
+          ? { supplierId: actorSupplierId(actor) || "__no_supplier_bound__" }
+          : {}),
+      },
+    }));
+  }
+  if ((canRead(actor, "domesticLogistics") || canRead(actor, "costs")) && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) {
+    counts.push(prisma.logisticsBill.count({
+      where: {
+        deletedAt: null,
+        OR: [
+          { auditStatus: "审核通过", reviewedAt: { gte: today, lt: tomorrow } },
+          { invoiceStatus: { in: LOGISTICS_INVOICE_DONE_STATUSES }, updatedAt: { gte: today, lt: tomorrow } },
+        ],
+        ...logisticsBillAccessWhere(actor),
+      },
+    }));
+  }
+  if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
+    counts.push(prisma.receivableOrder.count({
+      where: {
+        deletedAt: null,
+        taxArchived: true,
+        taxRefundArchivedAt: { gte: today, lt: tomorrow },
+        AND: [orderAccessWhere(actor)],
+      },
+    }));
+  }
+  const values = await Promise.all(counts);
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
+function priorityRank(priority: WorkbenchTodoPriority) {
+  return priority === "urgent" ? 0 : priority === "important" ? 1 : 2;
+}
+
+function sortWorkbenchTodos(a: WorkbenchTodo, b: WorkbenchTodo) {
+  const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority);
+  if (priorityDiff) return priorityDiff;
+  const dueA = a.dueAt ? new Date(a.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
+  const dueB = b.dueAt ? new Date(b.dueAt).getTime() : Number.MAX_SAFE_INTEGER;
+  if (dueA !== dueB) return dueA - dueB;
+  const updatedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+  const updatedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+  return updatedB - updatedA;
+}
+
+function uniqueTodos(todos: WorkbenchTodo[]) {
+  const seen = new Set<string>();
+  return todos.filter((todo) => {
+    if (seen.has(todo.id)) return false;
+    seen.add(todo.id);
+    return true;
+  });
+}
+
+export async function listWorkbenchTodos(actor: ActorLike) {
+  const [orderTodos, domesticLogisticsTodos, logisticsFeeTodos, supplierDocumentTodos, taxRefundTodos, completed] = await Promise.all([
+    listOrderTodos(actor),
+    listDomesticLogisticsTodos(actor),
+    listLogisticsFeeTodos(actor),
+    listSupplierDocumentTodos(actor),
+    listTaxRefundTodos(actor),
+    completedTodayCount(actor),
+  ]);
+  const todos = uniqueTodos([
+    ...orderTodos,
+    ...domesticLogisticsTodos,
+    ...logisticsFeeTodos,
+    ...supplierDocumentTodos,
+    ...taxRefundTodos,
+  ]).sort(sortWorkbenchTodos);
+  return {
+    todos,
+    summary: summarizeWorkbenchTodos(todos, completed),
+    generatedAt: new Date().toISOString(),
+    sourceTypes: [
+      "orders",
+      "domesticLogistics",
+      "logisticsFees",
+      "supplierDocuments",
+      "taxRefund",
+    ],
+    supportedDocumentTypes: SUPPLIER_DOCUMENT_TYPES,
+  };
+}

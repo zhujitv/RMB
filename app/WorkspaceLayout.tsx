@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { MENU_ITEMS } from "./menu";
-import type { AuthPayload, MenuItem, User } from "./types";
+import type { AuthPayload, MenuItem, User, WorkbenchTodo, WorkbenchTodosState } from "./types";
 import { initials } from "./utils";
 import styles from "./WorkspaceShell.module.css";
 
@@ -14,6 +14,9 @@ type WorkspaceLayoutProps = {
   onSelectMenu: (key: string) => void;
   onLogout: () => void;
   onPasswordChange: (user: User) => void;
+  workbenchTodos: WorkbenchTodosState;
+  onRefreshTodos: () => void;
+  onOpenTodo: (todo: WorkbenchTodo) => void;
   children: ReactNode;
 };
 
@@ -41,6 +44,25 @@ function NavIcon({ menuKey }: { menuKey: string }) {
   );
 }
 
+function todoDotClass(summary: WorkbenchTodosState["summary"]) {
+  if (summary.overdue > 0) return styles.todoDotRed;
+  if (summary.todayDue > 0) return styles.todoDotOrange;
+  return styles.todoDotBlue;
+}
+
+function todoPriorityLabel(priority: WorkbenchTodo["priority"], dueAt?: string | null) {
+  if (priority === "urgent") return "紧急";
+  if (priority === "important") return "重要";
+  return dueAt ? "普通" : "普通";
+}
+
+function formatTodoDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+}
+
 export function WorkspaceLayout({
   payload,
   menus,
@@ -48,10 +70,14 @@ export function WorkspaceLayout({
   onSelectMenu,
   onLogout,
   onPasswordChange,
+  workbenchTodos,
+  onRefreshTodos,
+  onOpenTodo,
   children,
 }: WorkspaceLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const active = MENU_ITEMS.find((item) => item.key === activeMenu);
   const topbarTitle = activeMenu === "welcome"
     ? "工作台首页"
@@ -67,6 +93,13 @@ export function WorkspaceLayout({
   const footerText = typeof companyProfile.footerText === "string"
     ? companyProfile.footerText.trim()
     : "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.";
+  const topTodos = workbenchTodos.todos.slice(0, 10);
+  const pendingCount = Number(workbenchTodos.summary?.pending || 0);
+
+  function handleOpenTodo(todo: WorkbenchTodo) {
+    setTodoPanelOpen(false);
+    onOpenTodo(todo);
+  }
 
   return (
     <div className={styles.appShell}>
@@ -131,7 +164,46 @@ export function WorkspaceLayout({
               <h1>{topbarTitle}</h1>
             </div>
           </div>
-          <div className={styles.accountArea}>
+          <div className={styles.topbarRight}>
+            <div className={styles.todoNavRoot}>
+              <button
+                className={styles.todoNavButton}
+                type="button"
+                onClick={() => setTodoPanelOpen((open) => !open)}
+                aria-expanded={todoPanelOpen}
+              >
+                <span className={`${styles.todoDot} ${todoDotClass(workbenchTodos.summary)}`} />
+                <span>待办 {pendingCount}</span>
+              </button>
+              {todoPanelOpen ? (
+                <div className={styles.todoPanel}>
+                  <div className={styles.todoPanelHeader}>
+                    <strong>我的待办</strong>
+                    <button type="button" onClick={onRefreshTodos} disabled={workbenchTodos.loading}>
+                      {workbenchTodos.loading ? "刷新中" : "刷新"}
+                    </button>
+                  </div>
+                  {workbenchTodos.error ? <div className={styles.todoPanelError}>{workbenchTodos.error}</div> : null}
+                  {topTodos.length ? (
+                    <div className={styles.todoPanelList}>
+                      {topTodos.map((todo) => (
+                        <button key={todo.id} type="button" className={styles.todoPanelItem} onClick={() => handleOpenTodo(todo)}>
+                          <span className={styles.todoPanelItemTop}>
+                            <b>{todo.title}</b>
+                            <em>{todoPriorityLabel(todo.priority, todo.dueAt)}</em>
+                          </span>
+                          <span>{[todo.module, todo.orderNo, todo.customerShortName].filter(Boolean).join(" · ") || "-"}</span>
+                          <small>截止：{formatTodoDate(todo.dueAt)} · 负责人：{todo.ownerName || "-"}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={styles.todoPanelEmpty}>{workbenchTodos.loading ? "正在加载待办..." : "暂无待处理事项"}</div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <div className={styles.accountArea}>
             <button className={styles.accountButton} type="button" onClick={() => setMenuOpen((open) => !open)}>
               <span className={styles.avatar}>{avatarText}</span>
               <span>{payload.user.name}</span>
@@ -145,6 +217,7 @@ export function WorkspaceLayout({
                 <button type="button" onClick={onLogout}>退出登录</button>
               </div>
             ) : null}
+            </div>
           </div>
         </header>
         <main className={styles.content}>{children}</main>

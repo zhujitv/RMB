@@ -77,7 +77,17 @@ const DOCUMENT_LABELS: Record<string, string> = {
 };
 const SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) {
+export function SupplierDocumentsModule({
+  currentUser,
+  initialKeyword = "",
+  initialRequestId = "",
+  initialOpenToken = 0,
+}: {
+  currentUser: User;
+  initialKeyword?: string;
+  initialRequestId?: string;
+  initialOpenToken?: number;
+}) {
   const [rows, setRows] = useState<SupplierDocumentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -103,21 +113,25 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
     void loadRows(1, pageSize);
   }, []);
 
-  async function loadRows(nextPage = page, nextPageSize = pageSize) {
+  async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "") {
     setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams({ page: String(nextPage), pageSize: String(nextPageSize) });
+      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const data = await apiJson<SupplierDocumentsResponse>(`/api/supplier-document-requests?${params.toString()}`);
-      setRows(data.requests || []);
+      const nextRows = data.requests || [];
+      setRows(nextRows);
       const pagination = data.pagination || {};
       setPage(Number(pagination.page || nextPage));
       setPageSize(Number(pagination.pageSize || nextPageSize));
       setTotal(Number(pagination.total || data.requests?.length || 0));
       setTotalPages(Math.max(1, Number(pagination.totalPages || 1)));
       setPendingCount(Number(data.summary?.pendingCount || 0));
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取资料回传任务失败");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -200,6 +214,17 @@ export function SupplierDocumentsModule({ currentUser }: { currentUser: User }) 
   useEffect(() => {
     if (page > totalPages) void loadRows(totalPages, pageSize);
   }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!initialOpenToken) return;
+    const keyword = initialKeyword.trim();
+    void loadRows(1, pageSize, keyword).then((nextRows) => {
+      const focused = initialRequestId
+        ? nextRows.find((row) => row.id === initialRequestId)
+        : nextRows[0];
+      if (focused?.id) setExpandedTaskId(focused.id);
+    });
+  }, [initialOpenToken]);
 
   return (
     <section className={`${styles.moduleCard} ${styles.supplierDocumentsPage}`}>

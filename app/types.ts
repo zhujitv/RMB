@@ -79,3 +79,42 @@ export type LoginResponse = {
   mustChangePassword?: boolean;
   message?: string;
 };
+
+export type WorkbenchTodoPriority = "urgent" | "important" | "normal";
+
+export type WorkbenchTodo = {
+  id: string;
+  type: string;
+  title: string;
+  module: string;
+  orderId?: string;
+  orderNo?: string;
+  customerShortName?: string;
+  priority: WorkbenchTodoPriority;
+  status: "pending" | "completed";
+  dueAt?: string | null;
+  ownerName?: string;
+  action: {
+    label: string;
+    href: string;
+  };
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type WorkbenchTodoSummary = {
+  pending: number;
+  todayDue: number;
+  overdue: number;
+  completed: number;
+  total: number;
+  urgent: number;
+};
+
+export type WorkbenchTodosState = {
+  todos: WorkbenchTodo[];
+  summary: WorkbenchTodoSummary;
+  loading: boolean;
+  error: string;
+  generatedAt?: string;
+};
