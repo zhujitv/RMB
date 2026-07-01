@@ -115,9 +115,10 @@ export type OrderSummary = {
   settleableCommissionCny: number;
   expectedGrossProfit: number;
   expectedGrossMargin: number | null;
-  realizedGrossProfit: number;
+  realizedGrossProfit: number | null;
   realizedGrossMargin: number | null;
-  actualGrossProfit: number;
+  actualGrossProfit: number | null;
+  netCashFlowCny: number;
   grossMargin: number | null;
   reminderStatus: string;
   overdueDays: number;
@@ -283,8 +284,10 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const depositOverpaidCny = Math.max(receivedDepositCny - requiredDepositAmount, 0);
   const expectedGrossProfit = receivableCny - confirmedTotalCostCny;
   const expectedGrossMargin = receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
-  const realizedGrossProfit = arrivedPaymentsCny - paidConfirmedCostCny;
-  const realizedGrossMargin = arrivedPaymentsCny > 0 ? realizedGrossProfit / arrivedPaymentsCny : null;
+  const revenueRecognized = receivableCny > 0 && arrivedPaymentsCny >= receivableCny;
+  const realizedGrossProfit = revenueRecognized ? expectedGrossProfit : null;
+  const realizedGrossMargin = realizedGrossProfit != null && receivableCny > 0 ? realizedGrossProfit / receivableCny : null;
+  const netCashFlowCny = arrivedPaymentsCny - paidConfirmedCostCny;
   const commissionRate = commissionRateFromOrder(order);
   const realSalespersonSet = hasRealSalesperson(order);
   const allCostsAreConfirmed = allCostsConfirmed(order.costs || []);
@@ -369,6 +372,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     realizedGrossProfit,
     realizedGrossMargin,
     actualGrossProfit: realizedGrossProfit,
+    netCashFlowCny,
     grossMargin: expectedGrossMargin,
     reminderStatus: reminder.status,
     overdueDays: reminder.overdueDays,

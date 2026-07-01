@@ -16,11 +16,13 @@ import {
   FACTORY_SUPPLIER_COST_TYPES,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   LOGISTICS_OPERATOR_ROLE,
+  PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE,
   PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   cachedTaxRefundCompleteness,
   customerShortName,
   getCommissionFormulaSettings,
+  getExchangeRateSettings,
   includeOrderRelations,
   isLogisticsCostType,
   isProductSupplierOperatorRole,
@@ -28,6 +30,7 @@ import {
   listShipsgoControlTowerTrackings,
   needsTaxRefundCompletenessRefresh,
   nonEmpty,
+  normalizeDateText,
   refreshTaxRefundCompleteness,
   summarizeOrder,
   taxRefundStatusFromCompleteness,
@@ -128,6 +131,7 @@ type WorkbenchTodoContext = {
   systemCompanyKeys: string[];
   purchaseUsers: TodoUser[];
   usersBySupplierId: Map<string, TodoUser[]>;
+  paymentVoucherReminderStartDate: Date;
 };
 
 const TODO_LIMIT_PER_SOURCE = 80;
@@ -144,6 +148,16 @@ const LOGISTICS_PAYMENT_DONE_STATUSES = ["已付款"];
 const NEGATIVE_PROFIT_THRESHOLD = 0;
 const PROFIT_COST_REVIEW_STATUSES = ["生产中", "已发货", "部分收款", "已收齐", "多收款"];
 const PROFIT_COST_REQUIRED_STATUSES = ["已发货", "部分收款", "已收齐", "多收款"];
+
+function paymentVoucherReminderStartDateFromSettings(settings: unknown) {
+  const input = settings && typeof settings === "object" ? settings as Record<string, unknown> : {};
+  const text = normalizeDateText(input.paymentVoucherReminderStartDate, PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE);
+  const dateText = /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE;
+  const date = new Date(`${dateText}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime())
+    ? new Date(`${PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE}T00:00:00.000Z`)
+    : date;
+}
 
 type TodoCost = {
   id: string;
@@ -347,7 +361,7 @@ function taxRefundArchiveOwnerUsersFromIds(users: TodoUser[], ownerIds: string[]
 }
 
 async function createWorkbenchTodoContext(actor: ActorLike): Promise<WorkbenchTodoContext> {
-  const [users, taxRefundFinanceOwnerSettings] = await Promise.all([
+  const [users, taxRefundFinanceOwnerSettings, exchangeRateSettings] = await Promise.all([
     prisma.user.findMany({
       where: {
         isActive: true,
@@ -367,6 +381,7 @@ async function createWorkbenchTodoContext(actor: ActorLike): Promise<WorkbenchTo
       where: { key: { in: [...WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS, COMPANY_PROFILE_SETTING_KEY] } },
       select: { key: true, value: true },
     }).catch(() => []),
+    getExchangeRateSettings(),
   ]);
   const usersBySupplierId = new Map<string, TodoUser[]>();
   for (const user of users) {
@@ -409,6 +424,7 @@ async function createWorkbenchTodoContext(actor: ActorLike): Promise<WorkbenchTo
     systemCompanyKeys,
     purchaseUsers: users.filter((user) => user.role === "采购"),
     usersBySupplierId,
+    paymentVoucherReminderStartDate: paymentVoucherReminderStartDateFromSettings(exchangeRateSettings),
   };
 }
 
@@ -1149,13 +1165,14 @@ async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
         paymentStatus: { not: "已取消" },
         AND: [
           baseWhere,
-          paidCostWhere(),
+          { paid: true },
+          { paymentDate: { gte: context.paymentVoucherReminderStartDate } },
           { paymentVoucherStorageKey: null },
           { paymentVoucherUrl: null },
         ],
       },
       include,
-      orderBy: [{ paidAt: "asc" }, { updatedAt: "asc" }],
+      orderBy: [{ paymentDate: "asc" }, { paidAt: "asc" }, { updatedAt: "asc" }],
       take: TODO_LIMIT_PER_SOURCE,
     }),
     prisma.orderCost.findMany({
@@ -1196,7 +1213,7 @@ async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
     module: "成本管理",
     cost,
     context,
-    dueAt: cost.paidAt || cost.paymentDate || cost.updatedAt,
+    dueAt: cost.paymentDate || cost.paidAt || cost.updatedAt,
     owner: roleOwner(context, "FINANCE"),
   })));
   unpaidCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({

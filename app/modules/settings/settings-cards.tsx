@@ -215,6 +215,14 @@ export function ExchangeSettingsCard({
           value={currentForm.allowAdminIncompleteTaxSubmit}
           onChange={(value) => setField("allowAdminIncompleteTaxSubmit", value)}
         />
+        <label>
+          付款凭证提醒启用日期
+          <input
+            type="date"
+            value={currentForm.paymentVoucherReminderStartDate}
+            onChange={(event) => setField("paymentVoucherReminderStartDate", event.target.value)}
+          />
+        </label>
       </div>
 
       <div className={styles.detailActions}>

@@ -166,6 +166,7 @@ function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, comm
       expectedGrossMargin: summary.expectedGrossMargin,
       realizedGrossProfit: summary.realizedGrossProfit,
       realizedGrossMargin: summary.realizedGrossMargin,
+      netCashFlowCny: summary.netCashFlowCny,
       commissionAmountCny: summary.commissionAmountCny,
       estimatedCommissionCny: summary.estimatedCommissionCny,
       commissionRate: summary.commissionRate,
@@ -230,7 +231,11 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     acc.confirmedCost += order.summary.confirmedTotalCostCny;
     acc.paidConfirmedCost += order.summary.paidConfirmedCostCny;
     acc.expectedProfit += order.summary.expectedGrossProfit;
-    acc.realizedProfit += order.summary.realizedGrossProfit;
+    acc.netCashFlow += order.summary.netCashFlowCny;
+    if (order.summary.realizedGrossProfit != null) {
+      acc.realizedProfit += order.summary.realizedGrossProfit;
+      acc.realizedReceivable += order.summary.receivableCny;
+    }
     acc.commissionAmount += Number(order.summary?.commissionAmountCny ?? order.summary?.estimatedCommissionCny ?? 0);
     if (order.summary.reminderStatus === "已逾期") acc.overdueOrders += 1;
     if (order.summary.reminderStatus === "即将到期") acc.dueSoonOrders += 1;
@@ -248,6 +253,8 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     paidConfirmedCost: 0,
     expectedProfit: 0,
     realizedProfit: 0,
+    realizedReceivable: 0,
+    netCashFlow: 0,
     commissionAmount: 0,
     overdueOrders: 0,
     dueSoonOrders: 0,
@@ -256,7 +263,7 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     grossMargin: null as number | null,
   });
   total.expectedGrossMargin = total.receivable > 0 ? total.expectedProfit / total.receivable : null;
-  total.realizedGrossMargin = total.confirmed > 0 ? total.realizedProfit / total.confirmed : null;
+  total.realizedGrossMargin = total.realizedReceivable > 0 ? total.realizedProfit / total.realizedReceivable : null;
   total.grossMargin = total.expectedGrossMargin;
   const activeOrders = orders.filter((order) => !order.taxArchived && order.taxRefundStatus !== "SUBMITTED");
   const overviewRows = orders.map((order) => overviewOrderMetrics(order, query));
@@ -344,7 +351,7 @@ function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null
   const expectedGrossMargin = summary.expectedGrossMargin == null
     ? (receivable > 0 ? expectedGrossProfit / receivable : null)
     : Number(summary.expectedGrossMargin);
-  const realizedGrossProfit = Number(summary.realizedGrossProfit ?? summary.actualGrossProfit ?? 0);
+  const realizedGrossProfit = summary.realizedGrossProfit == null ? null : Number(summary.realizedGrossProfit);
   const todayNo = overviewDayNumber(new Date());
   const dueNo = overviewDayNumber(order.dueDate);
   const remainingDays = dueNo == null || todayNo == null ? null : dueNo - todayNo;
@@ -374,6 +381,7 @@ function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null
     expectedGrossProfit,
     expectedGrossMargin,
     realizedGrossProfit,
+    netCashFlowCny: Number(summary.netCashFlowCny || 0),
     remainingDays,
     commissionMonth: createdMonth === month ? (order.commissionStatus === "已结算" ? settledCommission : estimatedCommission) : 0,
     commissionYear: createdYear === year ? (order.commissionStatus === "已结算" ? settledCommission : estimatedCommission) : 0,

@@ -22,8 +22,9 @@ type ProfitSummary = {
   taxLogisticsMissingLabels?: string[];
   expectedGrossProfit?: number;
   expectedGrossMargin?: number | null;
-  realizedGrossProfit?: number;
+  realizedGrossProfit?: number | null;
   realizedGrossMargin?: number | null;
+  netCashFlowCny?: number;
   commissionAmountCny?: number;
   estimatedCommissionCny?: number;
   commissionRate?: number;
@@ -58,6 +59,19 @@ type ProfitResponse = {
 };
 
 const PAGE_SIZE = 20;
+const REALIZED_GROSS_PROFIT_TOOLTIP = "客户款项未收齐时，不计算已实现毛利；负数现金流请查看净现金流。";
+
+function formatCnyOrDash(value: unknown) {
+  return value == null || value === "" ? "--" : formatCny(value);
+}
+
+function realizedGrossProfitLabel() {
+  return (
+    <span title={REALIZED_GROSS_PROFIT_TOOLTIP} style={{ cursor: "help" }}>
+      已实现毛利 <span aria-label={REALIZED_GROSS_PROFIT_TOOLTIP}>?</span>
+    </span>
+  );
+}
 
 export function ProfitModule({
   currentUser,
@@ -438,8 +452,9 @@ function ProfitDetailDrawer({
         <DetailField label="物流成本" value={formatCny(summary.logisticsCostCny)} />
         <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
         <DetailField label="预计毛利率" value={formatPercent(summary.expectedGrossMargin)} />
-        <DetailField label="已实现毛利" value={formatCny(summary.realizedGrossProfit)} />
+        <DetailField label={realizedGrossProfitLabel()} value={formatCnyOrDash(summary.realizedGrossProfit)} />
         <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
+        <DetailField label="净现金流" value={formatCny(summary.netCashFlowCny)} />
         <DetailField label="提成公式" value={summary.commissionFormulaLabel || summary.commissionFormulaDescription || "-"} />
         <DetailField label="提成前置缺失" value={(summary.taxLogisticsMissingLabels || []).join("、") || "-"} wide />
         <DetailField label="提成基数" value={formatCny(summary.commissionBaseCny)} />

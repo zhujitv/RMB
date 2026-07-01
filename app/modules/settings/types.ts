@@ -141,6 +141,7 @@ export type ExchangeRateForm = {
   allowManualEdit: boolean;
   allowMultipleOrderLogisticsSuppliers: boolean;
   allowAdminIncompleteTaxSubmit: boolean;
+  paymentVoucherReminderStartDate: string;
 };
 
 export type CommissionFormulaForm = {

@@ -15,6 +15,7 @@ type OverviewTotals = {
   expectedProfit?: number;
   expectedGrossMargin?: number | null;
   realizedProfit?: number;
+  netCashFlow?: number;
   realizedGrossMargin?: number | null;
   commissionAmount?: number;
   orderCount?: number;
@@ -144,7 +145,7 @@ export function DashboardModule() {
     { label: "逾期金额", value: formatCny(overdueAmount), note: `${Number(totals.overdueOrders || 0)} 个逾期订单`, tone: styles.metricRed },
     { label: "预计毛利", value: formatCny(totals.expectedProfit), note: "最终应收 - 已确认总成本", tone: Number(totals.expectedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed },
     { label: "预计毛利率", value: formatPercent(totals.expectedGrossMargin), note: "订单盈利能力", tone: styles.metricBlue },
-    { label: "已实现毛利", value: formatCny(totals.realizedProfit), note: "已到账 - 已支付确认成本", tone: Number(totals.realizedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed },
+    { label: "已实现毛利", value: formatCny(totals.realizedProfit), note: "收齐订单：最终应收 - 总成本", tone: Number(totals.realizedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed },
     { label: "业务员提成", value: formatCny(totals.commissionAmount), note: "按当前提成口径统计", tone: styles.metricBlue },
   ];
 

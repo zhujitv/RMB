@@ -241,7 +241,7 @@ const columnSets = {
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["costType", "成本类型"], ["supplierName", "供应商"], ["supplierType", "供应商类型"], ["currency", "币种"], ["amount", "原币成本金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["paymentStatus", "付款状态"], ["invoiceStatus", "发票状态"],
   ],
   profits: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["netCashFlowCny", "净现金流"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
   ],
   commissions: [
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["commissionRate", "提成比例"], ["receivedAmountCny", "已到账收款"], ["logisticsCostCny", "物流成本"], ["commissionBaseCny", "提成基数"], ["commissionAmountCny", "提成金额"], ["commissionStatus", "提成状态"], ["commissionSettledAt", "结算时间"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
@@ -316,8 +316,9 @@ function orderToProfit(order: BusinessReportRow) {
     totalCostCny: moneyNumber(order.summary?.confirmedTotalCostCny ?? order.summary?.totalCostCny),
     expectedGrossProfit: moneyNumber(order.summary?.expectedGrossProfit),
     expectedGrossMargin: order.summary?.expectedGrossMargin == null ? "--" : `${((Number(order.summary.expectedGrossMargin || 0)) * 100).toFixed(2)}%`,
-    realizedGrossProfit: moneyNumber(order.summary?.realizedGrossProfit ?? order.summary?.actualGrossProfit),
+    realizedGrossProfit: order.summary?.realizedGrossProfit == null ? "--" : moneyNumber(order.summary.realizedGrossProfit),
     realizedGrossMargin: order.summary?.realizedGrossMargin == null ? "--" : `${((Number(order.summary.realizedGrossMargin || 0)) * 100).toFixed(2)}%`,
+    netCashFlowCny: moneyNumber(order.summary?.netCashFlowCny),
   };
 }
 

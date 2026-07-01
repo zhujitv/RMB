@@ -68,6 +68,11 @@ type ExchangeRateSnapshot = {
   exchangeRateType: string;
 };
 
+function normalizeSettingsDate(value: unknown, fallback: string) {
+  const text = normalizeDateText(value, fallback);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : fallback;
+}
+
 function errorMessage(error: unknown, fallback = "") {
   return error instanceof Error ? error.message : fallback;
 }
@@ -83,6 +88,10 @@ export function normalizeExchangeRateSettings(value: unknown = {}) {
     allowManualEdit: input.allowManualEdit !== false,
     allowAdminIncompleteTaxSubmit: input.allowAdminIncompleteTaxSubmit === true,
     allowMultipleOrderLogisticsSuppliers: input.allowMultipleOrderLogisticsSuppliers === true,
+    paymentVoucherReminderStartDate: normalizeSettingsDate(
+      input.paymentVoucherReminderStartDate,
+      DEFAULT_EXCHANGE_RATE_SETTINGS.paymentVoucherReminderStartDate,
+    ),
   };
 }
 
@@ -114,6 +123,7 @@ export async function saveExchangeRateSettings(request: AuditRequestLike, actor:
     allowManualEdit: input.allowManualEdit,
     allowAdminIncompleteTaxSubmit: input.allowAdminIncompleteTaxSubmit,
     allowMultipleOrderLogisticsSuppliers: input.allowMultipleOrderLogisticsSuppliers,
+    paymentVoucherReminderStartDate: input.paymentVoucherReminderStartDate,
   });
   const before = await prisma.systemSetting.findUnique({ where: { key: EXCHANGE_RATE_SETTING_KEY } });
   const setting = await prisma.systemSetting.upsert({

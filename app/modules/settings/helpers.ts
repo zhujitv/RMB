@@ -264,6 +264,7 @@ export function exchangeFormFromSettings(settings: ExchangeRateSettings | null):
     allowManualEdit: Boolean(settings?.allowManualEdit),
     allowMultipleOrderLogisticsSuppliers: Boolean(settings?.allowMultipleOrderLogisticsSuppliers),
     allowAdminIncompleteTaxSubmit: Boolean(settings?.allowAdminIncompleteTaxSubmit),
+    paymentVoucherReminderStartDate: stringSetting(settings, "paymentVoucherReminderStartDate", "2026-06-30"),
   };
 }
 

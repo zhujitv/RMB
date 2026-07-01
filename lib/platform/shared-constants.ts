@@ -490,6 +490,7 @@ export const MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_PAYMENT_VOUCHER_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export const EXCHANGE_RATE_SETTING_KEY = "exchange_rate";
+export const PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE = "2026-06-30";
 export const DEFAULT_EXCHANGE_RATE_SETTINGS = {
   source: "中国银行",
   rateType: "中间价",
@@ -497,6 +498,7 @@ export const DEFAULT_EXCHANGE_RATE_SETTINGS = {
   allowManualEdit: true,
   allowAdminIncompleteTaxSubmit: false,
   allowMultipleOrderLogisticsSuppliers: false,
+  paymentVoucherReminderStartDate: PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE,
 };
 export const COMPANY_PROFILE_SETTING_KEY = "company_profile";
 export const DEFAULT_COMPANY_PROFILE_SETTINGS = {

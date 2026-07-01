@@ -422,7 +422,7 @@ export function DetailField({
   wide = false,
   hidden = false,
 }: {
-  label: string;
+  label: ReactNode;
   value: ReactNode;
   wide?: boolean;
   hidden?: boolean;
