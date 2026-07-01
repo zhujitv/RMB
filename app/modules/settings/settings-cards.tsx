@@ -10,6 +10,7 @@ import {
   EXCHANGE_RATE_SOURCES,
   EXCHANGE_RATE_TYPES,
   NOTIFICATION_RECIPIENT_EMAIL_OPTIONS,
+  OCR_FEATURE_OPTIONS,
   SHIPSGO_FEATURE_OPTIONS,
 } from "./constants";
 import {
@@ -22,6 +23,7 @@ import {
   notificationTemplateFormFromSettings,
   notificationTemplatePreview,
   notificationTemplateRows,
+  ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
 } from "./helpers";
 import type {
@@ -34,6 +36,8 @@ import type {
   ExchangeRateSettings,
   NotificationTemplateForm,
   NotificationTemplateSettings,
+  OcrIntegrationForm,
+  OcrIntegrationSettings,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
 } from "./types";
@@ -779,6 +783,143 @@ export function NotificationTemplateSettingsCard({
           </table>
         </div>
       </section>
+    </form>
+  );
+}
+
+export function OcrIntegrationSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+}: {
+  settings: OcrIntegrationSettings | null;
+  form: OcrIntegrationForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: OcrIntegrationForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
+  const currentForm = form || ocrIntegrationFormFromSettings(settings);
+
+  function setField<K extends keyof OcrIntegrationForm>(key: K, value: OcrIntegrationForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
+    setField(key, !currentForm[key]);
+  }
+
+  return (
+    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={styles.quickCreateHeader}>
+        <div>
+          <strong>OCR识别配置</strong>
+          <div className={styles.quickCreateMeta}>
+            <span>统一管理阿里云 OCR 开关、密钥和识别范围。</span>
+          </div>
+        </div>
+      </div>
+
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <div className={styles.reportFilterGrid}>
+        <UiSwitch
+          label="启用 OCR"
+          description="关闭后，报关单识别等 OCR 能力不会执行。"
+          checked={currentForm.enabled}
+          onChange={(value) => setField("enabled", value)}
+        />
+        <label>
+          服务商
+          <select value={currentForm.provider} onChange={(event) => setField("provider", event.target.value)}>
+            <option value="ALIYUN">阿里云 OCR</option>
+          </select>
+        </label>
+        <label>
+          API Base URL
+          <input
+            value={currentForm.apiBaseUrl}
+            onChange={(event) => setField("apiBaseUrl", event.target.value)}
+            placeholder="https://ocr-api.cn-hangzhou.aliyuncs.com"
+          />
+        </label>
+        <label>
+          AppCode
+          <input
+            value={currentForm.appCode}
+            onChange={(event) => setField("appCode", event.target.value)}
+            placeholder={currentForm.appCodeConfigured ? "已配置，留空则保持不变" : "请输入阿里云 OCR AppCode"}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          AccessKey ID
+          <input
+            value={currentForm.accessKeyId}
+            onChange={(event) => setField("accessKeyId", event.target.value)}
+            placeholder={currentForm.accessKeyIdConfigured ? "已配置，留空则保持不变" : "可选：AccessKey ID"}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          AccessKey Secret
+          <input
+            value={currentForm.accessKeySecret}
+            onChange={(event) => setField("accessKeySecret", event.target.value)}
+            placeholder={currentForm.accessKeySecretConfigured ? "已配置，留空则保持不变" : "可选：AccessKey Secret"}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          请求超时
+          <input
+            value={currentForm.timeoutMs}
+            onChange={(event) => setField("timeoutMs", event.target.value)}
+            inputMode="numeric"
+            min={3000}
+            type="number"
+          />
+        </label>
+      </div>
+
+      <section className={styles.documentGroupCard}>
+        <strong>识别功能范围</strong>
+        <div className={styles.commissionDeductionGrid}>
+          {OCR_FEATURE_OPTIONS.map((item) => (
+            <PermissionSelectItem
+              key={item.key}
+              label={item.label}
+              description={item.description}
+              checked={Boolean(currentForm[item.key])}
+              onChange={() => toggleFeature(item.key)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <div className={styles.emptyState}>
+        当前状态：{currentForm.enabled
+          ? (currentForm.appCodeConfigured || currentForm.appCode || currentForm.accessKeyIdConfigured || currentForm.accessKeyId ? "已启用" : "待填写密钥")
+          : "已关闭"}
+      </div>
+
+      <div className={styles.detailActions}>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存OCR设置"}</button>
+        <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
+      </div>
     </form>
   );
 }

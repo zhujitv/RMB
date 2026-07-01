@@ -6,6 +6,7 @@ import {
   COMMISSION_FORMULA_PRESETS,
   COMMISSION_FORMULA_SOURCES,
   DEFAULT_NOTIFICATION_TEMPLATE_FORM,
+  DEFAULT_OCR_INTEGRATION_FORM,
   DEFAULT_SHIPSGO_INTEGRATION_FORM,
   FACTORY_SUPPLIER_ACCOUNT_ROLES,
   LOGISTICS_SUPPLIER_TYPE_CODE,
@@ -34,6 +35,8 @@ import type {
   NotificationTemplateForm,
   NotificationTemplateRow,
   NotificationTemplateSettings,
+  OcrIntegrationForm,
+  OcrIntegrationSettings,
   Pagination,
   PermissionConfig,
   SettingsFilters,
@@ -388,6 +391,24 @@ export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationS
     liveMapEnabled: settings?.liveMapEnabled === true,
     customerPushEnabled: settings?.customerPushEnabled === true,
     creditWarningThreshold: String(settings?.creditWarningThreshold ?? DEFAULT_SHIPSGO_INTEGRATION_FORM.creditWarningThreshold),
+  };
+}
+
+export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings | null): OcrIntegrationForm {
+  return {
+    enabled: settings?.enabled === true,
+    provider: stringSetting(settings, "provider", DEFAULT_OCR_INTEGRATION_FORM.provider),
+    apiBaseUrl: stringSetting(settings, "apiBaseUrl", DEFAULT_OCR_INTEGRATION_FORM.apiBaseUrl),
+    accessKeyId: "",
+    accessKeyIdConfigured: settings?.accessKeyIdConfigured === true,
+    accessKeySecret: "",
+    accessKeySecretConfigured: settings?.accessKeySecretConfigured === true,
+    appCode: "",
+    appCodeConfigured: settings?.appCodeConfigured === true,
+    customsDeclarationEnabled: settings?.customsDeclarationEnabled !== false,
+    invoiceTextEnabled: settings?.invoiceTextEnabled === true,
+    fallbackToPdfText: settings?.fallbackToPdfText !== false,
+    timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };
 }
 

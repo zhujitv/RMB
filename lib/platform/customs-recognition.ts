@@ -26,6 +26,7 @@ import {
   canUseDomesticLogisticsDocumentScope,
 } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
+import { recognizePdfTextWithOcr } from "./ocr-integration";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 
 type CustomsDocumentRuntimeFields = {
@@ -238,7 +239,8 @@ function mergeCustomsFields(parsedFields: CustomsFields = {}, before: CustomsOrd
 }
 
 async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocumentLike = {}, options: { requireText?: boolean } = {}): Promise<ParseCustomsDocumentResult> {
-  const result = await customsDeclarationParser.parseCustomsDeclarationPdfBuffer(buffer, options);
+  const recognized = await recognizePdfTextWithOcr(buffer, "customsDeclaration", options);
+  const result = customsDeclarationParser.parseCustomsDeclarationText(recognized.text);
   const fields = {
     customsDeclarationNo: result.customsDeclarationNo || "",
     customsDeclarationDate: result.customsDeclarationDate || "",
@@ -246,7 +248,7 @@ async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocu
   return {
     fields,
     status: result.customsDeclarationParseStatus || customsDeclarationParser.customsParseStatusFromFields(fields),
-    source: customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
+    source: recognized.source || customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
     message: result.customsDeclarationParseMessage || customsDeclarationParser.customsParseMessage(fields),
   };
 }

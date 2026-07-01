@@ -6,6 +6,7 @@ import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/passw
 import {
   API_PERFORMANCE_PAGE_SIZE,
   AUDIT_PAGE_SIZE,
+  DEFAULT_OCR_INTEGRATION_FORM,
   DEFAULT_SHIPSGO_INTEGRATION_FORM,
   FACTORY_SUPPLIER_ACCOUNT_ROLES,
   PAGE_SIZE,
@@ -29,6 +30,7 @@ import {
   kebabTab,
   notificationTemplateFormFromSettings,
   notificationTemplateRows,
+  ocrIntegrationFormFromSettings,
   resetFilters,
   rowsFor,
   shipsgoIntegrationFormFromSettings,
@@ -51,6 +53,8 @@ import type {
   FiltersFor,
   NotificationTemplateForm,
   NotificationTemplateSettings,
+  OcrIntegrationForm,
+  OcrIntegrationSettings,
   Pagination,
   PermissionConfig,
   SalespersonOption,
@@ -91,6 +95,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [notificationTemplateSettings, setNotificationTemplateSettings] = useState<NotificationTemplateSettings | null>(null);
   const [notificationTemplateForm, setNotificationTemplateForm] = useState<NotificationTemplateForm | null>(null);
   const [selectedNotificationTemplateType, setSelectedNotificationTemplateType] = useState("");
+  const [ocrIntegrationSettings, setOcrIntegrationSettings] = useState<OcrIntegrationSettings | null>(null);
+  const [ocrIntegrationForm, setOcrIntegrationForm] = useState<OcrIntegrationForm | null>(null);
   const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
@@ -134,6 +140,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [commissionFormulaMessage, setCommissionFormulaMessage] = useState("");
   const [notificationTemplateSaving, setNotificationTemplateSaving] = useState(false);
   const [notificationTemplateMessage, setNotificationTemplateMessage] = useState("");
+  const [ocrIntegrationSaving, setOcrIntegrationSaving] = useState(false);
+  const [ocrIntegrationMessage, setOcrIntegrationMessage] = useState("");
   const [shipsgoIntegrationSaving, setShipsgoIntegrationSaving] = useState(false);
   const [shipsgoIntegrationMessage, setShipsgoIntegrationMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
@@ -212,8 +220,14 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
         return;
       }
       if (tab === "shipsgoIntegration") {
-        const result = await apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo");
-        const settings = result.settings || {};
+        const [ocrResult, shipsgoResult] = await Promise.all([
+          apiJson<{ settings: OcrIntegrationSettings }>("/api/settings/ocr"),
+          apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo"),
+        ]);
+        const ocrSettings = ocrResult.settings || {};
+        const settings = shipsgoResult.settings || {};
+        setOcrIntegrationSettings(ocrSettings);
+        setOcrIntegrationForm(ocrIntegrationFormFromSettings(ocrSettings));
         setShipsgoIntegrationSettings(settings);
         setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(settings));
         markLoaded(tab);
@@ -284,6 +298,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setExchangeMessage("");
     setCommissionFormulaMessage("");
     setNotificationTemplateMessage("");
+    setOcrIntegrationMessage("");
     setShipsgoIntegrationMessage("");
   }
 
@@ -861,6 +876,35 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     }
   }
 
+  async function saveOcrIntegrationSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ocrIntegrationForm) return;
+    setOcrIntegrationSaving(true);
+    setOcrIntegrationMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: OcrIntegrationSettings; message?: string }>(
+        "/api/settings/ocr",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            ...ocrIntegrationForm,
+            timeoutMs: Number(ocrIntegrationForm.timeoutMs || DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
+          }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "OCR设置保存失败");
+      const nextSettings = result.settings || ocrIntegrationForm;
+      setOcrIntegrationSettings(nextSettings);
+      setOcrIntegrationForm(ocrIntegrationFormFromSettings(nextSettings));
+      markLoaded("shipsgoIntegration");
+      setOcrIntegrationMessage(result.message || "OCR设置已保存");
+    } catch (saveError) {
+      setOcrIntegrationMessage(saveError instanceof Error ? saveError.message : "OCR设置保存失败");
+    } finally {
+      setOcrIntegrationSaving(false);
+    }
+  }
+
 
   function updateFilter(tab: SettingsTabKey, key: string, value: string) {
     setFilters((current) => {
@@ -890,6 +934,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     notificationTemplateSettings,
     notificationTemplateForm,
     selectedNotificationTemplateType,
+    ocrIntegrationSettings,
+    ocrIntegrationForm,
     shipsgoIntegrationSettings,
     shipsgoIntegrationForm,
     permissionConfig,
@@ -920,6 +966,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     commissionFormulaMessage,
     notificationTemplateSaving,
     notificationTemplateMessage,
+    ocrIntegrationSaving,
+    ocrIntegrationMessage,
     shipsgoIntegrationSaving,
     shipsgoIntegrationMessage,
     activeSuppliers,
@@ -958,6 +1006,7 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     saveNotificationTemplateSettings,
     selectNotificationTemplate,
     testNotificationTemplate,
+    saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     updateFilter,
     setDetailRow,
@@ -979,6 +1028,8 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setCommissionFormulaMessage,
     setNotificationTemplateForm,
     setNotificationTemplateMessage,
+    setOcrIntegrationForm,
+    setOcrIntegrationMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
   };

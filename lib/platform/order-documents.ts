@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { buildOrderDocumentKey, headR2Object, readR2Object, safeFileName } from "../r2";
 import { parseAndApplyCustomsDocument } from "./customs-recognition";
+import { isOcrFeatureEnabled } from "./ocr-integration";
 import {
   canAccessDomesticLogisticsOrder,
   canUseDomesticLogisticsDocumentScope,
@@ -433,7 +434,9 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     replacedCustomsDocumentCount,
   }));
   let customsRecognition: Record<string, unknown> | null = null;
-  if (isCustomsDeclarationDocumentType(documentType)) {
+  const shouldAutoRecognizeCustoms = isCustomsDeclarationDocumentType(documentType)
+    && await isOcrFeatureEnabled("customsDeclaration");
+  if (shouldAutoRecognizeCustoms) {
     customsRecognition = await parseAndApplyCustomsDocument(request, actor, document, body, {
       allowManualFailure: true,
       replaceWithParsedFields: true,

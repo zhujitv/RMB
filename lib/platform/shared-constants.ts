@@ -550,6 +550,19 @@ export const DEFAULT_COMPANY_PROFILE_SETTINGS = {
   logoUrl: "",
   footerText: "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.",
 };
+export const OCR_INTEGRATION_SETTING_KEY = "ocr_integration";
+export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
+  enabled: false,
+  provider: "ALIYUN",
+  apiBaseUrl: "https://ocr-api.cn-hangzhou.aliyuncs.com",
+  accessKeyId: "",
+  accessKeySecret: "",
+  appCode: "",
+  customsDeclarationEnabled: true,
+  invoiceTextEnabled: false,
+  fallbackToPdfText: true,
+  timeoutMs: 15000,
+};
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   enabled: false,

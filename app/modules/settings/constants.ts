@@ -1,4 +1,4 @@
-import type { NotificationTemplateForm, SettingsTabKey, ShipsgoIntegrationForm } from "./types";
+import type { NotificationTemplateForm, OcrIntegrationForm, SettingsTabKey, ShipsgoIntegrationForm } from "./types";
 
 export const PAGE_SIZE = 20;
 export const AUDIT_PAGE_SIZE = 50;
@@ -161,6 +161,45 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   customerPushEnabled: false,
   creditWarningThreshold: "20",
 };
+export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
+  enabled: false,
+  provider: "ALIYUN",
+  apiBaseUrl: "https://ocr-api.cn-hangzhou.aliyuncs.com",
+  accessKeyId: "",
+  accessKeyIdConfigured: false,
+  accessKeySecret: "",
+  accessKeySecretConfigured: false,
+  appCode: "",
+  appCodeConfigured: false,
+  customsDeclarationEnabled: true,
+  invoiceTextEnabled: false,
+  fallbackToPdfText: true,
+  timeoutMs: "15000",
+};
+export const OCR_FEATURE_OPTIONS = [
+  {
+    key: "customsDeclarationEnabled",
+    label: "报关单识别",
+    description: "用于退税资料、报关资料中的报关单号和申报日期识别。",
+  },
+  {
+    key: "invoiceTextEnabled",
+    label: "发票识别预留",
+    description: "为后续发票号码、金额、税率等识别能力预留入口。",
+  },
+  {
+    key: "fallbackToPdfText",
+    label: "本地 PDF 文本兜底",
+    description: "阿里云适配器不可用时，允许继续使用系统现有 PDF 文本解析能力。",
+  },
+] satisfies Array<{
+  key: keyof Pick<
+    OcrIntegrationForm,
+    "customsDeclarationEnabled" | "invoiceTextEnabled" | "fallbackToPdfText"
+  >;
+  label: string;
+  description: string;
+}>;
 export const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "oceanTrackingEnabled",

@@ -214,6 +214,7 @@ export type NotificationTemplateSettings = {
   logs?: NotificationDeliveryLogRow[];
   types?: Array<Record<string, unknown>>;
 } & Record<string, unknown>;
+export type OcrIntegrationSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
 
 export type ExchangeRateForm = {
@@ -268,6 +269,22 @@ export type ShipsgoIntegrationForm = {
   liveMapEnabled: boolean;
   customerPushEnabled: boolean;
   creditWarningThreshold: string;
+};
+
+export type OcrIntegrationForm = {
+  enabled: boolean;
+  provider: string;
+  apiBaseUrl: string;
+  accessKeyId: string;
+  accessKeyIdConfigured: boolean;
+  accessKeySecret: string;
+  accessKeySecretConfigured: boolean;
+  appCode: string;
+  appCodeConfigured: boolean;
+  customsDeclarationEnabled: boolean;
+  invoiceTextEnabled: boolean;
+  fallbackToPdfText: boolean;
+  timeoutMs: string;
 };
 
 export type CompanyProfileForm = {

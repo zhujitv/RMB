@@ -16,6 +16,7 @@ import {
   exchangeFormFromSettings,
   filtersForTab,
   notificationTemplateFormFromSettings,
+  ocrIntegrationFormFromSettings,
   placeholderFor,
   shipsgoIntegrationFormFromSettings,
 } from "./helpers";
@@ -25,6 +26,7 @@ import {
   CompanyProfileSettingsCard,
   ExchangeSettingsCard,
   NotificationTemplateSettingsCard,
+  OcrIntegrationSettingsCard,
   ShipsgoIntegrationSettingsCard,
 } from "./settings-cards";
 import { SettingsTable } from "./settings-table";
@@ -48,6 +50,8 @@ export function SettingsModuleView(settings: SettingsController) {
     notificationTemplateSettings,
     notificationTemplateForm,
     selectedNotificationTemplateType,
+    ocrIntegrationSettings,
+    ocrIntegrationForm,
     shipsgoIntegrationSettings,
     shipsgoIntegrationForm,
     permissionConfig,
@@ -76,6 +80,8 @@ export function SettingsModuleView(settings: SettingsController) {
     commissionFormulaMessage,
     notificationTemplateSaving,
     notificationTemplateMessage,
+    ocrIntegrationSaving,
+    ocrIntegrationMessage,
     shipsgoIntegrationSaving,
     shipsgoIntegrationMessage,
     activeSuppliers,
@@ -114,6 +120,7 @@ export function SettingsModuleView(settings: SettingsController) {
     saveNotificationTemplateSettings,
     selectNotificationTemplate,
     testNotificationTemplate,
+    saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     updateFilter,
     setDetailRow,
@@ -135,6 +142,8 @@ export function SettingsModuleView(settings: SettingsController) {
     setCommissionFormulaMessage,
     setNotificationTemplateForm,
     setNotificationTemplateMessage,
+    setOcrIntegrationForm,
+    setOcrIntegrationMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
   } = settings;
@@ -381,19 +390,34 @@ export function SettingsModuleView(settings: SettingsController) {
           onSubmit={saveNotificationTemplateSettings}
         />
       ) : activeTab === "shipsgoIntegration" ? (
-        <ShipsgoIntegrationSettingsCard
-          settings={shipsgoIntegrationSettings}
-          form={shipsgoIntegrationForm}
-          loading={loading && !shipsgoIntegrationSettings}
-          saving={shipsgoIntegrationSaving}
-          message={shipsgoIntegrationMessage}
-          onChange={setShipsgoIntegrationForm}
-          onReset={() => {
-            setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
-            setShipsgoIntegrationMessage("");
-          }}
-          onSubmit={saveShipsgoIntegrationSettings}
-        />
+        <>
+          <OcrIntegrationSettingsCard
+            settings={ocrIntegrationSettings}
+            form={ocrIntegrationForm}
+            loading={loading && !ocrIntegrationSettings}
+            saving={ocrIntegrationSaving}
+            message={ocrIntegrationMessage}
+            onChange={setOcrIntegrationForm}
+            onReset={() => {
+              setOcrIntegrationForm(ocrIntegrationFormFromSettings(ocrIntegrationSettings));
+              setOcrIntegrationMessage("");
+            }}
+            onSubmit={saveOcrIntegrationSettings}
+          />
+          <ShipsgoIntegrationSettingsCard
+            settings={shipsgoIntegrationSettings}
+            form={shipsgoIntegrationForm}
+            loading={loading && !shipsgoIntegrationSettings}
+            saving={shipsgoIntegrationSaving}
+            message={shipsgoIntegrationMessage}
+            onChange={setShipsgoIntegrationForm}
+            onReset={() => {
+              setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
+              setShipsgoIntegrationMessage("");
+            }}
+            onSubmit={saveShipsgoIntegrationSettings}
+          />
+        </>
       ) : (
         <>
           <SettingsTable
