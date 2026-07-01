@@ -67,14 +67,15 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(taxRefundService, /logisticsBills: \{\s*where: \{ deletedAt: null \}/);
   assert.match(taxRefundService, /billOfLadingNumbers/);
   assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
-  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1020px;[\s\S]*table-layout: fixed;/);
+  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1040px;[\s\S]*table-layout: fixed;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundOrderNoColumn,[\s\S]*width: 150px;[\s\S]*min-width: 150px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 280px;[\s\S]*min-width: 240px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCustomerColumn,[\s\S]*width: 130px;[\s\S]*min-width: 120px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundDateColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCompletenessColumn,[\s\S]*width: 120px;[\s\S]*min-width: 120px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundStatusColumn,[\s\S]*width: 160px;[\s\S]*min-width: 160px;/);
-  assert.match(css, /\.taxRefundTable col\.taxRefundActionColumn,[\s\S]*width: 70px;[\s\S]*min-width: 70px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundActionColumn,[\s\S]*width: 88px;[\s\S]*min-width: 88px;[\s\S]*overflow: visible;[\s\S]*white-space: nowrap;/);
+  assert.match(css, /\.taxRefundTable td\.taxRefundActionColumn button \{[\s\S]*min-width: 64px;[\s\S]*height: 32px;[\s\S]*line-height: 20px;[\s\S]*white-space: nowrap;[\s\S]*overflow: visible;/);
   assert.match(css, /\.taxRefundTable th\.taxRefundBlNoColumn,[\s\S]*overflow-wrap: anywhere;/);
   assert.match(css, /\.taxRefundTableWrap \{[\s\S]*overflow-x: auto;/);
 });
