@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
-import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, headR2Object, readR2Object, safeFileName, uploadToR2 } from "../r2";
+import { buildOrderDocumentKey, headR2Object, readR2Object, safeFileName } from "../r2";
 import { parseAndApplyCustomsDocument } from "./customs-recognition";
 import {
   canAccessDomesticLogisticsOrder,
@@ -10,6 +10,7 @@ import {
   isInternalLogisticsOperator,
 } from "./masters-access";
 import { canAccessOrder } from "./order-access";
+import { assertCanDeleteOrderDocumentFile } from "./file-delete-policy";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
@@ -23,7 +24,6 @@ import {
   assertRead,
   assertWrite,
   canRead,
-  canWrite,
   codedError,
   effectivePermissions,
   isCustomsDeclarationDocumentType,
@@ -33,15 +33,25 @@ import {
   normalizeOrderDocumentType,
   normalizeUploadSource,
   permissionError,
-  readValidatedPdfUploadFile,
+  deleteManagedStoredFile,
+  FILE_ASSET_SOURCE_TABLES,
+  findActiveFileAssetBySource,
+  applyFileAssetToOrderDocument,
+  managedFileMetadata,
+  managedPreviewableMimeType,
+  mergeFileAssetMetadata,
+  readManagedUploadFile,
   refreshTaxRefundCompleteness,
   requireText,
   resolveStandardFilenameForPersistedDocument,
   runNonCriticalTask,
   SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES,
   serializeOrderDocument,
+  softDeleteFileAssetBySource,
   standardFilenameForDocument,
   syncCostInvoiceStatus,
+  uploadManagedFileToStorage,
+  upsertFileAssetForOrderDocument,
   writeAudit,
 } from "./shared";
 
@@ -209,18 +219,6 @@ export function canReadDocumentContent(actor: ActorLike, document: DocumentLike)
   return true;
 }
 
-function canModifyDocument(actor: ActorLike, document: DocumentLike) {
-  if (!canWrite(actor, "documents")) return false;
-  if (["SUBMITTED", "COMPLETED", "ARCHIVED"].includes(String(document.order?.taxRefundStatus || ""))) return false;
-  if (actorRole(actor) === "业务员" && isProtectedCustomsDocumentType(document.documentType)) return false;
-  if (actorRole(actor) === LOGISTICS_OPERATOR_ROLE && DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(document.documentType as OrderDocumentType)) return false;
-  const scope = effectivePermissions(actor).dataScope;
-  if (scope === "ALL") return true;
-  if (scope === "OWN") return document.relatedModule !== "SUPPLIER" && canAccessOrder(actor, document.order);
-  if (scope === "OWN_COST") return document.relatedModule === "SUPPLIER" && document.cost?.createdById === actor?.id;
-  return false;
-}
-
 function orderDocumentFileInclude() {
   return Prisma.validator<Prisma.OrderDocumentInclude>()({
     order: {
@@ -338,8 +336,8 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   if (isLogisticsGeneratedCostInvoice(documentType, cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。", 400);
   }
-  const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(file, "document.pdf");
-  const { bucket: r2Bucket } = ensureR2Configured();
+  const uploadedFile = await readManagedUploadFile(file, "pdf", "document.pdf");
+  const { originalFileName, mimeType, body, fileSize } = uploadedFile;
   const standardFilename = await nextStandardFilenameForUpload(order, documentType, {
     cost,
     costId: cost?.id || "",
@@ -354,7 +352,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     relatedModule,
     supplierId: resolvedSupplierId || "",
   });
-  await uploadToR2({ key: storageKey, body, contentType: mimeType });
+  const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName: standardFilename });
   let document;
   let replacedCustomsDocumentCount = 0;
   try {
@@ -370,19 +368,30 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
           originalName: originalFileName,
           originalFilename: originalFileName,
           standardFilename,
-          fileSize,
-          mimeType,
-          r2Bucket,
-          storageKey,
-          fileUrl: null,
+          fileSize: storedFile.fileSize || fileSize,
+          mimeType: storedFile.mimeType || mimeType,
+          r2Bucket: storedFile.bucket,
+          storageKey: storedFile.storageKey,
+          fileUrl: storedFile.fileUrl,
           uploadStatus: "SUCCESS",
           uploadProgress: 100,
           uploadedById,
-          uploadedAt: new Date(),
+          uploadedAt: storedFile.uploadedAt,
         },
         include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
       });
+      await upsertFileAssetForOrderDocument(tx, created);
       if (isCustomsDeclarationDocumentType(documentType)) {
+        const replacedAt = new Date();
+        const replacedDocuments = await tx.orderDocument.findMany({
+          where: {
+            orderId: order.id,
+            documentType: "CUSTOMS_ENTRY_FORM",
+            id: { not: created.id },
+            deletedAt: null,
+          },
+          select: { id: true, documentType: true },
+        });
         const replaced = await tx.orderDocument.updateMany({
           where: {
             orderId: order.id,
@@ -390,14 +399,23 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
             id: { not: created.id },
             deletedAt: null,
           },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: replacedAt },
         });
+        for (const replacedDocument of replacedDocuments) {
+          await softDeleteFileAssetBySource(
+            tx,
+            FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+            replacedDocument.id,
+            String(replacedDocument.documentType),
+            replacedAt,
+          );
+        }
         replacedCustomsDocumentCount = replaced.count || 0;
       }
       return created;
     });
   } catch (error: unknown) {
-    await deleteR2Object(storageKey).catch(() => null);
+    await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     const message = error instanceof Error ? error.message : "未知错误";
     throw codedError(`数据库写入失败：${message}`, 500, "DATABASE_WRITE_FAILED");
   }
@@ -460,11 +478,22 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
   if (isLogisticsGeneratedCostInvoice(before.documentType, before.cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组删除或替换，成本管理仅同步查看。", 400);
   }
-  if (!canModifyDocument(actor, before)) throw permissionError("无权限删除该订单单证");
-  const document = await prisma.orderDocument.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-    include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+  assertCanDeleteOrderDocumentFile(actor, before);
+  const deletedAt = new Date();
+  const document = await prisma.$transaction(async (tx) => {
+    const updated = await tx.orderDocument.update({
+      where: { id },
+      data: { deletedAt },
+      include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+    });
+    await softDeleteFileAssetBySource(
+      tx,
+      FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+      id,
+      String(before.documentType),
+      deletedAt,
+    );
+    return updated;
   });
   if (isCustomsDeclarationDocumentType(before.documentType)) {
     await prisma.receivableOrder.update({
@@ -502,9 +531,11 @@ export async function getOrderDocumentDownload(request: AuditRequestLike, actor:
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw permissionError("无权限下载该订单单证");
   if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能下载", 400);
-  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
-  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
-  const body = await readR2Object(document.storageKey).catch((error) => {
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
+  const body = await readR2Object(fileDocument.storageKey).catch((error) => {
     if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
     throw error;
   });
@@ -512,7 +543,7 @@ export async function getOrderDocumentDownload(request: AuditRequestLike, actor:
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
   }));
-  return { body, mimeType: previewableOrderDocumentMimeType(document), document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType: previewableOrderDocumentMimeType(fileDocument), document: serializeOrderDocument({ ...fileDocument, standardFilename }) };
 }
 
 export async function getOrderDocumentMetadata(request: AuditRequestLike, actor: ActorLike, id: string) {
@@ -524,8 +555,49 @@ export async function getOrderDocumentMetadata(request: AuditRequestLike, actor:
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限查看该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能预览", 400);
-  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
-  return serializeOrderDocument({ ...document, standardFilename });
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
+  return serializeOrderDocument({ ...fileDocument, standardFilename });
+}
+
+export async function getOrderDocumentFileMetadata(_request: AuditRequestLike, actor: ActorLike, id: string) {
+  assertRead(actor, "documents");
+  const document = await prisma.orderDocument.findUnique({
+    where: { id },
+    include: orderDocumentFileInclude(),
+  });
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (!canReadDocumentContent(actor, document)) throw codedError("无权限查看该订单单证", 403, "PERMISSION_DENIED");
+  if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能预览", 400);
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
+  const metadata = {
+    id: document.id,
+    ...managedFileMetadata({
+      fileUrl: fileDocument.fileUrl,
+      fileName: standardFilename,
+      originalFileName: fileDocument.originalFilename || fileDocument.originalName || fileDocument.fileName,
+      mimeType: fileDocument.mimeType,
+      fileSize: fileDocument.fileSize,
+      storageKey: fileDocument.storageKey,
+      r2Bucket: fileDocument.r2Bucket,
+      uploadedAt: fileDocument.uploadedAt,
+      uploadedBy: fileDocument.uploadedBy,
+      binding: {
+        orderId: fileDocument.orderId,
+        costId: fileDocument.costId,
+        supplierId: fileDocument.supplierId,
+        supplierDocumentRequestId: fileDocument.factoryDocumentRequestId,
+        taxRefundDocumentType: fileDocument.documentType,
+        orderDocumentId: document.id,
+        relatedModule: fileDocument.relatedModule,
+      },
+    }),
+    previewKind: managedPreviewableMimeType(fileDocument.mimeType),
+  };
+  return mergeFileAssetMetadata(metadata, asset);
 }
 
 export async function getOrderDocumentPreviewMetadata(request: AuditRequestLike, actor: ActorLike, id: string) {
@@ -537,17 +609,19 @@ export async function getOrderDocumentPreviewMetadata(request: AuditRequestLike,
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
-  const mimeType = previewableOrderDocumentMimeType(document);
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  const mimeType = previewableOrderDocumentMimeType(fileDocument);
   if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
-  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
-  await headR2Object(document.storageKey).catch((error) => {
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  await headR2Object(fileDocument.storageKey).catch((error) => {
     if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
     throw error;
   });
-  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
-  return serializeOrderDocument({ ...document, standardFilename });
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
+  return serializeOrderDocument({ ...fileDocument, standardFilename });
 }
 
 export async function getOrderDocumentPreview(request: AuditRequestLike, actor: ActorLike, id: string) {
@@ -559,21 +633,23 @@ export async function getOrderDocumentPreview(request: AuditRequestLike, actor: 
   if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
   if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
   if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
-  const mimeType = previewableOrderDocumentMimeType(document);
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  const mimeType = previewableOrderDocumentMimeType(fileDocument);
   if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
-  if (!document.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
-  const body = await readR2Object(document.storageKey).catch((error) => {
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  const body = await readR2Object(fileDocument.storageKey).catch((error) => {
     if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
     throw error;
   });
-  const standardFilename = await resolveStandardFilenameForPersistedDocument(document);
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
   await runNonCriticalTask("文件预览操作日志写入", () => writeAudit(request, actor, "预览文件", "order_documents", document.id, null, {
     orderNo: document.order?.orderNo,
     fileName: standardFilename,
   }));
-  return { body, mimeType, document: serializeOrderDocument({ ...document, standardFilename }) };
+  return { body, mimeType, document: serializeOrderDocument({ ...fileDocument, standardFilename }) };
 }
 
 function previewableOrderDocumentMimeType(document: DocumentLike) {
@@ -581,5 +657,5 @@ function previewableOrderDocumentMimeType(document: DocumentLike) {
 }
 
 function isPreviewableOrderDocumentMimeType(mimeType: unknown) {
-  return ["application/pdf", "image/jpeg", "image/png"].includes(String(mimeType || "").toLowerCase());
+  return ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(String(mimeType || "").toLowerCase());
 }

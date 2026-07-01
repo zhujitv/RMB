@@ -11,20 +11,31 @@ import {
   assertWrite,
   codedError,
   dateToInput,
+  deleteManagedStoredFile,
+  FILE_ASSET_ROLES,
+  FILE_ASSET_SOURCE_TABLES,
+  findActiveFileAssetBySource,
   getCompanyProfileSettings,
   logServerError,
+  managedFileMetadata,
+  managedPreviewableMimeType,
+  mergeFileAssetMetadata,
   nonEmpty,
   normalizeEmail,
   pageParams,
   pageResult,
-  readValidatedPdfUploadFile,
+  readManagedUploadFile,
   refreshTaxRefundCompleteness,
   requireText,
   runNonCriticalTask,
   serializeOrderDocument,
+  softDeleteFileAssetBySource,
   syncCostInvoiceStatus,
   isProductSupplierOperatorRole,
   isProductSupplierType,
+  uploadManagedFileToStorage,
+  upsertFileAssetForOrderDocument,
+  upsertFileAssetForSupplierRequestTemplate,
   validEmail,
   writeAudit,
 } from "./shared";
@@ -234,14 +245,20 @@ async function latestProductSupplierPaymentVoucherAttachment(orderId: string, su
     paymentVoucherMimeType?: string | null;
   };
   if (!voucherCost?.paymentVoucherStorageKey) return null;
-  const content = await readR2Object(voucherCost.paymentVoucherStorageKey).catch((error) => {
+  const asset = await findActiveFileAssetBySource(
+    FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
+    voucherCost.id,
+    FILE_ASSET_ROLES.PAYMENT_VOUCHER,
+  );
+  const storageKey = asset?.storageKey || voucherCost.paymentVoucherStorageKey;
+  const content = await readR2Object(storageKey).catch((error) => {
     logServerError("产品供应商资料回传通知付款凭证读取失败", error, { orderId, supplierId, costId: cost?.id || "" });
     return null;
   });
   if (!content) return null;
-  const contentType = voucherCost.paymentVoucherMimeType || "image/jpeg";
+  const contentType = asset?.mimeType || voucherCost.paymentVoucherMimeType || "image/jpeg";
   return {
-    filename: paymentVoucherAttachmentFileName(voucherCost.paymentVoucherFileName || "", contentType),
+    filename: paymentVoucherAttachmentFileName(asset?.fileName || voucherCost.paymentVoucherFileName || "", contentType),
     content,
     contentType,
   };
@@ -503,6 +520,31 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
       where: { id: row.id },
       data: { deletedAt: now, status: "已关闭" },
     });
+    if (row.templateStorageKey) {
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.SUPPLIER_DOCUMENT_REQUESTS,
+        row.id,
+        FILE_ASSET_ROLES.SUPPLIER_REQUEST_TEMPLATE,
+        now,
+      );
+    }
+    for (const documentId of pendingDocumentIds) {
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+        documentId,
+        "SUPPLIER_PURCHASE_CONTRACT",
+        now,
+      );
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+        documentId,
+        "SUPPLIER_INVOICE",
+        now,
+      );
+    }
   });
 
   if (row.templateStorageKey) {
@@ -580,28 +622,32 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
 
   let created;
   try {
-    created = await prisma.supplierDocumentRequest.create({
-      data: {
-        orderId: order.id,
-        supplierId: supplier.id,
-        requestedById,
-        requiredDocumentTypes: requiredTypes,
-        status: "待上传",
-        dueDate,
-        message: message || null,
-        templateFileName: templateFileName || null,
-        templateOriginalName: template?.originalFileName || null,
-        templateMimeType: template?.mimeType || null,
-        templateFileSize: template?.fileSize || null,
-        templateStorageKey: templateStorageKey || null,
-        templateBucket: templateBucket || null,
-        recipientEmails: recipients,
-        ccEmails,
-        sendStatus: "pending",
-        emailSubject: subject,
-        emailBody: body,
-      },
-      include: supplierDocumentRequestInclude(),
+    created = await prisma.$transaction(async (tx) => {
+      const saved = await tx.supplierDocumentRequest.create({
+        data: {
+          orderId: order.id,
+          supplierId: supplier.id,
+          requestedById,
+          requiredDocumentTypes: requiredTypes,
+          status: "待上传",
+          dueDate,
+          message: message || null,
+          templateFileName: templateFileName || null,
+          templateOriginalName: template?.originalFileName || null,
+          templateMimeType: template?.mimeType || null,
+          templateFileSize: template?.fileSize || null,
+          templateStorageKey: templateStorageKey || null,
+          templateBucket: templateBucket || null,
+          recipientEmails: recipients,
+          ccEmails,
+          sendStatus: "pending",
+          emailSubject: subject,
+          emailBody: body,
+        },
+        include: supplierDocumentRequestInclude(),
+      });
+      await upsertFileAssetForSupplierRequestTemplate(tx, saved);
+      return saved;
     });
   } catch (error: unknown) {
     if (templateStorageKey) await deleteR2Object(templateStorageKey).catch(() => null);
@@ -663,8 +709,8 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   if (!requiredTypes.includes(documentType)) {
     throw codedError("该任务不需要上传此类资料。", 400, "DOCUMENT_TYPE_NOT_ALLOWED");
   }
-  const { originalFileName, mimeType, body, fileSize } = await readValidatedPdfUploadFile(input.file, "supplier-document.pdf");
-  const { bucket: r2Bucket } = ensureR2Configured();
+  const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
+  const { originalFileName, mimeType, fileSize } = uploadedFile;
   const standardFilename = `${row.order.orderNo || row.orderId}_${SUPPLIER_DOCUMENT_LABELS[documentType] || documentType}.pdf`;
   const uniqueFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(input.costId));
   const storageFileName = safeFileName(`${row.order.orderNo || row.orderId}_${documentType}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
@@ -675,7 +721,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     supplierId: row.supplierId,
     fileName: storageFileName,
   });
-  await uploadToR2({ key: storageKey, body, contentType: mimeType });
+  const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName: standardFilename });
   let document;
   try {
     document = await prisma.$transaction(async (tx) => {
@@ -691,23 +737,24 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
           originalName: originalFileName,
           originalFilename: originalFileName,
           standardFilename,
-          fileSize,
-          mimeType,
-          r2Bucket,
-          storageKey,
-          fileUrl: null,
+          fileSize: storedFile.fileSize || fileSize,
+          mimeType: storedFile.mimeType || mimeType,
+          r2Bucket: storedFile.bucket,
+          storageKey: storedFile.storageKey,
+          fileUrl: storedFile.fileUrl,
           uploadStatus: "SUCCESS",
           uploadProgress: 100,
           uploadedById,
-          uploadedAt: new Date(),
+          uploadedAt: storedFile.uploadedAt,
         },
         include: { uploadedBy: true, supplier: true },
       });
+      await upsertFileAssetForOrderDocument(tx, created);
       await refreshSupplierDocumentRequestStatus(tx, row.id);
       return created;
     });
   } catch (error: unknown) {
-    await deleteR2Object(storageKey).catch(() => null);
+    await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
   await runNonCriticalTask("退税资料完整度刷新", () => refreshTaxRefundCompleteness(row.orderId));
@@ -746,7 +793,13 @@ export async function getSupplierDocumentRequestTemplate(request: AuditRequestLi
   if (!row.templateStorageKey) {
     throw codedError("该任务没有合同样本文件。", 404, "TEMPLATE_NOT_FOUND");
   }
-  const body = await readR2Object(row.templateStorageKey).catch((error) => {
+  const asset = await findActiveFileAssetBySource(
+    FILE_ASSET_SOURCE_TABLES.SUPPLIER_DOCUMENT_REQUESTS,
+    row.id,
+    FILE_ASSET_ROLES.SUPPLIER_REQUEST_TEMPLATE,
+  );
+  const storageKey = asset?.storageKey || row.templateStorageKey;
+  const body = await readR2Object(storageKey).catch((error) => {
     if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") {
       throw codedError("合同样本文件不存在或已删除。", 404, "TEMPLATE_NOT_FOUND");
     }
@@ -758,7 +811,42 @@ export async function getSupplierDocumentRequestTemplate(request: AuditRequestLi
   }));
   return {
     body,
-    mimeType: row.templateMimeType || EXCEL_TEMPLATE_MIME,
-    fileName: row.templateOriginalName || row.templateFileName || "factory-document-template.xlsx",
+    mimeType: asset?.mimeType || row.templateMimeType || EXCEL_TEMPLATE_MIME,
+    fileName: asset?.fileName || row.templateOriginalName || row.templateFileName || "factory-document-template.xlsx",
   };
+}
+
+export async function getSupplierDocumentRequestTemplateMetadata(_request: AuditRequestLike, actor: ActorLike, requestId: string) {
+  assertRead(actor, "supplierDocuments");
+  const row = await loadSupplierDocumentRequest(requestId, actor);
+  if (!row.templateStorageKey) {
+    throw codedError("该任务没有合同样本文件。", 404, "TEMPLATE_NOT_FOUND");
+  }
+  const asset = await findActiveFileAssetBySource(
+    FILE_ASSET_SOURCE_TABLES.SUPPLIER_DOCUMENT_REQUESTS,
+    row.id,
+    FILE_ASSET_ROLES.SUPPLIER_REQUEST_TEMPLATE,
+  );
+  const mimeType = asset?.mimeType || row.templateMimeType || EXCEL_TEMPLATE_MIME;
+  const fileName = asset?.fileName || row.templateOriginalName || row.templateFileName || "factory-document-template.xlsx";
+  const metadata = {
+    id: row.id,
+    ...managedFileMetadata({
+      fileName,
+      originalFileName: asset?.originalFileName || row.templateOriginalName || row.templateFileName,
+      mimeType,
+      fileSize: row.templateFileSize,
+      storageKey: asset?.storageKey || row.templateStorageKey,
+      bucket: asset?.bucket || row.templateBucket,
+      uploadedAt: asset?.uploadedAt || row.createdAt,
+      binding: {
+        orderId: row.orderId,
+        supplierId: row.supplierId,
+        supplierDocumentRequestId: row.id,
+        relatedModule: "SUPPLIER_REQUEST_TEMPLATE",
+      },
+    }),
+    previewKind: managedPreviewableMimeType(mimeType),
+  };
+  return mergeFileAssetMetadata(metadata, asset);
 }

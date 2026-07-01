@@ -60,9 +60,11 @@ export function paymentVoucherUploadKey(cost: CostRow) {
 }
 
 export function paymentVoucherDownloadUrl(cost: Pick<CostRow, "id" | "paymentVoucherUrl" | "paymentVoucherFileName">, disposition: "inline" | "attachment" = "inline") {
-  const baseUrl = cost.paymentVoucherUrl || (cost.paymentVoucherFileName ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : "");
+  const baseUrl = cost.id && (cost.paymentVoucherFileName || cost.paymentVoucherUrl)
+    ? `/api/files/payment-voucher/${encodeURIComponent(cost.id)}/download`
+    : (cost.paymentVoucherUrl || "");
   if (!baseUrl || disposition === "inline") return baseUrl;
-  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}download=1`;
+  return baseUrl;
 }
 
 export function hasPaymentVoucher(cost: Pick<CostRow, "id" | "paymentVoucherUrl" | "paymentVoucherFileName">) {

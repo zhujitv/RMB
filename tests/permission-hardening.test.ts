@@ -22,6 +22,7 @@ const reportService = readFileSync("lib/report-service.ts", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
+const fileDeletePolicy = readFileSync("lib/platform/file-delete-policy.ts", "utf8");
 
 const SECURITY_ROLE_MATRIX = [
   {
@@ -246,7 +247,7 @@ test("salesperson tax refund uploads are limited to own-customer clearance docum
   assert.match(orderDocumentsService, /assertDocumentOrder\(orderId, actor, documentType\)/);
   assert.match(orderDocumentsService, /canAccessOrder\(actor, order\)/);
   assert.match(orderDocumentsService, /actorRole\(actor\) === "业务员" && canRead\(actor, "documents"\) && canAccessOrder\(actor, document\.order\)/);
-  assert.match(orderDocumentsService, /actorRole\(actor\) === "业务员" && isProtectedCustomsDocumentType\(document\.documentType\)\) return false/);
+  assert.match(fileDeletePolicy, /actorRole\(actor\) === "业务员" && isProtectedCustomsDocumentType\(document\.documentType\)\) return false/);
 });
 
 test("workspace auth distinguishes expired login from server-side profile failure", () => {

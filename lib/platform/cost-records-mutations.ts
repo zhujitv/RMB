@@ -2,11 +2,8 @@ import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import {
   buildCostPaymentVoucherKey,
-  deleteR2Object,
-  ensureR2Configured,
   readR2Object,
   safeFileName,
-  uploadToR2,
 } from "../r2";
 import {
   COST_PAYMENT_STATUSES,
@@ -27,24 +24,34 @@ import {
   confirmedFactorySupplierMismatch,
   costTypeAllowsForeignCurrency,
   dateFromInput,
+  deleteManagedStoredFile,
   effectivePermissions,
+  FILE_ASSET_ROLES,
+  FILE_ASSET_SOURCE_TABLES,
+  findActiveFileAssetBySource,
   inputHasOwn,
   isLogisticsCostType,
   isProductSupplierType,
+  mergeFileAssetMetadata,
   nonEmpty,
   normalizedCostType,
   num,
   optional,
   permissionError,
-  readValidatedPaymentVoucherUploadFile,
+  managedFileMetadata,
+  managedPreviewableMimeType,
+  readManagedUploadFile,
   refreshTaxRefundCompleteness,
   requirePositive,
   requireText,
   resolveExchangeRateSnapshot,
   runNonCriticalTask,
   safeSerializeCost,
+  softDeleteFileAssetBySource,
   syncCostInvoiceStatus,
   todayInputInChina,
+  uploadManagedFileToStorage,
+  upsertFileAssetForPaymentVoucher,
   validCost,
   writeAudit,
 } from "./shared";
@@ -465,16 +472,26 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
   const deletedAt = new Date();
   const action: DeletedCostAction = canPhysicallyDeleteCost(before, hasUploadedInvoice) ? "deleted" : "voided";
   const auditPayload = deletionAuditPayload(action, currentActor, before, deletedAt);
-  const cost = action === "deleted"
-    ? await prisma.orderCost.delete({ where: { id } })
-    : await prisma.orderCost.update({
-      where: { id },
-      data: {
-        deletedAt,
-        paymentStatus: "已取消",
-        updatedById: currentActor.id,
-      },
-    });
+  const cost = await prisma.$transaction(async (tx) => {
+    const saved = action === "deleted"
+      ? await tx.orderCost.delete({ where: { id } })
+      : await tx.orderCost.update({
+        where: { id },
+        data: {
+          deletedAt,
+          paymentStatus: "已取消",
+          updatedById: currentActor.id,
+        },
+      });
+    await softDeleteFileAssetBySource(
+      tx,
+      FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
+      id,
+      FILE_ASSET_ROLES.PAYMENT_VOUCHER,
+      deletedAt,
+    );
+    return saved;
+  });
   await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(
     request,
     currentActor,
@@ -520,34 +537,39 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   const currentActor = requireCostActor(actor);
   assertCanManageProductSupplierPayment(currentActor);
   const before = await loadCostForPayment(currentActor, id);
-  const { body, mimeType, extension, fileSize } = await readValidatedPaymentVoucherUploadFile(file, "payment-voucher.jpg");
+  const uploadedFile = await readManagedUploadFile(file, "paymentVoucherImage", "payment-voucher.jpg");
+  const { mimeType, fileSize } = uploadedFile;
+  const extension = uploadedFile.extension || "jpg";
   const fileName = paymentVoucherFileName(extension);
   const storageFileName = safeFileName(`payment-voucher-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileName.split(".").pop() || extension}`);
   const storageKey = buildCostPaymentVoucherKey({ costId: id, fileName: storageFileName });
-  const { bucket } = ensureR2Configured();
-  await uploadToR2({ key: storageKey, body, contentType: mimeType });
+  const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName });
   let updated;
   try {
-    updated = await prisma.orderCost.update({
-      where: { id },
-      data: {
-        paymentVoucherUrl: null,
-        paymentVoucherFileName: fileName,
-        paymentVoucherMimeType: mimeType,
-        paymentVoucherUploadedAt: new Date(),
-        paymentVoucherStorageKey: storageKey,
-        paymentVoucherBucket: bucket,
-        updatedById: currentActor.id,
-      } as Prisma.OrderCostUncheckedUpdateInput,
-      include: includeCostRelations(),
+    updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.orderCost.update({
+        where: { id },
+        data: {
+          paymentVoucherUrl: null,
+          paymentVoucherFileName: fileName,
+          paymentVoucherMimeType: storedFile.mimeType || mimeType,
+          paymentVoucherUploadedAt: storedFile.uploadedAt,
+          paymentVoucherStorageKey: storedFile.storageKey,
+          paymentVoucherBucket: storedFile.bucket,
+          updatedById: currentActor.id,
+        } as Prisma.OrderCostUncheckedUpdateInput,
+        include: includeCostRelations(),
+      });
+      await upsertFileAssetForPaymentVoucher(tx, saved);
+      return saved;
     });
   } catch (error: unknown) {
-    await deleteR2Object(storageKey).catch(() => null);
+    await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
   const oldStorageKey = before.paymentVoucherStorageKey || "";
-  if (oldStorageKey && oldStorageKey !== storageKey) {
-    await runNonCriticalTask("付款凭证旧文件删除", () => deleteR2Object(oldStorageKey));
+  if (oldStorageKey && oldStorageKey !== storedFile.storageKey) {
+    await runNonCriticalTask("付款凭证旧文件删除", () => deleteManagedStoredFile(oldStorageKey));
   }
   await runNonCriticalTask("成本付款凭证操作日志写入", () => writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
     costId: id,
@@ -558,18 +580,57 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 
-export async function getProductSupplierCostPaymentVoucher(_request: AuditRequestLike, actor: CostActorInput, id: string) {
+export async function getProductSupplierCostPaymentVoucherMetadata(_request: AuditRequestLike, actor: CostActorInput, id: string) {
   assertRead(actor, "costs");
   const currentActor = requireCostActor(actor);
   const cost = await loadCostForPayment(currentActor, id);
-  const storageKey = cost.paymentVoucherStorageKey || "";
+  const asset = await findActiveFileAssetBySource(
+    FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
+    cost.id,
+    FILE_ASSET_ROLES.PAYMENT_VOUCHER,
+  );
+  const storageKey = asset?.storageKey || cost.paymentVoucherStorageKey || "";
   if (!storageKey) throw codedError("该成本记录尚未上传付款凭证。", 404, "PAYMENT_VOUCHER_NOT_FOUND");
+  const mimeType = asset?.mimeType || cost.paymentVoucherMimeType || "application/octet-stream";
+  const fileName = asset?.fileName || cost.paymentVoucherFileName || "汇款水单.jpg";
+  const metadata = {
+    id: cost.id,
+    ...managedFileMetadata({
+      fileUrl: asset?.fileUrl || cost.paymentVoucherUrl,
+      fileName,
+      originalFileName: asset?.originalFileName || cost.paymentVoucherFileName,
+      mimeType,
+      storageKey,
+      bucket: asset?.bucket || cost.paymentVoucherBucket,
+      uploadedAt: asset?.uploadedAt || cost.paymentVoucherUploadedAt,
+      uploadedBy: asset?.uploadedById ? cost.updatedBy : null,
+      binding: {
+        orderId: cost.orderId,
+        costId: cost.id,
+        supplierId: cost.supplierId,
+        relatedModule: "COST_PAYMENT",
+      },
+    }),
+    previewKind: managedPreviewableMimeType(mimeType),
+  };
+  return {
+    mimeType: metadata.mimeType,
+    fileName: metadata.fileName,
+    cost: safeSerializeCost(cost),
+    metadata: mergeFileAssetMetadata(metadata, asset),
+  };
+}
+
+export async function getProductSupplierCostPaymentVoucher(request: AuditRequestLike, actor: CostActorInput, id: string) {
+  const metadata = await getProductSupplierCostPaymentVoucherMetadata(request, actor, id);
+  const storageKey = metadata.metadata.storageKey || "";
   const body = await readR2Object(storageKey);
   return {
     body,
-    mimeType: cost.paymentVoucherMimeType || "application/octet-stream",
-    fileName: cost.paymentVoucherFileName || "汇款水单.jpg",
-    cost: safeSerializeCost(cost),
+    mimeType: metadata.mimeType,
+    fileName: metadata.fileName,
+    cost: metadata.cost,
+    metadata: metadata.metadata,
   };
 }
 

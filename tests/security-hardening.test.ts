@@ -20,6 +20,10 @@ const uploadValidation = readFileSync(
   "lib/platform/upload-validation.ts",
   "utf8",
 );
+const fileCenter = readFileSync(
+  "lib/platform/file-center.ts",
+  "utf8",
+);
 const appUtils = readFileSync("app/utils.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
@@ -389,12 +393,14 @@ test("all active PDF upload services reuse shared basic PDF validation", () => {
   );
   assert.match(
     orderDocumentsService,
-    /readValidatedPdfUploadFile\(file, "document\.pdf"\)/,
+    /readManagedUploadFile\(file, "pdf", "document\.pdf"\)/,
   );
   assert.match(
     logisticsInvoiceService,
-    /readValidatedInvoiceUploadFile\(file, "invoice\.pdf"\)/,
+    /readManagedUploadFile\(file, "invoicePdf", "invoice\.pdf"\)/,
   );
+  assert.match(fileCenter, /readValidatedPdfUploadFile\(candidate, fallbackName\)/);
+  assert.match(fileCenter, /readValidatedInvoiceUploadFile\(candidate, fallbackName\)/);
   assert.match(
     uploadValidation,
     /return readValidatedPdfUploadFile\(candidate, fallbackName\)/,

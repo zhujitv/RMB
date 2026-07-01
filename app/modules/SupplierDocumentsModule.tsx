@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, PaginationBar, PdfPreviewButton, useConfirmationDialog } from "../components";
+import { ConfirmationDialog, PaginationBar, PdfPreviewButton, fileDownloadUrl, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
@@ -425,7 +425,7 @@ function SupplierDocumentTaskCard({
                           <div className={styles.fileUploadActions}>
                             <span className={styles.fileUploadActionLabel}>操作：</span>
                             <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                            <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
                           </div>
                         </div>
                       ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DetailField, MoneyAmount, PdfPreviewButton, SideDetailDrawer, UiTabs } from "../../components";
+import { DetailField, MoneyAmount, PdfPreviewButton, SideDetailDrawer, UiTabs, fileDownloadUrl } from "../../components";
 import { formatCny, formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
 import { customerLegalName } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
@@ -421,7 +421,7 @@ export function CostInvoiceGroupDocuments({
           </div>
           <div className={styles.fileListItemActions}>
             <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+            <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
           </div>
         </div>
       )) : <div className={styles.emptyState}>暂未收到整组发票资料</div>}
@@ -431,4 +431,3 @@ export function CostInvoiceGroupDocuments({
     </div>
   );
 }
-

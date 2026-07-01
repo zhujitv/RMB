@@ -15,6 +15,7 @@ type DocumentMetadata = {
 type MetadataResponse = {
   success?: boolean;
   document?: DocumentMetadata;
+  file?: DocumentMetadata;
   error?: string;
 };
 
@@ -35,7 +36,7 @@ function displayNameFromMetadata(document: DocumentMetadata | null) {
 function previewStatusMessage(response: Response) {
   if (response.status === 403) return "权限不足，无法预览该文件。";
   if (response.status === 404) return "文件不存在或已删除。";
-  return "在线预览失败，请下载文件查看。";
+  return "文件暂时无法预览，请下载查看。";
 }
 
 export function DocumentPreviewClient({ documentId, initialFileName = "" }: { documentId: string; initialFileName?: string }) {
@@ -45,8 +46,8 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
   const [previewError, setPreviewError] = useState("");
 
   const encodedId = useMemo(() => encodeURIComponent(documentId), [documentId]);
-  const previewUrl = `/api/order-documents/${encodedId}/preview`;
-  const downloadUrl = `/api/order-documents/${encodedId}/download`;
+  const previewUrl = `/api/files/order-document/${encodedId}/preview`;
+  const downloadUrl = `/api/files/order-document/${encodedId}/download`;
 
   useEffect(() => {
     let cancelled = false;
@@ -54,13 +55,13 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
 
     async function loadMetadata() {
       try {
-        const response = await fetch(`/api/order-documents/${encodedId}`, {
+        const response = await fetch(`/api/files/order-document/${encodedId}`, {
           cache: "no-store",
           credentials: "same-origin",
         });
         const result = await response.json().catch(() => ({} as MetadataResponse));
         if (!response.ok) throw new Error(result?.error || "读取文件信息失败");
-        const nextFileName = displayNameFromMetadata(result.document || null);
+        const nextFileName = displayNameFromMetadata(result.file || result.document || null);
         if (cancelled) return;
         if (nextFileName) {
           setFileName(nextFileName);
@@ -95,13 +96,13 @@ export function DocumentPreviewClient({ documentId, initialFileName = "" }: { do
         const contentType = response.headers.get("Content-Type") || "";
         if (!response.ok) throw new Error(previewStatusMessage(response));
         if (!contentType.toLowerCase().includes("application/pdf")) {
-          throw new Error("预览接口未返回 PDF 文件流，请下载文件查看。");
+          throw new Error("文件暂时无法预览，请下载查看。");
         }
         if (!cancelled) setPreviewState("ready");
       } catch (previewLoadError) {
         if (cancelled) return;
         setPreviewState("failed");
-        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "在线预览失败，请下载文件查看。");
+        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "文件暂时无法预览，请下载查看。");
       }
     }
 

@@ -412,7 +412,8 @@ test("supplier settings include logistics expense and invoice permissions", () =
 test("invoice upload and confirmation workflow is present", () => {
   assert.match(backend, /uploadLogisticsExpenseInvoice/);
   assert.match(backend, /confirmLogisticsExpenseInvoice/);
-  assert.match(backend, /readValidatedInvoiceUploadFile/);
+  assert.match(backend, /readManagedUploadFile\(file, "invoicePdf", "invoice\.pdf"\)/);
+  assert.match(backend, /uploadManagedFileToStorage/);
   assert.doesNotMatch(
     backend,
     /LOGISTICS_INVOICE_AMOUNT_EXCEEDS_APPROVED|LOGISTICS_INVOICE_FORCE_REASON_REQUIRED/,

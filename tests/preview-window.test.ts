@@ -11,6 +11,18 @@ const downloadRoute = readFileSync(
   "app/api/order-documents/[id]/download/route.ts",
   "utf8",
 );
+const filePreviewRoute = readFileSync(
+  "app/api/files/[kind]/[id]/preview/route.ts",
+  "utf8",
+);
+const fileDownloadRoute = readFileSync(
+  "app/api/files/[kind]/[id]/download/route.ts",
+  "utf8",
+);
+const fileMetadataRoute = readFileSync(
+  "app/api/files/[kind]/[id]/route.ts",
+  "utf8",
+);
 const orderDocumentRoute = readFileSync(
   "app/api/order-documents/[id]/route.ts",
   "utf8",
@@ -54,56 +66,56 @@ const sharedSerialization = readFileSync(
   "lib/platform/shared-serialization.ts",
   "utf8",
 );
+const fileCenter = readFileSync(
+  "lib/platform/file-center.ts",
+  "utf8",
+);
 const styles = readWorkspaceStylesSource();
 
 test("preview route returns inline file streams with cache and nosniff headers", () => {
   assert.match(
-    previewRoute,
-    /"Content-Type": mimeType \|\| "application\/pdf"/,
+    filePreviewRoute,
+    /getManagedFilePreview\(request, actor, kind, id\)/,
   );
-  assert.match(previewRoute, /preferredOrderDocumentFileName\(document\)/);
   assert.match(
-    previewRoute,
-    /pdfContentDispositionHeader\("inline", fileName\)/,
+    filePreviewRoute,
+    /managedFileStreamHeaders\(\{[\s\S]*disposition: "inline"/,
   );
-  assert.match(previewRoute, /export async function HEAD/);
+  assert.match(filePreviewRoute, /export async function HEAD/);
   assert.match(
-    previewRoute,
-    /getOrderDocumentPreviewMetadata\(request, actor, id\)/,
+    filePreviewRoute,
+    /getManagedFilePreviewMetadata\(request, actor, kind, id\)/,
   );
+  assert.match(previewRoute, /managedFileStreamHeaders/);
   assert.match(
     orderDocumentsService,
     /export async function getOrderDocumentPreviewMetadata/,
   );
-  assert.match(orderDocumentsService, /headR2Object\(document\.storageKey\)/);
+  assert.match(orderDocumentsService, /headR2Object\(fileDocument\.storageKey\)/);
   assert.match(
-    sharedConstants,
+    fileCenter,
     /filename="[^`]*"; filename\*=UTF-8''\$\{encodeURIComponent\(safeFileName\)\}/,
   );
   assert.match(
     sharedConstants,
     /document\.originalFileName,[\s\S]*document\.originalFilename,[\s\S]*document\.originalName,[\s\S]*document\.fileName,[\s\S]*generatedOrderDocumentFileName\(document\)/,
   );
-  assert.doesNotMatch(previewRoute, /attachment/);
-  assert.match(previewRoute, /"Cache-Control": "private, max-age=300"/);
-  assert.match(previewRoute, /"X-Content-Type-Options": "nosniff"/);
+  assert.doesNotMatch(filePreviewRoute, /attachment/);
+  assert.match(fileCenter, /"Cache-Control": "private, max-age=300"/);
+  assert.match(fileCenter, /"X-Content-Type-Options": "nosniff"/);
   assert.doesNotMatch(
-    previewRoute,
+    filePreviewRoute,
     /pdfjs|pdf2json|recognizeCustoms|parseCustoms|DOMMatrix/,
   );
 });
 
 test("download route returns attachment file streams", () => {
-  assert.match(downloadRoute, /getOrderDocumentDownload\(request, actor, id\)/);
+  assert.match(fileDownloadRoute, /getManagedFileDownload\(request, actor, kind, id\)/);
   assert.match(
-    downloadRoute,
-    /"Content-Type": mimeType \|\| "application\/pdf"/,
+    fileDownloadRoute,
+    /managedFileStreamHeaders\(\{[\s\S]*disposition: "attachment"/,
   );
-  assert.match(downloadRoute, /preferredOrderDocumentFileName\(document\)/);
-  assert.match(
-    downloadRoute,
-    /pdfContentDispositionHeader\("attachment", fileName\)/,
-  );
+  assert.match(downloadRoute, /managedFileStreamHeaders/);
   assert.doesNotMatch(downloadRoute, /searchParams\.get\("disposition"\)/);
   assert.doesNotMatch(downloadRoute, /pdfContentDispositionHeader\("inline"/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);
@@ -116,34 +128,37 @@ test("preview route returns structured JSON errors when stream fails", () => {
   );
   assert.match(previewRoute, /Response\.json\(\{ error: message, code \}/);
   assert.match(previewRoute, /X-Preview-Error-Code/);
-  assert.match(previewRoute, /文件预览失败，请下载原文件查看/);
+  assert.match(previewRoute, /文件暂时无法预览，请下载查看。/);
 });
 
-test("workspace modules use one PDF preview drawer instead of preview tabs", () => {
+test("workspace modules use one file preview modal instead of preview tabs", () => {
   const downloadHref =
-    /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(document\.id\)\}\/download`\}/;
+    /href=\{fileDownloadUrl\("order-document", document\.id\)\}/;
   const currentDocumentDownloadHref =
-    /href=\{`\/api\/order-documents\/\$\{encodeURIComponent\(currentDocument\.id\)\}\/download`\}/;
+    /href=\{fileDownloadUrl\("order-document", currentDocument\.id\)\}/;
   assert.match(sharedComponents, /export function PdfPreviewButton/);
   assert.match(sharedComponents, /export function PdfPreviewDrawer/);
+  assert.match(sharedComponents, /export function FilePreviewModal/);
+  assert.match(fileMetadataRoute, /getManagedFileMetadata\(request, actor, kind, id\)/);
   assert.match(
     sharedComponents,
-    /const previewUrl = `\/api\/order-documents\/\$\{encodedId\}\/preview`/,
+    /\/api\/files\/\$\{encodeURIComponent\(fileKind\)\}\/\$\{encodeURIComponent\(fileId\)\}\/preview/,
   );
   assert.match(sharedComponents, /method: "HEAD"/);
   assert.match(sharedComponents, /Content-Type/);
   assert.match(sharedComponents, /application\/pdf/);
   assert.match(sharedComponents, /image\/jpeg/);
   assert.match(sharedComponents, /image\/png/);
+  assert.match(sharedComponents, /image\/webp/);
   assert.match(sharedComponents, /<iframe[\s\S]*src=\{previewUrl\}/);
-  assert.match(sharedComponents, /styles\.imagePreviewFrame/);
+  assert.match(sharedComponents, /styles\.paymentVoucherImageFrame/);
   assert.doesNotMatch(sharedComponents, /<object/);
   assert.doesNotMatch(sharedComponents, /data=\{previewUrl\}/);
-  assert.match(sharedComponents, /在线预览失败/);
+  assert.match(sharedComponents, /文件暂时无法预览，请下载查看。/);
   assert.match(sharedComponents, /下载文件/);
   assert.match(
     sharedComponents,
-    /surfaceClassName=\{styles\.pdfPreviewDrawer\}/,
+    /surfaceClassName=\{styles\.paymentVoucherModal\}/,
   );
   assert.match(taxRefundModule, /PdfPreviewButton/);
   assert.match(domesticLogisticsModule, /PdfPreviewButton/);
@@ -179,7 +194,7 @@ test("document preview page sets the browser title from document metadata", () =
   );
   assert.match(
     documentPreviewClient,
-    /fetch\(`\/api\/order-documents\/\$\{encodedId\}`/,
+    /fetch\(`\/api\/files\/order-document\/\$\{encodedId\}`/,
   );
   assert.match(documentPreviewClient, /displayFileName/);
   assert.match(documentPreviewClient, /downloadFileName/);
@@ -193,7 +208,7 @@ test("document preview page sets the browser title from document metadata", () =
   assert.doesNotMatch(documentPreviewClient, /<object/);
   assert.doesNotMatch(documentPreviewClient, /data=\{previewUrl\}/);
   assert.match(documentPreviewClient, /minHeight: "calc\(100vh - 80px\)"/);
-  assert.match(documentPreviewClient, /在线预览失败/);
+  assert.match(documentPreviewClient, /文件暂时无法预览，请下载查看。/);
   assert.match(documentPreviewClient, /下载文件/);
   assert.match(orderDocumentRoute, /export async function GET/);
   assert.match(
@@ -361,7 +376,8 @@ test("domestic logistics customs declaration keeps one current upload", () => {
   );
   assert.match(orderDocumentsService, /documentType: "CUSTOMS_ENTRY_FORM"/);
   assert.match(orderDocumentsService, /id: \{ not: created\.id \}/);
-  assert.match(orderDocumentsService, /data: \{ deletedAt: new Date\(\) \}/);
+  assert.match(orderDocumentsService, /data: \{ deletedAt: replacedAt \}/);
+  assert.match(orderDocumentsService, /softDeleteFileAssetBySource\(/);
 });
 
 test("tax refund customs recognition stays focused on current declaration fields", () => {

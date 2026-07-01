@@ -17,6 +17,7 @@ import {
 } from "./shared-constants";
 import { USER_PUBLIC_SELECT, publicUser, serializeUser } from "./shared-users";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark, normalizeExportInvoiceRemark } from "./export-invoice-remark";
+import { managedFileDownloadPath } from "./file-center";
 
 export { USER_PUBLIC_SELECT, publicUser, serializeUser };
 
@@ -228,8 +229,6 @@ type CostLike = Record<string, unknown> & {
   paymentVoucherFileName?: string | null;
   paymentVoucherMimeType?: string | null;
   paymentVoucherUploadedAt?: Date | string | null;
-  paymentVoucherStorageKey?: string | null;
-  paymentVoucherBucket?: string | null;
   invoiceStatus?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
@@ -456,7 +455,7 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     paymentDate: dateToInput(cost.paymentDate),
     paid: Boolean(cost.paid),
     paidAt: dateTimeToIso(cost.paidAt),
-    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : (cost.paymentVoucherUrl || ""),
+    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? managedFileDownloadPath("payment-voucher", String(cost.id)) : (cost.paymentVoucherUrl || ""),
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
@@ -527,7 +526,7 @@ export function serializeCost(costInput: unknown) {
     paymentDate: dateToInput(cost.paymentDate),
     paid: Boolean(cost.paid),
     paidAt: dateTimeToIso(cost.paidAt),
-    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? `/api/costs/${encodeURIComponent(cost.id)}/payment-voucher/download` : (cost.paymentVoucherUrl || ""),
+    paymentVoucherUrl: cost.paymentVoucherStorageKey && cost.id ? managedFileDownloadPath("payment-voucher", String(cost.id)) : (cost.paymentVoucherUrl || ""),
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),

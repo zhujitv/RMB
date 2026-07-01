@@ -29,7 +29,7 @@ test("supplier document workflow uses existing factory tax document types", () =
   assert.match(service, /SUPPLIER_INVOICE/);
   assert.match(service, /refreshTaxRefundCompleteness\(row\.orderId\)/);
   assert.match(service, /syncCostInvoiceStatus/);
-  assert.match(service, /readValidatedPdfUploadFile/);
+  assert.match(service, /readManagedUploadFile\(input\.file, "pdf", "supplier-document\.pdf"\)/);
   assert.match(service, /readValidatedExcelTemplate/);
   assert.match(service, /orderId: row\.orderId/);
   assert.match(service, /supplierId: row\.supplierId/);
@@ -59,7 +59,9 @@ test("product supplier callback email attaches only matching cost payment vouche
   assert.match(service, /sourceType: \{ not: "LOGISTICS_EXPENSE" \}/);
   assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
   assert.match(service, /paymentVoucherStorageKey: \{ not: null \}/);
-  assert.match(service, /readR2Object\(voucherCost\.paymentVoucherStorageKey\)/);
+  assert.match(service, /findActiveFileAssetBySource\(/);
+  assert.match(service, /const storageKey = asset\?\.storageKey \|\| voucherCost\.paymentVoucherStorageKey/);
+  assert.match(service, /readR2Object\(storageKey\)/);
   assert.match(service, /已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。/);
   assert.match(service, /paymentVoucherAttached: Boolean\(paymentVoucherAttachment\)/);
   assert.match(service, /\.\.\.\(paymentVoucherAttachment \? \[paymentVoucherAttachment\] : \[\]\)/);

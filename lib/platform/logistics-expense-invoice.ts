@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, safeFileName, uploadToR2 } from "../r2";
+import { buildOrderDocumentKey, safeFileName } from "../r2";
 import {
   LEGACY_LOGISTICS_OPERATOR_ROLE,
   DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
@@ -8,12 +8,15 @@ import {
   codedError,
   customerBusinessName,
   customerShortName,
+  deleteManagedStoredFile,
   nextStandardFilenameForUpload,
   nonEmpty,
   normalizeEmail,
   normalizedCostType,
-  readValidatedInvoiceUploadFile,
+  readManagedUploadFile,
   runNonCriticalTask,
+  uploadManagedFileToStorage,
+  upsertFileAssetForOrderDocument,
   validEmail,
   writeAudit,
 } from "./shared";
@@ -380,7 +383,8 @@ export async function createLogisticsInvoiceDocument(
   file: unknown,
   metadata: UnknownRecord = {}
 ) {
-  const { originalFileName, mimeType, body, fileSize } = await readValidatedInvoiceUploadFile(file, "invoice.pdf");
+  const uploadedFile = await readManagedUploadFile(file, "invoicePdf", "invoice.pdf");
+  const { originalFileName, mimeType, fileSize } = uploadedFile;
   const order = asRecord(expense.order);
   const cost = asRecord(expense.cost);
   const logisticsCostType = normalizedCostType(expense.cost?.costType || expense.costType);
@@ -395,7 +399,6 @@ export async function createLogisticsInvoiceDocument(
     relatedModule: "SUPPLIER",
   });
   const standardFilename = baseStandardFilename.replace(/\.pdf$/i, extension);
-  const { bucket: r2Bucket } = ensureR2Configured();
   const storageFileName = safeFileName(`${nonEmpty(order.orderNo) || orderId}_LOGISTICS_INVOICE_${Date.now()}_${crypto.randomUUID().slice(0, 8)}${extension}`);
   const storageKey = buildOrderDocumentKey({
     orderId,
@@ -404,30 +407,34 @@ export async function createLogisticsInvoiceDocument(
     relatedModule: "SUPPLIER",
     supplierId: expense.supplierId,
   });
-  await uploadToR2({ key: storageKey, body, contentType: mimeType });
+  const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName: standardFilename });
   try {
-    const document = await prisma.orderDocument.create({
-      data: {
-        orderId,
-        costId: expense.costId || null,
-        supplierId: expense.supplierId,
-        relatedModule: "SUPPLIER",
-        documentType: "SUPPLIER_INVOICE",
-        fileName: standardFilename,
-        originalName: originalFileName,
-        originalFilename: originalFileName,
-        standardFilename,
-        fileSize,
-        mimeType,
-        r2Bucket,
-        storageKey,
-        fileUrl: null,
-        uploadStatus: "SUCCESS",
-        uploadProgress: 100,
-        uploadedById: actor?.id || null,
-        uploadedAt: new Date(),
-      },
-      include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+    const document = await prisma.$transaction(async (tx) => {
+      const created = await tx.orderDocument.create({
+        data: {
+          orderId,
+          costId: expense.costId || null,
+          supplierId: expense.supplierId,
+          relatedModule: "SUPPLIER",
+          documentType: "SUPPLIER_INVOICE",
+          fileName: standardFilename,
+          originalName: originalFileName,
+          originalFilename: originalFileName,
+          standardFilename,
+          fileSize: storedFile.fileSize || fileSize,
+          mimeType: storedFile.mimeType || mimeType,
+          r2Bucket: storedFile.bucket,
+          storageKey: storedFile.storageKey,
+          fileUrl: storedFile.fileUrl,
+          uploadStatus: "SUCCESS",
+          uploadProgress: 100,
+          uploadedById: actor?.id || null,
+          uploadedAt: storedFile.uploadedAt,
+        },
+        include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
+      });
+      await upsertFileAssetForOrderDocument(tx, created, { logisticsExpenseId: expense.id || null });
+      return created;
     });
     await runNonCriticalTask("物流发票上传日志写入", () => writeAudit(request, actor, "上传物流发票", "order_documents", document.id, null, {
       logisticsExpenseId: expense.id,
@@ -436,7 +443,7 @@ export async function createLogisticsInvoiceDocument(
     }));
     return document;
   } catch (error: unknown) {
-    await deleteR2Object(storageKey).catch(() => null);
+    await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
 }

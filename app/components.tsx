@@ -599,17 +599,22 @@ type PdfPreviewDocument = {
 type PdfPreviewMetadataResponse = {
   success?: boolean;
   document?: PdfPreviewDocument;
+  file?: PdfPreviewDocument & { mimeType?: string; previewKind?: string };
   error?: string;
   message?: string;
 };
 
 type PdfPreviewState = "checking" | "ready" | "failed";
 type PreviewContentKind = "pdf" | "image";
+type FilePreviewMetaItem = {
+  label: string;
+  value: ReactNode;
+};
 
 function pdfPreviewStatusMessage(response: Response) {
   if (response.status === 403) return "权限不足，无法预览该文件。";
   if (response.status === 404) return "文件不存在或已删除。";
-  return "在线预览失败，请下载文件查看。";
+  return "文件暂时无法预览，请下载查看。";
 }
 
 function pdfPreviewFileName(document: PdfPreviewDocument | null, fallback = "") {
@@ -622,6 +627,176 @@ function pdfPreviewFileName(document: PdfPreviewDocument | null, fallback = "") 
     || document?.fileName
     || fallback
     || "文件"
+  );
+}
+
+export function fileDownloadUrl(fileKind: string, fileId: string) {
+  return `/api/files/${encodeURIComponent(fileKind)}/${encodeURIComponent(fileId)}/download`;
+}
+
+export function filePreviewUrl(fileKind: string, fileId: string) {
+  return `/api/files/${encodeURIComponent(fileKind)}/${encodeURIComponent(fileId)}/preview`;
+}
+
+export function FilePreviewModal({
+  fileKind,
+  fileId,
+  title = "文件预览",
+  initialFileName = "",
+  metaItems = [],
+  onClose,
+  downloadLabel = "下载文件",
+}: {
+  fileKind: string;
+  fileId: string;
+  title?: string;
+  initialFileName?: string;
+  metaItems?: FilePreviewMetaItem[];
+  onClose: () => void;
+  downloadLabel?: string;
+}) {
+  const [fileName, setFileName] = useState(initialFileName || "文件");
+  const [error, setError] = useState("");
+  const [previewState, setPreviewState] = useState<PdfPreviewState>("checking");
+  const [previewError, setPreviewError] = useState("");
+  const [previewKind, setPreviewKind] = useState<PreviewContentKind>("pdf");
+  const encodedKind = encodeURIComponent(fileKind);
+  const encodedId = encodeURIComponent(fileId);
+  const metadataUrl = `/api/files/${encodedKind}/${encodedId}`;
+  const previewUrl = filePreviewUrl(fileKind, fileId);
+  const downloadUrl = fileDownloadUrl(fileKind, fileId);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMetadata() {
+      try {
+        const response = await fetch(metadataUrl, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const result = await response.json().catch(() => ({} as PdfPreviewMetadataResponse));
+        if (!response.ok) throw new Error(result.error || result.message || "读取文件信息失败");
+        if (cancelled) return;
+        setFileName(pdfPreviewFileName(result.file || result.document || null, initialFileName));
+        setError("");
+      } catch (metadataError) {
+        if (cancelled) return;
+        setFileName(initialFileName || "文件");
+        setError(metadataError instanceof Error ? metadataError.message : "读取文件信息失败");
+      }
+    }
+
+    void loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, [metadataUrl, initialFileName]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyPreviewStream() {
+      setPreviewState("checking");
+      setPreviewError("");
+      try {
+        const response = await fetch(previewUrl, {
+          method: "HEAD",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!response.ok) throw new Error(pdfPreviewStatusMessage(response));
+        const normalizedContentType = contentType.toLowerCase();
+        if (normalizedContentType.includes("application/pdf")) {
+          if (!cancelled) setPreviewKind("pdf");
+        } else if (normalizedContentType.includes("image/jpeg") || normalizedContentType.includes("image/png") || normalizedContentType.includes("image/webp")) {
+          if (!cancelled) setPreviewKind("image");
+        } else {
+          throw new Error("文件暂时无法预览，请下载查看。");
+        }
+        if (!cancelled) setPreviewState("ready");
+      } catch (previewLoadError) {
+        if (cancelled) return;
+        setPreviewState("failed");
+        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "文件暂时无法预览，请下载查看。");
+      }
+    }
+
+    void verifyPreviewStream();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUrl]);
+
+  return (
+    <DismissibleLayer
+      ariaLabel={`${title}：${fileName}`}
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={styles.paymentVoucherModal}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <>
+          <header className={styles.modalHeader}>
+            <div>
+              <strong>{title}</strong>
+              <span>{fileName}</span>
+              {error ? <span>{error}</span> : null}
+            </div>
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+          </header>
+          {metaItems.length ? (
+            <div className={styles.paymentVoucherMeta}>
+              {metaItems.map((item) => (
+                <span key={item.label}>
+                  <strong>{item.label}</strong>
+                  {item.value || "-"}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className={styles.paymentVoucherPreviewBody}>
+            {previewState === "checking" ? (
+              <div className={styles.paymentVoucherFallback}>正在加载文件预览...</div>
+            ) : null}
+            {previewState === "ready" ? (
+              previewKind === "image" ? (
+                <div className={styles.paymentVoucherImageFrame}>
+                  <img
+                    src={previewUrl}
+                    alt={fileName}
+                    onError={() => {
+                      setPreviewState("failed");
+                      setPreviewError("文件暂时无法预览，请下载查看。");
+                    }}
+                  />
+                </div>
+              ) : (
+                <iframe
+                  src={previewUrl}
+                  title={fileName}
+                  className={styles.paymentVoucherFrame}
+                  onError={() => {
+                    setPreviewState("failed");
+                    setPreviewError("文件暂时无法预览，请下载查看。");
+                  }}
+                />
+              )
+            ) : null}
+            {previewState === "failed" ? (
+              <div className={styles.paymentVoucherFallback}>
+                <span>{previewError || "文件暂时无法预览，请下载查看。"}</span>
+              </div>
+            ) : null}
+          </div>
+          <footer className={styles.modalFooter}>
+            <a className={styles.primaryButtonCompact} href={downloadUrl}>{downloadLabel}</a>
+            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+          </footer>
+        </>
+      )}
+    </DismissibleLayer>
   );
 }
 
@@ -662,128 +837,14 @@ export function PdfPreviewDrawer({
   initialFileName?: string;
   onClose: () => void;
 }) {
-  const [fileName, setFileName] = useState(initialFileName || "文件");
-  const [error, setError] = useState("");
-  const [previewState, setPreviewState] = useState<PdfPreviewState>("checking");
-  const [previewError, setPreviewError] = useState("");
-  const [previewKind, setPreviewKind] = useState<PreviewContentKind>("pdf");
-  const encodedId = encodeURIComponent(documentId);
-  const previewUrl = `/api/order-documents/${encodedId}/preview`;
-  const downloadUrl = `/api/order-documents/${encodedId}/download`;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadMetadata() {
-      try {
-        const response = await fetch(`/api/order-documents/${encodedId}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        const result = await response.json().catch(() => ({} as PdfPreviewMetadataResponse));
-        if (!response.ok) throw new Error(result.error || result.message || "读取文件信息失败");
-        if (cancelled) return;
-        setFileName(pdfPreviewFileName(result.document || null, initialFileName));
-        setError("");
-      } catch (metadataError) {
-        if (cancelled) return;
-        setFileName(initialFileName || "文件");
-        setError(metadataError instanceof Error ? metadataError.message : "读取文件信息失败");
-      }
-    }
-
-    void loadMetadata();
-    return () => {
-      cancelled = true;
-    };
-  }, [documentId, encodedId, initialFileName]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function verifyPreviewStream() {
-      setPreviewState("checking");
-      setPreviewError("");
-      try {
-        const response = await fetch(previewUrl, {
-          method: "HEAD",
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        const contentType = response.headers.get("Content-Type") || "";
-        if (!response.ok) throw new Error(pdfPreviewStatusMessage(response));
-        const normalizedContentType = contentType.toLowerCase();
-        if (normalizedContentType.includes("application/pdf")) {
-          if (!cancelled) setPreviewKind("pdf");
-        } else if (normalizedContentType.includes("image/jpeg") || normalizedContentType.includes("image/png")) {
-          if (!cancelled) setPreviewKind("image");
-        } else {
-          throw new Error("预览接口未返回可预览的文件流，请下载文件查看。");
-        }
-        if (!cancelled) setPreviewState("ready");
-      } catch (previewLoadError) {
-        if (cancelled) return;
-        setPreviewState("failed");
-        setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "在线预览失败，请下载文件查看。");
-      }
-    }
-
-    void verifyPreviewStream();
-    return () => {
-      cancelled = true;
-    };
-  }, [previewUrl]);
-
   return (
-    <SideDetailDrawer
-      ariaLabel={`文件预览：${fileName}`}
-      title={fileName}
-      subtitle={error || undefined}
-      surfaceClassName={styles.pdfPreviewDrawer}
+    <FilePreviewModal
+      fileKind="order-document"
+      fileId={documentId}
+      title="文件预览"
+      initialFileName={initialFileName}
       onClose={onClose}
-      actions={(
-        <a className={styles.primaryButtonCompact} href={downloadUrl}>
-          下载文件
-        </a>
-      )}
-    >
-      <div className={styles.pdfPreviewFrameWrap}>
-        {previewState === "checking" ? (
-          <div className={styles.pdfPreviewLoading}>正在加载文件预览...</div>
-        ) : null}
-        {previewState === "ready" ? (
-          previewKind === "image" ? (
-            <div className={styles.imagePreviewFrame}>
-              <img
-                src={previewUrl}
-                alt={fileName}
-                onError={() => {
-                  setPreviewState("failed");
-                  setPreviewError("在线预览失败，请下载文件查看。");
-                }}
-              />
-            </div>
-          ) : (
-            <iframe
-              src={previewUrl}
-              title={fileName}
-              className={styles.pdfPreviewFrame}
-              onError={() => {
-                setPreviewState("failed");
-                setPreviewError("在线预览失败，请下载文件查看。");
-              }}
-            />
-          )
-        ) : null}
-        {previewState === "failed" ? (
-          <div className={styles.pdfPreviewFallback}>
-            <strong>在线预览失败</strong>
-            <span>{previewError || "请下载文件查看。"}</span>
-            <a className={styles.primaryButtonCompact} href={downloadUrl}>下载文件</a>
-          </div>
-        ) : null}
-      </div>
-    </SideDetailDrawer>
+    />
   );
 }
 

@@ -1,4 +1,4 @@
-import { PdfPreviewButton } from "../../components";
+import { PdfPreviewButton, fileDownloadUrl } from "../../components";
 import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { UPLOAD_REPLACE_TEXT } from "../../uploadTexts";
@@ -78,7 +78,7 @@ export function CustomsDocumentPanel({
                   {canPreviewOrDownload ? (
                     <>
                       <PdfPreviewButton documentId={currentDocument.id} fileName={currentDocument.fileName || ""} />
-                      <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(currentDocument.id)}/download`}>下载</a>
+                      <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", currentDocument.id)}>下载</a>
                     </>
                   ) : null}
                   {canDelete ? (

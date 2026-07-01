@@ -16,6 +16,8 @@ import {
   validEmail,
   writeAudit,
   codedError,
+  FILE_ASSET_SOURCE_TABLES,
+  softDeleteFileAssetBySource,
 } from "./shared";
 import {
   assertCanConfirmLogisticsInvoice,
@@ -61,6 +63,7 @@ import {
   logisticsBillDeleteBlock,
   logisticsBillEditBlockReason as logisticsBillStateEditBlockReason,
 } from "./logistics-bill-state-machine";
+import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
 
 const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
@@ -1511,7 +1514,8 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
 
 export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   const before = await loadLogisticsExpenseForAction(id, actor);
-  if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限删除该物流费用发票", 403);
+  const canManageInvoice = canUploadLogisticsExpenseInvoice(actor, before);
+  assertCanDeleteLogisticsInvoiceFile({ canManageInvoice, invoiceConfirmed: false });
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
   const fallbackGroup = logisticsInvoiceGroupForExpense(before);
@@ -1521,9 +1525,10 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
   const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
   if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
-  if (targetRows.some((row) => row.invoiceStatus === "已确认" || row.invoiceConfirmedAt)) {
-    throw codedError("已确认发票不能删除。", 400, "LOGISTICS_INVOICE_CONFIRMED_DELETE_BLOCKED");
-  }
+  assertCanDeleteLogisticsInvoiceFile({
+    canManageInvoice,
+    invoiceConfirmed: targetRows.some((row) => row.invoiceStatus === "已确认" || row.invoiceConfirmedAt),
+  });
   const documentId = optional(input.documentId) || targetRows.find((row) => row.invoiceDocumentId)?.invoiceDocumentId || "";
   if (!documentId) throw codedError("当前分组没有已上传发票。", 404, "LOGISTICS_INVOICE_DOCUMENT_NOT_FOUND");
   const targetDocumentRows = targetRows.filter((row) => row.invoiceDocumentId === documentId);
@@ -1536,6 +1541,13 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
       where: { id: documentId },
       data: { deletedAt: uploadedAt },
     });
+    await softDeleteFileAssetBySource(
+      tx,
+      FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+      documentId,
+      String(document.documentType || "SUPPLIER_INVOICE"),
+      uploadedAt,
+    );
     for (const row of targetDocumentRows) {
       await tx.logisticsExpense.update({
         where: { id: row.id },

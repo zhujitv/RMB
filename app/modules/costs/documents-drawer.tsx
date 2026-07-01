@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { DetailField, DismissibleLayer, PdfPreviewButton } from "../../components";
+import { DetailField, DismissibleLayer, FilePreviewModal, PdfPreviewButton, fileDownloadUrl } from "../../components";
 import { formatDate, formatDateTime, moneyText } from "../../formatters";
 import { PAYMENT_VOUCHER_UPLOAD_ACCEPT, PDF_UPLOAD_ACCEPT } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import styles from "../../WorkspaceShell.module.css";
-import type { CostDocument, CostRow, PaymentVoucherPreviewKind, PaymentVoucherPreviewState } from "./model";
-import { costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, paymentVoucherDownloadUrl, paymentVoucherUploadKey, previewKindFromContentType, inferPaymentVoucherPreviewKind } from "./helpers";
+import type { CostDocument, CostRow } from "./model";
+import { costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, paymentVoucherUploadKey } from "./helpers";
 
 export function CostDocumentsDrawer({
   cost,
@@ -231,113 +231,21 @@ export function PaymentVoucherPreviewModal({
   cost: CostRow;
   onClose: () => void;
 }) {
-  const [previewState, setPreviewState] = useState<PaymentVoucherPreviewState>("checking");
-  const [previewKind, setPreviewKind] = useState<PaymentVoucherPreviewKind>(() => inferPaymentVoucherPreviewKind(cost) || "image");
-  const previewUrl = paymentVoucherDownloadUrl(cost);
-  const downloadUrl = paymentVoucherDownloadUrl(cost, "attachment");
   const supplierName = costSupplierName(cost);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function verifyPreview() {
-      setPreviewState("checking");
-      const inferredKind = inferPaymentVoucherPreviewKind(cost);
-      if (!previewUrl) {
-        setPreviewState("failed");
-        return;
-      }
-      try {
-        const response = await fetch(previewUrl, {
-          method: "HEAD",
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        if (!response.ok) throw new Error("preview unavailable");
-        const contentKind = previewKindFromContentType(response.headers.get("Content-Type") || "") || inferredKind;
-        if (!contentKind) throw new Error("unsupported preview type");
-        if (!cancelled) {
-          setPreviewKind(contentKind);
-          setPreviewState("ready");
-        }
-      } catch {
-        if (cancelled) return;
-        if (inferredKind) {
-          setPreviewKind(inferredKind);
-          setPreviewState("ready");
-          return;
-        }
-        setPreviewState("failed");
-      }
-    }
-
-    void verifyPreview();
-    return () => {
-      cancelled = true;
-    };
-  }, [cost.id, cost.paymentVoucherFileName, cost.paymentVoucherMimeType, previewUrl]);
-
   return (
-    <DismissibleLayer
-      ariaLabel="付款凭证"
-      overlayClassName={styles.modalOverlay}
-      surfaceClassName={styles.paymentVoucherModal}
-      dismissible
+    <FilePreviewModal
+      fileKind="payment-voucher"
+      fileId={cost.id}
+      title="付款凭证"
+      initialFileName={cost.paymentVoucherFileName || "汇款水单"}
+      metaItems={[
+        { label: "订单号", value: cost.orderNo || "-" },
+        { label: "供应商", value: supplierName || "-" },
+        { label: "付款时间", value: formatDateTime(cost.paidAt || cost.paymentDate) },
+      ]}
+      downloadLabel="下载凭证"
       onClose={onClose}
-    >
-      {({ requestClose }) => (
-        <>
-          <header className={styles.modalHeader}>
-            <div>
-              <strong>付款凭证</strong>
-              <span>{cost.paymentVoucherFileName || "汇款水单"}</span>
-            </div>
-            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
-          </header>
-          <div className={styles.paymentVoucherMeta}>
-            <span><strong>订单号</strong>{cost.orderNo || "-"}</span>
-            <span><strong>供应商</strong>{supplierName}</span>
-            <span><strong>付款时间</strong>{formatDateTime(cost.paidAt || cost.paymentDate)}</span>
-          </div>
-          <div className={styles.paymentVoucherPreviewBody}>
-            {previewState === "checking" ? (
-              <div className={styles.pdfPreviewLoading}>正在加载付款凭证...</div>
-            ) : null}
-            {previewState === "ready" && previewKind === "image" ? (
-              <div className={styles.paymentVoucherImageFrame}>
-                <img
-                  src={previewUrl}
-                  alt={cost.paymentVoucherFileName || "付款凭证"}
-                  onError={() => setPreviewState("failed")}
-                />
-              </div>
-            ) : null}
-            {previewState === "ready" && previewKind === "pdf" ? (
-              <iframe
-                src={previewUrl}
-                title="付款凭证"
-                className={styles.paymentVoucherFrame}
-                onError={() => setPreviewState("failed")}
-              />
-            ) : null}
-            {previewState === "failed" ? (
-              <div className={styles.paymentVoucherFallback}>
-                文件暂时无法预览，请下载查看。
-              </div>
-            ) : null}
-          </div>
-          <footer className={styles.modalFooter}>
-            <span aria-hidden="true" />
-            <div className={styles.detailActions}>
-              <a className={styles.primaryButtonCompact} href={downloadUrl} download>
-                下载凭证
-              </a>
-              <button className={styles.secondaryButton} type="button" onClick={requestClose}>关闭</button>
-            </div>
-          </footer>
-        </>
-      )}
-    </DismissibleLayer>
+    />
   );
 }
 
@@ -400,7 +308,7 @@ export function CostDocumentUploadItem({
         {documents.map((document) => (
           <span key={document.id} className={styles.fileListItemActions}>
             <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-            <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+            <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
             {canWriteDocuments ? (
               <button
                 className={styles.fileDangerButton}
@@ -429,4 +337,3 @@ export function UploadProgressInline({ progress }: { progress: number }) {
     </span>
   );
 }
-

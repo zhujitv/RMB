@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiJson } from "../../api";
-import { PdfPreviewButton } from "../../components";
+import { PdfPreviewButton, fileDownloadUrl } from "../../components";
 import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { UPLOAD_REPLACE_TEXT } from "../../uploadTexts";
@@ -124,7 +124,7 @@ export function FileUploadCard({
             {canPreviewOrDownload ? (
               <>
                 <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
               </>
             ) : null}
             {canDelete ? (
@@ -426,7 +426,7 @@ export function DocumentFileTable({
                 </td>
                 <td>
                   {canPreviewOrDownload ? (
-                    <a className={styles.fileActionButton} href={`/api/order-documents/${encodeURIComponent(document.id)}/download`}>下载</a>
+                    <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
                   ) : <span className={styles.mutedText}>-</span>}
                 </td>
                 <td>
