@@ -8,6 +8,7 @@ import {
   SEA_FREIGHT_REQUIREMENT_KEY,
   SEA_FREIGHT_REQUIRED_TRADE_TERMS,
   SUPPLIER_DOCUMENT_TYPES,
+  TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS,
   TAX_EXPORT_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS,
   TAX_REFUND_LOGISTICS_RULE_VERSION,
@@ -168,7 +169,27 @@ export function logisticsInvoiceRequirementForCost(cost: CostLike = {}) {
 }
 
 export function normalizedTradeTerm(value = "") {
-  return String(value || "").trim().toUpperCase();
+  const text = String(value || "").trim().toUpperCase();
+  if (text.includes("CIF")) return "CIF";
+  if (text.includes("CFR")) return "CFR";
+  if (text.includes("FOB")) return "FOB";
+  return text;
+}
+
+function normalizedTaxRefundTradeTerm(order: TaxOrderLike = {}) {
+  const orderRecord = asRecord(order);
+  const candidates = [
+    order.tradeTerm,
+    orderRecord.declarationType,
+    orderRecord.customsDeclarationType,
+    orderRecord.tradeMode,
+    orderRecord.modeOfTrade,
+    orderRecord.exportMode,
+    orderRecord.customsTradeMode,
+  ];
+  return candidates.map((value) => normalizedTradeTerm(String(value || ""))).find((value) => (
+    value === "FOB" || value === "CIF" || value === "CFR"
+  )) || normalizedTradeTerm(order.tradeTerm || "");
 }
 
 export function isSeaFreightRequirement(requirement: { key?: string } = {}) {
@@ -176,7 +197,7 @@ export function isSeaFreightRequirement(requirement: { key?: string } = {}) {
 }
 
 export function isSeaFreightRequiredByTradeTerm(order: TaxOrderLike = {}) {
-  return SEA_FREIGHT_REQUIRED_TRADE_TERMS.includes(normalizedTradeTerm(order.tradeTerm || ""));
+  return SEA_FREIGHT_REQUIRED_TRADE_TERMS.includes(normalizedTaxRefundTradeTerm(order));
 }
 
 function numberValue(value: NumericLike | null | undefined) {
@@ -209,7 +230,7 @@ function isActualApprovedLogisticsCost(cost: CostLike = {}) {
 }
 
 function isFobLclOrder(order: TaxOrderLike = {}) {
-  return normalizedTradeTerm(order.tradeTerm || "") === "FOB" && orderTransportMode(order) === "LCL";
+  return normalizedTaxRefundTradeTerm(order) === "FOB" && orderTransportMode(order) === "LCL";
 }
 
 function isLclGeneralLogisticsRequirement(requirement: { key?: string } = {}) {
@@ -217,17 +238,24 @@ function isLclGeneralLogisticsRequirement(requirement: { key?: string } = {}) {
 }
 
 export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLike = {}, logisticsInvoiceCosts: CostLike[] = []) {
-  const hasSeaFreightCost = logisticsInvoiceCosts.some((cost) => normalizedCostType(String(cost.costType || "")) === "海运费");
   const actualRequirementKeys = new Set(logisticsInvoiceCosts.flatMap((cost) => {
     const requirement = logisticsInvoiceRequirementForCost(cost);
     return requirement?.key ? [requirement.key] : [];
   }));
+  const tradeTerm = normalizedTaxRefundTradeTerm(order);
+  const tradeTermRequiredKeys = new Set<string>();
+  if (["FOB", "CIF", "CFR"].includes(tradeTerm)) {
+    TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS.forEach((key) => tradeTermRequiredKeys.add(key));
+  }
+  if (isSeaFreightRequiredByTradeTerm(order)) {
+    tradeTermRequiredKeys.add(SEA_FREIGHT_REQUIREMENT_KEY);
+  }
   const fobLcl = isFobLclOrder(order);
   return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.filter((requirement) => (
-    actualRequirementKeys.has(requirement.key)
+    tradeTermRequiredKeys.has(requirement.key)
+    || (tradeTerm !== "FOB" && actualRequirementKeys.has(requirement.key))
     || (requirement.key === "CUSTOMS" && fobLcl)
     || (isLclGeneralLogisticsRequirement(requirement) && fobLcl)
-    || (isSeaFreightRequirement(requirement) && (isSeaFreightRequiredByTradeTerm(order) || hasSeaFreightCost))
   ));
 }
 
@@ -324,6 +352,13 @@ function logisticsInvoiceGroupCoverages(documents: OrderDocumentLike[] = [], log
 function logisticsRequirementMatchesCoverage(requirement: { costTypes?: string[] } = {}, coverage: LogisticsInvoiceCoverage) {
   const requiredTypes = new Set((requirement.costTypes || []).map((type) => normalizedCostType(String(type || ""))).filter(Boolean));
   return coverage.includedFeeTypes.some((costType) => requiredTypes.has(costType));
+}
+
+function logisticsRequirementMissingLabel(order: TaxOrderLike = {}, requirement: { key?: string; missingCostLabel?: string; label?: string } = {}) {
+  if (requirement.key === SEA_FREIGHT_REQUIREMENT_KEY && normalizedTaxRefundTradeTerm(order) === "CIF") {
+    return "CIF订单缺少海运费发票";
+  }
+  return requirement.missingCostLabel || (requirement.label ? `缺少${requirement.label}` : "缺少物流费用发票");
 }
 
 function logTaxRefundLogisticsInvoiceDecision({
@@ -580,7 +615,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         requirementKey: requirement.key,
         documentType: "SUPPLIER_INVOICE",
         invoiceLabel: requirement.label,
-        label: requirement.missingCostLabel,
+        label: logisticsRequirementMissingLabel(order, requirement),
         missingCost: true,
         missingBucket: requirement.key,
       });
@@ -602,7 +637,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         documentType: "SUPPLIER_INVOICE",
         invoiceLabel: requirement.label,
         missingBucket: requirement.key,
-        label: "缺少已发生费用对应资料",
+        label: logisticsRequirementMissingLabel(order, requirement),
         reminderDue: daysSinceCostCreated >= 3,
         daysSinceCostCreated,
       });

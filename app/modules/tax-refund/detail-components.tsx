@@ -3,7 +3,7 @@ import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
 import { canDeleteTaxDocument, canRecognizeTaxCustoms, canUploadTaxDocument, factoryCostOrdinal, factorySupplierCosts, groupDocuments, latestTaxDocument, logisticsInvoiceCosts, taxDocumentTargetKey, taxRefundBillOfLadingText, taxTargetDomId, uploadScopeKey } from "./helpers";
-import { TAX_EXPORT_UPLOAD_TYPES, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
+import { TAX_EXPORT_UPLOAD_TYPES, type DocumentCompleteness, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
 import {
   CustomsRecognitionForm,
   CustomsUploadCard,
@@ -343,6 +343,7 @@ function TaxRefundDetailPanel({
         </div>
         <div className={styles.documentGroupCard} id={taxTargetDomId("logistics-section")}>
           <strong>物流资料上传</strong>
+          <LogisticsInvoiceRequirementStatus completeness={detail.documentCompleteness || {}} />
           {logisticsInvoiceCosts(detail.costs || []).length ? logisticsInvoiceCosts(detail.costs || []).map((cost) => (
             <LogisticsInvoiceUploadItem
               key={cost.id}
@@ -378,6 +379,27 @@ function TaxRefundDetailPanel({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function LogisticsInvoiceRequirementStatus({ completeness }: { completeness: DocumentCompleteness }) {
+  const requirements = completeness.logistics?.requirements || [];
+  if (!requirements.length) return null;
+
+  return (
+    <div className={styles.detailGrid}>
+      {requirements.map((requirement) => (
+        <DetailField
+          key={requirement.key || requirement.label || "logistics-invoice"}
+          label={requirement.label || "物流费用发票"}
+          value={(
+            <span className={`${styles.statusPill} ${requirement.completed ? styles.statusSuccess : styles.statusWarning}`}>
+              {requirement.completed ? "已完成" : "缺失"}
+            </span>
+          )}
+        />
+      ))}
     </div>
   );
 }

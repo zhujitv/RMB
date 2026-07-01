@@ -14,30 +14,49 @@ const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
 const taxRefundRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
 const taxRefundController = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const taxRefundDetailComponents = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
+const taxRefundHelpers = readFileSync("app/modules/tax-refund/helpers.ts", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
 const costMutations = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
 const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
 const logisticsExpenseMutations = readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 
-test("tax refund completeness adapts FOB LCL logistics invoice requirements to actual costs", () => {
-  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "GROUPED_INVOICE_INCLUDED_FEES_20260630"/);
-  assert.match(constants, /label: "物流费资料"[\s\S]*"国内物流费"[\s\S]*"进港费"[\s\S]*"其他物流费用"/);
+test("tax refund completeness uses trade term logistics invoice requirements", () => {
+  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260701"/);
+  assert.match(constants, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS = \["CUSTOMS", "TRUCKING", "PORT"\]/);
+  assert.match(constants, /label: "拖车费发票"[\s\S]*"国内物流费"[\s\S]*"进港费"[\s\S]*"其他物流费用"/);
+  assert.match(constants, /label: "港杂费发票"[\s\S]*missingCostLabel: "缺少港杂费发票"/);
+  assert.match(constants, /label: "海运费发票"[\s\S]*missingCostLabel: "缺少海运费发票"/);
   assert.match(completeness, /export function normalizedTransportMode/);
   assert.match(completeness, /\["LCL", "BULK_WAREHOUSE"[\s\S]*"拼箱"[\s\S]*"散货进舱"\]\.includes\(text\)\) return "LCL"/);
   assert.match(completeness, /\["FCL", "FULL_CONTAINER"[\s\S]*"TRUCK"[\s\S]*"MULTIMODAL"[\s\S]*"整柜"/);
+  assert.match(completeness, /function normalizedTaxRefundTradeTerm/);
+  assert.match(completeness, /orderRecord\.declarationType/);
+  assert.match(completeness, /orderRecord\.customsDeclarationType/);
+  assert.match(completeness, /orderRecord\.tradeMode/);
+  assert.match(completeness, /orderRecord\.modeOfTrade/);
   assert.match(completeness, /function isFobLclOrder/);
-  assert.match(completeness, /normalizedTradeTerm\(order\.tradeTerm \|\| ""\) === "FOB" && orderTransportMode\(order\) === "LCL"/);
+  assert.match(completeness, /normalizedTaxRefundTradeTerm\(order\) === "FOB" && orderTransportMode\(order\) === "LCL"/);
+  assert.match(completeness, /\["FOB", "CIF", "CFR"\]\.includes\(tradeTerm\)/);
+  assert.match(completeness, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS\.forEach\(\(key\) => tradeTermRequiredKeys\.add\(key\)\)/);
+  assert.match(completeness, /if \(isSeaFreightRequiredByTradeTerm\(order\)\)/);
+  assert.match(completeness, /tradeTerm !== "FOB" && actualRequirementKeys\.has\(requirement\.key\)/);
   assert.match(completeness, /requirement\.key === "CUSTOMS" && fobLcl/);
   assert.match(completeness, /isLclGeneralLogisticsRequirement\(requirement\) && fobLcl/);
+  assert.doesNotMatch(completeness, /hasSeaFreightCost/);
 });
 
-test("tax refund logistics completeness is based on occurred approved costs instead of fixed port requirement", () => {
+test("tax refund logistics completeness reports required invoice gaps with exact labels", () => {
   assert.match(completeness, /function isActualApprovedLogisticsCost/);
   assert.match(completeness, /sourceType === "LOGISTICS_EXPENSE" \|\| cost\.costConfirmed === true/);
   assert.match(completeness, /positiveCostAmount\(cost\)/);
-  assert.match(completeness, /actualRequirementKeys\.has\(requirement\.key\)/);
-  assert.match(completeness, /label: "缺少已发生费用对应资料"/);
+  assert.match(completeness, /function logisticsRequirementMissingLabel/);
+  assert.match(completeness, /return "CIF订单缺少海运费发票"/);
+  assert.match(completeness, /label: logisticsRequirementMissingLabel\(order, requirement\)/);
+  assert.match(taxRefundHelpers, /label \|\| "缺少报关费发票"/);
+  assert.match(taxRefundHelpers, /label \|\| "缺少拖车发票"/);
+  assert.match(taxRefundHelpers, /label \|\| "缺少港杂费发票"/);
+  assert.match(taxRefundHelpers, /label \|\| "缺少海运费发票"/);
   assert.match(completeness, /function logisticsInvoiceGroupCoverages/);
   assert.match(completeness, /logisticsInvoiceGroupForCost\(primaryCost\)/);
   assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[primaryCost\]\)/);
@@ -50,7 +69,7 @@ test("tax refund logistics completeness is based on occurred approved costs inst
   assert.match(completeness, /"拖车费": directTruckingCompleted \|\| truckingCoveredByGroup/);
   assert.doesNotMatch(completeness, /Number\(logistics\.total \|\| 0\) < 3/);
   assert.doesNotMatch(constants, /missingCostLabel: "未录入港杂费"/);
-  assert.match(constants, /missingCostLabel: "缺少已发生费用对应资料"/);
+  assert.doesNotMatch(completeness, /label: "缺少已发生费用对应资料"/);
 });
 
 test("tax refund detail displays grouped logistics invoices by included fee types", () => {
@@ -62,6 +81,9 @@ test("tax refund detail displays grouped logistics invoices by included fee type
   assert.match(completeness, /taxRefundDocumentTypeMatched: completed/);
   assert.match(taxRefundModule, /function logisticsInvoiceDocumentsForCost/);
   assert.match(taxRefundModule, /completeness\.logistics\?\.requirements/);
+  assert.match(taxRefundDetailComponents, /function LogisticsInvoiceRequirementStatus/);
+  assert.match(taxRefundDetailComponents, /completeness\.logistics\?\.requirements/);
+  assert.match(taxRefundDetailComponents, /requirement\.completed \? "已完成" : "缺失"/);
   assert.match(taxRefundModule, /group\.documentId/);
   assert.match(taxRefundModule, /group\.includedFeeTypes/);
   assert.match(taxRefundModule, /group\.feeTypes/);

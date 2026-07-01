@@ -64,17 +64,17 @@ export function taxCompletenessTooltipGroups(completeness: DocumentCompleteness,
 
   (completeness.logistics?.missing || []).forEach((item) => {
     const bucket = String(item.missingBucket || item.requirementKey || "").toUpperCase();
-    const missingInvoiceText = item.missingCost ? "记录" : "发票";
+    const label = item.label || item.invoiceLabel || "";
     if (bucket === "CUSTOMS") {
-      pushItem("报关费", `报关费${missingInvoiceText}`);
+      pushItem("报关费", label || "缺少报关费发票");
     } else if (bucket === "TRUCKING" || bucket === "DOMESTIC_LOGISTICS") {
-      pushItem("拖车费", `拖车费${missingInvoiceText}`);
+      pushItem("拖车费", label || "缺少拖车发票");
     } else if (bucket === "PORT") {
-      pushItem("港杂费", `港杂费${missingInvoiceText}`);
+      pushItem("港杂费", label || "缺少港杂费发票");
     } else if (bucket === "SEA") {
-      pushItem("海运费", `海运费${missingInvoiceText}`);
+      pushItem("海运费", label || "缺少海运费发票");
     } else {
-      pushItem("物流费用发票", item.invoiceLabel || item.label || "物流费用发票");
+      pushItem("物流费用发票", label || "物流费用发票");
     }
   });
 

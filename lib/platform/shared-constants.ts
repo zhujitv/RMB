@@ -127,14 +127,15 @@ export const LOGISTICS_EXPENSE_AUDIT_STATUSES = ["草稿", "待审核", "审核�
 export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["未通知", "已通知开票", "已上传", "已确认"];
 export const LOGISTICS_EXPENSE_PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
 export const TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS = [
-  { key: "CUSTOMS", label: "报关费资料", missingCostLabel: "未录入报关费", costTypes: ["报关费"] },
-  { key: "TRUCKING", label: "物流费资料", missingCostLabel: "缺少已审核通过物流费用", costTypes: ["拖车费", "国内物流费", "国内拖车费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他物流费用"] },
-  { key: "PORT", label: "港杂费资料", missingCostLabel: "缺少已发生费用对应资料", costTypes: ["港杂费", "文件费", "订舱费"] },
-  { key: "SEA", label: "海运费资料", missingCostLabel: "缺少海运费资料", costTypes: ["海运费"] },
+  { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "缺少报关费发票", costTypes: ["报关费"] },
+  { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "缺少拖车发票", costTypes: ["拖车费", "国内物流费", "国内拖车费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他物流费用"] },
+  { key: "PORT", label: "港杂费发票", missingCostLabel: "缺少港杂费发票", costTypes: ["港杂费", "文件费", "订舱费"] },
+  { key: "SEA", label: "海运费发票", missingCostLabel: "缺少海运费发票", costTypes: ["海运费"] },
 ];
 export const SEA_FREIGHT_REQUIREMENT_KEY = "SEA";
 export const SEA_FREIGHT_REQUIRED_TRADE_TERMS = ["CIF", "CFR"];
-export const TAX_REFUND_LOGISTICS_RULE_VERSION = "GROUPED_INVOICE_INCLUDED_FEES_20260630";
+export const TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS = ["CUSTOMS", "TRUCKING", "PORT"];
+export const TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260701";
 export const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.flatMap((item) => item.costTypes);
 export const TAX_REFUND_LOGISTICS_INVOICE_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
 export const DOMESTIC_LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商", LOGISTICS_SUPPLIER_TYPE_CODE];
