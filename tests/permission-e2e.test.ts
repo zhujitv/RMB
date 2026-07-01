@@ -20,7 +20,13 @@ const taxRefundService = source("lib/platform/tax-refunds.ts");
 const domesticLogisticsService = source("lib/platform/domestic-logistics-api.ts");
 const mastersAccess = source("lib/platform/masters-access.ts");
 const logisticsExpenseQueries = source("lib/platform/logistics-expense-queries.ts");
-const logisticsExpenseAccess = source("lib/platform/logistics-expense-access.ts");
+const logisticsExpenseAccess = [
+  "lib/platform/logistics-expense-access.ts",
+  "lib/platform/logistics-expense-access-model.ts",
+  "lib/platform/logistics-expense-access-serialization.ts",
+  "lib/platform/logistics-expense-access-permissions.ts",
+  "lib/platform/logistics-expense-access-mutations.ts",
+].map(source).join("\n");
 const shipsgoTracking = [
   "lib/platform/shipsgo-tracking.ts",
   "lib/platform/shipsgo-tracking-utils.ts",

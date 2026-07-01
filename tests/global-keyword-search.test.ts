@@ -25,7 +25,10 @@ const services = {
 test("business list pages use keyword for fuzzy search requests", () => {
   for (const [name, source] of Object.entries(modules)) {
     assert.match(source, /params\.set\("keyword",/, `${name} should send keyword query param`);
-    assert.match(source, /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) submitSearch\(\);/, `${name} should submit on Enter`);
+    const enterSubmitPattern = name === "taxRefund"
+      ? /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) onSubmitSearch\(\);/
+      : /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) submitSearch\(\);/;
+    assert.match(source, enterSubmitPattern, `${name} should submit on Enter`);
     assert.match(source, /window\.setTimeout\(\(\) => \{[\s\S]*}, 300\)/, `${name} should debounce keyword search by 300ms`);
   }
 });

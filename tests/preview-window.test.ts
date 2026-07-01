@@ -300,7 +300,7 @@ test("tax refund detail drawer close only clears local detail state", () => {
     closeBody,
     /loadRows\(|fetchDetail\(|window\.location|location\.href|router\.refresh|reloadData|reload\(/,
   );
-  assert.match(taxRefundModule, /onClose=\{closeDetailDrawer\}/);
+  assert.match(taxRefundModule, /onClose=\{onCloseDetailDrawer\}|onCloseDetailDrawer=\{taxRefund\.closeDetailDrawer\}/);
 });
 
 test("tax refund export documents use compact cards instead of wide tables", () => {

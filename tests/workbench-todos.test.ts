@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const workbenchRules = await import("../lib/platform/workbench-todo-rules.ts");
 const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const welcomePanel = readFileSync("app/WelcomePanel.tsx", "utf8");
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
-const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
+const taxRefundModule = readTaxRefundModuleSource();
 const controlTower = readFileSync("app/modules/domestic-logistics/control-tower.tsx", "utf8");
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
 const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");

@@ -24,6 +24,10 @@ const backend = [
   readFileSync("lib/platform/logistics-expenses.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-shared.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-access-model.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-access-serialization.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-access-permissions.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-access-mutations.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-core.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8"),
@@ -210,8 +214,8 @@ const logisticsExpenseBatchSaveRoute = readFileSync(
 );
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
-const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
+const settingsModuleMain = settingsModule;
 const notificationTemplateCardSource =
   settingsModule.match(
     /export function NotificationTemplateSettingsCard[\s\S]*?\n}\n/,

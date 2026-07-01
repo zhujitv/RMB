@@ -5,8 +5,8 @@ import { readSettingsModuleSource, readTaxRefundModuleSource, readWorkspaceStyle
 
 const components = readFileSync("app/components.tsx", "utf8");
 const accountSettings = readFileSync("app/AccountSettings.tsx", "utf8");
-const settingsModuleMain = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
+const settingsModuleMain = settingsModule;
 const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");

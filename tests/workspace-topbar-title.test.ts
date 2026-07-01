@@ -10,8 +10,10 @@ const businessModuleSources = [
   "app/modules/ProfitModule.tsx",
   "app/modules/DomesticLogisticsModule.tsx",
   "app/modules/TaxRefundModule.tsx",
+  "app/modules/tax-refund/list-panel.tsx",
   "app/modules/ReportsModule.tsx",
   "app/modules/SettingsModule.tsx",
+  "app/modules/settings/module-view.tsx",
   "app/modules/DashboardModule.tsx",
   "app/modules/LogisticsFeesModule.tsx",
 ].map((file) => readFileSync(file, "utf8")).join("\n");

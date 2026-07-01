@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 const SETTINGS_MODULE_FILES = [
   "app/modules/SettingsModule.tsx",
+  "app/modules/settings/use-settings-controller.ts",
+  "app/modules/settings/module-view.tsx",
   "app/modules/settings/types.ts",
   "app/modules/settings/constants.ts",
   "app/modules/settings/helpers.ts",
@@ -27,6 +29,9 @@ const DOMESTIC_LOGISTICS_MODULE_FILES = [
 
 const TAX_REFUND_MODULE_FILES = [
   "app/modules/TaxRefundModule.tsx",
+  "app/modules/tax-refund/use-tax-refund-controller.ts",
+  "app/modules/tax-refund/list-panel.tsx",
+  "app/modules/tax-refund/overlays.tsx",
   "app/modules/tax-refund/model.ts",
   "app/modules/tax-refund/helpers.ts",
   "app/modules/tax-refund/dialogs.tsx",
