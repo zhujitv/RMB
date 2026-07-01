@@ -46,12 +46,34 @@ const COSTS_MODULE_FILES = [
   "app/modules/costs/helpers.ts",
 ];
 
+const LOGISTICS_FEES_MODULE_FILES = [
+  "app/modules/LogisticsFeesModule.tsx",
+  "app/modules/logistics-fees/model.ts",
+  "app/modules/logistics-fees/bill-table.tsx",
+  "app/modules/logistics-fees/details-drawer.tsx",
+  "app/modules/logistics-fees/expense-form.tsx",
+  "app/modules/logistics-fees/invoice-groups-panel.tsx",
+  "app/modules/logistics-fees/monthly-summary.tsx",
+  "app/modules/logistics-fees/shared.tsx",
+  "app/modules/logistics-fees/shared-csv.ts",
+  "app/modules/logistics-fees/shared-currency.ts",
+  "app/modules/logistics-fees/shared-drafts.ts",
+  "app/modules/logistics-fees/shared-monthly-summary.tsx",
+  "app/modules/logistics-fees/shared-order-helpers.ts",
+  "app/modules/logistics-fees/shared-row-reconcile.ts",
+  "app/modules/logistics-fees/shared-status.ts",
+];
+
 export function readSettingsModuleSource() {
   return SETTINGS_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
 }
 
 export function readCostsModuleSource() {
   return COSTS_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
+}
+
+export function readLogisticsFeesModuleSource() {
+  return LOGISTICS_FEES_MODULE_FILES.map((file) => readFileSync(file, "utf8")).join("\n");
 }
 
 export function readDomesticLogisticsModuleSource() {

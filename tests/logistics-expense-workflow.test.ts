@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostsModuleSource, readDomesticLogisticsModuleSource, readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsFeesModuleSource, readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const backend = [
   readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
@@ -101,10 +101,16 @@ const logisticsFeesInvoices = readFileSync(
   "app/modules/logistics-fees/invoice-groups-panel.tsx",
   "utf8",
 );
-const logisticsFeesShared = readFileSync(
+const logisticsFeesShared = [
   "app/modules/logistics-fees/shared.tsx",
-  "utf8",
-);
+  "app/modules/logistics-fees/shared-csv.ts",
+  "app/modules/logistics-fees/shared-currency.ts",
+  "app/modules/logistics-fees/shared-drafts.ts",
+  "app/modules/logistics-fees/shared-monthly-summary.tsx",
+  "app/modules/logistics-fees/shared-order-helpers.ts",
+  "app/modules/logistics-fees/shared-row-reconcile.ts",
+  "app/modules/logistics-fees/shared-status.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const logisticsFeesBillTable = readFileSync(
   "app/modules/logistics-fees/bill-table.tsx",
   "utf8",
@@ -113,16 +119,7 @@ const logisticsFeesMonthlySummary = readFileSync(
   "app/modules/logistics-fees/monthly-summary.tsx",
   "utf8",
 );
-const logisticsModule = [
-  logisticsFeesMain,
-  logisticsFeesModel,
-  logisticsFeesDetails,
-  logisticsFeesForm,
-  logisticsFeesInvoices,
-  logisticsFeesShared,
-  logisticsFeesBillTable,
-  logisticsFeesMonthlySummary,
-].join("\n");
+const logisticsModule = readLogisticsFeesModuleSource();
 const deleteExpenseSource =
   logisticsFeesMain.match(
     /async function deleteExpense[\s\S]*?\n  async function withdrawExpense/,

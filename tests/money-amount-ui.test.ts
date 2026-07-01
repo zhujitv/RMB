@@ -6,7 +6,14 @@ import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const components = readFileSync("app/components.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
-const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
+const ordersModule = [
+  "app/modules/OrdersModule.tsx",
+  "app/modules/orders/model.ts",
+  "app/modules/orders/quick-order-panel.tsx",
+  "app/modules/orders/table.tsx",
+  "app/modules/orders/detail-drawer.tsx",
+  "app/modules/orders/utils.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const paymentsModule = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
 const costsModule = readCostsModuleSource();
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");

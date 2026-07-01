@@ -3,7 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sortReceivableRowsByShipmentDate } from "../lib/platform/order-receivable-sort.ts";
 
-const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
+const ordersModule = [
+  "app/modules/OrdersModule.tsx",
+  "app/modules/orders/model.ts",
+  "app/modules/orders/quick-order-panel.tsx",
+  "app/modules/orders/table.tsx",
+  "app/modules/orders/detail-drawer.tsx",
+  "app/modules/orders/utils.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
 const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
