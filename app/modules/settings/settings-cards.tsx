@@ -861,7 +861,7 @@ export function OcrIntegrationSettingsCard({
           <input
             value={currentForm.appCode}
             onChange={(event) => setField("appCode", event.target.value)}
-            placeholder={currentForm.appCodeConfigured ? "已配置，留空则保持不变" : "请输入阿里云 OCR AppCode"}
+            placeholder={currentForm.appCodeConfigured ? "已配置，留空则保持不变" : "可选：旧版 AppCode"}
             autoComplete="off"
           />
         </label>
@@ -914,6 +914,7 @@ export function OcrIntegrationSettingsCard({
         当前状态：{currentForm.enabled
           ? (currentForm.appCodeConfigured || currentForm.appCode || currentForm.accessKeyIdConfigured || currentForm.accessKeyId ? "已启用" : "待填写密钥")
           : "已关闭"}
+        。增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。
       </div>
 
       <div className={styles.detailActions}>

@@ -185,8 +185,8 @@ export const OCR_FEATURE_OPTIONS = [
   },
   {
     key: "invoiceTextEnabled",
-    label: "发票识别预留",
-    description: "为后续发票号码、金额、税率等识别能力预留入口。",
+    label: "发票结构化识别",
+    description: "用于增值税发票号、购买方、销售方、金额、税率和明细识别。",
   },
   {
     key: "supplierDocumentReturnEnabled",
@@ -196,7 +196,7 @@ export const OCR_FEATURE_OPTIONS = [
   {
     key: "fallbackToPdfText",
     label: "本地 PDF 文本兜底",
-    description: "阿里云适配器不可用时，允许继续使用系统现有 PDF 文本解析能力。",
+    description: "阿里云结构化识别失败或未配置 AccessKey 时，允许继续使用系统现有 PDF 文本解析能力。",
   },
 ] satisfies Array<{
   key: keyof Pick<

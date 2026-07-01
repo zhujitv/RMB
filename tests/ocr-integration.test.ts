@@ -43,10 +43,26 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /OcrIntegrationSettingsCard/);
   assert.match(settingsModule, /保存OCR设置/);
   assert.match(settingsModule, /OCR_FEATURE_OPTIONS/);
+  assert.match(settingsModule, /发票结构化识别/);
   assert.match(settingsModule, /产品供应商资料回传 OCR/);
-  assert.match(settingsModule, /placeholder=\{currentForm\.appCodeConfigured \? "已配置，留空则保持不变"/);
+  assert.match(settingsModule, /可选：旧版 AppCode/);
+  assert.match(settingsModule, /结构化识别需要 AccessKey ID \/ Secret/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);
+});
+
+test("OCR integration uses Aliyun structured APIs for supplier documents with PDF fallback", () => {
+  assert.match(service, /@alicloud\/ocr-api20210707/);
+  assert.match(service, /RecognizeInvoiceRequest/);
+  assert.match(service, /RecognizeGeneralStructureRequest/);
+  assert.match(service, /recognizeInvoice\(new RecognizeInvoiceRequest/);
+  assert.match(service, /recognizeGeneralStructure\(new RecognizeGeneralStructureRequest/);
+  assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
+  assert.match(service, /ALIYUN_RECOGNIZE_GENERAL_STRUCTURE/);
+  assert.match(service, /recognizeSupplierDocumentWithOcr/);
+  assert.match(service, /OCR_ACCESS_KEY_REQUIRED/);
+  assert.match(service, /ALIYUN_INVOICE_FALLBACK_PDF_TEXT/);
+  assert.match(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
 });
 
 test("customs recognition is controlled by OCR settings", () => {

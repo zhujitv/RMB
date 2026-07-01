@@ -42,13 +42,17 @@ test("supplier OCR validates invoice and contract against supplier, business ent
 });
 
 test("supplier VAT invoice OCR uses structured parser and preserves raw text", () => {
-  assert.match(service, /function parseVatInvoiceFields\(text: string\)/);
+  assert.match(service, /recognizeSupplierDocumentWithOcr/);
+  assert.match(service, /function parseVatInvoiceFields\(text: string, structuredFields: Record<string, unknown> = \{\}\)/);
+  assert.match(service, /structuredText\(structuredFields, "seller"\)/);
+  assert.match(service, /structuredAmount\(structuredFields, "amountWithTax"\)/);
   assert.match(service, /function extractPartyName\(section: string, partyLabel: string\)/);
   assert.match(service, /function extractInvoiceAmountWithTax\(text: string\)/);
   assert.match(service, /function extractInvoiceProductName\(text: string\)/);
   assert.match(service, /extractPartyTaxNo\(sellerSection\)/);
   assert.match(service, /extractPartyTaxNo\(buyerSection\)/);
-  assert.match(service, /parser: document\.documentType === "SUPPLIER_INVOICE" \? "VAT_INVOICE" : "PURCHASE_CONTRACT"/);
+  assert.match(service, /structuredFields: structuredFields as Prisma\.InputJsonValue/);
+  assert.match(service, /parser: recognized\.parser \|\| \(document\.documentType === "SUPPLIER_INVOICE" \? "VAT_INVOICE" : "PURCHASE_CONTRACT"\)/);
   assert.match(service, /rawJson: \(recognized\.rawJson \|\| \{ source: recognized\.source, provider: recognized\.provider, textLength: text\.length \}\)/);
   assert.match(service, /extractedFields: fields as Prisma\.InputJsonValue/);
   assert.match(service, /OCR原文未识别，请人工核对。/);

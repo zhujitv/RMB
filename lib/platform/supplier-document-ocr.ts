@@ -15,7 +15,7 @@ import {
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import { getCompanyProfileSettings } from "./company-profile";
-import { isOcrFeatureEnabled, recognizePdfTextWithOcr } from "./ocr-integration";
+import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
 
 type ActorLike = {
   id?: string | null;
@@ -286,7 +286,15 @@ function visibleResultFields(fields: Record<string, unknown>, labels: Record<str
     .filter((field) => field.value);
 }
 
-function parseVatInvoiceFields(text: string) {
+function structuredText(fields: Record<string, unknown> | null | undefined, key: string) {
+  return cleanText(fields?.[key]);
+}
+
+function structuredAmount(fields: Record<string, unknown> | null | undefined, key: string) {
+  return moneyValue(fields?.[key]);
+}
+
+function parseVatInvoiceFields(text: string, structuredFields: Record<string, unknown> = {}) {
   const buyerSection = sectionBetween(text, [
     /购买方/,
     /购\s*买\s*方/,
@@ -305,27 +313,27 @@ function parseVatInvoiceFields(text: string) {
     /复核/,
     /开票人/,
   ]);
-  const invoiceNo = firstMatch(text, [
+  const invoiceNo = structuredText(structuredFields, "invoiceNo") || firstMatch(text, [
     /发票号码[:：]?\s*([A-Z0-9\-]{6,30})/i,
     /发票号[:：]?\s*([A-Z0-9\-]{6,30})/i,
     /No\.?\s*[:：]?\s*([A-Z0-9\-]{6,30})/i,
   ]);
-  const invoiceDate = parseDateText(text, [
+  const invoiceDate = structuredText(structuredFields, "invoiceDate") || parseDateText(text, [
     /开票日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
     /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
   ]);
-  const amountWithTax = extractInvoiceAmountWithTax(text);
+  const amountWithTax = structuredAmount(structuredFields, "amountWithTax") || extractInvoiceAmountWithTax(text);
   const totals = extractInvoiceTotals(text);
-  const taxRate = extractInvoiceTaxRate(text);
-  const seller = extractPartyName(sellerSection, "销售方") || firstMatch(text, [
+  const taxRate = structuredText(structuredFields, "taxRate") || extractInvoiceTaxRate(text);
+  const seller = structuredText(structuredFields, "seller") || extractPartyName(sellerSection, "销售方") || firstMatch(text, [
     /销售方(?:名称)?[:：]\s*([^\n\r]+)/,
     /销\s*售\s*方[:：]\s*([^\n\r]+)/,
   ]);
-  const buyer = extractPartyName(buyerSection, "购买方") || firstMatch(text, [
+  const buyer = structuredText(structuredFields, "buyer") || extractPartyName(buyerSection, "购买方") || firstMatch(text, [
     /购买方(?:名称)?[:：]\s*([^\n\r]+)/,
     /购\s*买\s*方[:：]\s*([^\n\r]+)/,
   ]);
-  const productName = extractInvoiceProductName(text) || firstMatch(text, [
+  const productName = structuredText(structuredFields, "productName") || extractInvoiceProductName(text) || firstMatch(text, [
     /货物或应税劳务、服务名称[:：]?\s*([^\n\r]+)/,
     /产品名称[:：]\s*([^\n\r]+)/,
     /服务名称[:：]\s*([^\n\r]+)/,
@@ -334,18 +342,22 @@ function parseVatInvoiceFields(text: string) {
     invoiceNo,
     invoiceDate,
     amountWithTax,
-    amountWithoutTax: totals.amountWithoutTax,
-    taxAmount: totals.taxAmount,
+    amountWithoutTax: structuredAmount(structuredFields, "amountWithoutTax") || totals.amountWithoutTax,
+    taxAmount: structuredAmount(structuredFields, "taxAmount") || totals.taxAmount,
     taxRate,
     seller,
-    sellerTaxNo: extractPartyTaxNo(sellerSection),
+    sellerTaxNo: structuredText(structuredFields, "sellerTaxNo") || extractPartyTaxNo(sellerSection),
     buyer,
-    buyerTaxNo: extractPartyTaxNo(buyerSection),
+    buyerTaxNo: structuredText(structuredFields, "buyerTaxNo") || extractPartyTaxNo(buyerSection),
     productName,
+    specModel: structuredText(structuredFields, "specModel"),
+    unit: structuredText(structuredFields, "unit"),
+    quantity: structuredText(structuredFields, "quantity"),
+    unitPrice: structuredText(structuredFields, "unitPrice"),
   };
 }
 
-function parseContractFields(text: string) {
+function parseContractFields(text: string, structuredFields: Record<string, unknown> = {}) {
   const supplier = firstMatch(text, [
     /供(?:货|应)方[:：]\s*([^\n\r]+)/,
     /卖方[:：]\s*([^\n\r]+)/,
@@ -384,16 +396,16 @@ function parseContractFields(text: string) {
     /签署日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
   ]);
   return {
-    supplier,
-    buyer,
-    orderNo,
-    contractNo: orderNo,
-    contractAmount,
-    productName,
-    specModel,
-    quantity,
-    unitPrice,
-    signDate,
+    supplier: structuredText(structuredFields, "supplier") || supplier,
+    buyer: structuredText(structuredFields, "buyer") || buyer,
+    orderNo: structuredText(structuredFields, "orderNo") || orderNo,
+    contractNo: structuredText(structuredFields, "contractNo") || structuredText(structuredFields, "orderNo") || orderNo,
+    contractAmount: structuredAmount(structuredFields, "amount") || contractAmount,
+    productName: structuredText(structuredFields, "productName") || productName,
+    specModel: structuredText(structuredFields, "specModel") || specModel,
+    quantity: structuredText(structuredFields, "quantity") || quantity,
+    unitPrice: structuredText(structuredFields, "unitPrice") || unitPrice,
+    signDate: structuredText(structuredFields, "signingDate") || signDate,
   };
 }
 
@@ -411,6 +423,10 @@ function supplierDocumentLabels(documentType: string) {
       buyer: "购买方",
       buyerTaxNo: "购买方纳税人识别号",
       productName: "产品名称 / 服务名称",
+      specModel: "规格型号",
+      unit: "单位",
+      quantity: "数量",
+      unitPrice: "单价",
     };
   }
   return {
@@ -704,14 +720,20 @@ export async function runSupplierDocumentOcrForDocument(
   let latestRawText = "";
   try {
     const fileBuffer = await readR2Object(document.storageKey);
-    const recognized = await recognizePdfTextWithOcr(fileBuffer, SUPPLIER_DOCUMENT_OCR_FEATURE, { requireText: false });
+    const recognized = await recognizeSupplierDocumentWithOcr(
+      fileBuffer,
+      document.documentType as "SUPPLIER_PURCHASE_CONTRACT" | "SUPPLIER_INVOICE",
+      { requireText: false },
+    );
     const text = cleanText(recognized.text);
+    const structuredFields = recognized.extractedFields || {};
     latestRawText = text;
-    if (!text) throw codedError("OCR原文未识别，请人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
+    const hasStructuredFields = Object.values(structuredFields).some((value) => cleanText(value));
+    if (!text && !hasStructuredFields) throw codedError("OCR原文未识别，请人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
     const context = await ocrValidationContext(document);
     const fields = document.documentType === "SUPPLIER_INVOICE"
-      ? parseVatInvoiceFields(text)
-      : parseContractFields(text);
+      ? parseVatInvoiceFields(text, structuredFields)
+      : parseContractFields(text, structuredFields);
     const labels = supplierDocumentLabels(document.documentType) as unknown as Record<string, string>;
     const issues = document.documentType === "SUPPLIER_INVOICE"
       ? await validateInvoice(fields as ReturnType<typeof parseVatInvoiceFields>, context, document.id)
@@ -727,7 +749,7 @@ export async function runSupplierDocumentOcrForDocument(
       documentType: document.documentType,
       rawText: shortRawText(text).slice(0, 4000),
       rawJson: recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length },
-      parser: document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT",
+      parser: recognized.parser || (document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT"),
       extractedFields: fields,
       validationResult: { status, issues },
     });
@@ -761,7 +783,8 @@ export async function runSupplierDocumentOcrForDocument(
             source: recognized.source,
             provider: recognized.provider,
             rawJson: (recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length }) as Prisma.InputJsonValue,
-            parser: document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT",
+            parser: recognized.parser || (document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT"),
+            structuredFields: structuredFields as Prisma.InputJsonValue,
             extractedFields: fields as Prisma.InputJsonValue,
           },
         },
