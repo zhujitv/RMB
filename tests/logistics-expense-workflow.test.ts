@@ -25,6 +25,10 @@ const backend = [
   readFileSync("lib/platform/logistics-expense-shared.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-core.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-invoice.ts", "utf8"),
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readFileSync("lib/platform/notification-engine.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
@@ -1004,7 +1008,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
     /prisma\.logisticsBill\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
   assert.doesNotMatch(
-    backend,
+    `${reviewLogisticsExpenseBillsSource}\n${approveLogisticsExpenseBillRowsSource}`,
     /prisma\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
   assert.match(backend, /UPDATE "logistics_expenses"[\s\S]*CASE "id"/);

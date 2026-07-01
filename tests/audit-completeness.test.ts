@@ -27,9 +27,21 @@ const costs = source("lib/platform/cost-records-mutations.ts");
 const orderDocuments = source("lib/platform/order-documents.ts");
 const taxRefunds = source("lib/platform/tax-refunds.ts");
 const domesticLogistics = source("lib/platform/domestic-logistics-api.ts");
-const logisticsWorkflow = source("lib/platform/logistics-expense-workflow.ts");
+const logisticsWorkflow = [
+  "lib/platform/logistics-expense-workflow.ts",
+  "lib/platform/logistics-expense-workflow-core.ts",
+  "lib/platform/logistics-expense-workflow-review.ts",
+  "lib/platform/logistics-expense-workflow-mutations.ts",
+  "lib/platform/logistics-expense-workflow-invoice.ts",
+].map(source).join("\n");
 const supplierDocuments = source("lib/platform/supplier-document-requests.ts");
-const shipsgoTracking = source("lib/platform/shipsgo-tracking.ts");
+const shipsgoTracking = [
+  "lib/platform/shipsgo-tracking.ts",
+  "lib/platform/shipsgo-tracking-utils.ts",
+  "lib/platform/shipsgo-tracking-mapping.ts",
+  "lib/platform/shipsgo-control-tower.ts",
+  "lib/platform/shipsgo-tracking-service.ts",
+].map(source).join("\n");
 const companyProfile = source("lib/platform/company-profile.ts");
 const commissionFormula = source("lib/platform/commission-formula.ts");
 const notificationTemplates = source("lib/platform/notification-templates.ts");

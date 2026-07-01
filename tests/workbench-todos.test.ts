@@ -11,7 +11,12 @@ const taxRefundModule = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
 const controlTower = readFileSync("app/modules/domestic-logistics/control-tower.tsx", "utf8");
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
 const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");
-const workbenchSource = readFileSync("lib/platform/workbench-todos.ts", "utf8");
+const workbenchSource = [
+  "lib/platform/workbench-todos.ts",
+  "lib/platform/workbench-todos-core.ts",
+  "lib/platform/workbench-todos-sources.ts",
+  "lib/platform/workbench-todos-completed.ts",
+].map((path) => readFileSync(path, "utf8")).join("\n");
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
 const notificationEngineSource = readFileSync("lib/platform/notification-engine.ts", "utf8");
 const sharedConstantsSource = readFileSync("lib/platform/shared-constants.ts", "utf8");

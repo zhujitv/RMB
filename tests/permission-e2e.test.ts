@@ -21,7 +21,13 @@ const domesticLogisticsService = source("lib/platform/domestic-logistics-api.ts"
 const mastersAccess = source("lib/platform/masters-access.ts");
 const logisticsExpenseQueries = source("lib/platform/logistics-expense-queries.ts");
 const logisticsExpenseAccess = source("lib/platform/logistics-expense-access.ts");
-const shipsgoTracking = source("lib/platform/shipsgo-tracking.ts");
+const shipsgoTracking = [
+  "lib/platform/shipsgo-tracking.ts",
+  "lib/platform/shipsgo-tracking-utils.ts",
+  "lib/platform/shipsgo-tracking-mapping.ts",
+  "lib/platform/shipsgo-control-tower.ts",
+  "lib/platform/shipsgo-tracking-service.ts",
+].map(source).join("\n");
 const supplierDocumentService = source("lib/platform/supplier-document-requests.ts");
 const supplierDocumentModule = source("app/modules/SupplierDocumentsModule.tsx");
 const loginRoute = source("app/api/auth/login/route.ts");

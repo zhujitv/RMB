@@ -12,7 +12,14 @@ import { readDomesticLogisticsModuleSource, readSettingsModuleSource, readWorksp
 
 const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
-const trackingService = readFileSync("lib/platform/shipsgo-tracking.ts", "utf8");
+const trackingService = [
+  "lib/platform/shipsgo-tracking.ts",
+  "lib/platform/shipsgo-tracking-utils.ts",
+  "lib/platform/shipsgo-tracking-mapping.ts",
+  "lib/platform/shipsgo-control-tower.ts",
+  "lib/platform/shipsgo-tracking-service.ts",
+].map((path) => readFileSync(path, "utf8")).join("\n");
+const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackings/migration.sql", "utf8");
@@ -256,7 +263,7 @@ test("ShipsGo customer notification display can target configured customer langu
 test("ShipsGo ocean control tower is read-only and does not create tracking", () => {
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
-  const controlTowerService = trackingService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*?function dateText/)?.[0] || "";
+  const controlTowerService = shipsgoControlTowerService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*$/)?.[0] || "";
   assert.match(controlTowerService, /canAccessDomesticLogisticsOrder\(actor, row\.order\)/);
   assert.doesNotMatch(controlTowerService, /供应商账号不可查看运输监控/);
   assert.match(trackingService, /trackingSignalExists\(row\)/);

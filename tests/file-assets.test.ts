@@ -18,10 +18,13 @@ const logisticsInvoice = readFileSync(
   "lib/platform/logistics-expense-invoice.ts",
   "utf8",
 );
-const logisticsWorkflow = readFileSync(
+const logisticsWorkflow = [
   "lib/platform/logistics-expense-workflow.ts",
-  "utf8",
-);
+  "lib/platform/logistics-expense-workflow-core.ts",
+  "lib/platform/logistics-expense-workflow-review.ts",
+  "lib/platform/logistics-expense-workflow-mutations.ts",
+  "lib/platform/logistics-expense-workflow-invoice.ts",
+].map((path) => readFileSync(path, "utf8")).join("\n");
 
 test("file asset schema stores shared metadata and explicit business bindings", () => {
   assert.match(schema, /model FileAsset \{/);
