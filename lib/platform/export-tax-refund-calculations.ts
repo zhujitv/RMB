@@ -412,36 +412,76 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
   if (!document?.storageKey) throw codedError("未找到可识别的报关单 PDF。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
   const fileBuffer = await readR2Object(document.storageKey);
   if (!fileBuffer) throw codedError("未读取到报关单 PDF 文件。", 404, "CUSTOMS_DOCUMENT_FILE_EMPTY");
-  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true }).catch((error) => {
+  const ocrStartedAt = Date.now();
+  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true }).catch(async (error) => {
+    const failureMessage = error instanceof Error ? error.message : String(error);
+    const failureCode = (error as { code?: unknown } | null)?.code;
     logOcrCallFailure({
       documentId,
       orderId,
-      documentType: document.documentType,
+      documentType: "CUSTOMS_DECLARATION",
       provider: "ALIYUN",
       apiName: "CUSTOMS_DECLARATION_ITEMS_OCR",
-      errorCode: (error as { code?: unknown } | null)?.code,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorCode: failureCode,
+      errorMessage: failureMessage,
     });
+    await saveOcrRawResult({
+      documentId,
+      taxRefundId: orderId,
+      orderId,
+      documentType: "CUSTOMS_DECLARATION",
+      provider: "ALIYUN",
+      apiName: "CUSTOMS_DECLARATION_ITEMS_OCR",
+      rawJson: {
+        provider: "ALIYUN",
+        apiName: "CUSTOMS_DECLARATION_ITEMS_OCR",
+        errorCode: failureCode == null ? "" : String(failureCode),
+        errorMessage: failureMessage,
+      },
+      parsedJson: {
+        items: [],
+        errorCode: failureCode == null ? "" : String(failureCode),
+        errorMessage: failureMessage,
+      },
+      confidence: null,
+      status: "FAILED",
+      errorMessage: failureMessage,
+    }).catch(() => null);
     throw error;
   });
   const parsed = customsParsedFromRecognition(recognized);
+  const ocrDurationMs = Date.now() - ocrStartedAt;
   const itemMissingMessage = "已识别基础字段，但未解析到商品明细，请人工维护。";
   const actorId = nonEmpty(actor?.id);
   await prisma.$transaction(async (tx) => {
+    await tx.ocrRawResult.deleteMany({
+      where: {
+        documentId,
+        documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
+      },
+    });
     await saveOcrRawResult({
       documentId,
+      taxRefundId: orderId,
       orderId,
-      documentType: document.documentType,
+      documentType: "CUSTOMS_DECLARATION",
       provider: recognized.provider || "ALIYUN",
       apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
       rawJson: recognized.rawJson || null,
-      parsedJson: parsed,
+      parsedJson: {
+        ...parsed,
+        ocrDurationMs,
+        rawJsonSaved: Boolean(recognized.rawJson),
+        parsedJsonSaved: true,
+        itemCount: parsed.items.length,
+        fileName: document.fileName || document.originalName || "",
+      },
       confidence: recognized.confidence ?? null,
       status: parsed.items.length ? "SUCCESS" : "PARTIAL",
       errorMessage: parsed.items.length ? "" : itemMissingMessage,
     }, tx);
     await tx.exportCustomsDeclarationItem.updateMany({
-      where: { orderId, documentId, deletedAt: null, confirmationStatus: "PENDING_CONFIRMATION" },
+      where: { orderId, documentId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
     for (const [index, item] of parsed.items.entries()) {
@@ -511,8 +551,31 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
     "export_customs_declaration_items",
     orderId,
     null,
-    { orderId, documentId, itemCount: parsed.items.length, parsed },
+    {
+      orderId,
+      documentId,
+      fileName: document.fileName || document.originalName || "",
+      provider: recognized.provider || "ALIYUN",
+      apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+      durationMs: ocrDurationMs,
+      rawJsonSaved: Boolean(recognized.rawJson),
+      parsedJsonSaved: true,
+      itemCount: parsed.items.length,
+      failureReason: parsed.items.length ? "" : itemMissingMessage,
+      parsed,
+    },
   ), { context: { orderId, documentId } });
+  console.info("customs-ocr-result-persisted", {
+    documentId,
+    fileName: document.fileName || document.originalName || "",
+    provider: recognized.provider || "ALIYUN",
+    apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+    durationMs: ocrDurationMs,
+    rawJsonSaved: Boolean(recognized.rawJson),
+    parsedJsonSaved: true,
+    itemCount: parsed.items.length,
+    failureReason: parsed.items.length ? "" : itemMissingMessage,
+  });
   await refreshOrderCompleteness(orderId);
   return getExportTaxRefundCalculationSummary(orderId);
 }

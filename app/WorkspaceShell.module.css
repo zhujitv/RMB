@@ -923,6 +923,7 @@
   min-height: 92px;
   display: grid;
   place-items: center;
+  gap: 10px;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
@@ -1295,15 +1296,17 @@
 .taxDeclarationFocusTable th:nth-child(3),
 .taxDeclarationFocusTable td:nth-child(3) { width: 24%; }
 .taxDeclarationFocusTable th:nth-child(4),
-.taxDeclarationFocusTable td:nth-child(4),
+.taxDeclarationFocusTable td:nth-child(4) { width: 150px; }
 .taxDeclarationFocusTable th:nth-child(5),
 .taxDeclarationFocusTable td:nth-child(5) { width: 145px; }
 .taxDeclarationFocusTable th:nth-child(6),
-.taxDeclarationFocusTable td:nth-child(6) { width: 90px; }
+.taxDeclarationFocusTable td:nth-child(6) { width: 145px; }
 .taxDeclarationFocusTable th:nth-child(7),
-.taxDeclarationFocusTable td:nth-child(7) { width: 120px; }
+.taxDeclarationFocusTable td:nth-child(7) { width: 90px; }
 .taxDeclarationFocusTable th:nth-child(8),
-.taxDeclarationFocusTable td:nth-child(8) { width: 110px; }
+.taxDeclarationFocusTable td:nth-child(8) { width: 120px; }
+.taxDeclarationFocusTable th:nth-child(9),
+.taxDeclarationFocusTable td:nth-child(9) { width: 110px; }
 
 @media (max-width: 1360px) {
   .taxCalculationStatsGrid {

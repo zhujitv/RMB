@@ -498,7 +498,8 @@ export function useTaxRefundController({
   }
 
   async function recognizeCustomsDocument(order: TaxRefundDetail, document?: TaxDocument) {
-    const recognitionKey = document?.id || order.id;
+    const targetDocumentId = document?.id || order.currentCustomsDocument?.id || "";
+    const recognitionKey = targetDocumentId || order.id;
     setRecognizingDocumentId(recognitionKey);
     setDocumentRecognitionStatus(recognitionKey, "识别中...");
     setDetailError("");
@@ -507,12 +508,29 @@ export function useTaxRefundController({
     try {
       const response = await apiJson<CustomsRecognitionResponse>(`/api/tax-refund/${encodeURIComponent(order.id)}/recognize-customs-declaration`, {
         method: "POST",
+        body: JSON.stringify({ documentId: targetDocumentId }),
       });
       const result = response.data || response.customsRecognition;
       if (!result) throw new Error(response.message || "报关单识别失败");
       const statusText = customsRecognitionStatusText(result);
       setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText);
       patchCustomsRecognition(order.id, result);
+      const recognizedDocumentId = result.documentId || targetDocumentId;
+      if (recognizedDocumentId) {
+        try {
+          const extractResult = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(order.id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ action: "extractCustomsDeclarationItems", documentId: recognizedDocumentId }),
+          });
+          if (extractResult.order) patchDetailForOrder(order.id, extractResult.order);
+          setDocumentRecognitionStatus(recognizedDocumentId, statusText || "识别成功");
+          setNotice(extractResult.message || "报关单信息和商品明细已重新识别，请确认。");
+          return;
+        } catch (extractError) {
+          const extractMessage = extractError instanceof Error ? extractError.message : "报关商品明细识别失败，请人工维护。";
+          setNotice(`报关单基础字段已识别，但商品明细识别失败：${extractMessage}`);
+        }
+      }
       if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
         setNotice(response.message || result.customsParseMessage || "未识别成功，请手工填写报关单号和申报日期");
         return;

@@ -923,6 +923,7 @@ model OcrTask {
 model OcrRawResult {
   id           String    @id @default(cuid())
   documentId   String    @map("document_id")
+  taxRefundId  String?   @map("tax_refund_id")
   orderId      String?   @map("order_id")
   documentType String    @map("document_type")
   provider     String    @default("ALIYUN")
@@ -939,6 +940,7 @@ model OcrRawResult {
   order    ReceivableOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([documentId])
+  @@index([taxRefundId])
   @@index([orderId])
   @@index([documentType])
   @@index([provider, apiName])

@@ -421,7 +421,11 @@ test("tax refund customs recognition stores raw OCR while backfilling current de
 test("tax refund re-recognition uses order route and surfaces specific backend reasons", () => {
   assert.match(
     taxRefundRecognizeRoute,
-    /recognizeOrderCustomsDeclaration\(request, actor, orderId\)/,
+    /parseJsonBody\(request\)/,
+  );
+  assert.match(
+    taxRefundRecognizeRoute,
+    /recognizeOrderCustomsDeclaration\(request, actor, orderId, body as Record<string, unknown>\)/,
   );
   assert.match(
     taxRefundRecognizeRoute,

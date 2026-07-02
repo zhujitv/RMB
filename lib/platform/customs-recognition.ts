@@ -471,10 +471,17 @@ export async function parseAndApplyCustomsDocument(
   const manualProtected = before.customsDeclarationParseSource === "MANUAL" || before.customsParseStatus === "MANUAL";
   try {
     const { fields, status, source, message, provider, apiName, rawJson, parsedJson, confidence } = await parseCustomsDocumentBuffer(buffer, document);
+    await prisma.ocrRawResult.deleteMany({
+      where: {
+        documentId: document.id,
+        documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
+      },
+    }).catch(() => null);
     await saveOcrRawResult({
       documentId: document.id,
+      taxRefundId: document.orderId,
       orderId: document.orderId,
-      documentType: document.documentType,
+      documentType: "CUSTOMS_DECLARATION",
       provider: provider || "ALIYUN",
       apiName: apiName || source || "CUSTOMS_DECLARATION_OCR",
       rawJson,
@@ -709,7 +716,7 @@ export async function recognizeUploadedCustomsDocument(request: AuditRequestLike
   });
 }
 
-export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike, actor: CustomsActor, orderId: string) {
+export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike, actor: CustomsActor, orderId: string, input: CustomsRecognitionInput = {}) {
   if (!["管理员", "财务", "业务员"].includes(actorRole(actor))) {
     throw permissionError("没有权限重新识别报关单信息", 403);
   }
@@ -718,7 +725,11 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
   });
   if (!before) throw permissionError("应收订单不存在或无权修改", 404);
-  const document = await latestCustomsEntryDocument(orderId);
+  const document = await resolveCustomsDeclarationDocument({
+    orderId,
+    documentId: nonEmpty(input.documentId),
+    documentType: "CUSTOMS_ENTRY_FORM",
+  });
   if (!document) {
     throw codedError("未找到报关单文件，请先上传报关单。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
   }
@@ -726,6 +737,18 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   if (!document.storageKey && !documentRuntime.filePath && !document.fileUrl) {
     throw codedError("文件不存在", 404, "CUSTOMS_FILE_NOT_FOUND");
   }
+  await prisma.$transaction([
+    prisma.ocrRawResult.deleteMany({
+      where: {
+        documentId: document.id,
+        documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
+      },
+    }),
+    prisma.exportCustomsDeclarationItem.updateMany({
+      where: { orderId, documentId: document.id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    }),
+  ]);
 
   let buffer: Buffer;
   try {

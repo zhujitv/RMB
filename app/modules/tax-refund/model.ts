@@ -224,6 +224,7 @@ export type TaxDocument = {
 export type OcrRawResultView = {
   id?: string;
   documentId?: string;
+  taxRefundId?: string;
   orderId?: string;
   documentType?: string;
   provider?: string;

@@ -1043,11 +1043,13 @@ function TaxRefundCalculationPanel({
         declarationDate: detail.customsDeclarationDate || "",
         hsCode: "",
         productName: "",
+        specification: "",
         quantity: null,
         unit: "",
         tradeTerm: "FOB",
         currency: detail.currency || "",
         fobAmount: null,
+        totalAmount: null,
         exchangeRate: null,
       },
     ]);
@@ -1080,7 +1082,7 @@ function TaxRefundCalculationPanel({
   const declarationTable = (
     <TablePanel
       title="报关商品"
-      actions={!readOnly ? <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button> : null}
+      actions={!readOnly ? <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>{items.length ? "新增明细" : "手工新增商品明细"}</button> : null}
       formId={formId}
       onSubmit={(event) => { event.preventDefault(); void onSaveItems(detail.id, items); }}
     >
@@ -1090,6 +1092,7 @@ function TaxRefundCalculationPanel({
             <th>报关单号</th>
             <th>HS编码</th>
             <th>中文品名</th>
+            <th>规格型号</th>
             <th>数量/单位</th>
             <th>FOB金额</th>
             <th>汇率</th>
@@ -1103,6 +1106,7 @@ function TaxRefundCalculationPanel({
               <td title={item.declarationNo || ""}><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
               <td title={item.hsCode || ""}><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
               <td title={item.productName || ""}><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
+              <td title={item.specification || ""}><input disabled={readOnly} value={item.specification || ""} onChange={(event) => updateItem(index, { specification: event.target.value })} /></td>
               <td className={styles.numericCell} title={quantityUnitText(item.quantity, item.unit)}>
                 <div className={styles.taxInlineInputGroup}>
                   <input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} />
@@ -1112,7 +1116,7 @@ function TaxRefundCalculationPanel({
               <td className={styles.numericCell} title={currencyAmountText(item.currency, item.fobAmount)}>
                 <div className={styles.taxMoneyInputGroup}>
                   <input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} />
-                  <input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} />
+                  <input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0), totalAmount: Number(event.target.value || 0) })} />
                 </div>
               </td>
               <td className={styles.numericCell}><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
@@ -1138,7 +1142,10 @@ function TaxRefundCalculationPanel({
         <TaxCalculationStatCard label="异常原因" value={abnormalReasonText} tone={hasExceptions ? "danger" : "success"} title={abnormalReasonText} />
       </div>
       {!items.length ? (
-        <div className={styles.taxCalculationEmptyPanel}>暂无报关商品明细，请先上传或识别报关单。</div>
+        <div className={styles.taxCalculationEmptyPanel}>
+          <span>暂无报关商品明细，请先上传或识别报关单。</span>
+          {!readOnly ? <button className={styles.primaryButton} type="button" disabled={saving} onClick={addItem}>手工新增商品明细</button> : null}
+        </div>
       ) : !hasConfirmedItems ? (
           <>
             <div className={styles.taxCalculationBlockedPanel}>没有确认报关商品明细，不允许进入退税计算。请先在“报关商品”中确认并保存。</div>

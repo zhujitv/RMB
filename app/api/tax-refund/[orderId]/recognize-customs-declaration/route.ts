@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, ok, recognizeOrderCustomsDeclaration } from "../../../../../lib/platform-db";
+import { apiError, ok, parseJsonBody, recognizeOrderCustomsDeclaration } from "../../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
@@ -20,7 +20,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { orderId } = await params;
-    const result = await recognizeOrderCustomsDeclaration(request, actor, orderId) as CustomsRecognitionRouteResult;
+    const body = await parseJsonBody(request).catch(() => ({}));
+    const result = await recognizeOrderCustomsDeclaration(request, actor, orderId, body as Record<string, unknown>) as CustomsRecognitionRouteResult;
     return ok({
       success: true,
       data: result,

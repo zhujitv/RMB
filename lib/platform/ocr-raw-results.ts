@@ -7,6 +7,7 @@ type ActorLike = {
 
 type OcrRawResultInput = {
   documentId: string;
+  taxRefundId?: string | null;
   orderId?: string | null;
   documentType: string;
   provider?: string | null;
@@ -34,28 +35,51 @@ export function canReadOcrRawResult(actor: ActorLike) {
 }
 
 export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.TransactionClient = prisma) {
-  if (input.rawJson == null && input.status !== "FAILED") {
+  const requestedStatus = cleanText(input.status, "SUCCESS");
+  const rawJsonMissing = input.rawJson == null && requestedStatus !== "FAILED";
+  const parsedJsonMissing = input.parsedJson == null && requestedStatus !== "FAILED";
+  if (rawJsonMissing) {
     console.error("OCR response received but rawJson was not persisted.", {
       documentId: input.documentId,
       orderId: input.orderId || "",
       documentType: input.documentType,
       provider: cleanText(input.provider, "ALIYUN"),
       apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
-      status: cleanText(input.status, "SUCCESS"),
+      status: requestedStatus,
     });
   }
+  const fallbackPayload = {
+    provider: cleanText(input.provider, "ALIYUN"),
+    apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
+    documentId: input.documentId,
+    orderId: input.orderId || "",
+    taxRefundId: input.taxRefundId || input.orderId || "",
+    warning: rawJsonMissing
+      ? "识别部分成功，原始结果保存失败"
+      : parsedJsonMissing
+        ? "识别部分成功，解析结果保存失败"
+        : "",
+    createdAt: new Date().toISOString(),
+  };
+  const status = rawJsonMissing || parsedJsonMissing
+    ? "PARTIAL"
+    : requestedStatus;
+  const errorMessage = cleanText(input.errorMessage)
+    || (rawJsonMissing ? "识别部分成功，原始结果保存失败" : "")
+    || (parsedJsonMissing ? "识别部分成功，解析结果保存失败" : "");
   return tx.ocrRawResult.create({
     data: {
       documentId: input.documentId,
+      taxRefundId: input.taxRefundId || input.orderId || null,
       orderId: input.orderId || null,
       documentType: cleanText(input.documentType),
       provider: cleanText(input.provider, "ALIYUN"),
       apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
-      rawJson: jsonInput(input.rawJson),
-      parsedJson: jsonInput(input.parsedJson),
+      rawJson: jsonInput(rawJsonMissing ? fallbackPayload : input.rawJson),
+      parsedJson: jsonInput(parsedJsonMissing ? fallbackPayload : input.parsedJson),
       confidence: input.confidence == null ? null : input.confidence,
-      status: cleanText(input.status, "SUCCESS"),
-      errorMessage: cleanText(input.errorMessage) || null,
+      status,
+      errorMessage: errorMessage || null,
     },
   });
 }
@@ -83,6 +107,7 @@ export function logOcrCallFailure(input: {
 export function serializeOcrRawResult(row: {
   id?: string;
   documentId?: string | null;
+  taxRefundId?: string | null;
   orderId?: string | null;
   documentType?: string | null;
   provider?: string | null;
@@ -99,6 +124,7 @@ export function serializeOcrRawResult(row: {
   return {
     id: row.id || "",
     documentId: row.documentId || "",
+    taxRefundId: row.taxRefundId || "",
     orderId: row.orderId || "",
     documentType: row.documentType || "",
     provider: row.provider || "",
