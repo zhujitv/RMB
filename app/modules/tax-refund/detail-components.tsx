@@ -32,6 +32,7 @@ export function TaxRefundDetailDrawer({
   recognitionStatusByDocument,
   canSendShippingDocuments,
   canRefreshCompleteness,
+  canRecalculateTaxRefund,
   onClose,
   onDownloadPackage,
   onSubmitTaxRefund,
@@ -39,6 +40,7 @@ export function TaxRefundDetailDrawer({
   onRefreshCompleteness,
   onRecalculateTaxRefund,
   onSaveCustomsDeclarationItems,
+  onCreateCompanyHsFromDeclarationItem,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -50,6 +52,7 @@ export function TaxRefundDetailDrawer({
   onOpenDomesticLogistics,
   currentUserRole,
   canWriteDocuments,
+  canCreateCompanyHsFromOcr,
 }: {
   row: TaxRefundRow;
   detail: TaxRefundDetail | null;
@@ -68,6 +71,7 @@ export function TaxRefundDetailDrawer({
   recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
   canRefreshCompleteness: boolean;
+  canRecalculateTaxRefund: boolean;
   onClose: () => void;
   onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
@@ -75,6 +79,7 @@ export function TaxRefundDetailDrawer({
   onRefreshCompleteness: () => void;
   onRecalculateTaxRefund: () => void;
   onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+  onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
@@ -86,6 +91,7 @@ export function TaxRefundDetailDrawer({
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
+  canCreateCompanyHsFromOcr: boolean;
 }) {
   const displayCustomer = customerLegalName(row);
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail || {}, row);
@@ -118,7 +124,7 @@ export function TaxRefundDetailDrawer({
                 {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
               </button>
             ) : null}
-            {canRefreshCompleteness ? (
+            {canRefreshCompleteness && canRecalculateTaxRefund ? (
               <button className={styles.secondaryButton} type="button" disabled={calculatingTaxRefund || dismissLocked} onClick={onRecalculateTaxRefund}>
                 {calculatingTaxRefund ? "计算中..." : "重新计算退税"}
               </button>
@@ -162,8 +168,10 @@ export function TaxRefundDetailDrawer({
             onOpenDomesticLogistics={onOpenDomesticLogistics}
             currentUserRole={currentUserRole}
             canWriteDocuments={canWriteDocuments}
+            canCreateCompanyHsFromOcr={canCreateCompanyHsFromOcr}
             calculatingTaxRefund={calculatingTaxRefund}
             onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
+            onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
           />
         </div>
         </>
@@ -259,8 +267,10 @@ function TaxRefundDetailPanel({
   onOpenDomesticLogistics,
   currentUserRole,
   canWriteDocuments,
+  canCreateCompanyHsFromOcr,
   calculatingTaxRefund,
   onSaveCustomsDeclarationItems,
+  onCreateCompanyHsFromDeclarationItem,
 }: {
   detail: TaxRefundDetail | null;
   loading: boolean;
@@ -282,8 +292,10 @@ function TaxRefundDetailPanel({
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
+  canCreateCompanyHsFromOcr: boolean;
   calculatingTaxRefund: boolean;
   onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+  onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
 }) {
   if (loading) return <div className={styles.emptyState}>资料详情加载中...</div>;
   if (error) return <div className={styles.inlineError}>{error}</div>;
@@ -396,6 +408,8 @@ function TaxRefundDetailPanel({
           readOnly={readOnly || currentUserRole !== "管理员"}
           saving={calculatingTaxRefund}
           onSaveItems={onSaveCustomsDeclarationItems}
+          canCreateCompanyHs={canCreateCompanyHsFromOcr && currentUserRole === "管理员" && !readOnly}
+          onCreateCompanyHs={onCreateCompanyHsFromDeclarationItem}
         />
         <div className={`${styles.documentGroupCard} ${styles.fileUploadSection}`}>
           <strong>出口资料上传</strong>
@@ -523,13 +537,18 @@ function TaxRefundCalculationPanel({
   readOnly,
   saving,
   onSaveItems,
+  canCreateCompanyHs,
+  onCreateCompanyHs,
 }: {
   detail: TaxRefundDetail;
   readOnly: boolean;
   saving: boolean;
   onSaveItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+  canCreateCompanyHs: boolean;
+  onCreateCompanyHs: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
 }) {
   const [items, setItems] = useState<CustomsDeclarationItem[]>(detail.customsDeclarationItems || []);
+  const [companyHsDraft, setCompanyHsDraft] = useState<Record<string, { rebateRate: string; vatRate: string }>>({});
   const calculations = detail.exportTaxRefundCalculations || [];
   const summary = detail.exportTaxRefundSummary || {};
   useEffect(() => {
@@ -556,6 +575,18 @@ function TaxRefundCalculationPanel({
         exchangeRate: null,
       },
     ]);
+  }
+
+  function companyHsDraftFor(row: { declarationItemId?: string; rebateRate?: number | null; vatRate?: number | null }) {
+    const key = row.declarationItemId || "";
+    return companyHsDraft[key] || {
+      rebateRate: row.rebateRate == null ? "13" : String(Number(row.rebateRate) * 100),
+      vatRate: row.vatRate == null ? "13" : String(Number(row.vatRate) * 100),
+    };
+  }
+
+  function updateCompanyHsDraft(key: string, patch: { rebateRate?: string; vatRate?: string }) {
+    setCompanyHsDraft((current) => ({ ...current, [key]: { ...companyHsDraftFor({ declarationItemId: key }), ...patch } }));
   }
 
   const hasExceptions = Boolean(summary.abnormalReasons?.length);
@@ -626,13 +657,17 @@ function TaxRefundCalculationPanel({
               <th>匹配状态</th>
               <th>差异数量</th>
               <th>差异金额</th>
+              <th>企业HS</th>
               <th>退税率</th>
               <th>预计退税金额</th>
+              {canCreateCompanyHs ? <th>操作</th> : null}
             </tr>
           </thead>
           <tbody>
             {calculations.length ? calculations.map((row) => {
               const abnormal = row.calculationStatus === "资料异常" || Boolean(row.abnormalReasons?.length);
+              const hsMissing = Boolean(row.abnormalReasons?.includes("HS编码未维护"));
+              const draft = companyHsDraftFor(row);
               return (
                 <tr key={row.id || row.declarationItemId} className={abnormal ? styles.rowDanger : ""}>
                   <td>{row.declarationNo || "-"}</td>
@@ -646,12 +681,53 @@ function TaxRefundCalculationPanel({
                   <td><span className={`${styles.statusPill} ${abnormal ? styles.statusDanger : styles.statusSuccess}`}>{row.invoiceMatchStatus || "-"}</span></td>
                   <td>{moneyText(row.invoiceMatch?.differenceQuantity)}</td>
                   <td>{moneyText(row.invoiceMatch?.differenceAmount)}</td>
+                  <td>{row.invoiceMatch?.companyHs?.cnName || (hsMissing ? "未维护" : "-")}</td>
                   <td>{percentText(row.rebateRate)}</td>
                   <td>{moneyText(row.estimatedRefundAmount)}</td>
+                  {canCreateCompanyHs ? (
+                    <td>
+                      {hsMissing && row.declarationItemId ? (
+                        <div className={styles.rowActionGroup}>
+                          <input
+                            aria-label="出口退税率"
+                            type="number"
+                            min="0"
+                            max="13"
+                            step="0.01"
+                            value={draft.rebateRate}
+                            onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { rebateRate: event.target.value })}
+                            placeholder="退税率"
+                          />
+                          <input
+                            aria-label="增值税率"
+                            type="number"
+                            min="0"
+                            max="13"
+                            step="0.01"
+                            value={draft.vatRate}
+                            onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { vatRate: event.target.value })}
+                            placeholder="增值税率"
+                          />
+                          <button
+                            className={styles.secondaryButton}
+                            type="button"
+                            disabled={saving}
+                            onClick={() => onCreateCompanyHs(detail.id, {
+                              declarationItemId: row.declarationItemId,
+                              rebateRate: draft.rebateRate,
+                              vatRate: draft.vatRate,
+                            })}
+                          >
+                            新增到企业HS库
+                          </button>
+                        </div>
+                      ) : "-"}
+                    </td>
+                  ) : null}
                 </tr>
               );
             }) : (
-              <tr><td colSpan={13}><div className={styles.emptyState}>暂无退税计算结果。</div></td></tr>
+              <tr><td colSpan={canCreateCompanyHs ? 15 : 14}><div className={styles.emptyState}>暂无退税计算结果。</div></td></tr>
             )}
           </tbody>
         </table>

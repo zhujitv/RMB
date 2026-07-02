@@ -277,6 +277,7 @@ export const UPLOAD_STATUSES = ["PENDING", "UPLOADING", "SUCCESS", "FAILED"];
 export const TAX_REFUND_STATUS_LABELS = {
   NO_CUSTOMS: "未上传报关单",
   CUSTOMS_RECOGNIZED_PENDING_CONFIRM: "已识别待确认",
+  HS_NOT_MAINTAINED: "HS编码未维护",
   REBATE_RATE_MATCHED: "HS退税率已匹配",
   SUPPLIER_INVOICE_MATCHED: "供应商发票已匹配",
   REFUND_CALCULATED: "退税金额已计算",
@@ -301,6 +302,7 @@ export const CUSTOMS_PARSE_SOURCE_LABELS = {
 export const ACTIVE_TAX_REFUND_STATUSES = [
   "NO_CUSTOMS",
   "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
+  "HS_NOT_MAINTAINED",
   "REBATE_RATE_MATCHED",
   "SUPPLIER_INVOICE_MATCHED",
   "REFUND_CALCULATED",
@@ -578,6 +580,13 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   supplierDocumentReturnEnabled: false,
   fallbackToPdfText: true,
   timeoutMs: 15000,
+};
+export const TAX_REFUND_FEATURES_SETTING_KEY = "tax_refund_features";
+export const DEFAULT_TAX_REFUND_FEATURE_SETTINGS = {
+  enabled: true,
+  companyHsLibraryEnabled: true,
+  calculationEnabled: true,
+  addCompanyHsFromOcrEnabled: true,
 };
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {

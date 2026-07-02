@@ -18,6 +18,7 @@ import { writeAudit } from "./shared-audit";
 import { refreshTaxRefundCompletenessForOrder } from "./shared-tax-sync";
 import { includeOrderRelations } from "./shared-order-relations";
 import { roundMoney } from "./shared-order-calculations";
+import { getTaxRefundFeatureSettings, isTaxRefundCalculationFeatureEnabled } from "./tax-refund-features";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -242,15 +243,11 @@ async function supplierCountForOrder(orderId: string) {
   return new Set(costs.map((cost) => cost.supplierId).filter(Boolean)).size;
 }
 
-async function findRebateRate(hsCode: string, declarationDate: Date | null) {
-  if (!hsCode || !declarationDate) return null;
-  return prisma.exportTaxRebateRate.findFirst({
-    where: {
-      hsCode,
-      effectiveFrom: { lte: declarationDate },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: declarationDate } }],
-    },
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+async function findCompanyHs(hsCode: string, enabled: boolean) {
+  if (!enabled || !hsCode) return null;
+  return prisma.companyHs.findFirst({
+    where: { hsCode, deletedAt: null, isEnabled: true },
+    orderBy: [{ updatedAt: "desc" }],
   });
 }
 
@@ -300,6 +297,8 @@ function serializeCalculationRow(row: Prisma.ExportTaxRefundCalculationGetPayloa
     calculationStatus: row.calculationStatus,
     abnormalReasons: Array.isArray(row.abnormalReasons) ? row.abnormalReasons : [],
     invoiceMatch: match,
+    customsRmbAmount: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
+    inputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
   };
 }
 
@@ -427,10 +426,19 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
         await tx.exportCustomsDeclarationItem.create({ data: { ...data, orderId } });
       }
     }
-    await tx.receivableOrder.update({ where: { id: orderId }, data: { taxRefundStatus: "REBATE_RATE_MATCHED", updatedById: actorId } });
+    await tx.receivableOrder.update({ where: { id: orderId }, data: { taxRefundStatus: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM", updatedById: actorId } });
   });
-  await writeAudit(request, actor, "人工确认报关商品明细", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
-  return recalculateExportTaxRefund(request, actor, orderId);
+  const exchangeRateChanged = items.some((item) => {
+    const previous = item.id ? before.find((row) => row.id === item.id) : null;
+    return previous && num(previous.exchangeRate, 0) !== num(item.exchangeRate, 0);
+  });
+  await writeAudit(request, actor, "OCR识别结果确认", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
+  if (exchangeRateChanged) {
+    await writeAudit(request, actor, "手工修改汇率", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
+  }
+  if (await isTaxRefundCalculationFeatureEnabled()) return recalculateExportTaxRefund(request, actor, orderId);
+  await refreshOrderCompleteness(orderId);
+  return getExportTaxRefundCalculationSummary(orderId);
 }
 
 async function refreshOrderCompleteness(orderId: string) {
@@ -441,6 +449,10 @@ async function refreshOrderCompleteness(orderId: string) {
 
 export async function recalculateExportTaxRefund(request: AuditRequestLike, actor: ActorLike, orderId: string) {
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限重新计算退税金额", 403);
+  const features = await getTaxRefundFeatureSettings();
+  if (!features.enabled || !features.calculationEnabled) {
+    throw codedError("退税计算功能已关闭，请到系统设置启用后再计算。", 403, "TAX_REFUND_FEATURE_DISABLED");
+  }
   const actorId = nonEmpty(actor?.id);
   const [items, invoiceLines, supplierCount] = await Promise.all([
     prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
@@ -453,7 +465,8 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
   for (const item of items) {
     const declarationDate = item.declarationDate || null;
     const declarationAmountCny = num(item.fobAmountCny, 0) || (num(item.fobAmount, 0) && num(item.exchangeRate, 0) ? roundMoney(num(item.fobAmount, 0) * num(item.exchangeRate, 0)) : 0);
-    const rate = await findRebateRate(normalizedHsCode(item.hsCode), declarationDate);
+    const hsCode = normalizedHsCode(item.hsCode);
+    const companyHs = await findCompanyHs(hsCode, features.companyHsLibraryEnabled);
     const group = declarationGroups.get(declarationItemKey({
       declarationNo: item.declarationNo,
       hsCode: item.hsCode,
@@ -471,15 +484,16 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       items: [{ id: item.id }],
     }, invoiceLines, supplierCount);
     const duplicateReasons = await duplicateInvoiceUseReasons(orderId, match.lines);
-    const rebateRate = rate ? num(rate.rebateRate, 0) : 0;
-    const vatRate = rate ? num(rate.vatRate, 0) : (match.invoiceVatRate || 0);
+    const rebateRate = companyHs ? num(companyHs.rebateRate, 0) : 0;
+    const vatRate = companyHs ? num(companyHs.vatRate, 0) : (match.invoiceVatRate || 0);
     const theoreticalRefundAmount = declarationAmountCny && rebateRate ? roundMoney(declarationAmountCny * rebateRate) : 0;
     const availableInputVatAmount = match.invoiceAmountWithoutTax && vatRate ? roundMoney(match.invoiceAmountWithoutTax * vatRate) : 0;
     const estimatedRefundAmount = theoreticalRefundAmount && availableInputVatAmount ? Math.min(theoreticalRefundAmount, availableInputVatAmount) : 0;
     const abnormalReasons = [
-      ...(!normalizedHsCode(item.hsCode) ? ["HS编码缺失"] : []),
-      ...(normalizedHsCode(item.hsCode) && !rate ? ["退税率缺失"] : []),
-      ...(rate && rebateRate <= 0 ? ["退税率为0"] : []),
+      ...(!hsCode ? ["HS编码缺失"] : []),
+      ...(!features.companyHsLibraryEnabled ? ["企业HS编码库已关闭"] : []),
+      ...(features.companyHsLibraryEnabled && hsCode && !companyHs ? ["HS编码未维护"] : []),
+      ...(companyHs && rebateRate <= 0 ? ["退税率为0"] : []),
       ...(!num(item.fobAmount, 0) && !declarationAmountCny ? ["报关金额缺失"] : []),
       ...(!num(item.exchangeRate, 0) && cleanText(item.currency).toUpperCase() !== "CNY" ? ["汇率缺失"] : []),
       ...match.reasons,
@@ -496,22 +510,30 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       differenceAmount: match.differenceAmount,
       documentIds: match.lines.map((line) => line.documentId),
       lines: match.lines,
+      companyHs: companyHs ? {
+        id: companyHs.id,
+        hsCode: companyHs.hsCode,
+        cnName: companyHs.cnName,
+        unit: companyHs.unit,
+        rebateRate,
+        vatRate,
+      } : null,
     };
     const saved = await prisma.exportTaxRefundCalculation.upsert({
       where: { declarationItemId: item.id },
       create: {
         orderId,
         declarationItemId: item.id,
-        rateId: rate?.id || null,
+        rateId: null,
         declarationNo: item.declarationNo,
-        hsCode: normalizedHsCode(item.hsCode),
+        hsCode,
         productName: item.productName,
         declarationDate,
         fobCurrency: item.currency,
         fobAmount: nullableDecimal(item.fobAmount),
         exchangeRate: nullableDecimal(item.exchangeRate),
         declarationAmountCny: declarationAmountCny || null,
-        rebateRate: rate ? rebateRate : null,
+        rebateRate: companyHs ? rebateRate : null,
         vatRate: vatRate || null,
         theoreticalRefundAmount: theoreticalRefundAmount || null,
         supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
@@ -525,16 +547,16 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
         calculatedById: actorId || null,
       },
       update: {
-        rateId: rate?.id || null,
+        rateId: null,
         declarationNo: item.declarationNo,
-        hsCode: normalizedHsCode(item.hsCode),
+        hsCode,
         productName: item.productName,
         declarationDate,
         fobCurrency: item.currency,
         fobAmount: nullableDecimal(item.fobAmount),
         exchangeRate: nullableDecimal(item.exchangeRate),
         declarationAmountCny: declarationAmountCny || null,
-        rebateRate: rate ? rebateRate : null,
+        rebateRate: companyHs ? rebateRate : null,
         vatRate: vatRate || null,
         theoreticalRefundAmount: theoreticalRefundAmount || null,
         supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
@@ -554,8 +576,11 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
   }
   const hasException = results.some((row) => row.calculationStatus === "资料异常");
   const hasInvoiceMatched = results.every((row) => TAX_REFUND_OK_STATUSES.has(row.invoiceMatchStatus));
-  const hasRateMatched = results.every((row) => row.rateId);
-  const nextStatus = hasException
+  const hasRateMatched = results.every((row) => row.rebateRate != null);
+  const hasHsNotMaintained = results.some((row) => Array.isArray(row.abnormalReasons) && row.abnormalReasons.includes("HS编码未维护"));
+  const nextStatus = hasHsNotMaintained
+    ? "HS_NOT_MAINTAINED"
+    : hasException
     ? "PROBLEM"
     : results.every((row) => row.calculationStatus === "退税金额已计算")
       ? "REFUND_CALCULATED"
@@ -570,6 +595,14 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
     status: nextStatus,
     estimatedRefundAmount: roundMoney(results.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0)),
     exceptionCount: results.filter((row) => row.calculationStatus === "资料异常").length,
+  }).catch(() => null);
+  await writeAudit(request, actor, "供应商发票匹配", "export_tax_refund_calculations", orderId, null, {
+    orderId,
+    statuses: results.map((row) => row.invoiceMatchStatus),
+  }).catch(() => null);
+  await writeAudit(request, actor, "重新计算利润", "receivable_orders", orderId, null, {
+    orderId,
+    estimatedTaxRefundIncome: roundMoney(results.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0)),
   }).catch(() => null);
   await refreshOrderCompleteness(orderId);
   return getExportTaxRefundCalculationSummary(orderId);

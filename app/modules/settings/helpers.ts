@@ -8,6 +8,7 @@ import {
   DEFAULT_NOTIFICATION_TEMPLATE_FORM,
   DEFAULT_OCR_INTEGRATION_FORM,
   DEFAULT_SHIPSGO_INTEGRATION_FORM,
+  DEFAULT_TAX_REFUND_FEATURE_FORM,
   FACTORY_SUPPLIER_ACCOUNT_ROLES,
   LOGISTICS_SUPPLIER_TYPE_CODE,
   LOGISTICS_SUPPLIER_TYPES,
@@ -47,6 +48,8 @@ import type {
   SupplierForm,
   SupplierRow,
   TableColumn,
+  TaxRefundFeatureForm,
+  TaxRefundFeatureSettings,
   UserForm,
   UserRow,
 } from "./types";
@@ -241,6 +244,7 @@ export function kebabTab(tab: SettingsTabKey) {
   if (tab === "businessEntities") return "business-entities";
   if (tab === "exchangeRates") return "exchange-rates";
   if (tab === "commissionFormula") return "commission-formula";
+  if (tab === "taxRefundFeatures") return "tax-refund-features";
   if (tab === "auditLogs") return "audit-logs";
   if (tab === "apiPerformance") return "api-performance";
   return tab;
@@ -410,6 +414,15 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     supplierDocumentReturnEnabled: settings?.supplierDocumentReturnEnabled === true,
     fallbackToPdfText: settings?.fallbackToPdfText !== false,
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
+  };
+}
+
+export function taxRefundFeatureFormFromSettings(settings: TaxRefundFeatureSettings | null): TaxRefundFeatureForm {
+  return {
+    enabled: settings?.enabled !== false,
+    companyHsLibraryEnabled: settings?.companyHsLibraryEnabled !== false,
+    calculationEnabled: settings?.calculationEnabled !== false,
+    addCompanyHsFromOcrEnabled: settings?.addCompanyHsFromOcrEnabled !== false,
   };
 }
 

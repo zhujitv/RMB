@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 
-export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs" | "apiPerformance";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "taxRefundFeatures" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs" | "apiPerformance";
 
 export type SettingsFilters = {
   customers: {
@@ -216,6 +216,14 @@ export type NotificationTemplateSettings = {
 } & Record<string, unknown>;
 export type OcrIntegrationSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
+export type TaxRefundFeatureSettings = Record<string, unknown>;
+
+export type TaxRefundFeatureForm = {
+  enabled: boolean;
+  companyHsLibraryEnabled: boolean;
+  calculationEnabled: boolean;
+  addCompanyHsFromOcrEnabled: boolean;
+};
 
 export type ExchangeRateForm = {
   source: string;

@@ -19,6 +19,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "财务"],
+  companyHs: ["管理员"],
   commissions: ["管理员", "财务"],
   suppliers: ["管理员"],
   settings: ["管理员"],
@@ -26,7 +27,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "companyHs", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
@@ -75,6 +76,7 @@ export const READ_PERMISSIONS: Record<string, string[]> = {
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "业务员", "财务"],
+  companyHs: ["管理员", "财务"],
   commissions: ["管理员", "财务"],
   reports: ["管理员", "业务员", "财务"],
   settings: ["管理员"],
@@ -101,6 +103,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     logisticsFees: "物流费用",
     supplierDocuments: "资料回传",
     taxRefund: "退税资料",
+    companyHs: "企业HS编码",
     reports: "报表中心",
     manual: "操作手册",
     settings: "系统设置",
@@ -116,6 +119,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     documents: "单证查看",
     supplierDocuments: "供应商资料回传查看",
     taxRefund: "退税查看",
+    companyHs: "企业HS编码查看",
     commissions: "提成查看",
     reports: "报表查看",
     settings: "系统设置查看",
@@ -132,6 +136,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     documents: "单证上传/删除",
     supplierDocuments: "供应商资料回传",
     taxRefund: "退税状态",
+    companyHs: "企业HS编码维护",
     commissions: "提成结算",
     suppliers: "供应商维护",
     settings: "系统设置",

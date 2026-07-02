@@ -68,6 +68,8 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         canCreateSupplierDocumentRequest={taxRefund.canCreateSupplierDocumentRequest}
         canRefreshCompleteness={taxRefund.canManageTaxRefund}
         canWriteDocuments={taxRefund.canWriteDocuments}
+        canRecalculateTaxRefund={taxRefund.taxRefundCalculationEnabled}
+        canCreateCompanyHsFromOcr={taxRefund.canCreateCompanyHsFromOcr}
         currentUserRole={taxRefund.currentUserRole}
         customsFilePicker={taxRefund.customsFilePicker}
         manualShippingOrder={taxRefund.manualShippingOrder}
@@ -87,6 +89,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onRefreshCompleteness={(row) => void taxRefund.refreshCompleteness(row)}
         onRecalculateTaxRefund={(row) => void taxRefund.recalculateTaxRefund(row)}
         onSaveCustomsDeclarationItems={taxRefund.saveCustomsDeclarationItems}
+        onCreateCompanyHsFromDeclarationItem={taxRefund.createCompanyHsFromDeclarationItem}
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}
         onDelete={taxRefund.deleteDocument}

@@ -41,6 +41,8 @@ type TaxRefundOverlaysProps = {
   canCreateSupplierDocumentRequest: boolean;
   canRefreshCompleteness: boolean;
   canWriteDocuments: boolean;
+  canRecalculateTaxRefund: boolean;
+  canCreateCompanyHsFromOcr: boolean;
   currentUserRole: string;
   customsFilePicker: CustomsFilePickerState;
   manualShippingOrder: TaxRefundDetail | null;
@@ -60,6 +62,7 @@ type TaxRefundOverlaysProps = {
   onRefreshCompleteness: (row: TaxRefundRow) => void;
   onRecalculateTaxRefund: (row: TaxRefundRow) => void;
   onSaveCustomsDeclarationItems: (orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) => Promise<void> | void;
+  onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
   onDelete: (orderId: string, document: TaxDocument) => Promise<void> | void;
@@ -103,6 +106,8 @@ export function TaxRefundOverlays({
   canCreateSupplierDocumentRequest,
   canRefreshCompleteness,
   canWriteDocuments,
+  canRecalculateTaxRefund,
+  canCreateCompanyHsFromOcr,
   currentUserRole,
   customsFilePicker,
   manualShippingOrder,
@@ -122,6 +127,7 @@ export function TaxRefundOverlays({
   onRefreshCompleteness,
   onRecalculateTaxRefund,
   onSaveCustomsDeclarationItems,
+  onCreateCompanyHsFromDeclarationItem,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -164,6 +170,7 @@ export function TaxRefundOverlays({
           recognitionStatusByDocument={recognitionStatusByDocument}
           canSendShippingDocuments={canSendShippingDocuments}
           canRefreshCompleteness={canRefreshCompleteness}
+          canRecalculateTaxRefund={canRecalculateTaxRefund}
           onClose={onCloseDetailDrawer}
           onDownloadPackage={() => onDownloadPackage(detailRow)}
           onSubmitTaxRefund={() => onSubmitTaxRefund(detailRow)}
@@ -171,6 +178,7 @@ export function TaxRefundOverlays({
           onRefreshCompleteness={() => onRefreshCompleteness(detailRow)}
           onRecalculateTaxRefund={() => onRecalculateTaxRefund(detailRow)}
           onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
+          onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}
           onDelete={onDelete}
@@ -182,6 +190,7 @@ export function TaxRefundOverlays({
           onOpenDomesticLogistics={onOpenDomesticLogistics}
           currentUserRole={currentUserRole}
           canWriteDocuments={canWriteDocuments}
+          canCreateCompanyHsFromOcr={canCreateCompanyHsFromOcr}
         />
       ) : null}
       {customsFilePicker ? (

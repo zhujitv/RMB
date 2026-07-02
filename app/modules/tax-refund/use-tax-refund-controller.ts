@@ -43,6 +43,12 @@ import {
 export type TaxRefundModuleProps = {
   currentUser: User;
   permissions?: PermissionSnapshot;
+  features?: {
+    enabled?: boolean;
+    companyHsLibraryEnabled?: boolean;
+    calculationEnabled?: boolean;
+    addCompanyHsFromOcrEnabled?: boolean;
+  };
   initialKeyword?: string;
   initialAction?: string;
   initialOpenToken?: number;
@@ -52,6 +58,7 @@ export type TaxRefundModuleProps = {
 export function useTaxRefundController({
   currentUser,
   permissions,
+  features,
   initialKeyword = "",
   initialAction = "",
   initialOpenToken = 0,
@@ -113,6 +120,13 @@ export function useTaxRefundController({
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
+  const taxRefundCalculationEnabled = !features || (features.enabled !== false && features.calculationEnabled !== false);
+  const canCreateCompanyHsFromOcr = currentUser.role === "管理员"
+    && (!features || (
+      features.enabled !== false
+      && features.companyHsLibraryEnabled !== false
+      && features.addCompanyHsFromOcrEnabled !== false
+    ));
 
   async function loadRows(
     nextPage = page,
@@ -639,6 +653,26 @@ export function useTaxRefundController({
     }
   }
 
+  async function createCompanyHsFromDeclarationItem(orderId: string, payload: Record<string, unknown>) {
+    setCalculatingTaxRefundId(orderId);
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "createCompanyHsFromDeclarationItem", ...payload }),
+      });
+      if (result.success !== true || !result.order) throw new Error(result.message || "新增企业HS编码失败");
+      patchDetailForOrder(orderId, result.order);
+      setNotice(result.message || "企业HS编码已新增，退税金额已重新计算");
+    } catch (saveError) {
+      setDetailError(saveError instanceof Error ? saveError.message : "新增企业HS编码失败");
+    } finally {
+      setCalculatingTaxRefundId("");
+    }
+  }
+
   async function cancelTaxRefundArchive(row: TaxRefundRow) {
     const result = await requestConfirmation({
       title: "确认取消归档？",
@@ -989,6 +1023,8 @@ export function useTaxRefundController({
     businessEntities,
     canManageTaxRefund,
     canCancelArchive,
+    taxRefundCalculationEnabled,
+    canCreateCompanyHsFromOcr,
     canWriteDocuments,
     canSendShippingDocuments,
     submittingTaxId,
@@ -1036,6 +1072,7 @@ export function useTaxRefundController({
     refreshCompleteness,
     recalculateTaxRefund,
     saveCustomsDeclarationItems,
+    createCompanyHsFromDeclarationItem,
     updateTaxRefundStatus,
     closeDetailDrawer,
     downloadPackage,

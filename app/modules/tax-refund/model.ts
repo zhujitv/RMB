@@ -132,11 +132,13 @@ export type ExportTaxRefundCalculation = {
   fobAmount?: number | null;
   exchangeRate?: number | null;
   declarationAmountCny?: number | null;
+  customsRmbAmount?: number | null;
   rebateRate?: number | null;
   vatRate?: number | null;
   theoreticalRefundAmount?: number | null;
   supplierInvoiceAmountWithoutTax?: number | null;
   availableInputVatAmount?: number | null;
+  inputVatAmount?: number | null;
   estimatedRefundAmount?: number | null;
   invoiceMatchStatus?: string;
   calculationStatus?: string;
@@ -148,6 +150,14 @@ export type ExportTaxRefundCalculation = {
     invoiceAmountWithoutTax?: number;
     differenceQuantity?: number;
     differenceAmount?: number;
+    companyHs?: {
+      id?: string;
+      hsCode?: string;
+      cnName?: string;
+      unit?: string;
+      rebateRate?: number;
+      vatRate?: number;
+    } | null;
     lines?: unknown[];
   };
 };
@@ -367,6 +377,7 @@ export const TAX_REFUND_STATUS_OPTIONS = [
   { value: "", label: "全部退税状态" },
   { value: "NO_CUSTOMS", label: "未上传报关单" },
   { value: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM", label: "已识别待确认" },
+  { value: "HS_NOT_MAINTAINED", label: "HS编码未维护" },
   { value: "REBATE_RATE_MATCHED", label: "HS退税率已匹配" },
   { value: "SUPPLIER_INVOICE_MATCHED", label: "供应商发票已匹配" },
   { value: "REFUND_CALCULATED", label: "退税金额已计算" },

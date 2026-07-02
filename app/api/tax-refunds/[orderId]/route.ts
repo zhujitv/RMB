@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import {
   apiError,
   cancelTaxRefundArchive,
+  createCompanyHsFromDeclarationItem,
   extractCustomsDeclarationItemsFromDocument,
   getTaxRefundOrderDetail,
   ok,
@@ -96,6 +97,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const data = await recalculateExportTaxRefund(request, actor, orderId);
       const order = await getTaxRefundOrderDetail(orderId, actor);
       return ok({ success: true, order, data, message: "退税金额已重新计算" });
+    }
+    if (body.action === "createCompanyHsFromDeclarationItem") {
+      const data = await createCompanyHsFromDeclarationItem(request, actor, orderId, body);
+      const order = await getTaxRefundOrderDetail(orderId, actor);
+      return ok({ success: true, order, data, message: "企业HS编码已新增，退税金额已重新计算" });
     }
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);

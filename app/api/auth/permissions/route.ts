@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, logServerTiming, ok, rolePermissions, sanitizeForLog, timeServerStep } from "../../../../lib/platform-db";
+import { apiError, logServerTiming, ok, readSafeTaxRefundFeatureFlags, rolePermissions, sanitizeForLog, timeServerStep } from "../../../../lib/platform-db";
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +26,11 @@ export async function GET(request: NextRequest) {
     const permissions = await timeServerStep("workbench-init-timing", "authPermissions.buildBasicPermissions", async () => (
       rolePermissions(actor)
     ), { path, userId, role });
+    const taxRefundFeatures = await timeServerStep("workbench-init-timing", "authPermissions.taxRefundFeatureFlags", () => (
+      readSafeTaxRefundFeatureFlags({ path, userId, role })
+    ), { path, userId, role });
     outcome = "ready";
-    return ok({ permissions });
+    return ok({ permissions, features: { taxRefund: taxRefundFeatures } });
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;
     outcome = "error";

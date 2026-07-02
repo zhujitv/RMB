@@ -107,6 +107,23 @@ function taxRefundDetailBillOfLadingNumbers(order: Pick<TaxRefundOrderWithRelati
   ].filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
 }
 
+function serializeTaxRefundOrderForActor(order: unknown, actor: ActorLike) {
+  const serialized = serializeOrder(order);
+  const role = String(actor?.role || "");
+  if (role === "管理员" || role === "财务") return serialized;
+  return {
+    ...serialized,
+    exportTaxRefundCalculations: [],
+    exportTaxRefundSummary: {
+      estimatedRefundAmount: null,
+      calculationStatus: "",
+      abnormalReasons: [],
+    },
+    expectedTaxRefundIncomeCny: null,
+    estimatedTaxRefundIncome: null,
+  };
+}
+
 function transportItemStableKey(item: TaxRefundDomesticTransportItem) {
   return item.id || [
     item.containerNo,
@@ -445,12 +462,12 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
   const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(order);
   const completeness = await refreshTaxRefundCompletenessForOrder(orderWithLogistics);
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
-  return serializeOrder({
+  return serializeTaxRefundOrderForActor({
     ...orderWithLogistics,
     taxRefundCompleteness: completeness || order.taxRefundCompleteness,
     taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
     taxRefundStatus: status,
-  });
+  }, actor);
 }
 
 export async function refreshTaxRefundCompletenessNow(request: AuditRequestLike, actor: ActorLike, orderId: string) {

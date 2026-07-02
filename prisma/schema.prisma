@@ -683,6 +683,29 @@ model ExportCustomsDeclarationItem {
   @@map("export_customs_declaration_items")
 }
 
+model CompanyHs {
+  id         String    @id @default(cuid())
+  hsCode     String    @unique @map("hs_code")
+  cnName     String    @map("cn_name")
+  enName     String?   @map("en_name")
+  unit       String
+  rebateRate Decimal   @map("rebate_rate") @db.Decimal(8, 4)
+  vatRate    Decimal   @default(0.13) @map("vat_rate") @db.Decimal(8, 4)
+  keywords   String?
+  remark     String?
+  isEnabled  Boolean   @default(true) @map("is_enabled")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  @@index([hsCode])
+  @@index([cnName])
+  @@index([enName])
+  @@index([isEnabled])
+  @@index([deletedAt])
+  @@map("company_hs")
+}
+
 model ExportTaxRebateRate {
   id            String    @id @default(cuid())
   hsCode        String    @map("hs_code")

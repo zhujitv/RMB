@@ -167,6 +167,7 @@
 .currencyTotalsList { composes: currencyTotalsList from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .currencyTotalsRow { composes: currencyTotalsRow from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .cargoColumn { composes: cargoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.checkboxLabel { composes: checkboxLabel from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .customerColumn { composes: customerColumn from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: customerColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .customerShippingHeader { composes: customerShippingHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: customerShippingHeader from "./styles/workspace-shell/responsive-typography.module.css"; }
 .customerShippingPanel { composes: customerShippingPanel from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
@@ -212,6 +213,7 @@
 .drawerFormActions { composes: drawerFormActions from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .drawerOverlay { composes: drawerOverlay from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: drawerOverlay from "./styles/workspace-shell/responsive-main.module.css"; }
 .emptyState { composes: emptyState from "./styles/workspace-shell/responsive-typography.module.css"; composes: emptyState from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.errorBanner { composes: errorBanner from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .exportInvoiceRemarkBlock { composes: exportInvoiceRemarkBlock from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .exportInvoiceRemarkBlockGrid { composes: exportInvoiceRemarkBlockGrid from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .exportInvoiceRemarkBlocks { composes: exportInvoiceRemarkBlocks from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
@@ -235,6 +237,7 @@
 .fileUploadSection { composes: fileUploadSection from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .fileUploadStatus { composes: fileUploadStatus from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .filterHint { composes: filterHint from "./styles/workspace-shell/responsive-typography.module.css"; composes: filterHint from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.inlineFilterGroup { composes: inlineFilterGroup from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .formMessage { composes: formMessage from "./styles/workspace-shell/auth-controls.module.css"; }
 .ghostButton { composes: ghostButton from "./styles/workspace-shell/auth-controls.module.css"; composes: ghostButton from "./styles/workspace-shell/responsive-typography.module.css"; }
 .headerActions { composes: headerActions from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
@@ -461,6 +464,7 @@
 .reportTabActive { composes: reportTabActive from "./styles/workspace-shell/lists-reports-costs.module.css"; }
 .reportTabs { composes: reportTabs from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: reportTabs from "./styles/workspace-shell/responsive-typography.module.css"; }
 .rowDetailButton { composes: rowDetailButton from "./styles/workspace-shell/manual-table.module.css"; composes: rowDetailButton from "./styles/workspace-shell/responsive-typography.module.css"; }
+.rowActionGroup { composes: rowActionGroup from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .saveStateBadge { composes: saveStateBadge from "./styles/workspace-shell/logistics-fees.module.css"; }
 .saveStateDirty { composes: saveStateDirty from "./styles/workspace-shell/logistics-fees.module.css"; }
 .saveStateSaved { composes: saveStateSaved from "./styles/workspace-shell/logistics-fees.module.css"; }
@@ -530,6 +534,7 @@
 .statusPill { composes: statusPill from "./styles/workspace-shell/manual-table.module.css"; composes: statusPill from "./styles/workspace-shell/responsive-main.module.css"; composes: statusPill from "./styles/workspace-shell/responsive-typography.module.css"; composes: statusPill from "./styles/workspace-shell/supplier-documents.module.css"; }
 .statusSuccess { composes: statusSuccess from "./styles/workspace-shell/manual-table.module.css"; }
 .statusWarning { composes: statusWarning from "./styles/workspace-shell/manual-table.module.css"; }
+.successBanner { composes: successBanner from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .subList { composes: subList from "./styles/workspace-shell/responsive-typography.module.css"; composes: subList from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .subListItem { composes: subListItem from "./styles/workspace-shell/responsive-main.module.css"; composes: subListItem from "./styles/workspace-shell/responsive-typography.module.css"; composes: subListItem from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .subModuleCard { composes: subModuleCard from "./styles/workspace-shell/responsive-typography.module.css"; composes: subModuleCard from "./styles/workspace-shell/shell-account.module.css"; }

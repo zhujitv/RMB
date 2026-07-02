@@ -25,6 +25,7 @@ import {
   notificationTemplateRows,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  taxRefundFeatureFormFromSettings,
 } from "./helpers";
 import {
   SecretField,
@@ -49,6 +50,8 @@ import type {
   OcrIntegrationSettings,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
+  TaxRefundFeatureForm,
+  TaxRefundFeatureSettings,
 } from "./types";
 
 export function BusinessEntitySettingsCard({
@@ -929,6 +932,99 @@ export function OcrIntegrationSettingsCard({
       </SettingsCard>
 
       <div className={styles.emptyState}>增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。</div>
+    </SettingsPage>
+  );
+}
+
+export function TaxRefundFeatureSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+}: {
+  settings: TaxRefundFeatureSettings | null;
+  form: TaxRefundFeatureForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: TaxRefundFeatureForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载退税计算设置</div>;
+  const currentForm = form || taxRefundFeatureFormFromSettings(settings);
+  const statusTone = currentForm.enabled ? "success" : "muted";
+  const statusLabel = currentForm.enabled ? "已启用" : "已关闭";
+
+  function setField<K extends keyof TaxRefundFeatureForm>(key: K, value: TaxRefundFeatureForm[K]) {
+    const next = { ...currentForm, [key]: value };
+    if (key === "enabled" && value === false) {
+      next.companyHsLibraryEnabled = false;
+      next.calculationEnabled = false;
+      next.addCompanyHsFromOcrEnabled = false;
+    }
+    onChange(next);
+  }
+
+  return (
+    <SettingsPage
+      title="退税计算"
+      description="控制企业HS编码库、退税计算和OCR结果加入企业库能力。关闭后服务端接口同步禁用。"
+      status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
+      onSubmit={onSubmit}
+      actions={(
+        <>
+          <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存"}</button>
+          <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复</button>
+        </>
+      )}
+    >
+      {message ? (
+        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
+          {message}
+        </div>
+      ) : null}
+
+      <SettingsCard title="模块开关" icon="税">
+        <div className={styles.settingsFieldGrid}>
+          <SettingsSwitch
+            label="启用退税计算功能"
+            tooltip="关闭后企业HS入口、退税计算和从OCR新增企业HS能力都会停用。"
+            checked={currentForm.enabled}
+            onChange={(value) => setField("enabled", value)}
+          />
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="子能力" icon="HS">
+        <SettingsSection title="启用范围">
+          <div className={styles.commissionDeductionGrid}>
+            <PermissionSelectItem
+              label="企业HS编码库"
+              description="控制基础资料中的企业HS维护入口和 company_hs API。"
+              checked={currentForm.enabled && currentForm.companyHsLibraryEnabled}
+              onChange={() => setField("companyHsLibraryEnabled", !currentForm.companyHsLibraryEnabled)}
+            />
+            <PermissionSelectItem
+              label="退税金额计算"
+              description="控制报关明细保存后的自动计算和手动重新计算。"
+              checked={currentForm.enabled && currentForm.calculationEnabled}
+              onChange={() => setField("calculationEnabled", !currentForm.calculationEnabled)}
+            />
+            <PermissionSelectItem
+              label="OCR新增企业HS"
+              description="控制退税详情中“新增到企业HS库”操作。"
+              checked={currentForm.enabled && currentForm.addCompanyHsFromOcrEnabled}
+              onChange={() => setField("addCompanyHsFromOcrEnabled", !currentForm.addCompanyHsFromOcrEnabled)}
+            />
+          </div>
+        </SettingsSection>
+      </SettingsCard>
     </SettingsPage>
   );
 }

@@ -7,6 +7,7 @@ import {
   logServerTiming,
   ok,
   publicUser,
+  readSafeTaxRefundFeatureFlags,
   ROLES,
   rolePermissions,
   roleScopeText,
@@ -93,10 +94,14 @@ export async function GET(request: NextRequest) {
     ), { path });
     userId = user?.id || "";
     role = user?.role || "";
+    const taxRefundFeatures = await timeServerStep("workbench-init-timing", "authMe.taxRefundFeatureFlags", () => (
+      readSafeTaxRefundFeatureFlags({ path, userId, role })
+    ), { path, userId, role });
     const basePayload = {
       user: publicUser(user),
       roles: ROLES,
       permissions: rolePermissions(user),
+      features: { taxRefund: taxRefundFeatures },
       scopeText: roleScopeText(user?.role),
     };
     if (basicOnly) {

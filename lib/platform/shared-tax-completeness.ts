@@ -789,14 +789,14 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
 export function derivedTaxRefundStatus(order: TaxOrderLike | null | undefined, documents: OrderDocumentLike[] = order?.documents || []) {
   const status = order?.taxRefundStatus || "NOT_READY";
   if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
-  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM"].includes(status)) return status;
+  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM", "HS_NOT_MAINTAINED"].includes(status)) return status;
   return taxDocumentCompleteness({ ...order, documents }).complete ? "READY" : "NOT_READY";
 }
 
 export function taxRefundStatusFromCompleteness(currentStatus: unknown, completeness: TaxRefundCompletenessSummary | null | undefined) {
   const status = String(currentStatus || "");
   if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
-  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM"].includes(status)) return status;
+  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM", "HS_NOT_MAINTAINED"].includes(status)) return status;
   if (completeness && !completeness.complete && status && !["READY", "NOT_READY"].includes(status)) return status;
   return completeness?.complete ? "READY" : "NOT_READY";
 }
