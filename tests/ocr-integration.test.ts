@@ -148,6 +148,56 @@ test("Aliyun invoice parser falls back to prism key value pairs without merging 
   assert.equal(result.extractedFields.productName, "*有色金属压延材*铝制工程结构件");
 });
 
+test("customs table parser reads Aliyun table cells by row and column", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractCustomsItemsFromAliyunTableData } = await import("../lib/platform/aliyun-customs-table-parser.ts");
+  const payload = {
+    SubImages: [
+      {
+        TableInfo: {
+          TableDetails: [
+            {
+              CellDetails: [
+                { CellContent: "项号", RowStart: 0, RowEnd: 0, ColumnStart: 0, ColumnEnd: 0 },
+                { CellContent: "商品编号", RowStart: 0, RowEnd: 0, ColumnStart: 1, ColumnEnd: 1 },
+                { CellContent: "商品名称及规格型号", RowStart: 0, RowEnd: 0, ColumnStart: 2, ColumnEnd: 2 },
+                { CellContent: "数量及单位", RowStart: 0, RowEnd: 0, ColumnStart: 3, ColumnEnd: 3 },
+                { CellContent: "总价", RowStart: 0, RowEnd: 0, ColumnStart: 4, ColumnEnd: 4 },
+                { CellContent: "币制", RowStart: 0, RowEnd: 0, ColumnStart: 5, ColumnEnd: 5 },
+                { CellContent: "1", RowStart: 1, RowEnd: 1, ColumnStart: 0, ColumnEnd: 0 },
+                { CellContent: "9403200000", RowStart: 1, RowEnd: 1, ColumnStart: 1, ColumnEnd: 1 },
+                { CellContent: "铝制工程结构件\n无品牌;无型号", RowStart: 1, RowEnd: 1, ColumnStart: 2, ColumnEnd: 2 },
+                { CellContent: "2866.71 千克", RowStart: 1, RowEnd: 1, ColumnStart: 3, ColumnEnd: 3 },
+                { CellContent: "86588.10", RowStart: 1, RowEnd: 1, ColumnStart: 4, ColumnEnd: 4 },
+                { CellContent: "美元", RowStart: 1, RowEnd: 1, ColumnStart: 5, ColumnEnd: 5 },
+                { CellContent: "2", RowStart: 2, RowEnd: 2, ColumnStart: 0, ColumnEnd: 0 },
+                { CellContent: "7610900000", RowStart: 2, RowEnd: 2, ColumnStart: 1, ColumnEnd: 1 },
+                { CellContent: "铝制栏杆配件", RowStart: 2, RowEnd: 2, ColumnStart: 2, ColumnEnd: 2 },
+                { CellContent: "千克 3904.95", RowStart: 2, RowEnd: 2, ColumnStart: 3, ColumnEnd: 3 },
+                { CellContent: "131554.34", RowStart: 2, RowEnd: 2, ColumnStart: 4, ColumnEnd: 4 },
+                { CellContent: "USD", RowStart: 2, RowEnd: 2, ColumnStart: 5, ColumnEnd: 5 },
+                { CellContent: "备注：代理报关委托协议随附", RowStart: 3, RowEnd: 3, ColumnStart: 0, ColumnEnd: 5 },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+  const items = extractCustomsItemsFromAliyunTableData(payload, { tradeTerm: "FOB" });
+  assert.equal(items.length, 2);
+  assert.deepEqual(items.map((item) => ({
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+    currency: item.currency,
+    totalAmount: item.totalAmount,
+  })), [
+    { productName: "铝制工程结构件", quantity: 2866.71, unit: "千克", currency: "USD", totalAmount: 86588.1 },
+    { productName: "铝制栏杆配件", quantity: 3904.95, unit: "千克", currency: "USD", totalAmount: 131554.34 },
+  ]);
+});
+
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.match(customsRecognition, /saveOcrRawResult/);
@@ -157,6 +207,8 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /ensureOcrFeatureEnabled/);
   assert.match(service, /OCR_FEATURE_DISABLED/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
-  assert.match(service, /CUSTOMS_TABLE_KEYS/);
+  assert.match(service, /RecognizeAllTextRequest/);
+  assert.match(service, /outputTable: true/);
+  assert.match(service, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
 });

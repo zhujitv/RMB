@@ -1,5 +1,7 @@
 import { Readable } from "node:stream";
 import AliyunOcrClient, {
+  RecognizeAllTextRequest,
+  RecognizeAllTextRequestAdvancedConfig,
   RecognizeGeneralStructureRequest,
   RecognizeInvoiceRequest,
 } from "@alicloud/ocr-api20210707";
@@ -21,6 +23,10 @@ import {
 import { assertJsonObject, codedError, isPlainRecord, nonEmpty, num } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
+import {
+  extractCustomsItemsFromAliyunTableData,
+  hasAliyunTableShape,
+} from "./aliyun-customs-table-parser";
 import { extractAliyunInvoiceRecognitionData } from "./aliyun-invoice-ocr-parser";
 
 type SettingsActor = Parameters<typeof assertRead>[0];
@@ -92,13 +98,6 @@ const CUSTOMS_DECLARATION_KEYS = [
   "商品名称",
   "数量",
   "单位",
-];
-
-const CUSTOMS_TABLE_KEYS = [
-  "商品名称及规格型号",
-  "数量及单位",
-  "总价",
-  "币制",
 ];
 
 const CUSTOMS_FIELD_ALIASES: Record<string, string[]> = {
@@ -369,9 +368,13 @@ function collectCustomsItemCandidates(value: unknown, output: CustomsDeclaration
     return output;
   }
   if (!isPlainRecord(value)) return output;
-  const fields = collectFieldsFromObject(value, CUSTOMS_ITEM_FIELD_ALIASES);
-  const item = normalizeCustomsItemFromFields(fields);
-  if (item) output.push(item);
+  if (!hasAliyunTableShape(value)) {
+    const fields = collectFieldsFromObject(value, CUSTOMS_ITEM_FIELD_ALIASES);
+    if (fields.productName && fields.quantity && fields.unit && fields.totalAmount) {
+      const item = normalizeCustomsItemFromFields(fields);
+      if (item) output.push(item);
+    }
+  }
   for (const itemValue of Object.values(value)) collectCustomsItemCandidates(itemValue, output, depth + 1);
   return output;
 }
@@ -533,27 +536,40 @@ async function recognizeAliyunCustomsDeclaration(
   const primaryText = collectText(primaryData).join("\n");
   const pdfText = primaryText || await extractPdfTextFromPdfBuffer(buffer, { requireText: options.requireText === true }).catch(() => "");
   const primaryFields = collectFieldsFromObject(primaryData, CUSTOMS_FIELD_ALIASES);
-  let items = collectCustomsItemCandidates(primaryData);
+  let items = extractCustomsItemsFromAliyunTableData(primaryData, {
+    tradeTerm: normalizeFieldValue(primaryFields.tradeTerm),
+    currency: normalizeCurrencyCode(primaryFields.currency),
+  });
+  if (!items.length) items = collectCustomsItemCandidates(primaryData);
   let tableRawJson: unknown = null;
   let tableError = "";
   if (!items.length) {
     try {
-      const tableResponse = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+      const tableResponse = await client.recognizeAllText(new RecognizeAllTextRequest({
         body: Readable.from(buffer),
-        keys: CUSTOMS_TABLE_KEYS,
+        type: "Advanced",
+        advancedConfig: new RecognizeAllTextRequestAdvancedConfig({
+          outputTable: true,
+          outputRow: true,
+          isLineLessTable: true,
+        }),
       }));
       tableRawJson = toPlainJson(tableResponse);
       const tableBody = isPlainRecord(tableRawJson) ? tableRawJson.body : tableResponse.body;
       const tableData = parseJsonMaybe(responseField(tableBody, "data"));
       const tableText = collectText(tableData).join("\n");
-      items = collectCustomsItemCandidates(tableData);
+      items = extractCustomsItemsFromAliyunTableData(tableData, {
+        tradeTerm: normalizeFieldValue(primaryFields.tradeTerm),
+        currency: normalizeCurrencyCode(primaryFields.currency),
+      });
+      if (!items.length) items = collectCustomsItemCandidates(tableData);
       const mergedTableText = [pdfText, tableText].filter(Boolean).join("\n");
       const parsedWithTable = mergeCustomsParsedData(mergedTableText, primaryFields, items);
       return {
         text: mergedTableText,
         source: "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE",
         provider: settings.provider,
-        apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_FALLBACK",
+        apiName: "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK",
         rawJson: { primary: primaryRawJson, table: tableRawJson },
         extractedFields: primaryFields,
         parsedJson: parsedWithTable,
