@@ -1,0 +1,599 @@
+import { parseCustomsDeclarationDetailText, type CustomsDeclarationItemFields } from "../customs-declaration-parser";
+import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
+import { readR2Object } from "../r2";
+import { parseVatInvoiceFields } from "./supplier-document-ocr";
+import {
+  FACTORY_SUPPLIER_COST_TYPES,
+  TAX_REFUND_SUPPLIER_TYPES,
+  runNonCriticalTask,
+} from "./shared-constants";
+import {
+  codedError,
+  nonEmpty,
+  num,
+} from "./shared-base-utils";
+import { canWrite, permissionError } from "./shared-access";
+import { writeAudit } from "./shared-audit";
+import { refreshTaxRefundCompletenessForOrder } from "./shared-tax-sync";
+import { includeOrderRelations } from "./shared-order-relations";
+import { roundMoney } from "./shared-order-calculations";
+
+type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
+type AuditRequestLike = Parameters<typeof writeAudit>[0];
+type InvoiceLine = {
+  documentId: string;
+  invoiceNo: string;
+  supplierId: string;
+  supplierName: string;
+  hsCode: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  amountWithoutTax: number;
+  taxRate: number;
+};
+type DeclarationGroup = {
+  key: string;
+  declarationNo: string;
+  hsCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  amountCny: number;
+  items: Array<{ id: string }>;
+};
+type InvoiceMatchResult = {
+  status: string;
+  reasons: string[];
+  supplierCount: number;
+  invoiceCount: number;
+  invoiceQuantity: number;
+  invoiceAmountWithoutTax: number;
+  invoiceVatRate: number;
+  differenceQuantity: number;
+  differenceAmount: number;
+  lines: InvoiceLine[];
+};
+
+const TAX_REFUND_AMOUNT_TOLERANCE_CNY = 1;
+const TAX_REFUND_AMOUNT_TOLERANCE_PERCENT = 0.005;
+const TAX_REFUND_OK_STATUSES = new Set(["整体匹配", "匹配", "多票合并匹配"]);
+
+function cleanText(value: unknown) {
+  return String(value || "").replace(/\u3000/g, " ").replace(/[ \t]+/g, " ").trim();
+}
+
+function normalizeComparable(value: unknown) {
+  return cleanText(value)
+    .toUpperCase()
+    .replace(/[（）()【】\[\]{}《》<>，,。.\s·\-_/\\:：;；"'“”‘’]/g, "");
+}
+
+function normalizedHsCode(value: unknown) {
+  return cleanText(value).replace(/\D/g, "");
+}
+
+function normalizedUnit(value: unknown) {
+  const text = cleanText(value).toUpperCase();
+  if (["PCS", "PC", "PIECE", "PIECES", "个", "只", "件"].includes(text)) return "个";
+  if (["SET", "SETS", "套"].includes(text)) return "套";
+  if (["KG", "KGS", "千克", "公斤"].includes(text)) return "千克";
+  if (["TON", "TONS", "吨"].includes(text)) return "吨";
+  return cleanText(value);
+}
+
+function toDate(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const date = new Date(`${text.slice(0, 10)}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function nullableDecimal(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? roundMoney(parsed) : null;
+}
+
+function rateNumber(value: unknown) {
+  const text = cleanText(value).replace("%", "");
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) return 0;
+  return parsed > 1 ? parsed / 100 : parsed;
+}
+
+function declarationItemKey(item: Pick<DeclarationGroup, "declarationNo" | "hsCode" | "productName" | "unit">) {
+  return [
+    cleanText(item.declarationNo),
+    normalizedHsCode(item.hsCode),
+    normalizeComparable(item.productName),
+    normalizedUnit(item.unit),
+  ].join("|");
+}
+
+function amountMatches(declarationAmount: number, invoiceAmount: number) {
+  const diff = Math.abs(declarationAmount - invoiceAmount);
+  return diff <= Math.max(TAX_REFUND_AMOUNT_TOLERANCE_CNY, Math.abs(declarationAmount) * TAX_REFUND_AMOUNT_TOLERANCE_PERCENT);
+}
+
+function buildDeclarationGroups(items: Array<{
+  id: string;
+  declarationNo: string;
+  hsCode: string;
+  productName: string;
+  unit?: string | null;
+  quantity?: unknown;
+  fobAmountCny?: unknown;
+}>) {
+  const groups = new Map<string, DeclarationGroup>();
+  for (const item of items) {
+    const groupInput = {
+      declarationNo: item.declarationNo,
+      hsCode: item.hsCode,
+      productName: item.productName,
+      unit: item.unit || "",
+    };
+    const key = declarationItemKey(groupInput);
+    const current = groups.get(key) || {
+      key,
+      ...groupInput,
+      quantity: 0,
+      amountCny: 0,
+      items: [],
+    };
+    current.quantity += num(item.quantity, 0);
+    current.amountCny += num(item.fobAmountCny, 0);
+    current.items.push({ id: item.id });
+    groups.set(key, current);
+  }
+  return groups;
+}
+
+function latestTask<T extends { createdAt?: Date | string | null }>(tasks: T[] = []) {
+  return [...tasks].sort((a, b) => new Date(String(b.createdAt || 0)).getTime() - new Date(String(a.createdAt || 0)).getTime())[0] || null;
+}
+
+function invoiceLineFromDocument(document: Prisma.OrderDocumentGetPayload<{
+  include: { supplier: true; cost: { include: { supplier: true } }; ocrTasks: true };
+}>): InvoiceLine | null {
+  const task = latestTask(document.ocrTasks || []);
+  const fields = task?.resultJson && typeof task.resultJson === "object" && !Array.isArray(task.resultJson)
+    ? task.resultJson as Record<string, unknown>
+    : null;
+  const parsed = (fields || (task?.rawText ? parseVatInvoiceFields(task.rawText) : null)) as Record<string, unknown> | null;
+  if (!parsed) return null;
+  const supplier = document.supplier || document.cost?.supplier || null;
+  return {
+    documentId: document.id,
+    invoiceNo: cleanText(parsed.invoiceNo),
+    supplierId: document.supplierId || document.cost?.supplierId || "",
+    supplierName: supplier?.supplierName || document.cost?.supplierNameSnapshot || document.cost?.vendorName || "",
+    hsCode: normalizedHsCode(parsed.hsCode),
+    productName: cleanText(parsed.productName),
+    quantity: num(parsed.quantity, 0),
+    unit: normalizedUnit(parsed.unit),
+    amountWithoutTax: num(parsed.amountWithoutTax, 0),
+    taxRate: rateNumber(parsed.taxRate),
+  };
+}
+
+async function supplierInvoiceLinesForOrder(orderId: string): Promise<InvoiceLine[]> {
+  const documents = await prisma.orderDocument.findMany({
+    where: {
+      orderId,
+      deletedAt: null,
+      documentType: "SUPPLIER_INVOICE",
+      relatedModule: "SUPPLIER",
+      uploadStatus: "SUCCESS",
+    },
+    include: {
+      supplier: true,
+      cost: { include: { supplier: true } },
+      ocrTasks: { orderBy: [{ createdAt: "desc" }] },
+    },
+  });
+  return documents.map(invoiceLineFromDocument).filter((line): line is InvoiceLine => Boolean(line && line.productName));
+}
+
+function matchInvoices(group: DeclarationGroup, invoiceLines: InvoiceLine[], supplierCount: number): InvoiceMatchResult {
+  const sameHs = invoiceLines.filter((line) => !line.hsCode || !group.hsCode || line.hsCode === normalizedHsCode(group.hsCode));
+  const sameName = sameHs.filter((line) => normalizeComparable(line.productName) === normalizeComparable(group.productName));
+  const sameUnit = sameName.filter((line) => normalizedUnit(line.unit) === normalizedUnit(group.unit));
+  const lines = sameUnit;
+  const invoiceQuantity = roundMoney(lines.reduce((sum, line) => sum + line.quantity, 0));
+  const invoiceAmountWithoutTax = roundMoney(lines.reduce((sum, line) => sum + line.amountWithoutTax, 0));
+  const invoiceVatRate = lines.find((line) => line.taxRate > 0)?.taxRate || 0;
+  const reasons: string[] = [];
+  const invoiceCount = new Set(lines.map((line) => line.documentId)).size;
+  const matchedSupplierCount = new Set(lines.map((line) => line.supplierId).filter(Boolean)).size;
+  if (!invoiceLines.length) reasons.push("发票缺失");
+  else if (!sameHs.length) reasons.push("HS编码不一致");
+  else if (!sameName.length) reasons.push("品名不一致");
+  else if (!sameUnit.length) reasons.push("单位不一致");
+  if (lines.length && Math.abs(invoiceQuantity - group.quantity) > 0.0001) reasons.push("数量不一致");
+  if (lines.length && !amountMatches(group.amountCny, invoiceAmountWithoutTax)) reasons.push("金额异常");
+  if (supplierCount > 0 && matchedSupplierCount < supplierCount) reasons.push("部分供应商未上传");
+  const status = reasons[0] || (invoiceCount > 1 ? "多票合并匹配" : "整体匹配");
+  return {
+    status,
+    reasons,
+    supplierCount,
+    invoiceCount,
+    invoiceQuantity,
+    invoiceAmountWithoutTax,
+    invoiceVatRate,
+    differenceQuantity: roundMoney(invoiceQuantity - group.quantity),
+    differenceAmount: roundMoney(invoiceAmountWithoutTax - group.amountCny),
+    lines,
+  };
+}
+
+async function supplierCountForOrder(orderId: string) {
+  const costs = await prisma.orderCost.findMany({
+    where: {
+      orderId,
+      deletedAt: null,
+      supplierId: { not: null },
+      costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+      supplier: { is: { supplierType: { in: TAX_REFUND_SUPPLIER_TYPES } } },
+    },
+    select: { supplierId: true },
+  });
+  return new Set(costs.map((cost) => cost.supplierId).filter(Boolean)).size;
+}
+
+async function findRebateRate(hsCode: string, declarationDate: Date | null) {
+  if (!hsCode || !declarationDate) return null;
+  return prisma.exportTaxRebateRate.findFirst({
+    where: {
+      hsCode,
+      effectiveFrom: { lte: declarationDate },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: declarationDate } }],
+    },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+async function duplicateInvoiceUseReasons(orderId: string, lines: InvoiceLine[]) {
+  const documentIds = lines.map((line) => line.documentId).filter(Boolean);
+  if (!documentIds.length) return [];
+  const existing = await prisma.exportTaxRefundCalculation.findMany({
+    where: {
+      orderId: { not: orderId },
+      deletedAt: null,
+    },
+    select: { id: true, invoiceMatchJson: true },
+    take: 500,
+  });
+  const duplicated = existing.some((row) => {
+    const record = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
+      ? row.invoiceMatchJson as Record<string, unknown>
+      : {};
+    const usedIds = Array.isArray(record.documentIds) ? record.documentIds.map((value) => String(value || "")) : [];
+    return documentIds.some((documentId) => usedIds.includes(documentId));
+  });
+  return duplicated ? ["发票重复使用"] : [];
+}
+
+function serializeCalculationRow(row: Prisma.ExportTaxRefundCalculationGetPayload<{ include: { declarationItem: true; rate: true } }>) {
+  const match = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
+    ? row.invoiceMatchJson as Record<string, unknown>
+    : {};
+  return {
+    id: row.id,
+    declarationItemId: row.declarationItemId,
+    declarationNo: row.declarationNo,
+    hsCode: row.hsCode,
+    productName: row.productName,
+    declarationDate: row.declarationDate,
+    fobCurrency: row.fobCurrency || "",
+    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
+    exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
+    declarationAmountCny: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
+    rebateRate: row.rebateRate == null ? null : Number(row.rebateRate),
+    vatRate: row.vatRate == null ? null : Number(row.vatRate),
+    theoreticalRefundAmount: row.theoreticalRefundAmount == null ? null : Number(row.theoreticalRefundAmount),
+    supplierInvoiceAmountWithoutTax: row.supplierInvoiceAmountWithoutTax == null ? null : Number(row.supplierInvoiceAmountWithoutTax),
+    availableInputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
+    estimatedRefundAmount: row.estimatedRefundAmount == null ? null : Number(row.estimatedRefundAmount),
+    invoiceMatchStatus: row.invoiceMatchStatus,
+    calculationStatus: row.calculationStatus,
+    abnormalReasons: Array.isArray(row.abnormalReasons) ? row.abnormalReasons : [],
+    invoiceMatch: match,
+  };
+}
+
+export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclarationItemGetPayload<{}>) {
+  return {
+    id: row.id,
+    documentId: row.documentId || "",
+    declarationNo: row.declarationNo,
+    declarationDate: row.declarationDate,
+    exportDate: row.exportDate,
+    hsCode: row.hsCode,
+    productName: row.productName,
+    quantity: row.quantity == null ? null : Number(row.quantity),
+    unit: row.unit || "",
+    tradeTerm: row.tradeTerm || "",
+    currency: row.currency || "",
+    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
+    exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
+    fobAmountCny: row.fobAmountCny == null ? null : Number(row.fobAmountCny),
+    confirmationStatus: row.confirmationStatus,
+    source: row.source,
+    sortOrder: row.sortOrder,
+  };
+}
+
+export async function extractCustomsDeclarationItemsFromDocument(request: AuditRequestLike, actor: ActorLike, orderId: string, documentId: string) {
+  if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限识别退税计算资料", 403);
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
+  });
+  if (!document?.storageKey) throw codedError("未找到可识别的报关单 PDF。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
+  const fileBuffer = await readR2Object(document.storageKey);
+  const text = fileBuffer ? await import("../customs-declaration-parser").then((module) => module.extractPdfTextFromPdfBuffer(fileBuffer, { requireText: true })) : "";
+  const parsed = parseCustomsDeclarationDetailText(text);
+  const actorId = nonEmpty(actor?.id);
+  await prisma.$transaction(async (tx) => {
+    await tx.exportCustomsDeclarationItem.updateMany({
+      where: { orderId, documentId, deletedAt: null, confirmationStatus: "PENDING_CONFIRMATION" },
+      data: { deletedAt: new Date() },
+    });
+    for (const [index, item] of parsed.items.entries()) {
+      await tx.exportCustomsDeclarationItem.create({
+        data: {
+          orderId,
+          documentId,
+          declarationNo: parsed.customsDeclarationNo || "",
+          declarationDate: toDate(parsed.customsDeclarationDate),
+          exportDate: toDate(parsed.exportDate),
+          hsCode: normalizedHsCode(item.hsCode),
+          productName: item.productName,
+          quantity: item.quantity || null,
+          unit: item.unit || null,
+          tradeTerm: item.tradeTerm || parsed.tradeTerm || null,
+          currency: item.currency || parsed.currency || null,
+          fobAmount: item.fobAmount || null,
+          exchangeRate: null,
+          fobAmountCny: null,
+          rawJson: item as unknown as Prisma.InputJsonValue,
+          confirmationStatus: "PENDING_CONFIRMATION",
+          source: "OCR_PDF",
+          sortOrder: index,
+        },
+      });
+    }
+    await tx.receivableOrder.update({
+      where: { id: orderId },
+      data: {
+        customsDeclarationNo: parsed.customsDeclarationNo || undefined,
+        customsDeclarationDate: toDate(parsed.customsDeclarationDate) || undefined,
+        customsParsedAt: new Date(),
+        customsParseStatus: parsed.customsDeclarationParseStatus,
+        customsParseMessage: parsed.items.length
+          ? `${parsed.customsDeclarationParseMessage}\n已识别报关商品明细 ${parsed.items.length} 条，请确认。`
+          : `${parsed.customsDeclarationParseMessage}\n未识别到报关商品明细，请人工录入。`,
+        customsDeclarationParseSource: "AUTO_PDF_TEXT",
+        taxRefundStatus: parsed.items.length ? "CUSTOMS_RECOGNIZED_PENDING_CONFIRM" : "PROBLEM",
+        updatedById: actorId || undefined,
+      },
+    });
+  });
+  await runNonCriticalTask("报关商品明细OCR日志写入", () => writeAudit(
+    request,
+    actor,
+    "识别报关商品明细",
+    "export_customs_declaration_items",
+    orderId,
+    null,
+    { orderId, documentId, itemCount: parsed.items.length, parsed },
+  ), { context: { orderId, documentId } });
+  await refreshOrderCompleteness(orderId);
+  return getExportTaxRefundCalculationSummary(orderId);
+}
+
+export async function saveCustomsDeclarationItems(request: AuditRequestLike, actor: ActorLike, orderId: string, items: Array<Partial<CustomsDeclarationItemFields> & { id?: string; declarationNo?: string; declarationDate?: string; exportDate?: string; exchangeRate?: number }>) {
+  if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限确认报关商品明细", 403);
+  const actorId = nonEmpty(actor?.id);
+  if (!actorId) throw permissionError("请先登录", 401);
+  const before = await prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }] });
+  await prisma.$transaction(async (tx) => {
+    for (const [index, item] of items.entries()) {
+      const exchangeRate = num(item.exchangeRate, 0);
+      const fobAmount = num(item.fobAmount, 0);
+      const data = {
+        declarationNo: cleanText(item.declarationNo),
+        declarationDate: toDate(item.declarationDate),
+        exportDate: toDate(item.exportDate),
+        hsCode: normalizedHsCode(item.hsCode),
+        productName: cleanText(item.productName),
+        quantity: num(item.quantity, 0) || null,
+        unit: cleanText(item.unit) || null,
+        tradeTerm: cleanText(item.tradeTerm) || null,
+        currency: cleanText(item.currency).toUpperCase() || null,
+        fobAmount: fobAmount || null,
+        exchangeRate: exchangeRate || null,
+        fobAmountCny: fobAmount && exchangeRate ? roundMoney(fobAmount * exchangeRate) : null,
+        confirmationStatus: "CONFIRMED",
+        source: "MANUAL_CONFIRMED",
+        sortOrder: index,
+        confirmedById: actorId,
+        confirmedAt: new Date(),
+      };
+      if (item.id) {
+        await tx.exportCustomsDeclarationItem.update({ where: { id: item.id }, data });
+      } else {
+        await tx.exportCustomsDeclarationItem.create({ data: { ...data, orderId } });
+      }
+    }
+    await tx.receivableOrder.update({ where: { id: orderId }, data: { taxRefundStatus: "REBATE_RATE_MATCHED", updatedById: actorId } });
+  });
+  await writeAudit(request, actor, "人工确认报关商品明细", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
+  return recalculateExportTaxRefund(request, actor, orderId);
+}
+
+async function refreshOrderCompleteness(orderId: string) {
+  const order = await prisma.receivableOrder.findUnique({ where: { id: orderId }, include: includeOrderRelations() });
+  if (!order) return null;
+  return refreshTaxRefundCompletenessForOrder(order);
+}
+
+export async function recalculateExportTaxRefund(request: AuditRequestLike, actor: ActorLike, orderId: string) {
+  if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限重新计算退税金额", 403);
+  const actorId = nonEmpty(actor?.id);
+  const [items, invoiceLines, supplierCount] = await Promise.all([
+    prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
+    supplierInvoiceLinesForOrder(orderId),
+    supplierCountForOrder(orderId),
+  ]);
+  if (!items.length) throw codedError("未找到报关商品明细，请先上传并确认报关单。", 400, "CUSTOMS_DECLARATION_ITEMS_REQUIRED");
+  const declarationGroups = buildDeclarationGroups(items);
+  const results: Array<Prisma.ExportTaxRefundCalculationGetPayload<{ include: { declarationItem: true; rate: true } }>> = [];
+  for (const item of items) {
+    const declarationDate = item.declarationDate || null;
+    const declarationAmountCny = num(item.fobAmountCny, 0) || (num(item.fobAmount, 0) && num(item.exchangeRate, 0) ? roundMoney(num(item.fobAmount, 0) * num(item.exchangeRate, 0)) : 0);
+    const rate = await findRebateRate(normalizedHsCode(item.hsCode), declarationDate);
+    const group = declarationGroups.get(declarationItemKey({
+      declarationNo: item.declarationNo,
+      hsCode: item.hsCode,
+      productName: item.productName,
+      unit: item.unit || "",
+    }));
+    const match = matchInvoices(group || {
+      key: "",
+      declarationNo: item.declarationNo,
+      hsCode: item.hsCode,
+      productName: item.productName,
+      unit: item.unit || "",
+      quantity: num(item.quantity, 0),
+      amountCny: declarationAmountCny,
+      items: [{ id: item.id }],
+    }, invoiceLines, supplierCount);
+    const duplicateReasons = await duplicateInvoiceUseReasons(orderId, match.lines);
+    const rebateRate = rate ? num(rate.rebateRate, 0) : 0;
+    const vatRate = rate ? num(rate.vatRate, 0) : (match.invoiceVatRate || 0);
+    const theoreticalRefundAmount = declarationAmountCny && rebateRate ? roundMoney(declarationAmountCny * rebateRate) : 0;
+    const availableInputVatAmount = match.invoiceAmountWithoutTax && vatRate ? roundMoney(match.invoiceAmountWithoutTax * vatRate) : 0;
+    const estimatedRefundAmount = theoreticalRefundAmount && availableInputVatAmount ? Math.min(theoreticalRefundAmount, availableInputVatAmount) : 0;
+    const abnormalReasons = [
+      ...(!normalizedHsCode(item.hsCode) ? ["HS编码缺失"] : []),
+      ...(normalizedHsCode(item.hsCode) && !rate ? ["退税率缺失"] : []),
+      ...(rate && rebateRate <= 0 ? ["退税率为0"] : []),
+      ...(!num(item.fobAmount, 0) && !declarationAmountCny ? ["报关金额缺失"] : []),
+      ...(!num(item.exchangeRate, 0) && cleanText(item.currency).toUpperCase() !== "CNY" ? ["汇率缺失"] : []),
+      ...match.reasons,
+      ...duplicateReasons,
+      ...(theoreticalRefundAmount > 0 && availableInputVatAmount > 0 && availableInputVatAmount < theoreticalRefundAmount ? ["发票金额不足"] : []),
+    ].filter((reason, index, arr) => reason && arr.indexOf(reason) === index);
+    const calculationStatus = abnormalReasons.length ? "资料异常" : "退税金额已计算";
+    const invoiceMatchJson = {
+      supplierCount: match.supplierCount,
+      invoiceCount: match.invoiceCount,
+      invoiceQuantity: match.invoiceQuantity,
+      invoiceAmountWithoutTax: match.invoiceAmountWithoutTax,
+      differenceQuantity: match.differenceQuantity,
+      differenceAmount: match.differenceAmount,
+      documentIds: match.lines.map((line) => line.documentId),
+      lines: match.lines,
+    };
+    const saved = await prisma.exportTaxRefundCalculation.upsert({
+      where: { declarationItemId: item.id },
+      create: {
+        orderId,
+        declarationItemId: item.id,
+        rateId: rate?.id || null,
+        declarationNo: item.declarationNo,
+        hsCode: normalizedHsCode(item.hsCode),
+        productName: item.productName,
+        declarationDate,
+        fobCurrency: item.currency,
+        fobAmount: nullableDecimal(item.fobAmount),
+        exchangeRate: nullableDecimal(item.exchangeRate),
+        declarationAmountCny: declarationAmountCny || null,
+        rebateRate: rate ? rebateRate : null,
+        vatRate: vatRate || null,
+        theoreticalRefundAmount: theoreticalRefundAmount || null,
+        supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
+        availableInputVatAmount: availableInputVatAmount || null,
+        estimatedRefundAmount: estimatedRefundAmount || null,
+        invoiceMatchStatus: match.status,
+        calculationStatus,
+        abnormalReasons: abnormalReasons as Prisma.InputJsonValue,
+        invoiceMatchJson: invoiceMatchJson as Prisma.InputJsonValue,
+        calculatedAt: new Date(),
+        calculatedById: actorId || null,
+      },
+      update: {
+        rateId: rate?.id || null,
+        declarationNo: item.declarationNo,
+        hsCode: normalizedHsCode(item.hsCode),
+        productName: item.productName,
+        declarationDate,
+        fobCurrency: item.currency,
+        fobAmount: nullableDecimal(item.fobAmount),
+        exchangeRate: nullableDecimal(item.exchangeRate),
+        declarationAmountCny: declarationAmountCny || null,
+        rebateRate: rate ? rebateRate : null,
+        vatRate: vatRate || null,
+        theoreticalRefundAmount: theoreticalRefundAmount || null,
+        supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
+        availableInputVatAmount: availableInputVatAmount || null,
+        estimatedRefundAmount: estimatedRefundAmount || null,
+        invoiceMatchStatus: match.status,
+        calculationStatus,
+        abnormalReasons: abnormalReasons as Prisma.InputJsonValue,
+        invoiceMatchJson: invoiceMatchJson as Prisma.InputJsonValue,
+        calculatedAt: new Date(),
+        calculatedById: actorId || null,
+        deletedAt: null,
+      },
+      include: { declarationItem: true, rate: true },
+    });
+    results.push(saved);
+  }
+  const hasException = results.some((row) => row.calculationStatus === "资料异常");
+  const hasInvoiceMatched = results.every((row) => TAX_REFUND_OK_STATUSES.has(row.invoiceMatchStatus));
+  const hasRateMatched = results.every((row) => row.rateId);
+  const nextStatus = hasException
+    ? "PROBLEM"
+    : results.every((row) => row.calculationStatus === "退税金额已计算")
+      ? "REFUND_CALCULATED"
+      : hasInvoiceMatched
+        ? "SUPPLIER_INVOICE_MATCHED"
+        : hasRateMatched
+          ? "REBATE_RATE_MATCHED"
+          : "CUSTOMS_RECOGNIZED_PENDING_CONFIRM";
+  await prisma.receivableOrder.update({ where: { id: orderId }, data: { taxRefundStatus: nextStatus, updatedById: actorId || undefined } });
+  await writeAudit(request, actor, "重新计算退税金额", "export_tax_refund_calculations", orderId, null, {
+    orderId,
+    status: nextStatus,
+    estimatedRefundAmount: roundMoney(results.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0)),
+    exceptionCount: results.filter((row) => row.calculationStatus === "资料异常").length,
+  }).catch(() => null);
+  await refreshOrderCompleteness(orderId);
+  return getExportTaxRefundCalculationSummary(orderId);
+}
+
+export async function getExportTaxRefundCalculationSummary(orderId: string) {
+  const [items, calculations] = await Promise.all([
+    prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
+    prisma.exportTaxRefundCalculation.findMany({
+      where: { orderId, deletedAt: null },
+      include: { declarationItem: true, rate: true },
+      orderBy: [{ createdAt: "asc" }],
+    }),
+  ]);
+  const rows = calculations.map(serializeCalculationRow);
+  const estimatedRefundAmount = roundMoney(rows.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0));
+  const abnormalReasons = rows.flatMap((row) => row.abnormalReasons.map((reason) => String(reason || ""))).filter(Boolean);
+  return {
+    customsDeclarationItems: items.map(serializeCustomsDeclarationItem),
+    exportTaxRefundCalculations: rows,
+    exportTaxRefundSummary: {
+      estimatedRefundAmount,
+      calculationStatus: abnormalReasons.length ? "资料异常" : rows.length ? "退税金额已计算" : "",
+      abnormalReasons: abnormalReasons.filter((reason, index, arr) => arr.indexOf(reason) === index),
+    },
+  };
+}

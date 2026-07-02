@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import {
   normalizeCustomsDate,
+  parseCustomsDeclarationDetailText,
   parseCustomsDeclarationText,
 } from "../lib/customs-declaration-parser.ts";
 
@@ -103,6 +104,32 @@ test("returns failed status without blocking upload when fields are absent", () 
 test("normalizes valid declaration dates and rejects invalid dates", () => {
   assert.equal(normalizeCustomsDate("2024年2月29日"), "2024-02-29");
   assert.equal(normalizeCustomsDate("20230229"), "");
+});
+
+test("parses customs declaration item detail for tax refund calculation", () => {
+  const result = parseCustomsDeclarationDetailText(`
+    报关单号：223120241234567890
+    申报日期：2024-05-12
+    出口日期：2024-05-10
+    成交方式：FOB
+    币制：美元
+    1 9403609990 木制餐桌 120 个 USD 3600.00
+    2 9401619000 餐椅 240 个 FOB USD 4800.00
+  `);
+
+  assert.equal(result.exportDate, "2024-05-10");
+  assert.equal(result.tradeTerm, "FOB");
+  assert.equal(result.currency, "USD");
+  assert.equal(result.items.length, 2);
+  assert.deepEqual(result.items[0], {
+    hsCode: "9403609990",
+    productName: "木制餐桌",
+    quantity: 120,
+    unit: "个",
+    tradeTerm: "FOB",
+    currency: "USD",
+    fobAmount: 3600,
+  });
 });
 
 test("parser source does not reference bundled fixture documents", async () => {

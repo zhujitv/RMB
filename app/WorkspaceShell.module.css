@@ -520,6 +520,9 @@
 .statusBadgeSuccess { composes: statusBadgeSuccess from "./styles/workspace-shell/shell-account.module.css"; }
 .statusColumn { composes: statusColumn from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: statusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .statusDanger { composes: statusDanger from "./styles/workspace-shell/manual-table.module.css"; }
+.rowDanger {
+  background: rgba(220, 38, 38, 0.08);
+}
 .statusIcon { composes: statusIcon from "./styles/workspace-shell/lists-reports-costs.module.css"; }
 .statusInfo { composes: statusInfo from "./styles/workspace-shell/manual-table.module.css"; }
 .statusMuted { composes: statusMuted from "./styles/workspace-shell/manual-table.module.css"; }

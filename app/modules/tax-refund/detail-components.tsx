@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { DetailField, DismissibleLayer } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
 import { canDeleteTaxDocument, canRecognizeTaxCustoms, canUploadTaxDocument, factoryCostOrdinal, factorySupplierCosts, groupDocuments, latestTaxDocument, logisticsInvoiceCosts, taxDocumentTargetKey, taxRefundBillOfLadingText, taxTargetDomId, uploadScopeKey } from "./helpers";
-import { TAX_EXPORT_UPLOAD_TYPES, type DocumentCompleteness, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
+import { TAX_EXPORT_UPLOAD_TYPES, type CustomsDeclarationItem, type DocumentCompleteness, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
 import {
   CustomsRecognitionForm,
   CustomsUploadCard,
@@ -23,6 +24,7 @@ export function TaxRefundDetailDrawer({
   submittingTax,
   cancelingArchive,
   refreshingCompleteness,
+  calculatingTaxRefund,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
@@ -35,6 +37,8 @@ export function TaxRefundDetailDrawer({
   onSubmitTaxRefund,
   onCancelArchive,
   onRefreshCompleteness,
+  onRecalculateTaxRefund,
+  onSaveCustomsDeclarationItems,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -56,6 +60,7 @@ export function TaxRefundDetailDrawer({
   submittingTax: boolean;
   cancelingArchive: boolean;
   refreshingCompleteness: boolean;
+  calculatingTaxRefund: boolean;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
@@ -68,6 +73,8 @@ export function TaxRefundDetailDrawer({
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
   onRefreshCompleteness: () => void;
+  onRecalculateTaxRefund: () => void;
+  onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
@@ -111,6 +118,11 @@ export function TaxRefundDetailDrawer({
                 {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
               </button>
             ) : null}
+            {canRefreshCompleteness ? (
+              <button className={styles.secondaryButton} type="button" disabled={calculatingTaxRefund || dismissLocked} onClick={onRecalculateTaxRefund}>
+                {calculatingTaxRefund ? "计算中..." : "重新计算退税"}
+              </button>
+            ) : null}
             {readOnly ? (
               <button className={styles.secondaryButton} type="button" disabled={cancelingArchive} onClick={onCancelArchive}>
                 {cancelingArchive ? "处理中..." : "取消归档"}
@@ -150,6 +162,8 @@ export function TaxRefundDetailDrawer({
             onOpenDomesticLogistics={onOpenDomesticLogistics}
             currentUserRole={currentUserRole}
             canWriteDocuments={canWriteDocuments}
+            calculatingTaxRefund={calculatingTaxRefund}
+            onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
           />
         </div>
         </>
@@ -245,6 +259,8 @@ function TaxRefundDetailPanel({
   onOpenDomesticLogistics,
   currentUserRole,
   canWriteDocuments,
+  calculatingTaxRefund,
+  onSaveCustomsDeclarationItems,
 }: {
   detail: TaxRefundDetail | null;
   loading: boolean;
@@ -266,6 +282,8 @@ function TaxRefundDetailPanel({
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
+  calculatingTaxRefund: boolean;
+  onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
 }) {
   if (loading) return <div className={styles.emptyState}>资料详情加载中...</div>;
   if (error) return <div className={styles.inlineError}>{error}</div>;
@@ -373,6 +391,12 @@ function TaxRefundDetailPanel({
           onSaved={onCustomsSaved}
           onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
         />
+        <TaxRefundCalculationPanel
+          detail={detail}
+          readOnly={readOnly || currentUserRole !== "管理员"}
+          saving={calculatingTaxRefund}
+          onSaveItems={onSaveCustomsDeclarationItems}
+        />
         <div className={`${styles.documentGroupCard} ${styles.fileUploadSection}`}>
           <strong>出口资料上传</strong>
           <div className={styles.fileUploadGrid}>
@@ -475,6 +499,162 @@ function TaxRefundDetailPanel({
             />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function moneyText(value: unknown) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount !== 0 ? amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : "-";
+}
+
+function percentText(value: unknown) {
+  const rate = Number(value || 0);
+  return Number.isFinite(rate) && rate > 0 ? `${(rate * 100).toFixed(2)}%` : "-";
+}
+
+function inputNumberValue(value: unknown) {
+  return value == null || value === "" ? "" : String(value);
+}
+
+function TaxRefundCalculationPanel({
+  detail,
+  readOnly,
+  saving,
+  onSaveItems,
+}: {
+  detail: TaxRefundDetail;
+  readOnly: boolean;
+  saving: boolean;
+  onSaveItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+}) {
+  const [items, setItems] = useState<CustomsDeclarationItem[]>(detail.customsDeclarationItems || []);
+  const calculations = detail.exportTaxRefundCalculations || [];
+  const summary = detail.exportTaxRefundSummary || {};
+  useEffect(() => {
+    setItems(detail.customsDeclarationItems || []);
+  }, [detail.id, detail.customsDeclarationItems]);
+
+  function updateItem(index: number, patch: Partial<CustomsDeclarationItem>) {
+    setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }
+
+  function addItem() {
+    setItems((current) => [
+      ...current,
+      {
+        declarationNo: detail.customsDeclarationNo || "",
+        declarationDate: detail.customsDeclarationDate || "",
+        hsCode: "",
+        productName: "",
+        quantity: null,
+        unit: "",
+        tradeTerm: "FOB",
+        currency: detail.currency || "",
+        fobAmount: null,
+        exchangeRate: null,
+      },
+    ]);
+  }
+
+  const hasExceptions = Boolean(summary.abnormalReasons?.length);
+  return (
+    <div className={styles.documentGroupCard} id={taxTargetDomId("tax-refund-calculation")}>
+      <div className={styles.taxTransportSummaryHeader}>
+        <strong>退税计算</strong>
+        <span className={`${styles.statusPill} ${hasExceptions ? styles.statusDanger : summary.estimatedRefundAmount ? styles.statusSuccess : styles.statusWarning}`}>
+          {summary.calculationStatus || "待计算"}
+        </span>
+      </div>
+      <div className={styles.detailGrid}>
+        <DetailField label="预计退税收入" value={`CNY ${moneyText(summary.estimatedRefundAmount)}`} />
+        <DetailField label="异常原因" value={summary.abnormalReasons?.length ? summary.abnormalReasons.join(" / ") : "无"} wide />
+      </div>
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead>
+            <tr>
+              <th>报关单号</th>
+              <th>HS编码</th>
+              <th>报关品名</th>
+              <th>报关数量</th>
+              <th>单位</th>
+              <th>币种</th>
+              <th>FOB金额</th>
+              <th>申报汇率</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length ? items.map((item, index) => (
+              <tr key={item.id || `new-${index}`}>
+                <td><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
+                <td><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
+                <td><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
+                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} /></td>
+                <td><input disabled={readOnly} value={item.unit || ""} onChange={(event) => updateItem(index, { unit: event.target.value })} /></td>
+                <td><input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} /></td>
+                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} /></td>
+                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
+              </tr>
+            )) : (
+              <tr><td colSpan={8}><div className={styles.emptyState}>暂无报关商品明细，上传报关单 PDF 后自动识别，管理员也可手工新增。</div></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {!readOnly ? (
+        <div className={styles.taxTransportSummaryHeader}>
+          <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button>
+          <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={() => onSaveItems(detail.id, items)}>
+            {saving ? "保存中..." : "保存确认并计算"}
+          </button>
+        </div>
+      ) : null}
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead>
+            <tr>
+              <th>报关单号</th>
+              <th>HS编码</th>
+              <th>报关品名</th>
+              <th>报关金额</th>
+              <th>关联供应商数量</th>
+              <th>关联发票数量</th>
+              <th>发票数量合计</th>
+              <th>发票金额合计</th>
+              <th>匹配状态</th>
+              <th>差异数量</th>
+              <th>差异金额</th>
+              <th>退税率</th>
+              <th>预计退税金额</th>
+            </tr>
+          </thead>
+          <tbody>
+            {calculations.length ? calculations.map((row) => {
+              const abnormal = row.calculationStatus === "资料异常" || Boolean(row.abnormalReasons?.length);
+              return (
+                <tr key={row.id || row.declarationItemId} className={abnormal ? styles.rowDanger : ""}>
+                  <td>{row.declarationNo || "-"}</td>
+                  <td>{row.hsCode || "-"}</td>
+                  <td>{row.productName || "-"}</td>
+                  <td>{moneyText(row.declarationAmountCny)}</td>
+                  <td>{row.invoiceMatch?.supplierCount ?? "-"}</td>
+                  <td>{row.invoiceMatch?.invoiceCount ?? "-"}</td>
+                  <td>{moneyText(row.invoiceMatch?.invoiceQuantity)}</td>
+                  <td>{moneyText(row.invoiceMatch?.invoiceAmountWithoutTax)}</td>
+                  <td><span className={`${styles.statusPill} ${abnormal ? styles.statusDanger : styles.statusSuccess}`}>{row.invoiceMatchStatus || "-"}</span></td>
+                  <td>{moneyText(row.invoiceMatch?.differenceQuantity)}</td>
+                  <td>{moneyText(row.invoiceMatch?.differenceAmount)}</td>
+                  <td>{percentText(row.rebateRate)}</td>
+                  <td>{moneyText(row.estimatedRefundAmount)}</td>
+                </tr>
+              );
+            }) : (
+              <tr><td colSpan={13}><div className={styles.emptyState}>暂无退税计算结果。</div></td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

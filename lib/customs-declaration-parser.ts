@@ -11,10 +11,27 @@ type CustomsFields = {
   customsDeclarationDate: string;
 };
 
+export type CustomsDeclarationItemFields = {
+  hsCode: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  tradeTerm: string;
+  currency: string;
+  fobAmount: number;
+};
+
 type CustomsParseResult = CustomsFields & {
   customsDeclarationParseStatus: CustomsParseStatus;
   customsDeclarationParseSource: typeof CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO;
   customsDeclarationParseMessage: string;
+};
+
+export type CustomsDeclarationDetailParseResult = CustomsParseResult & {
+  exportDate: string;
+  tradeTerm: string;
+  currency: string;
+  items: CustomsDeclarationItemFields[];
 };
 
 type Candidate = {
@@ -65,6 +82,7 @@ type Pdf2JsonModule = {
 
 const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
+const EXPORT_DATE_LABELS = ["出口日期", "出口时间", "离境日期"];
 const NON_DECLARATION_DATE_LABEL_PATTERN = /(出口|录入|打印|放行|签发)日期/g;
 const DECLARATION_NO_PATTERN = /[A-Z0-9]{8,32}/gi;
 let pdf2JsonParserClassPromise: Promise<Pdf2JsonParserConstructor> | null = null;
@@ -110,9 +128,34 @@ export function parseCustomsDeclarationText(text = ""): CustomsParseResult {
   };
 }
 
+export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclarationDetailParseResult {
+  const normalized = normalizePdfText(text);
+  const base = parseCustomsDeclarationText(normalized);
+  const exportDate = findBestLabeledDate(normalized, EXPORT_DATE_LABELS);
+  const tradeTerm = findTradeTerm(normalized);
+  const currency = findCurrency(normalized);
+  const items = parseCustomsDeclarationItems(normalized).map((item) => ({
+    ...item,
+    tradeTerm: item.tradeTerm || tradeTerm,
+    currency: item.currency || currency,
+  }));
+  return {
+    ...base,
+    exportDate,
+    tradeTerm,
+    currency,
+    items,
+  };
+}
+
 export async function parseCustomsDeclarationPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
   const normalizedText = await extractPdfTextFromPdfBuffer(buffer, options);
   return parseCustomsDeclarationText(normalizedText);
+}
+
+export async function parseCustomsDeclarationDetailPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
+  const normalizedText = await extractPdfTextFromPdfBuffer(buffer, options);
+  return parseCustomsDeclarationDetailText(normalizedText);
 }
 
 export async function extractPdfTextFromPdfBuffer(buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined, options: PdfParseOptions = {}) {
@@ -298,15 +341,7 @@ function isLikelyDeclarationNo(value = "") {
 }
 
 function findBestDeclarationDate(text = "") {
-  const candidates: Candidate[] = [];
-  DECLARATION_DATE_LABELS.forEach((label, labelIndex) => {
-    const pattern = new RegExp(`${escapeRegExp(label)}[\\s:：]{0,8}([\\s\\S]{0,80})`, "gi");
-    for (const match of text.matchAll(pattern)) {
-      const context = trimBeforeKnownLabels(match[1] || "");
-      const date = normalizeCustomsDate(context);
-      if (date) candidates.push({ value: date, score: 120 - labelIndex * 10, index: match.index || 0 });
-    }
-  });
+  const candidates = labeledDateCandidates(text, DECLARATION_DATE_LABELS, 120);
   for (const match of text.matchAll(NON_DECLARATION_DATE_LABEL_PATTERN)) {
     const context = text.slice(match.index || 0, (match.index || 0) + 80);
     const date = normalizeCustomsDate(context);
@@ -319,6 +354,85 @@ function findBestDeclarationDate(text = "") {
     }
   }
   return chooseBest(candidates.filter((item) => item.score > 0));
+}
+
+function findBestLabeledDate(text = "", labels: string[] = []) {
+  return chooseBest(labeledDateCandidates(text, labels, 100));
+}
+
+function labeledDateCandidates(text = "", labels: string[] = [], baseScore = 100) {
+  const candidates: Candidate[] = [];
+  labels.forEach((label, labelIndex) => {
+    const pattern = new RegExp(`${escapeRegExp(label)}[\\s:：]{0,8}([\\s\\S]{0,80})`, "gi");
+    for (const match of text.matchAll(pattern)) {
+      const context = trimBeforeKnownLabels(match[1] || "");
+      const date = normalizeCustomsDate(context);
+      if (date) candidates.push({ value: date, score: baseScore - labelIndex * 10, index: match.index || 0 });
+    }
+  });
+  return candidates;
+}
+
+function findTradeTerm(text = "") {
+  const compact = compactForNearbySearch(text).toUpperCase();
+  const labeled = compact.match(/(?:成交方式|贸易方式|价格条款)[:：]?\s*(FOB|CIF|CFR|EXW)/i)?.[1];
+  return (labeled || compact.match(/\b(FOB|CIF|CFR|EXW)\b/i)?.[1] || "").toUpperCase();
+}
+
+function findCurrency(text = "") {
+  const compact = compactForNearbySearch(text);
+  const value = compact.match(/(?:币制|币种|成交币制)[:：]?\s*([A-Z]{3}|美元|人民币|欧元|日元|港币)/i)?.[1] || "";
+  return normalizeCurrency(value);
+}
+
+function normalizeCurrency(value = "") {
+  const text = String(value || "").trim().toUpperCase();
+  if (/美元|USD/.test(text)) return "USD";
+  if (/人民币|CNY|RMB/.test(text)) return "CNY";
+  if (/欧元|EUR/.test(text)) return "EUR";
+  if (/日元|JPY/.test(text)) return "JPY";
+  if (/港币|HKD/.test(text)) return "HKD";
+  return /^[A-Z]{3}$/.test(text) ? text : "";
+}
+
+function numericAmount(value = "") {
+  const parsed = Number.parseFloat(String(value || "").replace(/[,，\s]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[] {
+  const lines = normalizePdfText(text).split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const items: CustomsDeclarationItemFields[] = [];
+  const itemPattern = /(?:^|\s)(?:\d{1,3}\s+)?([0-9]{8,13})\s+(.+?)\s+([0-9]+(?:[,，][0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*([^\s\d.]{1,8}|PCS|SET|KG|KGS|M2|M3)\s+(?:(FOB|CIF|CFR|EXW)\s+)?(?:(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\s+)?([0-9]+(?:[,，][0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)(?:\s|$)/i;
+  for (const line of lines) {
+    const match = line.match(itemPattern);
+    if (!match) continue;
+    const productName = String(match[2] || "")
+      .replace(/\s+(FOB|CIF|CFR|EXW)\b.*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    const item = {
+      hsCode: String(match[1] || "").trim(),
+      productName,
+      quantity: numericAmount(match[3] || ""),
+      unit: String(match[4] || "").trim(),
+      tradeTerm: String(match[5] || "").trim().toUpperCase(),
+      currency: normalizeCurrency(match[6] || ""),
+      fobAmount: numericAmount(match[7] || ""),
+    };
+    if (item.hsCode && item.productName && item.quantity > 0) items.push(item);
+  }
+  return dedupeCustomsItems(items);
+}
+
+function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = [item.hsCode, item.productName, item.quantity, item.unit, item.currency, item.fobAmount].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function chooseBest(candidates: Candidate[] = []) {

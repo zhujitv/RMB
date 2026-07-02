@@ -255,10 +255,16 @@ function taxRefundCompletenessPercent(order: TaxRefundCompletenessOrder = {}) {
 
 function taxRefundStatusSortRank(status: string = "") {
   return ({
-    NOT_READY: 1,
-    PROBLEM: 2,
-    READY: 3,
-    SUBMITTED: 4,
+    NO_CUSTOMS: 1,
+    CUSTOMS_RECOGNIZED_PENDING_CONFIRM: 2,
+    REBATE_RATE_MATCHED: 3,
+    SUPPLIER_INVOICE_MATCHED: 4,
+    REFUND_CALCULATED: 5,
+    NOT_READY: 6,
+    PROBLEM: 7,
+    READY: 8,
+    SUBMITTED: 9,
+    REFUND_RECEIVED: 10,
   } as Record<string, number>)[status] || 5;
 }
 
@@ -495,6 +501,16 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
     throw permissionError("已提交退税档案只允许查看和下载资料。", 400);
   }
   const completeness = taxDocumentCompleteness(beforeWithLogistics);
+  const calculationMissing = Array.isArray((completeness as Record<string, unknown>).calculation && ((completeness as Record<string, unknown>).calculation as Record<string, unknown>).missing)
+    ? (((completeness as Record<string, unknown>).calculation as Record<string, unknown>).missing as unknown[])
+    : [];
+  if (status === "SUBMITTED" && calculationMissing.length) {
+    const error = codedError("退税计算或供应商发票一致性校验存在异常，无法提交退税。", 400, "TAX_REFUND_CALCULATION_EXCEPTION");
+    error.details = {
+      missingLabels: calculationMissing.map((item) => String((item as Record<string, unknown>)?.label || item || "")).filter(Boolean),
+    };
+    throw error;
+  }
   if (status === "SUBMITTED" && before.taxRefundStatus === "SUBMITTED" && beforeArchived) {
     throw codedError("该订单已提交退税并归档，不能重复提交。", 400, "TAX_REFUND_ALREADY_SUBMITTED");
   }

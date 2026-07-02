@@ -58,6 +58,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         submittingTaxId={taxRefund.submittingTaxId}
         cancelingArchiveId={taxRefund.cancelingArchiveId}
         refreshingCompletenessId={taxRefund.refreshingCompletenessId}
+        calculatingTaxRefundId={taxRefund.calculatingTaxRefundId}
         uploadingKey={taxRefund.uploadingKey}
         uploadProgressByKey={taxRefund.uploadProgressByKey}
         deletingDocumentId={taxRefund.deletingDocumentId}
@@ -84,6 +85,8 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onSubmitTaxRefund={(row) => void taxRefund.submitTaxRefund(row)}
         onCancelArchive={(row) => void taxRefund.cancelTaxRefundArchive(row)}
         onRefreshCompleteness={(row) => void taxRefund.refreshCompleteness(row)}
+        onRecalculateTaxRefund={(row) => void taxRefund.recalculateTaxRefund(row)}
+        onSaveCustomsDeclarationItems={taxRefund.saveCustomsDeclarationItems}
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}
         onDelete={taxRefund.deleteDocument}

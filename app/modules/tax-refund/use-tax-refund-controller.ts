@@ -81,6 +81,7 @@ export function useTaxRefundController({
   const [submittingTaxId, setSubmittingTaxId] = useState("");
   const [cancelingArchiveId, setCancelingArchiveId] = useState("");
   const [refreshingCompletenessId, setRefreshingCompletenessId] = useState("");
+  const [calculatingTaxRefundId, setCalculatingTaxRefundId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
@@ -596,6 +597,48 @@ export function useTaxRefundController({
     }
   }
 
+  async function recalculateTaxRefund(row: TaxRefundRow) {
+    setCalculatingTaxRefundId(row.id);
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "recalculateTaxRefund" }),
+      });
+      if (result.success !== true || !result.order) throw new Error(result.message || "退税金额重新计算失败");
+      patchDetailForOrder(row.id, result.order);
+      setNotice(result.message || "退税金额已重新计算");
+    } catch (calcError) {
+      const message = calcError instanceof Error ? calcError.message : "退税金额重新计算失败";
+      if (detailOrderId === row.id) setDetailError(message);
+      else setError(message);
+    } finally {
+      setCalculatingTaxRefundId("");
+    }
+  }
+
+  async function saveCustomsDeclarationItems(orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) {
+    setCalculatingTaxRefundId(orderId);
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "confirmCustomsDeclarationItems", items }),
+      });
+      if (result.success !== true || !result.order) throw new Error(result.message || "报关商品明细保存失败");
+      patchDetailForOrder(orderId, result.order);
+      setNotice(result.message || "报关商品明细已保存");
+    } catch (saveError) {
+      setDetailError(saveError instanceof Error ? saveError.message : "报关商品明细保存失败");
+    } finally {
+      setCalculatingTaxRefundId("");
+    }
+  }
+
   async function cancelTaxRefundArchive(row: TaxRefundRow) {
     const result = await requestConfirmation({
       title: "确认取消归档？",
@@ -657,6 +700,16 @@ export function useTaxRefundController({
       }
       if (isCustomsDeclaration && uploadedDocument?.id) {
         await handleUploadedCustomsRecognition(orderId, uploadedDocument, uploadedDocument.customsRecognition || data.customsRecognition || null);
+        try {
+          const extractResult = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ action: "extractCustomsDeclarationItems", documentId: uploadedDocument.id }),
+          });
+          if (extractResult.order) patchDetailForOrder(orderId, extractResult.order);
+          setNotice(extractResult.message || "报关商品明细已识别，请确认");
+        } catch (extractError) {
+          setNotice(extractError instanceof Error ? `上传成功，报关商品明细识别失败：${extractError.message}` : "上传成功，报关商品明细识别失败，请人工录入。");
+        }
       } else {
         setNotice("上传成功");
       }
@@ -947,6 +1000,7 @@ export function useTaxRefundController({
     packageDownloadingId,
     cancelingArchiveId,
     refreshingCompletenessId,
+    calculatingTaxRefundId,
     uploadingKey,
     uploadProgressByKey,
     deletingDocumentId,
@@ -980,6 +1034,8 @@ export function useTaxRefundController({
     submitTaxRefund,
     cancelTaxRefundArchive,
     refreshCompleteness,
+    recalculateTaxRefund,
+    saveCustomsDeclarationItems,
     updateTaxRefundStatus,
     closeDetailDrawer,
     downloadPackage,

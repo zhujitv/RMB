@@ -158,6 +158,7 @@ function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, comm
       confirmedTotalCostCny: summary.confirmedTotalCostCny,
       totalCostCny: summary.totalCostCny,
       logisticsCostCny: summary.logisticsCostCny,
+      expectedTaxRefundIncomeCny: summary.expectedTaxRefundIncomeCny,
       commissionBaseCny: summary.commissionBaseCny,
       commissionFormulaMode: summary.commissionFormulaMode,
       commissionFormulaLabel: summary.commissionFormulaLabel,

@@ -35,6 +35,7 @@ export function taxCompletenessTooltipGroups(completeness: DocumentCompleteness,
     { category: "拖车费", items: [] },
     { category: "港杂费", items: [] },
     { category: "海运费", items: [] },
+    { category: "退税计算", items: [] },
   ];
   const groupByCategory = new Map(groups.map((group) => [group.category, group]));
   const pushItem = (category: string, item: string) => {
@@ -78,6 +79,10 @@ export function taxCompletenessTooltipGroups(completeness: DocumentCompleteness,
     }
   });
 
+  (completeness.calculation?.missing || []).forEach((item) => {
+    pushItem("退税计算", item.label || "退税金额待计算");
+  });
+
   if (!groups.some((group) => group.items.length)) {
     normalizedMissingLabels(completeness).forEach((label) => pushItem("报关资料", label));
   }
@@ -119,6 +124,9 @@ export function taxMissingTargets(completeness: DocumentCompleteness) {
     }
     const targetKey = item.costId ? logisticsDocumentTargetKey(item.costId) : "logistics-section";
     pushTarget(item.invoiceLabel || item.label || logisticsDocumentLabel(item.documentType || "", item.costType || ""), targetKey);
+  });
+  (completeness.calculation?.missing || []).forEach((item) => {
+    pushTarget(item.label || "退税金额待计算", "tax-refund-calculation");
   });
 
   if (!targets.length) {
@@ -188,6 +196,9 @@ export function taxTargetKeyFromMissingLabel(label: string) {
     || text.includes("物流")
   ) {
     return "logistics-section";
+  }
+  if (text.includes("退税") || text.includes("HS") || text.includes("发票") || text.includes("金额") || text.includes("数量") || text.includes("品名") || text.includes("单位")) {
+    return "tax-refund-calculation";
   }
   return "tax-detail-top";
 }
@@ -505,7 +516,7 @@ export function taxRefundHasPackageContent(row: TaxRefundRow) {
 }
 
 export function statusClass(status = "") {
-  if (status === "READY") return styles.statusSuccess;
+  if (["READY", "REFUND_CALCULATED", "REFUND_RECEIVED"].includes(status)) return styles.statusSuccess;
   if (status === "PROBLEM") return styles.statusDanger;
   if (status === "SUBMITTED") return "";
   return styles.statusWarning;

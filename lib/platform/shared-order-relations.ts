@@ -83,6 +83,15 @@ export function includeOrderRelations() {
       include: { sentBy: true },
       orderBy: [{ createdAt: "desc" as const }],
     },
+    customsDeclarationItems: {
+      where: { deletedAt: null },
+      orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+    },
+    exportTaxRefundCalculations: {
+      where: { deletedAt: null },
+      include: { declarationItem: true, rate: true },
+      orderBy: [{ createdAt: "asc" as const }],
+    },
     domesticLogisticsInfos: {
       where: { deletedAt: null },
       select: domesticLogisticsInfoSafeSelect(),

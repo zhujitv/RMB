@@ -31,6 +31,7 @@ type TaxRefundOverlaysProps = {
   submittingTaxId: string;
   cancelingArchiveId: string;
   refreshingCompletenessId: string;
+  calculatingTaxRefundId: string;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
@@ -57,6 +58,8 @@ type TaxRefundOverlaysProps = {
   onSubmitTaxRefund: (row: TaxRefundRow) => void;
   onCancelArchive: (row: TaxRefundRow) => void;
   onRefreshCompleteness: (row: TaxRefundRow) => void;
+  onRecalculateTaxRefund: (row: TaxRefundRow) => void;
+  onSaveCustomsDeclarationItems: (orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
   onDelete: (orderId: string, document: TaxDocument) => Promise<void> | void;
@@ -90,6 +93,7 @@ export function TaxRefundOverlays({
   submittingTaxId,
   cancelingArchiveId,
   refreshingCompletenessId,
+  calculatingTaxRefundId,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
@@ -116,6 +120,8 @@ export function TaxRefundOverlays({
   onSubmitTaxRefund,
   onCancelArchive,
   onRefreshCompleteness,
+  onRecalculateTaxRefund,
+  onSaveCustomsDeclarationItems,
   onCustomsSaved,
   onUpload,
   onDelete,
@@ -150,6 +156,7 @@ export function TaxRefundOverlays({
           submittingTax={submittingTaxId === detailRow.id}
           cancelingArchive={cancelingArchiveId === detailRow.id}
           refreshingCompleteness={refreshingCompletenessId === detailRow.id}
+          calculatingTaxRefund={calculatingTaxRefundId === detailRow.id}
           uploadingKey={uploadingKey}
           uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
@@ -162,6 +169,8 @@ export function TaxRefundOverlays({
           onSubmitTaxRefund={() => onSubmitTaxRefund(detailRow)}
           onCancelArchive={() => onCancelArchive(detailRow)}
           onRefreshCompleteness={() => onRefreshCompleteness(detailRow)}
+          onRecalculateTaxRefund={() => onRecalculateTaxRefund(detailRow)}
+          onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}
           onDelete={onDelete}

@@ -62,3 +62,20 @@ test("realized gross profit uses final receivable minus total cost after full co
   assert.equal((Number(summary.realizedGrossMargin) * 100).toFixed(2), "19.47");
   assert.equal(rounded(summary.netCashFlowCny), 32973.47);
 });
+
+test("expected tax refund income is displayed separately and added to profit", () => {
+  const order = {
+    ...pv252LikeOrder(),
+    exportTaxRefundCalculations: [
+      {
+        calculationStatus: "退税金额已计算",
+        estimatedRefundAmount: 8000,
+      },
+    ],
+  };
+  const summary = summarizeOrder(order);
+
+  assert.equal(rounded(summary.receivableCny), 157191.79);
+  assert.equal(rounded(summary.expectedTaxRefundIncomeCny), 8000);
+  assert.equal(rounded(summary.expectedGrossProfit), 38604.84);
+});

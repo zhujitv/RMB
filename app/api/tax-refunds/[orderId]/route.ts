@@ -2,15 +2,18 @@ import type { NextRequest } from "next/server";
 import {
   apiError,
   cancelTaxRefundArchive,
+  extractCustomsDeclarationItemsFromDocument,
   getTaxRefundOrderDetail,
   ok,
   parseJsonBody,
+  recalculateExportTaxRefund,
   prepareManualShippingDocumentsNotification,
   previewCustomsRecognition,
   reparseCustomsRecognition,
   requireText,
   resendShippingDocumentsNotification,
   refreshTaxRefundCompletenessNow,
+  saveCustomsDeclarationItems,
   sendManualShippingDocumentsNotification,
   updateCustomsRecognition,
   updateTaxRefundStatus,
@@ -76,6 +79,23 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (body.action === "refreshCompleteness") {
       const order = await refreshTaxRefundCompletenessNow(request, actor, orderId);
       return ok({ success: true, order, message: "退税完整度已重新计算" });
+    }
+    if (body.action === "extractCustomsDeclarationItems") {
+      const documentId = requireText(body.documentId, "报关单文件");
+      const data = await extractCustomsDeclarationItemsFromDocument(request, actor, orderId, documentId);
+      const order = await getTaxRefundOrderDetail(orderId, actor);
+      return ok({ success: true, order, data, message: "报关商品明细已识别，请确认" });
+    }
+    if (body.action === "confirmCustomsDeclarationItems") {
+      const items = Array.isArray(body.items) ? body.items : [];
+      const data = await saveCustomsDeclarationItems(request, actor, orderId, items as never);
+      const order = await getTaxRefundOrderDetail(orderId, actor);
+      return ok({ success: true, order, data, message: "报关商品明细已确认，退税金额已重新计算" });
+    }
+    if (body.action === "recalculateTaxRefund") {
+      const data = await recalculateExportTaxRefund(request, actor, orderId);
+      const order = await getTaxRefundOrderDetail(orderId, actor);
+      return ok({ success: true, order, data, message: "退税金额已重新计算" });
     }
     const status = requireText(body.status, "退税状态");
     const order = await updateTaxRefundStatus(request, actor, orderId, status, body);

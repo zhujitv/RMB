@@ -48,6 +48,11 @@ type OrderLike = {
   reminderDays?: NumericLike | null;
   payments?: PaymentLike[] | null;
   costs?: CostLike[] | null;
+  exportTaxRefundCalculations?: Array<{
+    estimatedRefundAmount?: NumericLike | null;
+    calculationStatus?: string | null;
+    deletedAt?: Date | string | null;
+  }> | null;
 };
 
 type TaxLogisticsMissingItem = {
@@ -96,6 +101,7 @@ export type OrderSummary = {
   paidConfirmedCostCny: number;
   logisticsCostCny: number;
   confirmedLogisticsCostCny: number;
+  expectedTaxRefundIncomeCny: number;
   taxLogisticsCostsComplete: boolean;
   taxLogisticsMissing: TaxLogisticsMissingItem[];
   taxLogisticsMissingLabels: string[];
@@ -282,7 +288,10 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const requiredDepositAmount = depositRatio == null ? 0 : Math.round(receivableCny * depositRatio * 100) / 100;
   const depositGapCny = Math.max(requiredDepositAmount - receivedDepositCny, 0);
   const depositOverpaidCny = Math.max(receivedDepositCny - requiredDepositAmount, 0);
-  const expectedGrossProfit = receivableCny - confirmedTotalCostCny;
+  const expectedTaxRefundIncomeCny = (order.exportTaxRefundCalculations || [])
+    .filter((calculation) => !calculation.deletedAt && calculation.calculationStatus !== "资料异常")
+    .reduce((sum, calculation) => sum + Number(calculation.estimatedRefundAmount || 0), 0);
+  const expectedGrossProfit = receivableCny - confirmedTotalCostCny + expectedTaxRefundIncomeCny;
   const expectedGrossMargin = receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
   const revenueRecognized = receivableCny > 0 && arrivedPaymentsCny >= receivableCny;
   const realizedGrossProfit = revenueRecognized ? expectedGrossProfit : null;
@@ -350,6 +359,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     paidConfirmedCostCny,
     logisticsCostCny,
     confirmedLogisticsCostCny: logisticsCostConfirmed ? logisticsCostCny : 0,
+    expectedTaxRefundIncomeCny,
     taxLogisticsCostsComplete,
     taxLogisticsMissing,
     taxLogisticsMissingLabels: taxLogisticsMissing.map((item) => item.label || item.invoiceLabel || item.missingCostLabel || item.costType || "物流费用").filter(Boolean),

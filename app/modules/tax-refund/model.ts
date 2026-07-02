@@ -57,6 +57,16 @@ export type DocumentCompleteness = {
       }>;
     }>;
   };
+  calculation?: {
+    completed?: number;
+    total?: number;
+    complete?: boolean;
+    estimatedRefundAmount?: number;
+    missing?: Array<{
+      documentType?: string;
+      label?: string;
+    }>;
+  };
 };
 
 export type TaxRefundRow = {
@@ -89,6 +99,63 @@ export type TaxRefundRow = {
   taxSubmittedByName?: string;
   taxSubmittedAt?: string | null;
   documentCompleteness?: DocumentCompleteness;
+};
+
+export type CustomsDeclarationItem = {
+  id?: string;
+  documentId?: string;
+  declarationNo?: string;
+  declarationDate?: string | null;
+  exportDate?: string | null;
+  hsCode?: string;
+  productName?: string;
+  quantity?: number | null;
+  unit?: string;
+  tradeTerm?: string;
+  currency?: string;
+  fobAmount?: number | null;
+  exchangeRate?: number | null;
+  fobAmountCny?: number | null;
+  confirmationStatus?: string;
+  source?: string;
+  sortOrder?: number;
+};
+
+export type ExportTaxRefundCalculation = {
+  id?: string;
+  declarationItemId?: string;
+  declarationNo?: string;
+  hsCode?: string;
+  productName?: string;
+  declarationDate?: string | null;
+  fobCurrency?: string;
+  fobAmount?: number | null;
+  exchangeRate?: number | null;
+  declarationAmountCny?: number | null;
+  rebateRate?: number | null;
+  vatRate?: number | null;
+  theoreticalRefundAmount?: number | null;
+  supplierInvoiceAmountWithoutTax?: number | null;
+  availableInputVatAmount?: number | null;
+  estimatedRefundAmount?: number | null;
+  invoiceMatchStatus?: string;
+  calculationStatus?: string;
+  abnormalReasons?: string[];
+  invoiceMatch?: {
+    supplierCount?: number;
+    invoiceCount?: number;
+    invoiceQuantity?: number;
+    invoiceAmountWithoutTax?: number;
+    differenceQuantity?: number;
+    differenceAmount?: number;
+    lines?: unknown[];
+  };
+};
+
+export type ExportTaxRefundSummary = {
+  estimatedRefundAmount?: number;
+  calculationStatus?: string;
+  abnormalReasons?: string[];
 };
 
 export type BusinessEntityOption = {
@@ -159,6 +226,9 @@ export type TaxRefundDetail = TaxRefundRow & {
   documents?: TaxDocument[];
   costs?: TaxCost[];
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
+  customsDeclarationItems?: CustomsDeclarationItem[];
+  exportTaxRefundCalculations?: ExportTaxRefundCalculation[];
+  exportTaxRefundSummary?: ExportTaxRefundSummary;
 };
 
 export type CustomsRecognitionResult = {
@@ -295,8 +365,14 @@ export const TAX_FACTORY_UPLOAD_TYPES = [
 export const TAX_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
 export const TAX_REFUND_STATUS_OPTIONS = [
   { value: "", label: "全部退税状态" },
+  { value: "NO_CUSTOMS", label: "未上传报关单" },
+  { value: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM", label: "已识别待确认" },
+  { value: "REBATE_RATE_MATCHED", label: "HS退税率已匹配" },
+  { value: "SUPPLIER_INVOICE_MATCHED", label: "供应商发票已匹配" },
+  { value: "REFUND_CALCULATED", label: "退税金额已计算" },
   { value: "NOT_READY", label: "资料不完整" },
   { value: "READY", label: "资料完整待提交" },
   { value: "PROBLEM", label: "资料异常" },
   { value: "SUBMITTED", label: "已提交退税" },
+  { value: "REFUND_RECEIVED", label: "已收到退税款" },
 ];
