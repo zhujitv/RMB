@@ -931,6 +931,93 @@
   font-weight: 700;
 }
 
+.taxCalculationBlockedPanel {
+  min-height: 64px;
+  display: grid;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.customsRecognitionResultCard {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.customsResultHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customsResultHeader > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.customsResultHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.customsResultHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.customsRecognitionTable th:nth-child(1),
+.customsRecognitionTable td:nth-child(1) { width: 150px; }
+.customsRecognitionTable th:nth-child(2),
+.customsRecognitionTable td:nth-child(2),
+.customsRecognitionTable th:nth-child(3),
+.customsRecognitionTable td:nth-child(3) { width: 105px; }
+.customsRecognitionTable th:nth-child(4),
+.customsRecognitionTable td:nth-child(4),
+.customsRecognitionTable th:nth-child(6),
+.customsRecognitionTable td:nth-child(6) { width: 180px; }
+.customsRecognitionTable th:nth-child(5),
+.customsRecognitionTable td:nth-child(5) { width: 110px; }
+.customsRecognitionTable th:nth-child(7),
+.customsRecognitionTable td:nth-child(7),
+.customsRecognitionTable th:nth-child(11),
+.customsRecognitionTable td:nth-child(11) { width: 120px; }
+.customsRecognitionTable th:nth-child(8),
+.customsRecognitionTable td:nth-child(8),
+.customsRecognitionTable th:nth-child(10),
+.customsRecognitionTable td:nth-child(10) { width: 80px; }
+.customsRecognitionTable th:nth-child(9),
+.customsRecognitionTable td:nth-child(9),
+.customsRecognitionTable th:nth-child(12),
+.customsRecognitionTable td:nth-child(12) { width: 100px; }
+
+.customsOcrRawResult {
+  max-height: 260px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rowWarning td {
+  background: #fffbeb;
+}
+
 .taxCalculationTableContainer form {
   width: 100%;
   min-width: 100%;

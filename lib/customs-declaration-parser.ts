@@ -31,6 +31,7 @@ export type CustomsDeclarationDetailParseResult = CustomsParseResult & {
   exportDate: string;
   tradeTerm: string;
   currency: string;
+  domesticConsignor: string;
   items: CustomsDeclarationItemFields[];
 };
 
@@ -83,6 +84,7 @@ type Pdf2JsonModule = {
 const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
 const EXPORT_DATE_LABELS = ["出口日期", "出口时间", "离境日期"];
+const DOMESTIC_CONSIGNOR_LABELS = ["境内发货人", "境内收发货人", "发货人"];
 const NON_DECLARATION_DATE_LABEL_PATTERN = /(出口|录入|打印|放行|签发)日期/g;
 const DECLARATION_NO_PATTERN = /[A-Z0-9]{8,32}/gi;
 let pdf2JsonParserClassPromise: Promise<Pdf2JsonParserConstructor> | null = null;
@@ -134,6 +136,7 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
   const exportDate = findBestLabeledDate(normalized, EXPORT_DATE_LABELS);
   const tradeTerm = findTradeTerm(normalized);
   const currency = findCurrency(normalized);
+  const domesticConsignor = findBestLabeledText(normalized, DOMESTIC_CONSIGNOR_LABELS);
   const items = parseCustomsDeclarationItems(normalized).map((item) => ({
     ...item,
     tradeTerm: item.tradeTerm || tradeTerm,
@@ -144,6 +147,7 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
     exportDate,
     tradeTerm,
     currency,
+    domesticConsignor,
     items,
   };
 }
@@ -358,6 +362,41 @@ function findBestDeclarationDate(text = "") {
 
 function findBestLabeledDate(text = "", labels: string[] = []) {
   return chooseBest(labeledDateCandidates(text, labels, 100));
+}
+
+function findBestLabeledText(text = "", labels: string[] = []) {
+  const candidates: Candidate[] = [];
+  const compact = compactForNearbySearch(text);
+  labels.forEach((label, labelIndex) => {
+    const pattern = new RegExp(`${escapeRegExp(label)}[\\s:：]{0,8}([^\\n]{2,80})`, "gi");
+    for (const match of compact.matchAll(pattern)) {
+      const value = cleanLabeledTextValue(match[1] || "");
+      if (value) candidates.push({ value, score: 100 - labelIndex * 10, index: match.index || 0 });
+    }
+  });
+  return chooseBest(candidates);
+}
+
+function cleanLabeledTextValue(value = "") {
+  const stopLabels = [
+    ...DECLARATION_NO_LABELS,
+    ...DECLARATION_DATE_LABELS,
+    ...EXPORT_DATE_LABELS,
+    ...DOMESTIC_CONSIGNOR_LABELS,
+    "消费使用单位",
+    "生产销售单位",
+    "运输方式",
+    "成交方式",
+    "贸易方式",
+    "币制",
+    "币种",
+  ];
+  let text = String(value || "").replace(/[：:]+$/g, "").trim();
+  for (const label of stopLabels) {
+    const index = text.indexOf(label);
+    if (index > 0) text = text.slice(0, index).trim();
+  }
+  return text.replace(/\s{2,}/g, " ").slice(0, 80);
 }
 
 function labeledDateCandidates(text = "", labels: string[] = [], baseScore = 100) {

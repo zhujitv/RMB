@@ -148,6 +148,26 @@ const taxRefundCostLightSelect = Prisma.validator<Prisma.OrderCostSelect>()({
 });
 type TaxRefundDocumentLight = Prisma.OrderDocumentGetPayload<{ select: typeof taxRefundDocumentLightSelect }>;
 type TaxRefundCostLight = Prisma.OrderCostGetPayload<{ select: typeof taxRefundCostLightSelect }>;
+type TaxRefundCustomsItemLight = {
+  id: string;
+  documentId: string | null;
+  declarationNo: string;
+  declarationDate: Date | null;
+  exportDate: Date | null;
+  hsCode: string;
+  productName: string;
+  quantity: Prisma.Decimal | number | null;
+  unit: string | null;
+  tradeTerm: string | null;
+  currency: string | null;
+  fobAmount: Prisma.Decimal | number | null;
+  exchangeRate: Prisma.Decimal | number | null;
+  fobAmountCny: Prisma.Decimal | number | null;
+  rawJson?: Prisma.JsonValue | null;
+  confirmationStatus: string;
+  source: string;
+  sortOrder: number;
+};
 type TaxRefundPackageDocument = Prisma.OrderDocumentGetPayload<{
   include: { uploadedBy: true; cost: { include: { supplier: true } }; supplier: true };
 }>;
@@ -370,6 +390,60 @@ function serializeTaxRefundLightDocument(document: TaxRefundDocumentLight, order
     uploadStatusLabel: serialized.uploadStatusLabel,
     previewUrl: `/api/order-documents/${encodeURIComponent(String(serialized.id || ""))}/preview`,
     downloadUrl: `/api/order-documents/${encodeURIComponent(String(serialized.id || ""))}/download`,
+  };
+}
+
+function rawJsonRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function serializeTaxRefundCustomsItem(item: TaxRefundCustomsItemLight, fallback: Record<string, unknown> = {}) {
+  const raw = rawJsonRecord(item.rawJson);
+  return {
+    id: item.id,
+    documentId: item.documentId || "",
+    declarationNo: item.declarationNo || "",
+    declarationDate: dateToInput(item.declarationDate),
+    exportDate: dateToInput(item.exportDate),
+    domesticConsignor: String(raw.domesticConsignor || fallback.businessEntityName || fallback.businessEntityDisplayName || ""),
+    hsCode: item.hsCode || "",
+    productName: item.productName || "",
+    quantity: item.quantity == null ? null : Number(item.quantity),
+    unit: item.unit || "",
+    tradeTerm: item.tradeTerm || "",
+    currency: item.currency || "",
+    fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
+    exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
+    fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
+    confirmationStatus: item.confirmationStatus,
+    source: item.source,
+    sortOrder: item.sortOrder,
+  };
+}
+
+function serializeCustomsOcrRawResult(task: {
+  id?: string;
+  status?: string | null;
+  validationStatus?: string | null;
+  errorMessage?: string | null;
+  rawText?: string | null;
+  resultJson?: Prisma.JsonValue | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+} | null, items: TaxRefundCustomsItemLight[] = []) {
+  const rawItems = items
+    .map((item) => rawJsonRecord(item.rawJson))
+    .filter((item) => Object.keys(item).length > 0);
+  if (!task && !rawItems.length) return null;
+  return {
+    taskId: task?.id || "",
+    status: task?.status || "",
+    validationStatus: task?.validationStatus || "",
+    errorMessage: task?.errorMessage || "",
+    createdAt: task?.createdAt || null,
+    updatedAt: task?.updatedAt || null,
+    resultJson: task?.resultJson || (rawItems.length ? { customsDeclarationItems: rawItems } : null),
+    rawText: task?.rawText || "",
   };
 }
 
@@ -793,18 +867,71 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
 }
 
 async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
-  const [basic, documents] = await Promise.all([
+  const [basic, documents, customsItems, latestCustomsDocument] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
+    prisma.exportCustomsDeclarationItem.findMany({
+      where: { orderId, deletedAt: null },
+      select: {
+        id: true,
+        documentId: true,
+        declarationNo: true,
+        declarationDate: true,
+        exportDate: true,
+        hsCode: true,
+        productName: true,
+        quantity: true,
+        unit: true,
+        tradeTerm: true,
+        currency: true,
+        fobAmount: true,
+        exchangeRate: true,
+        fobAmountCny: true,
+        rawJson: true,
+        confirmationStatus: true,
+        source: true,
+        sortOrder: true,
+      },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      take: 200,
+    }),
+    actor?.role === "管理员"
+      ? prisma.orderDocument.findFirst({
+        where: { orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
+        select: {
+          id: true,
+          ocrTasks: {
+            select: {
+              id: true,
+              status: true,
+              validationStatus: true,
+              errorMessage: true,
+              rawText: true,
+              resultJson: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy: [{ createdAt: "desc" }],
+            take: 1,
+          },
+        },
+        orderBy: [{ createdAt: "desc" }],
+      })
+      : Promise.resolve(null),
   ]);
+  const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
+  const latestOcrTask = latestCustomsDocument?.ocrTasks?.[0] || null;
   return {
     ...documents,
+    ...basic,
     customsDeclarationNo: basic.customsDeclarationNo || "",
     customsDeclarationDate: basic.customsDeclarationDate || null,
     declarationDate: basic.declarationDate || null,
     customsParseStatusLabel: basic.customsParseStatusLabel || "",
     customsParseSourceLabel: basic.customsParseSourceLabel || "",
     customsParseMessage: basic.customsParseMessage || "",
+    customsDeclarationItems: serializedItems,
+    customsOcrRawResult: actor?.role === "管理员" ? serializeCustomsOcrRawResult(latestOcrTask, customsItems || []) : null,
   };
 }
 

@@ -111,6 +111,7 @@ test("parses customs declaration item detail for tax refund calculation", () => 
     报关单号：223120241234567890
     申报日期：2024-05-12
     出口日期：2024-05-10
+    境内发货人：杭州耐斯特家具有限公司
     成交方式：FOB
     币制：美元
     1 9403609990 木制餐桌 120 个 USD 3600.00
@@ -118,6 +119,7 @@ test("parses customs declaration item detail for tax refund calculation", () => 
   `);
 
   assert.equal(result.exportDate, "2024-05-10");
+  assert.equal(result.domesticConsignor, "杭州耐斯特家具有限公司");
   assert.equal(result.tradeTerm, "FOB");
   assert.equal(result.currency, "USD");
   assert.equal(result.items.length, 2);

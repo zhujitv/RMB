@@ -381,7 +381,13 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
           fobAmount: item.fobAmount || null,
           exchangeRate: null,
           fobAmountCny: null,
-          rawJson: item as unknown as Prisma.InputJsonValue,
+          rawJson: {
+            ...item,
+            domesticConsignor: parsed.domesticConsignor || "",
+            declarationNo: parsed.customsDeclarationNo || "",
+            declarationDate: parsed.customsDeclarationDate || "",
+            exportDate: parsed.exportDate || "",
+          } as unknown as Prisma.InputJsonValue,
           confirmationStatus: "PENDING_CONFIRMATION",
           source: "OCR_PDF",
           sortOrder: index,
@@ -451,7 +457,20 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
         await tx.exportCustomsDeclarationItem.create({ data: { ...data, orderId } });
       }
     }
-    await tx.receivableOrder.update({ where: { id: orderId }, data: { taxRefundStatus: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM", updatedById: actorId } });
+    const firstItem = items.find((item) => cleanText(item.declarationNo) || cleanText(item.declarationDate));
+    await tx.receivableOrder.update({
+      where: { id: orderId },
+      data: {
+        customsDeclarationNo: firstItem?.declarationNo ? cleanText(firstItem.declarationNo) : undefined,
+        customsDeclarationDate: firstItem?.declarationDate ? toDate(firstItem.declarationDate) : undefined,
+        customsParsedAt: firstItem ? new Date() : undefined,
+        customsParseStatus: firstItem ? "SUCCESS" : undefined,
+        customsParseMessage: firstItem ? "报关商品明细已确认，报关单号和申报日期已同步回填。" : undefined,
+        customsDeclarationParseSource: firstItem ? "MANUAL_CONFIRMED" : undefined,
+        taxRefundStatus: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
+        updatedById: actorId,
+      },
+    });
   });
   const exchangeRateChanged = items.some((item) => {
     const previous = item.id ? before.find((row) => row.id === item.id) : null;
@@ -480,11 +499,14 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
   }
   const actorId = nonEmpty(actor?.id);
   const [items, invoiceLines, supplierCount] = await Promise.all([
-    prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
+    prisma.exportCustomsDeclarationItem.findMany({
+      where: { orderId, deletedAt: null, confirmationStatus: "CONFIRMED" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
     supplierInvoiceLinesForOrder(orderId),
     supplierCountForOrder(orderId),
   ]);
-  if (!items.length) throw codedError("未找到报关商品明细，请先上传并确认报关单。", 400, "CUSTOMS_DECLARATION_ITEMS_REQUIRED");
+  if (!items.length) throw codedError("没有确认报关商品明细，不允许进入退税计算。", 400, "CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED");
   const declarationGroups = buildDeclarationGroups(items);
   const results: Array<Prisma.ExportTaxRefundCalculationGetPayload<{ include: { declarationItem: true; rate: true } }>> = [];
   for (const item of items) {

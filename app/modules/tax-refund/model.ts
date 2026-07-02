@@ -111,6 +111,7 @@ export type CustomsDeclarationItem = {
   declarationNo?: string;
   declarationDate?: string | null;
   exportDate?: string | null;
+  domesticConsignor?: string;
   hsCode?: string;
   productName?: string;
   quantity?: number | null;
@@ -250,6 +251,16 @@ export type TaxRefundDetail = TaxRefundRow & {
   costs?: TaxCost[];
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   customsDeclarationItems?: CustomsDeclarationItem[];
+  customsOcrRawResult?: {
+    taskId?: string;
+    status?: string;
+    validationStatus?: string;
+    errorMessage?: string;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    resultJson?: unknown;
+    rawText?: string;
+  } | null;
   exportTaxRefundCalculations?: ExportTaxRefundCalculation[];
   exportTaxRefundSummary?: ExportTaxRefundSummary;
 };

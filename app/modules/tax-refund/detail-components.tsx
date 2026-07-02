@@ -468,14 +468,17 @@ function TaxRefundDetailPanel({
           </div>
         ) : null}
         {activeTab === "customs-documents" ? (
-        <CustomsRecognitionForm
-          detail={detail}
-          readOnly={readOnly}
-          recognizing={Boolean(recognizingDocumentId)}
-          canRecognize={canRecognizeCustoms}
-          onSaved={onCustomsSaved}
-          onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
-        />
+        <>
+          <CustomsRecognitionResultPanel detail={detail} currentUserRole={currentUserRole} />
+          <CustomsRecognitionForm
+            detail={detail}
+            readOnly={readOnly}
+            recognizing={Boolean(recognizingDocumentId)}
+            canRecognize={canRecognizeCustoms}
+            onSaved={onCustomsSaved}
+            onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
+          />
+        </>
         ) : null}
         {activeTab === "calculation" ? (
         <TaxRefundCalculationPanel
@@ -606,6 +609,147 @@ function TaxRefundDetailPanel({
           </div>
         )) : null}
       </div>
+    </div>
+  );
+}
+
+function customsItemHasKeyFields(item: CustomsDeclarationItem) {
+  return Boolean(
+    item.declarationNo
+    || item.declarationDate
+    || item.exportDate
+    || item.tradeTerm
+    || item.currency
+    || item.fobAmount
+    || item.domesticConsignor
+    || item.hsCode
+    || item.productName
+    || item.quantity
+    || item.unit,
+  );
+}
+
+function customsRecognitionLooksSuccessful(detail: TaxRefundDetail) {
+  const text = [
+    detail.customsParseStatusLabel,
+    detail.customsParseMessage,
+    detail.customsOcrRawResult?.status,
+    detail.customsOcrRawResult?.validationStatus,
+  ].filter(Boolean).join(" ");
+  return /SUCCESS|成功|已识别|识别通过/i.test(text);
+}
+
+function customsRawResultText(detail: TaxRefundDetail) {
+  const raw = detail.customsOcrRawResult;
+  if (!raw) return "暂无 OCR 原始结果。";
+  return JSON.stringify({
+    taskId: raw.taskId || "",
+    status: raw.status || "",
+    validationStatus: raw.validationStatus || "",
+    errorMessage: raw.errorMessage || "",
+    resultJson: raw.resultJson || null,
+    rawText: raw.rawText || "",
+  }, null, 2);
+}
+
+function CustomsRecognitionResultPanel({
+  detail,
+  currentUserRole,
+}: {
+  detail: TaxRefundDetail;
+  currentUserRole: string;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+  const items = detail.customsDeclarationItems || [];
+  const firstItem = items[0] || {};
+  const hasAnyParsedField = Boolean(detail.customsDeclarationNo || detail.customsDeclarationDate || items.some(customsItemHasKeyFields));
+  const ocrSuccessButEmpty = customsRecognitionLooksSuccessful(detail) && !hasAnyParsedField;
+  const totalFobAmount = items.reduce((sum, item) => sum + Number(item.fobAmount || 0), 0);
+  const firstCurrency = firstItem.currency || detail.currency || "";
+  const firstTradeTerm = firstItem.tradeTerm || "";
+  const firstExportDate = firstItem.exportDate || "";
+  const domesticConsignor = firstItem.domesticConsignor || detail.businessEntityName || detail.businessEntityDisplayName || "";
+  return (
+    <div className={`${styles.documentGroupCard} ${styles.customsRecognitionResultCard}`} id={taxTargetDomId("customs-recognition-result")}>
+      <div className={styles.customsResultHeader}>
+        <div>
+          <strong>报关单识别结果</strong>
+          <span>{detail.customsParseMessage || "上传报关单后，识别结果会显示在这里。"}</span>
+        </div>
+        <div className={styles.inlineActionGroup}>
+          <span className={`${styles.statusPill} ${ocrSuccessButEmpty ? styles.statusDanger : hasAnyParsedField ? styles.statusSuccess : styles.statusWarning}`}>
+            {ocrSuccessButEmpty ? "字段异常" : hasAnyParsedField ? "已解析" : "待识别"}
+          </span>
+          {currentUserRole === "管理员" ? (
+            <button className={styles.secondaryButton} type="button" onClick={() => setShowRaw((value) => !value)}>
+              查看OCR原始结果
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {ocrSuccessButEmpty ? (
+        <div className={styles.inlineError}>OCR识别成功，但未解析到报关单关键字段。</div>
+      ) : null}
+      <div className={styles.taxBasicInfoGrid}>
+        <TaxInfoItem label="报关单号" value={detail.customsDeclarationNo || firstItem.declarationNo || ""} />
+        <TaxInfoItem label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || firstItem.declarationDate)} />
+        <TaxInfoItem label="出口日期" value={formatDate(firstExportDate)} />
+        <TaxInfoItem label="成交方式" value={firstTradeTerm} />
+        <TaxInfoItem label="币种" value={firstCurrency} />
+        <TaxInfoItem label="FOB金额" value={totalFobAmount ? currencyAmountText(firstCurrency, totalFobAmount) : currencyAmountText(firstCurrency, firstItem.fobAmount)} />
+        <TaxInfoItem label="境内发货人" value={domesticConsignor} wide />
+      </div>
+      <div className={styles.taxCalculationTableContainer}>
+        <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.customsRecognitionTable}`}>
+          <thead>
+            <tr>
+              <th>报关单号</th>
+              <th>申报日期</th>
+              <th>出口日期</th>
+              <th>境内发货人</th>
+              <th>HS编码</th>
+              <th>商品名称</th>
+              <th>数量</th>
+              <th>单位</th>
+              <th>成交方式</th>
+              <th>币种</th>
+              <th>FOB金额</th>
+              <th>确认状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length ? items.map((item, index) => (
+              <tr key={item.id || `customs-item-${index}`} className={item.confirmationStatus === "CONFIRMED" ? "" : styles.rowWarning}>
+                <td title={item.declarationNo || detail.customsDeclarationNo || ""}>{item.declarationNo || detail.customsDeclarationNo || "-"}</td>
+                <td>{formatDate(item.declarationDate || detail.customsDeclarationDate || detail.declarationDate)}</td>
+                <td>{formatDate(item.exportDate)}</td>
+                <td title={item.domesticConsignor || domesticConsignor}>{item.domesticConsignor || domesticConsignor || "-"}</td>
+                <td>{item.hsCode || "-"}</td>
+                <td title={item.productName || ""}>{item.productName || "-"}</td>
+                <td className={styles.numericCell}>{amountText(item.quantity)}</td>
+                <td>{item.unit || "-"}</td>
+                <td>{item.tradeTerm || "-"}</td>
+                <td>{item.currency || "-"}</td>
+                <td className={styles.numericCell}>{currencyAmountText(item.currency, item.fobAmount)}</td>
+                <td>
+                  <span className={`${styles.statusPill} ${item.confirmationStatus === "CONFIRMED" ? styles.statusSuccess : styles.statusWarning}`}>
+                    {item.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}
+                  </span>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={12} className={styles.taxCalculationEmptyCell}>
+                  <div className={styles.emptyState}>暂无报关商品明细，请先上传或识别报关单。</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {currentUserRole === "管理员" && showRaw ? (
+        <pre className={styles.customsOcrRawResult}>{customsRawResultText(detail)}</pre>
+      ) : null}
     </div>
   );
 }
@@ -760,10 +904,11 @@ function TaxRefundCalculationPanel({
   const [activeCalculationSubTab, setActiveCalculationSubTab] = useState<TaxCalculationSubTab>("refund");
   const calculations = detail.exportTaxRefundCalculations || [];
   const summary = detail.exportTaxRefundSummary || {};
+  const confirmedItems = items.filter((item) => item.confirmationStatus === "CONFIRMED");
   const calculationsByItemId = new Map(calculations.map((row) => [row.declarationItemId || "", row]));
-  const orphanCalculations = calculations.filter((row) => row.declarationItemId && !items.some((item) => item.id === row.declarationItemId));
+  const orphanCalculations = calculations.filter((row) => row.declarationItemId && !confirmedItems.some((item) => item.id === row.declarationItemId));
   const displayRows = [
-    ...items.map((item, index) => ({
+    ...confirmedItems.map((item, index) => ({
       key: item.id || `item-${index}`,
       item,
       calculation: calculationsByItemId.get(item.id || ""),
@@ -828,12 +973,63 @@ function TaxRefundCalculationPanel({
   );
   const statusClass = (status?: string) => matchedStatuses.has(status || "") || status === "退税金额已计算" ? styles.statusSuccess : styles.statusDanger;
   const calculationStatusText = summary.calculationStatus || (exceptionCount ? "异常" : estimatedRefundTotal ? "已计算" : "待计算");
-  const hasCalculationRows = displayRows.length > 0;
+  const hasConfirmedItems = confirmedItems.length > 0;
   const subTabs: Array<{ key: TaxCalculationSubTab; label: string; count: number }> = [
     { key: "refund", label: "退税结果", count: displayRows.length },
     { key: "invoice", label: "发票匹配", count: displayRows.length },
     { key: "declaration", label: "报关商品", count: items.length },
   ];
+  const declarationTable = (
+    <TablePanel
+      title="报关商品"
+      actions={!readOnly ? <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button> : null}
+      formId={formId}
+      onSubmit={(event) => { event.preventDefault(); void onSaveItems(detail.id, items); }}
+    >
+      <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.taxDeclarationFocusTable}`}>
+        <thead>
+          <tr>
+            <th>报关单号</th>
+            <th>HS编码</th>
+            <th>中文品名</th>
+            <th>数量/单位</th>
+            <th>FOB金额</th>
+            <th>汇率</th>
+            <th>确认状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr key={item.id || `new-${index}`} className={item.confirmationStatus === "CONFIRMED" ? "" : styles.rowWarning}>
+              <td title={item.declarationNo || ""}><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
+              <td title={item.hsCode || ""}><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
+              <td title={item.productName || ""}><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
+              <td className={styles.numericCell} title={quantityUnitText(item.quantity, item.unit)}>
+                <div className={styles.taxInlineInputGroup}>
+                  <input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} />
+                  <input disabled={readOnly} value={item.unit || ""} onChange={(event) => updateItem(index, { unit: event.target.value })} />
+                </div>
+              </td>
+              <td className={styles.numericCell} title={currencyAmountText(item.currency, item.fobAmount)}>
+                <div className={styles.taxMoneyInputGroup}>
+                  <input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} />
+                  <input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} />
+                </div>
+              </td>
+              <td className={styles.numericCell}><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
+              <td>
+                <span className={`${styles.statusPill} ${item.confirmationStatus === "CONFIRMED" ? styles.statusSuccess : styles.statusWarning}`}>
+                  {item.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}
+                </span>
+              </td>
+              <td>{readOnly ? "-" : "保存后确认"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TablePanel>
+  );
   return (
     <div className={`${styles.documentGroupCard} ${styles.taxRefundCalculationWorkspace}`} id={taxTargetDomId("tax-refund-calculation")}>
       <div className={styles.taxCalculationKpiBar}>
@@ -843,8 +1039,13 @@ function TaxRefundCalculationPanel({
         <TaxCalculationStatCard label="异常数量" value={exceptionCount} tone={exceptionCount ? "danger" : "success"} />
         <TaxCalculationStatCard label="异常原因" value={abnormalReasonText} tone={hasExceptions ? "danger" : "success"} title={abnormalReasonText} />
       </div>
-      {!hasCalculationRows ? (
+      {!items.length ? (
         <div className={styles.taxCalculationEmptyPanel}>暂无报关商品明细，请先上传或识别报关单。</div>
+      ) : !hasConfirmedItems ? (
+          <>
+            <div className={styles.taxCalculationBlockedPanel}>没有确认报关商品明细，不允许进入退税计算。请先在“报关商品”中确认并保存。</div>
+            {declarationTable}
+          </>
       ) : (
         <>
           <div className={styles.taxCalculationSubTabs} role="tablist" aria-label="退税计算明细">
@@ -967,51 +1168,7 @@ function TaxRefundCalculationPanel({
             </TablePanel>
           ) : null}
           {activeCalculationSubTab === "declaration" ? (
-            <TablePanel
-              title="报关商品"
-              actions={!readOnly ? <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button> : null}
-              formId={formId}
-              onSubmit={(event) => { event.preventDefault(); void onSaveItems(detail.id, items); }}
-            >
-              <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.taxDeclarationFocusTable}`}>
-                <thead>
-                  <tr>
-                    <th>报关单号</th>
-                    <th>HS编码</th>
-                    <th>中文品名</th>
-                    <th>数量/单位</th>
-                    <th>FOB金额</th>
-                    <th>汇率</th>
-                    <th>确认状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={item.id || `new-${index}`}>
-                      <td title={item.declarationNo || ""}><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
-                      <td title={item.hsCode || ""}><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
-                      <td title={item.productName || ""}><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
-                      <td className={styles.numericCell} title={quantityUnitText(item.quantity, item.unit)}>
-                        <div className={styles.taxInlineInputGroup}>
-                          <input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} />
-                          <input disabled={readOnly} value={item.unit || ""} onChange={(event) => updateItem(index, { unit: event.target.value })} />
-                        </div>
-                      </td>
-                      <td className={styles.numericCell} title={currencyAmountText(item.currency, item.fobAmount)}>
-                        <div className={styles.taxMoneyInputGroup}>
-                          <input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} />
-                          <input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} />
-                        </div>
-                      </td>
-                      <td className={styles.numericCell}><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
-                      <td>{item.confirmationStatus || "-"}</td>
-                      <td>{readOnly ? "-" : "保存后生效"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TablePanel>
+            declarationTable
           ) : null}
         </>
       )}
