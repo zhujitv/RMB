@@ -1143,7 +1143,7 @@ function TaxRefundCalculationPanel({
       </div>
       {!items.length ? (
         <div className={styles.taxCalculationEmptyPanel}>
-          <span>暂无报关商品明细，请先上传或识别报关单。</span>
+          <span>暂无退税计算数据，请先上传并确认报关单。</span>
           {!readOnly ? <button className={styles.primaryButton} type="button" disabled={saving} onClick={addItem}>手工新增商品明细</button> : null}
         </div>
       ) : !hasConfirmedItems ? (

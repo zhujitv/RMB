@@ -9,15 +9,21 @@ const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const ocrIntegration = readFileSync("lib/platform/ocr-integration.ts", "utf8");
+const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
+const taxRefundErrors = readFileSync("lib/platform/tax-refund-errors.ts", "utf8");
+const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
+const taxRefundCustomsRoute = readFileSync("app/api/tax-refund/[orderId]/customs-documents/route.ts", "utf8");
+const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
 
 test("customs document tab returns parsed declaration fields and internal raw OCR result", () => {
   const customsSection = taxRefundService.match(/async function getTaxRefundCustomsDocumentsSection[\s\S]*?\n}\n\nasync function getTaxRefundCostDocumentSection/)?.[0] || "";
-  assert.match(customsSection, /prisma\.exportCustomsDeclarationItem\.findMany/);
+  assert.match(customsSection, /guardedPrismaFindMany<TaxRefundCustomsItemLight\[\]>/);
   assert.match(customsSection, /rawJson: true/);
   assert.match(customsSection, /customsDeclarationItems: serializedItems/);
-  assert.match(customsSection, /prisma\.ocrRawResult\.findMany/);
+  assert.match(customsSection, /guardedPrismaFindMany<Prisma\.OcrRawResultGetPayload<\{\}>\[\]>/);
+  assert.match(customsSection, /getTaxRefundCustomsDocumentsSection\.ocrRawResults/);
   assert.match(customsSection, /canReadOcrRawResult\(actor\)/);
-  assert.match(customsSection, /prisma\.orderDocument\.findMany/);
+  assert.match(customsSection, /guardedPrismaFindMany<TaxRefundDocumentLight\[\]>/);
   assert.match(customsSection, /currentCustomsDocument/);
   assert.match(customsSection, /historicalCustomsDocuments/);
   assert.match(customsSection, /rawResultForDocument\(ocrRawResults, currentCustomsDocument\?\.id \|\| ""\)/);
@@ -27,6 +33,21 @@ test("customs document tab returns parsed declaration fields and internal raw OC
   assert.match(taxRefundService, /serializeStoredOcrRawResult/);
   assert.match(schema, /model OcrRawResult/);
   assert.match(schema, /@@map\("ocr_raw_results"\)/);
+});
+
+test("tax refund detail guards missing Prisma models and masks read failures", () => {
+  assert.match(sharedBaseUtils, /export function requirePrismaModel/);
+  assert.match(sharedBaseUtils, /export async function guardedPrismaFindMany/);
+  assert.match(sharedBaseUtils, /Prisma Model \$\{modelName\} not found/);
+  assert.match(sharedBaseUtils, /Prisma findMany failed/);
+  assert.match(sharedBaseUtils, /modelName/);
+  assert.match(sharedBaseUtils, /location/);
+  assert.match(sharedBaseUtils, /sql: prismaQueryForLog/);
+  assert.match(taxRefundDetailRoute, /taxRefundDataReadFailure/);
+  assert.match(taxRefundCustomsRoute, /taxRefundDataReadFailure/);
+  assert.match(taxRefundCalculationRoute, /taxRefundDataReadFailure/);
+  assert.match(taxRefundErrors, /退税数据读取失败，请联系管理员。/);
+  assert.match(taxRefundErrors, /TAX_REFUND_DATA_READ_FAILED/);
 });
 
 test("tax refund detail displays customs OCR results and empty-field exception", () => {

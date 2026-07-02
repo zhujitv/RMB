@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, getTaxRefundOrderDetailSection, ok } from "../../../../../lib/platform-db";
+import { getTaxRefundOrderDetailSection, ok, taxRefundDataReadFailure } from "../../../../../lib/platform-db";
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { orderId } = await params;
     return ok({ order: await getTaxRefundOrderDetailSection(orderId, actor, "customs-documents") });
   } catch (error: unknown) {
-    return apiError(error, "读取报关资料失败");
+    const { orderId } = await params.catch(() => ({ orderId: "" }));
+    return taxRefundDataReadFailure(error, {
+      path: request.nextUrl.pathname,
+      taxRefundRecordId: orderId,
+      orderId,
+      section: "customs-documents",
+    });
   }
 }

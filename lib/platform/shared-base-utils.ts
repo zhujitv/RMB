@@ -64,6 +64,7 @@ function errorForLog(error: unknown) {
     code: typedError.code || undefined,
     message: (!isProduction || status < 500 || typedError.expose) ? (typedError.message || "未知错误") : "internal_server_error",
     stack: !isProduction ? typedError.stack : undefined,
+    details: typedError.details ? sanitizeForLog(typedError.details) : undefined,
   };
 }
 
@@ -84,6 +85,66 @@ export function logServerError(label: string, error: unknown, context: Record<st
     console.error(label, payload);
   } else {
     console.warn(label, payload);
+  }
+}
+
+function prismaQueryForLog(modelName: string, action: string, args: unknown) {
+  return `prisma.${modelName}.${action}(${JSON.stringify(sanitizeForLog(args))})`;
+}
+
+export function requirePrismaModel<T>(delegate: T | null | undefined, modelName: string, context: Record<string, unknown> = {}): T {
+  if (delegate) return delegate;
+  const error = codedError(`Prisma Model ${modelName} not found`, 500, "PRISMA_MODEL_NOT_FOUND");
+  error.expose = false;
+  error.details = { modelName, ...context };
+  logServerError("Prisma Model not found", error, {
+    modelName,
+    ...context,
+  });
+  throw error;
+}
+
+export async function guardedPrismaFindMany<T = unknown>(
+  delegate: unknown,
+  modelName: string,
+  location: string,
+  args: unknown,
+): Promise<T> {
+  const model = requirePrismaModel<{ findMany?: (query: unknown) => Promise<T> }>(delegate as { findMany?: (query: unknown) => Promise<T> } | undefined, modelName, {
+    operation: "findMany",
+    location,
+    sql: prismaQueryForLog(modelName, "findMany", args),
+  });
+  if (typeof model.findMany !== "function") {
+    const error = codedError(`Prisma Model ${modelName} findMany not found`, 500, "PRISMA_MODEL_METHOD_NOT_FOUND");
+    error.expose = false;
+    error.details = { modelName, operation: "findMany", location };
+    logServerError("Prisma Model method not found", error, {
+      modelName,
+      operation: "findMany",
+      location,
+      sql: prismaQueryForLog(modelName, "findMany", args),
+    });
+    throw error;
+  }
+  try {
+    return await model.findMany(args);
+  } catch (error: unknown) {
+    const typedError = error as AppError;
+    typedError.details = {
+      ...(isPlainRecord(typedError.details) ? typedError.details : {}),
+      modelName,
+      operation: "findMany",
+      location,
+      sql: prismaQueryForLog(modelName, "findMany", args),
+    };
+    logServerError("Prisma findMany failed", error, {
+      modelName,
+      operation: "findMany",
+      location,
+      sql: prismaQueryForLog(modelName, "findMany", args),
+    });
+    throw error;
   }
 }
 

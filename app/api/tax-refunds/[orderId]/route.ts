@@ -16,6 +16,7 @@ import {
   refreshTaxRefundCompletenessNow,
   saveCustomsDeclarationItems,
   sendManualShippingDocumentsNotification,
+  taxRefundDataReadFailure,
   updateCustomsRecognition,
   updateTaxRefundStatus,
 } from "../../../../lib/platform-db";
@@ -40,7 +41,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { orderId } = await params;
     return ok({ order: await getTaxRefundOrderDetail(orderId, actor) });
   } catch (error: unknown) {
-    return apiError(error, "读取退税资料详情失败");
+    const { orderId } = await params.catch(() => ({ orderId: "" }));
+    return taxRefundDataReadFailure(error, {
+      path: request.nextUrl.pathname,
+      taxRefundRecordId: orderId,
+      orderId,
+      api: "GET /api/tax-refunds/[orderId]",
+    });
   }
 }
 

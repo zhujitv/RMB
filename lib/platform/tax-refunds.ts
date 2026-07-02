@@ -23,6 +23,7 @@ import {
   domesticLogisticsInfoSafeSelect,
   getExchangeRateSettings,
   getCommissionFormulaSettings,
+  guardedPrismaFindMany,
   includeOrderRelations,
   nonEmpty,
   num,
@@ -272,7 +273,7 @@ function warnIfArchivedLogisticsHasNoTransportItems(order: TaxRefundOrderWithRel
 }
 
 async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelations): Promise<TaxRefundOrderWithRelations> {
-  const orderBills = await prisma.logisticsBill.findMany({
+  const orderBills = await guardedPrismaFindMany<Array<{ billOfLadingNo: string | null }>>(prisma.logisticsBill, "logisticsBill", "lib/platform/tax-refunds.ts:hydrateTaxRefundOrderLogisticsInfo.orderBills", {
     where: { orderId: order.id, deletedAt: null, NOT: { billOfLadingNo: "" } },
     select: { billOfLadingNo: true },
     orderBy: [{ createdAt: "asc" }],
@@ -280,7 +281,7 @@ async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelat
   });
   const billOfLadingNumbers = taxRefundDetailBillOfLadingNumbers({ ...order, logisticsBills: orderBills });
   const relatedOrders = billOfLadingNumbers.length
-    ? await prisma.receivableOrder.findMany({
+    ? await guardedPrismaFindMany<Array<{ id: string; domesticLogisticsInfos: TaxRefundDomesticLogisticsInfo[] }>>(prisma.receivableOrder, "receivableOrder", "lib/platform/tax-refunds.ts:hydrateTaxRefundOrderLogisticsInfo.relatedOrders", {
       where: {
         deletedAt: null,
         OR: [
@@ -703,7 +704,7 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
     ];
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
-    prisma.receivableOrder.findMany({
+    guardedPrismaFindMany<Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>[]>(prisma.receivableOrder, "receivableOrder", "lib/platform/tax-refunds.ts:listTaxRefundOrders.rows", {
       where,
       select: taxRefundLightListSelect,
       orderBy,
@@ -937,7 +938,7 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
   const [basic, documents, customsItems, customsDocuments, ocrRawResults] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
-    prisma.exportCustomsDeclarationItem.findMany({
+    guardedPrismaFindMany<TaxRefundCustomsItemLight[]>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.customsItems", {
       where: { orderId, deletedAt: null },
       select: {
         id: true,
@@ -969,14 +970,14 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: 200,
     }),
-    prisma.orderDocument.findMany({
+    guardedPrismaFindMany<TaxRefundDocumentLight[]>(prisma.orderDocument, "orderDocument", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.customsDocuments", {
       where: { orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
       select: taxRefundDocumentLightSelect,
       orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
       take: 20,
     }),
     canReadRaw
-      ? prisma.ocrRawResult.findMany({
+      ? guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
         where: { orderId, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
         orderBy: [{ createdAt: "desc" }],
         take: 100,

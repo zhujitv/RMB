@@ -10,6 +10,7 @@ import {
 } from "./shared-constants";
 import {
   codedError,
+  guardedPrismaFindMany,
   nonEmpty,
   num,
 } from "./shared-base-utils";
@@ -235,7 +236,7 @@ function invoiceLineFromDocument(document: Prisma.OrderDocumentGetPayload<{
 }
 
 async function supplierInvoiceLinesForOrder(orderId: string): Promise<InvoiceLine[]> {
-  const documents = await prisma.orderDocument.findMany({
+  const documents = await guardedPrismaFindMany<Array<Prisma.OrderDocumentGetPayload<{ include: { supplier: true; cost: { include: { supplier: true } }; ocrTasks: true } }>>>(prisma.orderDocument, "orderDocument", "lib/platform/export-tax-refund-calculations.ts:supplierInvoiceLinesForOrder.documents", {
     where: {
       orderId,
       deletedAt: null,
@@ -288,7 +289,7 @@ function matchInvoices(group: DeclarationGroup, invoiceLines: InvoiceLine[], sup
 }
 
 async function supplierCountForOrder(orderId: string) {
-  const costs = await prisma.orderCost.findMany({
+  const costs = await guardedPrismaFindMany<Array<{ supplierId: string | null }>>(prisma.orderCost, "orderCost", "lib/platform/export-tax-refund-calculations.ts:supplierCountForOrder.costs", {
     where: {
       orderId,
       deletedAt: null,
@@ -312,7 +313,7 @@ async function findCompanyHs(hsCode: string, enabled: boolean) {
 async function duplicateInvoiceUseReasons(orderId: string, lines: InvoiceLine[]) {
   const documentIds = lines.map((line) => line.documentId).filter(Boolean);
   if (!documentIds.length) return [];
-  const existing = await prisma.exportTaxRefundCalculation.findMany({
+  const existing = await guardedPrismaFindMany<Array<{ id: string; invoiceMatchJson: Prisma.JsonValue | null }>>(prisma.exportTaxRefundCalculation, "exportTaxRefundCalculation", "lib/platform/export-tax-refund-calculations.ts:duplicateInvoiceUseReasons.existing", {
     where: {
       orderId: { not: orderId },
       deletedAt: null,
@@ -584,7 +585,7 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限确认报关商品明细", 403);
   const actorId = nonEmpty(actor?.id);
   if (!actorId) throw permissionError("请先登录", 401);
-  const before = await prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }] });
+  const before = await guardedPrismaFindMany<Array<Prisma.ExportCustomsDeclarationItemGetPayload<{}>>>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/export-tax-refund-calculations.ts:saveCustomsDeclarationItems.before", { where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }] });
   await prisma.$transaction(async (tx) => {
     for (const [index, item] of items.entries()) {
       const exchangeRate = num(item.exchangeRate, 0);
@@ -663,7 +664,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
   }
   const actorId = nonEmpty(actor?.id);
   const [items, invoiceLines, supplierCount] = await Promise.all([
-    prisma.exportCustomsDeclarationItem.findMany({
+    guardedPrismaFindMany<Array<Prisma.ExportCustomsDeclarationItemGetPayload<{}>>>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/export-tax-refund-calculations.ts:recalculateExportTaxRefund.items", {
       where: { orderId, deletedAt: null, confirmationStatus: "CONFIRMED" },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
@@ -832,8 +833,8 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
 
 export async function getExportTaxRefundCalculationSummary(orderId: string) {
   const [items, calculations] = await Promise.all([
-    prisma.exportCustomsDeclarationItem.findMany({ where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
-    prisma.exportTaxRefundCalculation.findMany({
+    guardedPrismaFindMany<Array<Prisma.ExportCustomsDeclarationItemGetPayload<{}>>>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/export-tax-refund-calculations.ts:getExportTaxRefundCalculationSummary.items", { where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
+    guardedPrismaFindMany<Array<Prisma.ExportTaxRefundCalculationGetPayload<{ include: { declarationItem: true; rate: true } }>>>(prisma.exportTaxRefundCalculation, "exportTaxRefundCalculation", "lib/platform/export-tax-refund-calculations.ts:getExportTaxRefundCalculationSummary.calculations", {
       where: { orderId, deletedAt: null },
       include: { declarationItem: true, rate: true },
       orderBy: [{ createdAt: "asc" }],

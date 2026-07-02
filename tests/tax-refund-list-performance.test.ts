@@ -62,7 +62,7 @@ test("tax refund detail uses a large verification workspace for calculation revi
   assert.match(detail, /计算状态/);
   assert.match(detail, /异常数量/);
   assert.match(detail, /理论退税额/);
-  assert.match(detail, /暂无报关商品明细，请先上传或识别报关单。/);
+  assert.match(detail, /暂无退税计算数据，请先上传并确认报关单。/);
   assert.match(detail, /发票金额/);
   assert.match(detail, /amountText\(row\?\.estimatedRefundAmount\)/);
   assert.match(detail, /function TablePanel/);
