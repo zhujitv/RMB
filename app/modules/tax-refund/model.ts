@@ -221,6 +221,34 @@ export type TaxDocument = {
   customsRecognition?: CustomsRecognitionResult;
 };
 
+export type OcrRawResultView = {
+  id?: string;
+  documentId?: string;
+  orderId?: string;
+  documentType?: string;
+  provider?: string;
+  apiName?: string;
+  rawJson?: unknown;
+  parsedJson?: unknown;
+  confidence?: number | null;
+  status?: string;
+  errorMessage?: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type CustomsRecognitionDocument = TaxDocument & {
+  isCurrent?: boolean;
+  ocrRawResultId?: string;
+  ocrStatus?: string;
+  ocrApiName?: string;
+  ocrRecognizedAt?: string | null;
+  hasRawJson?: boolean;
+  hasParsedJson?: boolean;
+  ocrErrorMessage?: string;
+  ocrRawResult?: OcrRawResultView | null;
+};
+
 export type TaxCost = {
   id: string;
   supplierId?: string;
@@ -263,21 +291,10 @@ export type TaxRefundDetail = TaxRefundRow & {
   costs?: TaxCost[];
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   customsDeclarationItems?: CustomsDeclarationItem[];
-  customsOcrRawResult?: {
-    id?: string;
-    documentId?: string;
-    orderId?: string;
-    documentType?: string;
-    provider?: string;
-    apiName?: string;
-    rawJson?: unknown;
-    parsedJson?: unknown;
-    confidence?: number | null;
-    status?: string;
-    errorMessage?: string;
-    createdAt?: string | null;
-    updatedAt?: string | null;
-  } | null;
+  currentCustomsDocument?: CustomsRecognitionDocument | null;
+  historicalCustomsDocuments?: CustomsRecognitionDocument[];
+  customsOcrCallLogs?: OcrRawResultView[];
+  customsOcrRawResult?: OcrRawResultView | null;
   exportTaxRefundCalculations?: ExportTaxRefundCalculation[];
   exportTaxRefundSummary?: ExportTaxRefundSummary;
 };

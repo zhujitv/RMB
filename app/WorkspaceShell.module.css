@@ -1003,6 +1003,67 @@
   gap: 10px;
 }
 
+.customsOcrFilePanel {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.customsOcrFileRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.customsOcrFileRow > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.customsOcrFileRow strong {
+  color: #0f172a;
+}
+
+.customsOcrHistoryList {
+  display: grid;
+  gap: 6px;
+}
+
+.customsOcrLogList {
+  display: grid;
+  gap: 6px;
+}
+
+.customsOcrLogRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+}
+
+.textSuccess {
+  color: #047857;
+  font-weight: 700;
+}
+
+.textDanger {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .customsOcrRawResult {
   max-height: 260px;
   margin: 0;

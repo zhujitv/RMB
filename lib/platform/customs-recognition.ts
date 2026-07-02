@@ -27,7 +27,7 @@ import {
 } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
 import { recognizePdfTextWithOcr } from "./ocr-integration";
-import { saveOcrRawResult } from "./ocr-raw-results";
+import { logOcrCallFailure, saveOcrRawResult } from "./ocr-raw-results";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 
 type CustomsDocumentRuntimeFields = {
@@ -632,6 +632,15 @@ export async function parseAndApplyCustomsDocument(
       })
       : serializedOrder;
   } catch (error: unknown) {
+    logOcrCallFailure({
+      documentId: document.id,
+      orderId: document.orderId,
+      documentType: document.documentType,
+      provider: "ALIYUN",
+      apiName: "CUSTOMS_DECLARATION_OCR",
+      errorCode: errorCode(error),
+      errorMessage: errorMessage(error),
+    });
     const publicMessage = customsFailurePublicMessage(error, errorMessage(error) || "报关单识别失败");
     const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, publicMessage, errorCode(error) || "CUSTOMS_PARSE_FAILED", failureAction, {
       allowManualFailure,

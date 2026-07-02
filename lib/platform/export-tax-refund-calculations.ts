@@ -20,7 +20,7 @@ import { includeOrderRelations } from "./shared-order-relations";
 import { roundMoney } from "./shared-order-calculations";
 import { getTaxRefundFeatureSettings, isTaxRefundCalculationFeatureEnabled } from "./tax-refund-features";
 import { recognizePdfTextWithOcr } from "./ocr-integration";
-import { saveOcrRawResult } from "./ocr-raw-results";
+import { logOcrCallFailure, saveOcrRawResult } from "./ocr-raw-results";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -412,7 +412,18 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
   if (!document?.storageKey) throw codedError("未找到可识别的报关单 PDF。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
   const fileBuffer = await readR2Object(document.storageKey);
   if (!fileBuffer) throw codedError("未读取到报关单 PDF 文件。", 404, "CUSTOMS_DOCUMENT_FILE_EMPTY");
-  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true });
+  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true }).catch((error) => {
+    logOcrCallFailure({
+      documentId,
+      orderId,
+      documentType: document.documentType,
+      provider: "ALIYUN",
+      apiName: "CUSTOMS_DECLARATION_ITEMS_OCR",
+      errorCode: (error as { code?: unknown } | null)?.code,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  });
   const parsed = customsParsedFromRecognition(recognized);
   const itemMissingMessage = "已识别基础字段，但未解析到商品明细，请人工维护。";
   const actorId = nonEmpty(actor?.id);

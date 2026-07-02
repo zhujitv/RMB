@@ -659,6 +659,35 @@ function canReadCustomsRawResult(role: string) {
   return role === "管理员" || role === "财务";
 }
 
+function CustomsRecognitionDocumentSummary({
+  title,
+  document,
+  canReadRaw,
+}: {
+  title: string;
+  document?: TaxRefundDetail["currentCustomsDocument"] | null;
+  canReadRaw: boolean;
+}) {
+  if (!document) return null;
+  return (
+    <div className={styles.customsOcrFileRow}>
+      <div>
+        <strong>{title}</strong>
+        <span title={document.fileName || ""}>{document.fileName || document.id || "-"}</span>
+      </div>
+      <div>
+        <span>{formatDateTime(document.uploadedAt)}</span>
+        <span>documentId: {document.id || "-"}</span>
+        {canReadRaw ? (
+          <span className={document.hasRawJson && document.hasParsedJson ? styles.textSuccess : styles.textDanger}>
+            raw: {document.hasRawJson ? "已保存" : "缺失"} / parsed: {document.hasParsedJson ? "已保存" : "缺失"}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function CustomsRecognitionResultPanel({
   detail,
   currentUserRole,
@@ -684,6 +713,8 @@ function CustomsRecognitionResultPanel({
   const tradeCountry = firstItem.tradeCountry || "";
   const destinationCountry = firstItem.destinationCountry || "";
   const supervisionMode = firstItem.supervisionMode || "";
+  const canReadRaw = canReadCustomsRawResult(currentUserRole);
+  const historicalCustomsDocuments = detail.historicalCustomsDocuments || [];
   return (
     <div className={`${styles.documentGroupCard} ${styles.customsRecognitionResultCard}`} id={taxTargetDomId("customs-recognition-result")}>
       <div className={styles.customsResultHeader}>
@@ -695,7 +726,7 @@ function CustomsRecognitionResultPanel({
           <span className={`${styles.statusPill} ${ocrSuccessButEmpty ? styles.statusDanger : hasAnyParsedField ? styles.statusSuccess : styles.statusWarning}`}>
             {ocrSuccessButEmpty ? "字段异常" : hasAnyParsedField ? "已解析" : "待识别"}
           </span>
-          {canReadCustomsRawResult(currentUserRole) ? (
+          {canReadRaw ? (
             <button className={styles.secondaryButton} type="button" onClick={() => setShowRaw((value) => !value)}>
               查看OCR原始结果
             </button>
@@ -707,6 +738,23 @@ function CustomsRecognitionResultPanel({
       ) : null}
       {ocrSuccessButNoItems ? (
         <div className={styles.inlineError}>OCR已识别基础字段，但未解析到报关商品明细。</div>
+      ) : null}
+      {detail.currentCustomsDocument || historicalCustomsDocuments.length ? (
+        <div className={styles.customsOcrFilePanel}>
+          <CustomsRecognitionDocumentSummary title="当前识别文件" document={detail.currentCustomsDocument} canReadRaw={canReadRaw} />
+          {historicalCustomsDocuments.length ? (
+            <div className={styles.customsOcrHistoryList}>
+              {historicalCustomsDocuments.map((document, index) => (
+                <CustomsRecognitionDocumentSummary
+                  key={document?.id || `historical-customs-${index}`}
+                  title="历史识别文件"
+                  document={document}
+                  canReadRaw={canReadRaw}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       ) : null}
       <div className={styles.taxBasicInfoGrid}>
         <TaxInfoItem label="报关单号" value={detail.customsDeclarationNo || firstItem.declarationNo || ""} />
@@ -766,10 +814,10 @@ function CustomsRecognitionResultPanel({
           </tbody>
         </table>
       </div>
-      {canReadCustomsRawResult(currentUserRole) && rawMissing ? (
+      {canReadRaw && rawMissing ? (
         <div className={styles.inlineError}>OCR原始结果未保存，请重新识别。</div>
       ) : null}
-      {canReadCustomsRawResult(currentUserRole) && showRaw ? (
+      {canReadRaw && showRaw ? (
         <div className={styles.customsRawResultSection}>
           <div className={styles.sectionSubheading}>OCR原始结果</div>
           <div className={styles.taxBasicInfoGrid}>
@@ -779,6 +827,25 @@ function CustomsRecognitionResultPanel({
             <TaxInfoItem label="失败原因" value={detail.customsOcrRawResult?.errorMessage || ""} wide />
           </div>
           <pre className={styles.customsOcrRawResult}>{customsRawResultText(detail)}</pre>
+          {detail.customsOcrCallLogs?.length ? (
+            <>
+              <div className={styles.sectionSubheading}>OCR调用日志</div>
+              <div className={styles.customsOcrLogList}>
+                {detail.customsOcrCallLogs.map((log) => (
+                  <div className={styles.customsOcrLogRow} key={log.id || `${log.documentId}-${log.createdAt}`}>
+                    <span>{formatDateTime(log.createdAt)}</span>
+                    <span>{log.provider || "-"}</span>
+                    <span>{log.apiName || "-"}</span>
+                    <span>documentId: {log.documentId || "-"}</span>
+                    <span className={log.rawJson && log.parsedJson ? styles.textSuccess : styles.textDanger}>
+                      raw: {log.rawJson ? "已保存" : "缺失"} / parsed: {log.parsedJson ? "已保存" : "缺失"}
+                    </span>
+                    {log.errorMessage ? <span title={log.errorMessage}>错误：{log.errorMessage}</span> : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -34,6 +34,16 @@ export function canReadOcrRawResult(actor: ActorLike) {
 }
 
 export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.TransactionClient = prisma) {
+  if (input.rawJson == null && input.status !== "FAILED") {
+    console.error("OCR response received but rawJson was not persisted.", {
+      documentId: input.documentId,
+      orderId: input.orderId || "",
+      documentType: input.documentType,
+      provider: cleanText(input.provider, "ALIYUN"),
+      apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
+      status: cleanText(input.status, "SUCCESS"),
+    });
+  }
   return tx.ocrRawResult.create({
     data: {
       documentId: input.documentId,
@@ -47,6 +57,26 @@ export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.Tran
       status: cleanText(input.status, "SUCCESS"),
       errorMessage: cleanText(input.errorMessage) || null,
     },
+  });
+}
+
+export function logOcrCallFailure(input: {
+  documentId?: string | null;
+  orderId?: string | null;
+  documentType?: string | null;
+  provider?: string | null;
+  apiName?: string | null;
+  errorCode?: unknown;
+  errorMessage?: unknown;
+}) {
+  console.error("OCR call failed.", {
+    documentId: input.documentId || "",
+    orderId: input.orderId || "",
+    documentType: input.documentType || "",
+    provider: cleanText(input.provider, "ALIYUN"),
+    apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
+    errorCode: cleanText(input.errorCode),
+    errorMessage: cleanText(input.errorMessage),
   });
 }
 

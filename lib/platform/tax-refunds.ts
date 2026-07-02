@@ -467,6 +467,38 @@ function serializeCustomsOcrRawResult(task: {
   };
 }
 
+function rawResultForDocument(
+  rawResults: Array<Prisma.OcrRawResultGetPayload<{}>> = [],
+  documentId = "",
+) {
+  if (!documentId) return null;
+  return rawResults.find((row) => row.documentId === documentId) || null;
+}
+
+function serializeCustomsRecognitionDocument(
+  document: TaxRefundDocumentLight | null,
+  order: Record<string, unknown>,
+  rawResult: Prisma.OcrRawResultGetPayload<{}> | null = null,
+  isCurrent = false,
+  canReadRaw = false,
+) {
+  if (!document) return null;
+  const serialized = serializeTaxRefundLightDocument(document, order);
+  const raw = canReadRaw ? serializeStoredOcrRawResult(rawResult) : null;
+  return {
+    ...serialized,
+    isCurrent,
+    ocrRawResultId: rawResult?.id || "",
+    ocrStatus: rawResult?.status || "",
+    ocrApiName: rawResult?.apiName || "",
+    ocrRecognizedAt: rawResult?.createdAt || null,
+    hasRawJson: Boolean(rawResult?.rawJson),
+    hasParsedJson: Boolean(rawResult?.parsedJson),
+    ocrErrorMessage: rawResult?.errorMessage || "",
+    ocrRawResult: raw,
+  };
+}
+
 function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<string, unknown> = {}) {
   return {
     id: cost.id,
@@ -901,7 +933,8 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
 }
 
 async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
-  const [basic, documents, customsItems, latestOcrRawResult] = await Promise.all([
+  const canReadRaw = canReadOcrRawResult(actor);
+  const [basic, documents, customsItems, customsDocuments, ocrRawResults] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
     prisma.exportCustomsDeclarationItem.findMany({
@@ -936,14 +969,25 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: 200,
     }),
-    canReadOcrRawResult(actor)
-      ? prisma.ocrRawResult.findFirst({
-        where: { orderId, documentType: "CUSTOMS_ENTRY_FORM" },
+    prisma.orderDocument.findMany({
+      where: { orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
+      select: taxRefundDocumentLightSelect,
+      orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
+      take: 20,
+    }),
+    canReadRaw
+      ? prisma.ocrRawResult.findMany({
+        where: { orderId, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
         orderBy: [{ createdAt: "desc" }],
+        take: 100,
       })
-      : Promise.resolve(null),
+      : Promise.resolve([]),
   ]);
   const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
+  const currentCustomsDocument = customsDocuments[0] || null;
+  const currentRawResult = rawResultForDocument(ocrRawResults, currentCustomsDocument?.id || "");
+  const historicalCustomsDocuments = customsDocuments.slice(1);
+  const currentItemRawFallback = (customsItems || []).filter((item) => item.documentId === currentCustomsDocument?.id);
   return {
     ...documents,
     ...basic,
@@ -954,8 +998,15 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
     customsParseSourceLabel: basic.customsParseSourceLabel || "",
     customsParseMessage: basic.customsParseMessage || "",
     customsDeclarationItems: serializedItems,
-    customsOcrRawResult: canReadOcrRawResult(actor)
-      ? serializeStoredOcrRawResult(latestOcrRawResult) || serializeCustomsOcrRawResult(null, customsItems || [])
+    currentCustomsDocument: serializeCustomsRecognitionDocument(currentCustomsDocument, basic, currentRawResult, true, canReadRaw),
+    historicalCustomsDocuments: historicalCustomsDocuments.map((document) => (
+      serializeCustomsRecognitionDocument(document, basic, rawResultForDocument(ocrRawResults, document.id), false, canReadRaw)
+    )).filter(Boolean),
+    customsOcrCallLogs: canReadRaw
+      ? ocrRawResults.map((row) => serializeStoredOcrRawResult(row)).filter(Boolean)
+      : [],
+    customsOcrRawResult: canReadRaw
+      ? serializeStoredOcrRawResult(currentRawResult) || serializeCustomsOcrRawResult(null, currentItemRawFallback)
       : null,
   };
 }

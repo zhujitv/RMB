@@ -15,8 +15,13 @@ test("customs document tab returns parsed declaration fields and internal raw OC
   assert.match(customsSection, /prisma\.exportCustomsDeclarationItem\.findMany/);
   assert.match(customsSection, /rawJson: true/);
   assert.match(customsSection, /customsDeclarationItems: serializedItems/);
-  assert.match(customsSection, /prisma\.ocrRawResult\.findFirst/);
+  assert.match(customsSection, /prisma\.ocrRawResult\.findMany/);
   assert.match(customsSection, /canReadOcrRawResult\(actor\)/);
+  assert.match(customsSection, /prisma\.orderDocument\.findMany/);
+  assert.match(customsSection, /currentCustomsDocument/);
+  assert.match(customsSection, /historicalCustomsDocuments/);
+  assert.match(customsSection, /rawResultForDocument\(ocrRawResults, currentCustomsDocument\?\.id \|\| ""\)/);
+  assert.match(customsSection, /customsOcrCallLogs/);
   assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
   assert.match(taxRefundService, /domesticConsignor/);
   assert.match(taxRefundService, /serializeStoredOcrRawResult/);
@@ -29,8 +34,14 @@ test("tax refund detail displays customs OCR results and empty-field exception",
   assert.match(model, /domesticConsignor\?: string/);
   assert.match(model, /apiName\?: string/);
   assert.match(model, /rawJson\?: unknown/);
+  assert.match(model, /currentCustomsDocument\?: CustomsRecognitionDocument/);
+  assert.match(model, /historicalCustomsDocuments\?: CustomsRecognitionDocument\[\]/);
+  assert.match(model, /customsOcrCallLogs\?: OcrRawResultView\[\]/);
   assert.match(detail, /function CustomsRecognitionResultPanel/);
   assert.match(detail, /报关单识别结果/);
+  assert.match(detail, /当前识别文件/);
+  assert.match(detail, /历史识别文件/);
+  assert.match(detail, /OCR调用日志/);
   assert.match(detail, /OCR识别成功，但未解析到报关单关键字段。/);
   assert.match(detail, /OCR已识别基础字段，但未解析到报关商品明细。/);
   assert.match(detail, /OCR原始结果未保存，请重新识别。/);
@@ -54,11 +65,14 @@ test("tax refund detail displays customs OCR results and empty-field exception",
   assert.match(detail, /规格型号/);
   assert.match(styles, /\.customsRecognitionResultCard/);
   assert.match(styles, /\.customsRawResultSection/);
+  assert.match(styles, /\.customsOcrFilePanel/);
+  assert.match(styles, /\.customsOcrLogList/);
   assert.match(styles, /\.customsOcrRawResult/);
 });
 
 test("tax refund calculation requires confirmed declaration items", () => {
   assert.match(taxCalculationService, /saveOcrRawResult/);
+  assert.match(taxCalculationService, /logOcrCallFailure/);
   assert.match(taxCalculationService, /customsParsedFromRecognition/);
   assert.match(taxCalculationService, /已识别基础字段，但未解析到商品明细，请人工维护。/);
   assert.match(taxCalculationService, /confirmationStatus: "CONFIRMED"/);
@@ -79,4 +93,16 @@ test("customs OCR uses structured recognition with table fallback and saves full
   assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE/);
   assert.match(ocrIntegration, /rawJson: \{ primary: primaryRawJson, table: tableRawJson \}/);
   assert.match(ocrIntegration, /parsedJson/);
+});
+
+test("customs OCR persistence logs empty raw JSON and failed provider calls", () => {
+  const rawResultService = readFileSync("lib/platform/ocr-raw-results.ts", "utf8");
+  const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
+  assert.match(rawResultService, /OCR response received but rawJson was not persisted\./);
+  assert.match(rawResultService, /export function logOcrCallFailure/);
+  assert.match(rawResultService, /provider/);
+  assert.match(rawResultService, /apiName/);
+  assert.match(rawResultService, /errorCode/);
+  assert.match(rawResultService, /errorMessage/);
+  assert.match(customsRecognition, /logOcrCallFailure/);
 });
