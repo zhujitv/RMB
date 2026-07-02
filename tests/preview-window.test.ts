@@ -385,7 +385,7 @@ test("domestic logistics customs declaration keeps one current upload", () => {
   assert.match(orderDocumentsService, /softDeleteFileAssetBySource\(/);
 });
 
-test("tax refund customs recognition stays focused on current declaration fields", () => {
+test("tax refund customs recognition stores raw OCR while backfilling current declaration fields", () => {
   const customsRecognitionFormSource = taxRefundModule.match(/export function CustomsRecognitionForm[\s\S]*?\n}\n\nexport function CustomsUploadCard/)?.[0] || "";
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
   assert.match(taxRefundModule, /UPLOAD_REPLACE_TEXT/);
@@ -403,15 +403,18 @@ test("tax refund customs recognition stays focused on current declaration fields
   );
   assert.match(
     customsRecognitionService,
-    /customsDeclarationNo: result\.customsDeclarationNo \|\| ""/,
+    /customsDeclarationNo: String\(parsed\.customsDeclarationNo \|\| result\.customsDeclarationNo \|\| ""\)/,
   );
   assert.match(
     customsRecognitionService,
-    /customsDeclarationDate: result\.customsDeclarationDate \|\| ""/,
+    /customsDeclarationDate: String\(parsed\.customsDeclarationDate \|\| result\.customsDeclarationDate \|\| ""\)/,
   );
+  assert.match(customsRecognitionService, /saveOcrRawResult/);
+  assert.match(customsRecognitionService, /rawJson/);
+  assert.match(customsRecognitionService, /parsedJson/);
   assert.doesNotMatch(
     customsRecognitionFormSource,
-    /运输方式|车牌号|起运地|到达地|货物名称/,
+    /车牌号|起运地|到达地/,
   );
 });
 
