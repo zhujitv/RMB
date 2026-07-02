@@ -38,13 +38,7 @@ export type CustomsDeclarationDetailParseResult = CustomsParseResult & {
   exportDate: string;
   tradeTerm: string;
   currency: string;
-  domesticConsignor: string;
-  declarationUnit: string;
-  transportMode: string;
-  billOfLadingNo: string;
-  tradeCountry: string;
-  destinationCountry: string;
-  supervisionMode: string;
+  totalAmount: number;
   items: CustomsDeclarationItemFields[];
 };
 
@@ -155,31 +149,16 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
   const exportDate = findBestLabeledDate(normalized, EXPORT_DATE_LABELS);
   const tradeTerm = findTradeTerm(normalized);
   const currency = findCurrency(normalized);
-  const domesticConsignor = findBestLabeledText(normalized, DOMESTIC_CONSIGNOR_LABELS);
-  const declarationUnit = findBestLabeledText(normalized, DECLARATION_UNIT_LABELS);
-  const transportMode = findBestLabeledText(normalized, TRANSPORT_MODE_LABELS);
-  const billOfLadingNo = findBestLabeledText(normalized, BILL_OF_LADING_LABELS);
-  const tradeCountry = findBestLabeledText(normalized, TRADE_COUNTRY_LABELS);
-  const destinationCountry = findBestLabeledText(normalized, DESTINATION_COUNTRY_LABELS);
-  const supervisionMode = findBestLabeledText(normalized, SUPERVISION_MODE_LABELS);
-  const items = parseCustomsDeclarationItems(normalized).map((item) => ({
-    ...item,
-    tradeTerm: item.tradeTerm || tradeTerm,
-    currency: item.currency || currency,
-    destinationCountry: item.destinationCountry || destinationCountry,
-  }));
+  const items = parseCustomsDeclarationItems(normalized)
+    .map((item) => normalizeCustomsDeclarationItemForTaxRefund(item, { tradeTerm, currency }))
+    .filter((item): item is CustomsDeclarationItemFields => Boolean(item));
+  const totalAmount = items.reduce((sum, item) => sum + (item.totalAmount || item.fobAmount || 0), 0) || findDeclarationTotalAmount(normalized);
   return {
     ...base,
     exportDate,
     tradeTerm,
     currency,
-    domesticConsignor,
-    declarationUnit,
-    transportMode,
-    billOfLadingNo,
-    tradeCountry,
-    destinationCountry,
-    supervisionMode,
+    totalAmount,
     items,
   };
 }
@@ -476,15 +455,89 @@ function numericAmount(value = "") {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-const CUSTOMS_ITEM_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
+const CUSTOMS_ITEM_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
 const CUSTOMS_ITEM_UNIT_REGEX = new RegExp(CUSTOMS_ITEM_UNIT_PATTERN, "i");
 const CUSTOMS_ITEM_HEADER_PATTERN = /^(项号|商品编号|HS编码|商品名称|商品名称及规格型号|规格型号|数量及单位|数量|单位|单价|总价|币制|原产国|最终目的国|征免|法定|成交|第一|第二)$/i;
-const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|境内发货人|申报单位|运输方式|提运单号|贸易国别|目的国|监管方式|征免性质|许可证号|合同协议号|集装箱|随附单证|标记唛码|备注)/;
+const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|日期|境内发货人|境内收发货人|申报单位|运输方式|提运单号|提单号|贸易国别|贸易国|目的国|监管方式|征免性质|征免|许可证号|合同协议号|集装箱|集装箱号|箱号|港口|口岸|装货港|指运港|境内货源地|随附单证|标记唛码|备注|发票|代理报关委托协议|毛重|净重)/;
+const CUSTOMS_ITEM_CONTAINER_NO_PATTERN = /\b[A-Z]{4}\d{7}\b/i;
+const CUSTOMS_ITEM_DATE_PATTERN = /\b20\d{2}[-/.年]?\d{1,2}[-/.月]?\d{1,2}(?:日)?\b/;
+
+export function normalizeCustomsDeclarationItemForTaxRefund(
+  input: Partial<CustomsDeclarationItemFields> & Record<string, unknown> = {},
+  defaults: Partial<Pick<CustomsDeclarationItemFields, "currency" | "tradeTerm">> = {},
+): CustomsDeclarationItemFields | null {
+  const productName = cleanTaxRefundProductName(input.productName);
+  const quantity = numericAmount(String(input.quantity ?? ""));
+  const unit = normalizeCustomsItemUnit(input.unit);
+  const totalAmount = numericAmount(String(input.totalAmount ?? input.fobAmount ?? ""));
+  if (!isValidTaxRefundProductName(productName) || quantity <= 0 || !unit || totalAmount <= 0) return null;
+  const currency = normalizeCurrency(String(input.currency || defaults.currency || ""));
+  return {
+    hsCode: "",
+    productName,
+    specification: "",
+    quantity,
+    unit,
+    unitPrice: 0,
+    totalAmount,
+    tradeTerm: normalizeTradeTerm(String(input.tradeTerm || defaults.tradeTerm || "")),
+    currency,
+    fobAmount: totalAmount,
+    grossWeight: 0,
+    netWeight: 0,
+    originCountry: "",
+    destinationCountry: "",
+  };
+}
+
+function normalizeTradeTerm(value = "") {
+  const match = String(value || "").trim().toUpperCase().match(/\b(FOB|CIF|CFR|EXW)\b/);
+  return match?.[1] || "";
+}
+
+function normalizeCustomsItemUnit(value: unknown) {
+  const text = String(value || "").trim().toUpperCase();
+  if (!text) return "";
+  if (["KG", "KGS", "公斤"].includes(text)) return "千克";
+  if (["PC", "PCE", "PCS", "PIECE", "PIECES"].includes(text)) return "PCS";
+  if (["SET", "SETS"].includes(text)) return "套";
+  if (["M2"].includes(text)) return "平方米";
+  if (["M3"].includes(text)) return "立方米";
+  if (["MT"].includes(text)) return "吨";
+  if (/^(千克|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|UNIT|UNITS)$/i.test(text)) {
+    return text;
+  }
+  return "";
+}
+
+function cleanTaxRefundProductName(value: unknown) {
+  return toHalfWidth(String(value || ""))
+    .replace(/^\s*\d{1,3}\s+/, "")
+    .replace(/^\s*\d{8,13}\s+/, "")
+    .replace(/商品名称及规格型号|商品名称|中文品名|品名|规格型号|HS编码|商品编号/g, " ")
+    .replace(/\b(FOB|CIF|CFR|EXW|USD|CNY|RMB|EUR|JPY|HKD)\b/ig, " ")
+    .replace(/[;；:：|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+function isValidTaxRefundProductName(productName = "") {
+  const text = cleanTaxRefundProductName(productName);
+  return Boolean(
+    text
+    && /[\u4e00-\u9fa5A-Za-z]/.test(text)
+    && !CUSTOMS_ITEM_HEADER_PATTERN.test(text)
+    && !CUSTOMS_ITEM_LABEL_PATTERN.test(text)
+    && !CUSTOMS_ITEM_CONTAINER_NO_PATTERN.test(text)
+    && !CUSTOMS_ITEM_DATE_PATTERN.test(text),
+  );
+}
 
 function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[] {
   const lines = normalizePdfText(text).split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const items: CustomsDeclarationItemFields[] = [];
-  const itemPattern = /(?:^|\s)(?:\d{1,3}\s+)?([0-9]{8,13})\s+(.+?)\s+([0-9]+(?:[,，][0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*([^\s\d.]{1,8}|PCS|SET|KG|KGS|M2|M3)\s+(?:(FOB|CIF|CFR|EXW)\s+)?(?:(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\s+)?([0-9]+(?:[,，][0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)(?:\s|$)/i;
+  const itemPattern = new RegExp(`(?:^|\\s)(?:\\d{1,3}\\s+)?([0-9]{8,13})\\s+(.+?)\\s+([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)\\s*${CUSTOMS_ITEM_UNIT_PATTERN}\\s+(?:(FOB|CIF|CFR|EXW)\\s+)?(?:(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\\s+)?([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)(?:\\s|$)`, "i");
   for (const line of lines) {
     const match = line.match(itemPattern);
     if (!match) continue;
@@ -492,23 +545,16 @@ function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[]
       .replace(/\s+(FOB|CIF|CFR|EXW)\b.*$/i, "")
       .replace(/\s{2,}/g, " ")
       .trim();
-    const item = {
+    const item = normalizeCustomsDeclarationItemForTaxRefund({
       hsCode: String(match[1] || "").trim(),
       productName,
-      specification: "",
       quantity: numericAmount(match[3] || ""),
       unit: String(match[4] || "").trim(),
-      unitPrice: 0,
       totalAmount: numericAmount(match[7] || ""),
       tradeTerm: String(match[5] || "").trim().toUpperCase(),
       currency: normalizeCurrency(match[6] || ""),
-      fobAmount: numericAmount(match[7] || ""),
-      grossWeight: 0,
-      netWeight: 0,
-      originCountry: "",
-      destinationCountry: "",
-    };
-    if (item.hsCode && item.productName && item.quantity > 0) items.push(item);
+    });
+    if (item) items.push(item);
   }
   return dedupeCustomsItems([...items, ...parseMultilineCustomsDeclarationItems(lines)]);
 }
@@ -527,23 +573,16 @@ function parseMultilineCustomsDeclarationItems(lines: string[] = []): CustomsDec
     const currency = findCurrency(windowText);
     const tradeTerm = findTradeTerm(windowText);
     const totalAmount = findTotalAmountInItemWindow(windowText, quantityUnit.quantity);
-    if (!row.hsCode || !productName || (!quantityUnit.quantity && !totalAmount)) continue;
-    items.push({
+    const item = normalizeCustomsDeclarationItemForTaxRefund({
       hsCode: row.hsCode,
       productName,
-      specification: "",
       quantity: quantityUnit.quantity,
       unit: quantityUnit.unit,
-      unitPrice: 0,
       totalAmount,
       tradeTerm,
       currency,
-      fobAmount: totalAmount,
-      grossWeight: 0,
-      netWeight: 0,
-      originCountry: "",
-      destinationCountry: "",
     });
+    if (item) items.push(item);
   }
   return items;
 }
@@ -560,7 +599,7 @@ function findProductNameInItemWindow(lines: string[] = [], hsCode = "") {
     .filter(Boolean)
     .filter((line) => /[\u4e00-\u9fa5A-Za-z]/.test(line))
     .filter((line) => !CUSTOMS_ITEM_HEADER_PATTERN.test(line))
-    .filter((line) => !CUSTOMS_ITEM_LABEL_PATTERN.test(line));
+    .filter((line) => isValidTaxRefundProductName(line));
   return candidates[0] || "";
 }
 
@@ -610,11 +649,17 @@ function findTotalAmountInItemWindow(text = "", quantity = 0) {
 function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = [item.hsCode, item.productName, item.quantity, item.unit, item.fobAmount || item.totalAmount || 0].join("|");
+    const key = [item.productName, item.quantity, item.unit, item.fobAmount || item.totalAmount || 0].join("|");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function findDeclarationTotalAmount(text = "") {
+  const compact = compactForNearbySearch(text);
+  const labeled = compact.match(/(?:报关总金额|FOB金额|成交金额|总价)[:：]?\s*(?:USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)?\s*(\d+(?:[,，]\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/i);
+  return labeled ? numericAmount(labeled[1]) : 0;
 }
 
 function chooseBest(candidates: Candidate[] = []) {

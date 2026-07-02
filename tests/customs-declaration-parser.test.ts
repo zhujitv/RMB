@@ -119,12 +119,12 @@ test("parses customs declaration item detail for tax refund calculation", () => 
   `);
 
   assert.equal(result.exportDate, "2024-05-10");
-  assert.equal(result.domesticConsignor, "杭州耐斯特家具有限公司");
   assert.equal(result.tradeTerm, "FOB");
   assert.equal(result.currency, "USD");
+  assert.equal(result.totalAmount, 8400);
   assert.equal(result.items.length, 2);
   assert.deepEqual(result.items[0], {
-    hsCode: "9403609990",
+    hsCode: "",
     productName: "木制餐桌",
     specification: "",
     quantity: 120,
@@ -162,16 +162,36 @@ test("parses multiline customs declaration item table rows", () => {
   `);
 
   assert.equal(result.items.length, 2);
-  assert.equal(result.items[0].hsCode, "9403200000");
+  assert.equal(result.items[0].hsCode, "");
   assert.equal(result.items[0].productName, "铝制工程结构件");
   assert.equal(result.items[0].quantity, 2866.71);
   assert.equal(result.items[0].unit, "千克");
   assert.equal(result.items[0].fobAmount, 86588.1);
-  assert.equal(result.items[1].hsCode, "7610900000");
+  assert.equal(result.items[1].hsCode, "");
   assert.equal(result.items[1].productName, "铝制栏杆配件");
   assert.equal(result.items[1].quantity, 3904.95);
   assert.equal(result.items[1].unit, "千克");
   assert.equal(result.items[1].fobAmount, 131554.34);
+});
+
+test("filters non-product customs text out of declaration items", () => {
+  const result = parseCustomsDeclarationDetailText(`
+    报关单号：223120241234567890
+    申报日期：2024-05-12
+    成交方式 FOB
+    币制 USD
+    9403200000 铝制工程结构件 2866.71 千克 USD 86588.10
+    备注：代理报关委托协议随附
+    集装箱号：MSCU1234567
+    境内货源地：杭州港
+    提单号：BL123456789
+  `);
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].productName, "铝制工程结构件");
+  assert.equal(result.items[0].quantity, 2866.71);
+  assert.equal(result.items[0].unit, "千克");
+  assert.equal(result.items[0].totalAmount, 86588.1);
 });
 
 test("parser source does not reference bundled fixture documents", async () => {

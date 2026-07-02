@@ -158,18 +158,12 @@ type TaxRefundCustomsItemLight = {
   exportDate: Date | null;
   hsCode: string;
   productName: string;
-  specification?: string | null;
   quantity: Prisma.Decimal | number | null;
   unit: string | null;
-  unitPrice?: Prisma.Decimal | number | null;
   totalAmount?: Prisma.Decimal | number | null;
   tradeTerm: string | null;
   currency: string | null;
   fobAmount: Prisma.Decimal | number | null;
-  grossWeight?: Prisma.Decimal | number | null;
-  netWeight?: Prisma.Decimal | number | null;
-  originCountry?: string | null;
-  destinationCountry?: string | null;
   exchangeRate: Prisma.Decimal | number | null;
   fobAmountCny: Prisma.Decimal | number | null;
   rawJson?: Prisma.JsonValue | null;
@@ -407,33 +401,20 @@ function rawJsonRecord(value: unknown) {
 }
 
 function serializeTaxRefundCustomsItem(item: TaxRefundCustomsItemLight, fallback: Record<string, unknown> = {}) {
-  const raw = rawJsonRecord(item.rawJson);
   return {
     id: item.id,
     documentId: item.documentId || "",
     declarationNo: item.declarationNo || "",
     declarationDate: dateToInput(item.declarationDate),
     exportDate: dateToInput(item.exportDate),
-    domesticConsignor: String(raw.domesticConsignor || fallback.businessEntityName || fallback.businessEntityDisplayName || ""),
-    declarationUnit: String(raw.declarationUnit || ""),
-    transportMode: String(raw.transportMode || ""),
-    billOfLadingNo: String(raw.billOfLadingNo || ""),
-    tradeCountry: String(raw.tradeCountry || ""),
-    destinationCountry: item.destinationCountry || String(raw.destinationCountry || ""),
-    supervisionMode: String(raw.supervisionMode || ""),
     hsCode: item.hsCode || "",
     productName: item.productName || "",
-    specification: item.specification || String(raw.specification || ""),
     quantity: item.quantity == null ? null : Number(item.quantity),
     unit: item.unit || "",
-    unitPrice: item.unitPrice == null ? null : Number(item.unitPrice),
     totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
     tradeTerm: item.tradeTerm || "",
     currency: item.currency || "",
     fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
-    grossWeight: item.grossWeight == null ? null : Number(item.grossWeight),
-    netWeight: item.netWeight == null ? null : Number(item.netWeight),
-    originCountry: item.originCountry || String(raw.originCountry || ""),
     exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
     fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
     confirmationStatus: item.confirmationStatus,
@@ -802,18 +783,12 @@ async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike)
           exportDate: true,
           hsCode: true,
           productName: true,
-          specification: true,
           quantity: true,
           unit: true,
-          unitPrice: true,
           totalAmount: true,
           tradeTerm: true,
           currency: true,
           fobAmount: true,
-          grossWeight: true,
-          netWeight: true,
-          originCountry: true,
-          destinationCountry: true,
           exchangeRate: true,
           fobAmountCny: true,
           confirmationStatus: true,
@@ -875,18 +850,12 @@ async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike)
       exportDate: dateToInput(item.exportDate),
       hsCode: item.hsCode || "",
       productName: item.productName || "",
-      specification: item.specification || "",
       quantity: item.quantity == null ? null : Number(item.quantity),
       unit: item.unit || "",
-      unitPrice: item.unitPrice == null ? null : Number(item.unitPrice),
       totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
       tradeTerm: item.tradeTerm || "",
       currency: item.currency || "",
       fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
-      grossWeight: item.grossWeight == null ? null : Number(item.grossWeight),
-      netWeight: item.netWeight == null ? null : Number(item.netWeight),
-      originCountry: item.originCountry || "",
-      destinationCountry: item.destinationCountry || "",
       exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
       fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
       confirmationStatus: item.confirmationStatus,
@@ -948,18 +917,12 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
         exportDate: true,
         hsCode: true,
         productName: true,
-        specification: true,
         quantity: true,
         unit: true,
-        unitPrice: true,
         totalAmount: true,
         tradeTerm: true,
         currency: true,
         fobAmount: true,
-        grossWeight: true,
-        netWeight: true,
-        originCountry: true,
-        destinationCountry: true,
         exchangeRate: true,
         fobAmountCny: true,
         rawJson: true,

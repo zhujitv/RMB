@@ -9,6 +9,7 @@ import {
   customsParseMessage,
   customsParseStatusFromFields,
   extractPdfTextFromPdfBuffer,
+  normalizeCustomsDeclarationItemForTaxRefund,
   parseCustomsDeclarationDetailText,
   type CustomsDeclarationItemFields,
 } from "../customs-declaration-parser";
@@ -86,36 +87,18 @@ const CUSTOMS_DECLARATION_KEYS = [
   "出口日期",
   "成交方式",
   "币制",
-  "FOB金额",
-  "境内发货人",
-  "申报单位",
-  "运输方式",
-  "提运单号",
-  "贸易国别",
-  "目的国",
-  "监管方式",
-  "HS编码",
+  "报关总金额",
+  "总价",
   "商品名称",
-  "规格型号",
   "数量",
   "单位",
-  "总价",
-  "毛重",
-  "净重",
 ];
 
 const CUSTOMS_TABLE_KEYS = [
-  "项号",
-  "商品编号",
   "商品名称及规格型号",
   "数量及单位",
-  "单价",
   "总价",
   "币制",
-  "原产国",
-  "最终目的国",
-  "毛重",
-  "净重",
 ];
 
 const CUSTOMS_FIELD_ALIASES: Record<string, string[]> = {
@@ -124,29 +107,15 @@ const CUSTOMS_FIELD_ALIASES: Record<string, string[]> = {
   exportDate: ["出口日期", "出口时间", "离境日期", "exportDate"],
   tradeTerm: ["成交方式", "贸易方式", "价格条款", "tradeTerm"],
   currency: ["币制", "币种", "成交币制", "currency"],
-  fobAmount: ["FOB金额", "总价", "成交金额", "fobAmount"],
-  domesticConsignor: ["境内发货人", "境内收发货人", "发货人", "domesticConsignor"],
-  declarationUnit: ["申报单位", "报关单位", "declarationUnit"],
-  transportMode: ["运输方式", "transportMode"],
-  billOfLadingNo: ["提运单号", "提单号", "运单号", "billOfLadingNo"],
-  tradeCountry: ["贸易国别", "贸易国", "tradeCountry"],
-  destinationCountry: ["目的国", "最终目的国", "运抵国", "destinationCountry"],
-  supervisionMode: ["监管方式", "supervisionMode"],
+  totalAmount: ["报关总金额", "FOB金额", "总价", "成交金额", "fobAmount", "totalAmount"],
 };
 
 const CUSTOMS_ITEM_FIELD_ALIASES: Record<string, string[]> = {
-  hsCode: ["HS编码", "商品编号", "税则号", "编码", "hsCode"],
   productName: ["商品名称", "中文品名", "商品名称及规格型号", "品名", "productName"],
-  specification: ["规格型号", "规格", "型号", "specification"],
   quantity: ["数量", "第一数量", "成交数量", "quantity"],
   unit: ["单位", "法定单位", "成交单位", "unit"],
-  unitPrice: ["单价", "unitPrice"],
   totalAmount: ["总价", "金额", "成交金额", "totalAmount"],
   currency: ["币制", "币种", "currency"],
-  grossWeight: ["毛重", "grossWeight"],
-  netWeight: ["净重", "netWeight"],
-  originCountry: ["原产国", "originCountry"],
-  destinationCountry: ["目的国", "最终目的国", "destinationCountry"],
 };
 
 function cleanSecret(value: unknown, limit = 500) {
@@ -382,28 +351,13 @@ function normalizeCurrencyCode(value: unknown) {
 }
 
 function normalizeCustomsItemFromFields(fields: Record<string, unknown>): CustomsDeclarationItemFields | null {
-  const hsCode = normalizeFieldValue(fields.hsCode).replace(/\D/g, "").slice(0, 13);
-  const productName = normalizeFieldValue(fields.productName);
-  const quantity = parseNumberText(fields.quantity);
-  const unit = normalizeFieldValue(fields.unit);
-  const totalAmount = parseNumberText(fields.totalAmount);
-  if (!hsCode || !productName || (!quantity && !totalAmount)) return null;
-  return {
-    hsCode,
-    productName,
-    specification: normalizeFieldValue(fields.specification),
-    quantity,
-    unit,
-    unitPrice: parseNumberText(fields.unitPrice),
-    totalAmount,
-    tradeTerm: "",
+  return normalizeCustomsDeclarationItemForTaxRefund({
+    productName: normalizeFieldValue(fields.productName),
+    quantity: parseNumberText(fields.quantity),
+    unit: normalizeFieldValue(fields.unit),
+    totalAmount: parseNumberText(fields.totalAmount),
     currency: normalizeCurrencyCode(fields.currency),
-    fobAmount: totalAmount,
-    grossWeight: parseNumberText(fields.grossWeight),
-    netWeight: parseNumberText(fields.netWeight),
-    originCountry: normalizeFieldValue(fields.originCountry),
-    destinationCountry: normalizeFieldValue(fields.destinationCountry),
-  };
+  });
 }
 
 function collectCustomsItemCandidates(value: unknown, output: CustomsDeclarationItemFields[] = [], depth = 0) {
@@ -426,9 +380,7 @@ function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
   const seen = new Set<string>();
   return items.filter((item) => {
     const key = [
-      item.hsCode,
       item.productName,
-      item.specification || "",
       item.quantity || 0,
       item.unit || "",
       item.currency || "",
@@ -452,24 +404,13 @@ function mergeCustomsParsedData(
     exportDate: normalizeFieldValue(structuredFields.exportDate) || fallback.exportDate,
     tradeTerm: normalizeFieldValue(structuredFields.tradeTerm) || fallback.tradeTerm,
     currency: normalizeCurrencyCode(structuredFields.currency) || fallback.currency,
-    fobAmount: parseNumberText(structuredFields.fobAmount) || 0,
-    domesticConsignor: normalizeFieldValue(structuredFields.domesticConsignor) || fallback.domesticConsignor,
-    declarationUnit: normalizeFieldValue(structuredFields.declarationUnit) || fallback.declarationUnit,
-    transportMode: normalizeFieldValue(structuredFields.transportMode) || fallback.transportMode,
-    billOfLadingNo: normalizeFieldValue(structuredFields.billOfLadingNo) || fallback.billOfLadingNo,
-    tradeCountry: normalizeFieldValue(structuredFields.tradeCountry) || fallback.tradeCountry,
-    destinationCountry: normalizeFieldValue(structuredFields.destinationCountry) || fallback.destinationCountry,
-    supervisionMode: normalizeFieldValue(structuredFields.supervisionMode) || fallback.supervisionMode,
+    totalAmount: parseNumberText(structuredFields.totalAmount) || fallback.totalAmount,
   };
-  const items = dedupeCustomsItems([...structuredItems, ...fallback.items]).map((item) => ({
-    ...item,
-    tradeTerm: item.tradeTerm || fields.tradeTerm,
-    currency: item.currency || fields.currency,
-    destinationCountry: item.destinationCountry || fields.destinationCountry,
-  }));
+  const items = dedupeCustomsItems([...structuredItems, ...fallback.items]
+    .map((item) => normalizeCustomsDeclarationItemForTaxRefund(item, { tradeTerm: fields.tradeTerm, currency: fields.currency }))
+    .filter((item): item is CustomsDeclarationItemFields => Boolean(item)));
   const status = customsParseStatusFromFields(fields);
   return {
-    ...fallback,
     ...fields,
     customsDeclarationParseStatus: status,
     customsDeclarationParseSource: fallback.customsDeclarationParseSource,

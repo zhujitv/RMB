@@ -1,4 +1,4 @@
-import { parseCustomsDeclarationDetailText, type CustomsDeclarationItemFields } from "../customs-declaration-parser";
+import { normalizeCustomsDeclarationItemForTaxRefund, parseCustomsDeclarationDetailText, type CustomsDeclarationItemFields } from "../customs-declaration-parser";
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import { readR2Object } from "../r2";
@@ -99,38 +99,21 @@ function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: 
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
   const items = rawItems
     .map((item) => plainRecord(item))
-    .map((item) => ({
-      hsCode: cleanText(item.hsCode),
-      productName: cleanText(item.productName),
-      specification: cleanText(item.specification),
-      quantity: num(item.quantity, 0),
-      unit: cleanText(item.unit),
-      unitPrice: num(item.unitPrice, 0),
-      totalAmount: num(item.totalAmount, 0),
-      tradeTerm: cleanText(item.tradeTerm),
-      currency: cleanText(item.currency).toUpperCase(),
-      fobAmount: num(item.fobAmount, 0) || num(item.totalAmount, 0),
-      grossWeight: num(item.grossWeight, 0),
-      netWeight: num(item.netWeight, 0),
-      originCountry: cleanText(item.originCountry),
-      destinationCountry: cleanText(item.destinationCountry),
+    .map((item) => normalizeCustomsDeclarationItemForTaxRefund(item, {
+      tradeTerm: cleanText(parsed.tradeTerm) || fallback.tradeTerm,
+      currency: cleanText(parsed.currency).toUpperCase() || fallback.currency,
     }))
-    .filter((item) => item.hsCode || item.productName || item.quantity || item.fobAmount);
+    .filter((item): item is CustomsDeclarationItemFields => Boolean(item));
   return {
-    ...fallback,
-    ...parsed,
     customsDeclarationNo: cleanText(parsed.customsDeclarationNo) || fallback.customsDeclarationNo,
     customsDeclarationDate: cleanText(parsed.customsDeclarationDate) || fallback.customsDeclarationDate,
     exportDate: cleanText(parsed.exportDate) || fallback.exportDate,
     tradeTerm: cleanText(parsed.tradeTerm) || fallback.tradeTerm,
     currency: cleanText(parsed.currency) || fallback.currency,
-    domesticConsignor: cleanText(parsed.domesticConsignor) || fallback.domesticConsignor,
-    declarationUnit: cleanText(parsed.declarationUnit) || fallback.declarationUnit,
-    transportMode: cleanText(parsed.transportMode) || fallback.transportMode,
-    billOfLadingNo: cleanText(parsed.billOfLadingNo) || fallback.billOfLadingNo,
-    tradeCountry: cleanText(parsed.tradeCountry) || fallback.tradeCountry,
-    destinationCountry: cleanText(parsed.destinationCountry) || fallback.destinationCountry,
-    supervisionMode: cleanText(parsed.supervisionMode) || fallback.supervisionMode,
+    totalAmount: num(parsed.totalAmount, 0) || fallback.totalAmount,
+    customsDeclarationParseStatus: fallback.customsDeclarationParseStatus,
+    customsDeclarationParseSource: fallback.customsDeclarationParseSource,
+    customsDeclarationParseMessage: fallback.customsDeclarationParseMessage,
     items: items.length ? items : fallback.items,
   };
 }
@@ -302,10 +285,34 @@ async function supplierCountForOrder(orderId: string) {
   return new Set(costs.map((cost) => cost.supplierId).filter(Boolean)).size;
 }
 
-async function findCompanyHs(hsCode: string, enabled: boolean) {
-  if (!enabled || !hsCode) return null;
+async function findCompanyHsForDeclarationItem(
+  item: { hsCode?: string | null; productName?: string | null; unit?: string | null },
+  match: InvoiceMatchResult,
+  enabled: boolean,
+) {
+  if (!enabled) return null;
+  const directHsCode = normalizedHsCode(item.hsCode);
+  const invoiceHsCode = match.lines.map((line) => normalizedHsCode(line.hsCode)).find(Boolean) || "";
+  const hsCode = directHsCode || invoiceHsCode;
+  if (hsCode) {
+    const direct = await prisma.companyHs.findFirst({
+      where: { hsCode, deletedAt: null, isEnabled: true },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+    if (direct) return direct;
+  }
+  const productName = cleanText(item.productName).slice(0, 80);
+  if (!productName) return null;
   return prisma.companyHs.findFirst({
-    where: { hsCode, deletedAt: null, isEnabled: true },
+    where: {
+      deletedAt: null,
+      isEnabled: true,
+      OR: [
+        { cnName: { contains: productName, mode: "insensitive" } },
+        { keywords: { contains: productName, mode: "insensitive" } },
+        { enName: { contains: productName, mode: "insensitive" } },
+      ],
+    },
     orderBy: [{ updatedAt: "desc" }],
   });
 }
@@ -385,18 +392,12 @@ export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclara
     exportDate: row.exportDate,
     hsCode: row.hsCode,
     productName: row.productName,
-    specification: row.specification || "",
     quantity: row.quantity == null ? null : Number(row.quantity),
     unit: row.unit || "",
-    unitPrice: row.unitPrice == null ? null : Number(row.unitPrice),
     totalAmount: row.totalAmount == null ? null : Number(row.totalAmount),
     tradeTerm: row.tradeTerm || "",
     currency: row.currency || "",
     fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
-    grossWeight: row.grossWeight == null ? null : Number(row.grossWeight),
-    netWeight: row.netWeight == null ? null : Number(row.netWeight),
-    originCountry: row.originCountry || "",
-    destinationCountry: row.destinationCountry || "",
     exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
     fobAmountCny: row.fobAmountCny == null ? null : Number(row.fobAmountCny),
     confirmationStatus: row.confirmationStatus,
@@ -493,34 +494,32 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
           declarationNo: parsed.customsDeclarationNo || "",
           declarationDate: toDate(parsed.customsDeclarationDate),
           exportDate: toDate(parsed.exportDate),
-          hsCode: normalizedHsCode(item.hsCode),
+          hsCode: "",
           productName: item.productName,
-          specification: cleanText(item.specification) || null,
+          specification: null,
           quantity: item.quantity || null,
           unit: item.unit || null,
-          unitPrice: item.unitPrice || null,
+          unitPrice: null,
           totalAmount: item.totalAmount || item.fobAmount || null,
           tradeTerm: item.tradeTerm || parsed.tradeTerm || null,
           currency: item.currency || parsed.currency || null,
           fobAmount: item.fobAmount || null,
-          grossWeight: item.grossWeight || null,
-          netWeight: item.netWeight || null,
-          originCountry: cleanText(item.originCountry) || null,
-          destinationCountry: cleanText(item.destinationCountry || parsed.destinationCountry) || null,
+          grossWeight: null,
+          netWeight: null,
+          originCountry: null,
+          destinationCountry: null,
           exchangeRate: null,
           fobAmountCny: null,
           rawJson: {
-            ...item,
-            domesticConsignor: parsed.domesticConsignor || "",
-            declarationUnit: parsed.declarationUnit || "",
-            transportMode: parsed.transportMode || "",
-            billOfLadingNo: parsed.billOfLadingNo || "",
-            tradeCountry: parsed.tradeCountry || "",
-            destinationCountry: item.destinationCountry || parsed.destinationCountry || "",
-            supervisionMode: parsed.supervisionMode || "",
+            productName: item.productName || "",
+            quantity: item.quantity || null,
+            unit: item.unit || "",
+            currency: item.currency || parsed.currency || "",
+            totalAmount: item.totalAmount || item.fobAmount || null,
             declarationNo: parsed.customsDeclarationNo || "",
             declarationDate: parsed.customsDeclarationDate || "",
             exportDate: parsed.exportDate || "",
+            tradeTerm: item.tradeTerm || parsed.tradeTerm || "",
             ocrApiName: recognized.apiName || recognized.source || "",
           } as unknown as Prisma.InputJsonValue,
           confirmationStatus: "PENDING_CONFIRMATION",
@@ -586,30 +585,57 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
   const actorId = nonEmpty(actor?.id);
   if (!actorId) throw permissionError("请先登录", 401);
   const before = await guardedPrismaFindMany<Array<Prisma.ExportCustomsDeclarationItemGetPayload<{}>>>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/export-tax-refund-calculations.ts:saveCustomsDeclarationItems.before", { where: { orderId, deletedAt: null }, orderBy: [{ sortOrder: "asc" }] });
+  const cleanedItems = items
+    .map((item) => {
+      const core = normalizeCustomsDeclarationItemForTaxRefund(item, { currency: cleanText(item.currency), tradeTerm: cleanText(item.tradeTerm) });
+      return core ? { input: item, core } : null;
+    })
+    .filter((item): item is { input: Partial<CustomsDeclarationItemFields> & { id?: string; declarationNo?: string; declarationDate?: string; exportDate?: string; exchangeRate?: number }; core: CustomsDeclarationItemFields } => Boolean(item));
+  const submittedIds = cleanedItems.map(({ input }) => cleanText(input.id)).filter(Boolean);
   await prisma.$transaction(async (tx) => {
-    for (const [index, item] of items.entries()) {
-      const exchangeRate = num(item.exchangeRate, 0);
-      const fobAmount = num(item.fobAmount, 0);
+    await tx.exportCustomsDeclarationItem.updateMany({
+      where: {
+        orderId,
+        deletedAt: null,
+        ...(submittedIds.length ? { id: { notIn: submittedIds } } : {}),
+      },
+      data: { deletedAt: new Date() },
+    });
+    for (const [index, { input: item, core }] of cleanedItems.entries()) {
+      const previous = item.id ? before.find((row) => row.id === item.id) : null;
+      const exchangeRate = item.exchangeRate === undefined ? num(previous?.exchangeRate, 0) : num(item.exchangeRate, 0);
+      const fobAmount = core.fobAmount;
       const data = {
         declarationNo: cleanText(item.declarationNo),
         declarationDate: toDate(item.declarationDate),
         exportDate: toDate(item.exportDate),
         hsCode: normalizedHsCode(item.hsCode),
-        productName: cleanText(item.productName),
-        specification: cleanText(item.specification) || null,
-        quantity: num(item.quantity, 0) || null,
-        unit: cleanText(item.unit) || null,
-        unitPrice: num(item.unitPrice, 0) || null,
-        totalAmount: num(item.totalAmount, 0) || fobAmount || null,
-        tradeTerm: cleanText(item.tradeTerm) || null,
-        currency: cleanText(item.currency).toUpperCase() || null,
+        productName: core.productName,
+        specification: null,
+        quantity: core.quantity || null,
+        unit: core.unit || null,
+        unitPrice: null,
+        totalAmount: core.totalAmount || fobAmount || null,
+        tradeTerm: core.tradeTerm || null,
+        currency: core.currency || null,
         fobAmount: fobAmount || null,
-        grossWeight: num(item.grossWeight, 0) || null,
-        netWeight: num(item.netWeight, 0) || null,
-        originCountry: cleanText(item.originCountry) || null,
-        destinationCountry: cleanText(item.destinationCountry) || null,
+        grossWeight: null,
+        netWeight: null,
+        originCountry: null,
+        destinationCountry: null,
         exchangeRate: exchangeRate || null,
         fobAmountCny: fobAmount && exchangeRate ? roundMoney(fobAmount * exchangeRate) : null,
+        rawJson: {
+          productName: core.productName,
+          quantity: core.quantity,
+          unit: core.unit,
+          currency: core.currency,
+          totalAmount: core.totalAmount,
+          declarationNo: cleanText(item.declarationNo),
+          declarationDate: cleanText(item.declarationDate),
+          exportDate: cleanText(item.exportDate),
+          tradeTerm: core.tradeTerm,
+        } as Prisma.InputJsonValue,
         confirmationStatus: "CONFIRMED",
         source: "MANUAL_CONFIRMED",
         sortOrder: index,
@@ -622,7 +648,7 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
         await tx.exportCustomsDeclarationItem.create({ data: { ...data, orderId } });
       }
     }
-    const firstItem = items.find((item) => cleanText(item.declarationNo) || cleanText(item.declarationDate));
+    const firstItem = cleanedItems.map(({ input }) => input).find((item) => cleanText(item.declarationNo) || cleanText(item.declarationDate));
     await tx.receivableOrder.update({
       where: { id: orderId },
       data: {
@@ -637,13 +663,13 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
       },
     });
   });
-  const exchangeRateChanged = items.some((item) => {
+  const exchangeRateChanged = cleanedItems.some(({ input: item }) => {
     const previous = item.id ? before.find((row) => row.id === item.id) : null;
     return previous && num(previous.exchangeRate, 0) !== num(item.exchangeRate, 0);
   });
-  await writeAudit(request, actor, "OCR识别结果确认", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
+  await writeAudit(request, actor, "OCR识别结果确认", "export_customs_declaration_items", orderId, before, { orderId, itemCount: cleanedItems.length, deletedItemCount: before.length - submittedIds.length }).catch(() => null);
   if (exchangeRateChanged) {
-    await writeAudit(request, actor, "手工修改汇率", "export_customs_declaration_items", orderId, before, { orderId, itemCount: items.length }).catch(() => null);
+    await writeAudit(request, actor, "手工修改汇率", "export_customs_declaration_items", orderId, before, { orderId, itemCount: cleanedItems.length }).catch(() => null);
   }
   if (await isTaxRefundCalculationFeatureEnabled()) return recalculateExportTaxRefund(request, actor, orderId);
   await refreshOrderCompleteness(orderId);
@@ -678,7 +704,6 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
     const declarationDate = item.declarationDate || null;
     const declarationAmountCny = num(item.fobAmountCny, 0) || (num(item.fobAmount, 0) && num(item.exchangeRate, 0) ? roundMoney(num(item.fobAmount, 0) * num(item.exchangeRate, 0)) : 0);
     const hsCode = normalizedHsCode(item.hsCode);
-    const companyHs = await findCompanyHs(hsCode, features.companyHsLibraryEnabled);
     const group = declarationGroups.get(declarationItemKey({
       declarationNo: item.declarationNo,
       hsCode: item.hsCode,
@@ -696,6 +721,8 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       items: [{ id: item.id }],
     }, invoiceLines, supplierCount);
     const duplicateReasons = await duplicateInvoiceUseReasons(orderId, match.lines);
+    const companyHs = await findCompanyHsForDeclarationItem(item, match, features.companyHsLibraryEnabled);
+    const effectiveHsCode = companyHs?.hsCode || hsCode || match.lines.map((line) => normalizedHsCode(line.hsCode)).find(Boolean) || "";
     const rebateRate = companyHs ? num(companyHs.rebateRate, 0) : 0;
     const vatRate = companyHs ? num(companyHs.vatRate, 0) : (match.invoiceVatRate || 0);
     const theoreticalRefundAmount = declarationAmountCny && rebateRate ? roundMoney(declarationAmountCny * rebateRate) : 0;
@@ -709,9 +736,8 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       : 0;
     const estimatedRefundAmount = theoreticalRefundAmount && availableInputVatAmount ? Math.min(theoreticalRefundAmount, availableInputVatAmount) : 0;
     const abnormalReasons = [
-      ...(!hsCode ? ["HS编码缺失"] : []),
       ...(!features.companyHsLibraryEnabled ? ["企业HS编码库已关闭"] : []),
-      ...(features.companyHsLibraryEnabled && hsCode && !companyHs ? ["HS编码未维护"] : []),
+      ...(features.companyHsLibraryEnabled && !companyHs ? ["HS编码未维护"] : []),
       ...(companyHs && rebateRate <= 0 ? ["退税率为0"] : []),
       ...(!num(item.fobAmount, 0) && !declarationAmountCny ? ["报关金额缺失"] : []),
       ...(!num(item.exchangeRate, 0) && cleanText(item.currency).toUpperCase() !== "CNY" ? ["汇率缺失"] : []),
@@ -731,11 +757,11 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       availableInputVatAmount,
       differenceQuantity: match.differenceQuantity,
       differenceAmount: match.differenceAmount,
-      documentIds: match.lines.map((line) => line.documentId),
-      lines: match.lines,
-      companyHs: companyHs ? {
-        id: companyHs.id,
-        hsCode: companyHs.hsCode,
+        documentIds: match.lines.map((line) => line.documentId),
+        lines: match.lines,
+        companyHs: companyHs ? {
+          id: companyHs.id,
+          hsCode: companyHs.hsCode,
         cnName: companyHs.cnName,
         unit: companyHs.unit,
         rebateRate,
@@ -749,7 +775,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
         declarationItemId: item.id,
         rateId: null,
         declarationNo: item.declarationNo,
-        hsCode,
+        hsCode: effectiveHsCode,
         productName: item.productName,
         declarationDate,
         fobCurrency: item.currency,
@@ -772,7 +798,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       update: {
         rateId: null,
         declarationNo: item.declarationNo,
-        hsCode,
+        hsCode: effectiveHsCode,
         productName: item.productName,
         declarationDate,
         fobCurrency: item.currency,

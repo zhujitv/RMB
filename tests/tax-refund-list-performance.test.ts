@@ -74,11 +74,14 @@ test("tax refund detail uses a large verification workspace for calculation revi
   assert.match(detail, /activeCalculationSubTab === "refund"/);
   assert.match(detail, /activeCalculationSubTab === "invoice"/);
   assert.match(detail, /activeCalculationSubTab === "declaration"/);
-  assert.match(detail, /数量\/单位/);
+  assert.match(detail, /商品名称/);
+  assert.match(detail, /<th>数量<\/th>/);
+  assert.match(detail, /<th>单位<\/th>/);
+  assert.match(detail, /总金额/);
   assert.match(detail, /FOB金额/);
   assert.match(detail, /发票数量/);
   assert.match(detail, /差异/);
-  assert.doesNotMatch(detail, /<th>FOB币种<\/th>|<th>增值税率<\/th>/);
+  assert.doesNotMatch(detail, /数量\/单位|<th>FOB币种<\/th>|<th>增值税率<\/th>/);
   assert.doesNotMatch(detail, /<TablePanel[\s\S]*<TablePanel[\s\S]*<TablePanel[\s\S]*<\/TablePanel>[\s\S]*<\/TablePanel>[\s\S]*<\/TablePanel>/);
   assert.match(detail, /role="tablist"/);
   assert.match(detail, /activeTab === "calculation"/);

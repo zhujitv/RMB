@@ -14,6 +14,7 @@ const taxRefundErrors = readFileSync("lib/platform/tax-refund-errors.ts", "utf8"
 const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
 const taxRefundCustomsRoute = readFileSync("app/api/tax-refund/[orderId]/customs-documents/route.ts", "utf8");
 const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
+const customsRecognitionPanel = detail.match(/function CustomsRecognitionResultPanel[\s\S]*?\n}\n\nfunction SupplierDocumentReturnNotice/)?.[0] || "";
 
 test("customs document tab returns parsed declaration fields and internal raw OCR result", () => {
   const customsSection = taxRefundService.match(/async function getTaxRefundCustomsDocumentsSection[\s\S]*?\n}\n\nasync function getTaxRefundCostDocumentSection/)?.[0] || "";
@@ -30,7 +31,7 @@ test("customs document tab returns parsed declaration fields and internal raw OC
   assert.match(customsSection, /documentId: \{ in: customsDocumentIds \}/);
   assert.match(customsSection, /customsOcrCallLogs/);
   assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
-  assert.match(taxRefundService, /domesticConsignor/);
+  assert.doesNotMatch(taxRefundService.match(/function serializeTaxRefundCustomsItem[\s\S]*?\n}\n\nfunction serializeCustomsOcrRawResult/)?.[0] || "", /domesticConsignor/);
   assert.match(taxRefundService, /serializeStoredOcrRawResult/);
   assert.match(schema, /model OcrRawResult/);
   assert.match(schema, /@@map\("ocr_raw_results"\)/);
@@ -53,7 +54,7 @@ test("tax refund detail guards missing Prisma models and masks read failures", (
 
 test("tax refund detail displays customs OCR results and empty-field exception", () => {
   assert.match(model, /customsOcrRawResult\?:/);
-  assert.match(model, /domesticConsignor\?: string/);
+  assert.doesNotMatch(model, /domesticConsignor\?: string/);
   assert.match(model, /apiName\?: string/);
   assert.match(model, /rawJson\?: unknown/);
   assert.match(model, /currentCustomsDocument\?: CustomsRecognitionDocument/);
@@ -69,22 +70,22 @@ test("tax refund detail displays customs OCR results and empty-field exception",
   assert.match(detail, /OCR原始结果未保存，请重新识别。/);
   assert.match(detail, /查看OCR原始结果/);
   assert.match(detail, /canReadCustomsRawResult/);
-  assert.match(detail, /报关单号/);
-  assert.match(detail, /申报日期/);
-  assert.match(detail, /出口日期/);
-  assert.match(detail, /成交方式/);
-  assert.match(detail, /币种/);
-  assert.match(detail, /FOB金额/);
-  assert.match(detail, /境内发货人/);
-  assert.match(detail, /申报单位/);
-  assert.match(detail, /运输方式/);
-  assert.match(detail, /提运单号/);
-  assert.match(detail, /贸易国别/);
-  assert.match(detail, /目的国/);
-  assert.match(detail, /监管方式/);
-  assert.match(detail, /HS编码/);
-  assert.match(detail, /商品名称/);
-  assert.match(detail, /规格型号/);
+  assert.match(customsRecognitionPanel, /报关单号/);
+  assert.match(customsRecognitionPanel, /申报日期/);
+  assert.match(customsRecognitionPanel, /出口日期/);
+  assert.match(customsRecognitionPanel, /成交方式/);
+  assert.match(customsRecognitionPanel, /币种/);
+  assert.match(customsRecognitionPanel, /报关总金额/);
+  assert.match(customsRecognitionPanel, /商品名称/);
+  assert.match(customsRecognitionPanel, /总金额/);
+  assert.doesNotMatch(customsRecognitionPanel, /境内发货人/);
+  assert.doesNotMatch(customsRecognitionPanel, /申报单位/);
+  assert.doesNotMatch(customsRecognitionPanel, /运输方式/);
+  assert.doesNotMatch(customsRecognitionPanel, /提运单号/);
+  assert.doesNotMatch(customsRecognitionPanel, /贸易国别/);
+  assert.doesNotMatch(customsRecognitionPanel, /监管方式/);
+  assert.doesNotMatch(customsRecognitionPanel, /HS编码/);
+  assert.doesNotMatch(customsRecognitionPanel, /规格型号/);
   assert.match(styles, /\.customsRecognitionResultCard/);
   assert.match(styles, /\.customsRawResultSection/);
   assert.match(styles, /\.customsOcrFilePanel/);
@@ -104,7 +105,7 @@ test("tax refund calculation requires confirmed declaration items", () => {
   assert.match(taxCalculationService, /customsDeclarationDate: firstItem\?\.declarationDate/);
   assert.match(detail, /const confirmedItems = items\.filter/);
   assert.match(detail, /没有确认报关商品明细，不允许进入退税计算。请先在“报关商品”中确认并保存。/);
-  assert.match(detail, /保存后确认/);
+  assert.match(detail, /removeItem/);
   assert.match(styles, /\.taxCalculationBlockedPanel/);
 });
 
