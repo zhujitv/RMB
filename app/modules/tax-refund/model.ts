@@ -78,6 +78,11 @@ export type TaxRefundRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityId?: string;
+  businessEntityName?: string;
+  businessEntityShortName?: string;
+  businessEntityDisplayName?: string;
+  businessEntityNameSnapshot?: string;
   currency?: string;
   customsDeclarationNo?: string;
   customsDeclarationDate?: string | null;
@@ -170,6 +175,15 @@ export type ExportTaxRefundSummary = {
   estimatedRefundAmount?: number;
   calculationStatus?: string;
   abnormalReasons?: string[];
+};
+
+export type BusinessEntityOption = {
+  id: string;
+  name: string;
+  shortName?: string;
+  displayName?: string;
+  isDefault?: boolean;
+  status?: string;
 };
 
 export type TaxDocument = {

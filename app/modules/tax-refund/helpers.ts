@@ -346,6 +346,11 @@ export function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
   if (detail.customerName !== undefined) patch.customerName = detail.customerName;
   if (detail.customerFullName !== undefined) patch.customerFullName = detail.customerFullName;
   if (detail.customerShortName !== undefined) patch.customerShortName = detail.customerShortName;
+  if (detail.businessEntityId !== undefined) patch.businessEntityId = detail.businessEntityId;
+  if (detail.businessEntityName !== undefined) patch.businessEntityName = detail.businessEntityName;
+  if (detail.businessEntityShortName !== undefined) patch.businessEntityShortName = detail.businessEntityShortName;
+  if (detail.businessEntityDisplayName !== undefined) patch.businessEntityDisplayName = detail.businessEntityDisplayName;
+  if (detail.businessEntityNameSnapshot !== undefined) patch.businessEntityNameSnapshot = detail.businessEntityNameSnapshot;
   if (detail.currency !== undefined) patch.currency = detail.currency;
   if (detail.customsDeclarationNo !== undefined) patch.customsDeclarationNo = detail.customsDeclarationNo;
   if (detail.customsDeclarationDate !== undefined) patch.customsDeclarationDate = detail.customsDeclarationDate;

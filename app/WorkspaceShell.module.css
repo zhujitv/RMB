@@ -596,6 +596,7 @@
 .taxRefundBlNoList { composes: taxRefundBlNoList from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
+.taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundDateColumn { composes: taxRefundDateColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundStatusColumn { composes: taxRefundStatusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }

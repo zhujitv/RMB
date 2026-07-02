@@ -43,6 +43,7 @@ import {
 } from "./shared";
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
+import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
 import { canReadOcrRawResult, saveOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
 import { isUsableCustomsDeclarationItem } from "./export-tax-refund-calculations";
 
@@ -64,6 +65,8 @@ type TaxRefundListFilters = {
   keyword: string;
   mode: TaxRefundListMode;
   statusFilter: string;
+  businessEntityId: string;
+  businessEntitySortDirection: "" | "asc" | "desc";
   declarationMonthStart: Date | null;
   declarationMonthEnd: Date | null;
 };
@@ -72,6 +75,8 @@ const taxRefundLightListSelect = Prisma.validator<Prisma.ReceivableOrderSelect>(
   orderNo: true,
   blNo: true,
   customerNameSnapshot: true,
+  businessEntityId: true,
+  businessEntityNameSnapshot: true,
   currency: true,
   customsDeclarationDate: true,
   taxRefundStatus: true,
@@ -84,6 +89,7 @@ const taxRefundLightListSelect = Prisma.validator<Prisma.ReceivableOrderSelect>(
   taxRefundArchiveRemark: true,
   taxSubmittedAt: true,
   customer: { select: { name: true, shortName: true } },
+  businessEntity: { select: { id: true, name: true, shortName: true } },
 });
 type TaxRefundLightListOrder = Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>;
 const taxRefundDocumentLightSelect = Prisma.validator<Prisma.OrderDocumentSelect>()({
@@ -172,6 +178,7 @@ type TaxRefundPackageDocument = Prisma.OrderDocumentGetPayload<{
 type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
   include: {
     customer: true;
+    businessEntity: true;
     documents: {
       include: { uploadedBy: true; cost: { include: { supplier: true } }; supplier: true };
     };
@@ -334,6 +341,7 @@ export function serializeTaxRefundListOrderLight(order: TaxRefundLightListOrder)
   const refundStatus = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
+  const businessEntityFields = businessEntityFieldsFromOrder(order);
   const completenessIssuesSummary = taxRefundCompletenessSummaryText(completeness, order.taxRefundCompletenessIssuesSummary || "");
   return {
     id: order.id,
@@ -343,6 +351,10 @@ export function serializeTaxRefundListOrderLight(order: TaxRefundLightListOrder)
     customerShortName: shortCustomerName || fullCustomerName,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
+    businessEntityId: order.businessEntityId || "",
+    businessEntityName: businessEntityFields.businessEntityDisplayName || businessEntityFields.businessEntityName || "",
+    businessEntityShortName: businessEntityFields.businessEntityShortName || "",
+    businessEntityDisplayName: businessEntityFields.businessEntityDisplayName || "",
     declarationDate: dateToInput(order.customsDeclarationDate),
     customsDeclarationDate: dateToInput(order.customsDeclarationDate),
     overallCompleteness,
@@ -672,6 +684,8 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
   const keyword = nonEmpty(query.get("keyword"));
   const mode = nonEmpty(query.get("mode")) === "archive" ? "archive" : "current";
   const statusFilter = nonEmpty(query.get("status"));
+  const businessEntityId = nonEmpty(query.get("businessEntityId") || query.get("businessEntity"));
+  const businessEntitySortDirection = nonEmpty(query.get("businessEntitySortDirection")) === "desc" ? "desc" : nonEmpty(query.get("businessEntitySortDirection")) === "asc" ? "asc" : "";
   const declarationStartMonth = nonEmpty(query.get("declarationStartMonth"));
   const declarationEndMonth = nonEmpty(query.get("declarationEndMonth"));
   const declarationStart = declarationStartMonth && /^\d{4}-\d{2}$/.test(declarationStartMonth) ? new Date(`${declarationStartMonth}-01T00:00:00.000Z`) : null;
@@ -682,6 +696,8 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
     keyword,
     mode,
     statusFilter,
+    businessEntityId,
+    businessEntitySortDirection,
     declarationMonthStart: declarationStart || null,
     declarationMonthEnd: declarationEnd ? new Date(Date.UTC(declarationEnd.getUTCFullYear(), declarationEnd.getUTCMonth() + 1, 1)) : null,
   };
@@ -715,6 +731,7 @@ function taxRefundListWhere(filters: TaxRefundListFilters, actor: ActorLike): Pr
     AND: [
       orderAccessWhere(actor),
       taxRefundKeywordWhere(filters.keyword),
+      businessEntityWhereFromQuery(filters.businessEntityId),
       ...(filters.mode === "archive"
         ? [{ OR: [{ taxArchived: true }, { taxRefundStatus: { in: ARCHIVE_TAX_REFUND_STATUSES } }] }]
         : [{ taxArchived: false }, { taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES } }]),
@@ -746,11 +763,18 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
   const filters = taxRefundListFiltersFromQuery(query);
   const where = taxRefundListWhere(filters, actor);
   const skip = (filters.page - 1) * filters.pageSize;
-  const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = [
-    { taxRefundOverallCompleteness: "asc" },
-    { updatedAt: "desc" },
-    { createdAt: "desc" },
-  ];
+  const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = filters.businessEntitySortDirection
+    ? [
+      { businessEntity: { name: filters.businessEntitySortDirection } },
+      { taxRefundOverallCompleteness: "asc" },
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ]
+    : [
+      { taxRefundOverallCompleteness: "asc" },
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ];
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     guardedPrismaFindMany<Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>[]>(prisma.receivableOrder, "receivableOrder", "lib/platform/tax-refunds.ts:listTaxRefundOrders.rows", {
@@ -1418,6 +1442,7 @@ export async function buildTaxRefundPackage(request: AuditRequestLike, actor: Ac
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
     include: {
       customer: true,
+      businessEntity: true,
       documents: {
         where: { deletedAt: null, uploadStatus: "SUCCESS" },
         include: { uploadedBy: true, cost: { include: { supplier: true } }, supplier: true },
