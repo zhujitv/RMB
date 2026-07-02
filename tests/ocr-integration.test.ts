@@ -8,6 +8,7 @@ const service = readFileSync("lib/platform/ocr-integration.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const customsParser = readFileSync("lib/customs-declaration-parser.ts", "utf8");
 const settingsRoute = readFileSync("app/api/settings/ocr/route.ts", "utf8");
+const customsTestRoute = readFileSync("app/api/settings/ocr/test-customs/route.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
 const r2 = readFileSync("lib/r2.ts", "utf8");
@@ -40,6 +41,24 @@ test("OCR settings API supports authenticated read and admin write", () => {
   assert.match(settingsRoute, /export async function PATCH/);
   assert.match(settingsRoute, /saveOcrIntegrationSettings\(request, actor, body\)/);
   assert.match(settingsRoute, /OCR设置已保存/);
+});
+
+test("OCR settings can run isolated customs declaration recognition diagnostics", () => {
+  assert.match(customsTestRoute, /export const runtime = "nodejs"/);
+  assert.match(customsTestRoute, /export const maxDuration = 60/);
+  assert.match(customsTestRoute, /readValidatedPdfUploadFile\(formData\.get\("file"\), "customs-declaration-test\.pdf"\)/);
+  assert.match(customsTestRoute, /testCustomsDeclarationOcr\(actor, file\)/);
+  assert.match(service, /export async function testCustomsDeclarationOcr/);
+  assert.match(service, /assertWrite\(actor, "settings"\)/);
+  assert.match(service, /uploadToR2/);
+  assert.match(service, /signedObjectReadUrl\(tempKey, 900\)/);
+  assert.match(service, /recognizePdfTextWithOcr\(fileBuffer, "customsDeclaration"/);
+  assert.match(service, /deleteR2Object\(tempKey\)/);
+  assert.match(service, /itemsCount: items\.length/);
+  assert.match(settingsModule, /\/api\/settings\/ocr\/test-customs/);
+  assert.match(settingsModule, /报关单识别测试/);
+  assert.match(settingsModule, /选择报关单 PDF 测试识别/);
+  assert.match(settingsModule, /仅测试识别，不保存订单数据，不影响资料回传 OCR。/);
 });
 
 test("settings module exposes OCR configuration without leaking secrets", () => {

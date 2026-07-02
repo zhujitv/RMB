@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import DocMindClient, {
   AyncTradeDocumentPackageExtractSmartAppRequest,
@@ -11,6 +12,7 @@ import AliyunOcrClient, {
 } from "@alicloud/ocr-api20210707";
 import { $OpenApiUtil } from "@alicloud/openapi-core";
 import { prisma } from "../prisma";
+import { deleteR2Object, safeFileName, signedObjectReadUrl, uploadToR2 } from "../r2";
 import {
   customsParseMessage,
   customsParseStatusFromFields,
@@ -71,6 +73,11 @@ type OcrRecognitionOptions = {
   requireText?: boolean;
   sourceUrl?: string;
   fileName?: string;
+};
+type OcrTestUploadFile = {
+  body: Buffer | Uint8Array | ArrayBuffer;
+  originalFileName: string;
+  mimeType?: string | null;
 };
 
 const SUPPLIER_CONTRACT_KEYS = [
@@ -899,6 +906,74 @@ export async function ensureOcrFeatureEnabled(feature: OcrFeatureKey) {
 export async function isOcrFeatureEnabled(feature: OcrFeatureKey) {
   const settings = await getOcrIntegrationSettings();
   return ocrFeatureEnabled(settings, feature);
+}
+
+function customsItemsFromParsedJson(parsedJson: unknown) {
+  if (!isPlainRecord(parsedJson) || !Array.isArray(parsedJson.items)) return [];
+  return parsedJson.items;
+}
+
+function jsonPreview(value: unknown, limit = 50000) {
+  try {
+    const text = JSON.stringify(value ?? null, null, 2);
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit)}\n... 已截断，完整结果请查看服务端日志。`;
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+export async function testCustomsDeclarationOcr(actor: SettingsActor, file: OcrTestUploadFile) {
+  assertWrite(actor, "settings");
+  const fileBuffer = bufferFromInput(file.body);
+  const fileName = safeFileName(file.originalFileName || "customs-declaration-test.pdf");
+  const actorId = nonEmpty(actor?.id) || "system";
+  const tempKey = `ocr-tests/customs/${actorId}/${Date.now()}-${randomUUID()}-${fileName}`;
+  await uploadToR2({
+    key: tempKey,
+    body: fileBuffer,
+    contentType: file.mimeType || "application/pdf",
+  });
+  try {
+    const sourceUrl = await signedObjectReadUrl(tempKey, 900);
+    const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", {
+      sourceUrl,
+      fileName,
+      requireText: true,
+    });
+    const parsedJson = recognized.parsedJson;
+    const items = customsItemsFromParsedJson(parsedJson);
+    const fields = isPlainRecord(parsedJson) ? parsedJson : {};
+    return {
+      fileName,
+      source: recognized.source,
+      provider: recognized.provider,
+      apiName: recognized.apiName || recognized.source,
+      parser: recognized.parser || "",
+      confidence: recognized.confidence ?? null,
+      textLength: recognized.text.length,
+      fields: {
+        customsDeclarationNo: fields.customsDeclarationNo || "",
+        customsDeclarationDate: fields.customsDeclarationDate || "",
+        exportDate: fields.exportDate || "",
+        tradeTerm: fields.tradeTerm || "",
+        currency: fields.currency || "",
+        totalAmount: fields.totalAmount || "",
+      },
+      itemsCount: items.length,
+      itemsPreview: items.slice(0, 20),
+      extractedFields: recognized.extractedFields || {},
+      parsedJson,
+      rawJsonPreview: jsonPreview(recognized.rawJson),
+    };
+  } finally {
+    await deleteR2Object(tempKey).catch((error) => {
+      console.error("ocr-test-temp-file-delete-failed", {
+        key: tempKey,
+        message: ocrErrorText(error),
+      });
+    });
+  }
 }
 
 export async function recognizePdfTextWithOcr(

@@ -1,7 +1,8 @@
-import type { FormEvent } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { PermissionSelectItem, UiSwitch } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../../types";
+import { uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import { BooleanSelect } from "./common-controls";
 import {
   COMMISSION_FORMULA_DEDUCTIONS,
@@ -819,6 +820,33 @@ export function OcrIntegrationSettingsCard({
   onReset: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  type CustomsOcrTestResult = {
+    fileName?: string;
+    source?: string;
+    provider?: string;
+    apiName?: string;
+    parser?: string;
+    confidence?: number | null;
+    textLength?: number;
+    fields?: Record<string, unknown>;
+    itemsCount?: number;
+    itemsPreview?: unknown[];
+    rawJsonPreview?: string;
+  };
+
+  type CustomsOcrTestResponse = {
+    success?: boolean;
+    result?: CustomsOcrTestResult;
+    message?: string;
+  };
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [customsTestBusy, setCustomsTestBusy] = useState(false);
+  const [customsTestProgress, setCustomsTestProgress] = useState(0);
+  const [customsTestMessage, setCustomsTestMessage] = useState("");
+  const [customsTestError, setCustomsTestError] = useState("");
+  const [customsTestResult, setCustomsTestResult] = useState<CustomsOcrTestResult | null>(null);
+
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
   if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
   const currentForm = form || ocrIntegrationFormFromSettings(settings);
@@ -841,6 +869,45 @@ export function OcrIntegrationSettingsCard({
       return;
     }
     setField(key, !currentForm[key]);
+  }
+
+  function resetCustomsTestInput() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function displayValue(value: unknown) {
+    if (value == null || value === "") return "-";
+    return String(value);
+  }
+
+  async function runCustomsOcrTest(file: File | null) {
+    setCustomsTestMessage("");
+    setCustomsTestError("");
+    setCustomsTestResult(null);
+    const validationError = validatePdfUploadFile(file);
+    if (validationError || !file) {
+      setCustomsTestError(validationError || "请选择 PDF 文件");
+      resetCustomsTestInput();
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    setCustomsTestBusy(true);
+    setCustomsTestProgress(1);
+    try {
+      const response = await uploadFormDataWithProgress<CustomsOcrTestResponse>(
+        "/api/settings/ocr/test-customs",
+        formData,
+        setCustomsTestProgress,
+      );
+      setCustomsTestResult(response.result || null);
+      setCustomsTestMessage(response.message || "报关单识别测试完成");
+    } catch (error) {
+      setCustomsTestError(error instanceof Error ? error.message : "测试报关单识别失败");
+    } finally {
+      setCustomsTestBusy(false);
+      resetCustomsTestInput();
+    }
   }
 
   return (
@@ -958,6 +1025,112 @@ export function OcrIntegrationSettingsCard({
               />
             ))}
           </div>
+        </SettingsSection>
+      </SettingsCard>
+
+      <SettingsCard title="报关单识别测试" icon="测">
+        <SettingsSection title="上传 PDF 测试">
+          <div className={styles.settingsFieldGrid}>
+            <SettingsField label="测试文件">
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  style={{ display: "none" }}
+                  onChange={(event) => void runCustomsOcrTest(event.target.files?.[0] || null)}
+                />
+                <button
+                  className={styles.primaryButtonCompact}
+                  type="button"
+                  disabled={customsTestBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {customsTestBusy ? "识别中..." : "选择报关单 PDF 测试识别"}
+                </button>
+                <span className={styles.emptyState} style={{ margin: 0, padding: 0 }}>
+                  仅测试识别，不保存订单数据，不影响资料回传 OCR。
+                </span>
+              </div>
+            </SettingsField>
+          </div>
+          {customsTestBusy ? (
+            <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+              <div style={{ height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" }}>
+                <div
+                  style={{
+                    width: `${Math.max(1, Math.min(100, customsTestProgress))}%`,
+                    height: "100%",
+                    background: "#2563eb",
+                    transition: "width 0.2s ease",
+                  }}
+                />
+              </div>
+              <span className={styles.emptyState} style={{ margin: 0, padding: 0 }}>识别中 {customsTestProgress}%</span>
+            </div>
+          ) : null}
+          {customsTestError ? <div className={styles.inlineError}>{customsTestError}</div> : null}
+          {customsTestMessage && !customsTestError ? <div className={styles.emptyState}>{customsTestMessage}</div> : null}
+          {customsTestResult ? (
+            <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+              <div className={styles.settingsFieldGrid}>
+                <SettingsField label="识别接口">{displayValue(customsTestResult.apiName)}</SettingsField>
+                <SettingsField label="数据来源">{displayValue(customsTestResult.source)}</SettingsField>
+                <SettingsField label="解析器">{displayValue(customsTestResult.parser)}</SettingsField>
+                <SettingsField label="商品明细数">{displayValue(customsTestResult.itemsCount)}</SettingsField>
+                <SettingsField label="报关单号">{displayValue(customsTestResult.fields?.customsDeclarationNo)}</SettingsField>
+                <SettingsField label="申报日期">{displayValue(customsTestResult.fields?.customsDeclarationDate)}</SettingsField>
+              </div>
+              {customsTestResult.itemsPreview?.length ? (
+                <div className={styles.tableWrap}>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>商品名称</th>
+                        <th>数量</th>
+                        <th>单位</th>
+                        <th>币种</th>
+                        <th>总金额</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customsTestResult.itemsPreview.map((item, index) => {
+                        const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+                        return (
+                          <tr key={`customs-test-item-${index}`}>
+                            <td>{displayValue(row.productName)}</td>
+                            <td>{displayValue(row.quantity)}</td>
+                            <td>{displayValue(row.unit)}</td>
+                            <td>{displayValue(row.currency)}</td>
+                            <td>{displayValue(row.totalAmount)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.inlineError}>未解析到商品明细；请检查识别接口是否返回结构化商品表。</div>
+              )}
+              <SettingsField label="原始返回摘要">
+                <pre
+                  style={{
+                    maxHeight: 280,
+                    overflow: "auto",
+                    padding: 12,
+                    borderRadius: 8,
+                    background: "#0f172a",
+                    color: "#e5e7eb",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {customsTestResult.rawJsonPreview || "-"}
+                </pre>
+              </SettingsField>
+            </div>
+          ) : null}
         </SettingsSection>
       </SettingsCard>
 
