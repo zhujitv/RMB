@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import DocMindClient, {
   AyncTradeDocumentPackageExtractSmartAppRequest,
+  GetDocParserResultRequest,
+  QueryDocParserStatusRequest,
 } from "@alicloud/docmind-api20220711";
 import AliyunOcrClient, {
   RecognizeAllTextRequest,
@@ -94,6 +96,8 @@ const SUPPLIER_CONTRACT_KEYS = [
   "签订日期",
 ];
 const CUSTOMS_DECLARATION_MIN_TIMEOUT_MS = 60000;
+const DOCMIND_CUSTOMS_POLL_INTERVAL_MS = 1500;
+const DOCMIND_CUSTOMS_MAX_POLLS = 12;
 
 function customsTextFallbackParsedJson(text: string) {
   const parsed = parseCustomsDeclarationDetailText(text);
@@ -257,6 +261,10 @@ function parseJsonMaybe(value: unknown) {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function responseField(record: unknown, key: string) {
   if (!isPlainRecord(record)) return undefined;
   const direct = record[key];
@@ -275,6 +283,105 @@ function toPlainJson(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+function findDocMindTaskId(value: unknown, depth = 0): string {
+  if (depth > 8 || value == null) return "";
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return findDocMindTaskId(parsed, depth + 1);
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (/^docmind-[\w-]+$/i.test(text)) return text;
+    const matched = text.match(/docmind-[\w-]+/i);
+    return matched?.[0] || "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const id = findDocMindTaskId(item, depth + 1);
+      if (id) return id;
+    }
+    return "";
+  }
+  if (!isPlainRecord(value)) return "";
+  const preferredKeys = ["id", "Id", "ID", "taskId", "TaskId", "jobId", "JobId", "parserId", "ParserId"];
+  for (const key of preferredKeys) {
+    const id = findDocMindTaskId(value[key], depth + 1);
+    if (id) return id;
+  }
+  for (const item of Object.values(value)) {
+    const id = findDocMindTaskId(item, depth + 1);
+    if (id) return id;
+  }
+  return "";
+}
+
+function docMindResponseError(body: unknown) {
+  const code = normalizeFieldValue(responseField(body, "code"));
+  const message = normalizeFieldValue(responseField(body, "message"));
+  if (code && !["success", "ok", "200"].includes(code.toLowerCase())) {
+    return [code, message].filter(Boolean).join(": ");
+  }
+  return "";
+}
+
+function docMindStatusReady(data: unknown) {
+  const status = normalizeFieldValue(responseField(data, "status")).toLowerCase();
+  const processing = parseNumberText(responseField(data, "processing"));
+  const successful = parseNumberText(responseField(data, "numberOfSuccessfulParsing"));
+  if (processing >= 100 || successful > 0) return true;
+  if (!status) return false;
+  return ["success", "succeeded", "completed", "complete", "finish", "finished", "done"].some((item) => status.includes(item));
+}
+
+function docMindResultHasData(data: unknown) {
+  const parsed = parseJsonMaybe(data);
+  if (Array.isArray(parsed)) return parsed.length > 0;
+  if (isPlainRecord(parsed)) return Object.keys(parsed).length > 0;
+  return Boolean(normalizeFieldValue(parsed));
+}
+
+async function getAliyunDocMindParserResult(
+  client: DocMindClient,
+  taskId: string,
+): Promise<{ data: unknown; resultRawJson: unknown; statusRawJson: unknown[] }> {
+  const statusRawJson: unknown[] = [];
+  let lastError = "";
+  for (let attempt = 0; attempt < DOCMIND_CUSTOMS_MAX_POLLS; attempt += 1) {
+    let ready = attempt === 0;
+    try {
+      const statusResponse = await client.queryDocParserStatus(new QueryDocParserStatusRequest({ id: taskId }));
+      const statusJson = toPlainJson(statusResponse);
+      statusRawJson.push(statusJson);
+      const statusBody = isPlainRecord(statusJson) ? statusJson.body : statusResponse.body;
+      const statusError = docMindResponseError(statusBody);
+      if (statusError) throw codedError(`阿里云文档智能任务状态查询失败：${statusError}`, 502, "ALIYUN_DOCMIND_STATUS_FAILED");
+      ready = docMindStatusReady(responseField(statusBody, "data"));
+    } catch (error) {
+      lastError = ocrErrorText(error);
+      console.error("aliyun-docmind-customs-status-failed", { taskId, attempt, message: lastError });
+    }
+
+    if (ready || attempt > 0) {
+      try {
+        const resultResponse = await client.getDocParserResult(new GetDocParserResultRequest({ id: taskId }));
+        const resultRawJson = toPlainJson(resultResponse);
+        const resultBody = isPlainRecord(resultRawJson) ? resultRawJson.body : resultResponse.body;
+        const resultError = docMindResponseError(resultBody);
+        if (resultError) throw codedError(`阿里云文档智能结果查询失败：${resultError}`, 502, "ALIYUN_DOCMIND_RESULT_FAILED");
+        const data = parseJsonMaybe(responseField(resultBody, "data"));
+        if (docMindResultHasData(data)) return { data, resultRawJson, statusRawJson };
+      } catch (error) {
+        lastError = ocrErrorText(error);
+        console.error("aliyun-docmind-customs-result-pending", { taskId, attempt, message: lastError });
+      }
+    }
+    if (attempt < DOCMIND_CUSTOMS_MAX_POLLS - 1) await sleep(DOCMIND_CUSTOMS_POLL_INTERVAL_MS);
+  }
+  throw codedError(
+    `阿里云文档智能报关单任务未在限定时间内返回结果${lastError ? `：${lastError}` : ""}`,
+    504,
+    "ALIYUN_DOCMIND_RESULT_TIMEOUT",
+  );
 }
 
 function collectText(value: unknown, output: string[] = [], depth = 0) {
@@ -614,9 +721,18 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
     fileName: nonEmpty(options.fileName) || "customs-declaration.pdf",
     customExtractionRange: CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE,
   }));
-  const rawJson = toPlainJson(response);
-  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
-  const data = parseJsonMaybe(responseField(responseBody, "data"));
+  const submitRawJson = toPlainJson(response);
+  const responseBody = isPlainRecord(submitRawJson) ? submitRawJson.body : response.body;
+  const submitError = docMindResponseError(responseBody);
+  if (submitError) {
+    throw codedError(`阿里云文档智能整票识别提交失败：${submitError}`, 502, "ALIYUN_DOCMIND_SUBMIT_FAILED");
+  }
+  const submitData = parseJsonMaybe(responseField(responseBody, "data"));
+  const taskId = findDocMindTaskId(submitData) || findDocMindTaskId(responseBody);
+  const result = taskId
+    ? await getAliyunDocMindParserResult(client, taskId)
+    : { data: submitData, resultRawJson: null, statusRawJson: [] };
+  const data = parseJsonMaybe(result.data);
   const text = collectText(data).join("\n");
   const structuredFields = collectFieldsFromObject(data, CUSTOMS_FIELD_ALIASES);
   let items = extractCustomsItemsFromAliyunTableData(data, {
@@ -633,7 +749,13 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
     source: "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
     provider: settings.provider,
     apiName: "ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT",
-    rawJson,
+    rawJson: {
+      submit: submitRawJson,
+      status: result.statusRawJson,
+      result: result.resultRawJson,
+      taskId,
+      data,
+    },
     extractedFields: structuredFields,
     parsedJson,
     confidence: null,

@@ -391,6 +391,11 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /Math\.max\(settings\.timeoutMs, CUSTOMS_DECLARATION_MIN_TIMEOUT_MS\)/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind/);
   assert.match(service, /ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT/);
+  assert.match(service, /AyncTradeDocumentPackageExtractSmartApp/);
+  assert.match(service, /queryDocParserStatus\(new QueryDocParserStatusRequest/);
+  assert.match(service, /getDocParserResult\(new GetDocParserResultRequest/);
+  assert.match(service, /findDocMindTaskId/);
+  assert.match(service, /ALIYUN_DOCMIND_RESULT_TIMEOUT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
   assert.match(service, /报关单严格结构化模式需要可下载文件 URL，不能回退到通用 OCR。/);
   assert.match(service, /阿里云报关单严格结构化识别失败/);
