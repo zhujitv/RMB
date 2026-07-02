@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import AliyunOcrClient, {
   RecognizeAllTextRequest,
   RecognizeAllTextRequestAdvancedConfig,
+  RecognizeAllTextRequestTableConfig,
   RecognizeGeneralStructureRequest,
   RecognizeInvoiceRequest,
 } from "@alicloud/ocr-api20210707";
@@ -542,7 +543,9 @@ async function recognizeAliyunCustomsDeclaration(
   });
   if (!items.length) items = collectCustomsItemCandidates(primaryData);
   let tableRawJson: unknown = null;
-  let tableError = "";
+  let tableOnlyRawJson: unknown = null;
+  let tableText = "";
+  const tableErrors: string[] = [];
   if (!items.length) {
     try {
       const tableResponse = await client.recognizeAllText(new RecognizeAllTextRequest({
@@ -557,28 +560,58 @@ async function recognizeAliyunCustomsDeclaration(
       tableRawJson = toPlainJson(tableResponse);
       const tableBody = isPlainRecord(tableRawJson) ? tableRawJson.body : tableResponse.body;
       const tableData = parseJsonMaybe(responseField(tableBody, "data"));
-      const tableText = collectText(tableData).join("\n");
+      tableText = collectText(tableData).join("\n");
       items = extractCustomsItemsFromAliyunTableData(tableData, {
         tradeTerm: normalizeFieldValue(primaryFields.tradeTerm),
         currency: normalizeCurrencyCode(primaryFields.currency),
       });
       if (!items.length) items = collectCustomsItemCandidates(tableData);
-      const mergedTableText = [pdfText, tableText].filter(Boolean).join("\n");
-      const parsedWithTable = mergeCustomsParsedData(mergedTableText, primaryFields, items);
-      return {
-        text: mergedTableText,
-        source: "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE",
-        provider: settings.provider,
-        apiName: "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK",
-        rawJson: { primary: primaryRawJson, table: tableRawJson },
-        extractedFields: primaryFields,
-        parsedJson: parsedWithTable,
-        confidence: null,
-        parser: "CUSTOMS_DECLARATION",
-      };
     } catch (error) {
-      tableError = error instanceof Error ? error.message : String(error);
+      tableErrors.push(`Advanced: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  if (!items.length) {
+    try {
+      const tableOnlyResponse = await client.recognizeAllText(new RecognizeAllTextRequest({
+        body: Readable.from(buffer),
+        type: "Table",
+        tableConfig: new RecognizeAllTextRequestTableConfig({
+          isLineLessTable: true,
+        }),
+      }));
+      tableOnlyRawJson = toPlainJson(tableOnlyResponse);
+      const tableOnlyBody = isPlainRecord(tableOnlyRawJson) ? tableOnlyRawJson.body : tableOnlyResponse.body;
+      const tableOnlyData = parseJsonMaybe(responseField(tableOnlyBody, "data"));
+      tableText = [tableText, collectText(tableOnlyData).join("\n")].filter(Boolean).join("\n");
+      items = extractCustomsItemsFromAliyunTableData(tableOnlyData, {
+        tradeTerm: normalizeFieldValue(primaryFields.tradeTerm),
+        currency: normalizeCurrencyCode(primaryFields.currency),
+      });
+      if (!items.length) items = collectCustomsItemCandidates(tableOnlyData);
+    } catch (error) {
+      tableErrors.push(`Table: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (tableRawJson || tableOnlyRawJson) {
+    const mergedTableText = [pdfText, tableText].filter(Boolean).join("\n");
+    const parsedWithTable = mergeCustomsParsedData(mergedTableText, primaryFields, items);
+    return {
+      text: mergedTableText,
+      source: items.length ? "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE" : "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_TABLE_EMPTY",
+      provider: settings.provider,
+      apiName: items.length ? "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK" : "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_EMPTY",
+      rawJson: {
+        primary: primaryRawJson,
+        table: tableOnlyRawJson || tableRawJson,
+        advancedTable: tableRawJson,
+        tableOnly: tableOnlyRawJson,
+        tableErrors,
+      },
+      extractedFields: primaryFields,
+      parsedJson: parsedWithTable,
+      confidence: null,
+      parser: "CUSTOMS_DECLARATION",
+    };
   }
   const parsedJson = mergeCustomsParsedData(pdfText, primaryFields, items);
   return {
@@ -589,7 +622,8 @@ async function recognizeAliyunCustomsDeclaration(
     rawJson: {
       primary: primaryRawJson,
       table: tableRawJson,
-      tableError,
+      tableOnly: tableOnlyRawJson,
+      tableErrors,
     },
     extractedFields: primaryFields,
     parsedJson,

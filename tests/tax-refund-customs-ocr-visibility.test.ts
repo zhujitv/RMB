@@ -114,11 +114,15 @@ test("tax refund calculation requires confirmed declaration items", () => {
 test("customs OCR uses structured recognition with table fallback and saves full raw JSON", () => {
   assert.match(ocrIntegration, /CUSTOMS_DECLARATION_KEYS/);
   assert.match(ocrIntegration, /RecognizeAllTextRequest/);
+  assert.match(ocrIntegration, /RecognizeAllTextRequestTableConfig/);
   assert.match(ocrIntegration, /outputTable: true/);
+  assert.match(ocrIntegration, /type: "Table"/);
+  assert.match(ocrIntegration, /tableConfig: new RecognizeAllTextRequestTableConfig/);
   assert.match(ocrIntegration, /recognizeAliyunCustomsDeclaration/);
   assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE/);
   assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
-  assert.match(ocrIntegration, /rawJson: \{ primary: primaryRawJson, table: tableRawJson \}/);
+  assert.match(ocrIntegration, /advancedTable: tableRawJson/);
+  assert.match(ocrIntegration, /tableOnly: tableOnlyRawJson/);
   assert.match(ocrIntegration, /parsedJson/);
 });
 

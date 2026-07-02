@@ -153,7 +153,9 @@ function classifyCustomsHeaderCell(value = "") {
 
 function customsHeaderColumns(rows: Array<{ rowStart: number; cells: AliyunTableCell[] }>) {
   const columns: Record<string, { start: number; end: number }> = {};
-  const headerRows = rows.slice(0, 6).filter((row) => row.cells.some((cell) => classifyCustomsHeaderCell(cell.content)));
+  const headerRows = rows.slice(0, 20).filter((row) => (
+    row.cells.filter((cell) => classifyCustomsHeaderCell(cell.content)).length >= 2
+  ));
   for (const row of headerRows) {
     for (const cell of row.cells) {
       const kind = classifyCustomsHeaderCell(cell.content);
@@ -172,15 +174,45 @@ function tableCellTextForColumn(row: { cells: AliyunTableCell[] }, column?: { st
     .join(" ");
 }
 
+const TABLE_NUMBER_PATTERN = "\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?";
+const TABLE_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
+const TABLE_UNIT_REGEX = new RegExp(TABLE_UNIT_PATTERN, "i");
+const TABLE_NUMBER_ONLY_REGEX = new RegExp(`^${TABLE_NUMBER_PATTERN}$`);
+
 function parseQuantityUnitText(value = "") {
   const text = stripAliyunStringQuote(value);
-  const amount = "\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?";
-  const unitPattern = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
-  let match = text.match(new RegExp(`(${amount})\\s*${unitPattern}`, "i"));
+  let match = text.match(new RegExp(`(${TABLE_NUMBER_PATTERN})\\s*${TABLE_UNIT_PATTERN}`, "i"));
   if (match) return { quantity: parseNumberText(match[1]), unit: match[2] || "" };
-  match = text.match(new RegExp(`${unitPattern}\\s*(${amount})`, "i"));
+  match = text.match(new RegExp(`${TABLE_UNIT_PATTERN}\\s*(${TABLE_NUMBER_PATTERN})`, "i"));
   if (match) return { quantity: parseNumberText(match[2]), unit: match[1] || "" };
   return { quantity: parseNumberText(text), unit: "" };
+}
+
+function normalizeTableUnit(value = "") {
+  const text = stripAliyunStringQuote(value);
+  const match = text.match(TABLE_UNIT_REGEX);
+  return match?.[1] || "";
+}
+
+function numericCellValue(value = "") {
+  const text = stripAliyunStringQuote(value).replace(/[,，\s]/g, "");
+  return TABLE_NUMBER_ONLY_REGEX.test(text) ? parseNumberText(text) : 0;
+}
+
+function quantityUnitFromRowHeuristic(row: { cells: AliyunTableCell[] }) {
+  for (const cell of row.cells) {
+    const parsed = parseQuantityUnitText(cell.content);
+    if (parsed.quantity > 0 && parsed.unit) return parsed;
+  }
+  for (let index = 0; index < row.cells.length; index += 1) {
+    const unit = normalizeTableUnit(row.cells[index]?.content || "");
+    if (!unit) continue;
+    const previousQuantity = numericCellValue(row.cells[index - 1]?.content || "");
+    if (previousQuantity > 0) return { quantity: previousQuantity, unit };
+    const nextQuantity = numericCellValue(row.cells[index + 1]?.content || "");
+    if (nextQuantity > 0) return { quantity: nextQuantity, unit };
+  }
+  return { quantity: 0, unit: "" };
 }
 
 function productNameFromTableCell(value = "") {
@@ -250,8 +282,15 @@ export function extractCustomsItemsFromAliyunTableData(
       const productName = productNameFromTableCell(tableCellTextForColumn(row, columns.productName)) || productNameFromRowHeuristic(row);
       const quantityUnitText = tableCellTextForColumn(row, columns.quantityUnit);
       const quantityUnit = parseQuantityUnitText(quantityUnitText);
-      const quantity = quantityUnit.quantity || parseNumberText(tableCellTextForColumn(row, columns.quantity));
-      const unit = quantityUnit.unit || tableCellTextForColumn(row, columns.unit);
+      const heuristicQuantityUnit = quantityUnit.quantity && quantityUnit.unit
+        ? quantityUnit
+        : quantityUnitFromRowHeuristic(row);
+      const quantity = quantityUnit.quantity
+        || parseNumberText(tableCellTextForColumn(row, columns.quantity))
+        || heuristicQuantityUnit.quantity;
+      const unit = quantityUnit.unit
+        || tableCellTextForColumn(row, columns.unit)
+        || heuristicQuantityUnit.unit;
       const totalAmount = parseNumberText(tableCellTextForColumn(row, columns.totalAmount)) || totalAmountFromRowHeuristic(row, quantity);
       const currency = normalizeCurrencyCode(tableCellTextForColumn(row, columns.currency))
         || normalizeCurrencyCode(row.cells.map((cell) => cell.content).join(" "))

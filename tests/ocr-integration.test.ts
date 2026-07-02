@@ -198,6 +198,46 @@ test("customs table parser reads Aliyun table cells by row and column", async ()
   ]);
 });
 
+test("customs table parser handles delayed headers with split quantity and unit columns", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractCustomsItemsFromAliyunTableData } = await import("../lib/platform/aliyun-customs-table-parser.ts");
+  const CellDetails = [
+    { CellContent: "报关单号 223120260000000001", RowStart: 0, RowEnd: 0, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "申报日期 2026-07-01", RowStart: 1, RowEnd: 1, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "境内发货人 浙江莱诺建材有限公司", RowStart: 2, RowEnd: 2, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "提运单号 NB26001", RowStart: 3, RowEnd: 3, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "集装箱号 TLLU1234567", RowStart: 4, RowEnd: 4, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "备注 代理报关委托协议随附", RowStart: 5, RowEnd: 5, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "随附单证 发票 装箱单", RowStart: 6, RowEnd: 6, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "境内货源地 浙江绍兴", RowStart: 7, RowEnd: 7, ColumnStart: 0, ColumnEnd: 5 },
+    { CellContent: "商品名称及规格型号", RowStart: 8, RowEnd: 8, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "成交数量", RowStart: 8, RowEnd: 8, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "成交单位", RowStart: 8, RowEnd: 8, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "总价", RowStart: 8, RowEnd: 8, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "币制", RowStart: 8, RowEnd: 8, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "铝制工程结构件\n无品牌;无型号", RowStart: 9, RowEnd: 9, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "2866.71", RowStart: 9, RowEnd: 9, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "千克", RowStart: 9, RowEnd: 9, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "86588.10", RowStart: 9, RowEnd: 9, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "美元", RowStart: 9, RowEnd: 9, ColumnStart: 4, ColumnEnd: 4 },
+  ];
+  const items = extractCustomsItemsFromAliyunTableData({ TableInfo: { TableDetails: [{ CellDetails }] } });
+  assert.equal(items.length, 1);
+  assert.deepEqual({
+    productName: items[0]?.productName,
+    quantity: items[0]?.quantity,
+    unit: items[0]?.unit,
+    currency: items[0]?.currency,
+    totalAmount: items[0]?.totalAmount,
+  }, {
+    productName: "铝制工程结构件",
+    quantity: 2866.71,
+    unit: "千克",
+    currency: "USD",
+    totalAmount: 86588.1,
+  });
+});
+
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.match(customsRecognition, /saveOcrRawResult/);
@@ -208,7 +248,10 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /OCR_FEATURE_DISABLED/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
   assert.match(service, /RecognizeAllTextRequest/);
+  assert.match(service, /RecognizeAllTextRequestTableConfig/);
   assert.match(service, /outputTable: true/);
+  assert.match(service, /type: "Table"/);
+  assert.match(service, /tableConfig: new RecognizeAllTextRequestTableConfig/);
   assert.match(service, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
 });
