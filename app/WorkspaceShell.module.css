@@ -107,6 +107,7 @@
 .workbenchStatsGrid { composes: workbenchStatsGrid from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchTable { composes: workbenchTable from "./styles/workspace-shell/workbench.module.css"; }
 .workbenchTableWrap { composes: workbenchTableWrap from "./styles/workspace-shell/workbench.module.css"; }
+.supplierDocumentDeleteButton { composes: supplierDocumentDeleteButton from "./styles/workspace-shell/supplier-documents.module.css"; }
 .controlTowerAlertDanger { composes: controlTowerAlertDanger from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .controlTowerAlertMuted { composes: controlTowerAlertMuted from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }
 .controlTowerAlertWarning { composes: controlTowerAlertWarning from "./styles/workspace-shell/shipsgo-control-tower.module.css"; }

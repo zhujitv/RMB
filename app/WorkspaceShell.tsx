@@ -607,6 +607,7 @@ export function WorkspaceShell() {
           initialKeyword={supplierDocumentsFocus.keyword}
           initialRequestId={supplierDocumentsFocus.requestId}
           initialOpenToken={supplierDocumentsFocus.token}
+          onRefreshTodos={loadWorkbenchTodos}
         />
       ) : activeMenu === "profit" ? (
         <ProfitModule

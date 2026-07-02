@@ -75,6 +75,7 @@ export async function refreshSupplierDocumentRequestCompletion(
     },
   });
   if (!row) return null;
+  if (row.deletedAt) return row;
 
   const requiredTypes = requiredSupplierDocumentTypes(row.requiredDocumentTypes);
   const latestByType = new Map<string, (typeof row.documents)[number]>();

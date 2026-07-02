@@ -24,7 +24,10 @@ test("supplier document request schema links supplier uploads to tax refund docu
   assert.match(schema, /documents\s+OrderDocument\[\]/);
   assert.match(schema, /completedAt\s+DateTime\?\s+@map\("completed_at"\)/);
   assert.match(schema, /completedById\s+String\?\s+@map\("completed_by"\)/);
+  assert.match(schema, /deletedAt\s+DateTime\?\s+@map\("deleted_at"\)/);
+  assert.match(schema, /deletedById\s+String\?\s+@map\("deleted_by"\)/);
   assert.match(schema, /completedBy\s+User\?\s+@relation\("SupplierDocumentRequestCompletedBy"/);
+  assert.match(schema, /deletedBy\s+User\?\s+@relation\("SupplierDocumentRequestDeletedBy"/);
 });
 
 test("supplier document workflow uses existing factory tax document types", () => {
@@ -127,25 +130,33 @@ test("product supplier callback uses a dedicated supplier account role", () => {
   assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
 });
 
-test("admin can delete only untouched supplier document requests", () => {
+test("admin can soft delete supplier document requests from the foreground list", () => {
   assert.match(supplierRequestRoute, /export async function DELETE/);
   assert.match(supplierRequestRoute, /deleteSupplierDocumentRequest\(request, actor, id\)/);
   assert.match(service, /export async function deleteSupplierDocumentRequest/);
   assert.match(service, /actor\?\.role !== "管理员"/);
   assert.match(service, /只有管理员可以删除资料回传任务/);
-  assert.match(service, /row\.status !== "待上传" \|\| supplierDocumentRequestHasStartedUpload\(row\)/);
-  assert.match(service, /该任务已开始回传资料，无法删除。/);
-  assert.match(service, /uploadStatus[^\\n]*!== "PENDING" \|\| uploadProgress > 0/);
+  assert.match(service, /supplierDocumentRequestOrderLocked\(row\.order\)/);
+  assert.match(service, /已提交退税或已归档/);
   assert.match(service, /tx\.orderDocument\.updateMany/);
   assert.match(service, /tx\.supplierDocumentRequest\.update/);
   assert.match(service, /deletedAt: now/);
-  assert.match(service, /deleteR2Object\(row\.templateStorageKey/);
+  assert.match(service, /deletedById/);
+  assert.match(service, /status: "DELETED"/);
+  assert.match(service, /softDeleteFileAssetBySource/);
+  assert.match(service, /scheduleTaxRefundCompletenessRefresh\(row\.orderId, "资料回传任务删除后退税完整度刷新"\)/);
+  assert.match(service, /syncCostInvoiceStatus\(costId\)/);
+  assert.doesNotMatch(service, /资料回传合同样本文件删除/);
   assert.match(supplierModule, /task\.canDelete/);
+  assert.match(supplierModule, /styles\.supplierDocumentDeleteButton/);
   assert.match(supplierModule, /删除资料回传任务/);
-  assert.match(supplierModule, /确定删除该资料回传任务吗？删除后无法恢复。/);
+  assert.match(supplierModule, /确认删除资料回传任务 \$\{task\.orderNo \|\| "-"\}？此操作将删除该任务及已上传资料，删除后不可恢复。/);
+  assert.match(supplierModule, /该任务已关联退税资料，删除后退税完整度将重新计算。/);
+  assert.match(supplierModule, /资料回传任务已删除/);
   assert.match(supplierModule, /method: "DELETE"/);
   assert.match(supplierModule, /const nextTotal = Math\.max\(0, total - 1\)/);
   assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
+  assert.match(supplierModule, /void onRefreshTodos\?\.\(\)/);
 });
 
 test("supplier document request list uses server-side pagination", () => {
@@ -233,7 +244,7 @@ test("supplier document cards merge upload slots with uploaded files by document
   assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
   assert.doesNotMatch(supplierModule, /function supplierDocumentUploadSlots/);
   assert.doesNotMatch(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
-  assert.doesNotMatch(supplierModule, /已上传资料/);
+  assert.doesNotMatch(supplierModule, /已上传资料槽|uploadedDocumentSlots/);
   assert.doesNotMatch(supplierModule, /uploadSlots\.flatMap/);
 });
 

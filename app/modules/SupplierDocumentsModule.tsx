@@ -79,6 +79,8 @@ type SupplierDocumentTask = {
   sendError?: string;
   sentAt?: string;
   canDelete?: boolean;
+  hasTaxRefundDocuments?: boolean;
+  taxRefundDocumentCount?: number;
   documents?: SupplierDocument[];
   createdAt?: string;
   updatedAt?: string;
@@ -130,11 +132,13 @@ export function SupplierDocumentsModule({
   initialKeyword = "",
   initialRequestId = "",
   initialOpenToken = 0,
+  onRefreshTodos,
 }: {
   currentUser: User;
   initialKeyword?: string;
   initialRequestId?: string;
   initialOpenToken?: number;
+  onRefreshTodos?: () => void | Promise<void>;
 }) {
   const [rows, setRows] = useState<SupplierDocumentTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,12 +236,13 @@ export function SupplierDocumentsModule({
       return;
     }
     if (!task.canDelete) {
-      setError("该任务已开始回传资料，无法删除。");
+      setError("该任务对应订单已提交退税或已归档，不能删除资料回传任务。");
       return;
     }
     const result = await requestConfirmation({
       title: "删除资料回传任务",
-      message: "确定删除该资料回传任务吗？删除后无法恢复。",
+      message: `确认删除资料回传任务 ${task.orderNo || "-"}？此操作将删除该任务及已上传资料，删除后不可恢复。`,
+      details: task.hasTaxRefundDocuments ? ["该任务已关联退税资料，删除后退税完整度将重新计算。"] : undefined,
       confirmLabel: "删除",
       cancelLabel: "取消",
       variant: "danger",
@@ -250,10 +255,11 @@ export function SupplierDocumentsModule({
         { method: "DELETE" },
       );
       setExpandedTaskId((current) => (current === task.id ? "" : current));
-      setNotice(data.message || "已删除资料回传任务。");
+      setNotice("资料回传任务已删除");
       const nextTotal = Math.max(0, total - 1);
       const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1))));
       await loadRows(nextPage, pageSize);
+      void onRefreshTodos?.();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
     } finally {
@@ -543,7 +549,7 @@ function SupplierDocumentTaskCard({
             上传资料
           </button>
           {isAdmin && task.canDelete ? (
-            <button className={styles.dangerButton} type="button" onClick={() => onDelete(task)} disabled={deleting}>
+            <button className={styles.supplierDocumentDeleteButton} type="button" onClick={() => onDelete(task)} disabled={deleting}>
               {deleting ? "删除中..." : "删除"}
             </button>
           ) : null}

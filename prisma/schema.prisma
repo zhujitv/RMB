@@ -108,6 +108,7 @@ model User {
   updatedLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillUpdatedBy")
   sentSupplierDocumentRequests           SupplierDocumentRequest[]      @relation("SupplierDocumentRequestRequestedBy")
   completedSupplierDocumentRequests      SupplierDocumentRequest[]      @relation("SupplierDocumentRequestCompletedBy")
+  deletedSupplierDocumentRequests        SupplierDocumentRequest[]      @relation("SupplierDocumentRequestDeletedBy")
   assignedOrderLogisticsSuppliers        OrderLogisticsSupplier[]       @relation("OrderLogisticsSupplierAssignedBy")
   createdShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingCreatedBy")
   updatedShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingUpdatedBy")
@@ -711,11 +712,13 @@ model SupplierDocumentRequest {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   deletedAt             DateTime? @map("deleted_at")
+  deletedById           String?   @map("deleted_by")
 
   order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   supplier    Supplier        @relation(fields: [supplierId], references: [id])
   requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   completedBy User?           @relation("SupplierDocumentRequestCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  deletedBy   User?           @relation("SupplierDocumentRequestDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
   documents   OrderDocument[]
   ocrTasks    OcrTask[]
 
@@ -723,6 +726,7 @@ model SupplierDocumentRequest {
   @@index([supplierId])
   @@index([requestedById])
   @@index([completedById])
+  @@index([deletedById])
   @@index([status])
   @@index([sendStatus])
   @@index([dueDate])

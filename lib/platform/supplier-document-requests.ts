@@ -99,6 +99,11 @@ function supplierDocumentRequestInclude() {
       select: {
         id: true,
         orderNo: true,
+        taxRefundStatus: true,
+        taxArchived: true,
+        isArchived: true,
+        taxSubmittedAt: true,
+        taxRefundArchivedAt: true,
         costs: {
           where: { deletedAt: null },
           include: { supplier: true },
@@ -367,9 +372,8 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOption
     .filter((document) => requiredTypes.includes(normalizeSupplierReturnDocumentType(document.documentType) as OrderDocumentType))
     .map((document) => serializeSupplierDocument(document));
   const factoryCostSlots = factoryCostSlotsForSupplierRequest(row);
-  const canDelete = actor?.role === "管理员"
-    && row.status === "待上传"
-    && !supplierDocumentRequestHasStartedUpload(row);
+  const canDelete = actor?.role === "管理员" && !supplierDocumentRequestOrderLocked(row.order);
+  const taxRefundDocumentCount = documents.filter((document) => document.uploadStatus === "SUCCESS").length;
   return {
     id: row.id,
     orderId: row.orderId,
@@ -391,6 +395,8 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOption
     completedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.completedBy?.name || ""),
     requestedByName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.requestedBy?.name || ""),
     canDelete,
+    hasTaxRefundDocuments: taxRefundDocumentCount > 0,
+    taxRefundDocumentCount,
     documents,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -486,13 +492,14 @@ async function refreshSupplierDocumentRequestStatus(tx: Prisma.TransactionClient
   });
 }
 
-function supplierDocumentRequestHasStartedUpload(row: Pick<SupplierDocumentRequestRow, "documents">) {
-  return (row.documents || []).some((document) => {
-    if (document.deletedAt) return false;
-    const uploadStatus = String(document.uploadStatus || "PENDING");
-    const uploadProgress = Number(document.uploadProgress || 0);
-    return uploadStatus !== "PENDING" || uploadProgress > 0;
-  });
+function supplierDocumentRequestOrderLocked(order: SupplierDocumentRequestRow["order"] | null | undefined) {
+  return Boolean(
+    order?.taxArchived
+    || order?.isArchived
+    || order?.taxSubmittedAt
+    || order?.taxRefundArchivedAt
+    || order?.taxRefundStatus === "SUBMITTED",
+  );
 }
 
 async function loadSupplierDocumentRequest(id: string, actor: ActorLike) {
@@ -578,6 +585,7 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
   if (actor?.role !== "管理员") {
     throw codedError("只有管理员可以删除资料回传任务。", 403, "SUPPLIER_DOCUMENT_DELETE_ADMIN_ONLY");
   }
+  const deletedById = actorId(actor);
   const row = await prisma.supplierDocumentRequest.findFirst({
     where: { id: requestId, deletedAt: null },
     include: supplierDocumentRequestInclude(),
@@ -585,27 +593,37 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
   if (!row) {
     throw codedError("资料回传任务不存在或已删除。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
   }
-  if (row.status !== "待上传" || supplierDocumentRequestHasStartedUpload(row)) {
-    throw codedError("该任务已开始回传资料，无法删除。", 400, "SUPPLIER_DOCUMENT_REQUEST_STARTED");
+  if (supplierDocumentRequestOrderLocked(row.order)) {
+    throw codedError("该任务对应订单已提交退税或已归档，不能删除资料回传任务。", 400, "SUPPLIER_DOCUMENT_REQUEST_TAX_ARCHIVED");
   }
 
   const now = new Date();
-  const pendingDocumentIds = (row.documents || [])
-    .filter((document) => !document.deletedAt
-      && String(document.uploadStatus || "PENDING") === "PENDING"
-      && Number(document.uploadProgress || 0) === 0)
+  const activeDocuments = (row.documents || []).filter((document) => !document.deletedAt);
+  const activeDocumentIds = activeDocuments.map((document) => document.id);
+  const deletedTaxRefundDocumentIds = activeDocuments
+    .filter((document) => document.uploadStatus === "SUCCESS")
     .map((document) => document.id);
+  const affectedCostIds = activeDocuments
+    .map((document) => document.costId || "")
+    .filter((id, index, ids) => id && ids.indexOf(id) === index);
+  const deletedSupplierInvoice = activeDocuments.some((document) => document.documentType === "SUPPLIER_INVOICE");
 
   await prisma.$transaction(async (tx) => {
-    if (pendingDocumentIds.length) {
+    if (activeDocumentIds.length) {
       await tx.orderDocument.updateMany({
-        where: { id: { in: pendingDocumentIds }, deletedAt: null },
+        where: { id: { in: activeDocumentIds }, deletedAt: null },
         data: { deletedAt: now },
       });
     }
     await tx.supplierDocumentRequest.update({
       where: { id: row.id },
-      data: { deletedAt: now, status: "已关闭" },
+      data: {
+        deletedAt: now,
+        deletedById,
+        status: "DELETED",
+        completedAt: null,
+        completedById: null,
+      },
     });
     if (row.templateStorageKey) {
       await softDeleteFileAssetBySource(
@@ -616,33 +634,46 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
         now,
       );
     }
-    for (const documentId of pendingDocumentIds) {
+    for (const document of activeDocuments) {
       await softDeleteFileAssetBySource(
         tx,
         FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
-        documentId,
-        "SUPPLIER_PURCHASE_CONTRACT",
-        now,
-      );
-      await softDeleteFileAssetBySource(
-        tx,
-        FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
-        documentId,
-        "SUPPLIER_INVOICE",
+        document.id,
+        String(document.documentType || "ORDER_DOCUMENT"),
         now,
       );
     }
   });
 
-  if (row.templateStorageKey) {
-    await runNonCriticalTask("资料回传合同样本文件删除", () => deleteR2Object(row.templateStorageKey || ""));
+  scheduleTaxRefundCompletenessRefresh(row.orderId, "资料回传任务删除后退税完整度刷新");
+  if (deletedSupplierInvoice) {
+    await runNonCriticalTask("资料回传任务删除后成本发票状态同步", async () => {
+      const costs = await prisma.orderCost.findMany({
+        where: {
+          orderId: row.orderId,
+          supplierId: row.supplierId,
+          deletedAt: null,
+        },
+        select: { id: true },
+        take: SUPPLIER_INVOICE_SYNC_COST_LIMIT,
+      });
+      const ids = [...new Set([...affectedCostIds, ...costs.map((cost) => cost.id)].filter(Boolean))];
+      await Promise.all(ids.map((costId) => syncCostInvoiceStatus(costId)));
+    });
   }
   await runNonCriticalTask("资料回传任务删除日志写入", () => writeAudit(request, actor, "删除资料回传任务", "supplier_document_requests", row.id, row, {
     orderNo: row.order?.orderNo,
     supplierId: row.supplierId,
-    pendingDocumentIds,
+    deletedDocumentIds: activeDocumentIds,
+    deletedTaxRefundDocumentIds,
+    deletedById,
   }));
-  return { id: row.id, deletedDocumentIds: pendingDocumentIds };
+  return {
+    id: row.id,
+    deletedDocumentIds: activeDocumentIds,
+    deletedTaxRefundDocumentIds,
+    taxRefundCompletenessRecalculated: deletedTaxRefundDocumentIds.length > 0,
+  };
 }
 
 export async function createSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, input: SupplierDocumentRequestInput, templateFile: unknown) {

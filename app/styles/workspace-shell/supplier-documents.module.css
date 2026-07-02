@@ -164,6 +164,31 @@
   font-size: 12px;
 }
 
+.supplierDocumentDeleteButton {
+  min-height: 32px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #b91c1c;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.supplierDocumentDeleteButton:hover:not(:disabled),
+.supplierDocumentDeleteButton:focus-visible:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.supplierDocumentDeleteButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .supplierDocumentTaskDetail {
   border-top: 1px solid #e2e8f0;
   background: #f8fbff;
