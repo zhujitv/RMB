@@ -21,6 +21,15 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
+function timeoutMessageForPath(path: string) {
+  const pathname = normalizedApiPath(path);
+  if (pathname === "/api/auth/me") return "无法读取当前用户信息";
+  if (pathname === "/api/auth/permissions" || pathname === "/api/settings/permissions") return "权限初始化失败";
+  if (pathname === "/api/workbench/todos") return "待办数据加载失败";
+  if (pathname === "/api/overview" || pathname === "/api/ledger") return "统计数据加载失败";
+  return "请求超时";
+}
+
 function startApiRequestTimer(path: string, init?: RequestInit) {
   if (typeof window === "undefined" || process.env.NODE_ENV === "production") return "";
   const method = String(init?.method || "GET").toUpperCase();
@@ -121,7 +130,7 @@ export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
       if (isAbortError(error)) {
         statusCode = 408;
         errorCode = "REQUEST_TIMEOUT";
-        throw new ApiRequestError("请求超时，请检查本地数据库、网络或权限初始化接口。", 408, "REQUEST_TIMEOUT");
+        throw new ApiRequestError(timeoutMessageForPath(path), 408, "REQUEST_TIMEOUT");
       }
       throw error;
     }

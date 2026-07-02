@@ -9,6 +9,7 @@ type WelcomePanelProps = {
   payload: AuthPayload;
   menus: MenuItem[];
   todosState: WorkbenchTodosState;
+  bootWarnings?: string[];
   onSelectMenu: (key: string) => void;
   onRefreshTodos: () => void;
   onOpenTodo: (todo: WorkbenchTodo) => void;
@@ -95,6 +96,7 @@ export function WelcomePanel({
   payload,
   menus,
   todosState,
+  bootWarnings = [],
   onSelectMenu,
   onRefreshTodos,
   onOpenTodo,
@@ -146,6 +148,12 @@ export function WelcomePanel({
         </div>
         <p>{payload.permissions?.scopeText || payload.scopeText || "请选择左侧功能模块开始操作。"}</p>
       </div>
+
+      {bootWarnings.length ? (
+        <div className={styles.inlineError}>
+          {bootWarnings.join("；")}
+        </div>
+      ) : null}
 
       <div className={styles.workbenchStatsGrid}>
         {cards.map((card) => (

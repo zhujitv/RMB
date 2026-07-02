@@ -11,7 +11,7 @@ import { LoginPanel } from "./LoginPanel";
 import { PasswordChangePanel } from "./PasswordChangePanel";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
-import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse, WorkbenchTodo, WorkbenchTodosState } from "./types";
+import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse, PermissionSnapshot, WorkbenchTodo, WorkbenchTodosState } from "./types";
 import { canWritePermission, normalizeEmail } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 import { WorkspaceLayout } from "./WorkspaceLayout";
@@ -19,6 +19,7 @@ import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-po
 
 const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
 const AUTH_BOOT_TIMEOUT_MS = 15000;
+const PERMISSIONS_BOOT_TIMEOUT_MS = 8000;
 const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
 const WORKBENCH_TODOS_TIMEOUT_MS = 12000;
 
@@ -138,20 +139,20 @@ function authLoadErrorState(error: unknown): AuthState {
   if (error instanceof ApiRequestError && error.status === 408) {
     return {
       status: "error",
-      message: "本地工作台初始化超时。",
+      message: "无法读取当前用户信息",
       detail,
     };
   }
   if (error instanceof ApiRequestError && error.status >= 500) {
     return {
       status: "error",
-      message: error.message || "系统暂时无法读取账户信息。",
+      message: "无法读取当前用户信息",
       detail,
     };
   }
   return {
     status: "error",
-    message: "工作台初始化失败。",
+    message: "无法读取当前用户信息",
     detail,
   };
 }
@@ -174,14 +175,23 @@ export function WorkspaceShell() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [publicCompanyProfile, setPublicCompanyProfile] = useState<CompanyProfileSettings | null>(null);
   const [workbenchTodos, setWorkbenchTodos] = useState<WorkbenchTodosState>(EMPTY_WORKBENCH_TODOS);
+  const [bootWarnings, setBootWarnings] = useState<string[]>([]);
+
+  function setBootWarning(label: string, error: unknown) {
+    const detail = error instanceof Error ? error.message : "";
+    const message = detail && detail !== label ? `${label}：${detail}` : label;
+    setBootWarnings((current) => [message, ...current.filter((item) => !item.startsWith(label))]);
+  }
 
   async function loadCurrentUser() {
     setAuth({ status: "loading", message: "正在加载工作台..." });
+    setBootWarnings([]);
+    setWorkbenchTodos(EMPTY_WORKBENCH_TODOS);
     let nextAuth: AuthState | null = null;
     let shouldResetMenu = false;
     let nextDefaultMenu = "welcome";
     try {
-      const payload = await apiJson<AuthPayload>("/api/auth/me", { timeoutMs: AUTH_BOOT_TIMEOUT_MS });
+      const payload = await apiJson<AuthPayload>("/api/auth/me?basic=1", { timeoutMs: AUTH_BOOT_TIMEOUT_MS });
       validateAuthPayload(payload);
       if (payload.user.mustChangePassword || payload.user.passwordPolicyPassed === false) {
         nextAuth = {
@@ -192,15 +202,16 @@ export function WorkspaceShell() {
             : "请先修改初始密码。",
         };
       } else {
-        if (payload.companyProfile) setPublicCompanyProfile(payload.companyProfile);
         nextAuth = { status: "ready", payload };
         shouldResetMenu = true;
-        nextDefaultMenu = payload.user.defaultHome || "welcome";
+        nextDefaultMenu = payload.user.role === "管理员" && payload.user.defaultHome === "dashboard"
+          ? "welcome"
+          : payload.user.defaultHome || "welcome";
       }
     } catch (error) {
       nextAuth = authLoadErrorState(error);
     } finally {
-      setAuth(nextAuth || { status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。" });
+      setAuth(nextAuth || { status: "error", message: "无法读取当前用户信息", detail: "初始化流程未返回有效状态。" });
       if (shouldResetMenu) setActiveMenu(nextDefaultMenu);
     }
   }
@@ -219,6 +230,18 @@ export function WorkspaceShell() {
       setPublicCompanyProfile(result.settings || null);
     } catch {
       setPublicCompanyProfile(null);
+    }
+  }
+
+  async function loadBasicPermissions() {
+    try {
+      const result = await apiJson<{ permissions?: PermissionSnapshot }>("/api/auth/permissions", { timeoutMs: PERMISSIONS_BOOT_TIMEOUT_MS });
+      setAuth((current) => current.status === "ready"
+        ? { ...current, payload: { ...current.payload, permissions: result.permissions } }
+        : current);
+      setBootWarnings((current) => current.filter((item) => !item.startsWith("权限初始化失败")));
+    } catch (error) {
+      setBootWarning("权限初始化失败", error);
     }
   }
 
@@ -241,7 +264,9 @@ export function WorkspaceShell() {
       setWorkbenchTodos((current) => ({
         ...current,
         loading: false,
-        error: error instanceof Error ? error.message : "读取待办失败",
+        error: error instanceof Error && error.message !== "待办数据加载失败"
+          ? `待办数据加载失败：${error.message}`
+          : "待办数据加载失败",
       }));
     }
   }
@@ -277,7 +302,9 @@ export function WorkspaceShell() {
 
   useEffect(() => {
     if (auth.status !== "ready") return;
+    void loadBasicPermissions();
     void loadWorkbenchTodos();
+    void loadPublicCompanyProfile();
   }, [auth.status]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -527,6 +554,7 @@ export function WorkspaceShell() {
           payload={payload}
           menus={menus}
           todosState={workbenchTodos}
+          bootWarnings={bootWarnings}
           onSelectMenu={selectWorkspaceMenu}
           onRefreshTodos={loadWorkbenchTodos}
           onOpenTodo={openWorkbenchTodo}

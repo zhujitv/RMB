@@ -1,15 +1,52 @@
 import type { NextRequest } from "next/server";
-import { apiError, ok } from "../../../../lib/platform-db";
+import { apiError, logServerTiming, ok, sanitizeForLog, timeServerStep } from "../../../../lib/platform-db";
 import { requireApiActor } from "../../../../lib/api-route-guard";
 import { listWorkbenchTodos } from "../../../../lib/platform/workbench-todos";
 
 export const dynamic = "force-dynamic";
 
+type ErrorLike = {
+  code?: string;
+  message?: string;
+  meta?: unknown;
+  stack?: string;
+};
+
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now();
+  const path = new URL(request.url).pathname;
+  let userId = "";
+  let role = "";
+  let outcome = "unknown";
   try {
-    const actor = await requireApiActor(request);
-    return ok({ success: true, ...(await listWorkbenchTodos(actor)) });
+    const actor = await timeServerStep("workbench-init-timing", "workbenchTodos.requireApiActor", () => requireApiActor(request), { path });
+    userId = actor?.id || "";
+    role = actor?.role || "";
+    const result = await timeServerStep("workbench-init-timing", "workbenchTodos.prismaQueries", () => (
+      listWorkbenchTodos(actor)
+    ), { path, userId, role });
+    outcome = "ready";
+    return ok({ success: true, ...result });
   } catch (error: unknown) {
-    return apiError(error, "读取工作台待办失败");
+    const typedError = (error || {}) as ErrorLike;
+    outcome = "error";
+    console.error("workbench todos failed", sanitizeForLog({
+      path,
+      userId,
+      role,
+      reason: typedError.message || "unknown",
+      code: typedError.code || "",
+      meta: typedError.meta,
+      stack: process.env.NODE_ENV === "production" ? undefined : typedError.stack,
+    }));
+    return apiError(error, "待办数据加载失败");
+  } finally {
+    logServerTiming("workbench-init-timing", startedAt, {
+      step: "workbenchTodos.total",
+      path,
+      userId,
+      role,
+      outcome,
+    });
   }
 }

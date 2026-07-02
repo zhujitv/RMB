@@ -49,11 +49,11 @@ function authInitErrorCode(error: ErrorLike) {
 function authInitErrorMessage(code: string, error: ErrorLike) {
   const isProduction = process.env.NODE_ENV === "production";
   const originalMessage = String(error.message || "账户初始化失败");
+  if (code === "AUTH-DB-CONNECTION") return "数据库连接失败，请检查 DATABASE_URL 和本地 PostgreSQL 状态。";
+  if (code === "AUTH-DB-SCHEMA") return "权限数据结构异常，请执行 Prisma migrate / db push。";
   if (!isProduction) {
     return `${originalMessage}（错误代码：${code}）`;
   }
-  if (code === "AUTH-DB-CONNECTION") return "系统暂时无法读取账户信息，请联系管理员。（错误代码：AUTH-DB-CONNECTION）";
-  if (code === "AUTH-DB-SCHEMA") return "系统暂时无法读取账户信息，请联系管理员。（错误代码：AUTH-DB-SCHEMA）";
   if (code === "AUTH-UNAUTHENTICATED") return "请先登录";
   if (code === "AUTH_USER_NOT_FOUND") return "登录会话对应的用户不存在，请重新登录或联系管理员。";
   if (code === "EMAIL_NOT_VERIFIED") return "请先完成邮箱验证";
@@ -82,29 +82,50 @@ function classifyAuthInitError(error: unknown) {
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
+  const path = new URL(request.url).pathname;
+  const basicOnly = new URL(request.url).searchParams.get("basic") === "1";
   let outcome = "unknown";
+  let userId = "";
   let role = "";
   try {
     const user = await timeServerStep("workbench-init-timing", "authMe.requireApiActor", () => (
       requireApiActor(request, { allowPasswordChangeRequired: true })
-    ));
+    ), { path });
+    userId = user?.id || "";
     role = user?.role || "";
-    const [session, companyProfile] = await timeServerStep("workbench-init-timing", "authMe.parallelSessionAndCompanyProfile", () => Promise.all([
-      currentSessionInfo(request),
-      getCompanyProfileSettings(),
-    ]), { role });
-    outcome = "ready";
-    const response = ok({
+    const basePayload = {
       user: publicUser(user),
       roles: ROLES,
       permissions: rolePermissions(user),
       scopeText: roleScopeText(user?.role),
+    };
+    if (basicOnly) {
+      outcome = "ready-basic";
+      const response = ok(basePayload);
+      logServerTiming("workbench-init-timing", startedAt, {
+        step: "authMe.total",
+        path,
+        outcome,
+        userId,
+        role,
+      });
+      return response;
+    }
+    const [session, companyProfile] = await timeServerStep("workbench-init-timing", "authMe.parallelSessionAndCompanyProfile", () => Promise.all([
+      currentSessionInfo(request),
+      getCompanyProfileSettings(),
+    ]), { path, userId, role });
+    outcome = "ready";
+    const response = ok({
+      ...basePayload,
       session,
       companyProfile,
     });
     logServerTiming("workbench-init-timing", startedAt, {
       step: "authMe.total",
+      path,
       outcome,
+      userId,
       role,
     });
     return response;
@@ -114,13 +135,17 @@ export async function GET(request: NextRequest) {
     outcome = classifiedError.status ? `error-${classifiedError.status}` : "error-500";
     logServerTiming("workbench-init-timing", startedAt, {
       step: "authMe.total",
+      path,
       outcome,
+      userId,
       role,
       code: classifiedError.code,
     });
     console.error("auth me failed: account info load error", sanitizeForLog({
       code: classifiedError.code,
       status: classifiedError.status,
+      path,
+      userId,
       role,
       error: {
         name: error instanceof Error ? error.name : "Error",

@@ -83,6 +83,7 @@ type OverviewResponse = {
 };
 
 const currentMonth = new Date().toISOString().slice(0, 7);
+const OVERVIEW_TIMEOUT_MS = 15000;
 
 export function DashboardModule() {
   const [month, setMonth] = useState(currentMonth);
@@ -99,10 +100,11 @@ export function DashboardModule() {
       const params = new URLSearchParams();
       if (nextMonth) params.set("month", nextMonth);
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
-      const result = await apiJson<OverviewResponse>(`/api/overview?${params}`);
+      const result = await apiJson<OverviewResponse>(`/api/overview?${params}`, { timeoutMs: OVERVIEW_TIMEOUT_MS });
       setOverview(result.overview || null);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取经营总览失败");
+      const detail = loadError instanceof Error ? loadError.message : "";
+      setError(detail && detail !== "统计数据加载失败" ? `统计数据加载失败：${detail}` : "统计数据加载失败");
       setOverview(null);
     } finally {
       setLoading(false);

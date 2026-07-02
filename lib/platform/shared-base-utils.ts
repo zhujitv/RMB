@@ -142,10 +142,47 @@ function prismaSchemaMismatchMessage(error: unknown) {
   return `保存失败：本地数据库缺少 ${fieldName} 字段，请执行迁移。`;
 }
 
+function prismaInfrastructureError(error: unknown) {
+  const typedError = (error || {}) as AppError & { meta?: unknown };
+  const code = String(typedError.code || "");
+  const message = String(typedError.message || "");
+  if (
+    code === "P1001"
+    || /Can't reach database server|database .*connect|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|Connection terminated|connect ECONNREFUSED/i.test(message)
+  ) {
+    return {
+      status: 500,
+      code: "PRISMA_DATABASE_CONNECTION_FAILED",
+      message: "数据库连接失败，请检查 DATABASE_URL 和本地 PostgreSQL 状态。",
+    };
+  }
+  if (
+    ["P2021", "P2022", "P2009"].includes(code)
+    || /Unknown field|Unknown argument|column .*does not exist|The column .* does not exist|Invalid .*select|has no column/i.test(message)
+  ) {
+    return {
+      status: 500,
+      code: "PRISMA_SCHEMA_MISMATCH",
+      message: "权限数据结构异常，请执行 Prisma migrate / db push。",
+    };
+  }
+  return null;
+}
+
 export function apiError(error: unknown, fallback = "请求处理失败") {
   const typedError = (error || {}) as AppError;
   const status = typedError.status || 500;
   if (shouldLogApiErrorStatus(status)) logServerError(fallback, error);
+  const infrastructureError = prismaInfrastructureError(error);
+  if (infrastructureError) {
+    return NextResponse.json(
+      {
+        error: infrastructureError.message,
+        code: infrastructureError.code,
+      },
+      { status: infrastructureError.status },
+    );
+  }
   const schemaMismatchMessage = prismaSchemaMismatchMessage(error);
   if (schemaMismatchMessage) {
     return NextResponse.json(
