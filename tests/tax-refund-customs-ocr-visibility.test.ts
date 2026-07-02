@@ -100,6 +100,11 @@ test("tax refund calculation requires confirmed declaration items", () => {
   assert.match(taxCalculationService, /logOcrCallFailure/);
   assert.match(taxCalculationService, /customsParsedFromRecognition/);
   assert.match(taxCalculationService, /已识别基础字段，但未解析到商品明细，请人工维护。/);
+  assert.match(taxCalculationService, /LOW_CONFIDENCE_CUSTOMS_ITEM_MESSAGE/);
+  assert.match(taxCalculationService, /OCR仅使用PDF全文兜底，商品明细未自动保存，请人工核对。/);
+  assert.match(taxCalculationService, /isLowConfidenceCustomsItemSource/);
+  assert.match(taxCalculationService, /source: \{ in: LOW_CONFIDENCE_CUSTOMS_ITEM_SOURCE_VALUES \}/);
+  assert.doesNotMatch(taxCalculationService, /items: items\.length \? items : fallback\.items/);
   assert.match(taxCalculationService, /confirmationStatus: "CONFIRMED"/);
   assert.match(taxCalculationService, /CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED/);
   assert.match(taxCalculationService, /没有确认报关商品明细，不允许进入退税计算。/);
@@ -124,6 +129,9 @@ test("customs OCR uses structured recognition with table fallback and saves full
   assert.match(ocrIntegration, /advancedTable: tableRawJson/);
   assert.match(ocrIntegration, /tableOnly: tableOnlyRawJson/);
   assert.match(ocrIntegration, /parsedJson/);
+  assert.match(ocrIntegration, /customsTextFallbackParsedJson/);
+  assert.match(ocrIntegration, /itemParseSkippedReason: "LOW_CONFIDENCE_PDF_TEXT_FALLBACK"/);
+  assert.doesNotMatch(ocrIntegration, /\[\.\.\.structuredItems, \.\.\.fallback\.items\]/);
 });
 
 test("customs OCR parsed items can be synced into declaration item table", () => {

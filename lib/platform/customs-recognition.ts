@@ -204,10 +204,18 @@ function customsDateOrNull(value: unknown) {
   return text ? dateFromInput(text) : null;
 }
 
-function customsParsedDetailFromRecognition(parsedJson: unknown, text = "") {
+function customsParsedDetailFromRecognition(parsedJson: unknown, text = "", sourceValue = "") {
   const parsed = isPlainRecord(parsedJson) ? parsedJson : {};
   const fallback = customsDeclarationParser.parseCustomsDeclarationDetailText(text);
-  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const source = cleanCustomsText(sourceValue || parsed.apiName || parsed.source || parsed.ocrApiName).toUpperCase();
+  const lowConfidenceItemSource = [
+    "ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT",
+    "OCR_PDF_TEXT_FALLBACK",
+    "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_EMPTY",
+    "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_EMPTY",
+    "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_TABLE_EMPTY",
+  ].some((item) => source.includes(item));
+  const rawItems = !lowConfidenceItemSource && Array.isArray(parsed.items) ? parsed.items : [];
   const items = rawItems
     .map((item) => isPlainRecord(item) ? item : {})
     .map((item): customsDeclarationParser.CustomsDeclarationItemFields | null => {
@@ -235,7 +243,7 @@ function customsParsedDetailFromRecognition(parsedJson: unknown, text = "") {
     tradeTerm: cleanCustomsText(parsed.tradeTerm) || fallback.tradeTerm,
     currency: cleanCustomsText(parsed.currency).toUpperCase() || fallback.currency,
     totalAmount: num(parsed.totalAmount, 0) || fallback.totalAmount,
-    items: items.length ? items : fallback.items,
+    items,
   };
 }
 
@@ -269,7 +277,7 @@ async function persistCustomsRecognitionArtifacts(
   document: CustomsRecognitionDocument,
   parsed: ParseCustomsDocumentResult,
 ): Promise<CustomsRecognitionPersistenceResult> {
-  const parsedDetail = customsParsedDetailFromRecognition(parsed.parsedJson, parsed.text || "");
+  const parsedDetail = customsParsedDetailFromRecognition(parsed.parsedJson, parsed.text || "", parsed.apiName || parsed.source || "");
   const rawJsonForSave = customsRecognitionRawJsonForSave(parsed, document, orderId);
   let rawResult: Awaited<ReturnType<typeof saveOcrRawResult>> | null = null;
   let errorMessage = "";

@@ -84,6 +84,16 @@ const SUPPLIER_CONTRACT_KEYS = [
   "签订日期",
 ];
 
+function customsTextFallbackParsedJson(text: string) {
+  const parsed = parseCustomsDeclarationDetailText(text);
+  return {
+    ...parsed,
+    items: [],
+    itemParseSkippedReason: "LOW_CONFIDENCE_PDF_TEXT_FALLBACK",
+    itemParseMessage: "PDF全文兜底仅用于报关单基础字段，不自动保存商品明细。",
+  };
+}
+
 const CONTRACT_FIELD_ALIASES: Record<string, string[]> = {
   supplier: ["供应商", "供方", "卖方", "乙方", "Supplier", "Seller"],
   buyer: ["采购方", "需方", "买方", "甲方", "Buyer", "Purchaser"],
@@ -421,7 +431,7 @@ function mergeCustomsParsedData(
     currency: normalizeCurrencyCode(structuredFields.currency) || fallback.currency,
     totalAmount: parseNumberText(structuredFields.totalAmount) || fallback.totalAmount,
   };
-  const items = dedupeCustomsItems([...structuredItems, ...fallback.items]
+  const items = dedupeCustomsItems(structuredItems
     .map((item) => normalizeCustomsDeclarationItemForTaxRefund(item, { tradeTerm: fields.tradeTerm, currency: fields.currency }))
     .filter((item): item is CustomsDeclarationItemFields => Boolean(item)));
   const status = customsParseStatusFromFields(fields);
@@ -485,7 +495,7 @@ async function recognizeWithPdfTextFallback(
     throw codedError("OCR服务未配置可用结构化识别，且本地 PDF 文本兜底已关闭。", 501, "OCR_PROVIDER_ADAPTER_NOT_CONFIGURED");
   }
   const text = await extractPdfTextFromPdfBuffer(buffer, options);
-  const parsedJson = feature === "customsDeclaration" ? parseCustomsDeclarationDetailText(text) : undefined;
+  const parsedJson = feature === "customsDeclaration" ? customsTextFallbackParsedJson(text) : undefined;
   return {
     text,
     source: options.source || "OCR_PDF_TEXT_FALLBACK",

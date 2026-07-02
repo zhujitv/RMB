@@ -73,6 +73,14 @@ type ParsedCustomsItemsSyncInput = {
 const TAX_REFUND_AMOUNT_TOLERANCE_CNY = 1;
 const TAX_REFUND_AMOUNT_TOLERANCE_PERCENT = 0.005;
 const TAX_REFUND_OK_STATUSES = new Set(["整体匹配", "匹配", "多票合并匹配"]);
+const LOW_CONFIDENCE_CUSTOMS_ITEM_SOURCE_VALUES = [
+  "ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT",
+  "OCR_PDF_TEXT_FALLBACK",
+  "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_EMPTY",
+  "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_EMPTY",
+  "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_TABLE_EMPTY",
+];
+const LOW_CONFIDENCE_CUSTOMS_ITEM_MESSAGE = "OCR仅使用PDF全文兜底，商品明细未自动保存，请人工核对。";
 
 function cleanText(value: unknown) {
   return String(value || "").replace(/\u3000/g, " ").replace(/[ \t]+/g, " ").trim();
@@ -101,10 +109,22 @@ function plainRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: unknown }) {
+function customsRecognitionSource(recognized: { source?: unknown; apiName?: unknown }, parsed: Record<string, unknown> = {}) {
+  return cleanText(recognized.apiName || recognized.source || parsed.apiName || parsed.source || parsed.ocrApiName);
+}
+
+function isLowConfidenceCustomsItemSource(value: unknown) {
+  const source = cleanText(value).toUpperCase();
+  if (!source) return false;
+  return LOW_CONFIDENCE_CUSTOMS_ITEM_SOURCE_VALUES.some((item) => source.includes(item));
+}
+
+function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: unknown; source?: string | null; apiName?: string | null }) {
   const parsed = plainRecord(recognized.parsedJson);
   const fallback = parseCustomsDeclarationDetailText(String(recognized.text || ""));
-  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const source = customsRecognitionSource(recognized, parsed);
+  const lowConfidenceItemSource = isLowConfidenceCustomsItemSource(source);
+  const rawItems = !lowConfidenceItemSource && Array.isArray(parsed.items) ? parsed.items : [];
   const items = rawItems
     .map((item) => plainRecord(item))
     .map((item): CustomsDeclarationItemFields | null => {
@@ -133,9 +153,12 @@ function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: 
     currency: cleanText(parsed.currency) || fallback.currency,
     totalAmount: num(parsed.totalAmount, 0) || fallback.totalAmount,
     customsDeclarationParseStatus: fallback.customsDeclarationParseStatus,
-    customsDeclarationParseSource: fallback.customsDeclarationParseSource,
-    customsDeclarationParseMessage: fallback.customsDeclarationParseMessage,
-    items: items.length ? items : fallback.items,
+    customsDeclarationParseSource: source || fallback.customsDeclarationParseSource,
+    customsDeclarationParseMessage: [
+      fallback.customsDeclarationParseMessage,
+      lowConfidenceItemSource ? LOW_CONFIDENCE_CUSTOMS_ITEM_MESSAGE : "",
+    ].filter(Boolean).join("\n"),
+    items,
   };
 }
 
@@ -210,11 +233,29 @@ async function replaceCustomsDeclarationItemsFromParsed(
   input: ParsedCustomsItemsSyncInput,
 ) {
   const parsedItemsCount = input.parsed.items.length;
+  if (!parsedItemsCount) {
+    const cleared = await tx.exportCustomsDeclarationItem.updateMany({
+      where: {
+        orderId: input.orderId,
+        documentId: input.documentId,
+        deletedAt: null,
+        confirmationStatus: "PENDING_CONFIRMATION",
+        source: { in: LOW_CONFIDENCE_CUSTOMS_ITEM_SOURCE_VALUES },
+      },
+      data: { deletedAt: new Date() },
+    });
+    return {
+      parsedItemsCount,
+      insertedItemsCount: 0,
+      skippedReason: cleared.count
+        ? `parsedJson.items empty; cleared ${cleared.count} low-confidence OCR rows`
+        : "parsedJson.items empty",
+    };
+  }
   await tx.exportCustomsDeclarationItem.updateMany({
     where: { orderId: input.orderId, documentId: input.documentId, deletedAt: null },
     data: { deletedAt: new Date() },
   });
-  if (!parsedItemsCount) return { parsedItemsCount, insertedItemsCount: 0, skippedReason: "parsedJson.items empty" };
   const created = await tx.exportCustomsDeclarationItem.createMany({
     data: customsDeclarationItemCreateRows(input),
   });
@@ -709,7 +750,10 @@ export async function syncCustomsDeclarationItemsFromOcrRawResult(request: Audit
     },
     orderBy: [{ createdAt: "desc" }],
   });
-  const parsed = customsParsedFromRecognition({ parsedJson: rawResult?.parsedJson || null });
+  const parsed = customsParsedFromRecognition({
+    parsedJson: rawResult?.parsedJson || null,
+    apiName: rawResult?.apiName || "",
+  });
   if (!rawResult || !parsed.items.length) {
     const skippedReason = !rawResult ? "ocrRawResult missing" : "parsedJson.items empty";
     console.warn("customs-ocr-items-sync-skipped", {
