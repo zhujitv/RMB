@@ -141,6 +141,39 @@ test("parses customs declaration item detail for tax refund calculation", () => 
   });
 });
 
+test("parses multiline customs declaration item table rows", () => {
+  const result = parseCustomsDeclarationDetailText(`
+    中华人民共和国海关出口货物报关单
+    海关编号 223120241234567890
+    申报日期 2024-05-12
+    成交方式 FOB
+    币制 USD
+    项号 商品编号 商品名称及规格型号 数量及单位 总价 币制
+    1
+    9403200000
+    铝制工程结构件
+    2866.71 千克
+    USD 86588.10
+    2
+    7610900000
+    铝制栏杆配件
+    千克 3904.95
+    USD 131554.34
+  `);
+
+  assert.equal(result.items.length, 2);
+  assert.equal(result.items[0].hsCode, "9403200000");
+  assert.equal(result.items[0].productName, "铝制工程结构件");
+  assert.equal(result.items[0].quantity, 2866.71);
+  assert.equal(result.items[0].unit, "千克");
+  assert.equal(result.items[0].fobAmount, 86588.1);
+  assert.equal(result.items[1].hsCode, "7610900000");
+  assert.equal(result.items[1].productName, "铝制栏杆配件");
+  assert.equal(result.items[1].quantity, 3904.95);
+  assert.equal(result.items[1].unit, "千克");
+  assert.equal(result.items[1].fobAmount, 131554.34);
+});
+
 test("parser source does not reference bundled fixture documents", async () => {
   const source = await fs.readFile(new URL("../lib/customs-declaration-parser.ts", import.meta.url), "utf8");
   const packageJson = await fs.readFile(new URL("../package.json", import.meta.url), "utf8");

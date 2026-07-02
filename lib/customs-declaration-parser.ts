@@ -476,6 +476,11 @@ function numericAmount(value = "") {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+const CUSTOMS_ITEM_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
+const CUSTOMS_ITEM_UNIT_REGEX = new RegExp(CUSTOMS_ITEM_UNIT_PATTERN, "i");
+const CUSTOMS_ITEM_HEADER_PATTERN = /^(项号|商品编号|HS编码|商品名称|商品名称及规格型号|规格型号|数量及单位|数量|单位|单价|总价|币制|原产国|最终目的国|征免|法定|成交|第一|第二)$/i;
+const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|境内发货人|申报单位|运输方式|提运单号|贸易国别|目的国|监管方式|征免性质|许可证号|合同协议号|集装箱|随附单证|标记唛码|备注)/;
+
 function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[] {
   const lines = normalizePdfText(text).split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const items: CustomsDeclarationItemFields[] = [];
@@ -505,13 +510,107 @@ function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[]
     };
     if (item.hsCode && item.productName && item.quantity > 0) items.push(item);
   }
-  return dedupeCustomsItems(items);
+  return dedupeCustomsItems([...items, ...parseMultilineCustomsDeclarationItems(lines)]);
+}
+
+function parseMultilineCustomsDeclarationItems(lines: string[] = []): CustomsDeclarationItemFields[] {
+  const hsRows = lines
+    .map((line, index) => ({ line, index, hsCode: findHsCodeInLine(line) }))
+    .filter((row) => row.hsCode);
+  const items: CustomsDeclarationItemFields[] = [];
+  for (const [rowIndex, row] of hsRows.entries()) {
+    const nextIndex = hsRows[rowIndex + 1]?.index ?? Math.min(lines.length, row.index + 16);
+    const windowLines = lines.slice(row.index, Math.min(nextIndex, row.index + 16));
+    const windowText = windowLines.join(" ");
+    const productName = findProductNameInItemWindow(windowLines, row.hsCode);
+    const quantityUnit = findQuantityUnitInItemWindow(windowText);
+    const currency = findCurrency(windowText);
+    const tradeTerm = findTradeTerm(windowText);
+    const totalAmount = findTotalAmountInItemWindow(windowText, quantityUnit.quantity);
+    if (!row.hsCode || !productName || (!quantityUnit.quantity && !totalAmount)) continue;
+    items.push({
+      hsCode: row.hsCode,
+      productName,
+      specification: "",
+      quantity: quantityUnit.quantity,
+      unit: quantityUnit.unit,
+      unitPrice: 0,
+      totalAmount,
+      tradeTerm,
+      currency,
+      fobAmount: totalAmount,
+      grossWeight: 0,
+      netWeight: 0,
+      originCountry: "",
+      destinationCountry: "",
+    });
+  }
+  return items;
+}
+
+function findHsCodeInLine(line = "") {
+  if (CUSTOMS_ITEM_LABEL_PATTERN.test(line)) return "";
+  const match = toHalfWidth(line).match(/(?:^|\D)([0-9]{8,13})(?!\d)/);
+  return match?.[1] || "";
+}
+
+function findProductNameInItemWindow(lines: string[] = [], hsCode = "") {
+  const candidates = lines
+    .map((line) => cleanProductNameCandidate(line, hsCode))
+    .filter(Boolean)
+    .filter((line) => /[\u4e00-\u9fa5A-Za-z]/.test(line))
+    .filter((line) => !CUSTOMS_ITEM_HEADER_PATTERN.test(line))
+    .filter((line) => !CUSTOMS_ITEM_LABEL_PATTERN.test(line));
+  return candidates[0] || "";
+}
+
+function cleanProductNameCandidate(line = "", hsCode = "") {
+  let text = toHalfWidth(line)
+    .replace(hsCode, " ")
+    .replace(/^\s*\d{1,3}\s*/, "")
+    .replace(/商品名称及规格型号|商品名称|规格型号|HS编码|商品编号/g, " ")
+    .replace(new RegExp(`\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?\\s*${CUSTOMS_ITEM_UNIT_PATTERN}`, "ig"), " ")
+    .replace(new RegExp(`${CUSTOMS_ITEM_UNIT_PATTERN}\\s*\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?`, "ig"), " ")
+    .replace(/\b(FOB|CIF|CFR|EXW|USD|CNY|RMB|EUR|JPY|HKD)\b/ig, " ")
+    .replace(/[美元人民币欧元日元港币]+/g, " ")
+    .replace(/\d+(?:[,，]\d{3})*(?:\.\d+)?/g, " ")
+    .replace(/[;；:：|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length > 80) text = text.slice(0, 80).trim();
+  return text;
+}
+
+function findQuantityUnitInItemWindow(text = "") {
+  const normalized = toHalfWidth(text);
+  const amount = "\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?";
+  const quantityBeforeUnit = new RegExp(`(${amount})\\s*${CUSTOMS_ITEM_UNIT_PATTERN}`, "i");
+  const quantityAfterUnit = new RegExp(`${CUSTOMS_ITEM_UNIT_PATTERN}\\s*(${amount})`, "i");
+  let match = normalized.match(quantityBeforeUnit);
+  if (match) return { quantity: numericAmount(match[1]), unit: match[2] || "" };
+  match = normalized.match(quantityAfterUnit);
+  if (match) return { quantity: numericAmount(match[2]), unit: match[1] || "" };
+  return { quantity: 0, unit: "" };
+}
+
+function findTotalAmountInItemWindow(text = "", quantity = 0) {
+  const normalized = toHalfWidth(text);
+  const currencyAmount = normalized.match(/(?:FOB|CIF|CFR|EXW)?\s*(?:USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\s*(\d+(?:[,，]\d{3})*(?:\.\d+)?)/i);
+  if (currencyAmount) return numericAmount(currencyAmount[1]);
+  const amountCandidates = [...normalized.matchAll(/\d+(?:[,，]\d{3})*(?:\.\d+)?/g)]
+    .map((match) => ({ value: numericAmount(match[0]), index: match.index || 0, raw: match[0] }))
+    .filter((candidate) => candidate.value > 0)
+    .filter((candidate) => candidate.raw.replace(/\D/g, "").length < 14)
+    .filter((candidate) => Math.abs(candidate.value - quantity) > 0.0001)
+    .filter((candidate) => !CUSTOMS_ITEM_UNIT_REGEX.test(normalized.slice(candidate.index, candidate.index + 20)));
+  if (!amountCandidates.length) return 0;
+  return amountCandidates.sort((left, right) => right.index - left.index)[0].value;
 }
 
 function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = [item.hsCode, item.productName, item.quantity, item.unit, item.currency, item.fobAmount].join("|");
+    const key = [item.hsCode, item.productName, item.quantity, item.unit, item.fobAmount || item.totalAmount || 0].join("|");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

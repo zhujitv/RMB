@@ -365,6 +365,76 @@ async function persistCustomsRecognitionArtifacts(
   return result;
 }
 
+async function persistHistoricalCustomsRecognitionArtifacts(
+  request: AuditRequestLike,
+  actor: CustomsActor,
+  orderId: string,
+  document: CustomsRecognitionDocument,
+  before: CustomsOrderLike | null,
+  error: unknown,
+  reasonCode: string,
+) {
+  const fields = currentCustomsFields(before);
+  if (!hasCustomsRecognitionValue(fields)) return null;
+  const source = "HISTORICAL_ORDER_FIELDS";
+  const message = "文件无法读取，已保留历史识别基础字段并补写OCR记录；未解析到报关商品明细，请人工维护。";
+  const parsed: ParseCustomsDocumentResult = {
+    fields,
+    status: "PARTIAL",
+    source,
+    message,
+    text: "",
+    provider: "SYSTEM",
+    apiName: "BACKFILLED_HISTORICAL_ORDER_FIELDS",
+    rawJson: {
+      source,
+      provider: "SYSTEM",
+      apiName: "BACKFILLED_HISTORICAL_ORDER_FIELDS",
+      documentId: document.id,
+      orderId,
+      documentType: document.documentType,
+      fileName: String((document as { fileName?: unknown; originalName?: unknown }).fileName || (document as { originalName?: unknown }).originalName || ""),
+      reasonCode,
+      note: "历史识别未保存原始 OCR 响应；此记录由系统从订单已有报关基础字段回填。",
+      fileReadError: customsFailureDetails(error, document),
+      historicalRecognition: before ? serializeCustomsRecognition(before) : null,
+    },
+    parsedJson: {
+      source,
+      backfilled: true,
+      customsDeclarationNo: fields.customsDeclarationNo || "",
+      customsDeclarationDate: fields.customsDeclarationDate || "",
+      items: [],
+      itemCount: 0,
+    },
+    confidence: null,
+  };
+  const persistence = await persistCustomsRecognitionArtifacts(orderId, document, parsed);
+  const order = await prisma.receivableOrder.update({
+    where: { id: orderId },
+    data: customsUpdateData(fields, "PARTIAL", message, source),
+    include: includeOrderRelations(),
+  });
+  await runNonCriticalTask("历史报关单识别结果回填日志写入", () => writeAudit(request, actor, "重新识别报关单部分信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
+    ...serializeCustomsRecognition(order),
+    documentId: document.id,
+    recognitionSource: source,
+    rawJsonSaved: persistence.rawJsonSaved,
+    parsedJsonSaved: persistence.parsedJsonSaved,
+    customsDeclarationItemCount: persistence.itemCount,
+    failureReason: reasonCode,
+  }));
+  return buildCustomsRecognitionResult({
+    document,
+    parsedFields: fields,
+    currentFields: currentCustomsFields(before),
+    status: "PARTIAL",
+    message,
+    applied: true,
+    order: serializeOrder(order),
+  });
+}
+
 function currentCustomsFields(before: CustomsOrderLike | null = null): CustomsFields {
   const declarationDate = before?.customsDeclarationDate instanceof Date
     ? dateToInput(before.customsDeclarationDate)
@@ -913,6 +983,8 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   try {
     buffer = await readCustomsDeclarationPdfBuffer(document);
   } catch (error: unknown) {
+    const recovered = await persistHistoricalCustomsRecognitionArtifacts(request, actor, orderId, document, before, error, errorCode(error) || "CUSTOMS_FILE_UNREADABLE");
+    if (recovered) return recovered;
     const specificError = specificCustomsFileReadError(error);
     await applyCustomsParseFailure(request, actor, orderId, specificError.message, specificError.code, "重新识别失败", {
       allowManualFailure: true,
@@ -927,6 +999,8 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   try {
     parsed = await parseCustomsDocumentBuffer(buffer, document, { requireText: true });
   } catch (error: unknown) {
+    const recovered = await persistHistoricalCustomsRecognitionArtifacts(request, actor, orderId, document, before, error, errorCode(error) || "CUSTOMS_PARSE_FAILED");
+    if (recovered) return recovered;
     const specificError = specificCustomsParseError(error);
     await applyCustomsParseFailure(request, actor, orderId, specificError.message, specificError.code, "重新识别失败", {
       allowManualFailure: true,

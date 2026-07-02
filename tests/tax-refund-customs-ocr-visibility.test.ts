@@ -125,6 +125,9 @@ test("customs OCR persistence logs empty raw JSON and failed provider calls", ()
   assert.match(rawResultService, /tx\.ocrRawResult\.create/);
   assert.match(rawResultService, /tx\.ocrRawResult\.update/);
   assert.match(customsRecognition, /persistCustomsRecognitionArtifacts/);
+  assert.match(customsRecognition, /persistHistoricalCustomsRecognitionArtifacts/);
+  assert.match(customsRecognition, /BACKFILLED_HISTORICAL_ORDER_FIELDS/);
+  assert.match(customsRecognition, /历史识别未保存原始 OCR 响应/);
   assert.match(customsRecognition, /customs-ocr-result-persisted/);
   assert.match(customsRecognition, /rawJsonSaved/);
   assert.match(customsRecognition, /parsedJsonSaved/);
