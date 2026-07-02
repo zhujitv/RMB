@@ -350,9 +350,14 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /@alicloud\/docmind-api20220711/);
   assert.match(service, /AyncTradeDocumentPackageExtractSmartAppRequest/);
   assert.match(service, /CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE = \["出口报关单", "进口报关单"\]/);
+  assert.match(service, /CUSTOMS_DECLARATION_MIN_TIMEOUT_MS = 60000/);
+  assert.match(service, /function customsOcrSettings/);
+  assert.match(service, /Math\.max\(settings\.timeoutMs, CUSTOMS_DECLARATION_MIN_TIMEOUT_MS\)/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind/);
   assert.match(service, /ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
+  assert.match(service, /aliyun-customs-general-structure-failed/);
+  assert.match(service, /ALIYUN_CUSTOMS_OCR_TIMEOUT/);
   assert.match(service, /RecognizeAllTextRequest/);
   assert.match(service, /RecognizeAllTextRequestTableConfig/);
   assert.match(service, /outputTable: true/);

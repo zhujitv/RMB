@@ -83,6 +83,7 @@ const SUPPLIER_CONTRACT_KEYS = [
   "单价",
   "签订日期",
 ];
+const CUSTOMS_DECLARATION_MIN_TIMEOUT_MS = 60000;
 
 function customsTextFallbackParsedJson(text: string) {
   const parsed = parseCustomsDeclarationDetailText(text);
@@ -171,6 +172,17 @@ function cleanOptionalUrl(value: unknown, fallback: string) {
 function cleanTimeoutMs(value: unknown) {
   const timeoutMs = Math.round(num(value, DEFAULT_OCR_INTEGRATION_SETTINGS.timeoutMs));
   return Math.min(60000, Math.max(3000, timeoutMs));
+}
+
+function customsOcrSettings(settings: ReturnType<typeof normalizeOcrIntegrationSettings>) {
+  return {
+    ...settings,
+    timeoutMs: Math.max(settings.timeoutMs, CUSTOMS_DECLARATION_MIN_TIMEOUT_MS),
+  };
+}
+
+function ocrErrorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "");
 }
 
 function settingValue(setting: unknown) {
@@ -580,7 +592,7 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
   if (!fileUrl) {
     throw codedError("文档智能报关单识别需要可下载的文件 URL。", 400, "ALIYUN_DOCMIND_FILE_URL_REQUIRED");
   }
-  const client = createAliyunDocMindClient(settings);
+  const client = createAliyunDocMindClient(customsOcrSettings(settings));
   const response = await client.ayncTradeDocumentPackageExtractSmartApp(new AyncTradeDocumentPackageExtractSmartAppRequest({
     fileUrl,
     fileName: nonEmpty(options.fileName) || "customs-declaration.pdf",
@@ -618,25 +630,43 @@ async function recognizeAliyunCustomsDeclaration(
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
   options: OcrRecognitionOptions = {},
 ): Promise<OcrRecognitionResult> {
+  const effectiveSettings = customsOcrSettings(settings);
   if (options.sourceUrl) {
     try {
-      return await recognizeAliyunCustomsDeclarationWithDocMind(settings, options);
+      return await recognizeAliyunCustomsDeclarationWithDocMind(effectiveSettings, options);
     } catch (error) {
       console.error("aliyun-docmind-customs-ocr-failed", {
         code: (error as { code?: string } | null)?.code || "",
-        message: error instanceof Error ? error.message : String(error),
+        message: ocrErrorText(error),
       });
     }
   }
-  const client = createAliyunOcrClient(settings);
-  const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
-    body: Readable.from(buffer),
-    keys: CUSTOMS_DECLARATION_KEYS,
-  }));
-  const primaryRawJson = toPlainJson(response);
-  const responseBody = isPlainRecord(primaryRawJson) ? primaryRawJson.body : response.body;
-  const primaryData = parseJsonMaybe(responseField(responseBody, "data"));
-  const primaryText = collectText(primaryData).join("\n");
+  const client = createAliyunOcrClient(effectiveSettings);
+  let primaryRawJson: unknown = null;
+  let primaryData: unknown = null;
+  let primaryText = "";
+  let primaryError = "";
+  try {
+    const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+      body: Readable.from(buffer),
+      keys: CUSTOMS_DECLARATION_KEYS,
+    }));
+    primaryRawJson = toPlainJson(response);
+    const responseBody = isPlainRecord(primaryRawJson) ? primaryRawJson.body : response.body;
+    primaryData = parseJsonMaybe(responseField(responseBody, "data"));
+    primaryText = collectText(primaryData).join("\n");
+  } catch (error) {
+    primaryError = ocrErrorText(error);
+    primaryRawJson = {
+      error: primaryError,
+      apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
+      timeoutMs: effectiveSettings.timeoutMs,
+    };
+    console.error("aliyun-customs-general-structure-failed", {
+      message: primaryError,
+      timeoutMs: effectiveSettings.timeoutMs,
+    });
+  }
   const pdfText = primaryText || await extractPdfTextFromPdfBuffer(buffer, { requireText: options.requireText === true }).catch(() => "");
   const primaryFields = collectFieldsFromObject(primaryData, CUSTOMS_FIELD_ALIASES);
   let items = extractCustomsItemsFromAliyunTableData(primaryData, {
@@ -669,7 +699,7 @@ async function recognizeAliyunCustomsDeclaration(
       });
       if (!items.length) items = collectCustomsItemCandidates(tableData);
     } catch (error) {
-      tableErrors.push(`Advanced: ${error instanceof Error ? error.message : String(error)}`);
+      tableErrors.push(`Advanced: ${ocrErrorText(error)}`);
     }
   }
   if (!items.length) {
@@ -691,8 +721,15 @@ async function recognizeAliyunCustomsDeclaration(
       });
       if (!items.length) items = collectCustomsItemCandidates(tableOnlyData);
     } catch (error) {
-      tableErrors.push(`Table: ${error instanceof Error ? error.message : String(error)}`);
+      tableErrors.push(`Table: ${ocrErrorText(error)}`);
     }
+  }
+  if (primaryError && !tableRawJson && !tableOnlyRawJson) {
+    throw codedError(
+      `阿里云报关单结构化识别超时或失败：${primaryError}`,
+      504,
+      "ALIYUN_CUSTOMS_OCR_TIMEOUT",
+    );
   }
   if (tableRawJson || tableOnlyRawJson) {
     const mergedTableText = [pdfText, tableText].filter(Boolean).join("\n");
@@ -707,6 +744,7 @@ async function recognizeAliyunCustomsDeclaration(
         table: tableOnlyRawJson || tableRawJson,
         advancedTable: tableRawJson,
         tableOnly: tableOnlyRawJson,
+        primaryError,
         tableErrors,
       },
       extractedFields: primaryFields,
@@ -725,6 +763,7 @@ async function recognizeAliyunCustomsDeclaration(
       primary: primaryRawJson,
       table: tableRawJson,
       tableOnly: tableOnlyRawJson,
+      primaryError,
       tableErrors,
     },
     extractedFields: primaryFields,
