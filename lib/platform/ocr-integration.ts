@@ -9,6 +9,7 @@ import AliyunOcrClient, {
   RecognizeAllTextRequest,
   RecognizeAllTextRequestAdvancedConfig,
   RecognizeAllTextRequestTableConfig,
+  RecognizeDocumentStructureRequest,
   RecognizeGeneralStructureRequest,
   RecognizeInvoiceRequest,
 } from "@alicloud/ocr-api20210707";
@@ -765,6 +766,39 @@ async function recognizeAliyunSupplierContract(
   };
 }
 
+function buildAliyunCustomsStructureRawJson(rawJson: unknown, data: unknown) {
+  return {
+    primary: rawJson,
+    data,
+  };
+}
+
+function throwAliyunCustomsStructureEmptyError(params: {
+  rawJson: unknown;
+  data: unknown;
+  text: string;
+  structuredFields: Record<string, unknown>;
+  items: CustomsDeclarationItemFields[];
+  parsedJson: unknown;
+}) {
+  const error = codedError("阿里云 OCR 文档结构化接口未返回可用的报关单商品明细。", 422, "ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_EMPTY");
+  error.details = {
+    source: "ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE_CUSTOMS",
+    provider: "ALIYUN",
+    apiName: "ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE",
+    parser: "CUSTOMS_DECLARATION_DOCUMENT_STRUCTURE",
+    textLength: params.text.length,
+    textPreview: params.text.slice(0, 4000),
+    dataType: Array.isArray(params.data) ? "array" : typeof params.data,
+    dataKeys: safeObjectKeys(params.data),
+    extractedFields: params.structuredFields,
+    itemsCount: params.items.length,
+    parsedJson: params.parsedJson,
+    rawJsonPreview: jsonPreview(buildAliyunCustomsStructureRawJson(params.rawJson, params.data)),
+  };
+  throw error;
+}
+
 function hasUsefulCustomsParsedData(parsed: unknown) {
   if (!isPlainRecord(parsed)) return false;
   return Boolean(
@@ -774,6 +808,73 @@ function hasUsefulCustomsParsedData(parsed: unknown) {
     || parsed.totalAmount
     || (Array.isArray(parsed.items) && parsed.items.length > 0),
   );
+}
+
+function hasStructuredCustomsItems(parsed: unknown) {
+  return isPlainRecord(parsed) && Array.isArray(parsed.items) && parsed.items.length > 0;
+}
+
+async function recognizeAliyunCustomsDeclarationWithDocumentStructure(
+  buffer: Buffer,
+  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: OcrRecognitionOptions = {},
+): Promise<OcrRecognitionResult> {
+  const client = createAliyunOcrClient(customsOcrSettings(settings));
+  const request = new RecognizeDocumentStructureRequest({
+    body: options.sourceUrl ? undefined : Readable.from(buffer),
+    url: nonEmpty(options.sourceUrl) || undefined,
+    outputTable: true,
+    row: true,
+    paragraph: true,
+    page: true,
+    needRotate: true,
+    needSortPage: true,
+    useNewStyleOutput: true,
+  });
+  const response = await client.recognizeDocumentStructure(request);
+  const rawJson = toPlainJson(response);
+  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
+  const responseError = docMindResponseError(responseBody);
+  if (responseError) {
+    throw codedError(`阿里云 OCR 文档结构化识别失败：${responseError}`, 502, "ALIYUN_DOCUMENT_STRUCTURE_FAILED");
+  }
+  const data = parseJsonMaybe(responseField(responseBody, "data"));
+  const text = collectText(data).join("\n");
+  const structuredFields = collectFieldsFromObject(data, CUSTOMS_FIELD_ALIASES);
+  let items = extractCustomsItemsFromAliyunTableData(data, {
+    tradeTerm: normalizeFieldValue(structuredFields.tradeTerm),
+    currency: normalizeCurrencyCode(structuredFields.currency),
+  });
+  if (!items.length) items = collectCustomsItemCandidates(data);
+  const parsedJson = mergeCustomsParsedData(text, structuredFields, items);
+  if (!hasStructuredCustomsItems(parsedJson)) {
+    throwAliyunCustomsStructureEmptyError({
+      rawJson,
+      data,
+      text,
+      structuredFields,
+      items,
+      parsedJson,
+    });
+  }
+  return {
+    text,
+    source: "ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE_CUSTOMS",
+    provider: settings.provider,
+    apiName: "ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE",
+    rawJson: buildAliyunCustomsStructureRawJson(rawJson, data),
+    extractedFields: structuredFields,
+    parsedJson,
+    confidence: null,
+    parser: "CUSTOMS_DECLARATION_DOCUMENT_STRUCTURE",
+    diagnostics: {
+      docMindAttempted: true,
+      docMindSucceeded: true,
+      docMindErrorCode: "",
+      docMindErrorMessage: "",
+      fallbackUsed: false,
+    },
+  };
 }
 
 async function recognizeAliyunCustomsDeclarationWithDocMind(
@@ -855,15 +956,40 @@ async function recognizeAliyunCustomsDeclaration(
     docMindAttempted: Boolean(options.sourceUrl),
     docMindSucceeded: false,
     docMindErrorCode: "",
-    docMindErrorMessage: options.sourceUrl ? "" : "未提供可下载文件 URL，无法调用阿里云文档智能贸易单证结构化接口。",
+    docMindErrorMessage: "",
     fallbackUsed: false,
   };
-  if (!options.sourceUrl && effectiveSettings.customsDeclarationMode === "STRICT") {
-    throw codedError(
-      "报关单严格结构化模式需要可下载文件 URL，不能回退到通用 OCR。",
-      400,
-      "ALIYUN_DOCMIND_FILE_URL_REQUIRED",
-    );
+  try {
+    return await recognizeAliyunCustomsDeclarationWithDocumentStructure(buffer, effectiveSettings, options);
+  } catch (error) {
+    const structureErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_FAILED";
+    const structureErrorMessage = ocrErrorText(error);
+    docMindDiagnostics = {
+      docMindAttempted: true,
+      docMindSucceeded: false,
+      docMindErrorCode: structureErrorCode,
+      docMindErrorMessage: structureErrorMessage,
+      fallbackUsed: effectiveSettings.customsDeclarationMode !== "STRICT",
+    };
+    console.error("aliyun-document-structure-customs-ocr-failed", {
+      code: structureErrorCode,
+      message: structureErrorMessage,
+      mode: effectiveSettings.customsDeclarationMode,
+    });
+    if (effectiveSettings.customsDeclarationMode === "STRICT") {
+      const strictError = codedError(
+        `阿里云报关单严格结构化识别失败：${structureErrorMessage}`,
+        (error as { status?: number } | null)?.status || 502,
+        structureErrorCode,
+      );
+      strictError.details = ocrErrorDetails(error);
+      throw strictError;
+    }
+    return recognizeWithPdfTextFallback(buffer, "customsDeclaration", effectiveSettings, {
+      ...options,
+      source: "ALIYUN_CUSTOMS_STRUCTURE_FAILED_PDF_TEXT",
+      error,
+    });
   }
   if (options.sourceUrl) {
     try {
@@ -905,7 +1031,7 @@ async function recognizeAliyunCustomsDeclaration(
       keys: CUSTOMS_DECLARATION_KEYS,
     }));
     primaryRawJson = toPlainJson(response);
-    const responseBody = isPlainRecord(primaryRawJson) ? primaryRawJson.body : response.body;
+    const responseBody = responseField(primaryRawJson, "body") || response.body;
     primaryData = parseJsonMaybe(responseField(responseBody, "data"));
     primaryText = collectText(primaryData).join("\n");
   } catch (error) {
@@ -943,7 +1069,7 @@ async function recognizeAliyunCustomsDeclaration(
         }),
       }));
       tableRawJson = toPlainJson(tableResponse);
-      const tableBody = isPlainRecord(tableRawJson) ? tableRawJson.body : tableResponse.body;
+      const tableBody = responseField(tableRawJson, "body") || tableResponse.body;
       const tableData = parseJsonMaybe(responseField(tableBody, "data"));
       tableText = collectText(tableData).join("\n");
       items = extractCustomsItemsFromAliyunTableData(tableData, {
@@ -965,7 +1091,7 @@ async function recognizeAliyunCustomsDeclaration(
         }),
       }));
       tableOnlyRawJson = toPlainJson(tableOnlyResponse);
-      const tableOnlyBody = isPlainRecord(tableOnlyRawJson) ? tableOnlyRawJson.body : tableOnlyResponse.body;
+      const tableOnlyBody = responseField(tableOnlyRawJson, "body") || tableOnlyResponse.body;
       const tableOnlyData = parseJsonMaybe(responseField(tableOnlyBody, "data"));
       tableText = [tableText, collectText(tableOnlyData).join("\n")].filter(Boolean).join("\n");
       items = extractCustomsItemsFromAliyunTableData(tableOnlyData, {
@@ -1314,7 +1440,7 @@ export async function testCustomsDeclarationOcr(actor: SettingsActor, file: OcrT
     };
   } catch (error) {
     const code = normalizeFieldValue((error as { code?: unknown } | null)?.code);
-    if (code.startsWith("ALIYUN_DOCMIND_")) {
+    if (code.startsWith("ALIYUN_DOCMIND_") || code.startsWith("ALIYUN_DOCUMENT_STRUCTURE_")) {
       return customsDiagnosticResultFromError(fileName, error);
     }
     throw error;

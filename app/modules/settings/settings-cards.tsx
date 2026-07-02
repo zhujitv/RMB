@@ -1083,14 +1083,14 @@ export function OcrIntegrationSettingsCard({
                 <SettingsField label="数据来源">{displayValue(customsTestResult.source)}</SettingsField>
                 <SettingsField label="解析器">{displayValue(customsTestResult.parser)}</SettingsField>
                 <SettingsField label="商品明细数">{displayValue(customsTestResult.itemsCount)}</SettingsField>
-                <SettingsField label="文档智能">{customsTestResult.docMindAttempted ? (customsTestResult.docMindSucceeded ? "已调用成功" : "已尝试但失败") : "未调用"}</SettingsField>
+                <SettingsField label="结构化接口">{customsTestResult.docMindAttempted ? (customsTestResult.docMindSucceeded ? "已调用成功" : "已尝试但失败") : "未调用"}</SettingsField>
                 <SettingsField label="是否回退">{customsTestResult.fallbackUsed ? "已回退到通用 OCR" : "未回退"}</SettingsField>
                 <SettingsField label="报关单号">{displayValue(customsTestResult.fields?.customsDeclarationNo)}</SettingsField>
                 <SettingsField label="申报日期">{displayValue(customsTestResult.fields?.customsDeclarationDate)}</SettingsField>
               </div>
               {customsTestResult.docMindAttempted && !customsTestResult.docMindSucceeded ? (
                 <div className={styles.inlineError}>
-                  文档智能贸易单证结构化接口未成功：{displayValue(customsTestResult.docMindErrorCode)}
+                  阿里云报关单结构化接口未成功：{displayValue(customsTestResult.docMindErrorCode)}
                   {customsTestResult.docMindErrorMessage ? `，${customsTestResult.docMindErrorMessage}` : ""}
                 </div>
               ) : null}

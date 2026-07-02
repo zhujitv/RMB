@@ -63,9 +63,9 @@ test("OCR settings can run isolated customs declaration recognition diagnostics"
   assert.match(settingsModule, /报关单识别测试/);
   assert.match(settingsModule, /选择报关单 PDF 测试识别/);
   assert.match(settingsModule, /仅测试识别，不保存订单数据，不影响资料回传 OCR。/);
-  assert.match(settingsModule, /文档智能/);
+  assert.match(settingsModule, /结构化接口/);
   assert.match(settingsModule, /是否回退/);
-  assert.match(settingsModule, /文档智能贸易单证结构化接口未成功/);
+  assert.match(settingsModule, /阿里云报关单结构化接口未成功/);
 });
 
 test("settings module exposes OCR configuration without leaking secrets", () => {
@@ -382,6 +382,11 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /OCR_FEATURE_DISABLED/);
   assert.match(service, /settings\.customsDeclarationMode !== "MANUAL"/);
   assert.match(service, /settings\.customsDeclarationMode === "STRICT"/);
+  assert.match(service, /RecognizeDocumentStructureRequest/);
+  assert.match(service, /recognizeDocumentStructure\(request\)/);
+  assert.match(service, /ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE/);
+  assert.match(service, /ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_EMPTY/);
+  assert.match(service, /ALIYUN_CUSTOMS_STRUCTURE_FAILED_PDF_TEXT/);
   assert.match(service, /报关单严格结构化模式需要配置 AccessKey ID 和 AccessKey Secret。/);
   assert.match(service, /@alicloud\/docmind-api20220711/);
   assert.match(service, /AyncTradeDocumentPackageExtractSmartAppRequest/);
@@ -404,7 +409,7 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /ALIYUN_DOCMIND_CUSTOMS_EMPTY/);
   assert.match(service, /ALIYUN_DOCMIND_RESULT_TIMEOUT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
-  assert.match(service, /报关单严格结构化模式需要可下载文件 URL，不能回退到通用 OCR。/);
+  assert.match(service, /阿里云 OCR 文档结构化接口未返回可用的报关单商品明细。/);
   assert.match(service, /阿里云报关单严格结构化识别失败/);
   assert.match(service, /aliyun-customs-general-structure-failed/);
   assert.match(service, /ALIYUN_CUSTOMS_OCR_TIMEOUT/);
