@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { DetailField, DismissibleLayer } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
-import { canDeleteTaxDocument, canRecognizeTaxCustoms, canUploadTaxDocument, factoryCostOrdinal, factorySupplierCosts, groupDocuments, latestTaxDocument, logisticsInvoiceCosts, taxDocumentTargetKey, taxRefundBillOfLadingText, taxTargetDomId, uploadScopeKey } from "./helpers";
-import { TAX_EXPORT_UPLOAD_TYPES, type CustomsDeclarationItem, type DocumentCompleteness, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
+import { canDeleteTaxDocument, canRecognizeTaxCustoms, canUploadTaxDocument, factoryCostOrdinal, factorySupplierCosts, groupDocuments, latestTaxDocument, logisticsInvoiceCosts, taxDocumentTargetKey, taxRefundBillOfLadingText, taxSupplierDocumentLabel, taxTargetDomId, uploadScopeKey } from "./helpers";
+import { TAX_EXPORT_UPLOAD_TYPES, type CustomsDeclarationItem, type DocumentCompleteness, type ExportTaxRefundCalculation, type TaxDocument, type TaxRefundDetail, type TaxRefundDetailTab, type TaxRefundRow, type UploadScope } from "./model";
 import {
   CustomsRecognitionForm,
   CustomsUploadCard,
@@ -18,6 +18,9 @@ export function TaxRefundDetailDrawer({
   row,
   detail,
   loading,
+  activeTab,
+  loadedSections,
+  sectionLoading,
   error,
   readOnly,
   packageDownloading,
@@ -34,6 +37,7 @@ export function TaxRefundDetailDrawer({
   canRefreshCompleteness,
   canRecalculateTaxRefund,
   onClose,
+  onSelectTab,
   onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
@@ -47,8 +51,7 @@ export function TaxRefundDetailDrawer({
   onRecognizeCustomsDocument,
   onRecognizeFromUploadedCustoms,
   onOpenManualShippingDocuments,
-  canCreateSupplierDocumentRequest,
-  onOpenSupplierDocumentRequest,
+  onOpenSupplierDocuments,
   onOpenDomesticLogistics,
   currentUserRole,
   canWriteDocuments,
@@ -57,6 +60,9 @@ export function TaxRefundDetailDrawer({
   row: TaxRefundRow;
   detail: TaxRefundDetail | null;
   loading: boolean;
+  activeTab: TaxRefundDetailTab;
+  loadedSections: Record<TaxRefundDetailTab, boolean>;
+  sectionLoading: Record<TaxRefundDetailTab, boolean>;
   error: string;
   readOnly: boolean;
   packageDownloading: boolean;
@@ -73,6 +79,7 @@ export function TaxRefundDetailDrawer({
   canRefreshCompleteness: boolean;
   canRecalculateTaxRefund: boolean;
   onClose: () => void;
+  onSelectTab: (tab: TaxRefundDetailTab) => void;
   onDownloadPackage: () => void;
   onSubmitTaxRefund: () => void;
   onCancelArchive: () => void;
@@ -86,8 +93,7 @@ export function TaxRefundDetailDrawer({
   onRecognizeCustomsDocument: (order: TaxRefundDetail, document: TaxDocument) => void;
   onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
-  canCreateSupplierDocumentRequest: boolean;
-  onOpenSupplierDocumentRequest: (order: TaxRefundDetail) => void;
+  onOpenSupplierDocuments: (keyword: string) => void;
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
@@ -97,6 +103,8 @@ export function TaxRefundDetailDrawer({
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail || {}, row);
   const dismissLocked = packageDownloading || submittingTax || Boolean(uploadingKey);
   const dismissConfirmMessage = dismissLocked ? "当前内容尚未保存，确定关闭吗？" : "";
+  const canRecognizeCustoms = canRecognizeTaxCustoms(currentUserRole, canWriteDocuments, readOnly);
+  const calculationFormId = `tax-refund-calculation-form-${row.id}`;
 
   return (
     <DismissibleLayer
@@ -116,17 +124,14 @@ export function TaxRefundDetailDrawer({
             <small>提单号：{displayBillOfLadingNo}</small>
           </div>
           <div className={styles.taxRefundDrawerActions}>
-            <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
-              {packageDownloading ? "下载中..." : "下载资料包"}
-            </button>
-            {canRefreshCompleteness ? (
-              <button className={styles.secondaryButton} type="button" disabled={refreshingCompleteness || dismissLocked} onClick={onRefreshCompleteness}>
-                {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
+            {activeTab === "calculation" && detail && currentUserRole === "管理员" && !readOnly ? (
+              <button className={styles.primaryButtonCompact} type="submit" form={calculationFormId} disabled={calculatingTaxRefund || dismissLocked}>
+                {calculatingTaxRefund ? "保存中..." : "保存"}
               </button>
             ) : null}
             {canRefreshCompleteness && canRecalculateTaxRefund ? (
               <button className={styles.secondaryButton} type="button" disabled={calculatingTaxRefund || dismissLocked} onClick={onRecalculateTaxRefund}>
-                {calculatingTaxRefund ? "计算中..." : "重新计算退税"}
+                {calculatingTaxRefund ? "计算中..." : "重新计算"}
               </button>
             ) : null}
             {readOnly ? (
@@ -135,14 +140,27 @@ export function TaxRefundDetailDrawer({
               </button>
             ) : (
               <button className={styles.secondaryButton} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
-                {submittingTax ? "提交中..." : "提交退税并归档"}
+                {submittingTax ? "提交中..." : "提交归档"}
               </button>
             )}
-            {canCreateSupplierDocumentRequest && detail ? (
-              <button className={styles.secondaryButton} type="button" onClick={() => onOpenSupplierDocumentRequest(detail)}>
-                通知产品供应商回传
+            <details className={styles.taxRefundMoreActions}>
+              <summary>更多操作</summary>
+              <div className={styles.taxRefundMoreActionMenu}>
+              <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
+                {packageDownloading ? "下载中..." : "下载资料包"}
               </button>
-            ) : null}
+              {detail && canRecognizeCustoms ? (
+                <button className={styles.secondaryButton} type="button" disabled={Boolean(recognizingDocumentId) || dismissLocked} onClick={() => onRecognizeFromUploadedCustoms(detail)}>
+                  {recognizingDocumentId ? "识别中..." : "重新识别"}
+                </button>
+              ) : null}
+              {canRefreshCompleteness ? (
+                <button className={styles.secondaryButton} type="button" disabled={refreshingCompleteness || dismissLocked} onClick={onRefreshCompleteness}>
+                  {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
+                </button>
+              ) : null}
+              </div>
+            </details>
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
           </div>
         </header>
@@ -150,6 +168,9 @@ export function TaxRefundDetailDrawer({
           <TaxRefundDetailPanel
             detail={detail}
             loading={loading}
+            activeTab={activeTab}
+            loadedSections={loadedSections}
+            sectionLoading={sectionLoading}
             error={error}
             fallback={row}
             uploadingKey={uploadingKey}
@@ -166,12 +187,15 @@ export function TaxRefundDetailDrawer({
             canSendShippingDocuments={canSendShippingDocuments}
             onOpenManualShippingDocuments={onOpenManualShippingDocuments}
             onOpenDomesticLogistics={onOpenDomesticLogistics}
+            onOpenSupplierDocuments={onOpenSupplierDocuments}
             currentUserRole={currentUserRole}
             canWriteDocuments={canWriteDocuments}
             canCreateCompanyHsFromOcr={canCreateCompanyHsFromOcr}
             calculatingTaxRefund={calculatingTaxRefund}
+            calculationFormId={calculationFormId}
             onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
             onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
+            onSelectTab={onSelectTab}
           />
         </div>
         </>
@@ -249,6 +273,9 @@ function TaxTransportField({ label, value, wide = false }: { label: string; valu
 function TaxRefundDetailPanel({
   detail,
   loading,
+  activeTab,
+  loadedSections,
+  sectionLoading,
   error,
   fallback,
   uploadingKey,
@@ -265,15 +292,21 @@ function TaxRefundDetailPanel({
   canSendShippingDocuments,
   onOpenManualShippingDocuments,
   onOpenDomesticLogistics,
+  onOpenSupplierDocuments,
   currentUserRole,
   canWriteDocuments,
   canCreateCompanyHsFromOcr,
   calculatingTaxRefund,
+  calculationFormId,
   onSaveCustomsDeclarationItems,
   onCreateCompanyHsFromDeclarationItem,
+  onSelectTab,
 }: {
   detail: TaxRefundDetail | null;
   loading: boolean;
+  activeTab: TaxRefundDetailTab;
+  loadedSections: Record<TaxRefundDetailTab, boolean>;
+  sectionLoading: Record<TaxRefundDetailTab, boolean>;
   error: string;
   fallback: TaxRefundRow;
   uploadingKey: string;
@@ -290,14 +323,17 @@ function TaxRefundDetailPanel({
   canSendShippingDocuments: boolean;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenDomesticLogistics?: () => void;
+  onOpenSupplierDocuments: (keyword: string) => void;
   currentUserRole: string;
   canWriteDocuments: boolean;
   canCreateCompanyHsFromOcr: boolean;
   calculatingTaxRefund: boolean;
+  calculationFormId: string;
   onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
   onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
+  onSelectTab: (tab: TaxRefundDetailTab) => void;
 }) {
-  if (loading) return <div className={styles.emptyState}>资料详情加载中...</div>;
+  if (loading && !detail) return <div className={styles.emptyState}>资料详情加载中...</div>;
   if (error) return <div className={styles.inlineError}>{error}</div>;
   if (!detail) return <div className={styles.emptyState}>点击查看资料后加载详情</div>;
 
@@ -315,43 +351,78 @@ function TaxRefundDetailPanel({
     || detail.taxArchived
     || fallback.taxArchived,
   );
+  const tabs: Array<{ key: TaxRefundDetailTab; label: string }> = [
+    { key: "basic", label: "基础信息" },
+    { key: "calculation", label: "退税计算" },
+    { key: "export-documents", label: "出口资料" },
+    { key: "customs-documents", label: "报关资料" },
+    { key: "factory-documents", label: "工厂资料" },
+    { key: "logistics-documents", label: "物流资料" },
+  ];
+  const activeSectionLoading = Boolean(sectionLoading[activeTab]);
+  const activeSectionLoaded = Boolean(loadedSections[activeTab]);
+  const supplierDocumentMissingItems = (detail.documentCompleteness?.supplier?.missing || [])
+    .filter((item) => !item.missingFactoryCost);
 
   return (
     <div className={styles.taxDetailPanel} id={taxTargetDomId("tax-detail-top")}>
+      <div className={styles.taxDetailTabBar} role="tablist" aria-label="退税资料详情分段">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={activeTab === tab.key ? styles.taxDetailTabActive : styles.taxDetailTab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            onClick={() => onSelectTab(tab.key)}
+          >
+            {tab.label}
+            {sectionLoading[tab.key] ? <span className={styles.taxDetailTabSpinner} /> : null}
+          </button>
+        ))}
+      </div>
+      {activeSectionLoading && !activeSectionLoaded ? (
+        <div className={styles.emptyState}>正在加载当前资料...</div>
+      ) : null}
       <div className={styles.documentGroupGrid}>
-        {showTaxArchiveRecord ? (
-          <div className={styles.documentGroupCard}>
-            <strong>提交记录</strong>
-            <div className={styles.detailGrid}>
-              <DetailField label="提交人" value={detail.taxSubmittedByName || fallback.taxSubmittedByName || "-"} />
-              <DetailField label="提交时间" value={formatDateTime(detail.taxSubmittedAt || fallback.taxSubmittedAt)} />
-              <DetailField label="归档人" value={detail.taxRefundArchivedByName || fallback.taxRefundArchivedByName || "-"} />
-              <DetailField label="归档时间" value={formatDateTime(detail.taxRefundArchivedAt || fallback.taxRefundArchivedAt)} />
-              {(detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark) ? (
-                <DetailField label="备注" value={detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark || "-"} wide />
-              ) : null}
+        {activeTab === "basic" ? (
+          <>
+            {showTaxArchiveRecord ? (
+              <div className={styles.documentGroupCard}>
+                <strong>提交记录</strong>
+                <div className={styles.detailGrid}>
+                  <DetailField label="提交人" value={detail.taxSubmittedByName || fallback.taxSubmittedByName || "-"} />
+                  <DetailField label="提交时间" value={formatDateTime(detail.taxSubmittedAt || fallback.taxSubmittedAt)} />
+                  <DetailField label="归档人" value={detail.taxRefundArchivedByName || fallback.taxRefundArchivedByName || "-"} />
+                  <DetailField label="归档时间" value={formatDateTime(detail.taxRefundArchivedAt || fallback.taxRefundArchivedAt)} />
+                  {(detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark) ? (
+                    <DetailField label="备注" value={detail.taxRefundArchiveRemark || fallback.taxRefundArchiveRemark || "-"} wide />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div className={`${styles.documentGroupCard} ${styles.taxBasicInfoCard}`}>
+              <strong>基础信息</strong>
+              <div className={styles.taxBasicInfoGrid}>
+                <TaxInfoItem label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
+                <TaxInfoItem label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
+                <TaxInfoItem label="提单号" value={displayBillOfLadingNo} />
+                <TaxInfoItem label="币种" value={detail.currency || fallback.currency || "-"} />
+                <TaxInfoItem label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
+                <div className={styles.taxInfoItem}>
+                  <span>物流信息状态</span>
+                  <strong>
+                    <span className={`${styles.statusPill} ${logisticsArchiveStatus === "已归档" ? styles.statusSuccess : styles.statusWarning}`}>
+                      {logisticsArchiveStatus}
+                    </span>
+                  </strong>
+                </div>
+              </div>
             </div>
-          </div>
+          </>
         ) : null}
-        <div className={`${styles.documentGroupCard} ${styles.taxBasicInfoCard}`}>
-          <strong>基础信息</strong>
-          <div className={styles.taxBasicInfoGrid}>
-            <TaxInfoItem label="客户全称" value={customerLegalName({ ...fallback, ...detail })} wide />
-            <TaxInfoItem label="订单号" value={detail.orderNo || fallback.orderNo || "-"} />
-            <TaxInfoItem label="提单号" value={displayBillOfLadingNo} />
-            <TaxInfoItem label="币种" value={detail.currency || fallback.currency || "-"} />
-            <TaxInfoItem label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || fallback.customsDeclarationDate || fallback.declarationDate)} />
-            <div className={styles.taxInfoItem}>
-              <span>物流信息状态</span>
-              <strong>
-                <span className={`${styles.statusPill} ${logisticsArchiveStatus === "已归档" ? styles.statusSuccess : styles.statusWarning}`}>
-                  {logisticsArchiveStatus}
-                </span>
-              </strong>
-            </div>
-          </div>
-        </div>
-        <div className={`${styles.documentGroupCard} ${styles.taxTransportSummaryCard}`} id={taxTargetDomId("domestic-logistics")}>
+        {activeTab === "logistics-documents" ? (
+          <div className={`${styles.documentGroupCard} ${styles.taxTransportSummaryCard}`} id={taxTargetDomId("domestic-logistics")}>
           <div className={styles.taxTransportSummaryHeader}>
             <strong>运输信息摘要</strong>
             {onOpenDomesticLogistics ? (
@@ -385,8 +456,9 @@ function TaxRefundDetailPanel({
               {domesticRemarkText || domesticExportInvoiceRemark ? "暂无结构化集装箱明细，请前往物流信息维护。" : "暂无运输信息摘要，请前往物流信息维护。"}
             </div>
           )}
-        </div>
-        {canSendShippingDocuments ? (
+          </div>
+        ) : null}
+        {activeTab === "logistics-documents" && canSendShippingDocuments ? (
           <div className={styles.documentGroupCard}>
             <strong>清关资料发送</strong>
             <span className={styles.mutedText}>向客户发送商业发票、装箱单和报关单。发送前可临时调整收件邮箱、抄送、语言、标题和正文。</span>
@@ -395,6 +467,7 @@ function TaxRefundDetailPanel({
             </button>
           </div>
         ) : null}
+        {activeTab === "customs-documents" ? (
         <CustomsRecognitionForm
           detail={detail}
           readOnly={readOnly}
@@ -403,14 +476,19 @@ function TaxRefundDetailPanel({
           onSaved={onCustomsSaved}
           onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
         />
+        ) : null}
+        {activeTab === "calculation" ? (
         <TaxRefundCalculationPanel
           detail={detail}
           readOnly={readOnly || currentUserRole !== "管理员"}
           saving={calculatingTaxRefund}
+          formId={calculationFormId}
           onSaveItems={onSaveCustomsDeclarationItems}
           canCreateCompanyHs={canCreateCompanyHsFromOcr && currentUserRole === "管理员" && !readOnly}
           onCreateCompanyHs={onCreateCompanyHsFromDeclarationItem}
         />
+        ) : null}
+        {activeTab === "export-documents" ? (
         <div className={`${styles.documentGroupCard} ${styles.fileUploadSection}`}>
           <strong>出口资料上传</strong>
           <div className={styles.fileUploadGrid}>
@@ -436,6 +514,8 @@ function TaxRefundDetailPanel({
             ))}
           </div>
         </div>
+        ) : null}
+        {activeTab === "customs-documents" ? (
         <CustomsUploadCard
           order={detail}
           documents={detail.documents || []}
@@ -452,8 +532,17 @@ function TaxRefundDetailPanel({
           onDelete={onDelete}
           onRecognize={onRecognizeCustomsDocument}
         />
+        ) : null}
+        {activeTab === "factory-documents" ? (
         <div className={styles.documentGroupCard} id={taxTargetDomId("factory-section")}>
           <strong>工厂资料上传</strong>
+          {supplierDocumentMissingItems.length ? (
+            <SupplierDocumentReturnNotice
+              orderNo={detail.orderNo || fallback.orderNo || ""}
+              missingItems={supplierDocumentMissingItems}
+              onOpenSupplierDocuments={onOpenSupplierDocuments}
+            />
+          ) : null}
           {factoryCosts.length ? factoryCosts.map((cost) => {
             const ordinal = factoryCostOrdinal(cost, factoryCosts);
             return (
@@ -476,6 +565,8 @@ function TaxRefundDetailPanel({
             );
           }) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
         </div>
+        ) : null}
+        {activeTab === "logistics-documents" ? (
         <div className={styles.documentGroupCard} id={taxTargetDomId("logistics-section")}>
           <strong>物流资料上传</strong>
           <LogisticsInvoiceRequirementStatus completeness={detail.documentCompleteness || {}} />
@@ -497,7 +588,8 @@ function TaxRefundDetailPanel({
             />
           )) : <span className={styles.mutedText}>暂未录入需要发票的物流费用</span>}
         </div>
-        {Object.entries(groups).filter(([groupName]) => !["出口资料", "报关资料", "工厂资料", "物流资料"].includes(groupName)).map(([groupName, documents]) => (
+        ) : null}
+        {activeTab === "export-documents" ? Object.entries(groups).filter(([groupName]) => !["出口资料", "报关资料", "工厂资料", "物流资料"].includes(groupName)).map(([groupName, documents]) => (
           <div className={styles.documentGroupCard} key={groupName}>
             <strong>{groupName}</strong>
             <DocumentFileTable
@@ -512,15 +604,42 @@ function TaxRefundDetailPanel({
               onDelete={onDelete}
             />
           </div>
-        ))}
+        )) : null}
       </div>
     </div>
   );
 }
 
-function moneyText(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) && amount !== 0 ? amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : "-";
+function SupplierDocumentReturnNotice({
+  orderNo,
+  missingItems,
+  onOpenSupplierDocuments,
+}: {
+  orderNo: string;
+  missingItems: NonNullable<DocumentCompleteness["supplier"]>["missing"];
+  onOpenSupplierDocuments: (keyword: string) => void;
+}) {
+  const labels = (missingItems || [])
+    .map((item) => item?.label || `${item?.supplierName ? `${item.supplierName} ` : ""}${taxSupplierDocumentLabel(item?.documentType || "")}`)
+    .map((label) => String(label || "").trim())
+    .filter((label, index, arr) => Boolean(label) && arr.indexOf(label) === index);
+  return (
+    <div className={styles.taxSupplierReturnNotice}>
+      <div>
+        <strong>产品供应商资料缺失</strong>
+        <span>{labels.length ? labels.join(" / ") : "请在资料回传模块处理供应商催办和发送记录。"}</span>
+      </div>
+      <button className={styles.secondaryButton} type="button" onClick={() => onOpenSupplierDocuments(orderNo)}>
+        前往资料回传
+      </button>
+    </div>
+  );
+}
+
+function amountText(value: unknown) {
+  if (value == null || value === "") return "-";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
 }
 
 function percentText(value: unknown) {
@@ -532,10 +651,98 @@ function inputNumberValue(value: unknown) {
   return value == null || value === "" ? "" : String(value);
 }
 
+function quantityUnitText(quantity: unknown, unit: unknown) {
+  const quantityText = amountText(quantity);
+  const unitText = String(unit || "").trim();
+  if (quantityText === "-" && !unitText) return "-";
+  return `${quantityText}${unitText ? ` ${unitText}` : ""}`;
+}
+
+function currencyAmountText(currency: unknown, amount: unknown) {
+  const amountValue = amountText(amount);
+  const currencyText = String(currency || "").trim();
+  if (amountValue === "-" && !currencyText) return "-";
+  return `${currencyText ? `${currencyText} ` : ""}${amountValue}`;
+}
+
+function differenceText(quantity: unknown, amount: unknown) {
+  const quantityText = amountText(quantity);
+  const amountTextValue = amountText(amount);
+  if (quantityText === "-" && amountTextValue === "-") return "-";
+  return `数量 ${quantityText} / 金额 ${amountTextValue}`;
+}
+
+function invoiceMatchLineText(row: ExportTaxRefundCalculation | undefined, key: "supplierName" | "invoiceNo") {
+  const lines = Array.isArray(row?.invoiceMatch?.lines) ? row.invoiceMatch.lines : [];
+  const values = lines
+    .map((line) => (line && typeof line === "object" ? String((line as Record<string, unknown>)[key] || "").trim() : ""))
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+  return values.length ? values.join(" / ") : "-";
+}
+
+function TaxCalculationStatCard({
+  label,
+  value,
+  tone = "default",
+  title,
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "default" | "success" | "danger";
+  title?: string;
+}) {
+  const toneClass = tone === "success" ? styles.taxCalculationStatSuccess : tone === "danger" ? styles.taxCalculationStatDanger : "";
+  return (
+    <div className={`${styles.taxCalculationStatCard} ${toneClass}`} title={title}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function TablePanel({
+  title,
+  summary,
+  actions,
+  formId,
+  onSubmit,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  actions?: ReactNode;
+  formId?: string;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  children: ReactNode;
+}) {
+  const table = formId ? (
+    <form id={formId} onSubmit={onSubmit}>
+      {children}
+    </form>
+  ) : children;
+  return (
+    <section className={styles.taxCalculationTablePanel}>
+      <div className={styles.taxCalculationSectionHeader}>
+        <div className={styles.taxCalculationSectionTitle}>
+          <strong>{title}</strong>
+          {summary ? <span>{summary}</span> : null}
+        </div>
+        {actions}
+      </div>
+      <div className={styles.taxCalculationTableContainer}>
+        {table}
+      </div>
+    </section>
+  );
+}
+
+type TaxCalculationSubTab = "refund" | "invoice" | "declaration";
+
 function TaxRefundCalculationPanel({
   detail,
   readOnly,
   saving,
+  formId,
   onSaveItems,
   canCreateCompanyHs,
   onCreateCompanyHs,
@@ -543,14 +750,40 @@ function TaxRefundCalculationPanel({
   detail: TaxRefundDetail;
   readOnly: boolean;
   saving: boolean;
+  formId: string;
   onSaveItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
   canCreateCompanyHs: boolean;
   onCreateCompanyHs: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
 }) {
   const [items, setItems] = useState<CustomsDeclarationItem[]>(detail.customsDeclarationItems || []);
   const [companyHsDraft, setCompanyHsDraft] = useState<Record<string, { rebateRate: string; vatRate: string }>>({});
+  const [activeCalculationSubTab, setActiveCalculationSubTab] = useState<TaxCalculationSubTab>("refund");
   const calculations = detail.exportTaxRefundCalculations || [];
   const summary = detail.exportTaxRefundSummary || {};
+  const calculationsByItemId = new Map(calculations.map((row) => [row.declarationItemId || "", row]));
+  const orphanCalculations = calculations.filter((row) => row.declarationItemId && !items.some((item) => item.id === row.declarationItemId));
+  const displayRows = [
+    ...items.map((item, index) => ({
+      key: item.id || `item-${index}`,
+      item,
+      calculation: calculationsByItemId.get(item.id || ""),
+    })),
+    ...orphanCalculations.map((calculation) => ({
+      key: calculation.id || calculation.declarationItemId || `calculation-${calculation.hsCode}`,
+      item: null,
+      calculation,
+    })),
+  ];
+  const matchedStatuses = new Set(["匹配", "整体匹配", "多票合并匹配"]);
+  const abnormalStatuses = new Set(["HS未维护", "发票未匹配", "资料不匹配", "资料异常"]);
+  const matchedCount = displayRows.filter((row) => matchedStatuses.has(row.calculation?.invoiceMatchStatus || "")).length;
+  const exceptionCount = displayRows.filter((row) => {
+    const status = row.calculation?.calculationStatus || "";
+    return abnormalStatuses.has(status) || Boolean(row.calculation?.abnormalReasons?.length);
+  }).length;
+  const theoreticalRefundTotal = displayRows.reduce((sum, row) => sum + Number(row.calculation?.theoreticalRefundAmount || 0), 0);
+  const estimatedRefundTotal = displayRows.reduce((sum, row) => sum + Number(row.calculation?.estimatedRefundAmount || 0), 0);
+  const abnormalReasonText = summary.abnormalReasons?.length ? summary.abnormalReasons.join(" / ") : (exceptionCount ? "查看异常行" : "无");
   useEffect(() => {
     setItems(detail.customsDeclarationItems || []);
   }, [detail.id, detail.customsDeclarationItems]);
@@ -589,149 +822,199 @@ function TaxRefundCalculationPanel({
     setCompanyHsDraft((current) => ({ ...current, [key]: { ...companyHsDraftFor({ declarationItemId: key }), ...patch } }));
   }
 
-  const hasExceptions = Boolean(summary.abnormalReasons?.length);
+  const hasExceptions = Boolean(summary.abnormalReasons?.length || exceptionCount);
+  const isAbnormalCalculation = (row?: ExportTaxRefundCalculation) => Boolean(
+    row && (abnormalStatuses.has(row.calculationStatus || "") || row.abnormalReasons?.length),
+  );
+  const statusClass = (status?: string) => matchedStatuses.has(status || "") || status === "退税金额已计算" ? styles.statusSuccess : styles.statusDanger;
+  const calculationStatusText = summary.calculationStatus || (exceptionCount ? "异常" : estimatedRefundTotal ? "已计算" : "待计算");
+  const hasCalculationRows = displayRows.length > 0;
+  const subTabs: Array<{ key: TaxCalculationSubTab; label: string; count: number }> = [
+    { key: "refund", label: "退税结果", count: displayRows.length },
+    { key: "invoice", label: "发票匹配", count: displayRows.length },
+    { key: "declaration", label: "报关商品", count: items.length },
+  ];
   return (
-    <div className={styles.documentGroupCard} id={taxTargetDomId("tax-refund-calculation")}>
-      <div className={styles.taxTransportSummaryHeader}>
-        <strong>退税计算</strong>
-        <span className={`${styles.statusPill} ${hasExceptions ? styles.statusDanger : summary.estimatedRefundAmount ? styles.statusSuccess : styles.statusWarning}`}>
-          {summary.calculationStatus || "待计算"}
-        </span>
+    <div className={`${styles.documentGroupCard} ${styles.taxRefundCalculationWorkspace}`} id={taxTargetDomId("tax-refund-calculation")}>
+      <div className={styles.taxCalculationKpiBar}>
+        <TaxCalculationStatCard label="计算状态" value={calculationStatusText} tone={hasExceptions ? "danger" : estimatedRefundTotal ? "success" : "default"} />
+        <TaxCalculationStatCard label="预计退税收入" value={`CNY ${amountText(estimatedRefundTotal || summary.estimatedRefundAmount)}`} tone={estimatedRefundTotal ? "success" : "default"} />
+        <TaxCalculationStatCard label="理论退税额" value={`CNY ${amountText(theoreticalRefundTotal)}`} />
+        <TaxCalculationStatCard label="异常数量" value={exceptionCount} tone={exceptionCount ? "danger" : "success"} />
+        <TaxCalculationStatCard label="异常原因" value={abnormalReasonText} tone={hasExceptions ? "danger" : "success"} title={abnormalReasonText} />
       </div>
-      <div className={styles.detailGrid}>
-        <DetailField label="预计退税收入" value={`CNY ${moneyText(summary.estimatedRefundAmount)}`} />
-        <DetailField label="异常原因" value={summary.abnormalReasons?.length ? summary.abnormalReasons.join(" / ") : "无"} wide />
-      </div>
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>报关单号</th>
-              <th>HS编码</th>
-              <th>报关品名</th>
-              <th>报关数量</th>
-              <th>单位</th>
-              <th>币种</th>
-              <th>FOB金额</th>
-              <th>申报汇率</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length ? items.map((item, index) => (
-              <tr key={item.id || `new-${index}`}>
-                <td><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
-                <td><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
-                <td><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
-                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} /></td>
-                <td><input disabled={readOnly} value={item.unit || ""} onChange={(event) => updateItem(index, { unit: event.target.value })} /></td>
-                <td><input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} /></td>
-                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} /></td>
-                <td><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
-              </tr>
-            )) : (
-              <tr><td colSpan={8}><div className={styles.emptyState}>暂无报关商品明细，上传报关单 PDF 后自动识别，管理员也可手工新增。</div></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {!readOnly ? (
-        <div className={styles.taxTransportSummaryHeader}>
-          <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button>
-          <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={() => onSaveItems(detail.id, items)}>
-            {saving ? "保存中..." : "保存确认并计算"}
-          </button>
-        </div>
-      ) : null}
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>报关单号</th>
-              <th>HS编码</th>
-              <th>报关品名</th>
-              <th>报关金额</th>
-              <th>关联供应商数量</th>
-              <th>关联发票数量</th>
-              <th>发票数量合计</th>
-              <th>发票金额合计</th>
-              <th>匹配状态</th>
-              <th>差异数量</th>
-              <th>差异金额</th>
-              <th>企业HS</th>
-              <th>退税率</th>
-              <th>预计退税金额</th>
-              {canCreateCompanyHs ? <th>操作</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {calculations.length ? calculations.map((row) => {
-              const abnormal = row.calculationStatus === "资料异常" || Boolean(row.abnormalReasons?.length);
-              const hsMissing = Boolean(row.abnormalReasons?.includes("HS编码未维护"));
-              const draft = companyHsDraftFor(row);
-              return (
-                <tr key={row.id || row.declarationItemId} className={abnormal ? styles.rowDanger : ""}>
-                  <td>{row.declarationNo || "-"}</td>
-                  <td>{row.hsCode || "-"}</td>
-                  <td>{row.productName || "-"}</td>
-                  <td>{moneyText(row.declarationAmountCny)}</td>
-                  <td>{row.invoiceMatch?.supplierCount ?? "-"}</td>
-                  <td>{row.invoiceMatch?.invoiceCount ?? "-"}</td>
-                  <td>{moneyText(row.invoiceMatch?.invoiceQuantity)}</td>
-                  <td>{moneyText(row.invoiceMatch?.invoiceAmountWithoutTax)}</td>
-                  <td><span className={`${styles.statusPill} ${abnormal ? styles.statusDanger : styles.statusSuccess}`}>{row.invoiceMatchStatus || "-"}</span></td>
-                  <td>{moneyText(row.invoiceMatch?.differenceQuantity)}</td>
-                  <td>{moneyText(row.invoiceMatch?.differenceAmount)}</td>
-                  <td>{row.invoiceMatch?.companyHs?.cnName || (hsMissing ? "未维护" : "-")}</td>
-                  <td>{percentText(row.rebateRate)}</td>
-                  <td>{moneyText(row.estimatedRefundAmount)}</td>
-                  {canCreateCompanyHs ? (
-                    <td>
-                      {hsMissing && row.declarationItemId ? (
-                        <div className={styles.rowActionGroup}>
-                          <input
-                            aria-label="出口退税率"
-                            type="number"
-                            min="0"
-                            max="13"
-                            step="0.01"
-                            value={draft.rebateRate}
-                            onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { rebateRate: event.target.value })}
-                            placeholder="退税率"
-                          />
-                          <input
-                            aria-label="增值税率"
-                            type="number"
-                            min="0"
-                            max="13"
-                            step="0.01"
-                            value={draft.vatRate}
-                            onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { vatRate: event.target.value })}
-                            placeholder="增值税率"
-                          />
-                          <button
-                            className={styles.secondaryButton}
-                            type="button"
-                            disabled={saving}
-                            onClick={() => onCreateCompanyHs(detail.id, {
-                              declarationItemId: row.declarationItemId,
-                              rebateRate: draft.rebateRate,
-                              vatRate: draft.vatRate,
-                            })}
-                          >
-                            新增到企业HS库
-                          </button>
+      {!hasCalculationRows ? (
+        <div className={styles.taxCalculationEmptyPanel}>暂无报关商品明细，请先上传或识别报关单。</div>
+      ) : (
+        <>
+          <div className={styles.taxCalculationSubTabs} role="tablist" aria-label="退税计算明细">
+            {subTabs.map((tab) => (
+              <button
+                key={tab.key}
+                className={activeCalculationSubTab === tab.key ? styles.taxCalculationSubTabActive : styles.taxCalculationSubTab}
+                type="button"
+                role="tab"
+                aria-selected={activeCalculationSubTab === tab.key}
+                onClick={() => setActiveCalculationSubTab(tab.key)}
+              >
+                <span>{tab.label}</span>
+                <b>{tab.count}</b>
+              </button>
+            ))}
+          </div>
+          {activeCalculationSubTab === "refund" ? (
+            <TablePanel title="退税结果">
+              <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.taxRefundResultFocusTable}`}>
+                <thead>
+                  <tr>
+                    <th>报关单号</th>
+                    <th>HS编码</th>
+                    <th>品名</th>
+                    <th>FOB金额</th>
+                    <th>报关人民币金额</th>
+                    <th>退税率</th>
+                    <th>发票金额</th>
+                    <th>预计退税额</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayRows.map((displayRow) => {
+                    const row = displayRow.calculation;
+                    const item = displayRow.item;
+                    const abnormal = isAbnormalCalculation(row);
+                    const hsMissing = Boolean(row?.abnormalReasons?.includes("HS编码未维护"));
+                    const draft = companyHsDraftFor(row || { declarationItemId: item?.id || "" });
+                    const fobSummary = currencyAmountText(row?.fobCurrency || item?.currency, row?.fobAmount ?? item?.fobAmount);
+                    const invoiceAmount = amountText(row?.supplierInvoiceAmountWithTax ?? row?.invoiceMatch?.supplierInvoiceAmountWithTax ?? row?.invoiceMatch?.invoiceAmountWithTax);
+                    const calculationTitle = [
+                      `企业HS：${row?.invoiceMatch?.companyHs?.cnName || (hsMissing ? "未维护" : "-")}`,
+                      `理论退税：CNY ${amountText(row?.theoreticalRefundAmount)}`,
+                      `不含税发票：CNY ${amountText(row?.supplierInvoiceAmountWithoutTax ?? row?.invoiceMatch?.supplierInvoiceAmountWithoutTax)}`,
+                      `可用进项：CNY ${amountText(row?.inputVatAmount ?? row?.availableInputVatAmount)}`,
+                      `增值税率：${percentText(row?.vatRate)}`,
+                    ].join("\n");
+                    return (
+                      <tr key={`refund-${displayRow.key}`} className={abnormal ? styles.rowDanger : ""}>
+                        <td title={row?.declarationNo || item?.declarationNo || ""}>{row?.declarationNo || item?.declarationNo || "-"}</td>
+                        <td>{row?.hsCode || item?.hsCode || "-"}</td>
+                        <td title={row?.productName || item?.productName || ""}>{row?.productName || item?.productName || "-"}</td>
+                        <td className={styles.numericCell} title={calculationTitle}>{fobSummary}</td>
+                        <td className={styles.numericCell} title={calculationTitle}>{amountText(row?.customsRmbAmount ?? row?.declarationAmountCny ?? item?.fobAmountCny)}</td>
+                        <td className={styles.numericCell} title={calculationTitle}>{percentText(row?.rebateRate)}</td>
+                        <td className={styles.numericCell} title={calculationTitle}>{invoiceAmount}</td>
+                        <td className={styles.numericCell} title={calculationTitle}>{amountText(row?.estimatedRefundAmount)}</td>
+                        <td><span className={`${styles.statusPill} ${row ? statusClass(row.calculationStatus) : styles.statusWarning}`}>{row?.calculationStatus || "待计算"}</span></td>
+                        <td>
+                          {canCreateCompanyHs && hsMissing && row?.declarationItemId ? (
+                            <div className={styles.rowActionGroup}>
+                              <input aria-label="出口退税率" type="number" min="0" max="13" step="0.01" value={draft.rebateRate} onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { rebateRate: event.target.value })} placeholder="退税率" />
+                              <input aria-label="增值税率" type="number" min="0" max="13" step="0.01" value={draft.vatRate} onChange={(event) => updateCompanyHsDraft(row.declarationItemId || "", { vatRate: event.target.value })} placeholder="增值税率" />
+                              <button className={styles.secondaryButton} type="button" title="新增到企业HS库" disabled={saving} onClick={() => onCreateCompanyHs(detail.id, { declarationItemId: row.declarationItemId, rebateRate: draft.rebateRate, vatRate: draft.vatRate })}>新增HS</button>
+                            </div>
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TablePanel>
+          ) : null}
+          {activeCalculationSubTab === "invoice" ? (
+            <TablePanel title="发票匹配">
+              <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.taxInvoiceFocusTable}`}>
+                <thead>
+                  <tr>
+                    <th>HS编码</th>
+                    <th>品名</th>
+                    <th>报关数量</th>
+                    <th>发票数量</th>
+                    <th>供应商</th>
+                    <th>发票号</th>
+                    <th>差异</th>
+                    <th>状态</th>
+                    <th>异常原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayRows.map((displayRow) => {
+                    const row = displayRow.calculation;
+                    const item = displayRow.item;
+                    const abnormal = isAbnormalCalculation(row);
+                    const declarationQuantity = quantityUnitText(item?.quantity, item?.unit);
+                    const invoiceQuantity = quantityUnitText(row?.invoiceMatch?.invoiceQuantity, item?.unit);
+                    const differenceSummary = differenceText(row?.invoiceMatch?.differenceQuantity, row?.invoiceMatch?.differenceAmount);
+                    const supplierText = invoiceMatchLineText(row, "supplierName") !== "-" ? invoiceMatchLineText(row, "supplierName") : `${row?.invoiceMatch?.supplierCount ?? "-"} 个供应商`;
+                    const invoiceText = invoiceMatchLineText(row, "invoiceNo") !== "-" ? invoiceMatchLineText(row, "invoiceNo") : `${row?.invoiceMatch?.invoiceCount ?? "-"} 张发票`;
+                    return (
+                      <tr key={`invoice-${displayRow.key}`} className={abnormal ? styles.rowDanger : ""}>
+                        <td>{row?.hsCode || item?.hsCode || "-"}</td>
+                        <td title={row?.productName || item?.productName || ""}>{row?.productName || item?.productName || "-"}</td>
+                        <td className={styles.numericCell} title={declarationQuantity}>{declarationQuantity}</td>
+                        <td className={styles.numericCell} title={invoiceQuantity}>{invoiceQuantity}</td>
+                        <td title={supplierText}>{supplierText}</td>
+                        <td title={invoiceText}>{invoiceText}</td>
+                        <td className={styles.numericCell} title={differenceSummary}>{differenceSummary}</td>
+                        <td><span className={`${styles.statusPill} ${row ? statusClass(row.invoiceMatchStatus) : styles.statusWarning}`}>{row?.invoiceMatchStatus || "待匹配"}</span></td>
+                        <td title={row?.abnormalReasons?.join(" / ") || ""}>{row?.abnormalReasons?.length ? row.abnormalReasons.join(" / ") : "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TablePanel>
+          ) : null}
+          {activeCalculationSubTab === "declaration" ? (
+            <TablePanel
+              title="报关商品"
+              actions={!readOnly ? <button className={styles.secondaryButton} type="button" disabled={saving} onClick={addItem}>新增明细</button> : null}
+              formId={formId}
+              onSubmit={(event) => { event.preventDefault(); void onSaveItems(detail.id, items); }}
+            >
+              <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.taxDeclarationFocusTable}`}>
+                <thead>
+                  <tr>
+                    <th>报关单号</th>
+                    <th>HS编码</th>
+                    <th>中文品名</th>
+                    <th>数量/单位</th>
+                    <th>FOB金额</th>
+                    <th>汇率</th>
+                    <th>确认状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={item.id || `new-${index}`}>
+                      <td title={item.declarationNo || ""}><input disabled={readOnly} value={item.declarationNo || ""} onChange={(event) => updateItem(index, { declarationNo: event.target.value })} /></td>
+                      <td title={item.hsCode || ""}><input disabled={readOnly} value={item.hsCode || ""} onChange={(event) => updateItem(index, { hsCode: event.target.value })} /></td>
+                      <td title={item.productName || ""}><input disabled={readOnly} value={item.productName || ""} onChange={(event) => updateItem(index, { productName: event.target.value })} /></td>
+                      <td className={styles.numericCell} title={quantityUnitText(item.quantity, item.unit)}>
+                        <div className={styles.taxInlineInputGroup}>
+                          <input disabled={readOnly} type="number" value={inputNumberValue(item.quantity)} onChange={(event) => updateItem(index, { quantity: Number(event.target.value || 0) })} />
+                          <input disabled={readOnly} value={item.unit || ""} onChange={(event) => updateItem(index, { unit: event.target.value })} />
                         </div>
-                      ) : "-"}
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            }) : (
-              <tr><td colSpan={canCreateCompanyHs ? 15 : 14}><div className={styles.emptyState}>暂无退税计算结果。</div></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                      </td>
+                      <td className={styles.numericCell} title={currencyAmountText(item.currency, item.fobAmount)}>
+                        <div className={styles.taxMoneyInputGroup}>
+                          <input disabled={readOnly} value={item.currency || ""} onChange={(event) => updateItem(index, { currency: event.target.value })} />
+                          <input disabled={readOnly} type="number" value={inputNumberValue(item.fobAmount)} onChange={(event) => updateItem(index, { fobAmount: Number(event.target.value || 0) })} />
+                        </div>
+                      </td>
+                      <td className={styles.numericCell}><input disabled={readOnly} type="number" value={inputNumberValue(item.exchangeRate)} onChange={(event) => updateItem(index, { exchangeRate: Number(event.target.value || 0) })} /></td>
+                      <td>{item.confirmationStatus || "-"}</td>
+                      <td>{readOnly ? "-" : "保存后生效"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TablePanel>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -757,4 +1040,4 @@ function LogisticsInvoiceRequirementStatus({ completeness }: { completeness: Doc
   );
 }
 
-export { CustomsFilePickerDialog, ManualShippingDocumentsDialog, SupplierDocumentRequestDialog } from "./dialogs";
+export { CustomsFilePickerDialog, ManualShippingDocumentsDialog } from "./dialogs";

@@ -180,9 +180,15 @@ export function TaxRefundListPanel({
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
-              </tr>
+              Array.from({ length: 6 }).map((_, index) => (
+                <tr key={`tax-refund-skeleton-${index}`}>
+                  {Array.from({ length: 8 }).map((__, cellIndex) => (
+                    <td key={cellIndex}>
+                      <span className={styles.tableSkeletonLine} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : rows.length ? rows.map((row) => {
               const rowStatus = taxRowStatus(row);
               return (

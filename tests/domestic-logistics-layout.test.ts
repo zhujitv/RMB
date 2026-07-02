@@ -66,7 +66,9 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(taxModuleSource, /<td colSpan=\{8\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
-  assert.match(taxRefundService, /logisticsBills: \{\s*where: \{ deletedAt: null \}/);
+  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
+  assert.match(listFunction, /select: taxRefundLightListSelect/);
+  assert.doesNotMatch(listFunction, /logisticsBills:\s*\{|documents:\s*\{|costs:\s*\{/);
   assert.match(taxRefundService, /billOfLadingNumbers/);
   assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
   assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1160px;[\s\S]*table-layout: fixed;/);

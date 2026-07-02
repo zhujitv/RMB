@@ -43,6 +43,12 @@ test("tax refund calculation uses company HS and exposes OCR add-to-library flow
   assert.match(taxCalculation, /prisma\.companyHs\.findFirst/);
   assert.doesNotMatch(taxCalculation, /exportTaxRebateRate\.findFirst/);
   assert.match(taxCalculation, /"HS编码未维护"/);
+  assert.match(taxCalculation, /calculationStatusFromReasons/);
+  assert.match(taxCalculation, /"HS未维护"/);
+  assert.match(taxCalculation, /"发票未匹配"/);
+  assert.match(taxCalculation, /"资料不匹配"/);
+  assert.match(taxCalculation, /supplierInvoiceAmountWithTax \/ \(1 \+ vatRate\)/);
+  assert.match(taxCalculation, /supplierInvoiceAmountWithTax - supplierInvoiceAmountWithoutTax/);
   assert.match(taxCalculation, /"供应商发票匹配"/);
   assert.match(taxCalculation, /"重新计算利润"/);
   assert.match(taxDetail, /新增到企业HS库/);

@@ -138,6 +138,7 @@ export function taxMissingTargets(completeness: DocumentCompleteness) {
 }
 
 export function taxRowStatus(row: TaxRefundRow) {
+  if (row.refundStatus) return row.refundStatus;
   if (row.taxRefundStatus) return row.taxRefundStatus;
   const completeness = row.documentCompleteness || {};
   const completed = Number(completeness.completed || 0);
@@ -366,6 +367,10 @@ export function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
   if (detail.taxSubmittedByName !== undefined) patch.taxSubmittedByName = detail.taxSubmittedByName;
   if (detail.taxSubmittedAt !== undefined) patch.taxSubmittedAt = detail.taxSubmittedAt;
   if (detail.documentCompleteness !== undefined) patch.documentCompleteness = detail.documentCompleteness;
+  if (detail.overallCompleteness !== undefined) patch.overallCompleteness = detail.overallCompleteness;
+  if (detail.completenessUpdatedAt !== undefined) patch.completenessUpdatedAt = detail.completenessUpdatedAt;
+  if (detail.completenessIssuesSummary !== undefined) patch.completenessIssuesSummary = detail.completenessIssuesSummary;
+  if (detail.refundStatus !== undefined) patch.refundStatus = detail.refundStatus;
   return patch;
 }
 

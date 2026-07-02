@@ -659,6 +659,10 @@ export function WorkspaceShell() {
             setDomesticLogisticsFocus({ keyword, token: Date.now() });
             setActiveMenu("domesticLogistics");
           }}
+          onOpenSupplierDocuments={(keyword) => {
+            setSupplierDocumentsFocus({ keyword: keyword.trim(), requestId: "", token: Date.now() });
+            setActiveMenu("supplierDocuments");
+          }}
         />
       ) : activeMenu === "companyHs" ? (
         <CompanyHsModule currentUser={payload.user} permissions={payload.permissions} features={payload.features?.taxRefund} />

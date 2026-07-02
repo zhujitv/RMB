@@ -22,17 +22,15 @@ import {
 import {
   PAGE_SIZE,
   type BusinessEntityOption,
-  TAX_FACTORY_UPLOAD_TYPES,
   type CustomsFilePickerState,
   type CustomsRecognitionResponse,
   type CustomsRecognitionResult,
   type ManualShippingDraft,
   type ManualShippingForm,
-  type SupplierDocumentRequestForm,
-  type SupplierOption,
   type TaxDocument,
   type TaxRefundDetail,
   type TaxRefundDetailResponse,
+  type TaxRefundDetailTab,
   type TaxRefundMode,
   type TaxRefundResponse,
   type TaxRefundRow,
@@ -53,6 +51,7 @@ export type TaxRefundModuleProps = {
   initialAction?: string;
   initialOpenToken?: number;
   onOpenDomesticLogistics?: (keyword: string) => void;
+  onOpenSupplierDocuments?: (keyword: string) => void;
 };
 
 export function useTaxRefundController({
@@ -83,6 +82,23 @@ export function useTaxRefundController({
   const [detail, setDetail] = useState<TaxRefundDetail | null>(null);
   const [pendingDetailTarget, setPendingDetailTarget] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailActiveTab, setDetailActiveTab] = useState<TaxRefundDetailTab>("basic");
+  const [detailLoadedSections, setDetailLoadedSections] = useState<Record<TaxRefundDetailTab, boolean>>({
+    basic: false,
+    calculation: false,
+    "export-documents": false,
+    "customs-documents": false,
+    "factory-documents": false,
+    "logistics-documents": false,
+  });
+  const [detailSectionLoading, setDetailSectionLoading] = useState<Record<TaxRefundDetailTab, boolean>>({
+    basic: false,
+    calculation: false,
+    "export-documents": false,
+    "customs-documents": false,
+    "factory-documents": false,
+    "logistics-documents": false,
+  });
   const [detailError, setDetailError] = useState("");
   const [packageDownloadingId, setPackageDownloadingId] = useState("");
   const [submittingTaxId, setSubmittingTaxId] = useState("");
@@ -101,9 +117,6 @@ export function useTaxRefundController({
   const [manualShippingLoading, setManualShippingLoading] = useState(false);
   const [manualShippingSending, setManualShippingSending] = useState(false);
   const [manualShippingMessage, setManualShippingMessage] = useState("");
-  const [supplierDocumentForm, setSupplierDocumentForm] = useState<SupplierDocumentRequestForm | null>(null);
-  const [supplierDocumentSending, setSupplierDocumentSending] = useState(false);
-  const [supplierDocumentSubmitProgress, setSupplierDocumentSubmitProgress] = useState(0);
   const {
     confirmation,
     requestConfirmation,
@@ -152,7 +165,7 @@ export function useTaxRefundController({
       if (nextStatus) params.set("status", nextStatus);
       if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
       if (nextBusinessEntitySortDirection) params.set("businessEntitySortDirection", nextBusinessEntitySortDirection);
-      const result = await apiJson<TaxRefundResponse>(`/api/tax-refunds?${params}`);
+      const result = await apiJson<TaxRefundResponse>(`/api/tax-refund/list?${params}`);
       const nextRows = Array.isArray(result.orders) ? result.orders : [];
       const pagination = result.pagination || {};
       setRows(nextRows);
@@ -289,17 +302,47 @@ export function useTaxRefundController({
     void loadRows(1, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, nextDirection);
   }
 
-  async function fetchDetail(orderId: string) {
-    const requestToken = detailRequestTokenRef.current + 1;
-    detailRequestTokenRef.current = requestToken;
+  function resetDetailSectionState() {
+    setDetailLoadedSections({
+      basic: false,
+      calculation: false,
+      "export-documents": false,
+      "customs-documents": false,
+      "factory-documents": false,
+      "logistics-documents": false,
+    });
+    setDetailSectionLoading({
+      basic: false,
+      calculation: false,
+      "export-documents": false,
+      "customs-documents": false,
+      "factory-documents": false,
+      "logistics-documents": false,
+    });
+  }
+
+  function detailSectionPath(tab: TaxRefundDetailTab) {
+    return tab;
+  }
+
+  async function fetchDetailSection(orderId: string, section: TaxRefundDetailTab, options: { replace?: boolean } = {}) {
+    const requestToken = detailRequestTokenRef.current;
     setDetailError("");
-    setDetailLoading(true);
+    setDetailSectionLoading((current) => ({ ...current, [section]: true }));
+    if (section === "basic") setDetailLoading(true);
     try {
-      const result = await apiJson<TaxRefundDetailResponse>(`/api/tax-refunds/${encodeURIComponent(orderId)}`);
+      const result = await apiJson<TaxRefundDetailResponse>(`/api/tax-refund/${encodeURIComponent(orderId)}/${detailSectionPath(section)}`);
       if (detailRequestTokenRef.current === requestToken) {
         const nextDetail = result.order || null;
-        setDetail(nextDetail);
-        if (nextDetail) patchRowsForOrder(orderId, nextDetail);
+        if (nextDetail) {
+          if (options.replace) {
+            setDetail(nextDetail);
+          } else {
+            patchDetailForOrder(orderId, nextDetail);
+          }
+          patchRowsForOrder(orderId, nextDetail);
+          setDetailLoadedSections((current) => ({ ...current, [section]: true }));
+        }
       }
     } catch (loadError) {
       if (detailRequestTokenRef.current === requestToken) {
@@ -307,16 +350,32 @@ export function useTaxRefundController({
       }
     } finally {
       if (detailRequestTokenRef.current === requestToken) {
-        setDetailLoading(false);
+        setDetailSectionLoading((current) => ({ ...current, [section]: false }));
+        if (section === "basic") setDetailLoading(false);
       }
     }
   }
 
+  async function fetchDetail(orderId: string) {
+    await fetchDetailSection(orderId, "basic");
+    if (detailActiveTab !== "basic") await fetchDetailSection(orderId, detailActiveTab);
+  }
+
   async function loadDetail(row: TaxRefundRow) {
+    detailRequestTokenRef.current += 1;
     setDetailRow(row);
     setDetailOrderId(row.id);
-    setDetail(null);
-    await fetchDetail(row.id);
+    setDetail({ ...row });
+    setDetailActiveTab("basic");
+    resetDetailSectionState();
+    await fetchDetailSection(row.id, "basic");
+  }
+
+  function selectDetailTab(tab: TaxRefundDetailTab) {
+    setDetailActiveTab(tab);
+    const orderId = detailOrderId || detailRow?.id || "";
+    if (!orderId || detailLoadedSections[tab] || detailSectionLoading[tab]) return;
+    void fetchDetailSection(orderId, tab);
   }
 
   function patchRowsForOrder(orderId: string, patch: Partial<TaxRefundDetail>) {
@@ -329,11 +388,21 @@ export function useTaxRefundController({
   function patchDetailForOrder(orderId: string, patch: Partial<TaxRefundDetail>) {
     setDetail((current) => {
       if (!current || current.id !== orderId) return current;
+      const mergeById = <T extends { id?: string }>(existing: T[] = [], incoming: T[] = []) => {
+        if (!incoming.length) return existing;
+        const next = new Map(existing.map((item) => [item.id || Math.random().toString(36), item]));
+        incoming.forEach((item) => {
+          const key = item.id || Math.random().toString(36);
+          const existing = next.get(key) || ({} as T);
+          next.set(key, { ...existing, ...item });
+        });
+        return [...next.values()];
+      };
       return {
         ...current,
         ...patch,
-        documents: patch.documents || current.documents,
-        costs: patch.costs || current.costs,
+        documents: patch.documents ? mergeById(current.documents || [], patch.documents) : current.documents,
+        costs: patch.costs ? mergeById(current.costs || [], patch.costs) : current.costs,
       };
     });
     patchRowsForOrder(orderId, patch);
@@ -380,6 +449,8 @@ export function useTaxRefundController({
     setDetail(null);
     setDetailError("");
     setDetailLoading(false);
+    setDetailActiveTab("basic");
+    resetDetailSectionState();
     setPendingDetailTarget("");
     setRecognitionStatusByDocument({});
     setCustomsFilePicker(null);
@@ -761,83 +832,6 @@ export function useTaxRefundController({
     }
   }
 
-  async function openSupplierDocumentRequest(order: TaxRefundDetail) {
-    setSupplierDocumentForm({
-      order,
-      suppliers: [],
-      supplierId: "",
-      requiredDocumentTypes: TAX_FACTORY_UPLOAD_TYPES.map((type) => type.value),
-      dueDate: "",
-      message: "",
-      templateFile: null,
-      loadingSuppliers: true,
-      error: "",
-    });
-    try {
-      const data = await apiJson<{ suppliers?: SupplierOption[] }>("/api/suppliers/available?type=factory");
-      const suppliers = (data.suppliers || []).filter((supplier) => supplier.allowFactoryDocumentUpload);
-      setSupplierDocumentForm((current) => current && current.order.id === order.id
-        ? {
-            ...current,
-            suppliers,
-            supplierId: current.supplierId || suppliers[0]?.id || "",
-            loadingSuppliers: false,
-            error: suppliers.length ? "" : "暂无已开启资料回传权限的产品供应商，请先到系统设置开启。",
-          }
-        : current);
-    } catch (loadError) {
-      setSupplierDocumentForm((current) => current && current.order.id === order.id
-        ? {
-            ...current,
-            loadingSuppliers: false,
-            error: loadError instanceof Error ? loadError.message : "读取产品供应商失败",
-          }
-        : current);
-    }
-  }
-
-  async function submitSupplierDocumentRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supplierDocumentForm) return;
-    if (!supplierDocumentForm.supplierId) {
-      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请选择产品供应商" });
-      return;
-    }
-    if (!supplierDocumentForm.requiredDocumentTypes.length) {
-      setSupplierDocumentForm({ ...supplierDocumentForm, error: "请至少选择一种回传资料" });
-      return;
-    }
-    setSupplierDocumentSending(true);
-    setSupplierDocumentSubmitProgress(0);
-    setSupplierDocumentForm({ ...supplierDocumentForm, error: "" });
-    try {
-      const formData = new FormData();
-      formData.append("orderId", supplierDocumentForm.order.id);
-      formData.append("supplierId", supplierDocumentForm.supplierId);
-      formData.append("requiredDocumentTypes", supplierDocumentForm.requiredDocumentTypes.join(","));
-      formData.append("dueDate", supplierDocumentForm.dueDate);
-      formData.append("message", supplierDocumentForm.message);
-      if (supplierDocumentForm.templateFile) {
-        formData.append("templateFile", supplierDocumentForm.templateFile);
-      }
-      const data = await uploadFormDataWithProgress<{ success?: boolean; message?: string; error?: string }>(
-        "/api/supplier-document-requests",
-        formData,
-        setSupplierDocumentSubmitProgress,
-      );
-      setSupplierDocumentForm(null);
-      setNotice(data.message || "已通知供应商回传资料");
-      if (detailOrderId === supplierDocumentForm.order.id) await fetchDetail(supplierDocumentForm.order.id);
-    } catch (submitError) {
-      setSupplierDocumentForm((current) => current
-        ? { ...current, error: submitError instanceof Error ? submitError.message : "创建供应商资料回传任务失败" }
-        : current);
-    } finally {
-      setSupplierDocumentSending(false);
-      setSupplierDocumentSubmitProgress(0);
-    }
-  }
-
   async function deleteDocument(orderId: string, document: TaxDocument) {
     const result = await requestConfirmation({
       title: "确定删除该文件？",
@@ -1032,6 +1026,9 @@ export function useTaxRefundController({
     detail,
     detailOrderId,
     detailLoading,
+    detailActiveTab,
+    detailLoadedSections,
+    detailSectionLoading,
     detailError,
     packageDownloadingId,
     cancelingArchiveId,
@@ -1049,12 +1046,8 @@ export function useTaxRefundController({
     manualShippingLoading,
     manualShippingSending,
     manualShippingMessage,
-    supplierDocumentForm,
-    supplierDocumentSending,
-    supplierDocumentSubmitProgress,
     confirmation,
     readOnly: mode === "archive" || Boolean(detailRow?.taxArchived),
-    canCreateSupplierDocumentRequest: canManageTaxRefund && mode === "current" && !detailRow?.taxArchived,
     refreshRows,
     switchMode,
     setKeyword,
@@ -1067,6 +1060,7 @@ export function useTaxRefundController({
     resetSearch,
     gotoPage,
     loadDetail,
+    selectDetailTab,
     submitTaxRefund,
     cancelTaxRefundArchive,
     refreshCompleteness,
@@ -1082,7 +1076,6 @@ export function useTaxRefundController({
     recognizeCustomsDocument,
     recognizeFromUploadedCustoms,
     openManualShippingDocuments,
-    openSupplierDocumentRequest,
     openDomesticLogisticsFromDetail,
     closeCustomsFilePicker: () => setCustomsFilePicker(null),
     selectCustomsFile,
@@ -1090,9 +1083,6 @@ export function useTaxRefundController({
     sendManualShippingDocuments,
     setManualShippingForm,
     updateManualShippingLanguage,
-    closeSupplierDocumentRequest: () => setSupplierDocumentForm(null),
-    setSupplierDocumentForm,
-    submitSupplierDocumentRequest,
     cancelConfirmation,
     confirmConfirmation,
     updateConfirmationInput,

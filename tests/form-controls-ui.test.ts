@@ -9,6 +9,7 @@ const settingsModule = readSettingsModuleSource();
 const settingsModuleMain = settingsModule;
 const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
+const supplierDocumentsModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const globalStyles = readFileSync("app/globals.css", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
@@ -65,14 +66,11 @@ test("auto-send document selection reuses commission formula card selection", ()
   assert.doesNotMatch(autoSendSnippet, /styles\.checkboxPanel/);
 });
 
-test("factory supplier callback documents use aligned card selection UI", () => {
-  const requestIndex = taxRefundModule.indexOf("<strong>需要回传的资料</strong>");
-  const requestSnippet = taxRefundModule.slice(Math.max(0, requestIndex - 360), requestIndex + 1000);
-
-  assert.match(requestSnippet, /styles\.factoryDocumentChoiceGrid/);
-  assert.match(requestSnippet, /<CheckboxOptionRow/);
-  assert.match(requestSnippet, /checked=\{form\.requiredDocumentTypes\.includes\(item\.value\)\}/);
-  assert.match(requestSnippet, /onChange=\{\(\) => toggleDocumentType\(item\.value\)\}/);
+test("factory supplier callback documents are handled from supplier return module", () => {
+  assert.doesNotMatch(taxRefundModule, /<strong>需要回传的资料<\/strong>/);
+  assert.match(supplierDocumentsModule, /重新发送邮件/);
+  assert.match(supplierDocumentsModule, /发送状态/);
+  assert.match(taxRefundModule, /前往资料回传/);
   assert.match(components, /<label className=\{mergeClassNames\(styles\.checkboxOptionRow/);
   assert.match(components, /className=\{styles\.checkboxOptionInput\}/);
   assert.match(components, /className=\{styles\.checkboxBox\} aria-hidden="true">✓<\/span>/);
@@ -82,7 +80,7 @@ test("factory supplier callback documents use aligned card selection UI", () => 
   assert.match(workspaceStyles, /\.checkboxContent \{[\s\S]*flex: 1;[\s\S]*margin-left: 10px;/);
   assert.match(workspaceStyles, /\.checkboxPanel input:not\(\.uiChoiceInput\):not\(\.checkboxOptionInput\)/);
   assert.doesNotMatch(workspaceStyles, /\.factoryDocumentChoiceCard/);
-  assert.doesNotMatch(requestSnippet, /type=["']checkbox["']/);
+  assert.doesNotMatch(taxRefundModule, /type=["']checkbox["']/);
 });
 
 test("user email verification wording is concise and consistent", () => {

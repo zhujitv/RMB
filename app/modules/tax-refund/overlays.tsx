@@ -6,16 +6,15 @@ import {
 import {
   CustomsFilePickerDialog,
   ManualShippingDocumentsDialog,
-  SupplierDocumentRequestDialog,
   TaxRefundDetailDrawer,
 } from "./detail-components";
 import type {
   CustomsFilePickerState,
   ManualShippingDraft,
   ManualShippingForm,
-  SupplierDocumentRequestForm,
   TaxDocument,
   TaxRefundDetail,
+  TaxRefundDetailTab,
   TaxRefundRow,
   UploadScope,
 } from "./model";
@@ -25,6 +24,9 @@ type TaxRefundOverlaysProps = {
   detail: TaxRefundDetail | null;
   detailOrderId: string;
   detailLoading: boolean;
+  detailActiveTab: TaxRefundDetailTab;
+  detailLoadedSections: Record<TaxRefundDetailTab, boolean>;
+  detailSectionLoading: Record<TaxRefundDetailTab, boolean>;
   detailError: string;
   readOnly: boolean;
   packageDownloadingId: string;
@@ -38,7 +40,6 @@ type TaxRefundOverlaysProps = {
   recognizingDocumentId: string;
   recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
-  canCreateSupplierDocumentRequest: boolean;
   canRefreshCompleteness: boolean;
   canWriteDocuments: boolean;
   canRecalculateTaxRefund: boolean;
@@ -51,11 +52,9 @@ type TaxRefundOverlaysProps = {
   manualShippingLoading: boolean;
   manualShippingSending: boolean;
   manualShippingMessage: string;
-  supplierDocumentForm: SupplierDocumentRequestForm | null;
-  supplierDocumentSending: boolean;
-  supplierDocumentSubmitProgress: number;
   confirmation: ConfirmationDialogState | null;
   onCloseDetailDrawer: () => void;
+  onSelectDetailTab: (tab: TaxRefundDetailTab) => void;
   onDownloadPackage: (row: TaxRefundRow) => void;
   onSubmitTaxRefund: (row: TaxRefundRow) => void;
   onCancelArchive: (row: TaxRefundRow) => void;
@@ -69,7 +68,7 @@ type TaxRefundOverlaysProps = {
   onRecognizeCustomsDocument: (order: TaxRefundDetail, document?: TaxDocument) => Promise<void> | void;
   onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
-  onOpenSupplierDocumentRequest: (order: TaxRefundDetail) => void;
+  onOpenSupplierDocuments: (keyword: string) => void;
   onOpenDomesticLogistics: () => void;
   onCloseCustomsFilePicker: () => void;
   onSelectCustomsFile: (order: TaxRefundDetail, document: TaxDocument) => void;
@@ -77,9 +76,6 @@ type TaxRefundOverlaysProps = {
   onSubmitManualShippingDocuments: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
   onChangeManualShippingForm: (form: ManualShippingForm | null) => void;
   onManualShippingLanguageChange: (language: string) => void;
-  onCloseSupplierDocumentRequest: () => void;
-  onChangeSupplierDocumentForm: (form: SupplierDocumentRequestForm | null) => void;
-  onSubmitSupplierDocumentRequest: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
   onUpdateConfirmationInput: (value: string) => void;
@@ -90,6 +86,9 @@ export function TaxRefundOverlays({
   detail,
   detailOrderId,
   detailLoading,
+  detailActiveTab,
+  detailLoadedSections,
+  detailSectionLoading,
   detailError,
   readOnly,
   packageDownloadingId,
@@ -103,7 +102,6 @@ export function TaxRefundOverlays({
   recognizingDocumentId,
   recognitionStatusByDocument,
   canSendShippingDocuments,
-  canCreateSupplierDocumentRequest,
   canRefreshCompleteness,
   canWriteDocuments,
   canRecalculateTaxRefund,
@@ -116,11 +114,9 @@ export function TaxRefundOverlays({
   manualShippingLoading,
   manualShippingSending,
   manualShippingMessage,
-  supplierDocumentForm,
-  supplierDocumentSending,
-  supplierDocumentSubmitProgress,
   confirmation,
   onCloseDetailDrawer,
+  onSelectDetailTab,
   onDownloadPackage,
   onSubmitTaxRefund,
   onCancelArchive,
@@ -134,7 +130,7 @@ export function TaxRefundOverlays({
   onRecognizeCustomsDocument,
   onRecognizeFromUploadedCustoms,
   onOpenManualShippingDocuments,
-  onOpenSupplierDocumentRequest,
+  onOpenSupplierDocuments,
   onOpenDomesticLogistics,
   onCloseCustomsFilePicker,
   onSelectCustomsFile,
@@ -142,9 +138,6 @@ export function TaxRefundOverlays({
   onSubmitManualShippingDocuments,
   onChangeManualShippingForm,
   onManualShippingLanguageChange,
-  onCloseSupplierDocumentRequest,
-  onChangeSupplierDocumentForm,
-  onSubmitSupplierDocumentRequest,
   onCancelConfirmation,
   onConfirmConfirmation,
   onUpdateConfirmationInput,
@@ -156,6 +149,9 @@ export function TaxRefundOverlays({
           row={detailRow}
           detail={detailOrderId === detailRow.id ? detail : null}
           loading={detailOrderId === detailRow.id && detailLoading}
+          activeTab={detailActiveTab}
+          loadedSections={detailLoadedSections}
+          sectionLoading={detailSectionLoading}
           error={detailOrderId === detailRow.id ? detailError : ""}
           readOnly={readOnly}
           packageDownloading={packageDownloadingId === detailRow.id}
@@ -172,6 +168,7 @@ export function TaxRefundOverlays({
           canRefreshCompleteness={canRefreshCompleteness}
           canRecalculateTaxRefund={canRecalculateTaxRefund}
           onClose={onCloseDetailDrawer}
+          onSelectTab={onSelectDetailTab}
           onDownloadPackage={() => onDownloadPackage(detailRow)}
           onSubmitTaxRefund={() => onSubmitTaxRefund(detailRow)}
           onCancelArchive={() => onCancelArchive(detailRow)}
@@ -185,8 +182,7 @@ export function TaxRefundOverlays({
           onRecognizeCustomsDocument={onRecognizeCustomsDocument}
           onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
           onOpenManualShippingDocuments={onOpenManualShippingDocuments}
-          canCreateSupplierDocumentRequest={canCreateSupplierDocumentRequest}
-          onOpenSupplierDocumentRequest={onOpenSupplierDocumentRequest}
+          onOpenSupplierDocuments={onOpenSupplierDocuments}
           onOpenDomesticLogistics={onOpenDomesticLogistics}
           currentUserRole={currentUserRole}
           canWriteDocuments={canWriteDocuments}
@@ -213,16 +209,6 @@ export function TaxRefundOverlays({
           onSubmit={onSubmitManualShippingDocuments}
           onChange={onChangeManualShippingForm}
           onLanguageChange={onManualShippingLanguageChange}
-        />
-      ) : null}
-      {supplierDocumentForm ? (
-        <SupplierDocumentRequestDialog
-          form={supplierDocumentForm}
-          sending={supplierDocumentSending}
-          submitProgress={supplierDocumentSubmitProgress}
-          onClose={onCloseSupplierDocumentRequest}
-          onChange={onChangeSupplierDocumentForm}
-          onSubmit={onSubmitSupplierDocumentRequest}
         />
       ) : null}
       {confirmation ? (

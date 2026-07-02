@@ -544,6 +544,12 @@
 .supplierSettingsTableWrap { composes: supplierSettingsTableWrap from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .supplierDocumentsHeader { composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsListToolbar from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentNoticeActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
 .supplierDocumentsPage { composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStats { composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/supplier-documents.module.css"; }
@@ -616,6 +622,623 @@
 .taxRefundDrawerBody { composes: taxRefundDrawerBody from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: taxRefundDrawerBody from "./styles/workspace-shell/responsive-main.module.css"; }
 .taxRefundDrawerHeader { composes: taxRefundDrawerHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: taxRefundDrawerHeader from "./styles/workspace-shell/responsive-main.module.css"; }
 .taxRefundDrawerTitle { composes: taxRefundDrawerTitle from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: taxRefundDrawerTitle from "./styles/workspace-shell/responsive-typography.module.css"; }
+
+.taxRefundDrawer {
+  width: min(96vw, 1680px);
+  max-width: min(96vw, 1680px);
+  height: min(92vh, 960px);
+  max-height: min(92vh, 960px);
+  margin: 4vh 2vw 4vh 0;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+}
+
+.taxRefundDrawerHeader {
+  z-index: 8;
+  align-items: center;
+  padding: 14px 22px;
+}
+
+.taxRefundDrawerActions {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  max-width: min(980px, 64vw);
+  padding: 4px 0;
+}
+
+.taxRefundMoreActions {
+  position: relative;
+}
+
+.taxRefundMoreActions summary {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.taxRefundMoreActions summary::-webkit-details-marker {
+  display: none;
+}
+
+.taxRefundMoreActionMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  min-width: 170px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+
+.taxRefundMoreActionMenu button {
+  justify-content: flex-start;
+}
+
+.taxRefundActionGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.taxRefundActionGroup:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.taxRefundActionGroupLabel {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.taxRefundDrawerBody {
+  padding: 16px 22px 20px;
+}
+
+.taxRefundDrawerBody .documentGroupGrid {
+  gap: 14px;
+}
+
+.taxRefundDrawerBody .documentGroupCard {
+  border-radius: 8px;
+}
+
+.taxRefundDrawerBody .tableWrap {
+  max-height: min(56vh, 560px);
+  overflow: auto;
+}
+
+.taxRefundDrawerBody .dataTable {
+  table-layout: auto;
+}
+
+.taxRefundDrawerBody .dataTable th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f8fafc;
+}
+
+.taxDetailTabBar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  margin: -2px 0 12px;
+  padding: 0 0 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.taxRefundCalculationWorkspace {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: none;
+}
+
+.taxCalculationTablePanel {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: visible;
+}
+
+.taxCalculationSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.taxCalculationSectionTitle {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.taxCalculationSectionHeader strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.taxCalculationSectionHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.taxCalculationStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.taxCalculationKpiBar {
+  display: grid;
+  grid-template-columns: 140px 180px 180px 110px minmax(180px, 1fr);
+  gap: 8px;
+}
+
+.taxCalculationStatCard {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.taxCalculationStatCard span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.taxCalculationStatCard strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taxCalculationStatSuccess {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.taxCalculationStatSuccess strong {
+  color: #166534;
+}
+
+.taxCalculationStatDanger {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.taxCalculationStatDanger strong {
+  color: #b91c1c;
+}
+
+.taxCalculationTableContainer {
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  overflow: visible;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.taxCalculationSubTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.taxCalculationSubTab,
+.taxCalculationSubTabActive {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.taxCalculationSubTab b,
+.taxCalculationSubTabActive b {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  text-align: center;
+}
+
+.taxCalculationSubTabActive {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.taxCalculationSubTabActive b {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.taxCalculationEmptyPanel {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.taxCalculationTableContainer form {
+  width: 100%;
+  min-width: 100%;
+}
+
+.taxCalculationDataTable {
+  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.taxCalculationDataTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+.taxCalculationDataTable th,
+.taxCalculationDataTable td {
+  text-align: left;
+  height: 42px;
+  padding: 8px 10px;
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.taxCalculationDataTable input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.taxCalculationDataTable .numericCell,
+.taxCalculationDataTable .numericCell input {
+  text-align: right;
+}
+
+.taxInlineInputGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 4px;
+  align-items: center;
+}
+
+.taxMoneyInputGroup {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.taxCalculationEmptyCell {
+  height: 54px;
+  text-align: center;
+}
+
+.taxCalculationEmptyCell .emptyState {
+  min-height: 42px;
+  margin: 0;
+  padding: 10px;
+  justify-content: center;
+}
+
+.taxDeclarationReviewTable th:nth-child(1),
+.taxDeclarationReviewTable td:nth-child(1) { width: 14%; }
+.taxDeclarationReviewTable th:nth-child(2),
+.taxDeclarationReviewTable td:nth-child(2) { width: 110px; }
+.taxDeclarationReviewTable th:nth-child(3),
+.taxDeclarationReviewTable td:nth-child(3) { width: 21%; }
+.taxDeclarationReviewTable th:nth-child(4),
+.taxDeclarationReviewTable td:nth-child(4) { width: 130px; }
+.taxDeclarationReviewTable th:nth-child(5),
+.taxDeclarationReviewTable td:nth-child(5) { width: 86px; }
+.taxDeclarationReviewTable th:nth-child(6),
+.taxDeclarationReviewTable td:nth-child(6) { width: 140px; }
+.taxDeclarationReviewTable th:nth-child(7),
+.taxDeclarationReviewTable td:nth-child(7) { width: 100px; }
+.taxDeclarationReviewTable th:nth-child(8),
+.taxDeclarationReviewTable td:nth-child(8) { width: 120px; }
+.taxDeclarationReviewTable th:nth-child(9),
+.taxDeclarationReviewTable td:nth-child(9) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(1),
+.taxInvoiceReviewTable td:nth-child(1) { width: 12%; }
+.taxInvoiceReviewTable th:nth-child(2),
+.taxInvoiceReviewTable td:nth-child(2) { width: 110px; }
+.taxInvoiceReviewTable th:nth-child(3),
+.taxInvoiceReviewTable td:nth-child(3) { width: 18%; }
+.taxInvoiceReviewTable th:nth-child(4),
+.taxInvoiceReviewTable td:nth-child(4) { width: 120px; }
+.taxInvoiceReviewTable th:nth-child(5),
+.taxInvoiceReviewTable td:nth-child(5) { width: 120px; }
+.taxInvoiceReviewTable th:nth-child(6),
+.taxInvoiceReviewTable td:nth-child(6) { width: 90px; }
+.taxInvoiceReviewTable th:nth-child(7),
+.taxInvoiceReviewTable td:nth-child(7) { width: 90px; }
+.taxInvoiceReviewTable th:nth-child(8),
+.taxInvoiceReviewTable td:nth-child(8) { width: 120px; }
+.taxInvoiceReviewTable th:nth-child(9),
+.taxInvoiceReviewTable td:nth-child(9) { width: 120px; }
+.taxInvoiceReviewTable th:nth-child(10),
+.taxInvoiceReviewTable td:nth-child(10) { width: 120px; }
+.taxInvoiceReviewTable th:nth-child(11),
+.taxInvoiceReviewTable td:nth-child(11) { width: 140px; }
+.taxInvoiceReviewTable th:nth-child(12),
+.taxInvoiceReviewTable td:nth-child(12) { width: 14%; }
+
+.taxRefundReviewTable th:nth-child(1),
+.taxRefundReviewTable td:nth-child(1) { width: 11%; }
+.taxRefundReviewTable th:nth-child(2),
+.taxRefundReviewTable td:nth-child(2) { width: 110px; }
+.taxRefundReviewTable th:nth-child(3),
+.taxRefundReviewTable td:nth-child(3),
+.taxRefundReviewTable th:nth-child(4),
+.taxRefundReviewTable td:nth-child(4) { width: 12%; }
+.taxRefundReviewTable th:nth-child(5),
+.taxRefundReviewTable td:nth-child(5),
+.taxRefundReviewTable th:nth-child(7),
+.taxRefundReviewTable td:nth-child(7),
+.taxRefundReviewTable th:nth-child(9),
+.taxRefundReviewTable td:nth-child(9),
+.taxRefundReviewTable th:nth-child(10),
+.taxRefundReviewTable td:nth-child(10),
+.taxRefundReviewTable th:nth-child(11),
+.taxRefundReviewTable td:nth-child(11),
+.taxRefundReviewTable th:nth-child(12),
+.taxRefundReviewTable td:nth-child(12),
+.taxRefundReviewTable th:nth-child(13),
+.taxRefundReviewTable td:nth-child(13) { width: 120px; }
+.taxRefundReviewTable th:nth-child(6),
+.taxRefundReviewTable td:nth-child(6),
+.taxRefundReviewTable th:nth-child(8),
+.taxRefundReviewTable td:nth-child(8) { width: 82px; }
+.taxRefundReviewTable th:nth-child(14),
+.taxRefundReviewTable td:nth-child(14) { width: 120px; }
+.taxRefundReviewTable th:nth-child(15),
+.taxRefundReviewTable td:nth-child(15) { width: 150px; }
+
+.taxRefundReviewTable .rowActionGroup {
+  display: grid;
+  grid-template-columns: 42px 42px minmax(54px, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.taxRefundReviewTable .rowActionGroup input {
+  width: 42px;
+  min-width: 0;
+}
+
+.taxRefundReviewTable .rowActionGroup button {
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.taxRefundResultFocusTable th:nth-child(1),
+.taxRefundResultFocusTable td:nth-child(1) { width: 13%; }
+.taxRefundResultFocusTable th:nth-child(2),
+.taxRefundResultFocusTable td:nth-child(2) { width: 110px; }
+.taxRefundResultFocusTable th:nth-child(3),
+.taxRefundResultFocusTable td:nth-child(3) { width: 18%; }
+.taxRefundResultFocusTable th:nth-child(4),
+.taxRefundResultFocusTable td:nth-child(4),
+.taxRefundResultFocusTable th:nth-child(5),
+.taxRefundResultFocusTable td:nth-child(5),
+.taxRefundResultFocusTable th:nth-child(7),
+.taxRefundResultFocusTable td:nth-child(7),
+.taxRefundResultFocusTable th:nth-child(8),
+.taxRefundResultFocusTable td:nth-child(8) { width: 130px; }
+.taxRefundResultFocusTable th:nth-child(6),
+.taxRefundResultFocusTable td:nth-child(6) { width: 86px; }
+.taxRefundResultFocusTable th:nth-child(9),
+.taxRefundResultFocusTable td:nth-child(9) { width: 120px; }
+.taxRefundResultFocusTable th:nth-child(10),
+.taxRefundResultFocusTable td:nth-child(10) { width: 150px; }
+
+.taxInvoiceFocusTable th:nth-child(1),
+.taxInvoiceFocusTable td:nth-child(1) { width: 110px; }
+.taxInvoiceFocusTable th:nth-child(2),
+.taxInvoiceFocusTable td:nth-child(2) { width: 20%; }
+.taxInvoiceFocusTable th:nth-child(3),
+.taxInvoiceFocusTable td:nth-child(3),
+.taxInvoiceFocusTable th:nth-child(4),
+.taxInvoiceFocusTable td:nth-child(4) { width: 120px; }
+.taxInvoiceFocusTable th:nth-child(5),
+.taxInvoiceFocusTable td:nth-child(5),
+.taxInvoiceFocusTable th:nth-child(6),
+.taxInvoiceFocusTable td:nth-child(6) { width: 15%; }
+.taxInvoiceFocusTable th:nth-child(7),
+.taxInvoiceFocusTable td:nth-child(7) { width: 140px; }
+.taxInvoiceFocusTable th:nth-child(8),
+.taxInvoiceFocusTable td:nth-child(8) { width: 120px; }
+.taxInvoiceFocusTable th:nth-child(9),
+.taxInvoiceFocusTable td:nth-child(9) { width: 18%; }
+
+.taxDeclarationFocusTable th:nth-child(1),
+.taxDeclarationFocusTable td:nth-child(1) { width: 15%; }
+.taxDeclarationFocusTable th:nth-child(2),
+.taxDeclarationFocusTable td:nth-child(2) { width: 110px; }
+.taxDeclarationFocusTable th:nth-child(3),
+.taxDeclarationFocusTable td:nth-child(3) { width: 24%; }
+.taxDeclarationFocusTable th:nth-child(4),
+.taxDeclarationFocusTable td:nth-child(4),
+.taxDeclarationFocusTable th:nth-child(5),
+.taxDeclarationFocusTable td:nth-child(5) { width: 145px; }
+.taxDeclarationFocusTable th:nth-child(6),
+.taxDeclarationFocusTable td:nth-child(6) { width: 90px; }
+.taxDeclarationFocusTable th:nth-child(7),
+.taxDeclarationFocusTable td:nth-child(7) { width: 120px; }
+.taxDeclarationFocusTable th:nth-child(8),
+.taxDeclarationFocusTable td:nth-child(8) { width: 110px; }
+
+@media (max-width: 1360px) {
+  .taxCalculationStatsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .taxCalculationKpiBar {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+.taxSupplierReturnNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+}
+
+.taxSupplierReturnNotice div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.taxSupplierReturnNotice strong {
+  color: #9a3412;
+  font-size: 13px;
+}
+
+.taxSupplierReturnNotice span {
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.taxDetailTab,
+.taxDetailTabActive {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.taxDetailTabActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.taxDetailTabSpinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  opacity: 0.75;
+}
+
+.tableSkeletonLine {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #e2e8f0, #f8fafc, #e2e8f0);
+  background-size: 220% 100%;
+  animation: tableSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tableSkeletonPulse {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
 .taxTargetHighlight { composes: taxTargetHighlight from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .topbar { composes: topbar from "./styles/workspace-shell/responsive-typography.module.css"; composes: topbar from "./styles/workspace-shell/shell-account.module.css"; }
 .topbarTitleRow { composes: topbarTitleRow from "./styles/workspace-shell/responsive-typography.module.css"; composes: topbarTitleRow from "./styles/workspace-shell/shell-account.module.css"; }

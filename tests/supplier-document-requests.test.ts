@@ -90,10 +90,15 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
 });
 
-test("admin tax refund drawer can notify product suppliers without replacing tax upload flow", () => {
-  assert.match(taxModule, /通知产品供应商回传/);
-  assert.match(taxModule, /\/api\/supplier-document-requests/);
-  assert.match(taxModule, /allowFactoryDocumentUpload/);
+test("supplier document reminders are owned by the supplier return module", () => {
+  assert.doesNotMatch(taxModule, /通知产品供应商回传/);
+  assert.doesNotMatch(taxModule, /\/api\/supplier-document-requests/);
+  assert.match(taxModule, /前往资料回传/);
+  assert.match(taxModule, /产品供应商资料缺失/);
+  assert.match(taxModule, /onOpenSupplierDocuments/);
+  assert.match(supplierModule, /重新发送邮件/);
+  assert.match(supplierModule, /发送状态/);
+  assert.match(service, /resendSupplierDocumentRequestNotice/);
   assert.match(taxModule, /documentMatchesFactoryCostSlot\(document, cost, sameSupplierFactoryCostCount\)/);
   assert.doesNotMatch(taxModule, /document\.costId === cost\.id \|\| Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
 });

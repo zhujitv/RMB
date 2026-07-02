@@ -31,6 +31,7 @@ type InvoiceLine = {
   productName: string;
   quantity: number;
   unit: string;
+  amountWithTax: number;
   amountWithoutTax: number;
   taxRate: number;
 };
@@ -50,6 +51,7 @@ type InvoiceMatchResult = {
   supplierCount: number;
   invoiceCount: number;
   invoiceQuantity: number;
+  invoiceAmountWithTax: number;
   invoiceAmountWithoutTax: number;
   invoiceVatRate: number;
   differenceQuantity: number;
@@ -164,6 +166,11 @@ function invoiceLineFromDocument(document: Prisma.OrderDocumentGetPayload<{
   const parsed = (fields || (task?.rawText ? parseVatInvoiceFields(task.rawText) : null)) as Record<string, unknown> | null;
   if (!parsed) return null;
   const supplier = document.supplier || document.cost?.supplier || null;
+  const taxRate = rateNumber(parsed.taxRate);
+  const amountWithoutTax = num(parsed.amountWithoutTax, 0);
+  const amountWithTax = num(parsed.amountWithTax, 0)
+    || (amountWithoutTax && taxRate ? roundMoney(amountWithoutTax * (1 + taxRate)) : 0)
+    || (amountWithoutTax && num(parsed.taxAmount, 0) ? roundMoney(amountWithoutTax + num(parsed.taxAmount, 0)) : 0);
   return {
     documentId: document.id,
     invoiceNo: cleanText(parsed.invoiceNo),
@@ -173,8 +180,9 @@ function invoiceLineFromDocument(document: Prisma.OrderDocumentGetPayload<{
     productName: cleanText(parsed.productName),
     quantity: num(parsed.quantity, 0),
     unit: normalizedUnit(parsed.unit),
-    amountWithoutTax: num(parsed.amountWithoutTax, 0),
-    taxRate: rateNumber(parsed.taxRate),
+    amountWithTax,
+    amountWithoutTax,
+    taxRate,
   };
 }
 
@@ -202,29 +210,31 @@ function matchInvoices(group: DeclarationGroup, invoiceLines: InvoiceLine[], sup
   const sameUnit = sameName.filter((line) => normalizedUnit(line.unit) === normalizedUnit(group.unit));
   const lines = sameUnit;
   const invoiceQuantity = roundMoney(lines.reduce((sum, line) => sum + line.quantity, 0));
+  const invoiceAmountWithTax = roundMoney(lines.reduce((sum, line) => sum + line.amountWithTax, 0));
   const invoiceAmountWithoutTax = roundMoney(lines.reduce((sum, line) => sum + line.amountWithoutTax, 0));
   const invoiceVatRate = lines.find((line) => line.taxRate > 0)?.taxRate || 0;
   const reasons: string[] = [];
   const invoiceCount = new Set(lines.map((line) => line.documentId)).size;
   const matchedSupplierCount = new Set(lines.map((line) => line.supplierId).filter(Boolean)).size;
-  if (!invoiceLines.length) reasons.push("发票缺失");
+  if (!invoiceLines.length) reasons.push("发票未匹配");
   else if (!sameHs.length) reasons.push("HS编码不一致");
   else if (!sameName.length) reasons.push("品名不一致");
   else if (!sameUnit.length) reasons.push("单位不一致");
   if (lines.length && Math.abs(invoiceQuantity - group.quantity) > 0.0001) reasons.push("数量不一致");
-  if (lines.length && !amountMatches(group.amountCny, invoiceAmountWithoutTax)) reasons.push("金额异常");
+  if (lines.length && !amountMatches(group.amountCny, invoiceAmountWithTax || invoiceAmountWithoutTax)) reasons.push("金额异常");
   if (supplierCount > 0 && matchedSupplierCount < supplierCount) reasons.push("部分供应商未上传");
-  const status = reasons[0] || (invoiceCount > 1 ? "多票合并匹配" : "整体匹配");
+  const status = reasons[0] || (invoiceCount > 1 ? "多票合并匹配" : "匹配");
   return {
     status,
     reasons,
     supplierCount,
     invoiceCount,
     invoiceQuantity,
+    invoiceAmountWithTax,
     invoiceAmountWithoutTax,
     invoiceVatRate,
     differenceQuantity: roundMoney(invoiceQuantity - group.quantity),
-    differenceAmount: roundMoney(invoiceAmountWithoutTax - group.amountCny),
+    differenceAmount: roundMoney((invoiceAmountWithTax || invoiceAmountWithoutTax) - group.amountCny),
     lines,
   };
 }
@@ -299,7 +309,22 @@ function serializeCalculationRow(row: Prisma.ExportTaxRefundCalculationGetPayloa
     invoiceMatch: match,
     customsRmbAmount: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
     inputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
+    supplierInvoiceAmountWithTax: num(match.supplierInvoiceAmountWithTax, 0) || num(match.invoiceAmountWithTax, 0) || null,
   };
+}
+
+function calculationStatusFromReasons(abnormalReasons: string[]) {
+  if (abnormalReasons.includes("HS编码未维护")) return "HS未维护";
+  if (abnormalReasons.includes("发票未匹配") || abnormalReasons.includes("发票缺失")) return "发票未匹配";
+  if (abnormalReasons.some((reason) => [
+    "数量不一致",
+    "单位不一致",
+    "品名不一致",
+    "HS编码不一致",
+    "金额异常",
+    "部分供应商未上传",
+  ].includes(reason))) return "资料不匹配";
+  return abnormalReasons.length ? "资料异常" : "退税金额已计算";
 }
 
 export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclarationItemGetPayload<{}>) {
@@ -487,7 +512,14 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
     const rebateRate = companyHs ? num(companyHs.rebateRate, 0) : 0;
     const vatRate = companyHs ? num(companyHs.vatRate, 0) : (match.invoiceVatRate || 0);
     const theoreticalRefundAmount = declarationAmountCny && rebateRate ? roundMoney(declarationAmountCny * rebateRate) : 0;
-    const availableInputVatAmount = match.invoiceAmountWithoutTax && vatRate ? roundMoney(match.invoiceAmountWithoutTax * vatRate) : 0;
+    const supplierInvoiceAmountWithTax = match.invoiceAmountWithTax
+      || (match.invoiceAmountWithoutTax && vatRate ? roundMoney(match.invoiceAmountWithoutTax * (1 + vatRate)) : match.invoiceAmountWithoutTax);
+    const supplierInvoiceAmountWithoutTax = supplierInvoiceAmountWithTax && vatRate
+      ? roundMoney(supplierInvoiceAmountWithTax / (1 + vatRate))
+      : match.invoiceAmountWithoutTax;
+    const availableInputVatAmount = supplierInvoiceAmountWithTax && supplierInvoiceAmountWithoutTax
+      ? roundMoney(supplierInvoiceAmountWithTax - supplierInvoiceAmountWithoutTax)
+      : 0;
     const estimatedRefundAmount = theoreticalRefundAmount && availableInputVatAmount ? Math.min(theoreticalRefundAmount, availableInputVatAmount) : 0;
     const abnormalReasons = [
       ...(!hsCode ? ["HS编码缺失"] : []),
@@ -500,12 +532,16 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
       ...duplicateReasons,
       ...(theoreticalRefundAmount > 0 && availableInputVatAmount > 0 && availableInputVatAmount < theoreticalRefundAmount ? ["发票金额不足"] : []),
     ].filter((reason, index, arr) => reason && arr.indexOf(reason) === index);
-    const calculationStatus = abnormalReasons.length ? "资料异常" : "退税金额已计算";
+    const calculationStatus = calculationStatusFromReasons(abnormalReasons);
     const invoiceMatchJson = {
       supplierCount: match.supplierCount,
       invoiceCount: match.invoiceCount,
       invoiceQuantity: match.invoiceQuantity,
+      invoiceAmountWithTax: supplierInvoiceAmountWithTax,
       invoiceAmountWithoutTax: match.invoiceAmountWithoutTax,
+      supplierInvoiceAmountWithTax,
+      supplierInvoiceAmountWithoutTax,
+      availableInputVatAmount,
       differenceQuantity: match.differenceQuantity,
       differenceAmount: match.differenceAmount,
       documentIds: match.lines.map((line) => line.documentId),
@@ -536,7 +572,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
         rebateRate: companyHs ? rebateRate : null,
         vatRate: vatRate || null,
         theoreticalRefundAmount: theoreticalRefundAmount || null,
-        supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
+        supplierInvoiceAmountWithoutTax: supplierInvoiceAmountWithoutTax || null,
         availableInputVatAmount: availableInputVatAmount || null,
         estimatedRefundAmount: estimatedRefundAmount || null,
         invoiceMatchStatus: match.status,
@@ -559,7 +595,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
         rebateRate: companyHs ? rebateRate : null,
         vatRate: vatRate || null,
         theoreticalRefundAmount: theoreticalRefundAmount || null,
-        supplierInvoiceAmountWithoutTax: match.invoiceAmountWithoutTax || null,
+        supplierInvoiceAmountWithoutTax: supplierInvoiceAmountWithoutTax || null,
         availableInputVatAmount: availableInputVatAmount || null,
         estimatedRefundAmount: estimatedRefundAmount || null,
         invoiceMatchStatus: match.status,
@@ -574,7 +610,7 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
     });
     results.push(saved);
   }
-  const hasException = results.some((row) => row.calculationStatus === "资料异常");
+  const hasException = results.some((row) => row.calculationStatus !== "退税金额已计算");
   const hasInvoiceMatched = results.every((row) => TAX_REFUND_OK_STATUSES.has(row.invoiceMatchStatus));
   const hasRateMatched = results.every((row) => row.rebateRate != null);
   const hasHsNotMaintained = results.some((row) => Array.isArray(row.abnormalReasons) && row.abnormalReasons.includes("HS编码未维护"));

@@ -109,6 +109,11 @@ type SupplierDocumentDeleteResponse = {
   message?: string;
 };
 
+type SupplierDocumentNoticeResponse = {
+  request?: SupplierDocumentTask;
+  message?: string;
+};
+
 type SupplierDocumentOcrResponse = {
   success?: boolean;
   ocrTask?: SupplierDocumentOcrTask | null;
@@ -154,6 +159,7 @@ export function SupplierDocumentsModule({
   const [totalPages, setTotalPages] = useState(1);
   const [pendingCount, setPendingCount] = useState(0);
   const [deletingTaskId, setDeletingTaskId] = useState("");
+  const [resendingTaskId, setResendingTaskId] = useState("");
   const [ocrBusyKey, setOcrBusyKey] = useState("");
   const {
     confirmation,
@@ -264,6 +270,33 @@ export function SupplierDocumentsModule({
       setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
     } finally {
       setDeletingTaskId("");
+    }
+  }
+
+  async function resendNotice(task: SupplierDocumentTask) {
+    if (!isAdmin) {
+      setError("只有管理员可以重新发送资料回传催办。");
+      return;
+    }
+    setResendingTaskId(task.id);
+    setError("");
+    setNotice("");
+    try {
+      const data = await apiJson<SupplierDocumentNoticeResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ action: "resendNotice" }),
+        },
+      );
+      if (data.request?.id) {
+        setRows((current) => current.map((row) => (row.id === data.request?.id ? data.request : row)));
+      }
+      setNotice(data.message || "催办邮件已重新发送");
+    } catch (resendError) {
+      setError(resendError instanceof Error ? resendError.message : "重新发送资料回传催办失败");
+    } finally {
+      setResendingTaskId("");
     }
   }
 
@@ -455,10 +488,12 @@ export function SupplierDocumentsModule({
                 isAdmin={isAdmin}
                 canManageOcr={canManageSupplierDocumentOcr(currentUser.role)}
                 deleting={deletingTaskId === task.id}
+                resending={resendingTaskId === task.id}
                 onToggle={() => setExpandedTaskId((current) => (current === task.id ? "" : task.id))}
                 onOpen={() => setExpandedTaskId(task.id)}
                 onUpload={uploadDocument}
                 onDelete={deleteTask}
+                onResendNotice={resendNotice}
                 onRerunOcr={rerunOcr}
                 onConfirmOcr={confirmOcr}
                 onRejectOcr={rejectOcr}
@@ -500,10 +535,12 @@ function SupplierDocumentTaskCard({
   isAdmin,
   canManageOcr,
   deleting,
+  resending,
   onToggle,
   onOpen,
   onUpload,
   onDelete,
+  onResendNotice,
   onRerunOcr,
   onConfirmOcr,
   onRejectOcr,
@@ -516,10 +553,12 @@ function SupplierDocumentTaskCard({
   isAdmin: boolean;
   canManageOcr: boolean;
   deleting: boolean;
+  resending: boolean;
   onToggle: () => void;
   onOpen: () => void;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;
+  onResendNotice: (task: SupplierDocumentTask) => void;
   onRerunOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
   onConfirmOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
   onRejectOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
@@ -563,9 +602,19 @@ function SupplierDocumentTaskCard({
               <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
             </span>
             <span>
+              <small>发送状态</small>
+              <b>{supplierDocumentSendStatusLabel(task.sendStatus)}</b>
+            </span>
+            <span>
               <small>通知人</small>
               <b>{task.requestedByName || "-"}</b>
             </span>
+            {task.sendError ? (
+              <span title={task.sendError}>
+                <small>发送记录</small>
+                <b>{task.sendError}</b>
+              </span>
+            ) : null}
             {task.message ? (
               <span title={task.message}>
                 <small>备注</small>
@@ -577,6 +626,13 @@ function SupplierDocumentTaskCard({
             <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
               下载合同样本（{task.templateFileName || `${task.orderNo || "合同样本"}.xlsx`}）
             </a>
+          ) : null}
+          {isAdmin ? (
+            <div className={styles.supplierDocumentNoticeActions}>
+              <button className={styles.secondaryButton} type="button" onClick={() => onResendNotice(task)} disabled={resending}>
+                {resending ? "发送中..." : "重新发送邮件"}
+              </button>
+            </div>
           ) : null}
           <div className={styles.supplierDocumentUploadGrid}>
             {uniqueRequiredDocumentTypes(requiredTypes).map((documentType) => {
@@ -736,6 +792,13 @@ function supplierDocumentStatusClass(status: string) {
   if (status === "OCR识别成功，存在异常" || status === "OCR识别失败，需人工核对") return styles.statusDanger;
   if (status === "已关闭") return styles.statusMuted;
   return styles.statusMuted;
+}
+
+function supplierDocumentSendStatusLabel(status = "") {
+  if (status === "sent") return "已发送";
+  if (status === "failed") return "发送失败";
+  if (status === "pending") return "待发送";
+  return status || "未记录";
 }
 
 function supplierOcrCleanlyPassed(ocrTask: SupplierDocumentOcrTask) {

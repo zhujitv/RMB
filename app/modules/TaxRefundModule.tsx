@@ -52,6 +52,9 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         detail={taxRefund.detail}
         detailOrderId={taxRefund.detailOrderId}
         detailLoading={taxRefund.detailLoading}
+        detailActiveTab={taxRefund.detailActiveTab}
+        detailLoadedSections={taxRefund.detailLoadedSections}
+        detailSectionLoading={taxRefund.detailSectionLoading}
         detailError={taxRefund.detailError}
         readOnly={taxRefund.readOnly}
         packageDownloadingId={taxRefund.packageDownloadingId}
@@ -65,7 +68,6 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         recognizingDocumentId={taxRefund.recognizingDocumentId}
         recognitionStatusByDocument={taxRefund.recognitionStatusByDocument}
         canSendShippingDocuments={taxRefund.canSendShippingDocuments}
-        canCreateSupplierDocumentRequest={taxRefund.canCreateSupplierDocumentRequest}
         canRefreshCompleteness={taxRefund.canManageTaxRefund}
         canWriteDocuments={taxRefund.canWriteDocuments}
         canRecalculateTaxRefund={taxRefund.taxRefundCalculationEnabled}
@@ -78,11 +80,9 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         manualShippingLoading={taxRefund.manualShippingLoading}
         manualShippingSending={taxRefund.manualShippingSending}
         manualShippingMessage={taxRefund.manualShippingMessage}
-        supplierDocumentForm={taxRefund.supplierDocumentForm}
-        supplierDocumentSending={taxRefund.supplierDocumentSending}
-        supplierDocumentSubmitProgress={taxRefund.supplierDocumentSubmitProgress}
         confirmation={taxRefund.confirmation}
         onCloseDetailDrawer={taxRefund.closeDetailDrawer}
+        onSelectDetailTab={taxRefund.selectDetailTab}
         onDownloadPackage={(row) => void taxRefund.downloadPackage(row)}
         onSubmitTaxRefund={(row) => void taxRefund.submitTaxRefund(row)}
         onCancelArchive={(row) => void taxRefund.cancelTaxRefundArchive(row)}
@@ -96,7 +96,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onRecognizeCustomsDocument={taxRefund.recognizeCustomsDocument}
         onRecognizeFromUploadedCustoms={taxRefund.recognizeFromUploadedCustoms}
         onOpenManualShippingDocuments={taxRefund.openManualShippingDocuments}
-        onOpenSupplierDocumentRequest={taxRefund.openSupplierDocumentRequest}
+        onOpenSupplierDocuments={(keyword) => props.onOpenSupplierDocuments?.(keyword)}
         onOpenDomesticLogistics={taxRefund.openDomesticLogisticsFromDetail}
         onCloseCustomsFilePicker={taxRefund.closeCustomsFilePicker}
         onSelectCustomsFile={taxRefund.selectCustomsFile}
@@ -104,9 +104,6 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onSubmitManualShippingDocuments={taxRefund.sendManualShippingDocuments}
         onChangeManualShippingForm={taxRefund.setManualShippingForm}
         onManualShippingLanguageChange={taxRefund.updateManualShippingLanguage}
-        onCloseSupplierDocumentRequest={taxRefund.closeSupplierDocumentRequest}
-        onChangeSupplierDocumentForm={taxRefund.setSupplierDocumentForm}
-        onSubmitSupplierDocumentRequest={taxRefund.submitSupplierDocumentRequest}
         onCancelConfirmation={taxRefund.cancelConfirmation}
         onConfirmConfirmation={taxRefund.confirmConfirmation}
         onUpdateConfirmationInput={taxRefund.updateConfirmationInput}

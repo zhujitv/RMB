@@ -326,6 +326,8 @@ model ReceivableOrder {
   taxRefundStatus                String           @default("NOT_READY") @map("tax_refund_status")
   taxRefundCompleteness          Json?            @map("tax_refund_completeness")
   taxRefundCompletenessUpdatedAt DateTime?        @map("tax_refund_completeness_updated_at")
+  taxRefundOverallCompleteness   Int?             @map("tax_refund_overall_completeness")
+  taxRefundCompletenessIssuesSummary String?      @map("tax_refund_completeness_issues_summary") @db.Text
   taxArchived                    Boolean          @default(false) @map("tax_archived")
   isArchived                     Boolean          @default(false) @map("is_archived")
   taxRefundArchivedById          String?          @map("tax_refund_archived_by")
@@ -385,6 +387,7 @@ model ReceivableOrder {
   @@index([status])
   @@index([paymentTermType])
   @@index([taxRefundStatus])
+  @@index([taxRefundOverallCompleteness])
   @@index([taxArchived])
   @@index([isArchived])
   @@index([taxRefundCompletenessUpdatedAt])

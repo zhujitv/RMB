@@ -9,7 +9,7 @@ test("manual explains current tax refund document upload workflow", () => {
   assert.doesNotMatch(manualModule, /操作说明书/);
   assert.match(manualModule, /当前版本：v3\.0/);
   assert.match(manualModule, /出口资料上传和报关资料上传区域，按资料卡片上传 PDF/);
-  assert.match(manualModule, /通知产品供应商回传工厂采购合同和工厂增值税发票 PDF/);
+  assert.match(manualModule, /退税详情仅显示状态提示和前往资料回传入口/);
   assert.match(manualModule, /预览、下载、删除或替换当前 PDF/);
   assert.match(manualModule, /重新识别报关单/);
   assert.match(manualModule, /删除报关单会同步清空报关单号和申报日期/);

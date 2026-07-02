@@ -99,6 +99,10 @@ export type TaxRefundRow = {
   taxSubmittedByName?: string;
   taxSubmittedAt?: string | null;
   documentCompleteness?: DocumentCompleteness;
+  overallCompleteness?: number;
+  completenessUpdatedAt?: string | null;
+  completenessIssuesSummary?: string;
+  refundStatus?: string;
 };
 
 export type CustomsDeclarationItem = {
@@ -136,6 +140,7 @@ export type ExportTaxRefundCalculation = {
   rebateRate?: number | null;
   vatRate?: number | null;
   theoreticalRefundAmount?: number | null;
+  supplierInvoiceAmountWithTax?: number | null;
   supplierInvoiceAmountWithoutTax?: number | null;
   availableInputVatAmount?: number | null;
   inputVatAmount?: number | null;
@@ -147,7 +152,10 @@ export type ExportTaxRefundCalculation = {
     supplierCount?: number;
     invoiceCount?: number;
     invoiceQuantity?: number;
+    invoiceAmountWithTax?: number;
     invoiceAmountWithoutTax?: number;
+    supplierInvoiceAmountWithTax?: number;
+    supplierInvoiceAmountWithoutTax?: number;
     differenceQuantity?: number;
     differenceAmount?: number;
     companyHs?: {
@@ -179,6 +187,7 @@ export type BusinessEntityOption = {
 
 export type TaxDocument = {
   id: string;
+  fileId?: string;
   costId?: string;
   supplierId?: string;
   documentType?: string;
@@ -190,8 +199,12 @@ export type TaxDocument = {
   fileSize?: number;
   uploadStatus?: string;
   uploadStatusLabel?: string;
+  recognitionStatus?: string;
+  uploadedBy?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+  previewUrl?: string;
+  downloadUrl?: string;
   customsRecognition?: CustomsRecognitionResult;
 };
 
@@ -240,6 +253,14 @@ export type TaxRefundDetail = TaxRefundRow & {
   exportTaxRefundCalculations?: ExportTaxRefundCalculation[];
   exportTaxRefundSummary?: ExportTaxRefundSummary;
 };
+
+export type TaxRefundDetailTab =
+  | "basic"
+  | "calculation"
+  | "export-documents"
+  | "customs-documents"
+  | "factory-documents"
+  | "logistics-documents";
 
 export type CustomsRecognitionResult = {
   attempted?: boolean;

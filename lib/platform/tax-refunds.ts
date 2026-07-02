@@ -1,36 +1,38 @@
 import JSZip from "jszip";
 import { prisma } from "../prisma";
-import type { Prisma, OrderDocumentType } from "../generated/prisma/client.js";
+import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { readR2Object, safeFileName } from "../r2";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   ARCHIVE_TAX_REFUND_STATUSES,
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
+  FACTORY_SUPPLIER_COST_TYPES,
   ORDER_DOCUMENT_LABELS,
   ORDER_DOCUMENT_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_STATUS_LABELS,
   TAX_REFUND_STATUSES,
+  TAX_EXPORT_DOCUMENT_TYPES,
   assertRead,
   canWrite,
   cachedTaxRefundCompleteness,
   codedError,
   customerFullName,
   customerShortName,
+  dateToInput,
   domesticLogisticsInfoSafeSelect,
   getExchangeRateSettings,
   getCommissionFormulaSettings,
   includeOrderRelations,
-  needsTaxRefundCompletenessRefresh,
   nonEmpty,
   num,
   optional,
   permissionError,
   refreshTaxRefundCompletenessForOrder,
-  scheduleTaxRefundCompletenessRefreshBatch,
   roundMoney,
   runNonCriticalTask,
   serializeOrder,
+  serializeOrderDocument,
   serializeCustomsRecognition,
   standardFilenameForDocument,
   summarizeOrder,
@@ -65,16 +67,87 @@ type TaxRefundListFilters = {
   declarationMonthStart: Date | null;
   declarationMonthEnd: Date | null;
 };
-type TaxRefundListOrder = Prisma.ReceivableOrderGetPayload<{
-  include: {
-    customer: true;
-    businessEntity: true;
-    taxRefundArchivedBy: true;
-    taxSubmittedBy: true;
-    logisticsBills: { select: { billOfLadingNo: true; createdAt: true } };
-    payments: { select: { amountCny: true; status: true; deletedAt: true } };
-  };
-}>;
+const taxRefundLightListSelect = Prisma.validator<Prisma.ReceivableOrderSelect>()({
+  id: true,
+  orderNo: true,
+  blNo: true,
+  customerNameSnapshot: true,
+  businessEntityId: true,
+  businessEntityNameSnapshot: true,
+  currency: true,
+  customsDeclarationDate: true,
+  taxRefundStatus: true,
+  taxRefundCompleteness: true,
+  taxRefundCompletenessUpdatedAt: true,
+  taxRefundOverallCompleteness: true,
+  taxRefundCompletenessIssuesSummary: true,
+  taxArchived: true,
+  taxRefundArchivedAt: true,
+  taxRefundArchiveRemark: true,
+  taxSubmittedAt: true,
+  customer: { select: { name: true, shortName: true } },
+  businessEntity: { select: { id: true, name: true, shortName: true } },
+});
+type TaxRefundLightListOrder = Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>;
+const taxRefundDocumentLightSelect = Prisma.validator<Prisma.OrderDocumentSelect>()({
+  id: true,
+  orderId: true,
+  costId: true,
+  supplierId: true,
+  factoryDocumentRequestId: true,
+  relatedModule: true,
+  documentType: true,
+  fileName: true,
+  originalName: true,
+  originalFilename: true,
+  standardFilename: true,
+  fileSize: true,
+  mimeType: true,
+  uploadStatus: true,
+  uploadProgress: true,
+  uploadedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  uploadedBy: { select: { id: true, name: true } },
+  supplier: { select: { id: true, supplierName: true, supplierType: true } },
+  cost: { select: { id: true, supplierNameSnapshot: true, costType: true, supplier: { select: { id: true, supplierName: true, supplierType: true } } } },
+});
+const taxRefundCostLightSelect = Prisma.validator<Prisma.OrderCostSelect>()({
+  id: true,
+  orderId: true,
+  supplierId: true,
+  supplierNameSnapshot: true,
+  costType: true,
+  vendorName: true,
+  currency: true,
+  exchangeRate: true,
+  exchangeRateDate: true,
+  exchangeRateSource: true,
+  exchangeRateType: true,
+  amount: true,
+  amountCny: true,
+  paymentStatus: true,
+  costConfirmed: true,
+  costConfirmedAt: true,
+  paymentDate: true,
+  paid: true,
+  paidAt: true,
+  invoiceStatus: true,
+  sourceType: true,
+  sourceId: true,
+  remark: true,
+  createdAt: true,
+  updatedAt: true,
+  supplier: { select: { id: true, supplierName: true, supplierType: true } },
+  documents: {
+    where: { deletedAt: null },
+    select: taxRefundDocumentLightSelect,
+    orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    take: 50,
+  },
+});
+type TaxRefundDocumentLight = Prisma.OrderDocumentGetPayload<{ select: typeof taxRefundDocumentLightSelect }>;
+type TaxRefundCostLight = Prisma.OrderCostGetPayload<{ select: typeof taxRefundCostLightSelect }>;
 type TaxRefundPackageDocument = Prisma.OrderDocumentGetPayload<{
   include: { uploadedBy: true; cost: { include: { supplier: true } }; supplier: true };
 }>;
@@ -90,15 +163,7 @@ type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
 type TaxRefundOrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 type TaxRefundDomesticLogisticsInfo = Prisma.DomesticLogisticsInfoGetPayload<{ select: ReturnType<typeof domesticLogisticsInfoSafeSelect> }>;
 type TaxRefundDomesticTransportItem = TaxRefundDomesticLogisticsInfo["transportItems"][number];
-
-function taxRefundBillOfLadingNumbers(order: TaxRefundListOrder) {
-  const logisticsBillNos = (order.logisticsBills || [])
-    .map((bill) => nonEmpty(bill.billOfLadingNo))
-    .filter(Boolean);
-  const fallbackOrderBlNo = nonEmpty(order.blNo);
-  const values = logisticsBillNos.length ? logisticsBillNos : [fallbackOrderBlNo];
-  return values.filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
-}
+const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
 
 function taxRefundDetailBillOfLadingNumbers(order: Pick<TaxRefundOrderWithRelations, "blNo"> & { logisticsBills?: Array<{ billOfLadingNo?: string | null }> }) {
   return [
@@ -223,45 +288,155 @@ async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelat
   };
 }
 
-export function serializeTaxRefundListOrder(order: TaxRefundListOrder) {
+function taxRefundCompletenessSummaryText(completeness: ReturnType<typeof cachedTaxRefundCompleteness>, fallback = "") {
+  if (fallback) return fallback;
+  const labels = Array.isArray(completeness.missingLabels)
+    ? completeness.missingLabels.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (labels.length) return labels.slice(0, 30).join(" / ");
+  return String(completeness.text || "");
+}
+
+function taxRefundOverallCompletenessPercent(order: {
+  taxRefundOverallCompleteness?: number | null;
+  taxRefundCompleteness?: unknown;
+}) {
+  if (order.taxRefundOverallCompleteness != null) {
+    const value = Number(order.taxRefundOverallCompleteness);
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0;
+  }
   const completeness = cachedTaxRefundCompleteness(order);
-  const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
-  const arrivedPaymentsCny = (order.payments || [])
-    .filter((payment) => payment.status === "已到账" && !payment.deletedAt)
-    .reduce((sum, payment) => sum + Number(payment.amountCny || 0), 0);
+  const total = Number(completeness.total || 0);
+  if (total <= 0) return 0;
+  return Math.round((Number(completeness.completed || 0) / total) * 100);
+}
+
+export function serializeTaxRefundListOrderLight(order: TaxRefundLightListOrder) {
+  const completeness = cachedTaxRefundCompleteness(order);
+  const overallCompleteness = taxRefundOverallCompletenessPercent(order);
+  const refundStatus = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
-  const billOfLadingNumbers = taxRefundBillOfLadingNumbers(order);
-  const billOfLadingNo = billOfLadingNumbers.join(" / ");
+  const businessEntityFields = businessEntityFieldsFromOrder(order);
+  const completenessIssuesSummary = taxRefundCompletenessSummaryText(completeness, order.taxRefundCompletenessIssuesSummary || "");
   return {
     id: order.id,
     orderNo: order.orderNo,
-    blNo: billOfLadingNo || order.blNo || "",
-    billOfLadingNo,
-    billOfLadingNumbers,
+    billOfLadingNo: order.blNo || "",
+    blNo: order.blNo || "",
+    customerShortName: shortCustomerName || fullCustomerName,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
-    customerShortName: shortCustomerName,
-    ...businessEntityFieldsFromOrder(order),
-    currency: order.currency,
-    finalReceivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
-    finalReceivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
-    receivedAmountCny: arrivedPaymentsCny,
-    taxRefundStatus: status,
-    taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[status] || status,
-    taxArchived: Boolean(order.taxArchived || status === "SUBMITTED" || order.taxRefundArchivedAt),
-    taxRefundArchivedByName: order.taxRefundArchivedBy?.name || "",
+    businessEntityId: order.businessEntityId || "",
+    businessEntityName: businessEntityFields.businessEntityDisplayName || businessEntityFields.businessEntityName || "",
+    businessEntityShortName: businessEntityFields.businessEntityShortName || "",
+    businessEntityDisplayName: businessEntityFields.businessEntityDisplayName || "",
+    declarationDate: dateToInput(order.customsDeclarationDate),
+    customsDeclarationDate: dateToInput(order.customsDeclarationDate),
+    overallCompleteness,
+    completenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
+    completenessIssuesSummary,
+    refundStatus,
+    taxRefundStatus: refundStatus,
+    taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[refundStatus] || refundStatus,
+    taxArchived: Boolean(order.taxArchived || refundStatus === "SUBMITTED" || order.taxRefundArchivedAt),
     taxRefundArchivedAt: order.taxRefundArchivedAt || null,
     taxRefundArchiveRemark: order.taxRefundArchiveRemark || "",
-    taxSubmittedByName: order.taxSubmittedBy?.name || order.taxRefundArchivedBy?.name || "",
     taxSubmittedAt: order.taxSubmittedAt || order.taxRefundArchivedAt || null,
-    ...serializeCustomsRecognition(order),
-    documentCompleteness: completeness,
-    taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
   };
 }
 
-export type TaxRefundListOrderDto = ReturnType<typeof serializeTaxRefundListOrder>;
+export type TaxRefundLightListOrderDto = ReturnType<typeof serializeTaxRefundListOrderLight>;
+
+function serializeTaxRefundLightDocument(document: TaxRefundDocumentLight, order: Record<string, unknown> = {}) {
+  const serialized = serializeOrderDocument(document, order);
+  return {
+    id: serialized.id,
+    fileId: serialized.id,
+    orderId: serialized.orderId,
+    costId: serialized.costId,
+    supplierId: serialized.supplierId,
+    relatedModule: serialized.relatedModule,
+    documentType: serialized.documentType,
+    documentTypeLabel: serialized.documentTypeLabel,
+    supplierName: serialized.supplierName,
+    costType: serialized.costType,
+    fileName: serialized.fileName,
+    uploadedBy: serialized.uploadedByName,
+    uploadedByName: serialized.uploadedByName,
+    uploadedAt: serialized.uploadedAt,
+    recognitionStatus: serialized.uploadStatusLabel,
+    uploadStatus: serialized.uploadStatus,
+    uploadStatusLabel: serialized.uploadStatusLabel,
+    previewUrl: `/api/order-documents/${encodeURIComponent(String(serialized.id || ""))}/preview`,
+    downloadUrl: `/api/order-documents/${encodeURIComponent(String(serialized.id || ""))}/download`,
+  };
+}
+
+function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<string, unknown> = {}) {
+  return {
+    id: cost.id,
+    supplierId: cost.supplierId || "",
+    supplierName: cost.supplierNameSnapshot || cost.supplier?.supplierName || "",
+    supplierNameSnapshot: cost.supplierNameSnapshot || "",
+    vendorName: cost.vendorName || "",
+    supplierType: cost.supplier?.supplierType || "",
+    costType: cost.costType,
+    amount: Number(cost.amount || 0),
+    amountCny: Number(cost.amountCny || 0),
+    currency: cost.currency,
+    invoiceStatus: cost.invoiceStatus,
+    sourceType: cost.sourceType,
+    sourceId: cost.sourceId || "",
+    documents: (cost.documents || []).map((document) => serializeTaxRefundLightDocument(document, {
+      ...order,
+      id: cost.orderId,
+      orderNo: String(order.orderNo || ""),
+      blNo: String(order.blNo || ""),
+      documents: cost.documents || [],
+    })),
+  };
+}
+
+function serializeTaxRefundCalculationRow(row: Record<string, unknown> = {}) {
+  const invoiceMatchJson = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
+    ? row.invoiceMatchJson as Record<string, unknown>
+    : {};
+  return {
+    id: String(row.id || ""),
+    declarationItemId: String(row.declarationItemId || ""),
+    declarationNo: String(row.declarationNo || ""),
+    hsCode: String(row.hsCode || ""),
+    productName: String(row.productName || ""),
+    declarationDate: row.declarationDate || null,
+    fobCurrency: String(row.fobCurrency || ""),
+    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
+    exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
+    declarationAmountCny: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
+    customsRmbAmount: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
+    rebateRate: row.rebateRate == null ? null : Number(row.rebateRate),
+    vatRate: row.vatRate == null ? null : Number(row.vatRate),
+    theoreticalRefundAmount: row.theoreticalRefundAmount == null ? null : Number(row.theoreticalRefundAmount),
+    supplierInvoiceAmountWithoutTax: row.supplierInvoiceAmountWithoutTax == null ? null : Number(row.supplierInvoiceAmountWithoutTax),
+    availableInputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
+    inputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
+    estimatedRefundAmount: row.estimatedRefundAmount == null ? null : Number(row.estimatedRefundAmount),
+    invoiceMatchStatus: String(row.invoiceMatchStatus || ""),
+    calculationStatus: String(row.calculationStatus || ""),
+    abnormalReasons: Array.isArray(row.abnormalReasons) ? row.abnormalReasons : [],
+    invoiceMatch: invoiceMatchJson,
+  };
+}
+
+function exportTaxRefundSummaryFromRows(rows: ReturnType<typeof serializeTaxRefundCalculationRow>[]) {
+  return {
+    estimatedRefundAmount: rows.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0),
+    calculationStatus: rows.some((row) => row.calculationStatus === "资料异常") ? "资料异常" : rows.length ? "退税金额已计算" : "",
+    abnormalReasons: rows
+      .flatMap((row) => row.abnormalReasons.map((reason) => String(reason || "")))
+      .filter((reason, index, arr) => reason && arr.indexOf(reason) === index),
+  };
+}
 
 function taxRefundCompletenessPercent(order: TaxRefundCompletenessOrder = {}) {
   const completeness = cachedTaxRefundCompleteness(order);
@@ -372,7 +547,7 @@ function taxRefundListWhere(filters: TaxRefundListFilters, actor: ActorLike): Pr
 }
 
 type TaxRefundListResult = {
-  orders: TaxRefundListOrderDto[];
+  orders: TaxRefundLightListOrderDto[];
   pagination: {
     page: number;
     pageSize: number;
@@ -383,64 +558,35 @@ type TaxRefundListResult = {
   mode: TaxRefundListMode;
 };
 
-const TAX_REFUND_LIST_SCAN_BUFFER = 80;
-const TAX_REFUND_LIST_SCAN_LIMIT = 600;
-
 export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): Promise<TaxRefundListResult> {
   assertRead(actor, "taxRefund");
   const filters = taxRefundListFiltersFromQuery(query);
   const where = taxRefundListWhere(filters, actor);
-  const scanTake = Math.min(
-    TAX_REFUND_LIST_SCAN_LIMIT,
-    Math.max(filters.page * filters.pageSize + TAX_REFUND_LIST_SCAN_BUFFER, filters.pageSize),
-  );
+  const skip = (filters.page - 1) * filters.pageSize;
+  const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = filters.businessEntitySortDirection
+    ? [
+      { businessEntity: { name: filters.businessEntitySortDirection } },
+      { taxRefundOverallCompleteness: "asc" },
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ]
+    : [
+      { taxRefundOverallCompleteness: "asc" },
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ];
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
       where,
-      include: {
-        customer: true,
-        businessEntity: true,
-        taxRefundArchivedBy: true,
-        taxSubmittedBy: true,
-        logisticsBills: {
-          where: { deletedAt: null },
-          select: { billOfLadingNo: true, createdAt: true },
-          orderBy: [{ createdAt: "asc" }],
-        },
-        payments: {
-          where: { deletedAt: null, status: "已到账" },
-          select: { amountCny: true, status: true, deletedAt: true },
-        },
-      },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: scanTake,
+      select: taxRefundLightListSelect,
+      orderBy,
+      skip,
+      take: filters.pageSize,
     }),
   ]);
-  const staleCompletenessOrderIds = rows
-    .filter(needsTaxRefundCompletenessRefresh)
-    .map((order) => order.id)
-    .slice(0, filters.pageSize);
-  if (staleCompletenessOrderIds.length) {
-    scheduleTaxRefundCompletenessRefreshBatch(staleCompletenessOrderIds, "退税列表完整度后台刷新");
-  }
-  const hydratedRows = rows.sort(sortTaxRefundOrders);
-  if (filters.businessEntitySortDirection) {
-    const direction = filters.businessEntitySortDirection === "desc" ? -1 : 1;
-    hydratedRows.sort((a, b) => {
-      const aFields = businessEntityFieldsFromOrder(a);
-      const bFields = businessEntityFieldsFromOrder(b);
-      const entityDiff = (aFields.businessEntityDisplayName || aFields.businessEntityName || "").localeCompare(
-        bFields.businessEntityDisplayName || bFields.businessEntityName || "",
-        "zh-Hans-CN",
-      );
-      if (entityDiff) return entityDiff * direction;
-      return sortTaxRefundOrders(a, b);
-    });
-  }
-  const pagedRows = hydratedRows.slice((filters.page - 1) * filters.pageSize, filters.page * filters.pageSize);
   return {
-    orders: pagedRows.map(serializeTaxRefundListOrder),
+    orders: rows.map(serializeTaxRefundListOrderLight),
     pagination: {
       page: filters.page,
       pageSize: filters.pageSize,
@@ -468,6 +614,290 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
     taxRefundCompletenessUpdatedAt: completeness ? new Date() : order.taxRefundCompletenessUpdatedAt,
     taxRefundStatus: status,
   }, actor);
+}
+
+async function getTaxRefundBaseOrder(orderId: string, actor: ActorLike) {
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    select: {
+      ...taxRefundLightListSelect,
+      customsDeclarationNo: true,
+      customsDeclarationDate: true,
+      customsParseStatus: true,
+      customsParseMessage: true,
+      customsDeclarationParseSource: true,
+      taxRefundArchivedBy: { select: { id: true, name: true } },
+      taxSubmittedBy: { select: { id: true, name: true } },
+    },
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+  return order;
+}
+
+function serializeTaxRefundBasicOrder(order: Awaited<ReturnType<typeof getTaxRefundBaseOrder>>) {
+  const light = serializeTaxRefundListOrderLight(order);
+  return {
+    ...light,
+    taxRefundArchivedByName: order.taxRefundArchivedBy?.name || "",
+    taxSubmittedByName: order.taxSubmittedBy?.name || order.taxRefundArchivedBy?.name || "",
+    ...serializeCustomsRecognition(order),
+    documentCompleteness: cachedTaxRefundCompleteness(order),
+    taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
+  };
+}
+
+async function getTaxRefundBasicSection(orderId: string, actor: ActorLike) {
+  return serializeTaxRefundBasicOrder(await getTaxRefundBaseOrder(orderId, actor));
+}
+
+async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike) {
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    select: {
+      id: true,
+      orderNo: true,
+      blNo: true,
+      currency: true,
+      customsDeclarationNo: true,
+      customsDeclarationDate: true,
+      customerNameSnapshot: true,
+      taxRefundStatus: true,
+      taxRefundCompleteness: true,
+      taxRefundOverallCompleteness: true,
+      customer: { select: { name: true, shortName: true } },
+      customsDeclarationItems: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          documentId: true,
+          declarationNo: true,
+          declarationDate: true,
+          exportDate: true,
+          hsCode: true,
+          productName: true,
+          quantity: true,
+          unit: true,
+          tradeTerm: true,
+          currency: true,
+          fobAmount: true,
+          exchangeRate: true,
+          fobAmountCny: true,
+          confirmationStatus: true,
+          source: true,
+          sortOrder: true,
+        },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        take: 200,
+      },
+      exportTaxRefundCalculations: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          declarationItemId: true,
+          declarationNo: true,
+          hsCode: true,
+          productName: true,
+          declarationDate: true,
+          fobCurrency: true,
+          fobAmount: true,
+          exchangeRate: true,
+          declarationAmountCny: true,
+          rebateRate: true,
+          vatRate: true,
+          theoreticalRefundAmount: true,
+          supplierInvoiceAmountWithoutTax: true,
+          availableInputVatAmount: true,
+          estimatedRefundAmount: true,
+          invoiceMatchStatus: true,
+          calculationStatus: true,
+          abnormalReasons: true,
+          invoiceMatchJson: true,
+        },
+        orderBy: [{ createdAt: "asc" }],
+        take: 200,
+      },
+    },
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+  const calculations = (order.exportTaxRefundCalculations || []).map((row) => serializeTaxRefundCalculationRow(row as Record<string, unknown>));
+  const role = String(actor?.role || "");
+  const canReadAmount = role === "管理员" || role === "财务";
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    blNo: order.blNo || "",
+    billOfLadingNo: order.blNo || "",
+    currency: order.currency,
+    customerName: customerShortName(order.customer) || customerFullName(order.customer, order.customerNameSnapshot),
+    customsDeclarationNo: order.customsDeclarationNo || "",
+    customsDeclarationDate: dateToInput(order.customsDeclarationDate),
+    declarationDate: dateToInput(order.customsDeclarationDate),
+    taxRefundStatus: taxRefundStatusFromCompleteness(order.taxRefundStatus, cachedTaxRefundCompleteness(order)),
+    customsDeclarationItems: (order.customsDeclarationItems || []).map((item) => ({
+      id: item.id,
+      documentId: item.documentId || "",
+      declarationNo: item.declarationNo || "",
+      declarationDate: dateToInput(item.declarationDate),
+      exportDate: dateToInput(item.exportDate),
+      hsCode: item.hsCode || "",
+      productName: item.productName || "",
+      quantity: item.quantity == null ? null : Number(item.quantity),
+      unit: item.unit || "",
+      tradeTerm: item.tradeTerm || "",
+      currency: item.currency || "",
+      fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
+      exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
+      fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
+      confirmationStatus: item.confirmationStatus,
+      source: item.source,
+      sortOrder: item.sortOrder,
+    })),
+    exportTaxRefundCalculations: canReadAmount ? calculations : [],
+    exportTaxRefundSummary: canReadAmount ? exportTaxRefundSummaryFromRows(calculations) : {
+      estimatedRefundAmount: null,
+      calculationStatus: "",
+      abnormalReasons: [],
+    },
+  };
+}
+
+async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, documentTypes: string[]) {
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    select: {
+      id: true,
+      orderNo: true,
+      blNo: true,
+      customerNameSnapshot: true,
+      customer: { select: { name: true, shortName: true } },
+      documents: {
+        where: {
+          deletedAt: null,
+          documentType: { in: documentTypes as OrderDocumentType[] },
+        },
+        select: taxRefundDocumentLightSelect,
+        orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+        take: 80,
+      },
+    },
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    blNo: order.blNo || "",
+    billOfLadingNo: order.blNo || "",
+    customerName: customerShortName(order.customer) || customerFullName(order.customer, order.customerNameSnapshot),
+    documents: (order.documents || []).map((document) => serializeTaxRefundLightDocument(document, order as Record<string, unknown>)),
+  };
+}
+
+async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
+  const [basic, documents] = await Promise.all([
+    getTaxRefundBasicSection(orderId, actor),
+    getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
+  ]);
+  return {
+    ...documents,
+    customsDeclarationNo: basic.customsDeclarationNo || "",
+    customsDeclarationDate: basic.customsDeclarationDate || null,
+    declarationDate: basic.declarationDate || null,
+    customsParseStatusLabel: basic.customsParseStatusLabel || "",
+    customsParseSourceLabel: basic.customsParseSourceLabel || "",
+    customsParseMessage: basic.customsParseMessage || "",
+  };
+}
+
+async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike, type: "factory" | "logistics") {
+  const costTypes = type === "factory" ? FACTORY_SUPPLIER_COST_TYPES : TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES;
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    select: {
+      id: true,
+      orderNo: true,
+      blNo: true,
+      taxRefundCompleteness: true,
+      taxRefundCompletenessUpdatedAt: true,
+      costs: {
+        where: { deletedAt: null, costType: { in: costTypes } },
+        select: taxRefundCostLightSelect,
+        orderBy: [{ createdAt: "desc" }],
+        take: 80,
+      },
+    },
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+  const costs = (order.costs || []).map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
+  const documents = costs.flatMap((cost) => cost.documents || []);
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    blNo: order.blNo || "",
+    billOfLadingNo: order.blNo || "",
+    documentCompleteness: cachedTaxRefundCompleteness(order),
+    taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
+    costs,
+    documents,
+  };
+}
+
+async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: ActorLike) {
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    select: {
+      id: true,
+      orderNo: true,
+      blNo: true,
+      taxRefundCompleteness: true,
+      taxRefundCompletenessUpdatedAt: true,
+      domesticLogisticsInfos: {
+        where: { deletedAt: null },
+        select: domesticLogisticsInfoSafeSelect(),
+        orderBy: [{ updatedAt: "desc" }],
+        take: 5,
+      },
+      costs: {
+        where: { deletedAt: null, costType: { in: TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES } },
+        select: taxRefundCostLightSelect,
+        orderBy: [{ createdAt: "desc" }],
+        take: 80,
+      },
+    },
+  });
+  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
+  const costs = (order.costs || []).map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
+  const documents = costs.flatMap((cost) => cost.documents || []);
+  const domesticLogisticsInfo = combineTaxRefundDomesticLogisticsInfos(order.domesticLogisticsInfos || [])[0] || null;
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    blNo: order.blNo || "",
+    billOfLadingNo: order.blNo || "",
+    documentCompleteness: cachedTaxRefundCompleteness(order),
+    taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
+    domesticLogisticsInfo: domesticLogisticsInfo ? serializeOrder({ id: order.id, domesticLogisticsInfos: [domesticLogisticsInfo] }).domesticLogisticsInfo : null,
+    costs,
+    documents,
+  };
+}
+
+export type TaxRefundDetailSection =
+  | "basic"
+  | "calculation"
+  | "export-documents"
+  | "customs-documents"
+  | "factory-documents"
+  | "logistics-documents";
+
+export async function getTaxRefundOrderDetailSection(orderId: string, actor: ActorLike, section: TaxRefundDetailSection) {
+  assertRead(actor, "taxRefund");
+  if (section === "basic") return getTaxRefundBasicSection(orderId, actor);
+  if (section === "calculation") return getTaxRefundCalculationSection(orderId, actor);
+  if (section === "export-documents") return getTaxRefundDocumentSection(orderId, actor, TAX_EXPORT_DOCUMENT_TYPES);
+  if (section === "customs-documents") return getTaxRefundCustomsDocumentsSection(orderId, actor);
+  if (section === "factory-documents") return getTaxRefundCostDocumentSection(orderId, actor, "factory");
+  if (section === "logistics-documents") return getTaxRefundLogisticsDocumentsSection(orderId, actor);
+  throw codedError("未知退税资料详情分段", 400, "INVALID_TAX_REFUND_DETAIL_SECTION");
 }
 
 export async function refreshTaxRefundCompletenessNow(request: AuditRequestLike, actor: ActorLike, orderId: string) {

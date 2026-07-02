@@ -1,10 +1,29 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteSupplierDocumentRequest } from "../../../../lib/platform-db";
+import { apiError, deleteSupplierDocumentRequest, parseJsonBody, resendSupplierDocumentRequestNotice } from "../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const actor = await requireApiActor(request);
+    const { id } = await params;
+    const body = await parseJsonBody(request).catch(() => ({})) as { action?: string };
+    if (body.action !== "resendNotice") {
+      return NextResponse.json({ success: false, message: "不支持的资料回传操作" }, { status: 400 });
+    }
+    const requestRow = await resendSupplierDocumentRequestNotice(request, actor, id);
+    return NextResponse.json({
+      success: true,
+      request: requestRow,
+      message: requestRow.sendStatus === "sent" ? "催办邮件已重新发送" : "催办邮件发送失败，请检查邮箱配置",
+    });
+  } catch (error: unknown) {
+    return apiError(error, "重新发送资料回传催办失败");
+  }
+}
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

@@ -30,12 +30,39 @@ function safeCompletenessJson(value: unknown) {
   }
 }
 
+function taxRefundOverallCompletenessValue(completeness: TaxRefundCompletenessResult | null | undefined) {
+  const total = Number((completeness as Record<string, unknown> | null | undefined)?.total || 0);
+  const completed = Number((completeness as Record<string, unknown> | null | undefined)?.completed || 0);
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((completed / total) * 100)));
+}
+
+function taxRefundCompletenessIssuesSummary(completeness: TaxRefundCompletenessResult | null | undefined) {
+  const record = (completeness && typeof completeness === "object" && !Array.isArray(completeness))
+    ? completeness as Record<string, unknown>
+    : {};
+  const labels = Array.isArray(record.missingLabels)
+    ? record.missingLabels.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (labels.length) return labels.slice(0, 30).join(" / ");
+  const text = String(record.text || "").trim();
+  return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+}
+
 async function computeAndPersistTaxRefundCompleteness(order: TaxRefundCompletenessOrder) {
   const completeness = JSON.parse(JSON.stringify(taxDocumentCompleteness(order))) as TaxRefundCompletenessResult;
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
   const completenessChanged = safeCompletenessJson(order.taxRefundCompleteness) !== safeCompletenessJson(completeness);
   const statusChanged = status !== order.taxRefundStatus;
-  if (!completenessChanged && !statusChanged && order.taxRefundCompletenessUpdatedAt) {
+  const overallCompleteness = taxRefundOverallCompletenessValue(completeness);
+  const issuesSummary = taxRefundCompletenessIssuesSummary(completeness);
+  if (
+    !completenessChanged
+    && !statusChanged
+    && order.taxRefundCompletenessUpdatedAt
+    && order.taxRefundOverallCompleteness === overallCompleteness
+    && String(order.taxRefundCompletenessIssuesSummary || "") === issuesSummary
+  ) {
     return completeness;
   }
   await prisma.receivableOrder.update({
@@ -43,6 +70,8 @@ async function computeAndPersistTaxRefundCompleteness(order: TaxRefundCompletene
     data: {
       taxRefundCompleteness: completeness as Prisma.InputJsonValue,
       taxRefundCompletenessUpdatedAt: new Date(),
+      taxRefundOverallCompleteness: overallCompleteness,
+      taxRefundCompletenessIssuesSummary: issuesSummary,
       ...(statusChanged ? { taxRefundStatus: status } : {}),
     },
   });

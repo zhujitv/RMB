@@ -30,10 +30,19 @@ export function TaxRefundTableRow({
   const completeness = row.documentCompleteness || {};
   const completed = Number(completeness.completed || 0);
   const total = Number(completeness.total || 0);
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const cachedPercent = row.overallCompleteness == null ? null : Number(row.overallCompleteness);
+  const percent = cachedPercent != null && Number.isFinite(cachedPercent)
+    ? Math.max(0, Math.min(100, Math.round(cachedPercent)))
+    : total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
   const currentStatus = taxRowStatus(row);
-  const missingGroups = taxCompletenessTooltipGroups(completeness, percent);
+  const summaryItems = String(row.completenessIssuesSummary || "")
+    .split("/")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const missingGroups = summaryItems.length && percent < 100
+    ? [{ category: "异常摘要", items: summaryItems }]
+    : taxCompletenessTooltipGroups(completeness, percent);
   const billOfLadingNumbers = taxRefundBillOfLadingNumbers(row);
   const billOfLadingTitle = billOfLadingNumbers.join(" / ");
   const businessEntityFullName = row.businessEntityName || row.businessEntityNameSnapshot || "";
