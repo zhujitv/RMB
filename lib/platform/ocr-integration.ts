@@ -38,6 +38,7 @@ type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
 export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "supplierDocumentReturn";
 export type SupplierOcrDocumentType = "SUPPLIER_PURCHASE_CONTRACT" | "SUPPLIER_INVOICE";
+export type CustomsDeclarationRecognitionMode = "AUTO" | "STRICT" | "MANUAL";
 
 type OcrIntegrationInput = {
   enabled?: unknown;
@@ -46,6 +47,7 @@ type OcrIntegrationInput = {
   accessKeyId?: unknown;
   accessKeySecret?: unknown;
   appCode?: unknown;
+  customsDeclarationMode?: unknown;
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
   supplierDocumentReturnEnabled?: unknown;
@@ -153,6 +155,12 @@ function cleanProvider(value: unknown) {
     throw codedError("当前仅支持阿里云 OCR 服务。", 400, "OCR_PROVIDER_UNSUPPORTED");
   }
   return "ALIYUN";
+}
+
+function cleanCustomsDeclarationMode(value: unknown, input: OcrIntegrationInput = {}): CustomsDeclarationRecognitionMode {
+  const mode = nonEmpty(value).toUpperCase();
+  if (mode === "AUTO" || mode === "STRICT" || mode === "MANUAL") return mode;
+  return input.customsDeclarationEnabled === false ? "MANUAL" : "AUTO";
 }
 
 function cleanOptionalUrl(value: unknown, fallback: string) {
@@ -775,6 +783,7 @@ async function recognizeAliyunCustomsDeclaration(
 
 export function normalizeOcrIntegrationSettings(value: unknown = {}) {
   const input: OcrIntegrationInput = isPlainRecord(value) ? value : {};
+  const customsDeclarationMode = cleanCustomsDeclarationMode(input.customsDeclarationMode, input);
   return {
     enabled: input.enabled === true,
     provider: cleanProvider(input.provider),
@@ -782,7 +791,8 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     accessKeyId: cleanSecret(input.accessKeyId),
     accessKeySecret: cleanSecret(input.accessKeySecret),
     appCode: cleanSecret(input.appCode),
-    customsDeclarationEnabled: input.customsDeclarationEnabled !== false,
+    customsDeclarationMode,
+    customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
     supplierDocumentReturnEnabled: input.supplierDocumentReturnEnabled === true,
     fallbackToPdfText: input.fallbackToPdfText !== false,
@@ -810,6 +820,7 @@ export function serializeOcrFeatureFlags(setting: unknown) {
   return {
     enabled,
     provider: normalized.provider,
+    customsDeclarationMode: normalized.customsDeclarationMode,
     customsDeclarationEnabled: enabled && normalized.customsDeclarationEnabled,
     invoiceTextEnabled: enabled && normalized.invoiceTextEnabled,
     supplierDocumentReturnEnabled: enabled && normalized.supplierDocumentReturnEnabled,
@@ -822,7 +833,7 @@ function ocrFeatureEnabled(settings: ReturnType<typeof normalizeOcrIntegrationSe
   if (!settings.enabled) return false;
   const credentialsConfigured = Boolean(settings.appCode || (settings.accessKeyId && settings.accessKeySecret));
   if (!credentialsConfigured) return false;
-  if (feature === "customsDeclaration") return settings.customsDeclarationEnabled;
+  if (feature === "customsDeclaration") return settings.customsDeclarationMode !== "MANUAL" && settings.customsDeclarationEnabled;
   if (feature === "invoiceText") return settings.invoiceTextEnabled;
   if (feature === "supplierDocumentReturn") return settings.supplierDocumentReturnEnabled;
   return false;
@@ -865,6 +876,9 @@ export async function saveOcrIntegrationSettings(request: AuditRequestLike, acto
   if (value.enabled && !value.appCode && !(value.accessKeyId && value.accessKeySecret)) {
     throw codedError("启用 OCR 前请先填写 AppCode，或同时填写 AccessKey ID 和 AccessKey Secret。", 400, "OCR_CREDENTIAL_REQUIRED");
   }
+  if (value.enabled && value.customsDeclarationMode === "STRICT" && !(value.accessKeyId && value.accessKeySecret)) {
+    throw codedError("报关单严格结构化模式需要配置 AccessKey ID 和 AccessKey Secret。", 400, "OCR_ACCESS_KEY_REQUIRED");
+  }
   const setting = await prisma.systemSetting.upsert({
     where: { key: OCR_INTEGRATION_SETTING_KEY },
     update: { value },
@@ -901,6 +915,7 @@ export async function recognizePdfTextWithOcr(
       console.error("aliyun-customs-ocr-structured-failed", {
         message: error instanceof Error ? error.message : String(error),
       });
+      if (settings.customsDeclarationMode === "STRICT") throw error;
       return recognizeWithPdfTextFallback(fileBuffer, feature, settings, {
         ...options,
         source: "ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT",

@@ -575,6 +575,7 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   accessKeyId: "",
   accessKeySecret: "",
   appCode: "",
+  customsDeclarationMode: "AUTO",
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
   supplierDocumentReturnEnabled: false,

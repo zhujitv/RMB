@@ -16,7 +16,10 @@ const settingsModule = readSettingsModuleSource();
 test("OCR integration settings are modular and stored in system settings", () => {
   assert.match(constants, /OCR_INTEGRATION_SETTING_KEY = "ocr_integration"/);
   assert.match(constants, /DEFAULT_OCR_INTEGRATION_SETTINGS/);
+  assert.match(constants, /customsDeclarationMode: "AUTO"/);
   assert.match(constants, /supplierDocumentReturnEnabled: false/);
+  assert.match(service, /export type CustomsDeclarationRecognitionMode = "AUTO" \| "STRICT" \| "MANUAL"/);
+  assert.match(service, /function cleanCustomsDeclarationMode/);
   assert.match(service, /prisma\.systemSetting\.findUnique\(\{ where: \{ key: OCR_INTEGRATION_SETTING_KEY \} \}\)/);
   assert.match(service, /prisma\.systemSetting\.upsert/);
   assert.match(service, /assertRead\(actor, "settings"\)/);
@@ -46,6 +49,10 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /OcrIntegrationSettingsCard/);
   assert.match(settingsModule, /title="OCR识别"/);
   assert.match(settingsModule, /SecretField/);
+  assert.match(settingsModule, /CUSTOMS_DECLARATION_MODE_OPTIONS/);
+  assert.match(settingsModule, /报关单识别模式/);
+  assert.match(settingsModule, /严格结构化模式/);
+  assert.match(settingsModule, /手工模式/);
   assert.match(settingsModule, /OCR_FEATURE_OPTIONS/);
   assert.match(settingsModule, /发票结构化识别/);
   assert.match(settingsModule, /产品供应商资料回传 OCR/);
@@ -347,6 +354,9 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(orderDocuments, /shouldAutoRecognizeCustoms/);
   assert.match(service, /ensureOcrFeatureEnabled/);
   assert.match(service, /OCR_FEATURE_DISABLED/);
+  assert.match(service, /settings\.customsDeclarationMode !== "MANUAL"/);
+  assert.match(service, /settings\.customsDeclarationMode === "STRICT"/);
+  assert.match(service, /报关单严格结构化模式需要配置 AccessKey ID 和 AccessKey Secret。/);
   assert.match(service, /@alicloud\/docmind-api20220711/);
   assert.match(service, /AyncTradeDocumentPackageExtractSmartAppRequest/);
   assert.match(service, /CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE = \["出口报关单", "进口报关单"\]/);

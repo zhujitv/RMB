@@ -289,6 +289,7 @@ export type OcrIntegrationForm = {
   accessKeySecretConfigured: boolean;
   appCode: string;
   appCodeConfigured: boolean;
+  customsDeclarationMode: "AUTO" | "STRICT" | "MANUAL";
   customsDeclarationEnabled: boolean;
   invoiceTextEnabled: boolean;
   supplierDocumentReturnEnabled: boolean;

@@ -10,6 +10,7 @@ import {
   EXCHANGE_RATE_SOURCES,
   EXCHANGE_RATE_TYPES,
   NOTIFICATION_RECIPIENT_EMAIL_OPTIONS,
+  CUSTOMS_DECLARATION_MODE_OPTIONS,
   OCR_FEATURE_OPTIONS,
   SHIPSGO_FEATURE_OPTIONS,
 } from "./constants";
@@ -835,6 +836,10 @@ export function OcrIntegrationSettingsCard({
   }
 
   function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
+    if (key === "fallbackToPdfText" && currentForm.customsDeclarationMode === "STRICT") {
+      setField("fallbackToPdfText", false);
+      return;
+    }
     setField(key, !currentForm[key]);
   }
 
@@ -916,6 +921,31 @@ export function OcrIntegrationSettingsCard({
       </SettingsCard>
 
       <SettingsCard title="识别能力" icon="能">
+        <SettingsSection title="报关单识别模式">
+          <div className={styles.settingsFieldGrid}>
+            <SettingsField label="报关单识别模式">
+              <select
+                value={currentForm.customsDeclarationMode}
+                onChange={(event) => {
+                  const mode = event.target.value as OcrIntegrationForm["customsDeclarationMode"];
+                  onChange({
+                    ...currentForm,
+                    customsDeclarationMode: mode,
+                    customsDeclarationEnabled: mode !== "MANUAL",
+                    fallbackToPdfText: mode === "STRICT" ? false : currentForm.fallbackToPdfText,
+                  });
+                }}
+              >
+                {CUSTOMS_DECLARATION_MODE_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </SettingsField>
+          </div>
+          <div className={styles.emptyState}>
+            {CUSTOMS_DECLARATION_MODE_OPTIONS.find((item) => item.value === currentForm.customsDeclarationMode)?.description}
+          </div>
+        </SettingsSection>
         <SettingsSection title="启用范围">
           <div className={styles.commissionDeductionGrid}>
             {OCR_FEATURE_OPTIONS.map((item) => (

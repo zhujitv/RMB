@@ -171,6 +171,7 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   accessKeySecretConfigured: false,
   appCode: "",
   appCodeConfigured: false,
+  customsDeclarationMode: "AUTO",
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
   supplierDocumentReturnEnabled: false,
@@ -183,12 +184,24 @@ export const DEFAULT_TAX_REFUND_FEATURE_FORM: TaxRefundFeatureForm = {
   calculationEnabled: true,
   addCompanyHsFromOcrEnabled: true,
 };
-export const OCR_FEATURE_OPTIONS = [
+export const CUSTOMS_DECLARATION_MODE_OPTIONS = [
   {
-    key: "customsDeclarationEnabled",
-    label: "报关单识别",
-    description: "用于退税资料、报关资料中的报关单号和申报日期识别。",
+    value: "AUTO",
+    label: "自动模式",
+    description: "结构化优先；失败后只识别基础字段，不保存商品明细。",
   },
+  {
+    value: "STRICT",
+    label: "严格结构化模式",
+    description: "只允许阿里云出口/进口报关单结构化识别，失败就报错。",
+  },
+  {
+    value: "MANUAL",
+    label: "手工模式",
+    description: "关闭报关单 OCR，人工维护报关信息和商品明细。",
+  },
+] as const;
+export const OCR_FEATURE_OPTIONS = [
   {
     key: "invoiceTextEnabled",
     label: "发票结构化识别",
@@ -201,13 +214,13 @@ export const OCR_FEATURE_OPTIONS = [
   },
   {
     key: "fallbackToPdfText",
-    label: "本地 PDF 文本兜底",
-    description: "阿里云结构化识别失败或未配置 AccessKey 时，允许继续使用系统现有 PDF 文本解析能力。",
+    label: "PDF 文本兜底",
+    description: "自动模式下仅可用于基础字段兜底，不允许生成报关商品明细。",
   },
 ] satisfies Array<{
   key: keyof Pick<
     OcrIntegrationForm,
-    "customsDeclarationEnabled" | "invoiceTextEnabled" | "supplierDocumentReturnEnabled" | "fallbackToPdfText"
+    "invoiceTextEnabled" | "supplierDocumentReturnEnabled" | "fallbackToPdfText"
   >;
   label: string;
   description: string;
