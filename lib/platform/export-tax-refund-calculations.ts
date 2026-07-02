@@ -1,7 +1,7 @@
 import { normalizeCustomsDeclarationItemForTaxRefund, parseCustomsDeclarationDetailText, type CustomsDeclarationItemFields } from "../customs-declaration-parser";
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
-import { readR2Object } from "../r2";
+import { readR2Object, signedObjectReadUrl } from "../r2";
 import { parseVatInvoiceFields } from "./supplier-document-ocr";
 import {
   FACTORY_SUPPLIER_COST_TYPES,
@@ -550,8 +550,13 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
   if (!document?.storageKey) throw codedError("未找到可识别的报关单 PDF。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
   const fileBuffer = await readR2Object(document.storageKey);
   if (!fileBuffer) throw codedError("未读取到报关单 PDF 文件。", 404, "CUSTOMS_DOCUMENT_FILE_EMPTY");
+  const sourceUrl = await signedObjectReadUrl(document.storageKey, 900).catch(() => "");
   const ocrStartedAt = Date.now();
-  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true }).catch(async (error) => {
+  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", {
+    requireText: true,
+    sourceUrl,
+    fileName: document.fileName || document.standardFilename || "customs-declaration.pdf",
+  }).catch(async (error) => {
     const failureMessage = error instanceof Error ? error.message : String(error);
     const failureCode = (error as { code?: unknown } | null)?.code;
     logOcrCallFailure({

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
-import { readR2Object } from "../r2";
+import { readR2Object, signedObjectReadUrl } from "../r2";
 import * as customsDeclarationParser from "../customs-declaration-parser";
 import {
   CUSTOMS_FILE_READ_FAILED_MESSAGE,
@@ -64,6 +64,8 @@ type CustomsDocumentLike = CustomsDocumentRuntimeFields & {
   id?: string;
   orderId?: string;
   documentType?: string;
+  fileName?: string | null;
+  standardFilename?: string | null;
   uploadStatus?: string | null;
 };
 type CustomsRecognitionDocument = CustomsDocumentLike & {
@@ -527,8 +529,19 @@ function mergeCustomsFields(parsedFields: CustomsFields = {}, before: CustomsOrd
   return { fields, preserved, conflictFields, currentFields };
 }
 
-async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocumentLike = {}, options: { requireText?: boolean } = {}): Promise<ParseCustomsDocumentResult> {
-  const recognized = await recognizePdfTextWithOcr(buffer, "customsDeclaration", options);
+async function customsDocumentSourceUrl(document: CustomsDocumentLike = {}) {
+  if (document.fileUrl && /^https?:\/\//i.test(String(document.fileUrl))) return String(document.fileUrl);
+  if (document.storageKey) return signedObjectReadUrl(document.storageKey, 900).catch(() => "");
+  return "";
+}
+
+async function parseCustomsDocumentBuffer(buffer: Buffer, document: CustomsDocumentLike = {}, options: { requireText?: boolean } = {}): Promise<ParseCustomsDocumentResult> {
+  const sourceUrl = await customsDocumentSourceUrl(document);
+  const recognized = await recognizePdfTextWithOcr(buffer, "customsDeclaration", {
+    ...options,
+    sourceUrl,
+    fileName: document.fileName || document.standardFilename || "customs-declaration.pdf",
+  });
   const parsed = recognized.parsedJson && typeof recognized.parsedJson === "object" && !Array.isArray(recognized.parsedJson)
     ? recognized.parsedJson as Record<string, unknown>
     : {};
@@ -550,9 +563,9 @@ async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocu
       source: recognized.source || "CUSTOMS_DECLARATION_OCR",
       provider: recognized.provider || "ALIYUN",
       apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
-      documentId: _document.id || "",
-      orderId: _document.orderId || "",
-      documentType: _document.documentType || "CUSTOMS_ENTRY_FORM",
+      documentId: document.id || "",
+      orderId: document.orderId || "",
+      documentType: document.documentType || "CUSTOMS_ENTRY_FORM",
       textLength: String(recognized.text || "").length,
       fallbackRawJson: true,
       note: "OCR适配器未返回原始JSON，系统保存识别文本摘要和解析字段用于排查。",

@@ -10,6 +10,7 @@ const customsParser = readFileSync("lib/customs-declaration-parser.ts", "utf8");
 const settingsRoute = readFileSync("app/api/settings/ocr/route.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
+const r2 = readFileSync("lib/r2.ts", "utf8");
 const settingsModule = readSettingsModuleSource();
 
 test("OCR integration settings are modular and stored in system settings", () => {
@@ -346,6 +347,11 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(orderDocuments, /shouldAutoRecognizeCustoms/);
   assert.match(service, /ensureOcrFeatureEnabled/);
   assert.match(service, /OCR_FEATURE_DISABLED/);
+  assert.match(service, /@alicloud\/docmind-api20220711/);
+  assert.match(service, /AyncTradeDocumentPackageExtractSmartAppRequest/);
+  assert.match(service, /CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE = \["出口报关单", "进口报关单"\]/);
+  assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind/);
+  assert.match(service, /ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
   assert.match(service, /RecognizeAllTextRequest/);
   assert.match(service, /RecognizeAllTextRequestTableConfig/);
@@ -354,4 +360,6 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /tableConfig: new RecognizeAllTextRequestTableConfig/);
   assert.match(service, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
+  assert.match(r2, /export async function signedObjectReadUrl/);
+  assert.match(customsRecognition, /signedObjectReadUrl\(document\.storageKey, 900\)/);
 });

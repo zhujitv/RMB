@@ -1,4 +1,7 @@
 import { Readable } from "node:stream";
+import DocMindClient, {
+  AyncTradeDocumentPackageExtractSmartAppRequest,
+} from "@alicloud/docmind-api20220711";
 import AliyunOcrClient, {
   RecognizeAllTextRequest,
   RecognizeAllTextRequestAdvancedConfig,
@@ -62,6 +65,12 @@ export type OcrRecognitionResult = {
   parser?: string;
 };
 
+type OcrRecognitionOptions = {
+  requireText?: boolean;
+  sourceUrl?: string;
+  fileName?: string;
+};
+
 const SUPPLIER_CONTRACT_KEYS = [
   "供应商",
   "采购方",
@@ -117,6 +126,8 @@ const CUSTOMS_ITEM_FIELD_ALIASES: Record<string, string[]> = {
   totalAmount: ["总价", "金额", "成交金额", "totalAmount"],
   currency: ["币制", "币种", "currency"],
 };
+
+const CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE = ["出口报关单", "进口报关单"];
 
 function cleanSecret(value: unknown, limit = 500) {
   return nonEmpty(value)
@@ -444,11 +455,30 @@ function createAliyunOcrClient(settings: ReturnType<typeof normalizeOcrIntegrati
   }));
 }
 
+function aliyunDocMindEndpoint() {
+  return (process.env.ALIYUN_DOCMIND_ENDPOINT || process.env.DOCMIND_API_ENDPOINT || "docmind-api.cn-hangzhou.aliyuncs.com")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+}
+
+function createAliyunDocMindClient(settings: ReturnType<typeof normalizeOcrIntegrationSettings>) {
+  if (!settings.accessKeyId || !settings.accessKeySecret) {
+    throw codedError("阿里云文档智能需要配置 AccessKey ID 和 AccessKey Secret。", 400, "OCR_ACCESS_KEY_REQUIRED");
+  }
+  return new DocMindClient(new $OpenApiUtil.Config({
+    accessKeyId: settings.accessKeyId,
+    accessKeySecret: settings.accessKeySecret,
+    endpoint: aliyunDocMindEndpoint(),
+    readTimeout: settings.timeoutMs,
+    connectTimeout: Math.min(settings.timeoutMs, 10000),
+  }));
+}
+
 async function recognizeWithPdfTextFallback(
   buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
   feature: OcrFeatureKey,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-  options: { requireText?: boolean; source?: string; error?: unknown } = {},
+  options: OcrRecognitionOptions & { source?: string; error?: unknown } = {},
 ): Promise<OcrRecognitionResult> {
   if (!settings.fallbackToPdfText) {
     if (options.error) throw options.error;
@@ -521,11 +551,73 @@ async function recognizeAliyunSupplierContract(
   };
 }
 
+function hasUsefulCustomsParsedData(parsed: unknown) {
+  if (!isPlainRecord(parsed)) return false;
+  return Boolean(
+    parsed.customsDeclarationNo
+    || parsed.customsDeclarationDate
+    || parsed.exportDate
+    || parsed.totalAmount
+    || (Array.isArray(parsed.items) && parsed.items.length > 0),
+  );
+}
+
+async function recognizeAliyunCustomsDeclarationWithDocMind(
+  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: OcrRecognitionOptions = {},
+): Promise<OcrRecognitionResult> {
+  const fileUrl = nonEmpty(options.sourceUrl);
+  if (!fileUrl) {
+    throw codedError("文档智能报关单识别需要可下载的文件 URL。", 400, "ALIYUN_DOCMIND_FILE_URL_REQUIRED");
+  }
+  const client = createAliyunDocMindClient(settings);
+  const response = await client.ayncTradeDocumentPackageExtractSmartApp(new AyncTradeDocumentPackageExtractSmartAppRequest({
+    fileUrl,
+    fileName: nonEmpty(options.fileName) || "customs-declaration.pdf",
+    customExtractionRange: CUSTOMS_TRADE_DOCUMENT_EXTRACTION_RANGE,
+  }));
+  const rawJson = toPlainJson(response);
+  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
+  const data = parseJsonMaybe(responseField(responseBody, "data"));
+  const text = collectText(data).join("\n");
+  const structuredFields = collectFieldsFromObject(data, CUSTOMS_FIELD_ALIASES);
+  let items = extractCustomsItemsFromAliyunTableData(data, {
+    tradeTerm: normalizeFieldValue(structuredFields.tradeTerm),
+    currency: normalizeCurrencyCode(structuredFields.currency),
+  });
+  if (!items.length) items = collectCustomsItemCandidates(data);
+  const parsedJson = mergeCustomsParsedData(text, structuredFields, items);
+  if (!hasUsefulCustomsParsedData(parsedJson)) {
+    throw codedError("文档智能未返回可用的报关单结构化字段。", 422, "ALIYUN_DOCMIND_CUSTOMS_EMPTY");
+  }
+  return {
+    text,
+    source: "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
+    provider: settings.provider,
+    apiName: "ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT",
+    rawJson,
+    extractedFields: structuredFields,
+    parsedJson,
+    confidence: null,
+    parser: "CUSTOMS_DECLARATION_DOCMIND",
+  };
+}
+
 async function recognizeAliyunCustomsDeclaration(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-  options: { requireText?: boolean } = {},
+  options: OcrRecognitionOptions = {},
 ): Promise<OcrRecognitionResult> {
+  if (options.sourceUrl) {
+    try {
+      return await recognizeAliyunCustomsDeclarationWithDocMind(settings, options);
+    } catch (error) {
+      console.error("aliyun-docmind-customs-ocr-failed", {
+        code: (error as { code?: string } | null)?.code || "",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   const client = createAliyunOcrClient(settings);
   const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
     body: Readable.from(buffer),
@@ -749,7 +841,7 @@ export async function isOcrFeatureEnabled(feature: OcrFeatureKey) {
 export async function recognizePdfTextWithOcr(
   buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
   feature: OcrFeatureKey,
-  options: { requireText?: boolean } = {},
+  options: OcrRecognitionOptions = {},
 ) {
   const settings = await ensureOcrFeatureEnabled(feature);
   const fileBuffer = bufferFromInput(buffer);

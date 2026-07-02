@@ -221,6 +221,20 @@ export async function signedDownloadUrl(key: string, fileName: string, expiresIn
   }
 }
 
+export async function signedObjectReadUrl(key: string, expiresIn = 900) {
+  if (!key) throw storageError("R2 文件 key 缺失，无法生成读取链接。", 404, "R2_OBJECT_NOT_FOUND");
+  const bucket = r2BucketName();
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  });
+  try {
+    return await getSignedUrl(r2Client(), command, { expiresIn });
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
+}
+
 async function streamToBuffer(stream: TransformableStream) {
   if (!stream) return Buffer.alloc(0);
   if (typeof stream.transformToByteArray === "function") {
