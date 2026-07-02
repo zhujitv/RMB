@@ -260,9 +260,9 @@ test("workspace auth distinguishes expired login from server-side profile failur
   assert.match(workspaceShell, /accountStateCodes = \["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"\]/);
   assert.match(workspaceShell, /error\.code === "PASSWORD_CHANGE_REQUIRED" \|\| accountStateCodes\.includes\(error\.code \|\| ""\)/);
   assert.match(workspaceShell, /message: withErrorCode\(guestMessage, errorCode\)/);
-  assert.match(workspaceShell, /message: error\.message \|\| "系统暂时无法读取账户信息。"/);
-  assert.match(workspaceShell, /message: "工作台初始化失败。"/);
-  assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "工作台初始化失败。", detail: "初始化流程未返回有效状态。"/);
+  assert.match(workspaceShell, /message: "无法读取当前用户信息"/);
+  assert.doesNotMatch(workspaceShell, /message: "工作台初始化失败。"/);
+  assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "无法读取当前用户信息", detail: "初始化流程未返回有效状态。"/);
 });
 
 test("auth me initialization returns classified diagnostics instead of one generic failure", () => {
