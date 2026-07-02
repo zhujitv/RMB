@@ -21,7 +21,6 @@ import {
 } from "./helpers";
 import {
   PAGE_SIZE,
-  type BusinessEntityOption,
   type CustomsFilePickerState,
   type CustomsRecognitionResponse,
   type CustomsRecognitionResult,
@@ -74,9 +73,6 @@ export function useTaxRefundController({
   const [declarationStartMonth, setDeclarationStartMonth] = useState("");
   const [declarationEndMonth, setDeclarationEndMonth] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [businessEntityId, setBusinessEntityId] = useState("");
-  const [businessEntitySortDirection, setBusinessEntitySortDirection] = useState<"" | "asc" | "desc">("");
-  const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
   const [detailOrderId, setDetailOrderId] = useState("");
   const [detailRow, setDetailRow] = useState<TaxRefundRow | null>(null);
   const [detail, setDetail] = useState<TaxRefundDetail | null>(null);
@@ -148,8 +144,6 @@ export function useTaxRefundController({
     nextStartMonth = declarationStartMonth,
     nextEndMonth = declarationEndMonth,
     nextStatus = statusFilter,
-    nextBusinessEntityId = businessEntityId,
-    nextBusinessEntitySortDirection = businessEntitySortDirection,
   ) {
     setLoading(true);
     setError("");
@@ -163,8 +157,6 @@ export function useTaxRefundController({
       if (nextStartMonth) params.set("declarationStartMonth", nextStartMonth);
       if (nextEndMonth) params.set("declarationEndMonth", nextEndMonth);
       if (nextStatus) params.set("status", nextStatus);
-      if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
-      if (nextBusinessEntitySortDirection) params.set("businessEntitySortDirection", nextBusinessEntitySortDirection);
       const result = await apiJson<TaxRefundResponse>(`/api/tax-refund/list?${params}`);
       const nextRows = Array.isArray(result.orders) ? result.orders : [];
       const pagination = result.pagination || {};
@@ -184,17 +176,7 @@ export function useTaxRefundController({
 
   useEffect(() => {
     void loadRows(1, "");
-    void loadBusinessEntities();
   }, []);
-
-  async function loadBusinessEntities() {
-    try {
-      const result = await apiJson<{ entities?: BusinessEntityOption[] }>("/api/business-entities");
-      setBusinessEntities(Array.isArray(result.entities) ? result.entities : []);
-    } catch {
-      setBusinessEntities([]);
-    }
-  }
 
   useEffect(() => {
     const value = initialKeyword.trim();
@@ -205,7 +187,7 @@ export function useTaxRefundController({
     void (async () => {
       const nextStatus = initialAction === "submitTaxArchive" ? "READY" : statusFilter;
       if (initialAction === "submitTaxArchive") setStatusFilter("READY");
-      const nextRows = await loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, nextStatus, businessEntityId, businessEntitySortDirection);
+      const nextRows = await loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, nextStatus);
       if (initialAction !== "submitTaxArchive") return;
       const matched = nextRows.find((row) => row.orderNo === value) || nextRows[0];
       if (matched) await loadDetail(matched);
@@ -221,10 +203,10 @@ export function useTaxRefundController({
       setDetailOrderId("");
       setDetail(null);
       setNotice("");
-      void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, businessEntitySortDirection);
+      void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [keyword, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, businessEntitySortDirection]);
+  }, [keyword, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter]);
 
   useEffect(() => {
     if (!detail || !pendingDetailTarget || detailLoading) return;
@@ -253,10 +235,8 @@ export function useTaxRefundController({
     setDeclarationStartMonth("");
     setDeclarationEndMonth("");
     setStatusFilter("");
-    setBusinessEntityId("");
-    setBusinessEntitySortDirection("");
     setNotice("");
-    void loadRows(1, "", nextMode, "", "", "", "", "");
+    void loadRows(1, "", nextMode, "", "", "");
   }
 
   function submitSearch() {
@@ -266,7 +246,7 @@ export function useTaxRefundController({
     setDetailOrderId("");
     setDetail(null);
     setNotice("");
-    void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, businessEntitySortDirection);
+    void loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
   function resetSearch() {
@@ -275,13 +255,11 @@ export function useTaxRefundController({
     setDeclarationStartMonth("");
     setDeclarationEndMonth("");
     setStatusFilter("");
-    setBusinessEntityId("");
-    setBusinessEntitySortDirection("");
     setDetailRow(null);
     setDetailOrderId("");
     setDetail(null);
     setNotice("");
-    void loadRows(1, "", mode, "", "", "", "", "");
+    void loadRows(1, "", mode, "", "", "");
   }
 
   function gotoPage(nextPage: number) {
@@ -289,17 +267,7 @@ export function useTaxRefundController({
     setDetailOrderId("");
     setDetail(null);
     setNotice("");
-    void loadRows(nextPage, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, businessEntitySortDirection);
-  }
-
-  function toggleBusinessEntitySort() {
-    const nextDirection = businessEntitySortDirection === "asc" ? "desc" : "asc";
-    setBusinessEntitySortDirection(nextDirection);
-    setDetailRow(null);
-    setDetailOrderId("");
-    setDetail(null);
-    setNotice("");
-    void loadRows(1, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId, nextDirection);
+    void loadRows(nextPage, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter);
   }
 
   function resetDetailSectionState() {
@@ -1050,9 +1018,6 @@ export function useTaxRefundController({
     declarationStartMonth,
     declarationEndMonth,
     statusFilter,
-    businessEntityId,
-    businessEntitySortDirection,
-    businessEntities,
     canManageTaxRefund,
     canCancelArchive,
     taxRefundCalculationEnabled,
@@ -1092,8 +1057,6 @@ export function useTaxRefundController({
     setDeclarationStartMonth,
     setDeclarationEndMonth,
     setStatusFilter,
-    setBusinessEntityId,
-    toggleBusinessEntitySort,
     submitSearch,
     resetSearch,
     gotoPage,

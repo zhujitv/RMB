@@ -14,11 +14,6 @@ const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx",
 const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const reportService = readFileSync("lib/report-service.ts", "utf8");
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
-const taxRefundListPanel = readFileSync("app/modules/tax-refund/list-panel.tsx", "utf8");
-const taxRefundTableRow = readFileSync("app/modules/tax-refund/table-row.tsx", "utf8");
-const taxRefundHelpers = readFileSync("app/modules/tax-refund/helpers.ts", "utf8");
-const taxRefundController = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
 const listRoute = readFileSync("app/api/business-entities/route.ts", "utf8");
 const transferRoute = readFileSync("app/api/orders/[id]/business-entity/route.ts", "utf8");
@@ -91,21 +86,6 @@ test("reports expose business entity columns and filters", () => {
   assert.match(reportsModule, /businessEntityDisplayName/);
   assert.match(reportsModule, /businessEntityFullName\(row\)/);
   assert.match(reportsModule, /updateFilter\("businessEntityId"/);
-});
-
-test("tax refund list exposes business entity filter display and export column", () => {
-  assert.match(taxRefundService, /businessEntityWhereFromQuery\(filters\.businessEntityId\)/);
-  assert.match(taxRefundService, /businessEntityFieldsFromOrder\(order\)/);
-  assert.match(taxRefundService, /businessEntitySortDirection/);
-  assert.match(taxRefundController, /\/api\/business-entities/);
-  assert.match(taxRefundController, /params\.set\("businessEntityId"/);
-  assert.match(taxRefundListPanel, /全部业务主体/);
-  assert.match(taxRefundListPanel, /taxRefundBusinessEntityColumn/);
-  assert.match(taxRefundListPanel, /onToggleBusinessEntitySort/);
-  assert.match(taxRefundTableRow, /businessEntityDisplayName \|\| row\.businessEntityShortName \|\| businessEntityFullName/);
-  assert.match(taxRefundTableRow, /title=\{businessEntityFullName \|\| "-"\}/);
-  assert.match(taxRefundHelpers, /businessEntityNameSnapshot/);
-  assert.match(reportService.match(/"tax-refunds":\s*\[[\s\S]*?\n  \]/)?.[0] || "", /\["businessEntityName", "业务主体"\]/);
 });
 
 test("settings can maintain business entities without making it multi tenant", () => {

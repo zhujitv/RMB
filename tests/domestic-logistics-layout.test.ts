@@ -58,12 +58,10 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(tableHead, /订单号/);
   assert.match(tableHead, /提单号/);
   assert.match(tableHead, /客户简称/);
-  assert.match(tableHead, /业务主体/);
   assert.ok(tableHead.indexOf("订单号") < tableHead.indexOf("提单号"));
   assert.ok(tableHead.indexOf("提单号") < tableHead.indexOf("客户简称"));
-  assert.ok(tableHead.indexOf("客户简称") < tableHead.indexOf("业务主体"));
   assert.match(taxModuleSource, /<col className=\{styles\.taxRefundBlNoColumn\} \/>/);
-  assert.match(taxModuleSource, /<td colSpan=\{8\}>/);
+  assert.match(taxModuleSource, /<td colSpan=\{7\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
   const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
@@ -71,11 +69,10 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.doesNotMatch(listFunction, /logisticsBills:\s*\{|documents:\s*\{|costs:\s*\{/);
   assert.match(taxRefundService, /billOfLadingNumbers/);
   assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
-  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1160px;[\s\S]*table-layout: fixed;/);
+  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1040px;[\s\S]*table-layout: fixed;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundOrderNoColumn,[\s\S]*width: 150px;[\s\S]*min-width: 150px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 280px;[\s\S]*min-width: 240px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCustomerColumn,[\s\S]*width: 130px;[\s\S]*min-width: 120px;/);
-  assert.match(css, /\.taxRefundTable col\.taxRefundBusinessEntityColumn,[\s\S]*width: 140px;[\s\S]*min-width: 120px;[\s\S]*max-width: 150px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundDateColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCompletenessColumn,[\s\S]*width: 120px;[\s\S]*min-width: 120px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundStatusColumn,[\s\S]*width: 160px;[\s\S]*min-width: 160px;/);
