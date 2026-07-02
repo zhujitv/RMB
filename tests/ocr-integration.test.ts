@@ -398,6 +398,10 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /collectDocMindText/);
   assert.match(service, /readDocMindOutputFiles/);
   assert.match(service, /outputFileUrl/);
+  assert.match(service, /throwDocMindCustomsEmptyError/);
+  assert.match(service, /customsDiagnosticResultFromError/);
+  assert.match(service, /rawJsonPreview/);
+  assert.match(service, /ALIYUN_DOCMIND_CUSTOMS_EMPTY/);
   assert.match(service, /ALIYUN_DOCMIND_RESULT_TIMEOUT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
   assert.match(service, /报关单严格结构化模式需要可下载文件 URL，不能回退到通用 OCR。/);

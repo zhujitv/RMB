@@ -205,6 +205,10 @@ function ocrErrorText(error: unknown) {
   return error instanceof Error ? error.message : String(error || "");
 }
 
+function ocrErrorDetails(error: unknown) {
+  return isPlainRecord(error) && "details" in error && isPlainRecord(error.details) ? error.details : {};
+}
+
 function settingValue(setting: unknown) {
   return isPlainRecord(setting) && "value" in setting ? setting.value : setting;
 }
@@ -808,20 +812,25 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
   if (!items.length) items = collectCustomsItemCandidates(data);
   const parsedJson = mergeCustomsParsedData(text, structuredFields, items);
   if (!hasUsefulCustomsParsedData(parsedJson)) {
-    throw codedError("文档智能未返回可用的报关单结构化字段。", 422, "ALIYUN_DOCMIND_CUSTOMS_EMPTY");
+    throwDocMindCustomsEmptyError({
+      submitRawJson,
+      statusRawJson: result.statusRawJson,
+      resultRawJson: result.resultRawJson,
+      taskId,
+      data,
+      text,
+      structuredFields,
+      items,
+      parsedJson,
+    });
   }
+  const rawJson = buildDocMindCustomsRawJson(submitRawJson, result.statusRawJson, result.resultRawJson, taskId, data);
   return {
     text,
     source: "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
     provider: settings.provider,
     apiName: "ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT",
-    rawJson: {
-      submit: submitRawJson,
-      status: result.statusRawJson,
-      result: result.resultRawJson,
-      taskId,
-      data,
-    },
+    rawJson,
     extractedFields: structuredFields,
     parsedJson,
     confidence: null,
@@ -875,11 +884,13 @@ async function recognizeAliyunCustomsDeclaration(
         mode: effectiveSettings.customsDeclarationMode,
       });
       if (effectiveSettings.customsDeclarationMode === "STRICT") {
-        throw codedError(
+        const strictError = codedError(
           `阿里云报关单严格结构化识别失败：${docMindErrorMessage}`,
           (error as { status?: number } | null)?.status || 502,
           docMindErrorCode,
         );
+        strictError.details = ocrErrorDetails(error);
+        throw strictError;
       }
     }
   }
@@ -1154,6 +1165,105 @@ function jsonPreview(value: unknown, limit = 50000) {
   }
 }
 
+function safeObjectKeys(value: unknown) {
+  if (Array.isArray(value)) return [`array(${value.length})`];
+  if (!isPlainRecord(value)) return [];
+  return Object.keys(value).slice(0, 50);
+}
+
+function buildDocMindCustomsRawJson(
+  submit: unknown,
+  status: unknown[],
+  result: unknown,
+  taskId: string,
+  data: unknown,
+) {
+  return {
+    submit,
+    status,
+    result,
+    taskId,
+    data,
+  };
+}
+
+function throwDocMindCustomsEmptyError(params: {
+  submitRawJson: unknown;
+  statusRawJson: unknown[];
+  resultRawJson: unknown;
+  taskId: string;
+  data: unknown;
+  text: string;
+  structuredFields: Record<string, unknown>;
+  items: CustomsDeclarationItemFields[];
+  parsedJson: unknown;
+}) {
+  const rawJson = buildDocMindCustomsRawJson(
+    params.submitRawJson,
+    params.statusRawJson,
+    params.resultRawJson,
+    params.taskId,
+    params.data,
+  );
+  const error = codedError("文档智能未返回可用的报关单结构化字段。", 422, "ALIYUN_DOCMIND_CUSTOMS_EMPTY");
+  error.details = {
+    source: "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
+    provider: "ALIYUN",
+    apiName: "ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT",
+    parser: "CUSTOMS_DECLARATION_DOCMIND",
+    taskId: params.taskId,
+    textLength: params.text.length,
+    textPreview: params.text.slice(0, 4000),
+    dataType: Array.isArray(params.data) ? "array" : typeof params.data,
+    dataKeys: safeObjectKeys(params.data),
+    statusCount: params.statusRawJson.length,
+    extractedFields: params.structuredFields,
+    itemsCount: params.items.length,
+    parsedJson: params.parsedJson,
+    rawJsonPreview: jsonPreview(rawJson),
+  };
+  throw error;
+}
+
+function customsDiagnosticResultFromError(fileName: string, error: unknown) {
+  const details = ocrErrorDetails(error);
+  const parsedJson = isPlainRecord(details.parsedJson) ? details.parsedJson : {};
+  const extractedFields = isPlainRecord(details.extractedFields) ? details.extractedFields : {};
+  return {
+    fileName,
+    source: normalizeFieldValue(details.source) || "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
+    provider: normalizeFieldValue(details.provider) || "ALIYUN",
+    apiName: normalizeFieldValue(details.apiName) || "ALIYUN_DOCMIND_TRADE_DOCUMENT_PACKAGE_EXTRACT",
+    parser: normalizeFieldValue(details.parser) || "CUSTOMS_DECLARATION_DOCMIND",
+    confidence: null,
+    textLength: parseNumberText(details.textLength),
+    docMindAttempted: true,
+    docMindSucceeded: false,
+    docMindErrorCode: normalizeFieldValue((error as { code?: unknown } | null)?.code) || "ALIYUN_DOCMIND_CUSTOMS_FAILED",
+    docMindErrorMessage: ocrErrorText(error),
+    fallbackUsed: false,
+    fields: {
+      customsDeclarationNo: parsedJson.customsDeclarationNo || extractedFields.customsDeclarationNo || "",
+      customsDeclarationDate: parsedJson.customsDeclarationDate || extractedFields.customsDeclarationDate || "",
+      exportDate: parsedJson.exportDate || extractedFields.exportDate || "",
+      tradeTerm: parsedJson.tradeTerm || extractedFields.tradeTerm || "",
+      currency: parsedJson.currency || extractedFields.currency || "",
+      totalAmount: parsedJson.totalAmount || extractedFields.totalAmount || "",
+    },
+    itemsCount: parseNumberText(details.itemsCount),
+    itemsPreview: [],
+    extractedFields,
+    parsedJson,
+    rawJsonPreview: normalizeFieldValue(details.rawJsonPreview) || jsonPreview({
+      error: {
+        code: (error as { code?: unknown } | null)?.code || "",
+        message: ocrErrorText(error),
+      },
+      details,
+    }),
+  };
+}
+
 export async function testCustomsDeclarationOcr(actor: SettingsActor, file: OcrTestUploadFile) {
   assertWrite(actor, "settings");
   const fileBuffer = bufferFromInput(file.body);
@@ -1202,6 +1312,12 @@ export async function testCustomsDeclarationOcr(actor: SettingsActor, file: OcrT
       parsedJson,
       rawJsonPreview: jsonPreview(recognized.rawJson),
     };
+  } catch (error) {
+    const code = normalizeFieldValue((error as { code?: unknown } | null)?.code);
+    if (code.startsWith("ALIYUN_DOCMIND_")) {
+      return customsDiagnosticResultFromError(fileName, error);
+    }
+    throw error;
   } finally {
     await deleteR2Object(tempKey).catch((error) => {
       console.error("ocr-test-temp-file-delete-failed", {
