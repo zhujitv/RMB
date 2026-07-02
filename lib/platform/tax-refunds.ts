@@ -43,6 +43,7 @@ import {
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
+import { canReadOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -156,11 +157,18 @@ type TaxRefundCustomsItemLight = {
   exportDate: Date | null;
   hsCode: string;
   productName: string;
+  specification?: string | null;
   quantity: Prisma.Decimal | number | null;
   unit: string | null;
+  unitPrice?: Prisma.Decimal | number | null;
+  totalAmount?: Prisma.Decimal | number | null;
   tradeTerm: string | null;
   currency: string | null;
   fobAmount: Prisma.Decimal | number | null;
+  grossWeight?: Prisma.Decimal | number | null;
+  netWeight?: Prisma.Decimal | number | null;
+  originCountry?: string | null;
+  destinationCountry?: string | null;
   exchangeRate: Prisma.Decimal | number | null;
   fobAmountCny: Prisma.Decimal | number | null;
   rawJson?: Prisma.JsonValue | null;
@@ -406,13 +414,25 @@ function serializeTaxRefundCustomsItem(item: TaxRefundCustomsItemLight, fallback
     declarationDate: dateToInput(item.declarationDate),
     exportDate: dateToInput(item.exportDate),
     domesticConsignor: String(raw.domesticConsignor || fallback.businessEntityName || fallback.businessEntityDisplayName || ""),
+    declarationUnit: String(raw.declarationUnit || ""),
+    transportMode: String(raw.transportMode || ""),
+    billOfLadingNo: String(raw.billOfLadingNo || ""),
+    tradeCountry: String(raw.tradeCountry || ""),
+    destinationCountry: item.destinationCountry || String(raw.destinationCountry || ""),
+    supervisionMode: String(raw.supervisionMode || ""),
     hsCode: item.hsCode || "",
     productName: item.productName || "",
+    specification: item.specification || String(raw.specification || ""),
     quantity: item.quantity == null ? null : Number(item.quantity),
     unit: item.unit || "",
+    unitPrice: item.unitPrice == null ? null : Number(item.unitPrice),
+    totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
     tradeTerm: item.tradeTerm || "",
     currency: item.currency || "",
     fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
+    grossWeight: item.grossWeight == null ? null : Number(item.grossWeight),
+    netWeight: item.netWeight == null ? null : Number(item.netWeight),
+    originCountry: item.originCountry || String(raw.originCountry || ""),
     exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
     fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
     confirmationStatus: item.confirmationStatus,
@@ -749,11 +769,18 @@ async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike)
           exportDate: true,
           hsCode: true,
           productName: true,
+          specification: true,
           quantity: true,
           unit: true,
+          unitPrice: true,
+          totalAmount: true,
           tradeTerm: true,
           currency: true,
           fobAmount: true,
+          grossWeight: true,
+          netWeight: true,
+          originCountry: true,
+          destinationCountry: true,
           exchangeRate: true,
           fobAmountCny: true,
           confirmationStatus: true,
@@ -815,11 +842,18 @@ async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike)
       exportDate: dateToInput(item.exportDate),
       hsCode: item.hsCode || "",
       productName: item.productName || "",
+      specification: item.specification || "",
       quantity: item.quantity == null ? null : Number(item.quantity),
       unit: item.unit || "",
+      unitPrice: item.unitPrice == null ? null : Number(item.unitPrice),
+      totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
       tradeTerm: item.tradeTerm || "",
       currency: item.currency || "",
       fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
+      grossWeight: item.grossWeight == null ? null : Number(item.grossWeight),
+      netWeight: item.netWeight == null ? null : Number(item.netWeight),
+      originCountry: item.originCountry || "",
+      destinationCountry: item.destinationCountry || "",
       exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
       fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
       confirmationStatus: item.confirmationStatus,
@@ -867,7 +901,7 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
 }
 
 async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
-  const [basic, documents, customsItems, latestCustomsDocument] = await Promise.all([
+  const [basic, documents, customsItems, latestOcrRawResult] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
     prisma.exportCustomsDeclarationItem.findMany({
@@ -880,11 +914,18 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
         exportDate: true,
         hsCode: true,
         productName: true,
+        specification: true,
         quantity: true,
         unit: true,
+        unitPrice: true,
+        totalAmount: true,
         tradeTerm: true,
         currency: true,
         fobAmount: true,
+        grossWeight: true,
+        netWeight: true,
+        originCountry: true,
+        destinationCountry: true,
         exchangeRate: true,
         fobAmountCny: true,
         rawJson: true,
@@ -895,32 +936,14 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: 200,
     }),
-    actor?.role === "管理员"
-      ? prisma.orderDocument.findFirst({
-        where: { orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
-        select: {
-          id: true,
-          ocrTasks: {
-            select: {
-              id: true,
-              status: true,
-              validationStatus: true,
-              errorMessage: true,
-              rawText: true,
-              resultJson: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-            orderBy: [{ createdAt: "desc" }],
-            take: 1,
-          },
-        },
+    canReadOcrRawResult(actor)
+      ? prisma.ocrRawResult.findFirst({
+        where: { orderId, documentType: "CUSTOMS_ENTRY_FORM" },
         orderBy: [{ createdAt: "desc" }],
       })
       : Promise.resolve(null),
   ]);
   const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
-  const latestOcrTask = latestCustomsDocument?.ocrTasks?.[0] || null;
   return {
     ...documents,
     ...basic,
@@ -931,7 +954,9 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
     customsParseSourceLabel: basic.customsParseSourceLabel || "",
     customsParseMessage: basic.customsParseMessage || "",
     customsDeclarationItems: serializedItems,
-    customsOcrRawResult: actor?.role === "管理员" ? serializeCustomsOcrRawResult(latestOcrTask, customsItems || []) : null,
+    customsOcrRawResult: canReadOcrRawResult(actor)
+      ? serializeStoredOcrRawResult(latestOcrRawResult) || serializeCustomsOcrRawResult(null, customsItems || [])
+      : null,
   };
 }
 

@@ -16,6 +16,7 @@ import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import { getCompanyProfileSettings } from "./company-profile";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
+import { saveOcrRawResult } from "./ocr-raw-results";
 import { refreshSupplierDocumentRequestCompletion, type CompletionRefreshOptions } from "./supplier-document-request-completion";
 import {
   contractOrderNoMatches,
@@ -554,6 +555,9 @@ export async function runSupplierDocumentOcrForDocument(
   }
   if (!task) return null;
   let latestRawText = "";
+  let latestRawJson: unknown = null;
+  let latestApiName = "";
+  let latestProvider = "ALIYUN";
   try {
     const fileBuffer = await readR2Object(document.storageKey);
     const recognized = await recognizeSupplierDocumentWithOcr(
@@ -563,6 +567,9 @@ export async function runSupplierDocumentOcrForDocument(
     );
     const text = cleanText(recognized.text);
     const structuredFields = recognized.extractedFields || {};
+    latestRawJson = recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length };
+    latestApiName = recognized.apiName || recognized.source || "";
+    latestProvider = recognized.provider || "ALIYUN";
     latestRawText = text;
     const hasStructuredFields = Object.values(structuredFields).some((value) => cleanText(value));
     if (!text && !hasStructuredFields) throw codedError("OCR原文未识别，请人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
@@ -595,6 +602,23 @@ export async function runSupplierDocumentOcrForDocument(
       validationResult: { status, issues },
     });
     const saved = await prisma.$transaction(async (tx) => {
+      await saveOcrRawResult({
+        documentId: document.id,
+        orderId: document.orderId,
+        documentType: document.documentType,
+        provider: latestProvider,
+        apiName: latestApiName || (document.documentType === "SUPPLIER_INVOICE" ? "ALIYUN_RECOGNIZE_INVOICE" : "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE"),
+        rawJson: latestRawJson,
+        parsedJson: {
+          fields,
+          structuredFields,
+          validation: { status: status.validationStatus, issues },
+          parser: recognized.parser || (document.documentType === "SUPPLIER_INVOICE" ? "VAT_INVOICE" : "PURCHASE_CONTRACT"),
+        },
+        confidence: recognized.confidence ?? null,
+        status: status.validationStatus === VALIDATION_PASSED ? "SUCCESS" : "EXCEPTION",
+        errorMessage: issues.map((issue) => issue.message).join("；"),
+      }, tx);
       await tx.ocrResult.deleteMany({ where: { taskId: task.id } });
       if (fieldRows.length) {
         await tx.ocrResult.createMany({
@@ -655,6 +679,17 @@ export async function runSupplierDocumentOcrForDocument(
         },
         include: { results: true },
       });
+      await saveOcrRawResult({
+        documentId: document.id,
+        orderId: document.orderId,
+        documentType: document.documentType,
+        provider: latestProvider,
+        apiName: latestApiName || "SUPPLIER_DOCUMENT_OCR",
+        rawJson: latestRawJson || (latestRawText ? { text: latestRawText } : null),
+        parsedJson: latestRawText ? { rawText: latestRawText } : null,
+        status: "FAILED",
+        errorMessage: message.slice(0, 1000),
+      }).catch(() => null);
     } catch (updateError: unknown) {
       throwIfSupplierOcrTableMissing(updateError);
       throw updateError;

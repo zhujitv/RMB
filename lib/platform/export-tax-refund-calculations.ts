@@ -19,6 +19,8 @@ import { refreshTaxRefundCompletenessForOrder } from "./shared-tax-sync";
 import { includeOrderRelations } from "./shared-order-relations";
 import { roundMoney } from "./shared-order-calculations";
 import { getTaxRefundFeatureSettings, isTaxRefundCalculationFeatureEnabled } from "./tax-refund-features";
+import { recognizePdfTextWithOcr } from "./ocr-integration";
+import { saveOcrRawResult } from "./ocr-raw-results";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -84,6 +86,52 @@ function normalizedUnit(value: unknown) {
   if (["KG", "KGS", "千克", "公斤"].includes(text)) return "千克";
   if (["TON", "TONS", "吨"].includes(text)) return "吨";
   return cleanText(value);
+}
+
+function plainRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: unknown }) {
+  const parsed = plainRecord(recognized.parsedJson);
+  const fallback = parseCustomsDeclarationDetailText(String(recognized.text || ""));
+  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const items = rawItems
+    .map((item) => plainRecord(item))
+    .map((item) => ({
+      hsCode: cleanText(item.hsCode),
+      productName: cleanText(item.productName),
+      specification: cleanText(item.specification),
+      quantity: num(item.quantity, 0),
+      unit: cleanText(item.unit),
+      unitPrice: num(item.unitPrice, 0),
+      totalAmount: num(item.totalAmount, 0),
+      tradeTerm: cleanText(item.tradeTerm),
+      currency: cleanText(item.currency).toUpperCase(),
+      fobAmount: num(item.fobAmount, 0) || num(item.totalAmount, 0),
+      grossWeight: num(item.grossWeight, 0),
+      netWeight: num(item.netWeight, 0),
+      originCountry: cleanText(item.originCountry),
+      destinationCountry: cleanText(item.destinationCountry),
+    }))
+    .filter((item) => item.hsCode || item.productName || item.quantity || item.fobAmount);
+  return {
+    ...fallback,
+    ...parsed,
+    customsDeclarationNo: cleanText(parsed.customsDeclarationNo) || fallback.customsDeclarationNo,
+    customsDeclarationDate: cleanText(parsed.customsDeclarationDate) || fallback.customsDeclarationDate,
+    exportDate: cleanText(parsed.exportDate) || fallback.exportDate,
+    tradeTerm: cleanText(parsed.tradeTerm) || fallback.tradeTerm,
+    currency: cleanText(parsed.currency) || fallback.currency,
+    domesticConsignor: cleanText(parsed.domesticConsignor) || fallback.domesticConsignor,
+    declarationUnit: cleanText(parsed.declarationUnit) || fallback.declarationUnit,
+    transportMode: cleanText(parsed.transportMode) || fallback.transportMode,
+    billOfLadingNo: cleanText(parsed.billOfLadingNo) || fallback.billOfLadingNo,
+    tradeCountry: cleanText(parsed.tradeCountry) || fallback.tradeCountry,
+    destinationCountry: cleanText(parsed.destinationCountry) || fallback.destinationCountry,
+    supervisionMode: cleanText(parsed.supervisionMode) || fallback.supervisionMode,
+    items: items.length ? items : fallback.items,
+  };
 }
 
 function toDate(value: unknown) {
@@ -336,11 +384,18 @@ export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclara
     exportDate: row.exportDate,
     hsCode: row.hsCode,
     productName: row.productName,
+    specification: row.specification || "",
     quantity: row.quantity == null ? null : Number(row.quantity),
     unit: row.unit || "",
+    unitPrice: row.unitPrice == null ? null : Number(row.unitPrice),
+    totalAmount: row.totalAmount == null ? null : Number(row.totalAmount),
     tradeTerm: row.tradeTerm || "",
     currency: row.currency || "",
     fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
+    grossWeight: row.grossWeight == null ? null : Number(row.grossWeight),
+    netWeight: row.netWeight == null ? null : Number(row.netWeight),
+    originCountry: row.originCountry || "",
+    destinationCountry: row.destinationCountry || "",
     exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
     fobAmountCny: row.fobAmountCny == null ? null : Number(row.fobAmountCny),
     confirmationStatus: row.confirmationStatus,
@@ -356,10 +411,24 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
   });
   if (!document?.storageKey) throw codedError("未找到可识别的报关单 PDF。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
   const fileBuffer = await readR2Object(document.storageKey);
-  const text = fileBuffer ? await import("../customs-declaration-parser").then((module) => module.extractPdfTextFromPdfBuffer(fileBuffer, { requireText: true })) : "";
-  const parsed = parseCustomsDeclarationDetailText(text);
+  if (!fileBuffer) throw codedError("未读取到报关单 PDF 文件。", 404, "CUSTOMS_DOCUMENT_FILE_EMPTY");
+  const recognized = await recognizePdfTextWithOcr(fileBuffer, "customsDeclaration", { requireText: true });
+  const parsed = customsParsedFromRecognition(recognized);
+  const itemMissingMessage = "已识别基础字段，但未解析到商品明细，请人工维护。";
   const actorId = nonEmpty(actor?.id);
   await prisma.$transaction(async (tx) => {
+    await saveOcrRawResult({
+      documentId,
+      orderId,
+      documentType: document.documentType,
+      provider: recognized.provider || "ALIYUN",
+      apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+      rawJson: recognized.rawJson || null,
+      parsedJson: parsed,
+      confidence: recognized.confidence ?? null,
+      status: parsed.items.length ? "SUCCESS" : "PARTIAL",
+      errorMessage: parsed.items.length ? "" : itemMissingMessage,
+    }, tx);
     await tx.exportCustomsDeclarationItem.updateMany({
       where: { orderId, documentId, deletedAt: null, confirmationStatus: "PENDING_CONFIRMATION" },
       data: { deletedAt: new Date() },
@@ -374,22 +443,36 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
           exportDate: toDate(parsed.exportDate),
           hsCode: normalizedHsCode(item.hsCode),
           productName: item.productName,
+          specification: cleanText(item.specification) || null,
           quantity: item.quantity || null,
           unit: item.unit || null,
+          unitPrice: item.unitPrice || null,
+          totalAmount: item.totalAmount || item.fobAmount || null,
           tradeTerm: item.tradeTerm || parsed.tradeTerm || null,
           currency: item.currency || parsed.currency || null,
           fobAmount: item.fobAmount || null,
+          grossWeight: item.grossWeight || null,
+          netWeight: item.netWeight || null,
+          originCountry: cleanText(item.originCountry) || null,
+          destinationCountry: cleanText(item.destinationCountry || parsed.destinationCountry) || null,
           exchangeRate: null,
           fobAmountCny: null,
           rawJson: {
             ...item,
             domesticConsignor: parsed.domesticConsignor || "",
+            declarationUnit: parsed.declarationUnit || "",
+            transportMode: parsed.transportMode || "",
+            billOfLadingNo: parsed.billOfLadingNo || "",
+            tradeCountry: parsed.tradeCountry || "",
+            destinationCountry: item.destinationCountry || parsed.destinationCountry || "",
+            supervisionMode: parsed.supervisionMode || "",
             declarationNo: parsed.customsDeclarationNo || "",
             declarationDate: parsed.customsDeclarationDate || "",
             exportDate: parsed.exportDate || "",
+            ocrApiName: recognized.apiName || recognized.source || "",
           } as unknown as Prisma.InputJsonValue,
           confirmationStatus: "PENDING_CONFIRMATION",
-          source: "OCR_PDF",
+          source: recognized.apiName || recognized.source || "OCR_PDF",
           sortOrder: index,
         },
       });
@@ -403,8 +486,8 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
         customsParseStatus: parsed.customsDeclarationParseStatus,
         customsParseMessage: parsed.items.length
           ? `${parsed.customsDeclarationParseMessage}\n已识别报关商品明细 ${parsed.items.length} 条，请确认。`
-          : `${parsed.customsDeclarationParseMessage}\n未识别到报关商品明细，请人工录入。`,
-        customsDeclarationParseSource: "AUTO_PDF_TEXT",
+          : `${parsed.customsDeclarationParseMessage}\n${itemMissingMessage}`,
+        customsDeclarationParseSource: recognized.apiName || recognized.source || "AUTO_PDF_TEXT",
         taxRefundStatus: parsed.items.length ? "CUSTOMS_RECOGNIZED_PENDING_CONFIRM" : "PROBLEM",
         updatedById: actorId || undefined,
       },
@@ -438,11 +521,18 @@ export async function saveCustomsDeclarationItems(request: AuditRequestLike, act
         exportDate: toDate(item.exportDate),
         hsCode: normalizedHsCode(item.hsCode),
         productName: cleanText(item.productName),
+        specification: cleanText(item.specification) || null,
         quantity: num(item.quantity, 0) || null,
         unit: cleanText(item.unit) || null,
+        unitPrice: num(item.unitPrice, 0) || null,
+        totalAmount: num(item.totalAmount, 0) || fobAmount || null,
         tradeTerm: cleanText(item.tradeTerm) || null,
         currency: cleanText(item.currency).toUpperCase() || null,
         fobAmount: fobAmount || null,
+        grossWeight: num(item.grossWeight, 0) || null,
+        netWeight: num(item.netWeight, 0) || null,
+        originCountry: cleanText(item.originCountry) || null,
+        destinationCountry: cleanText(item.destinationCountry) || null,
         exchangeRate: exchangeRate || null,
         fobAmountCny: fobAmount && exchangeRate ? roundMoney(fobAmount * exchangeRate) : null,
         confirmationStatus: "CONFIRMED",

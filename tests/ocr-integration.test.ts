@@ -150,10 +150,13 @@ test("Aliyun invoice parser falls back to prism key value pairs without merging 
 
 test("customs recognition is controlled by OCR settings", () => {
   assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
-  assert.match(customsRecognition, /customsDeclarationParser\.parseCustomsDeclarationText\(recognized\.text\)/);
+  assert.match(customsRecognition, /saveOcrRawResult/);
   assert.match(customsParser, /export async function extractPdfTextFromPdfBuffer/);
   assert.match(orderDocuments, /isOcrFeatureEnabled\("customsDeclaration"\)/);
   assert.match(orderDocuments, /shouldAutoRecognizeCustoms/);
   assert.match(service, /ensureOcrFeatureEnabled/);
   assert.match(service, /OCR_FEATURE_DISABLED/);
+  assert.match(service, /recognizeAliyunCustomsDeclaration/);
+  assert.match(service, /CUSTOMS_TABLE_KEYS/);
+  assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
 });

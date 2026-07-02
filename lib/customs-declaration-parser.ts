@@ -14,11 +14,18 @@ type CustomsFields = {
 export type CustomsDeclarationItemFields = {
   hsCode: string;
   productName: string;
+  specification?: string;
   quantity: number;
   unit: string;
+  unitPrice?: number;
+  totalAmount?: number;
   tradeTerm: string;
   currency: string;
   fobAmount: number;
+  grossWeight?: number;
+  netWeight?: number;
+  originCountry?: string;
+  destinationCountry?: string;
 };
 
 type CustomsParseResult = CustomsFields & {
@@ -32,6 +39,12 @@ export type CustomsDeclarationDetailParseResult = CustomsParseResult & {
   tradeTerm: string;
   currency: string;
   domesticConsignor: string;
+  declarationUnit: string;
+  transportMode: string;
+  billOfLadingNo: string;
+  tradeCountry: string;
+  destinationCountry: string;
+  supervisionMode: string;
   items: CustomsDeclarationItemFields[];
 };
 
@@ -85,6 +98,12 @@ const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
 const EXPORT_DATE_LABELS = ["出口日期", "出口时间", "离境日期"];
 const DOMESTIC_CONSIGNOR_LABELS = ["境内发货人", "境内收发货人", "发货人"];
+const DECLARATION_UNIT_LABELS = ["申报单位", "报关单位", "代理报关企业"];
+const TRANSPORT_MODE_LABELS = ["运输方式", "运输模式"];
+const BILL_OF_LADING_LABELS = ["提运单号", "提单号", "运单号", "B/L No", "BL No"];
+const TRADE_COUNTRY_LABELS = ["贸易国别", "贸易国", "贸易国家"];
+const DESTINATION_COUNTRY_LABELS = ["目的国", "最终目的国", "运抵国"];
+const SUPERVISION_MODE_LABELS = ["监管方式", "贸易方式"];
 const NON_DECLARATION_DATE_LABEL_PATTERN = /(出口|录入|打印|放行|签发)日期/g;
 const DECLARATION_NO_PATTERN = /[A-Z0-9]{8,32}/gi;
 let pdf2JsonParserClassPromise: Promise<Pdf2JsonParserConstructor> | null = null;
@@ -137,10 +156,17 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
   const tradeTerm = findTradeTerm(normalized);
   const currency = findCurrency(normalized);
   const domesticConsignor = findBestLabeledText(normalized, DOMESTIC_CONSIGNOR_LABELS);
+  const declarationUnit = findBestLabeledText(normalized, DECLARATION_UNIT_LABELS);
+  const transportMode = findBestLabeledText(normalized, TRANSPORT_MODE_LABELS);
+  const billOfLadingNo = findBestLabeledText(normalized, BILL_OF_LADING_LABELS);
+  const tradeCountry = findBestLabeledText(normalized, TRADE_COUNTRY_LABELS);
+  const destinationCountry = findBestLabeledText(normalized, DESTINATION_COUNTRY_LABELS);
+  const supervisionMode = findBestLabeledText(normalized, SUPERVISION_MODE_LABELS);
   const items = parseCustomsDeclarationItems(normalized).map((item) => ({
     ...item,
     tradeTerm: item.tradeTerm || tradeTerm,
     currency: item.currency || currency,
+    destinationCountry: item.destinationCountry || destinationCountry,
   }));
   return {
     ...base,
@@ -148,6 +174,12 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
     tradeTerm,
     currency,
     domesticConsignor,
+    declarationUnit,
+    transportMode,
+    billOfLadingNo,
+    tradeCountry,
+    destinationCountry,
+    supervisionMode,
     items,
   };
 }
@@ -386,8 +418,13 @@ function cleanLabeledTextValue(value = "") {
     "消费使用单位",
     "生产销售单位",
     "运输方式",
+    "提运单号",
     "成交方式",
     "贸易方式",
+    "监管方式",
+    "申报单位",
+    "贸易国别",
+    "目的国",
     "币制",
     "币种",
   ];
@@ -453,11 +490,18 @@ function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[]
     const item = {
       hsCode: String(match[1] || "").trim(),
       productName,
+      specification: "",
       quantity: numericAmount(match[3] || ""),
       unit: String(match[4] || "").trim(),
+      unitPrice: 0,
+      totalAmount: numericAmount(match[7] || ""),
       tradeTerm: String(match[5] || "").trim().toUpperCase(),
       currency: normalizeCurrency(match[6] || ""),
       fobAmount: numericAmount(match[7] || ""),
+      grossWeight: 0,
+      netWeight: 0,
+      originCountry: "",
+      destinationCountry: "",
     };
     if (item.hsCode && item.productName && item.quantity > 0) items.push(item);
   }

@@ -7,6 +7,7 @@ export * from "./upload-validation";
 export * from "./shared-exchange";
 export * from "./company-profile";
 export * from "./ocr-integration";
+export * from "./ocr-raw-results";
 export * from "./shipsgo-integration";
 export * from "./shipsgo-tracking";
 export * from "./api-performance";

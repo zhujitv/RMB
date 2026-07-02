@@ -5,7 +5,13 @@ import AliyunOcrClient, {
 } from "@alicloud/ocr-api20210707";
 import { $OpenApiUtil } from "@alicloud/openapi-core";
 import { prisma } from "../prisma";
-import { extractPdfTextFromPdfBuffer } from "../customs-declaration-parser";
+import {
+  customsParseMessage,
+  customsParseStatusFromFields,
+  extractPdfTextFromPdfBuffer,
+  parseCustomsDeclarationDetailText,
+  type CustomsDeclarationItemFields,
+} from "../customs-declaration-parser";
 import {
   DEFAULT_OCR_INTEGRATION_SETTINGS,
   OCR_INTEGRATION_SETTING_KEY,
@@ -36,12 +42,15 @@ type OcrIntegrationInput = {
   timeoutMs?: unknown;
 };
 
-type OcrRecognitionResult = {
+export type OcrRecognitionResult = {
   text: string;
   source: string;
   provider: string;
   rawJson?: unknown;
   extractedFields?: Record<string, unknown>;
+  parsedJson?: unknown;
+  apiName?: string;
+  confidence?: number | null;
   parser?: string;
 };
 
@@ -69,6 +78,75 @@ const CONTRACT_FIELD_ALIASES: Record<string, string[]> = {
   quantity: ["数量", "Quantity"],
   unitPrice: ["单价", "UnitPrice"],
   signingDate: ["签订日期", "合同日期", "日期", "SigningDate", "ContractDate"],
+};
+
+const CUSTOMS_DECLARATION_KEYS = [
+  "报关单号",
+  "申报日期",
+  "出口日期",
+  "成交方式",
+  "币制",
+  "FOB金额",
+  "境内发货人",
+  "申报单位",
+  "运输方式",
+  "提运单号",
+  "贸易国别",
+  "目的国",
+  "监管方式",
+  "HS编码",
+  "商品名称",
+  "规格型号",
+  "数量",
+  "单位",
+  "总价",
+  "毛重",
+  "净重",
+];
+
+const CUSTOMS_TABLE_KEYS = [
+  "项号",
+  "商品编号",
+  "商品名称及规格型号",
+  "数量及单位",
+  "单价",
+  "总价",
+  "币制",
+  "原产国",
+  "最终目的国",
+  "毛重",
+  "净重",
+];
+
+const CUSTOMS_FIELD_ALIASES: Record<string, string[]> = {
+  customsDeclarationNo: ["报关单号", "海关编号", "预录入编号", "declarationNo", "customsDeclarationNo"],
+  customsDeclarationDate: ["申报日期", "申报时间", "declarationDate"],
+  exportDate: ["出口日期", "出口时间", "离境日期", "exportDate"],
+  tradeTerm: ["成交方式", "贸易方式", "价格条款", "tradeTerm"],
+  currency: ["币制", "币种", "成交币制", "currency"],
+  fobAmount: ["FOB金额", "总价", "成交金额", "fobAmount"],
+  domesticConsignor: ["境内发货人", "境内收发货人", "发货人", "domesticConsignor"],
+  declarationUnit: ["申报单位", "报关单位", "declarationUnit"],
+  transportMode: ["运输方式", "transportMode"],
+  billOfLadingNo: ["提运单号", "提单号", "运单号", "billOfLadingNo"],
+  tradeCountry: ["贸易国别", "贸易国", "tradeCountry"],
+  destinationCountry: ["目的国", "最终目的国", "运抵国", "destinationCountry"],
+  supervisionMode: ["监管方式", "supervisionMode"],
+};
+
+const CUSTOMS_ITEM_FIELD_ALIASES: Record<string, string[]> = {
+  hsCode: ["HS编码", "商品编号", "税则号", "编码", "hsCode"],
+  productName: ["商品名称", "中文品名", "商品名称及规格型号", "品名", "productName"],
+  specification: ["规格型号", "规格", "型号", "specification"],
+  quantity: ["数量", "第一数量", "成交数量", "quantity"],
+  unit: ["单位", "法定单位", "成交单位", "unit"],
+  unitPrice: ["单价", "unitPrice"],
+  totalAmount: ["总价", "金额", "成交金额", "totalAmount"],
+  currency: ["币制", "币种", "currency"],
+  grossWeight: ["毛重", "grossWeight"],
+  netWeight: ["净重", "netWeight"],
+  originCountry: ["原产国", "originCountry"],
+  destinationCountry: ["目的国", "最终目的国", "destinationCountry"],
 };
 
 function cleanSecret(value: unknown, limit = 500) {
@@ -285,6 +363,121 @@ function collectFieldsFromObject(
   return output;
 }
 
+function parseNumberText(value: unknown) {
+  const text = normalizeFieldValue(value)
+    .replace(/[,，\s]/g, "")
+    .replace(/[^\d.-]/g, "");
+  const parsed = Number.parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeCurrencyCode(value: unknown) {
+  const text = normalizeFieldValue(value).toUpperCase();
+  if (/美元|USD/.test(text)) return "USD";
+  if (/人民币|CNY|RMB/.test(text)) return "CNY";
+  if (/欧元|EUR/.test(text)) return "EUR";
+  if (/日元|JPY/.test(text)) return "JPY";
+  if (/港币|HKD/.test(text)) return "HKD";
+  return /^[A-Z]{3}$/.test(text) ? text : "";
+}
+
+function normalizeCustomsItemFromFields(fields: Record<string, unknown>): CustomsDeclarationItemFields | null {
+  const hsCode = normalizeFieldValue(fields.hsCode).replace(/\D/g, "").slice(0, 13);
+  const productName = normalizeFieldValue(fields.productName);
+  const quantity = parseNumberText(fields.quantity);
+  const unit = normalizeFieldValue(fields.unit);
+  const totalAmount = parseNumberText(fields.totalAmount);
+  if (!hsCode || !productName || (!quantity && !totalAmount)) return null;
+  return {
+    hsCode,
+    productName,
+    specification: normalizeFieldValue(fields.specification),
+    quantity,
+    unit,
+    unitPrice: parseNumberText(fields.unitPrice),
+    totalAmount,
+    tradeTerm: "",
+    currency: normalizeCurrencyCode(fields.currency),
+    fobAmount: totalAmount,
+    grossWeight: parseNumberText(fields.grossWeight),
+    netWeight: parseNumberText(fields.netWeight),
+    originCountry: normalizeFieldValue(fields.originCountry),
+    destinationCountry: normalizeFieldValue(fields.destinationCountry),
+  };
+}
+
+function collectCustomsItemCandidates(value: unknown, output: CustomsDeclarationItemFields[] = [], depth = 0) {
+  if (depth > 8 || value == null) return output;
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return collectCustomsItemCandidates(parsed, output, depth + 1);
+  if (Array.isArray(value)) {
+    for (const item of value) collectCustomsItemCandidates(item, output, depth + 1);
+    return output;
+  }
+  if (!isPlainRecord(value)) return output;
+  const fields = collectFieldsFromObject(value, CUSTOMS_ITEM_FIELD_ALIASES);
+  const item = normalizeCustomsItemFromFields(fields);
+  if (item) output.push(item);
+  for (const itemValue of Object.values(value)) collectCustomsItemCandidates(itemValue, output, depth + 1);
+  return output;
+}
+
+function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = [
+      item.hsCode,
+      item.productName,
+      item.specification || "",
+      item.quantity || 0,
+      item.unit || "",
+      item.currency || "",
+      item.totalAmount || item.fobAmount || 0,
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergeCustomsParsedData(
+  text: string,
+  structuredFields: Record<string, unknown> = {},
+  structuredItems: CustomsDeclarationItemFields[] = [],
+) {
+  const fallback = parseCustomsDeclarationDetailText(text);
+  const fields = {
+    customsDeclarationNo: normalizeFieldValue(structuredFields.customsDeclarationNo) || fallback.customsDeclarationNo,
+    customsDeclarationDate: normalizeFieldValue(structuredFields.customsDeclarationDate) || fallback.customsDeclarationDate,
+    exportDate: normalizeFieldValue(structuredFields.exportDate) || fallback.exportDate,
+    tradeTerm: normalizeFieldValue(structuredFields.tradeTerm) || fallback.tradeTerm,
+    currency: normalizeCurrencyCode(structuredFields.currency) || fallback.currency,
+    fobAmount: parseNumberText(structuredFields.fobAmount) || 0,
+    domesticConsignor: normalizeFieldValue(structuredFields.domesticConsignor) || fallback.domesticConsignor,
+    declarationUnit: normalizeFieldValue(structuredFields.declarationUnit) || fallback.declarationUnit,
+    transportMode: normalizeFieldValue(structuredFields.transportMode) || fallback.transportMode,
+    billOfLadingNo: normalizeFieldValue(structuredFields.billOfLadingNo) || fallback.billOfLadingNo,
+    tradeCountry: normalizeFieldValue(structuredFields.tradeCountry) || fallback.tradeCountry,
+    destinationCountry: normalizeFieldValue(structuredFields.destinationCountry) || fallback.destinationCountry,
+    supervisionMode: normalizeFieldValue(structuredFields.supervisionMode) || fallback.supervisionMode,
+  };
+  const items = dedupeCustomsItems([...structuredItems, ...fallback.items]).map((item) => ({
+    ...item,
+    tradeTerm: item.tradeTerm || fields.tradeTerm,
+    currency: item.currency || fields.currency,
+    destinationCountry: item.destinationCountry || fields.destinationCountry,
+  }));
+  const status = customsParseStatusFromFields(fields);
+  return {
+    ...fallback,
+    ...fields,
+    customsDeclarationParseStatus: status,
+    customsDeclarationParseSource: fallback.customsDeclarationParseSource,
+    customsDeclarationParseMessage: customsParseMessage(fields, status),
+    items,
+  };
+}
+
 function aliyunEndpointFromUrl(value: string) {
   try {
     return new URL(value).host;
@@ -317,16 +510,19 @@ async function recognizeWithPdfTextFallback(
     throw codedError("OCR服务未配置可用结构化识别，且本地 PDF 文本兜底已关闭。", 501, "OCR_PROVIDER_ADAPTER_NOT_CONFIGURED");
   }
   const text = await extractPdfTextFromPdfBuffer(buffer, options);
+  const parsedJson = feature === "customsDeclaration" ? parseCustomsDeclarationDetailText(text) : undefined;
   return {
     text,
     source: options.source || "OCR_PDF_TEXT_FALLBACK",
     provider: settings.provider,
+    apiName: options.source || "OCR_PDF_TEXT_FALLBACK",
     rawJson: {
       source: options.source || "OCR_PDF_TEXT_FALLBACK",
       provider: settings.provider,
       textLength: text.length,
       fallbackReason: options.error instanceof Error ? options.error.message : "",
     },
+    parsedJson,
   };
 }
 
@@ -346,8 +542,10 @@ async function recognizeAliyunVatInvoice(
     text,
     source: "ALIYUN_RECOGNIZE_INVOICE",
     provider: settings.provider,
+    apiName: "ALIYUN_RECOGNIZE_INVOICE",
     rawJson,
     extractedFields,
+    parsedJson: extractedFields,
     parser: "VAT_INVOICE",
   };
 }
@@ -370,9 +568,76 @@ async function recognizeAliyunSupplierContract(
     text,
     source: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
     provider: settings.provider,
+    apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
     rawJson,
     extractedFields,
+    parsedJson: extractedFields,
     parser: "PURCHASE_CONTRACT",
+  };
+}
+
+async function recognizeAliyunCustomsDeclaration(
+  buffer: Buffer,
+  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: { requireText?: boolean } = {},
+): Promise<OcrRecognitionResult> {
+  const client = createAliyunOcrClient(settings);
+  const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+    body: Readable.from(buffer),
+    keys: CUSTOMS_DECLARATION_KEYS,
+  }));
+  const primaryRawJson = toPlainJson(response);
+  const responseBody = isPlainRecord(primaryRawJson) ? primaryRawJson.body : response.body;
+  const primaryData = parseJsonMaybe(responseField(responseBody, "data"));
+  const primaryText = collectText(primaryData).join("\n");
+  const pdfText = primaryText || await extractPdfTextFromPdfBuffer(buffer, { requireText: options.requireText === true }).catch(() => "");
+  const primaryFields = collectFieldsFromObject(primaryData, CUSTOMS_FIELD_ALIASES);
+  let items = collectCustomsItemCandidates(primaryData);
+  let tableRawJson: unknown = null;
+  let tableError = "";
+  if (!items.length) {
+    try {
+      const tableResponse = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+        body: Readable.from(buffer),
+        keys: CUSTOMS_TABLE_KEYS,
+      }));
+      tableRawJson = toPlainJson(tableResponse);
+      const tableBody = isPlainRecord(tableRawJson) ? tableRawJson.body : tableResponse.body;
+      const tableData = parseJsonMaybe(responseField(tableBody, "data"));
+      const tableText = collectText(tableData).join("\n");
+      items = collectCustomsItemCandidates(tableData);
+      const mergedTableText = [pdfText, tableText].filter(Boolean).join("\n");
+      const parsedWithTable = mergeCustomsParsedData(mergedTableText, primaryFields, items);
+      return {
+        text: mergedTableText,
+        source: "ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE",
+        provider: settings.provider,
+        apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_FALLBACK",
+        rawJson: { primary: primaryRawJson, table: tableRawJson },
+        extractedFields: primaryFields,
+        parsedJson: parsedWithTable,
+        confidence: null,
+        parser: "CUSTOMS_DECLARATION",
+      };
+    } catch (error) {
+      tableError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const parsedJson = mergeCustomsParsedData(pdfText, primaryFields, items);
+  return {
+    text: pdfText,
+    source: "ALIYUN_RECOGNIZE_TRADE_DOCUMENT",
+    provider: settings.provider,
+    apiName: items.length ? "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE" : "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_EMPTY",
+    rawJson: {
+      primary: primaryRawJson,
+      table: tableRawJson,
+      tableError,
+    },
+    extractedFields: primaryFields,
+    parsedJson,
+    confidence: null,
+    parser: "CUSTOMS_DECLARATION",
   };
 }
 
@@ -496,6 +761,21 @@ export async function recognizePdfTextWithOcr(
   options: { requireText?: boolean } = {},
 ) {
   const settings = await ensureOcrFeatureEnabled(feature);
+  const fileBuffer = bufferFromInput(buffer);
+  if (feature === "customsDeclaration") {
+    try {
+      return await recognizeAliyunCustomsDeclaration(fileBuffer, settings, options);
+    } catch (error) {
+      console.error("aliyun-customs-ocr-structured-failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return recognizeWithPdfTextFallback(fileBuffer, feature, settings, {
+        ...options,
+        source: "ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT",
+        error,
+      });
+    }
+  }
   return recognizeWithPdfTextFallback(buffer, feature, settings, options);
 }
 

@@ -375,6 +375,7 @@ model ReceivableOrder {
   exportTaxRefundCalculations   ExportTaxRefundCalculation[]
   shipsgoTrackings              ShipsgoTracking[]
   ocrTasks                      OcrTask[]
+  ocrRawResults                 OcrRawResult[]
 
   @@index([orderNo])
   @@index([blNo])
@@ -630,6 +631,7 @@ model OrderDocument {
   uploadedBy               User?                    @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
   logisticsExpenseInvoices LogisticsExpense[]       @relation("LogisticsExpenseInvoiceDocument")
   ocrTasks                 OcrTask[]
+  ocrRawResults            OcrRawResult[]
   customsDeclarationItems  ExportCustomsDeclarationItem[]
 
   @@index([orderId])
@@ -655,11 +657,18 @@ model ExportCustomsDeclarationItem {
   exportDate         DateTime? @map("export_date") @db.Date
   hsCode             String    @map("hs_code")
   productName        String    @map("product_name")
+  specification      String?
   quantity           Decimal?  @db.Decimal(18, 4)
   unit               String?
+  unitPrice          Decimal?  @map("unit_price") @db.Decimal(18, 6)
+  totalAmount        Decimal?  @map("total_amount") @db.Decimal(18, 2)
   tradeTerm          String?   @map("trade_term")
   currency           String?
   fobAmount          Decimal?  @map("fob_amount") @db.Decimal(18, 2)
+  grossWeight        Decimal?  @map("gross_weight") @db.Decimal(18, 4)
+  netWeight          Decimal?  @map("net_weight") @db.Decimal(18, 4)
+  originCountry      String?   @map("origin_country")
+  destinationCountry String?   @map("destination_country")
   exchangeRate       Decimal?  @map("exchange_rate") @db.Decimal(18, 6)
   fobAmountCny       Decimal?  @map("fob_amount_cny") @db.Decimal(18, 2)
   rawJson            Json?     @map("raw_json")
@@ -909,6 +918,32 @@ model OcrTask {
   @@index([validationStatus])
   @@index([documentType])
   @@map("ocr_tasks")
+}
+
+model OcrRawResult {
+  id           String    @id @default(cuid())
+  documentId   String    @map("document_id")
+  orderId      String?   @map("order_id")
+  documentType String    @map("document_type")
+  provider     String    @default("ALIYUN")
+  apiName      String    @map("api_name")
+  rawJson      Json?     @map("raw_json")
+  parsedJson   Json?     @map("parsed_json")
+  confidence   Decimal?  @db.Decimal(8, 4)
+  status       String    @default("SUCCESS")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  document OrderDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  order    ReceivableOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([documentId])
+  @@index([orderId])
+  @@index([documentType])
+  @@index([provider, apiName])
+  @@index([status])
+  @@map("ocr_raw_results")
 }
 
 model OcrResult {

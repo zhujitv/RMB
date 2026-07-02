@@ -7,25 +7,35 @@ const taxCalculationService = readFileSync("lib/platform/export-tax-refund-calcu
 const detail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
 const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+const ocrIntegration = readFileSync("lib/platform/ocr-integration.ts", "utf8");
 
-test("customs document tab returns parsed declaration fields and admin raw OCR result", () => {
+test("customs document tab returns parsed declaration fields and internal raw OCR result", () => {
   const customsSection = taxRefundService.match(/async function getTaxRefundCustomsDocumentsSection[\s\S]*?\n}\n\nasync function getTaxRefundCostDocumentSection/)?.[0] || "";
   assert.match(customsSection, /prisma\.exportCustomsDeclarationItem\.findMany/);
   assert.match(customsSection, /rawJson: true/);
   assert.match(customsSection, /customsDeclarationItems: serializedItems/);
-  assert.match(customsSection, /customsOcrRawResult: actor\?\.role === "管理员"/);
+  assert.match(customsSection, /prisma\.ocrRawResult\.findFirst/);
+  assert.match(customsSection, /canReadOcrRawResult\(actor\)/);
   assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
   assert.match(taxRefundService, /domesticConsignor/);
-  assert.match(taxRefundService, /function serializeCustomsOcrRawResult/);
+  assert.match(taxRefundService, /serializeStoredOcrRawResult/);
+  assert.match(schema, /model OcrRawResult/);
+  assert.match(schema, /@@map\("ocr_raw_results"\)/);
 });
 
 test("tax refund detail displays customs OCR results and empty-field exception", () => {
   assert.match(model, /customsOcrRawResult\?:/);
   assert.match(model, /domesticConsignor\?: string/);
+  assert.match(model, /apiName\?: string/);
+  assert.match(model, /rawJson\?: unknown/);
   assert.match(detail, /function CustomsRecognitionResultPanel/);
   assert.match(detail, /报关单识别结果/);
   assert.match(detail, /OCR识别成功，但未解析到报关单关键字段。/);
+  assert.match(detail, /OCR已识别基础字段，但未解析到报关商品明细。/);
+  assert.match(detail, /OCR原始结果未保存，请重新识别。/);
   assert.match(detail, /查看OCR原始结果/);
+  assert.match(detail, /canReadCustomsRawResult/);
   assert.match(detail, /报关单号/);
   assert.match(detail, /申报日期/);
   assert.match(detail, /出口日期/);
@@ -33,13 +43,24 @@ test("tax refund detail displays customs OCR results and empty-field exception",
   assert.match(detail, /币种/);
   assert.match(detail, /FOB金额/);
   assert.match(detail, /境内发货人/);
+  assert.match(detail, /申报单位/);
+  assert.match(detail, /运输方式/);
+  assert.match(detail, /提运单号/);
+  assert.match(detail, /贸易国别/);
+  assert.match(detail, /目的国/);
+  assert.match(detail, /监管方式/);
   assert.match(detail, /HS编码/);
   assert.match(detail, /商品名称/);
+  assert.match(detail, /规格型号/);
   assert.match(styles, /\.customsRecognitionResultCard/);
+  assert.match(styles, /\.customsRawResultSection/);
   assert.match(styles, /\.customsOcrRawResult/);
 });
 
 test("tax refund calculation requires confirmed declaration items", () => {
+  assert.match(taxCalculationService, /saveOcrRawResult/);
+  assert.match(taxCalculationService, /customsParsedFromRecognition/);
+  assert.match(taxCalculationService, /已识别基础字段，但未解析到商品明细，请人工维护。/);
   assert.match(taxCalculationService, /confirmationStatus: "CONFIRMED"/);
   assert.match(taxCalculationService, /CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED/);
   assert.match(taxCalculationService, /没有确认报关商品明细，不允许进入退税计算。/);
@@ -49,4 +70,13 @@ test("tax refund calculation requires confirmed declaration items", () => {
   assert.match(detail, /没有确认报关商品明细，不允许进入退税计算。请先在“报关商品”中确认并保存。/);
   assert.match(detail, /保存后确认/);
   assert.match(styles, /\.taxCalculationBlockedPanel/);
+});
+
+test("customs OCR uses structured recognition with table fallback and saves full raw JSON", () => {
+  assert.match(ocrIntegration, /CUSTOMS_DECLARATION_KEYS/);
+  assert.match(ocrIntegration, /CUSTOMS_TABLE_KEYS/);
+  assert.match(ocrIntegration, /recognizeAliyunCustomsDeclaration/);
+  assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE/);
+  assert.match(ocrIntegration, /rawJson: \{ primary: primaryRawJson, table: tableRawJson \}/);
+  assert.match(ocrIntegration, /parsedJson/);
 });

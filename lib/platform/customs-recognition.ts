@@ -27,6 +27,7 @@ import {
 } from "./masters-access";
 import { orderAccessWhere } from "./order-access";
 import { recognizePdfTextWithOcr } from "./ocr-integration";
+import { saveOcrRawResult } from "./ocr-raw-results";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 
 type CustomsDocumentRuntimeFields = {
@@ -103,6 +104,11 @@ type ParseCustomsDocumentResult = {
   status: CustomsParseStatus;
   source: string;
   message: string;
+  provider?: string;
+  apiName?: string;
+  rawJson?: unknown;
+  parsedJson?: unknown;
+  confidence?: number | null;
 };
 type ParseAndApplyCustomsOptions = {
   force?: boolean;
@@ -240,16 +246,25 @@ function mergeCustomsFields(parsedFields: CustomsFields = {}, before: CustomsOrd
 
 async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocumentLike = {}, options: { requireText?: boolean } = {}): Promise<ParseCustomsDocumentResult> {
   const recognized = await recognizePdfTextWithOcr(buffer, "customsDeclaration", options);
+  const parsed = recognized.parsedJson && typeof recognized.parsedJson === "object" && !Array.isArray(recognized.parsedJson)
+    ? recognized.parsedJson as Record<string, unknown>
+    : {};
   const result = customsDeclarationParser.parseCustomsDeclarationText(recognized.text);
   const fields = {
-    customsDeclarationNo: result.customsDeclarationNo || "",
-    customsDeclarationDate: result.customsDeclarationDate || "",
+    customsDeclarationNo: String(parsed.customsDeclarationNo || result.customsDeclarationNo || ""),
+    customsDeclarationDate: String(parsed.customsDeclarationDate || result.customsDeclarationDate || ""),
   };
+  const status = customsDeclarationParser.customsParseStatusFromFields(fields);
   return {
     fields,
-    status: result.customsDeclarationParseStatus || customsDeclarationParser.customsParseStatusFromFields(fields),
-    source: recognized.source || customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
-    message: result.customsDeclarationParseMessage || customsDeclarationParser.customsParseMessage(fields),
+    status,
+    source: recognized.apiName || recognized.source || customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
+    message: customsDeclarationParser.customsParseMessage(fields, status),
+    provider: recognized.provider,
+    apiName: recognized.apiName || recognized.source,
+    rawJson: recognized.rawJson || null,
+    parsedJson: recognized.parsedJson || result,
+    confidence: recognized.confidence ?? null,
   };
 }
 
@@ -455,7 +470,25 @@ export async function parseAndApplyCustomsDocument(
   if (!before) throw permissionError("应收订单不存在", 404);
   const manualProtected = before.customsDeclarationParseSource === "MANUAL" || before.customsParseStatus === "MANUAL";
   try {
-    const { fields, status, source, message } = await parseCustomsDocumentBuffer(buffer, document);
+    const { fields, status, source, message, provider, apiName, rawJson, parsedJson, confidence } = await parseCustomsDocumentBuffer(buffer, document);
+    await saveOcrRawResult({
+      documentId: document.id,
+      orderId: document.orderId,
+      documentType: document.documentType,
+      provider: provider || "ALIYUN",
+      apiName: apiName || source || "CUSTOMS_DECLARATION_OCR",
+      rawJson,
+      parsedJson,
+      confidence: confidence ?? null,
+      status: status === "SUCCESS" ? "SUCCESS" : status === "PARTIAL" ? "PARTIAL" : "FAILED",
+      errorMessage: status === "SUCCESS" ? "" : message,
+    }).catch((error) => {
+      console.error("customs-ocr-raw-result-save-failed", {
+        documentId: document.id,
+        orderId: document.orderId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
     if (!hasCustomsRecognitionValue(fields)) {
       const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, message, "CUSTOMS_PARSE_NO_FIELDS", failureAction, {
         allowManualFailure,

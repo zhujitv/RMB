@@ -126,11 +126,18 @@ test("parses customs declaration item detail for tax refund calculation", () => 
   assert.deepEqual(result.items[0], {
     hsCode: "9403609990",
     productName: "木制餐桌",
+    specification: "",
     quantity: 120,
     unit: "个",
+    unitPrice: 0,
+    totalAmount: 3600,
     tradeTerm: "FOB",
     currency: "USD",
     fobAmount: 3600,
+    grossWeight: 0,
+    netWeight: 0,
+    originCountry: "",
+    destinationCountry: "",
   });
 });
 

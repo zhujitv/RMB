@@ -634,7 +634,6 @@ function customsRecognitionLooksSuccessful(detail: TaxRefundDetail) {
     detail.customsParseStatusLabel,
     detail.customsParseMessage,
     detail.customsOcrRawResult?.status,
-    detail.customsOcrRawResult?.validationStatus,
   ].filter(Boolean).join(" ");
   return /SUCCESS|成功|已识别|识别通过/i.test(text);
 }
@@ -643,13 +642,21 @@ function customsRawResultText(detail: TaxRefundDetail) {
   const raw = detail.customsOcrRawResult;
   if (!raw) return "暂无 OCR 原始结果。";
   return JSON.stringify({
-    taskId: raw.taskId || "",
+    id: raw.id || "",
+    documentId: raw.documentId || "",
+    provider: raw.provider || "",
+    apiName: raw.apiName || "",
     status: raw.status || "",
-    validationStatus: raw.validationStatus || "",
     errorMessage: raw.errorMessage || "",
-    resultJson: raw.resultJson || null,
-    rawText: raw.rawText || "",
+    confidence: raw.confidence ?? null,
+    recognizedAt: raw.createdAt || null,
+    rawJson: raw.rawJson || null,
+    parsedJson: raw.parsedJson || null,
   }, null, 2);
+}
+
+function canReadCustomsRawResult(role: string) {
+  return role === "管理员" || role === "财务";
 }
 
 function CustomsRecognitionResultPanel({
@@ -664,11 +671,19 @@ function CustomsRecognitionResultPanel({
   const firstItem = items[0] || {};
   const hasAnyParsedField = Boolean(detail.customsDeclarationNo || detail.customsDeclarationDate || items.some(customsItemHasKeyFields));
   const ocrSuccessButEmpty = customsRecognitionLooksSuccessful(detail) && !hasAnyParsedField;
+  const ocrSuccessButNoItems = customsRecognitionLooksSuccessful(detail) && hasAnyParsedField && !items.length;
+  const rawMissing = canReadCustomsRawResult(currentUserRole) && customsRecognitionLooksSuccessful(detail) && !detail.customsOcrRawResult?.rawJson;
   const totalFobAmount = items.reduce((sum, item) => sum + Number(item.fobAmount || 0), 0);
   const firstCurrency = firstItem.currency || detail.currency || "";
   const firstTradeTerm = firstItem.tradeTerm || "";
   const firstExportDate = firstItem.exportDate || "";
   const domesticConsignor = firstItem.domesticConsignor || detail.businessEntityName || detail.businessEntityDisplayName || "";
+  const declarationUnit = firstItem.declarationUnit || "";
+  const transportMode = firstItem.transportMode || "";
+  const billOfLadingNo = firstItem.billOfLadingNo || detail.billOfLadingNo || "";
+  const tradeCountry = firstItem.tradeCountry || "";
+  const destinationCountry = firstItem.destinationCountry || "";
+  const supervisionMode = firstItem.supervisionMode || "";
   return (
     <div className={`${styles.documentGroupCard} ${styles.customsRecognitionResultCard}`} id={taxTargetDomId("customs-recognition-result")}>
       <div className={styles.customsResultHeader}>
@@ -680,7 +695,7 @@ function CustomsRecognitionResultPanel({
           <span className={`${styles.statusPill} ${ocrSuccessButEmpty ? styles.statusDanger : hasAnyParsedField ? styles.statusSuccess : styles.statusWarning}`}>
             {ocrSuccessButEmpty ? "字段异常" : hasAnyParsedField ? "已解析" : "待识别"}
           </span>
-          {currentUserRole === "管理员" ? (
+          {canReadCustomsRawResult(currentUserRole) ? (
             <button className={styles.secondaryButton} type="button" onClick={() => setShowRaw((value) => !value)}>
               查看OCR原始结果
             </button>
@@ -690,6 +705,9 @@ function CustomsRecognitionResultPanel({
       {ocrSuccessButEmpty ? (
         <div className={styles.inlineError}>OCR识别成功，但未解析到报关单关键字段。</div>
       ) : null}
+      {ocrSuccessButNoItems ? (
+        <div className={styles.inlineError}>OCR已识别基础字段，但未解析到报关商品明细。</div>
+      ) : null}
       <div className={styles.taxBasicInfoGrid}>
         <TaxInfoItem label="报关单号" value={detail.customsDeclarationNo || firstItem.declarationNo || ""} />
         <TaxInfoItem label="申报日期" value={formatDate(detail.customsDeclarationDate || detail.declarationDate || firstItem.declarationDate)} />
@@ -698,39 +716,38 @@ function CustomsRecognitionResultPanel({
         <TaxInfoItem label="币种" value={firstCurrency} />
         <TaxInfoItem label="FOB金额" value={totalFobAmount ? currencyAmountText(firstCurrency, totalFobAmount) : currencyAmountText(firstCurrency, firstItem.fobAmount)} />
         <TaxInfoItem label="境内发货人" value={domesticConsignor} wide />
+        <TaxInfoItem label="申报单位" value={declarationUnit} />
+        <TaxInfoItem label="运输方式" value={transportMode} />
+        <TaxInfoItem label="提运单号" value={billOfLadingNo} />
+        <TaxInfoItem label="贸易国别" value={tradeCountry} />
+        <TaxInfoItem label="目的国" value={destinationCountry} />
+        <TaxInfoItem label="监管方式" value={supervisionMode} />
       </div>
+      <div className={styles.sectionSubheading}>商品明细</div>
       <div className={styles.taxCalculationTableContainer}>
         <table className={`${styles.dataTable} ${styles.taxCalculationDataTable} ${styles.customsRecognitionTable}`}>
           <thead>
             <tr>
-              <th>报关单号</th>
-              <th>申报日期</th>
-              <th>出口日期</th>
-              <th>境内发货人</th>
               <th>HS编码</th>
               <th>商品名称</th>
+              <th>规格型号</th>
               <th>数量</th>
               <th>单位</th>
-              <th>成交方式</th>
+              <th>金额</th>
               <th>币种</th>
-              <th>FOB金额</th>
               <th>确认状态</th>
             </tr>
           </thead>
           <tbody>
             {items.length ? items.map((item, index) => (
               <tr key={item.id || `customs-item-${index}`} className={item.confirmationStatus === "CONFIRMED" ? "" : styles.rowWarning}>
-                <td title={item.declarationNo || detail.customsDeclarationNo || ""}>{item.declarationNo || detail.customsDeclarationNo || "-"}</td>
-                <td>{formatDate(item.declarationDate || detail.customsDeclarationDate || detail.declarationDate)}</td>
-                <td>{formatDate(item.exportDate)}</td>
-                <td title={item.domesticConsignor || domesticConsignor}>{item.domesticConsignor || domesticConsignor || "-"}</td>
                 <td>{item.hsCode || "-"}</td>
                 <td title={item.productName || ""}>{item.productName || "-"}</td>
+                <td title={item.specification || ""}>{item.specification || "-"}</td>
                 <td className={styles.numericCell}>{amountText(item.quantity)}</td>
                 <td>{item.unit || "-"}</td>
-                <td>{item.tradeTerm || "-"}</td>
+                <td className={styles.numericCell}>{currencyAmountText(item.currency, item.totalAmount || item.fobAmount)}</td>
                 <td>{item.currency || "-"}</td>
-                <td className={styles.numericCell}>{currencyAmountText(item.currency, item.fobAmount)}</td>
                 <td>
                   <span className={`${styles.statusPill} ${item.confirmationStatus === "CONFIRMED" ? styles.statusSuccess : styles.statusWarning}`}>
                     {item.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}
@@ -739,16 +756,30 @@ function CustomsRecognitionResultPanel({
               </tr>
             )) : (
               <tr>
-                <td colSpan={12} className={styles.taxCalculationEmptyCell}>
-                  <div className={styles.emptyState}>暂无报关商品明细，请先上传或识别报关单。</div>
+                <td colSpan={8} className={styles.taxCalculationEmptyCell}>
+                  <div className={styles.emptyState}>
+                    {hasAnyParsedField ? "OCR已识别基础字段，但未解析到报关商品明细。" : "暂无报关商品明细，请先上传或识别报关单。"}
+                  </div>
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      {currentUserRole === "管理员" && showRaw ? (
-        <pre className={styles.customsOcrRawResult}>{customsRawResultText(detail)}</pre>
+      {canReadCustomsRawResult(currentUserRole) && rawMissing ? (
+        <div className={styles.inlineError}>OCR原始结果未保存，请重新识别。</div>
+      ) : null}
+      {canReadCustomsRawResult(currentUserRole) && showRaw ? (
+        <div className={styles.customsRawResultSection}>
+          <div className={styles.sectionSubheading}>OCR原始结果</div>
+          <div className={styles.taxBasicInfoGrid}>
+            <TaxInfoItem label="识别接口" value={detail.customsOcrRawResult?.apiName || ""} />
+            <TaxInfoItem label="识别时间" value={formatDateTime(detail.customsOcrRawResult?.createdAt)} />
+            <TaxInfoItem label="字段置信度" value={detail.customsOcrRawResult?.confidence == null ? "" : `${Math.round(Number(detail.customsOcrRawResult.confidence) * 10000) / 100}%`} />
+            <TaxInfoItem label="失败原因" value={detail.customsOcrRawResult?.errorMessage || ""} wide />
+          </div>
+          <pre className={styles.customsOcrRawResult}>{customsRawResultText(detail)}</pre>
+        </div>
       ) : null}
     </div>
   );
