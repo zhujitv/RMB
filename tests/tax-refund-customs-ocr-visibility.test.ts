@@ -66,7 +66,9 @@ test("tax refund detail displays customs OCR results and empty-field exception",
   assert.match(detail, /历史识别文件/);
   assert.match(detail, /OCR调用日志/);
   assert.match(detail, /OCR识别成功，但未解析到报关单关键字段。/);
-  assert.match(detail, /OCR已识别基础字段，但未解析到报关商品明细。/);
+  assert.match(detail, /OCR未识别到商品明细，请手工维护。/);
+  assert.match(detail, /OCR已解析到商品明细，但尚未同步到退税商品表，请点击同步。/);
+  assert.match(detail, /同步OCR商品明细/);
   assert.match(detail, /OCR原始结果未保存，请重新识别。/);
   assert.match(detail, /查看OCR原始结果/);
   assert.match(detail, /canReadCustomsRawResult/);
@@ -118,6 +120,17 @@ test("customs OCR uses structured recognition with table fallback and saves full
   assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(ocrIntegration, /rawJson: \{ primary: primaryRawJson, table: tableRawJson \}/);
   assert.match(ocrIntegration, /parsedJson/);
+});
+
+test("customs OCR parsed items can be synced into declaration item table", () => {
+  assert.match(taxCalculationService, /export async function syncCustomsDeclarationItemsFromOcrRawResult/);
+  assert.match(taxCalculationService, /replaceCustomsDeclarationItemsFromParsed/);
+  assert.match(taxCalculationService, /createMany/);
+  assert.match(taxCalculationService, /confirmationStatus: "PENDING_CONFIRMATION"/);
+  assert.match(taxCalculationService, /parsedItemsCount/);
+  assert.match(taxCalculationService, /insertedItemsCount/);
+  assert.match(taxCalculationService, /skippedReason/);
+  assert.match(taxRefundDetailRoute, /syncCustomsDeclarationItemsFromOcr/);
 });
 
 test("customs OCR persistence logs empty raw JSON and failed provider calls", () => {

@@ -89,6 +89,7 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onRefreshCompleteness={(row) => void taxRefund.refreshCompleteness(row)}
         onRecalculateTaxRefund={(row) => void taxRefund.recalculateTaxRefund(row)}
         onSaveCustomsDeclarationItems={taxRefund.saveCustomsDeclarationItems}
+        onSyncCustomsDeclarationItemsFromOcr={taxRefund.syncCustomsDeclarationItemsFromOcr}
         onCreateCompanyHsFromDeclarationItem={taxRefund.createCompanyHsFromDeclarationItem}
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}

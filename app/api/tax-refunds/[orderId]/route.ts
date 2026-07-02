@@ -16,6 +16,7 @@ import {
   refreshTaxRefundCompletenessNow,
   saveCustomsDeclarationItems,
   sendManualShippingDocumentsNotification,
+  syncCustomsDeclarationItemsFromOcrRawResult,
   taxRefundDataReadFailure,
   updateCustomsRecognition,
   updateTaxRefundStatus,
@@ -99,6 +100,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const data = await saveCustomsDeclarationItems(request, actor, orderId, items as never);
       const order = await getTaxRefundOrderDetail(orderId, actor);
       return ok({ success: true, order, data, message: "报关商品明细已确认，退税金额已重新计算" });
+    }
+    if (body.action === "syncCustomsDeclarationItemsFromOcr") {
+      const documentId = requireText(body.documentId, "报关单文件");
+      const data = await syncCustomsDeclarationItemsFromOcrRawResult(request, actor, orderId, documentId);
+      const order = await getTaxRefundOrderDetail(orderId, actor);
+      return ok({ success: true, order, data, message: "OCR商品明细已同步，请确认" });
     }
     if (body.action === "recalculateTaxRefund") {
       const data = await recalculateExportTaxRefund(request, actor, orderId);

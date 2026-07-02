@@ -742,6 +742,26 @@ export function useTaxRefundController({
     }
   }
 
+  async function syncCustomsDeclarationItemsFromOcr(orderId: string, documentId: string) {
+    setCalculatingTaxRefundId(orderId);
+    setDetailError("");
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "syncCustomsDeclarationItemsFromOcr", documentId }),
+      });
+      if (result.success !== true || !result.order) throw new Error(result.message || "OCR商品明细同步失败");
+      patchDetailForOrder(orderId, result.order);
+      setNotice(result.message || "OCR商品明细已同步，请确认");
+    } catch (syncError) {
+      setDetailError(syncError instanceof Error ? syncError.message : "OCR商品明细同步失败");
+    } finally {
+      setCalculatingTaxRefundId("");
+    }
+  }
+
   async function createCompanyHsFromDeclarationItem(orderId: string, payload: Record<string, unknown>) {
     setCalculatingTaxRefundId(orderId);
     setDetailError("");
@@ -1084,6 +1104,7 @@ export function useTaxRefundController({
     refreshCompleteness,
     recalculateTaxRefund,
     saveCustomsDeclarationItems,
+    syncCustomsDeclarationItemsFromOcr,
     createCompanyHsFromDeclarationItem,
     updateTaxRefundStatus,
     closeDetailDrawer,

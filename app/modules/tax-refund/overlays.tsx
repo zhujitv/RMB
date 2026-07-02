@@ -61,6 +61,7 @@ type TaxRefundOverlaysProps = {
   onRefreshCompleteness: (row: TaxRefundRow) => void;
   onRecalculateTaxRefund: (row: TaxRefundRow) => void;
   onSaveCustomsDeclarationItems: (orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) => Promise<void> | void;
+  onSyncCustomsDeclarationItemsFromOcr: (orderId: string, documentId: string) => Promise<void> | void;
   onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
@@ -123,6 +124,7 @@ export function TaxRefundOverlays({
   onRefreshCompleteness,
   onRecalculateTaxRefund,
   onSaveCustomsDeclarationItems,
+  onSyncCustomsDeclarationItemsFromOcr,
   onCreateCompanyHsFromDeclarationItem,
   onCustomsSaved,
   onUpload,
@@ -175,6 +177,7 @@ export function TaxRefundOverlays({
           onRefreshCompleteness={() => onRefreshCompleteness(detailRow)}
           onRecalculateTaxRefund={() => onRecalculateTaxRefund(detailRow)}
           onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
+          onSyncCustomsDeclarationItemsFromOcr={onSyncCustomsDeclarationItemsFromOcr}
           onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}

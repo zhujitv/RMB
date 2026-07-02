@@ -208,10 +208,23 @@ function customsParsedDetailFromRecognition(parsedJson: unknown, text = "") {
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
   const items = rawItems
     .map((item) => isPlainRecord(item) ? item : {})
-    .map((item) => customsDeclarationParser.normalizeCustomsDeclarationItemForTaxRefund(item, {
-      tradeTerm: cleanCustomsText(parsed.tradeTerm) || fallback.tradeTerm,
-      currency: cleanCustomsText(parsed.currency).toUpperCase() || fallback.currency,
-    }))
+    .map((item): customsDeclarationParser.CustomsDeclarationItemFields | null => {
+      const normalized = customsDeclarationParser.normalizeCustomsDeclarationItemForTaxRefund(item, {
+        tradeTerm: cleanCustomsText(parsed.tradeTerm) || fallback.tradeTerm,
+        currency: cleanCustomsText(parsed.currency).toUpperCase() || fallback.currency,
+      });
+      if (!normalized) return null;
+      return {
+        ...normalized,
+        hsCode: normalizedHsCode(item.hsCode || item.customsHsCode),
+        specification: cleanCustomsText(item.specification || item.specModel),
+        unitPrice: num(item.unitPrice, 0) || normalized.unitPrice,
+        grossWeight: num(item.grossWeight, 0) || normalized.grossWeight,
+        netWeight: num(item.netWeight, 0) || normalized.netWeight,
+        originCountry: cleanCustomsText(item.originCountry) || normalized.originCountry,
+        destinationCountry: cleanCustomsText(item.destinationCountry) || normalized.destinationCountry,
+      };
+    })
     .filter((item): item is customsDeclarationParser.CustomsDeclarationItemFields => Boolean(item));
   return {
     customsDeclarationNo: cleanCustomsText(parsed.customsDeclarationNo) || fallback.customsDeclarationNo,
@@ -289,7 +302,7 @@ async function persistCustomsRecognitionArtifacts(
       },
       confidence: parsed.confidence ?? null,
       status: parsed.status === "SUCCESS" && parsedDetail.items.length ? "SUCCESS" : "PARTIAL",
-      errorMessage: parsedDetail.items.length ? (parsed.status === "SUCCESS" ? "" : parsed.message) : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。",
+      errorMessage: parsedDetail.items.length ? (parsed.status === "SUCCESS" ? "" : parsed.message) : "OCR未识别到商品明细，请手工维护。",
     });
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : String(error);
@@ -308,6 +321,7 @@ async function persistCustomsRecognitionArtifacts(
     where: { orderId, documentId: document.id, deletedAt: null },
     data: { deletedAt: new Date() },
   });
+  let insertedItemsCount = 0;
   for (const [index, item] of parsedDetail.items.entries()) {
     await prisma.exportCustomsDeclarationItem.create({
       data: {
@@ -316,28 +330,31 @@ async function persistCustomsRecognitionArtifacts(
         declarationNo: parsedDetail.customsDeclarationNo || "",
         declarationDate: customsDateOrNull(parsedDetail.customsDeclarationDate),
         exportDate: customsDateOrNull(parsedDetail.exportDate),
-        hsCode: "",
+        hsCode: normalizedHsCode(item.hsCode),
         productName: item.productName,
-        specification: null,
+        specification: item.specification || null,
         quantity: item.quantity || null,
         unit: item.unit || null,
-        unitPrice: null,
+        unitPrice: item.unitPrice || null,
         totalAmount: item.totalAmount || item.fobAmount || null,
         tradeTerm: item.tradeTerm || parsedDetail.tradeTerm || null,
         currency: item.currency || parsedDetail.currency || null,
         fobAmount: item.fobAmount || null,
-        grossWeight: null,
-        netWeight: null,
-        originCountry: null,
-        destinationCountry: null,
+        grossWeight: item.grossWeight || null,
+        netWeight: item.netWeight || null,
+        originCountry: item.originCountry || null,
+        destinationCountry: item.destinationCountry || null,
         exchangeRate: null,
         fobAmountCny: null,
         rawJson: {
+          hsCode: item.hsCode || "",
           productName: item.productName || "",
+          specification: item.specification || "",
           quantity: item.quantity || null,
           unit: item.unit || "",
           currency: item.currency || parsedDetail.currency || "",
           totalAmount: item.totalAmount || item.fobAmount || null,
+          fobAmount: item.fobAmount || item.totalAmount || null,
           declarationNo: parsedDetail.customsDeclarationNo || "",
           declarationDate: parsedDetail.customsDeclarationDate || "",
           exportDate: parsedDetail.exportDate || "",
@@ -349,21 +366,27 @@ async function persistCustomsRecognitionArtifacts(
         sortOrder: index,
       },
     });
+    insertedItemsCount += 1;
   }
   const result = {
     rawJsonSaved: Boolean(rawResult?.rawJson),
     parsedJsonSaved: Boolean(rawResult?.parsedJson),
     itemCount: parsedDetail.items.length,
+    insertedItemsCount,
     errorMessage,
   };
   console.info("customs-ocr-result-persisted", {
     documentId: document.id,
+    refundRecordId: orderId,
     orderId,
     provider: parsed.provider || "ALIYUN",
     apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
     rawJsonSaved: result.rawJsonSaved,
     parsedJsonSaved: result.parsedJsonSaved,
     itemCount: result.itemCount,
+    parsedItemsCount: result.itemCount,
+    insertedItemsCount: result.insertedItemsCount,
+    skippedReason: result.itemCount ? "" : "parsedJson.items empty",
     errorMessage: result.errorMessage,
   });
   return result;
@@ -749,7 +772,7 @@ export async function parseAndApplyCustomsDocument(
       : !persistence.parsedJsonSaved
         ? "识别部分成功：解析结果未保存"
         : "";
-    const itemMissingMessage = persistence.itemCount ? "" : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。";
+    const itemMissingMessage = persistence.itemCount ? "" : "OCR未识别到商品明细，请手工维护。";
     const status: CustomsParseStatus = persistenceMessage || itemMissingMessage ? "PARTIAL" : parsed.status;
     const message = persistenceMessage || itemMissingMessage || parsed.message;
     if (!hasCustomsRecognitionValue(fields)) {
@@ -1032,7 +1055,7 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
     : !persistence.parsedJsonSaved
       ? "识别部分成功：解析结果未保存"
       : "";
-  const itemMissingMessage = persistence.itemCount ? "" : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。";
+  const itemMissingMessage = persistence.itemCount ? "" : "OCR未识别到商品明细，请手工维护。";
   const missing = missingCustomsFieldMessages(fields);
   if (!hasCustomsRecognitionValue(fields)) {
     const message = missing.join("；") || "未识别到报关单号；未识别到申报日期";

@@ -44,6 +44,7 @@ export function TaxRefundDetailDrawer({
   onRefreshCompleteness,
   onRecalculateTaxRefund,
   onSaveCustomsDeclarationItems,
+  onSyncCustomsDeclarationItemsFromOcr,
   onCreateCompanyHsFromDeclarationItem,
   onCustomsSaved,
   onUpload,
@@ -86,6 +87,7 @@ export function TaxRefundDetailDrawer({
   onRefreshCompleteness: () => void;
   onRecalculateTaxRefund: () => void;
   onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+  onSyncCustomsDeclarationItemsFromOcr: (orderId: string, documentId: string) => Promise<void> | void;
   onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
@@ -194,6 +196,7 @@ export function TaxRefundDetailDrawer({
             calculatingTaxRefund={calculatingTaxRefund}
             calculationFormId={calculationFormId}
             onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
+            onSyncCustomsDeclarationItemsFromOcr={onSyncCustomsDeclarationItemsFromOcr}
             onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
             onSelectTab={onSelectTab}
           />
@@ -299,6 +302,7 @@ function TaxRefundDetailPanel({
   calculatingTaxRefund,
   calculationFormId,
   onSaveCustomsDeclarationItems,
+  onSyncCustomsDeclarationItemsFromOcr,
   onCreateCompanyHsFromDeclarationItem,
   onSelectTab,
 }: {
@@ -330,6 +334,7 @@ function TaxRefundDetailPanel({
   calculatingTaxRefund: boolean;
   calculationFormId: string;
   onSaveCustomsDeclarationItems: (orderId: string, items: CustomsDeclarationItem[]) => Promise<void> | void;
+  onSyncCustomsDeclarationItemsFromOcr: (orderId: string, documentId: string) => Promise<void> | void;
   onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onSelectTab: (tab: TaxRefundDetailTab) => void;
 }) {
@@ -469,7 +474,13 @@ function TaxRefundDetailPanel({
         ) : null}
         {activeTab === "customs-documents" ? (
         <>
-          <CustomsRecognitionResultPanel detail={detail} currentUserRole={currentUserRole} />
+          <CustomsRecognitionResultPanel
+            detail={detail}
+            currentUserRole={currentUserRole}
+            readOnly={readOnly}
+            syncing={calculatingTaxRefund}
+            onSyncCustomsDeclarationItemsFromOcr={onSyncCustomsDeclarationItemsFromOcr}
+          />
           <CustomsRecognitionForm
             detail={detail}
             readOnly={readOnly}
@@ -637,6 +648,17 @@ function customsRecognitionLooksSuccessful(detail: TaxRefundDetail) {
   return /SUCCESS|成功|已识别|识别通过/i.test(text);
 }
 
+function customsOcrParsedItemsCount(detail: TaxRefundDetail) {
+  const parsed = detail.customsOcrRawResult?.parsedJson;
+  const parsedRecord = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
+  const items = parsedRecord.items;
+  if (Array.isArray(items)) return items.length;
+  const itemCount = Number(parsedRecord.itemCount || 0);
+  return Number.isFinite(itemCount) ? itemCount : 0;
+}
+
 function customsRawResultText(detail: TaxRefundDetail) {
   const raw = detail.customsOcrRawResult;
   if (!raw) return "暂无 OCR 原始结果。";
@@ -690,18 +712,29 @@ function CustomsRecognitionDocumentSummary({
 function CustomsRecognitionResultPanel({
   detail,
   currentUserRole,
+  readOnly,
+  syncing,
+  onSyncCustomsDeclarationItemsFromOcr,
 }: {
   detail: TaxRefundDetail;
   currentUserRole: string;
+  readOnly: boolean;
+  syncing: boolean;
+  onSyncCustomsDeclarationItemsFromOcr: (orderId: string, documentId: string) => Promise<void> | void;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   const items = detail.customsDeclarationItems || [];
-  const firstItem = items[0] || {};
-  const hasAnyParsedField = Boolean(detail.customsDeclarationNo || detail.customsDeclarationDate || items.some(customsItemHasKeyFields));
+  const ocrParsedItemsCount = customsOcrParsedItemsCount(detail);
+  const currentDocumentId = detail.currentCustomsDocument?.id || detail.customsOcrRawResult?.documentId || "";
+  const currentDocumentItems = currentDocumentId ? items.filter((item) => item.documentId === currentDocumentId) : items;
+  const displayItems = currentDocumentId && (currentDocumentItems.length || ocrParsedItemsCount > 0) ? currentDocumentItems : items;
+  const firstItem = displayItems[0] || {};
+  const hasAnyParsedField = Boolean(detail.customsDeclarationNo || detail.customsDeclarationDate || displayItems.some(customsItemHasKeyFields));
+  const ocrParsedButNotSynced = !displayItems.length && ocrParsedItemsCount > 0;
   const ocrSuccessButEmpty = customsRecognitionLooksSuccessful(detail) && !hasAnyParsedField;
-  const ocrSuccessButNoItems = customsRecognitionLooksSuccessful(detail) && hasAnyParsedField && !items.length;
+  const ocrSuccessButNoItems = customsRecognitionLooksSuccessful(detail) && hasAnyParsedField && !items.length && !ocrParsedButNotSynced;
   const rawMissing = canReadCustomsRawResult(currentUserRole) && customsRecognitionLooksSuccessful(detail) && !detail.customsOcrRawResult?.rawJson;
-  const totalDeclarationAmount = items.reduce((sum, item) => sum + Number(item.totalAmount || item.fobAmount || 0), 0);
+  const totalDeclarationAmount = displayItems.reduce((sum, item) => sum + Number(item.totalAmount || item.fobAmount || 0), 0);
   const firstCurrency = firstItem.currency || detail.currency || "";
   const firstTradeTerm = firstItem.tradeTerm || "";
   const firstExportDate = firstItem.exportDate || "";
@@ -729,7 +762,22 @@ function CustomsRecognitionResultPanel({
         <div className={styles.inlineError}>OCR识别成功，但未解析到报关单关键字段。</div>
       ) : null}
       {ocrSuccessButNoItems ? (
-        <div className={styles.inlineError}>OCR已识别基础字段，但未解析到报关商品明细。</div>
+        <div className={styles.inlineError}>OCR未识别到商品明细，请手工维护。</div>
+      ) : null}
+      {ocrParsedButNotSynced ? (
+        <div className={styles.inlineError}>
+          OCR已解析到商品明细，但尚未同步到退税商品表，请点击同步。
+          {currentDocumentId && !readOnly ? (
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={syncing}
+              onClick={() => onSyncCustomsDeclarationItemsFromOcr(detail.id, currentDocumentId)}
+            >
+              {syncing ? "同步中..." : "同步OCR商品明细"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {detail.currentCustomsDocument || historicalCustomsDocuments.length ? (
         <div className={styles.customsOcrFilePanel}>
@@ -770,7 +818,7 @@ function CustomsRecognitionResultPanel({
             </tr>
           </thead>
           <tbody>
-            {items.length ? items.map((item, index) => (
+            {displayItems.length ? displayItems.map((item, index) => (
               <tr key={item.id || `customs-item-${index}`} className={item.confirmationStatus === "CONFIRMED" ? "" : styles.rowWarning}>
                 <td title={item.productName || ""}>{item.productName || "-"}</td>
                 <td className={styles.numericCell}>{amountText(item.quantity)}</td>
@@ -787,7 +835,11 @@ function CustomsRecognitionResultPanel({
               <tr>
                 <td colSpan={6} className={styles.taxCalculationEmptyCell}>
                   <div className={styles.emptyState}>
-                    {hasAnyParsedField ? "OCR已识别基础字段，但未解析到报关商品明细。" : "暂无报关商品明细，请先上传或识别报关单。"}
+                    {ocrParsedButNotSynced
+                      ? "OCR已解析到商品明细，但尚未同步到退税商品表，请点击同步。"
+                      : hasAnyParsedField
+                        ? "OCR未识别到商品明细，请手工维护。"
+                        : "暂无报关商品明细，请先上传或识别报关单。"}
                   </div>
                 </td>
               </tr>

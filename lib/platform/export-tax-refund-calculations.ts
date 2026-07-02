@@ -61,6 +61,14 @@ type InvoiceMatchResult = {
   differenceAmount: number;
   lines: InvoiceLine[];
 };
+type ParsedCustomsItemsSyncInput = {
+  orderId: string;
+  documentId: string;
+  parsed: ReturnType<typeof customsParsedFromRecognition>;
+  apiName?: string | null;
+  source?: string | null;
+  updateOrder?: boolean;
+};
 
 const TAX_REFUND_AMOUNT_TOLERANCE_CNY = 1;
 const TAX_REFUND_AMOUNT_TOLERANCE_PERCENT = 0.005;
@@ -99,10 +107,23 @@ function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: 
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
   const items = rawItems
     .map((item) => plainRecord(item))
-    .map((item) => normalizeCustomsDeclarationItemForTaxRefund(item, {
-      tradeTerm: cleanText(parsed.tradeTerm) || fallback.tradeTerm,
-      currency: cleanText(parsed.currency).toUpperCase() || fallback.currency,
-    }))
+    .map((item): CustomsDeclarationItemFields | null => {
+      const normalized = normalizeCustomsDeclarationItemForTaxRefund(item, {
+        tradeTerm: cleanText(parsed.tradeTerm) || fallback.tradeTerm,
+        currency: cleanText(parsed.currency).toUpperCase() || fallback.currency,
+      });
+      if (!normalized) return null;
+      return {
+        ...normalized,
+        hsCode: normalizedHsCode(item.hsCode || item.customsHsCode),
+        specification: cleanText(item.specification || item.specModel),
+        unitPrice: num(item.unitPrice, 0) || normalized.unitPrice,
+        grossWeight: num(item.grossWeight, 0) || normalized.grossWeight,
+        netWeight: num(item.netWeight, 0) || normalized.netWeight,
+        originCountry: cleanText(item.originCountry) || normalized.originCountry,
+        destinationCountry: cleanText(item.destinationCountry) || normalized.destinationCountry,
+      };
+    })
     .filter((item): item is CustomsDeclarationItemFields => Boolean(item));
   return {
     customsDeclarationNo: cleanText(parsed.customsDeclarationNo) || fallback.customsDeclarationNo,
@@ -136,6 +157,82 @@ function customsRecognitionRawJsonForSave(
     fallbackRawJson: true,
     note: "OCR适配器未返回原始JSON，系统保存识别文本摘要和解析字段用于排查。",
   };
+}
+
+function customsDeclarationItemCreateRows(input: ParsedCustomsItemsSyncInput) {
+  const parsed = input.parsed;
+  const source = cleanText(input.source || input.apiName) || "OCR";
+  return parsed.items.map((item, index) => ({
+    orderId: input.orderId,
+    documentId: input.documentId,
+    declarationNo: parsed.customsDeclarationNo || "",
+    declarationDate: toDate(parsed.customsDeclarationDate),
+    exportDate: toDate(parsed.exportDate),
+    hsCode: normalizedHsCode(item.hsCode),
+    productName: item.productName,
+    specification: item.specification || null,
+    quantity: item.quantity || null,
+    unit: item.unit || null,
+    unitPrice: item.unitPrice || null,
+    totalAmount: item.totalAmount || item.fobAmount || null,
+    tradeTerm: item.tradeTerm || parsed.tradeTerm || null,
+    currency: item.currency || parsed.currency || null,
+    fobAmount: item.fobAmount || item.totalAmount || null,
+    grossWeight: item.grossWeight || null,
+    netWeight: item.netWeight || null,
+    originCountry: item.originCountry || null,
+    destinationCountry: item.destinationCountry || null,
+    exchangeRate: null,
+    fobAmountCny: null,
+    rawJson: {
+      hsCode: item.hsCode || "",
+      productName: item.productName || "",
+      specification: item.specification || "",
+      quantity: item.quantity || null,
+      unit: item.unit || "",
+      currency: item.currency || parsed.currency || "",
+      totalAmount: item.totalAmount || item.fobAmount || null,
+      fobAmount: item.fobAmount || item.totalAmount || null,
+      declarationNo: parsed.customsDeclarationNo || "",
+      declarationDate: parsed.customsDeclarationDate || "",
+      exportDate: parsed.exportDate || "",
+      tradeTerm: item.tradeTerm || parsed.tradeTerm || "",
+      ocrApiName: input.apiName || source,
+    } as Prisma.InputJsonValue,
+    confirmationStatus: "PENDING_CONFIRMATION",
+    source,
+    sortOrder: index,
+  }));
+}
+
+async function replaceCustomsDeclarationItemsFromParsed(
+  tx: Prisma.TransactionClient,
+  input: ParsedCustomsItemsSyncInput,
+) {
+  const parsedItemsCount = input.parsed.items.length;
+  await tx.exportCustomsDeclarationItem.updateMany({
+    where: { orderId: input.orderId, documentId: input.documentId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  if (!parsedItemsCount) return { parsedItemsCount, insertedItemsCount: 0, skippedReason: "parsedJson.items empty" };
+  const created = await tx.exportCustomsDeclarationItem.createMany({
+    data: customsDeclarationItemCreateRows(input),
+  });
+  if (input.updateOrder !== false) {
+    await tx.receivableOrder.update({
+      where: { id: input.orderId },
+      data: {
+        customsDeclarationNo: input.parsed.customsDeclarationNo || undefined,
+        customsDeclarationDate: toDate(input.parsed.customsDeclarationDate) || undefined,
+        customsParsedAt: new Date(),
+        customsParseStatus: input.parsed.customsDeclarationNo || input.parsed.customsDeclarationDate ? "SUCCESS" : "PARTIAL",
+        customsParseMessage: `OCR已解析报关商品明细 ${parsedItemsCount} 条，请确认。`,
+        customsDeclarationParseSource: cleanText(input.source || input.apiName) || "OCR",
+        taxRefundStatus: "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
+      },
+    });
+  }
+  return { parsedItemsCount, insertedItemsCount: created.count, skippedReason: "" };
 }
 
 function toDate(value: unknown) {
@@ -503,52 +600,14 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
       status: parsed.items.length ? "SUCCESS" : "PARTIAL",
       errorMessage: parsed.items.length ? "" : itemMissingMessage,
     }, tx);
-    await tx.exportCustomsDeclarationItem.updateMany({
-      where: { orderId, documentId, deletedAt: null },
-      data: { deletedAt: new Date() },
+    const syncResult = await replaceCustomsDeclarationItemsFromParsed(tx, {
+      orderId,
+      documentId,
+      parsed,
+      apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+      source: recognized.apiName || recognized.source || "OCR_PDF",
+      updateOrder: false,
     });
-    for (const [index, item] of parsed.items.entries()) {
-      await tx.exportCustomsDeclarationItem.create({
-        data: {
-          orderId,
-          documentId,
-          declarationNo: parsed.customsDeclarationNo || "",
-          declarationDate: toDate(parsed.customsDeclarationDate),
-          exportDate: toDate(parsed.exportDate),
-          hsCode: "",
-          productName: item.productName,
-          specification: null,
-          quantity: item.quantity || null,
-          unit: item.unit || null,
-          unitPrice: null,
-          totalAmount: item.totalAmount || item.fobAmount || null,
-          tradeTerm: item.tradeTerm || parsed.tradeTerm || null,
-          currency: item.currency || parsed.currency || null,
-          fobAmount: item.fobAmount || null,
-          grossWeight: null,
-          netWeight: null,
-          originCountry: null,
-          destinationCountry: null,
-          exchangeRate: null,
-          fobAmountCny: null,
-          rawJson: {
-            productName: item.productName || "",
-            quantity: item.quantity || null,
-            unit: item.unit || "",
-            currency: item.currency || parsed.currency || "",
-            totalAmount: item.totalAmount || item.fobAmount || null,
-            declarationNo: parsed.customsDeclarationNo || "",
-            declarationDate: parsed.customsDeclarationDate || "",
-            exportDate: parsed.exportDate || "",
-            tradeTerm: item.tradeTerm || parsed.tradeTerm || "",
-            ocrApiName: recognized.apiName || recognized.source || "",
-          } as unknown as Prisma.InputJsonValue,
-          confirmationStatus: "PENDING_CONFIRMATION",
-          source: recognized.apiName || recognized.source || "OCR_PDF",
-          sortOrder: index,
-        },
-      });
-    }
     await tx.receivableOrder.update({
       where: { id: orderId },
       data: {
@@ -563,6 +622,14 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
         taxRefundStatus: parsed.items.length ? "CUSTOMS_RECOGNIZED_PENDING_CONFIRM" : "PROBLEM",
         updatedById: actorId || undefined,
       },
+    });
+    console.info("customs-ocr-items-synced", {
+      documentId,
+      refundRecordId: orderId,
+      orderId,
+      parsedItemsCount: syncResult.parsedItemsCount,
+      insertedItemsCount: syncResult.insertedItemsCount,
+      skippedReason: syncResult.skippedReason,
     });
   });
   await runNonCriticalTask("报关商品明细OCR日志写入", () => writeAudit(
@@ -599,6 +666,89 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
   });
   await refreshOrderCompleteness(orderId);
   return getExportTaxRefundCalculationSummary(orderId);
+}
+
+export async function syncCustomsDeclarationItemsFromOcrRawResult(request: AuditRequestLike, actor: ActorLike, orderId: string, documentId: string) {
+  if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限同步OCR商品明细", 403);
+  const id = cleanText(documentId);
+  if (!id) throw codedError("请选择需要同步的报关单文件。", 400, "CUSTOMS_DOCUMENT_REQUIRED");
+  const document = await prisma.orderDocument.findFirst({
+    where: { id, orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
+    select: { id: true, orderId: true, fileName: true, originalName: true },
+  });
+  if (!document) throw codedError("未找到当前报关单文件。", 404, "CUSTOMS_DOCUMENT_NOT_FOUND");
+  const rawResult = await prisma.ocrRawResult.findFirst({
+    where: {
+      documentId: id,
+      orderId,
+      documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+  const parsed = customsParsedFromRecognition({ parsedJson: rawResult?.parsedJson || null });
+  if (!rawResult || !parsed.items.length) {
+    const skippedReason = !rawResult ? "ocrRawResult missing" : "parsedJson.items empty";
+    console.warn("customs-ocr-items-sync-skipped", {
+      documentId: id,
+      refundRecordId: orderId,
+      orderId,
+      parsedItemsCount: parsed.items.length,
+      insertedItemsCount: 0,
+      skippedReason,
+    });
+    throw codedError("OCR未识别到商品明细，请手工维护。", 400, "CUSTOMS_OCR_ITEMS_EMPTY");
+  }
+  const before = await guardedPrismaFindMany<Array<Prisma.ExportCustomsDeclarationItemGetPayload<{}>>>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/export-tax-refund-calculations.ts:syncCustomsDeclarationItemsFromOcrRawResult.before", {
+    where: { orderId, documentId: id, deletedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    take: 200,
+  });
+  let syncResult = { parsedItemsCount: parsed.items.length, insertedItemsCount: 0, skippedReason: "" };
+  await prisma.$transaction(async (tx) => {
+    syncResult = await replaceCustomsDeclarationItemsFromParsed(tx, {
+      orderId,
+      documentId: id,
+      parsed,
+      apiName: rawResult.apiName || "OCR_RAW_RESULT_SYNC",
+      source: "OCR",
+      updateOrder: true,
+    });
+  });
+  console.info("customs-ocr-items-synced", {
+    documentId: id,
+    refundRecordId: orderId,
+    orderId,
+    parsedItemsCount: syncResult.parsedItemsCount,
+    insertedItemsCount: syncResult.insertedItemsCount,
+    skippedReason: syncResult.skippedReason,
+  });
+  await runNonCriticalTask("同步OCR商品明细日志写入", () => writeAudit(
+    request,
+    actor,
+    "同步OCR商品明细",
+    "export_customs_declaration_items",
+    orderId,
+    before,
+    {
+      orderId,
+      documentId: id,
+      fileName: document.fileName || document.originalName || "",
+      ocrRawResultId: rawResult.id,
+      provider: rawResult.provider || "",
+      apiName: rawResult.apiName || "",
+      parsedItemsCount: syncResult.parsedItemsCount,
+      insertedItemsCount: syncResult.insertedItemsCount,
+      skippedReason: syncResult.skippedReason,
+    },
+  ), { context: { orderId, documentId: id } });
+  await refreshOrderCompleteness(orderId);
+  return {
+    documentId: id,
+    ocrRawResultId: rawResult.id,
+    parsedItemsCount: syncResult.parsedItemsCount,
+    insertedItemsCount: syncResult.insertedItemsCount,
+    skippedReason: syncResult.skippedReason,
+  };
 }
 
 export async function saveCustomsDeclarationItems(request: AuditRequestLike, actor: ActorLike, orderId: string, items: Array<Partial<CustomsDeclarationItemFields> & { id?: string; declarationNo?: string; declarationDate?: string; exportDate?: string; exchangeRate?: number }>) {
