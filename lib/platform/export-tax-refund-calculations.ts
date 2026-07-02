@@ -523,6 +523,17 @@ export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclara
   };
 }
 
+export function isUsableCustomsDeclarationItem(row: Prisma.ExportCustomsDeclarationItemGetPayload<{}>) {
+  return Boolean(normalizeCustomsDeclarationItemForTaxRefund({
+    productName: row.productName,
+    quantity: row.quantity == null ? 0 : Number(row.quantity),
+    unit: row.unit || "",
+    totalAmount: row.totalAmount == null ? Number(row.fobAmount || 0) : Number(row.totalAmount),
+    currency: row.currency || "",
+    tradeTerm: row.tradeTerm || "",
+  }));
+}
+
 export async function extractCustomsDeclarationItemsFromDocument(request: AuditRequestLike, actor: ActorLike, orderId: string, documentId: string) {
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限识别退税计算资料", 403);
   const document = await prisma.orderDocument.findFirst({
@@ -868,10 +879,11 @@ export async function recalculateExportTaxRefund(request: AuditRequestLike, acto
     supplierInvoiceLinesForOrder(orderId),
     supplierCountForOrder(orderId),
   ]);
-  if (!items.length) throw codedError("没有确认报关商品明细，不允许进入退税计算。", 400, "CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED");
-  const declarationGroups = buildDeclarationGroups(items);
+  const usableItems = items.filter(isUsableCustomsDeclarationItem);
+  if (!usableItems.length) throw codedError("没有确认报关商品明细，不允许进入退税计算。", 400, "CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED");
+  const declarationGroups = buildDeclarationGroups(usableItems);
   const results: Array<Prisma.ExportTaxRefundCalculationGetPayload<{ include: { declarationItem: true; rate: true } }>> = [];
-  for (const item of items) {
+  for (const item of usableItems) {
     const declarationDate = item.declarationDate || null;
     const declarationAmountCny = num(item.fobAmountCny, 0) || (num(item.fobAmount, 0) && num(item.exchangeRate, 0) ? roundMoney(num(item.fobAmount, 0) * num(item.exchangeRate, 0)) : 0);
     const hsCode = normalizedHsCode(item.hsCode);
@@ -1041,7 +1053,7 @@ export async function getExportTaxRefundCalculationSummary(orderId: string) {
   const estimatedRefundAmount = roundMoney(rows.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0));
   const abnormalReasons = rows.flatMap((row) => row.abnormalReasons.map((reason) => String(reason || ""))).filter(Boolean);
   return {
-    customsDeclarationItems: items.map(serializeCustomsDeclarationItem),
+    customsDeclarationItems: items.filter(isUsableCustomsDeclarationItem).map(serializeCustomsDeclarationItem),
     exportTaxRefundCalculations: rows,
     exportTaxRefundSummary: {
       estimatedRefundAmount,

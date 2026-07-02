@@ -215,11 +215,21 @@ test("customs table parser handles delayed headers with split quantity and unit 
     { CellContent: "成交单位", RowStart: 8, RowEnd: 8, ColumnStart: 2, ColumnEnd: 2 },
     { CellContent: "总价", RowStart: 8, RowEnd: 8, ColumnStart: 3, ColumnEnd: 3 },
     { CellContent: "币制", RowStart: 8, RowEnd: 8, ColumnStart: 4, ColumnEnd: 4 },
-    { CellContent: "铝制工程结构件\n无品牌;无型号", RowStart: 9, RowEnd: 9, ColumnStart: 0, ColumnEnd: 0 },
-    { CellContent: "2866.71", RowStart: 9, RowEnd: 9, ColumnStart: 1, ColumnEnd: 1 },
-    { CellContent: "千克", RowStart: 9, RowEnd: 9, ColumnStart: 2, ColumnEnd: 2 },
-    { CellContent: "86588.10", RowStart: 9, RowEnd: 9, ColumnStart: 3, ColumnEnd: 3 },
-    { CellContent: "美元", RowStart: 9, RowEnd: 9, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "出境关别(2248)洋山港区", RowStart: 9, RowEnd: 9, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "8.00", RowStart: 9, RowEnd: 9, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "平方米", RowStart: 9, RowEnd: 9, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "2026/6/17", RowStart: 9, RowEnd: 9, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "USD", RowStart: 9, RowEnd: 9, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "生产销售单位(M A D X)(BML)", RowStart: 10, RowEnd: 10, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "8.00", RowStart: 10, RowEnd: 10, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "平方米", RowStart: 10, RowEnd: 10, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "99.00", RowStart: 10, RowEnd: 10, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "USD", RowStart: 10, RowEnd: 10, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "铝制工程结构件\n无品牌;无型号", RowStart: 11, RowEnd: 11, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "2866.71", RowStart: 11, RowEnd: 11, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "千克", RowStart: 11, RowEnd: 11, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "86588.10", RowStart: 11, RowEnd: 11, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "美元", RowStart: 11, RowEnd: 11, ColumnStart: 4, ColumnEnd: 4 },
   ];
   const items = extractCustomsItemsFromAliyunTableData({ TableInfo: { TableDetails: [{ CellDetails }] } });
   assert.equal(items.length, 1);
@@ -236,6 +246,32 @@ test("customs table parser handles delayed headers with split quantity and unit 
     currency: "USD",
     totalAmount: 86588.1,
   });
+});
+
+test("customs item normalizer rejects declaration metadata as product rows", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { normalizeCustomsDeclarationItemForTaxRefund } = await import("../lib/customs-declaration-parser.ts");
+  for (const productName of [
+    "出境关别(2248)洋山港区",
+    "生产销售单位(M A D X)(BML)",
+    "生产销售单位(M A D X)(BML)浙江莱诺建材有限公司",
+    "境内收发货人 浙江莱诺建材有限公司",
+  ]) {
+    assert.equal(normalizeCustomsDeclarationItemForTaxRefund({
+      productName,
+      quantity: 8,
+      unit: "平方米",
+      totalAmount: 99,
+      currency: "USD",
+    }), null);
+  }
+  assert.equal(normalizeCustomsDeclarationItemForTaxRefund({
+    productName: "铝制工程结构件",
+    quantity: 5771.43,
+    unit: "千克",
+    totalAmount: 86588.1,
+    currency: "USD",
+  })?.productName, "铝制工程结构件");
 });
 
 test("customs recognition is controlled by OCR settings", () => {

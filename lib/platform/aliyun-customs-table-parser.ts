@@ -178,6 +178,10 @@ const TABLE_NUMBER_PATTERN = "\\d+(?:[,，]\\d{3})*(?:\\.\\d+)?";
 const TABLE_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
 const TABLE_UNIT_REGEX = new RegExp(TABLE_UNIT_PATTERN, "i");
 const TABLE_NUMBER_ONLY_REGEX = new RegExp(`^${TABLE_NUMBER_PATTERN}$`);
+const CUSTOMS_NON_ITEM_TEXT_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|出境关别|进境关别|备案号|境内收发货人|境外收发货人|境内发货人|生产销售单位|消费使用单位|申报单位|运输方式|运输工具名称|航次号|提运单号|提单号|监管方式|征免性质|许可证号|合同协议号|贸易国别|贸易国|运抵国|目的国|指运港|装货港|启运港|成交方式|运费|保费|杂费|件数|包装种类|毛重|净重|集装箱|随附单证|标记唛码|备注|境内货源地|关区|口岸|港区|代理报关|委托协议|统一编号|申报地海关|入境口岸)/;
+const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)$/i;
+const CUSTOMS_CONTAINER_NO_PATTERN = /\b[A-Z]{4}\d{7}\b/i;
+const CUSTOMS_DATE_LIKE_PATTERN = /\b20\d{2}[年/.-]?\d{1,2}[月/.-]?\d{1,2}(?:日)?\b/;
 
 function parseQuantityUnitText(value = "") {
   const text = stripAliyunStringQuote(value);
@@ -197,6 +201,12 @@ function normalizeTableUnit(value = "") {
 function numericCellValue(value = "") {
   const text = stripAliyunStringQuote(value).replace(/[,，\s]/g, "");
   return TABLE_NUMBER_ONLY_REGEX.test(text) ? parseNumberText(text) : 0;
+}
+
+function parseTableAmountText(value = "") {
+  const text = stripAliyunStringQuote(value);
+  if (CUSTOMS_DATE_LIKE_PATTERN.test(text)) return 0;
+  return parseNumberText(text);
 }
 
 function quantityUnitFromRowHeuristic(row: { cells: AliyunTableCell[] }) {
@@ -223,25 +233,40 @@ function productNameFromTableCell(value = "") {
     .map((part) => part.replace(/^\s*\d{1,3}\s+/, "").replace(/^\s*\d{8,13}\s+/, "").trim())
     .filter(Boolean)
     .filter((part) => !/^(无品牌|无型号|品牌|型号|规格|用途|材质|成分|生产厂家|生产商|境内货源地)/.test(part))
-    .filter((part) => /[\u4e00-\u9fa5A-Za-z]/.test(part));
+    .filter(isLikelyCustomsProductName);
   return parts[0] || stripAliyunStringQuote(value);
+}
+
+function isLikelyCustomsProductName(value = "") {
+  const text = stripAliyunStringQuote(value);
+  if (!text || !/[\u4e00-\u9fa5A-Za-z]/.test(text)) return false;
+  if (classifyCustomsHeaderCell(text)) return false;
+  if (CUSTOMS_NON_ITEM_TEXT_PATTERN.test(text)) return false;
+  if (CUSTOMS_COMPANY_NAME_PATTERN.test(text)) return false;
+  if (CUSTOMS_CONTAINER_NO_PATTERN.test(text)) return false;
+  if (CUSTOMS_DATE_LIKE_PATTERN.test(text)) return false;
+  if (/^\d{1,3}$/.test(text)) return false;
+  if (/^\d{8,13}$/.test(text)) return false;
+  if (/^(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)$/i.test(text)) return false;
+  if (/^\d+(?:[,，]\d{3})*(?:\.\d+)?$/.test(text)) return false;
+  if (parseQuantityUnitText(text).unit) return false;
+  return true;
 }
 
 function productNameFromRowHeuristic(row: { cells: AliyunTableCell[] }) {
   const candidates = row.cells
     .map((cell) => productNameFromTableCell(cell.content))
-    .filter((text) => text && !classifyCustomsHeaderCell(text))
-    .filter((text) => !/^\d{1,3}$/.test(text))
-    .filter((text) => !/^\d{8,13}$/.test(text))
-    .filter((text) => !/^(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)$/i.test(text))
-    .filter((text) => !/^\d+(?:[,，]\d{3})*(?:\.\d+)?$/.test(text))
-    .filter((text) => !parseQuantityUnitText(text).unit);
+    .filter(isLikelyCustomsProductName);
   return candidates[0] || "";
 }
 
 function totalAmountFromRowHeuristic(row: { cells: AliyunTableCell[] }, quantity = 0) {
   const candidates = row.cells
-    .flatMap((cell) => [...cell.content.matchAll(/\d+(?:[,，]\d{3})*(?:\.\d+)?/g)].map((match) => parseNumberText(match[0])))
+    .flatMap((cell) => (
+      CUSTOMS_DATE_LIKE_PATTERN.test(cell.content)
+        ? []
+        : [...cell.content.matchAll(/\d+(?:[,，]\d{3})*(?:\.\d+)?/g)].map((match) => parseNumberText(match[0]))
+    ))
     .filter((value) => value > 0 && Math.abs(value - quantity) > 0.0001);
   return candidates.length ? candidates[candidates.length - 1] : 0;
 }
@@ -250,7 +275,8 @@ function rowLooksLikeCustomsItem(row: { cells: AliyunTableCell[] }) {
   const text = row.cells.map((cell) => cell.content).join(" ");
   if (!/[\u4e00-\u9fa5A-Za-z]/.test(text)) return false;
   if (!/\d+(?:[,，]\d{3})*(?:\.\d+)?/.test(text)) return false;
-  return !/(报关单号|申报日期|出口日期|集装箱|提运单号|随附单证|备注|商品名称及规格型号|数量及单位|总价|币制)/.test(text);
+  if (CUSTOMS_NON_ITEM_TEXT_PATTERN.test(text)) return false;
+  return row.cells.some((cell) => isLikelyCustomsProductName(cell.content));
 }
 
 function dedupeCustomsItems(items: CustomsDeclarationItemFields[] = []) {
@@ -277,9 +303,16 @@ export function extractCustomsItemsFromAliyunTableData(
   const items: CustomsDeclarationItemFields[] = [];
   for (const rows of tables) {
     const { columns, headerRowStarts } = customsHeaderColumns(rows);
+    const hasStructuredItemColumns = Boolean(
+      columns.productName
+      && columns.totalAmount
+      && (columns.quantityUnit || columns.quantity || columns.unit),
+    );
     for (const row of rows) {
       if (headerRowStarts.has(row.rowStart)) continue;
       const productName = productNameFromTableCell(tableCellTextForColumn(row, columns.productName)) || productNameFromRowHeuristic(row);
+      if (!isLikelyCustomsProductName(productName)) continue;
+      if (!hasStructuredItemColumns && !rowLooksLikeCustomsItem(row)) continue;
       const quantityUnitText = tableCellTextForColumn(row, columns.quantityUnit);
       const quantityUnit = parseQuantityUnitText(quantityUnitText);
       const heuristicQuantityUnit = quantityUnit.quantity && quantityUnit.unit
@@ -291,12 +324,11 @@ export function extractCustomsItemsFromAliyunTableData(
       const unit = quantityUnit.unit
         || tableCellTextForColumn(row, columns.unit)
         || heuristicQuantityUnit.unit;
-      const totalAmount = parseNumberText(tableCellTextForColumn(row, columns.totalAmount)) || totalAmountFromRowHeuristic(row, quantity);
+      const totalAmount = parseTableAmountText(tableCellTextForColumn(row, columns.totalAmount)) || totalAmountFromRowHeuristic(row, quantity);
       const currency = normalizeCurrencyCode(tableCellTextForColumn(row, columns.currency))
         || normalizeCurrencyCode(row.cells.map((cell) => cell.content).join(" "))
         || defaults.currency
         || "";
-      if (!productName && !rowLooksLikeCustomsItem(row)) continue;
       const item = normalizeCustomsDeclarationItemForTaxRefund({
         productName,
         quantity,

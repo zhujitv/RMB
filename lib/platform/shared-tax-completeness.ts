@@ -17,6 +17,7 @@ import {
 } from "./shared-constants";
 import { logisticsInvoiceGroupForExpense } from "./logistics-invoice-groups";
 import { serializeDomesticLogisticsInfo } from "./shared-serialization";
+import { normalizeCustomsDeclarationItemForTaxRefund } from "../customs-declaration-parser";
 
 type NumericLike = number | string | { toString(): string };
 type OrderDocumentLike = {
@@ -81,6 +82,13 @@ type TaxOrderLike = {
   costs?: CostLike[] | null;
   customsDeclarationItems?: Array<{
     id?: string | null;
+    productName?: string | null;
+    quantity?: NumericLike | null;
+    unit?: string | null;
+    totalAmount?: NumericLike | null;
+    fobAmount?: NumericLike | null;
+    currency?: string | null;
+    tradeTerm?: string | null;
     confirmationStatus?: string | null;
     deletedAt?: Date | string | null;
   }> | null;
@@ -684,7 +692,17 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   });
   const logisticsTotal = logisticsRequirements.length;
   const logisticsCompleted = logisticsTotal - logisticsMissing.length;
-  const activeCustomsItems = (order.customsDeclarationItems || []).filter((item) => !item.deletedAt);
+  const activeCustomsItems = (order.customsDeclarationItems || []).filter((item) => (
+    !item.deletedAt
+    && normalizeCustomsDeclarationItemForTaxRefund({
+      productName: item.productName || "",
+      quantity: numberValue(item.quantity),
+      unit: item.unit || "",
+      totalAmount: numberValue(item.totalAmount) || numberValue(item.fobAmount),
+      currency: item.currency || "",
+      tradeTerm: item.tradeTerm || "",
+    })
+  ));
   const activeCalculations = (order.exportTaxRefundCalculations || []).filter((item) => !item.deletedAt);
   const calculationMissing: MissingEntry[] = [];
   if (customsMissing.includes("CUSTOMS_ENTRY_FORM")) {

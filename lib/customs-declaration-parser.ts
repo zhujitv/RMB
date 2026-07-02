@@ -458,7 +458,8 @@ function numericAmount(value = "") {
 const CUSTOMS_ITEM_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
 const CUSTOMS_ITEM_UNIT_REGEX = new RegExp(CUSTOMS_ITEM_UNIT_PATTERN, "i");
 const CUSTOMS_ITEM_HEADER_PATTERN = /^(项号|商品编号|HS编码|商品名称|商品名称及规格型号|规格型号|数量及单位|数量|单位|单价|总价|币制|原产国|最终目的国|征免|法定|成交|第一|第二)$/i;
-const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|日期|境内发货人|境内收发货人|申报单位|运输方式|提运单号|提单号|贸易国别|贸易国|目的国|监管方式|征免性质|征免|许可证号|合同协议号|集装箱|集装箱号|箱号|港口|口岸|装货港|指运港|境内货源地|随附单证|标记唛码|备注|发票|代理报关委托协议|毛重|净重)/;
+const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|日期|出境关别|进境关别|备案号|境内发货人|境内收发货人|境外收发货人|生产销售单位|消费使用单位|申报单位|运输方式|运输工具名称|航次号|提运单号|提单号|贸易国别|贸易国|运抵国|目的国|监管方式|征免性质|征免|许可证号|合同协议号|成交方式|运费|保费|杂费|件数|包装种类|集装箱|集装箱号|箱号|港口|口岸|装货港|指运港|启运港|境内货源地|随附单证|标记唛码|备注|发票|代理报关委托协议|统一编号|申报地海关|入境口岸|毛重|净重)/;
+const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)$/i;
 const CUSTOMS_ITEM_CONTAINER_NO_PATTERN = /\b[A-Z]{4}\d{7}\b/i;
 const CUSTOMS_ITEM_DATE_PATTERN = /\b20\d{2}[-/.年]?\d{1,2}[-/.月]?\d{1,2}(?:日)?\b/;
 
@@ -529,6 +530,7 @@ function isValidTaxRefundProductName(productName = "") {
     && /[\u4e00-\u9fa5A-Za-z]/.test(text)
     && !CUSTOMS_ITEM_HEADER_PATTERN.test(text)
     && !CUSTOMS_ITEM_LABEL_PATTERN.test(text)
+    && !CUSTOMS_COMPANY_NAME_PATTERN.test(text)
     && !CUSTOMS_ITEM_CONTAINER_NO_PATTERN.test(text)
     && !CUSTOMS_ITEM_DATE_PATTERN.test(text),
   );

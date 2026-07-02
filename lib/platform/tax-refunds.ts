@@ -45,6 +45,7 @@ import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
 import { canReadOcrRawResult, saveOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
+import { isUsableCustomsDeclarationItem } from "./export-tax-refund-calculations";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -933,7 +934,7 @@ async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike)
     customsDeclarationDate: dateToInput(order.customsDeclarationDate),
     declarationDate: dateToInput(order.customsDeclarationDate),
     taxRefundStatus: taxRefundStatusFromCompleteness(order.taxRefundStatus, cachedTaxRefundCompleteness(order)),
-    customsDeclarationItems: (order.customsDeclarationItems || []).map((item) => ({
+    customsDeclarationItems: (order.customsDeclarationItems || []).filter((item) => isUsableCustomsDeclarationItem(item as never)).map((item) => ({
       id: item.id,
       documentId: item.documentId || "",
       declarationNo: item.declarationNo || "",
@@ -1031,7 +1032,8 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
       take: 20,
     }),
   ]);
-  const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
+  const usableCustomsItems = (customsItems || []).filter((item) => isUsableCustomsDeclarationItem(item as never));
+  const serializedItems = usableCustomsItems.map((item) => serializeTaxRefundCustomsItem(item, basic));
   const currentCustomsDocument = customsDocuments[0] || null;
   const customsDocumentIds = customsDocuments.map((document) => document.id).filter(Boolean);
   const ocrRawRows = canReadRaw && customsDocumentIds.length
@@ -1043,7 +1045,7 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
     : [];
   const ensuredRawResults = canReadRaw
     ? await Promise.all(customsDocuments.map((document) => (
-      ensureCustomsOcrRawResultForDocument(document, basic, customsItems, rawResultForDocument(ocrRawRows, document.id))
+      ensureCustomsOcrRawResultForDocument(document, basic, usableCustomsItems, rawResultForDocument(ocrRawRows, document.id))
     )))
     : [];
   const ocrRawResults = [
@@ -1052,7 +1054,7 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
   ];
   const currentRawResult = currentCustomsDocument?.id ? rawResultForDocument(ocrRawResults, currentCustomsDocument.id) : null;
   const historicalCustomsDocuments = customsDocuments.slice(1);
-  const currentItemRawFallback = (customsItems || []).filter((item) => item.documentId === currentCustomsDocument?.id);
+  const currentItemRawFallback = usableCustomsItems.filter((item) => item.documentId === currentCustomsDocument?.id);
   return {
     ...documents,
     ...basic,

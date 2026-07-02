@@ -26,7 +26,7 @@ import { serializeUser } from "./shared-users";
 import { paymentTermLabel } from "./shared-utils";
 import { summarizeOrder } from "./shared-order-calculations";
 import { businessEntityFieldsFromOrder } from "./business-entities";
-import { serializeCustomsDeclarationItem } from "./export-tax-refund-calculations";
+import { isUsableCustomsDeclarationItem, serializeCustomsDeclarationItem } from "./export-tax-refund-calculations";
 
 type ShippingCustomerLike = {
   country?: string | null;
@@ -301,7 +301,9 @@ export function serializeOrder(orderInput: unknown) {
   const domesticLogisticsRows = Array.isArray(order.domesticLogisticsInfos) ? order.domesticLogisticsInfos : [];
   const domesticLogisticsInfo = serializeDomesticLogisticsInfo(domesticLogisticsRows[0]);
   const customsDeclarationItems = Array.isArray(order.customsDeclarationItems)
-    ? order.customsDeclarationItems.map((item) => serializeCustomsDeclarationItem(item as never))
+    ? order.customsDeclarationItems
+      .filter((item) => isUsableCustomsDeclarationItem(item as never))
+      .map((item) => serializeCustomsDeclarationItem(item as never))
     : [];
   const exportTaxRefundCalculations = Array.isArray(order.exportTaxRefundCalculations)
     ? order.exportTaxRefundCalculations.map((row) => serializeExportTaxRefundCalculation(row as Record<string, unknown>))
