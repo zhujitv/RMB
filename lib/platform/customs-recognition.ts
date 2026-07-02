@@ -224,12 +224,38 @@ function customsParsedDetailFromRecognition(parsedJson: unknown, text = "") {
   };
 }
 
+function customsRecognitionDocumentFileName(document: CustomsRecognitionDocument) {
+  return String((document as { fileName?: unknown; originalName?: unknown }).fileName || (document as { originalName?: unknown }).originalName || "");
+}
+
+function customsRecognitionRawJsonForSave(
+  parsed: ParseCustomsDocumentResult,
+  document: CustomsRecognitionDocument,
+  orderId: string,
+) {
+  if (parsed.rawJson != null) return parsed.rawJson;
+  return {
+    source: parsed.source || "CUSTOMS_DECLARATION_OCR",
+    provider: parsed.provider || "ALIYUN",
+    apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
+    documentId: document.id,
+    orderId,
+    documentType: document.documentType,
+    fileName: customsRecognitionDocumentFileName(document),
+    textLength: String(parsed.text || "").length,
+    parsedFields: parsed.fields || {},
+    fallbackRawJson: true,
+    note: "OCR适配器未返回原始JSON，系统保存识别文本摘要和解析字段用于排查。",
+  };
+}
+
 async function persistCustomsRecognitionArtifacts(
   orderId: string,
   document: CustomsRecognitionDocument,
   parsed: ParseCustomsDocumentResult,
 ): Promise<CustomsRecognitionPersistenceResult> {
   const parsedDetail = customsParsedDetailFromRecognition(parsed.parsedJson, parsed.text || "");
+  const rawJsonForSave = customsRecognitionRawJsonForSave(parsed, document, orderId);
   let rawResult: Awaited<ReturnType<typeof saveOcrRawResult>> | null = null;
   let errorMessage = "";
   await prisma.ocrRawResult.deleteMany({
@@ -255,11 +281,11 @@ async function persistCustomsRecognitionArtifacts(
       documentType: "CUSTOMS_DECLARATION",
       provider: parsed.provider || "ALIYUN",
       apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
-      rawJson: parsed.rawJson,
+      rawJson: rawJsonForSave,
       parsedJson: {
         ...parsedDetail,
         itemCount: parsedDetail.items.length,
-        fileName: String((document as { fileName?: unknown; originalName?: unknown }).fileName || (document as { originalName?: unknown }).originalName || ""),
+        fileName: customsRecognitionDocumentFileName(document),
       },
       confidence: parsed.confidence ?? null,
       status: parsed.status === "SUCCESS" && parsedDetail.items.length ? "SUCCESS" : "PARTIAL",
@@ -497,7 +523,17 @@ async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocu
     text: recognized.text,
     provider: recognized.provider,
     apiName: recognized.apiName || recognized.source,
-    rawJson: recognized.rawJson || null,
+    rawJson: recognized.rawJson ?? {
+      source: recognized.source || "CUSTOMS_DECLARATION_OCR",
+      provider: recognized.provider || "ALIYUN",
+      apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+      documentId: _document.id || "",
+      orderId: _document.orderId || "",
+      documentType: _document.documentType || "CUSTOMS_ENTRY_FORM",
+      textLength: String(recognized.text || "").length,
+      fallbackRawJson: true,
+      note: "OCR适配器未返回原始JSON，系统保存识别文本摘要和解析字段用于排查。",
+    },
     parsedJson: recognized.parsedJson || result,
     confidence: recognized.confidence ?? null,
   };

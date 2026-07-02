@@ -118,6 +118,26 @@ function customsParsedFromRecognition(recognized: { text?: string; parsedJson?: 
   };
 }
 
+function customsRecognitionRawJsonForSave(
+  recognized: { rawJson?: unknown; source?: string; provider?: string; apiName?: string; text?: string },
+  document: { id: string; documentType?: string | null; fileName?: string | null; originalName?: string | null },
+  orderId: string,
+) {
+  if (recognized.rawJson != null) return recognized.rawJson;
+  return {
+    source: recognized.source || "CUSTOMS_DECLARATION_OCR",
+    provider: recognized.provider || "ALIYUN",
+    apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
+    documentId: document.id,
+    orderId,
+    documentType: document.documentType || "CUSTOMS_ENTRY_FORM",
+    fileName: document.fileName || document.originalName || "",
+    textLength: String(recognized.text || "").length,
+    fallbackRawJson: true,
+    note: "OCR适配器未返回原始JSON，系统保存识别文本摘要和解析字段用于排查。",
+  };
+}
+
 function toDate(value: unknown) {
   const text = cleanText(value);
   if (!text) return null;
@@ -452,6 +472,7 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
     throw error;
   });
   const parsed = customsParsedFromRecognition(recognized);
+  const rawJsonForSave = customsRecognitionRawJsonForSave(recognized, document, orderId);
   const ocrDurationMs = Date.now() - ocrStartedAt;
   const itemMissingMessage = "已识别基础字段，但未解析到商品明细，请人工维护。";
   const actorId = nonEmpty(actor?.id);
@@ -469,11 +490,11 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
       documentType: "CUSTOMS_DECLARATION",
       provider: recognized.provider || "ALIYUN",
       apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
-      rawJson: recognized.rawJson || null,
+      rawJson: rawJsonForSave,
       parsedJson: {
         ...parsed,
         ocrDurationMs,
-        rawJsonSaved: Boolean(recognized.rawJson),
+        rawJsonSaved: true,
         parsedJsonSaved: true,
         itemCount: parsed.items.length,
         fileName: document.fileName || document.originalName || "",
@@ -558,7 +579,7 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
       provider: recognized.provider || "ALIYUN",
       apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
       durationMs: ocrDurationMs,
-      rawJsonSaved: Boolean(recognized.rawJson),
+      rawJsonSaved: true,
       parsedJsonSaved: true,
       itemCount: parsed.items.length,
       failureReason: parsed.items.length ? "" : itemMissingMessage,
@@ -571,7 +592,7 @@ export async function extractCustomsDeclarationItemsFromDocument(request: AuditR
     provider: recognized.provider || "ALIYUN",
     apiName: recognized.apiName || recognized.source || "CUSTOMS_DECLARATION_OCR",
     durationMs: ocrDurationMs,
-    rawJsonSaved: Boolean(recognized.rawJson),
+    rawJsonSaved: true,
     parsedJsonSaved: true,
     itemCount: parsed.items.length,
     failureReason: parsed.items.length ? "" : itemMissingMessage,

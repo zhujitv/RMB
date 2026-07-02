@@ -54,7 +54,7 @@ export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.Tran
   const errorMessage = cleanText(input.errorMessage)
     || (rawJsonMissing ? "识别部分成功，原始结果保存失败" : "")
     || (parsedJsonMissing ? "识别部分成功，解析结果保存失败" : "");
-  const created = await tx.ocrRawResult.create({
+  return tx.ocrRawResult.create({
     data: {
       documentId: input.documentId,
       taxRefundId: input.taxRefundId || input.orderId || null,
@@ -63,16 +63,8 @@ export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.Tran
       provider: cleanText(input.provider, "ALIYUN"),
       apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
       rawJson: jsonInput(input.rawJson),
-      confidence: input.confidence == null ? null : input.confidence,
-      status: parsedJsonMissing ? status : "PARTIAL",
-      errorMessage: parsedJsonMissing ? errorMessage || null : "识别部分成功，解析结果未保存",
-    },
-  });
-  if (parsedJsonMissing) return created;
-  return tx.ocrRawResult.update({
-    where: { id: created.id },
-    data: {
       parsedJson: jsonInput(input.parsedJson),
+      confidence: input.confidence == null ? null : input.confidence,
       status,
       errorMessage: errorMessage || null,
     },

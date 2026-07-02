@@ -44,7 +44,7 @@ import {
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
-import { canReadOcrRawResult, getOcrRawResultByDocumentId, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
+import { canReadOcrRawResult, saveOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -455,6 +455,97 @@ function rawResultForDocument(
 ) {
   if (!documentId) return null;
   return rawResults.find((row) => row.documentId === documentId) || null;
+}
+
+function customsItemsForDocument(items: TaxRefundCustomsItemLight[] = [], documentId = "") {
+  if (!documentId) return [];
+  return items.filter((item) => item.documentId === documentId);
+}
+
+function customsItemBackfillJson(item: TaxRefundCustomsItemLight) {
+  return {
+    id: item.id,
+    declarationNo: item.declarationNo || "",
+    declarationDate: dateToInput(item.declarationDate),
+    exportDate: dateToInput(item.exportDate),
+    productName: item.productName || "",
+    quantity: item.quantity == null ? null : Number(item.quantity),
+    unit: item.unit || "",
+    currency: item.currency || "",
+    totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
+    confirmationStatus: item.confirmationStatus,
+    source: item.source,
+    rawJson: rawJsonRecord(item.rawJson),
+  };
+}
+
+async function ensureCustomsOcrRawResultForDocument(
+  document: TaxRefundDocumentLight | null,
+  basic: Record<string, unknown>,
+  items: TaxRefundCustomsItemLight[] = [],
+  existing: Prisma.OcrRawResultGetPayload<{}> | null = null,
+) {
+  if (!document) return existing;
+  if (existing?.rawJson && existing?.parsedJson) return existing;
+  const documentItems = customsItemsForDocument(items, document.id);
+  const declarationNo = nonEmpty(basic.customsDeclarationNo);
+  const declarationDate = nonEmpty(basic.customsDeclarationDate) || nonEmpty(basic.declarationDate);
+  if (!declarationNo && !declarationDate && !documentItems.length) return existing;
+  const backfilledItems = documentItems.map(customsItemBackfillJson);
+  const firstItem = documentItems[0] || null;
+  const totalAmount = documentItems.reduce((sum, item) => sum + Number(item.totalAmount || item.fobAmount || 0), 0);
+  try {
+    return await saveOcrRawResult({
+      documentId: document.id,
+      taxRefundId: document.orderId,
+      orderId: document.orderId,
+      documentType: "CUSTOMS_DECLARATION",
+      provider: "SYSTEM",
+      apiName: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
+      rawJson: {
+        source: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
+        provider: "SYSTEM",
+        apiName: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
+        documentId: document.id,
+        orderId: document.orderId,
+        fileName: document.fileName || document.originalName || "",
+        previousOcrRawResultId: existing?.id || "",
+        previousRawJsonSaved: Boolean(existing?.rawJson),
+        previousParsedJsonSaved: Boolean(existing?.parsedJson),
+        note: "历史识别记录缺少 rawJson 或 parsedJson，系统根据当前报关业务字段和商品明细补写；服务商原始响应不可恢复。",
+        businessFields: {
+          customsDeclarationNo: declarationNo,
+          customsDeclarationDate: declarationDate,
+          customsParseStatus: nonEmpty(basic.customsParseStatusLabel) || "",
+          customsParseMessage: nonEmpty(basic.customsParseMessage) || "",
+        },
+        itemCount: backfilledItems.length,
+        items: backfilledItems,
+      },
+      parsedJson: {
+        source: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
+        backfilled: true,
+        customsDeclarationNo: declarationNo || firstItem?.declarationNo || "",
+        customsDeclarationDate: declarationDate || dateToInput(firstItem?.declarationDate),
+        exportDate: dateToInput(firstItem?.exportDate),
+        tradeTerm: firstItem?.tradeTerm || "",
+        currency: firstItem?.currency || "",
+        totalAmount: totalAmount || null,
+        itemCount: backfilledItems.length,
+        items: backfilledItems,
+      },
+      status: "PARTIAL",
+      errorMessage: "历史OCR记录缺少原始结果，已根据当前业务字段补写；服务商原始响应不可恢复。",
+    });
+  } catch (error) {
+    console.error("customs-ocr-backfill-raw-result-failed", {
+      documentId: document.id,
+      orderId: document.orderId,
+      previousOcrRawResultId: existing?.id || "",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return existing;
+  }
 }
 
 function serializeCustomsRecognitionDocument(
@@ -943,22 +1034,23 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
   const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
   const currentCustomsDocument = customsDocuments[0] || null;
   const customsDocumentIds = customsDocuments.map((document) => document.id).filter(Boolean);
-  const [currentRawResult, ocrRawRows] = canReadRaw
-    ? await Promise.all([
-      currentCustomsDocument?.id ? getOcrRawResultByDocumentId(currentCustomsDocument.id) : Promise.resolve(null),
-      customsDocumentIds.length
-        ? guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
-          where: { documentId: { in: customsDocumentIds }, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
-          orderBy: [{ createdAt: "desc" }],
-          take: 100,
-        })
-        : Promise.resolve([]),
-    ])
-    : [null, []];
+  const ocrRawRows = canReadRaw && customsDocumentIds.length
+    ? await guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
+      where: { documentId: { in: customsDocumentIds }, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
+      orderBy: [{ createdAt: "desc" }],
+      take: 100,
+    })
+    : [];
+  const ensuredRawResults = canReadRaw
+    ? await Promise.all(customsDocuments.map((document) => (
+      ensureCustomsOcrRawResultForDocument(document, basic, customsItems, rawResultForDocument(ocrRawRows, document.id))
+    )))
+    : [];
   const ocrRawResults = [
-    ...(currentRawResult ? [currentRawResult] : []),
-    ...ocrRawRows.filter((row) => row.id !== currentRawResult?.id),
+    ...ensuredRawResults.filter((row): row is Prisma.OcrRawResultGetPayload<{}> => Boolean(row)),
+    ...ocrRawRows.filter((row) => !ensuredRawResults.some((ensured) => ensured?.id === row.id)),
   ];
+  const currentRawResult = currentCustomsDocument?.id ? rawResultForDocument(ocrRawResults, currentCustomsDocument.id) : null;
   const historicalCustomsDocuments = customsDocuments.slice(1);
   const currentItemRawFallback = (customsItems || []).filter((item) => item.documentId === currentCustomsDocument?.id);
   return {

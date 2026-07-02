@@ -27,7 +27,7 @@ test("customs document tab returns parsed declaration fields and internal raw OC
   assert.match(customsSection, /guardedPrismaFindMany<TaxRefundDocumentLight\[\]>/);
   assert.match(customsSection, /currentCustomsDocument/);
   assert.match(customsSection, /historicalCustomsDocuments/);
-  assert.match(customsSection, /getOcrRawResultByDocumentId\(currentCustomsDocument\.id\)/);
+  assert.match(customsSection, /ensureCustomsOcrRawResultForDocument/);
   assert.match(customsSection, /documentId: \{ in: customsDocumentIds \}/);
   assert.match(customsSection, /customsOcrCallLogs/);
   assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
@@ -124,9 +124,11 @@ test("customs OCR persistence logs empty raw JSON and failed provider calls", ()
   assert.match(rawResultService, /OCR response received but rawJson was not persisted\./);
   assert.match(rawResultService, /export async function getOcrRawResultByDocumentId/);
   assert.match(rawResultService, /tx\.ocrRawResult\.create/);
-  assert.match(rawResultService, /tx\.ocrRawResult\.update/);
+  assert.doesNotMatch(rawResultService, /tx\.ocrRawResult\.update/);
   assert.match(customsRecognition, /persistCustomsRecognitionArtifacts/);
   assert.match(customsRecognition, /persistHistoricalCustomsRecognitionArtifacts/);
+  assert.match(taxRefundService, /ensureCustomsOcrRawResultForDocument/);
+  assert.match(taxRefundService, /BACKFILLED_CUSTOMS_OCR_RAW_RESULT/);
   assert.match(customsRecognition, /BACKFILLED_HISTORICAL_ORDER_FIELDS/);
   assert.match(customsRecognition, /历史识别未保存原始 OCR 响应/);
   assert.match(customsRecognition, /customs-ocr-result-persisted/);
