@@ -285,6 +285,67 @@ function toPlainJson(value: unknown): unknown {
   }
 }
 
+function collectDocMindText(value: unknown, output: string[] = [], depth = 0) {
+  if (depth > 10 || value == null) return output;
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return collectDocMindText(parsed, output, depth + 1);
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text || /^https?:\/\//i.test(text)) return output;
+    if (/[报关单申报日期商品名称数量单位总价成交方式币制海关编号]/.test(text) || text.length <= 2000) {
+      output.push(text.slice(0, 200000));
+    }
+    return output;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    output.push(String(value));
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectDocMindText(item, output, depth + 1));
+    return output;
+  }
+  if (isPlainRecord(value)) Object.values(value).forEach((item) => collectDocMindText(item, output, depth + 1));
+  return output;
+}
+
+function collectDocMindOutputFileUrls(value: unknown, output: string[] = [], depth = 0) {
+  if (depth > 8 || value == null) return output;
+  const parsed = parseJsonMaybe(value);
+  if (parsed !== value) return collectDocMindOutputFileUrls(parsed, output, depth + 1);
+  if (typeof value === "string") {
+    if (/^https?:\/\//i.test(value) && !output.includes(value)) output.push(value);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectDocMindOutputFileUrls(item, output, depth + 1));
+    return output;
+  }
+  if (!isPlainRecord(value)) return output;
+  const outputFileUrl = normalizeFieldValue(responseField(value, "outputFileUrl"));
+  if (/^https?:\/\//i.test(outputFileUrl) && !output.includes(outputFileUrl)) output.push(outputFileUrl);
+  Object.values(value).forEach((item) => collectDocMindOutputFileUrls(item, output, depth + 1));
+  return output;
+}
+
+async function readDocMindOutputFiles(rawStatusJson: unknown[]) {
+  const urls = [...new Set(rawStatusJson.flatMap((item) => collectDocMindOutputFileUrls(item)).slice(0, 3))];
+  const outputs: unknown[] = [];
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      outputs.push(parseJsonMaybe(text));
+    } catch (error) {
+      console.error("aliyun-docmind-customs-output-file-read-failed", {
+        message: ocrErrorText(error),
+      });
+    }
+  }
+  return outputs;
+}
+
 function findDocMindTaskId(value: unknown, depth = 0): string {
   if (depth > 8 || value == null) return "";
   const parsed = parseJsonMaybe(value);
@@ -373,6 +434,10 @@ async function getAliyunDocMindParserResult(
       } catch (error) {
         lastError = ocrErrorText(error);
         console.error("aliyun-docmind-customs-result-pending", { taskId, attempt, message: lastError });
+      }
+      if (ready) {
+        const outputFiles = await readDocMindOutputFiles(statusRawJson);
+        if (outputFiles.length) return { data: { outputFiles }, resultRawJson: null, statusRawJson };
       }
     }
     if (attempt < DOCMIND_CUSTOMS_MAX_POLLS - 1) await sleep(DOCMIND_CUSTOMS_POLL_INTERVAL_MS);
@@ -733,7 +798,8 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
     ? await getAliyunDocMindParserResult(client, taskId)
     : { data: submitData, resultRawJson: null, statusRawJson: [] };
   const data = parseJsonMaybe(result.data);
-  const text = collectText(data).join("\n");
+  const docMindText = collectDocMindText(data).join("\n");
+  const text = [docMindText, collectText(data).join("\n")].filter(Boolean).join("\n");
   const structuredFields = collectFieldsFromObject(data, CUSTOMS_FIELD_ALIASES);
   let items = extractCustomsItemsFromAliyunTableData(data, {
     tradeTerm: normalizeFieldValue(structuredFields.tradeTerm),
