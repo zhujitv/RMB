@@ -26,7 +26,8 @@ test("customs document tab returns parsed declaration fields and internal raw OC
   assert.match(customsSection, /guardedPrismaFindMany<TaxRefundDocumentLight\[\]>/);
   assert.match(customsSection, /currentCustomsDocument/);
   assert.match(customsSection, /historicalCustomsDocuments/);
-  assert.match(customsSection, /rawResultForDocument\(ocrRawResults, currentCustomsDocument\?\.id \|\| ""\)/);
+  assert.match(customsSection, /getOcrRawResultByDocumentId\(currentCustomsDocument\.id\)/);
+  assert.match(customsSection, /documentId: \{ in: customsDocumentIds \}/);
   assert.match(customsSection, /customsOcrCallLogs/);
   assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
   assert.match(taxRefundService, /domesticConsignor/);
@@ -120,6 +121,13 @@ test("customs OCR persistence logs empty raw JSON and failed provider calls", ()
   const rawResultService = readFileSync("lib/platform/ocr-raw-results.ts", "utf8");
   const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
   assert.match(rawResultService, /OCR response received but rawJson was not persisted\./);
+  assert.match(rawResultService, /export async function getOcrRawResultByDocumentId/);
+  assert.match(rawResultService, /tx\.ocrRawResult\.create/);
+  assert.match(rawResultService, /tx\.ocrRawResult\.update/);
+  assert.match(customsRecognition, /persistCustomsRecognitionArtifacts/);
+  assert.match(customsRecognition, /customs-ocr-result-persisted/);
+  assert.match(customsRecognition, /rawJsonSaved/);
+  assert.match(customsRecognition, /parsedJsonSaved/);
   assert.match(rawResultService, /export function logOcrCallFailure/);
   assert.match(rawResultService, /provider/);
   assert.match(rawResultService, /apiName/);

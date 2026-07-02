@@ -680,7 +680,7 @@ function CustomsRecognitionDocumentSummary({
         <span>documentId: {document.id || "-"}</span>
         {canReadRaw ? (
           <span className={document.hasRawJson && document.hasParsedJson ? styles.textSuccess : styles.textDanger}>
-            raw: {document.hasRawJson ? "已保存" : "缺失"} / parsed: {document.hasParsedJson ? "已保存" : "缺失"}
+            raw: {document.hasRawJson ? "已保存" : "原始结果未保存"} / parsed: {document.hasParsedJson ? "已保存" : "解析结果未保存"}
           </span>
         ) : null}
       </div>
@@ -838,7 +838,7 @@ function CustomsRecognitionResultPanel({
                     <span>{log.apiName || "-"}</span>
                     <span>documentId: {log.documentId || "-"}</span>
                     <span className={log.rawJson && log.parsedJson ? styles.textSuccess : styles.textDanger}>
-                      raw: {log.rawJson ? "已保存" : "缺失"} / parsed: {log.parsedJson ? "已保存" : "缺失"}
+                      raw: {log.rawJson ? "已保存" : "原始结果未保存"} / parsed: {log.parsedJson ? "已保存" : "解析结果未保存"}
                     </span>
                     {log.errorMessage ? <span title={log.errorMessage}>错误：{log.errorMessage}</span> : null}
                   </div>

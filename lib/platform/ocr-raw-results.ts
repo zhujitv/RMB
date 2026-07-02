@@ -48,26 +48,13 @@ export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.Tran
       status: requestedStatus,
     });
   }
-  const fallbackPayload = {
-    provider: cleanText(input.provider, "ALIYUN"),
-    apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
-    documentId: input.documentId,
-    orderId: input.orderId || "",
-    taxRefundId: input.taxRefundId || input.orderId || "",
-    warning: rawJsonMissing
-      ? "识别部分成功，原始结果保存失败"
-      : parsedJsonMissing
-        ? "识别部分成功，解析结果保存失败"
-        : "",
-    createdAt: new Date().toISOString(),
-  };
   const status = rawJsonMissing || parsedJsonMissing
     ? "PARTIAL"
     : requestedStatus;
   const errorMessage = cleanText(input.errorMessage)
     || (rawJsonMissing ? "识别部分成功，原始结果保存失败" : "")
     || (parsedJsonMissing ? "识别部分成功，解析结果保存失败" : "");
-  return tx.ocrRawResult.create({
+  const created = await tx.ocrRawResult.create({
     data: {
       documentId: input.documentId,
       taxRefundId: input.taxRefundId || input.orderId || null,
@@ -75,12 +62,29 @@ export async function saveOcrRawResult(input: OcrRawResultInput, tx: Prisma.Tran
       documentType: cleanText(input.documentType),
       provider: cleanText(input.provider, "ALIYUN"),
       apiName: cleanText(input.apiName, "UNKNOWN_OCR_API"),
-      rawJson: jsonInput(rawJsonMissing ? fallbackPayload : input.rawJson),
-      parsedJson: jsonInput(parsedJsonMissing ? fallbackPayload : input.parsedJson),
+      rawJson: jsonInput(input.rawJson),
       confidence: input.confidence == null ? null : input.confidence,
+      status: parsedJsonMissing ? status : "PARTIAL",
+      errorMessage: parsedJsonMissing ? errorMessage || null : "识别部分成功，解析结果未保存",
+    },
+  });
+  if (parsedJsonMissing) return created;
+  return tx.ocrRawResult.update({
+    where: { id: created.id },
+    data: {
+      parsedJson: jsonInput(input.parsedJson),
       status,
       errorMessage: errorMessage || null,
     },
+  });
+}
+
+export async function getOcrRawResultByDocumentId(documentId: string, tx: Prisma.TransactionClient = prisma) {
+  const id = cleanText(documentId);
+  if (!id) return null;
+  return tx.ocrRawResult.findFirst({
+    where: { documentId: id },
+    orderBy: [{ createdAt: "desc" }],
   });
 }
 

@@ -448,8 +448,11 @@ test("tax refund re-recognition uses order route and surfaces specific backend r
   );
   assert.match(
     customsRecognitionService,
-    /customsUpdateData\(fields, status, message, source\)/,
+    /customsUpdateData\(fields, effectiveStatus, message, source\)/,
   );
+  assert.match(customsRecognitionService, /persistCustomsRecognitionArtifacts\(orderId, document, parsed\)/);
+  assert.match(customsRecognitionService, /识别部分成功：原始结果未保存/);
+  assert.match(customsRecognitionService, /OCR已识别基础字段，但未解析到报关商品明细，请人工维护。/);
 });
 
 test("admin can delete uploaded customs documents with confirmation", () => {

@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { readR2Object } from "../r2";
 import * as customsDeclarationParser from "../customs-declaration-parser";
@@ -14,6 +15,7 @@ import {
   isCustomsDeclarationDocumentType,
   isPlainRecord,
   nonEmpty,
+  num,
   normalizeOrderDocumentType,
   permissionError,
   runNonCriticalTask,
@@ -104,6 +106,7 @@ type ParseCustomsDocumentResult = {
   status: CustomsParseStatus;
   source: string;
   message: string;
+  text?: string;
   provider?: string;
   apiName?: string;
   rawJson?: unknown;
@@ -125,6 +128,13 @@ type ErrorLike = {
   name?: unknown;
   message?: unknown;
   details?: unknown;
+};
+
+type CustomsRecognitionPersistenceResult = {
+  rawJsonSaved: boolean;
+  parsedJsonSaved: boolean;
+  itemCount: number;
+  errorMessage: string;
 };
 
 function customsDocumentRuntimeFields(document: unknown): CustomsDocumentRuntimeFields {
@@ -177,6 +187,182 @@ function customsUpdateData(fields: CustomsFields = {}, status: CustomsParseStatu
 
 function hasCustomsRecognitionValue(fields: CustomsFields = {}) {
   return Boolean(fields.customsDeclarationNo || fields.customsDeclarationDate);
+}
+
+function cleanCustomsText(value: unknown) {
+  return String(value || "").replace(/\u3000/g, " ").replace(/[ \t]+/g, " ").trim();
+}
+
+function normalizedHsCode(value: unknown) {
+  return cleanCustomsText(value).replace(/\D/g, "");
+}
+
+function customsDateOrNull(value: unknown) {
+  const text = customsDeclarationParser.normalizeCustomsDate(String(value || ""));
+  return text ? dateFromInput(text) : null;
+}
+
+function customsParsedDetailFromRecognition(parsedJson: unknown, text = "") {
+  const parsed = isPlainRecord(parsedJson) ? parsedJson : {};
+  const fallback = customsDeclarationParser.parseCustomsDeclarationDetailText(text);
+  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const items = rawItems
+    .map((item) => isPlainRecord(item) ? item : {})
+    .map((item) => ({
+      hsCode: normalizedHsCode(item.hsCode),
+      productName: cleanCustomsText(item.productName),
+      specification: cleanCustomsText(item.specification),
+      quantity: num(item.quantity, 0),
+      unit: cleanCustomsText(item.unit),
+      unitPrice: num(item.unitPrice, 0),
+      totalAmount: num(item.totalAmount, 0),
+      tradeTerm: cleanCustomsText(item.tradeTerm),
+      currency: cleanCustomsText(item.currency).toUpperCase(),
+      fobAmount: num(item.fobAmount, 0) || num(item.totalAmount, 0),
+      grossWeight: num(item.grossWeight, 0),
+      netWeight: num(item.netWeight, 0),
+      originCountry: cleanCustomsText(item.originCountry),
+      destinationCountry: cleanCustomsText(item.destinationCountry),
+    }))
+    .filter((item) => item.hsCode || item.productName || item.quantity || item.fobAmount);
+  return {
+    ...fallback,
+    ...parsed,
+    customsDeclarationNo: cleanCustomsText(parsed.customsDeclarationNo) || fallback.customsDeclarationNo,
+    customsDeclarationDate: cleanCustomsText(parsed.customsDeclarationDate) || fallback.customsDeclarationDate,
+    exportDate: cleanCustomsText(parsed.exportDate) || fallback.exportDate,
+    tradeTerm: cleanCustomsText(parsed.tradeTerm) || fallback.tradeTerm,
+    currency: cleanCustomsText(parsed.currency).toUpperCase() || fallback.currency,
+    domesticConsignor: cleanCustomsText(parsed.domesticConsignor) || fallback.domesticConsignor,
+    declarationUnit: cleanCustomsText(parsed.declarationUnit) || fallback.declarationUnit,
+    transportMode: cleanCustomsText(parsed.transportMode) || fallback.transportMode,
+    billOfLadingNo: cleanCustomsText(parsed.billOfLadingNo) || fallback.billOfLadingNo,
+    tradeCountry: cleanCustomsText(parsed.tradeCountry) || fallback.tradeCountry,
+    destinationCountry: cleanCustomsText(parsed.destinationCountry) || fallback.destinationCountry,
+    supervisionMode: cleanCustomsText(parsed.supervisionMode) || fallback.supervisionMode,
+    items: items.length ? items : fallback.items,
+  };
+}
+
+async function persistCustomsRecognitionArtifacts(
+  orderId: string,
+  document: CustomsRecognitionDocument,
+  parsed: ParseCustomsDocumentResult,
+): Promise<CustomsRecognitionPersistenceResult> {
+  const parsedDetail = customsParsedDetailFromRecognition(parsed.parsedJson, parsed.text || "");
+  let rawResult: Awaited<ReturnType<typeof saveOcrRawResult>> | null = null;
+  let errorMessage = "";
+  await prisma.ocrRawResult.deleteMany({
+    where: {
+      documentId: document.id,
+      documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
+    },
+  }).catch((error) => {
+    errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("customs-ocr-old-raw-result-cleanup-failed", {
+      documentId: document.id,
+      orderId,
+      provider: parsed.provider || "ALIYUN",
+      apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
+      errorMessage,
+    });
+  });
+  try {
+    rawResult = await saveOcrRawResult({
+      documentId: document.id,
+      taxRefundId: orderId,
+      orderId,
+      documentType: "CUSTOMS_DECLARATION",
+      provider: parsed.provider || "ALIYUN",
+      apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
+      rawJson: parsed.rawJson,
+      parsedJson: {
+        ...parsedDetail,
+        itemCount: parsedDetail.items.length,
+        fileName: String((document as { fileName?: unknown; originalName?: unknown }).fileName || (document as { originalName?: unknown }).originalName || ""),
+      },
+      confidence: parsed.confidence ?? null,
+      status: parsed.status === "SUCCESS" && parsedDetail.items.length ? "SUCCESS" : "PARTIAL",
+      errorMessage: parsedDetail.items.length ? (parsed.status === "SUCCESS" ? "" : parsed.message) : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。",
+    });
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("customs-ocr-raw-result-save-failed", {
+      documentId: document.id,
+      orderId,
+      provider: parsed.provider || "ALIYUN",
+      apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
+      rawJsonSaved: false,
+      parsedJsonSaved: false,
+      itemCount: parsedDetail.items.length,
+      errorMessage,
+    });
+  }
+  await prisma.exportCustomsDeclarationItem.updateMany({
+    where: { orderId, documentId: document.id, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  for (const [index, item] of parsedDetail.items.entries()) {
+    await prisma.exportCustomsDeclarationItem.create({
+      data: {
+        orderId,
+        documentId: document.id,
+        declarationNo: parsedDetail.customsDeclarationNo || "",
+        declarationDate: customsDateOrNull(parsedDetail.customsDeclarationDate),
+        exportDate: customsDateOrNull(parsedDetail.exportDate),
+        hsCode: normalizedHsCode(item.hsCode),
+        productName: item.productName,
+        specification: cleanCustomsText(item.specification) || null,
+        quantity: item.quantity || null,
+        unit: item.unit || null,
+        unitPrice: item.unitPrice || null,
+        totalAmount: item.totalAmount || item.fobAmount || null,
+        tradeTerm: item.tradeTerm || parsedDetail.tradeTerm || null,
+        currency: item.currency || parsedDetail.currency || null,
+        fobAmount: item.fobAmount || null,
+        grossWeight: item.grossWeight || null,
+        netWeight: item.netWeight || null,
+        originCountry: cleanCustomsText(item.originCountry) || null,
+        destinationCountry: cleanCustomsText(item.destinationCountry || parsedDetail.destinationCountry) || null,
+        exchangeRate: null,
+        fobAmountCny: null,
+        rawJson: {
+          ...item,
+          domesticConsignor: parsedDetail.domesticConsignor || "",
+          declarationUnit: parsedDetail.declarationUnit || "",
+          transportMode: parsedDetail.transportMode || "",
+          billOfLadingNo: parsedDetail.billOfLadingNo || "",
+          tradeCountry: parsedDetail.tradeCountry || "",
+          destinationCountry: item.destinationCountry || parsedDetail.destinationCountry || "",
+          supervisionMode: parsedDetail.supervisionMode || "",
+          declarationNo: parsedDetail.customsDeclarationNo || "",
+          declarationDate: parsedDetail.customsDeclarationDate || "",
+          exportDate: parsedDetail.exportDate || "",
+          ocrApiName: parsed.apiName || parsed.source || "",
+        } as unknown as Prisma.InputJsonValue,
+        confirmationStatus: "PENDING_CONFIRMATION",
+        source: parsed.apiName || parsed.source || "OCR_PDF",
+        sortOrder: index,
+      },
+    });
+  }
+  const result = {
+    rawJsonSaved: Boolean(rawResult?.rawJson),
+    parsedJsonSaved: Boolean(rawResult?.parsedJson),
+    itemCount: parsedDetail.items.length,
+    errorMessage,
+  };
+  console.info("customs-ocr-result-persisted", {
+    documentId: document.id,
+    orderId,
+    provider: parsed.provider || "ALIYUN",
+    apiName: parsed.apiName || parsed.source || "CUSTOMS_DECLARATION_OCR",
+    rawJsonSaved: result.rawJsonSaved,
+    parsedJsonSaved: result.parsedJsonSaved,
+    itemCount: result.itemCount,
+    errorMessage: result.errorMessage,
+  });
+  return result;
 }
 
 function currentCustomsFields(before: CustomsOrderLike | null = null): CustomsFields {
@@ -260,6 +446,7 @@ async function parseCustomsDocumentBuffer(buffer: Buffer, _document: CustomsDocu
     status,
     source: recognized.apiName || recognized.source || customsDeclarationParser.CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
     message: customsDeclarationParser.customsParseMessage(fields, status),
+    text: recognized.text,
     provider: recognized.provider,
     apiName: recognized.apiName || recognized.source,
     rawJson: recognized.rawJson || null,
@@ -470,32 +657,17 @@ export async function parseAndApplyCustomsDocument(
   if (!before) throw permissionError("应收订单不存在", 404);
   const manualProtected = before.customsDeclarationParseSource === "MANUAL" || before.customsParseStatus === "MANUAL";
   try {
-    const { fields, status, source, message, provider, apiName, rawJson, parsedJson, confidence } = await parseCustomsDocumentBuffer(buffer, document);
-    await prisma.ocrRawResult.deleteMany({
-      where: {
-        documentId: document.id,
-        documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
-      },
-    }).catch(() => null);
-    await saveOcrRawResult({
-      documentId: document.id,
-      taxRefundId: document.orderId,
-      orderId: document.orderId,
-      documentType: "CUSTOMS_DECLARATION",
-      provider: provider || "ALIYUN",
-      apiName: apiName || source || "CUSTOMS_DECLARATION_OCR",
-      rawJson,
-      parsedJson,
-      confidence: confidence ?? null,
-      status: status === "SUCCESS" ? "SUCCESS" : status === "PARTIAL" ? "PARTIAL" : "FAILED",
-      errorMessage: status === "SUCCESS" ? "" : message,
-    }).catch((error) => {
-      console.error("customs-ocr-raw-result-save-failed", {
-        documentId: document.id,
-        orderId: document.orderId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    });
+    const parsed = await parseCustomsDocumentBuffer(buffer, document);
+    const { fields, source } = parsed;
+    const persistence = await persistCustomsRecognitionArtifacts(document.orderId, document, parsed);
+    const persistenceMessage = !persistence.rawJsonSaved
+      ? "识别部分成功：原始结果未保存"
+      : !persistence.parsedJsonSaved
+        ? "识别部分成功：解析结果未保存"
+        : "";
+    const itemMissingMessage = persistence.itemCount ? "" : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。";
+    const status: CustomsParseStatus = persistenceMessage || itemMissingMessage ? "PARTIAL" : parsed.status;
+    const message = persistenceMessage || itemMissingMessage || parsed.message;
     if (!hasCustomsRecognitionValue(fields)) {
       const failureOrder = await applyCustomsParseFailure(request, actor, document.orderId, message, "CUSTOMS_PARSE_NO_FIELDS", failureAction, {
         allowManualFailure,
@@ -737,19 +909,6 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   if (!document.storageKey && !documentRuntime.filePath && !document.fileUrl) {
     throw codedError("文件不存在", 404, "CUSTOMS_FILE_NOT_FOUND");
   }
-  await prisma.$transaction([
-    prisma.ocrRawResult.deleteMany({
-      where: {
-        documentId: document.id,
-        documentType: { in: ["CUSTOMS_DECLARATION", "CUSTOMS_ENTRY_FORM"] },
-      },
-    }),
-    prisma.exportCustomsDeclarationItem.updateMany({
-      where: { orderId, documentId: document.id, deletedAt: null },
-      data: { deletedAt: new Date() },
-    }),
-  ]);
-
   let buffer: Buffer;
   try {
     buffer = await readCustomsDeclarationPdfBuffer(document);
@@ -779,6 +938,13 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   }
 
   const { fields, source } = parsed;
+  const persistence = await persistCustomsRecognitionArtifacts(orderId, document, parsed);
+  const persistenceMessage = !persistence.rawJsonSaved
+    ? "识别部分成功：原始结果未保存"
+    : !persistence.parsedJsonSaved
+      ? "识别部分成功：解析结果未保存"
+      : "";
+  const itemMissingMessage = persistence.itemCount ? "" : "OCR已识别基础字段，但未解析到报关商品明细，请人工维护。";
   const missing = missingCustomsFieldMessages(fields);
   if (!hasCustomsRecognitionValue(fields)) {
     const message = missing.join("；") || "未识别到报关单号；未识别到申报日期";
@@ -792,19 +958,23 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
   }
 
   const status = customsDeclarationParser.customsParseStatusFromFields(fields);
-  const message = missing.length
+  const effectiveStatus: CustomsParseStatus = persistenceMessage || itemMissingMessage ? "PARTIAL" : status;
+  const message = persistenceMessage || itemMissingMessage || (missing.length
     ? `已识别部分信息，${missing.join("；")}。`
-    : (parsed.message || "识别成功");
+    : (parsed.message || "识别成功"));
   const order = await prisma.receivableOrder.update({
     where: { id: orderId },
-    data: customsUpdateData(fields, status, message, source),
+    data: customsUpdateData(fields, effectiveStatus, message, source),
     include: includeOrderRelations(),
   });
-  await runNonCriticalTask("重新识别报关单日志写入", () => writeAudit(request, actor, status === "SUCCESS" ? "重新识别报关单信息" : "重新识别报关单部分信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
+  await runNonCriticalTask("重新识别报关单日志写入", () => writeAudit(request, actor, effectiveStatus === "SUCCESS" ? "重新识别报关单信息" : "重新识别报关单部分信息", "receivable_orders", order.id, serializeCustomsRecognition(before), {
     ...serializeCustomsRecognition(order),
     documentId: document.id,
     uploadSource: customsDocumentRuntimeFields(document).uploadSource || "",
     recognitionSource: source,
+    rawJsonSaved: persistence.rawJsonSaved,
+    parsedJsonSaved: persistence.parsedJsonSaved,
+    customsDeclarationItemCount: persistence.itemCount,
   }));
   const notifiedOrder = await tryAutoShippingDocumentsNotification(request, actor, order.id);
   const serializedOrder = notifiedOrder || serializeOrder(order);
@@ -812,7 +982,7 @@ export async function recognizeOrderCustomsDeclaration(request: AuditRequestLike
     document,
     parsedFields: fields,
     currentFields: currentCustomsFields(before),
-    status,
+    status: effectiveStatus,
     message,
     applied: true,
     order: serializedOrder,

@@ -44,7 +44,7 @@ import {
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
-import { canReadOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
+import { canReadOcrRawResult, getOcrRawResultByDocumentId, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -935,7 +935,7 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
 
 async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
   const canReadRaw = canReadOcrRawResult(actor);
-  const [basic, documents, customsItems, customsDocuments, ocrRawResults] = await Promise.all([
+  const [basic, documents, customsItems, customsDocuments] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
     guardedPrismaFindMany<TaxRefundCustomsItemLight[]>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.customsItems", {
@@ -976,17 +976,26 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
       orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
       take: 20,
     }),
-    canReadRaw
-      ? guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
-        where: { orderId, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
-        orderBy: [{ createdAt: "desc" }],
-        take: 100,
-      })
-      : Promise.resolve([]),
   ]);
   const serializedItems = (customsItems || []).map((item) => serializeTaxRefundCustomsItem(item, basic));
   const currentCustomsDocument = customsDocuments[0] || null;
-  const currentRawResult = rawResultForDocument(ocrRawResults, currentCustomsDocument?.id || "");
+  const customsDocumentIds = customsDocuments.map((document) => document.id).filter(Boolean);
+  const [currentRawResult, ocrRawRows] = canReadRaw
+    ? await Promise.all([
+      currentCustomsDocument?.id ? getOcrRawResultByDocumentId(currentCustomsDocument.id) : Promise.resolve(null),
+      customsDocumentIds.length
+        ? guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
+          where: { documentId: { in: customsDocumentIds }, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
+          orderBy: [{ createdAt: "desc" }],
+          take: 100,
+        })
+        : Promise.resolve([]),
+    ])
+    : [null, []];
+  const ocrRawResults = [
+    ...(currentRawResult ? [currentRawResult] : []),
+    ...ocrRawRows.filter((row) => row.id !== currentRawResult?.id),
+  ];
   const historicalCustomsDocuments = customsDocuments.slice(1);
   const currentItemRawFallback = (customsItems || []).filter((item) => item.documentId === currentCustomsDocument?.id);
   return {
