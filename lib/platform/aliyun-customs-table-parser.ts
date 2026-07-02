@@ -1,4 +1,5 @@
 import {
+  cleanCustomsDeclarationProductNameForTaxRefund,
   normalizeCustomsDeclarationItemForTaxRefund,
   type CustomsDeclarationItemFields,
 } from "../customs-declaration-parser.ts";
@@ -179,7 +180,8 @@ const TABLE_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平�
 const TABLE_UNIT_REGEX = new RegExp(TABLE_UNIT_PATTERN, "i");
 const TABLE_NUMBER_ONLY_REGEX = new RegExp(`^${TABLE_NUMBER_PATTERN}$`);
 const CUSTOMS_NON_ITEM_TEXT_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|出境关别|进境关别|备案号|境内收发货人|境外收发货人|境内发货人|生产销售单位|消费使用单位|申报单位|运输方式|运输工具名称|航次号|提运单号|提单号|监管方式|征免性质|许可证号|合同协议号|贸易国别|贸易国|运抵国|目的国|指运港|装货港|启运港|成交方式|运费|保费|杂费|件数|包装种类|毛重|净重|集装箱|随附单证|标记唛码|备注|境内货源地|关区|口岸|港区|代理报关|委托协议|统一编号|申报地海关|入境口岸)/;
-const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)$/i;
+const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)/i;
+const CUSTOMS_TRANSPORT_OR_PORT_TEXT_PATTERN = /(水路运输|铁路运输|公路运输|航空运输|多式联运|运输工具|航次|提运单|提单|HAMBURG\s+EXPRESS|EXPRESS\s*\/|VESSEL|VOYAGE|MAJOR\s+FENCE\s+B\.?V\.?|洋山\s*区|洋山港区|港区|口岸)/i;
 const CUSTOMS_CONTAINER_NO_PATTERN = /\b[A-Z]{4}\d{7}\b/i;
 const CUSTOMS_DATE_LIKE_PATTERN = /\b20\d{2}[年/.-]?\d{1,2}[月/.-]?\d{1,2}(?:日)?\b/;
 
@@ -231,20 +233,23 @@ function productNameFromTableCell(value = "") {
     .split(/\n|[;；]/)
     .map(stripAliyunStringQuote)
     .map((part) => part.replace(/^\s*\d{1,3}\s+/, "").replace(/^\s*\d{8,13}\s+/, "").trim())
+    .map(cleanCustomsDeclarationProductNameForTaxRefund)
     .filter(Boolean)
     .filter((part) => !/^(无品牌|无型号|品牌|型号|规格|用途|材质|成分|生产厂家|生产商|境内货源地)/.test(part))
     .filter(isLikelyCustomsProductName);
-  return parts[0] || stripAliyunStringQuote(value);
+  return parts[0] || cleanCustomsDeclarationProductNameForTaxRefund(value) || stripAliyunStringQuote(value);
 }
 
 function isLikelyCustomsProductName(value = "") {
-  const text = stripAliyunStringQuote(value);
+  const raw = stripAliyunStringQuote(value);
+  const text = cleanCustomsDeclarationProductNameForTaxRefund(raw);
   if (!text || !/[\u4e00-\u9fa5A-Za-z]/.test(text)) return false;
-  if (classifyCustomsHeaderCell(text)) return false;
-  if (CUSTOMS_NON_ITEM_TEXT_PATTERN.test(text)) return false;
-  if (CUSTOMS_COMPANY_NAME_PATTERN.test(text)) return false;
-  if (CUSTOMS_CONTAINER_NO_PATTERN.test(text)) return false;
-  if (CUSTOMS_DATE_LIKE_PATTERN.test(text)) return false;
+  if (classifyCustomsHeaderCell(raw) || classifyCustomsHeaderCell(text)) return false;
+  if (CUSTOMS_NON_ITEM_TEXT_PATTERN.test(raw) || CUSTOMS_NON_ITEM_TEXT_PATTERN.test(text)) return false;
+  if (CUSTOMS_COMPANY_NAME_PATTERN.test(raw) || CUSTOMS_COMPANY_NAME_PATTERN.test(text)) return false;
+  if (CUSTOMS_TRANSPORT_OR_PORT_TEXT_PATTERN.test(raw) || CUSTOMS_TRANSPORT_OR_PORT_TEXT_PATTERN.test(text)) return false;
+  if (CUSTOMS_CONTAINER_NO_PATTERN.test(raw) || CUSTOMS_CONTAINER_NO_PATTERN.test(text)) return false;
+  if (CUSTOMS_DATE_LIKE_PATTERN.test(raw) || CUSTOMS_DATE_LIKE_PATTERN.test(text)) return false;
   if (/^\d{1,3}$/.test(text)) return false;
   if (/^\d{8,13}$/.test(text)) return false;
   if (/^(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)$/i.test(text)) return false;
@@ -276,6 +281,8 @@ function rowLooksLikeCustomsItem(row: { cells: AliyunTableCell[] }) {
   if (!/[\u4e00-\u9fa5A-Za-z]/.test(text)) return false;
   if (!/\d+(?:[,，]\d{3})*(?:\.\d+)?/.test(text)) return false;
   if (CUSTOMS_NON_ITEM_TEXT_PATTERN.test(text)) return false;
+  if (CUSTOMS_COMPANY_NAME_PATTERN.test(text)) return false;
+  if (CUSTOMS_TRANSPORT_OR_PORT_TEXT_PATTERN.test(text)) return false;
   return row.cells.some((cell) => isLikelyCustomsProductName(cell.content));
 }
 

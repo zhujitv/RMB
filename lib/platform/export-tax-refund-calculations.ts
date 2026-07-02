@@ -501,6 +501,14 @@ function calculationStatusFromReasons(abnormalReasons: string[]) {
 }
 
 export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclarationItemGetPayload<{}>) {
+  const normalized = normalizeCustomsDeclarationItemForTaxRefund({
+    productName: row.productName,
+    quantity: row.quantity == null ? 0 : Number(row.quantity),
+    unit: row.unit || "",
+    totalAmount: row.totalAmount == null ? Number(row.fobAmount || 0) : Number(row.totalAmount),
+    currency: row.currency || "",
+    tradeTerm: row.tradeTerm || "",
+  });
   return {
     id: row.id,
     documentId: row.documentId || "",
@@ -508,13 +516,13 @@ export function serializeCustomsDeclarationItem(row: Prisma.ExportCustomsDeclara
     declarationDate: row.declarationDate,
     exportDate: row.exportDate,
     hsCode: row.hsCode,
-    productName: row.productName,
-    quantity: row.quantity == null ? null : Number(row.quantity),
-    unit: row.unit || "",
-    totalAmount: row.totalAmount == null ? null : Number(row.totalAmount),
-    tradeTerm: row.tradeTerm || "",
-    currency: row.currency || "",
-    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
+    productName: normalized?.productName || row.productName,
+    quantity: normalized?.quantity ?? (row.quantity == null ? null : Number(row.quantity)),
+    unit: normalized?.unit || row.unit || "",
+    totalAmount: normalized?.totalAmount ?? (row.totalAmount == null ? null : Number(row.totalAmount)),
+    tradeTerm: normalized?.tradeTerm || row.tradeTerm || "",
+    currency: normalized?.currency || row.currency || "",
+    fobAmount: normalized?.fobAmount ?? (row.fobAmount == null ? null : Number(row.fobAmount)),
     exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
     fobAmountCny: row.fobAmountCny == null ? null : Number(row.fobAmountCny),
     confirmationStatus: row.confirmationStatus,

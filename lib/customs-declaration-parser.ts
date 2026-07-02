@@ -459,15 +459,22 @@ const CUSTOMS_ITEM_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|�
 const CUSTOMS_ITEM_UNIT_REGEX = new RegExp(CUSTOMS_ITEM_UNIT_PATTERN, "i");
 const CUSTOMS_ITEM_HEADER_PATTERN = /^(项号|商品编号|HS编码|商品名称|商品名称及规格型号|规格型号|数量及单位|数量|单位|单价|总价|币制|原产国|最终目的国|征免|法定|成交|第一|第二)$/i;
 const CUSTOMS_ITEM_LABEL_PATTERN = /(报关单号|海关编号|预录入编号|申报日期|出口日期|日期|出境关别|进境关别|备案号|境内发货人|境内收发货人|境外收发货人|生产销售单位|消费使用单位|申报单位|运输方式|运输工具名称|航次号|提运单号|提单号|贸易国别|贸易国|运抵国|目的国|监管方式|征免性质|征免|许可证号|合同协议号|成交方式|运费|保费|杂费|件数|包装种类|集装箱|集装箱号|箱号|港口|口岸|装货港|指运港|启运港|境内货源地|随附单证|标记唛码|备注|发票|代理报关委托协议|统一编号|申报地海关|入境口岸|毛重|净重)/;
-const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)$/i;
+const CUSTOMS_COMPANY_NAME_PATTERN = /(有限公司|有限责任公司|股份有限公司|进出口公司|贸易公司|B\.?V\.?|LTD\.?|LIMITED|INC\.?|CO\.?,?\s*LTD\.?)/i;
+const CUSTOMS_ITEM_PARTY_OR_TRANSPORT_PATTERN = /(水路运输|铁路运输|公路运输|航空运输|多式联运|运输工具|航次|提运单|提单|HAMBURG\s+EXPRESS|EXPRESS\s*\/|VESSEL|VOYAGE|MAJOR\s+FENCE\s+B\.?V\.?|洋山\s*区|洋山港区|港区|口岸)/i;
 const CUSTOMS_ITEM_CONTAINER_NO_PATTERN = /\b[A-Z]{4}\d{7}\b/i;
 const CUSTOMS_ITEM_DATE_PATTERN = /\b20\d{2}[-/.年]?\d{1,2}[-/.月]?\d{1,2}(?:日)?\b/;
+const CUSTOMS_COUNTRY_NAMES = "中国|荷兰|美国|德国|英国|法国|意大利|日本|韩国|越南|印度|加拿大|澳大利亚|比利时|西班牙|波兰|俄罗斯|泰国|马来西亚|印尼|墨西哥|巴西|阿联酋|沙特|奥地利|瑞典|瑞士|土耳其|南非";
+const CUSTOMS_ITEM_TRAILING_METADATA_PATTERNS = [
+  new RegExp(`\\s+(?:${CUSTOMS_COUNTRY_NAMES})(?:\\s*(?:${CUSTOMS_COUNTRY_NAMES}))?(?:\\s|[()（）]|$).*$`, "i"),
+  new RegExp(`中国\\s*(?:${CUSTOMS_COUNTRY_NAMES})(?:\\s|[()（）]|$).*$`, "i"),
+  /[()（）\s]*(?:宣城|照章征税|照章|征税|全免|征免方式|征免性质|境内货源地|最终目的国|原产国).*$/i,
+];
 
 export function normalizeCustomsDeclarationItemForTaxRefund(
   input: Partial<CustomsDeclarationItemFields> & Record<string, unknown> = {},
   defaults: Partial<Pick<CustomsDeclarationItemFields, "currency" | "tradeTerm">> = {},
 ): CustomsDeclarationItemFields | null {
-  const productName = cleanTaxRefundProductName(input.productName);
+  const productName = cleanCustomsDeclarationProductNameForTaxRefund(input.productName);
   const quantity = numericAmount(String(input.quantity ?? ""));
   const unit = normalizeCustomsItemUnit(input.unit);
   const totalAmount = numericAmount(String(input.totalAmount ?? input.fobAmount ?? ""));
@@ -511,29 +518,71 @@ function normalizeCustomsItemUnit(value: unknown) {
   return "";
 }
 
-function cleanTaxRefundProductName(value: unknown) {
-  return toHalfWidth(String(value || ""))
+export function cleanCustomsDeclarationProductNameForTaxRefund(value: unknown) {
+  let text = toHalfWidth(String(value || ""))
     .replace(/^\s*\d{1,3}\s+/, "")
     .replace(/^\s*\d{8,13}\s+/, "")
     .replace(/商品名称及规格型号|商品名称|中文品名|品名|规格型号|HS编码|商品编号/g, " ")
     .replace(/\b(FOB|CIF|CFR|EXW|USD|CNY|RMB|EUR|JPY|HKD)\b/ig, " ")
+    .replace(/[（(]\s*[）)]/g, " ")
     .replace(/[;；:：|]/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 100);
+    .trim();
+  if (isWholeCustomsMetadataRow(text)) return text.slice(0, 100);
+  text = stripTrailingCustomsItemMetadata(text)
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, 100);
 }
 
 function isValidTaxRefundProductName(productName = "") {
-  const text = cleanTaxRefundProductName(productName);
+  const raw = toHalfWidth(String(productName || "")).replace(/\s+/g, " ").trim();
+  const text = cleanCustomsDeclarationProductNameForTaxRefund(productName);
   return Boolean(
     text
     && /[\u4e00-\u9fa5A-Za-z]/.test(text)
+    && !CUSTOMS_ITEM_HEADER_PATTERN.test(raw)
     && !CUSTOMS_ITEM_HEADER_PATTERN.test(text)
+    && !CUSTOMS_ITEM_LABEL_PATTERN.test(raw)
     && !CUSTOMS_ITEM_LABEL_PATTERN.test(text)
+    && !CUSTOMS_COMPANY_NAME_PATTERN.test(raw)
     && !CUSTOMS_COMPANY_NAME_PATTERN.test(text)
+    && !CUSTOMS_ITEM_PARTY_OR_TRANSPORT_PATTERN.test(raw)
+    && !CUSTOMS_ITEM_PARTY_OR_TRANSPORT_PATTERN.test(text)
+    && !CUSTOMS_ITEM_CONTAINER_NO_PATTERN.test(raw)
     && !CUSTOMS_ITEM_CONTAINER_NO_PATTERN.test(text)
+    && !CUSTOMS_ITEM_DATE_PATTERN.test(raw)
     && !CUSTOMS_ITEM_DATE_PATTERN.test(text),
   );
+}
+
+function isWholeCustomsMetadataRow(text = "") {
+  return Boolean(
+    text
+    && (
+      CUSTOMS_COMPANY_NAME_PATTERN.test(text)
+      || CUSTOMS_ITEM_PARTY_OR_TRANSPORT_PATTERN.test(text)
+      || CUSTOMS_ITEM_CONTAINER_NO_PATTERN.test(text)
+      || CUSTOMS_ITEM_DATE_PATTERN.test(text)
+    )
+  );
+}
+
+function stripTrailingCustomsItemMetadata(value = "") {
+  let text = value;
+  for (const pattern of CUSTOMS_ITEM_TRAILING_METADATA_PATTERNS) {
+    const match = text.match(pattern);
+    const index = match?.index ?? -1;
+    if (index > 1 && hasProductNameSignal(text.slice(0, index))) {
+      text = text.slice(0, index).trim();
+    }
+  }
+  return text;
+}
+
+function hasProductNameSignal(value = "") {
+  const text = value.trim();
+  return /[\u4e00-\u9fa5]{2,}/.test(text) || /[A-Za-z]{3,}/.test(text);
 }
 
 function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[] {

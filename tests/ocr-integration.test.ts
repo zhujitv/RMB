@@ -250,12 +250,17 @@ test("customs table parser handles delayed headers with split quantity and unit 
 
 test("customs item normalizer rejects declaration metadata as product rows", async () => {
   process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
-  const { normalizeCustomsDeclarationItemForTaxRefund } = await import("../lib/customs-declaration-parser.ts");
+  const {
+    cleanCustomsDeclarationProductNameForTaxRefund,
+    normalizeCustomsDeclarationItemForTaxRefund,
+  } = await import("../lib/customs-declaration-parser.ts");
   for (const productName of [
     "出境关别(2248)洋山港区",
     "生产销售单位(M A D X)(BML)",
     "生产销售单位(M A D X)(BML)浙江莱诺建材有限公司",
     "境内收发货人 浙江莱诺建材有限公司",
+    "浙江莱诺建材有限公司 洋山 区",
+    "Major Fence B.V.水路运输HAMBURG EXPRESS / W",
   ]) {
     assert.equal(normalizeCustomsDeclarationItemForTaxRefund({
       productName,
@@ -272,6 +277,65 @@ test("customs item normalizer rejects declaration metadata as product rows", asy
     totalAmount: 86588.1,
     currency: "USD",
   })?.productName, "铝制工程结构件");
+  assert.equal(cleanCustomsDeclarationProductNameForTaxRefund("塑料制栅栏 中国 荷兰（ ）宣城 照章征税"), "塑料制栅栏");
+  assert.equal(cleanCustomsDeclarationProductNameForTaxRefund("铝制工程结构 中国荷兰( )宣城照章征税"), "铝制工程结构");
+  assert.equal(normalizeCustomsDeclarationItemForTaxRefund({
+    productName: "塑料制栅栏 中国 荷兰（ ）宣城 照章征税",
+    quantity: 41636.05,
+    unit: "千克",
+    totalAmount: 10320,
+    currency: "USD",
+  })?.productName, "塑料制栅栏");
+  assert.equal(normalizeCustomsDeclarationItemForTaxRefund({
+    productName: "铝制工程结构 中国荷兰( )宣城照章征税",
+    quantity: 3904.95,
+    unit: "千克",
+    totalAmount: 200,
+    currency: "USD",
+  })?.productName, "铝制工程结构");
+});
+
+test("customs table parser filters party and transport rows while trimming item metadata", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractCustomsItemsFromAliyunTableData } = await import("../lib/platform/aliyun-customs-table-parser.ts");
+  const CellDetails = [
+    { CellContent: "商品名称", RowStart: 0, RowEnd: 0, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "数量", RowStart: 0, RowEnd: 0, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "单位", RowStart: 0, RowEnd: 0, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "币制", RowStart: 0, RowEnd: 0, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "总价", RowStart: 0, RowEnd: 0, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "塑料制栅栏 中国 荷兰（ ）宣城 照章征税", RowStart: 1, RowEnd: 1, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "41636.05", RowStart: 1, RowEnd: 1, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "千克", RowStart: 1, RowEnd: 1, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "USD", RowStart: 1, RowEnd: 1, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "10320.00", RowStart: 1, RowEnd: 1, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "浙江莱诺建材有限公司 洋山 区", RowStart: 2, RowEnd: 2, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "8.00", RowStart: 2, RowEnd: 2, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "平方米", RowStart: 2, RowEnd: 2, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "USD", RowStart: 2, RowEnd: 2, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "2248.00", RowStart: 2, RowEnd: 2, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "Major Fence B.V.水路运输HAMBURG EXPRESS / W", RowStart: 3, RowEnd: 3, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "8.00", RowStart: 3, RowEnd: 3, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "平方米", RowStart: 3, RowEnd: 3, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "USD", RowStart: 3, RowEnd: 3, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "3.00", RowStart: 3, RowEnd: 3, ColumnStart: 4, ColumnEnd: 4 },
+    { CellContent: "铝制工程结构 中国荷兰( )宣城照章征税", RowStart: 4, RowEnd: 4, ColumnStart: 0, ColumnEnd: 0 },
+    { CellContent: "3904.95", RowStart: 4, RowEnd: 4, ColumnStart: 1, ColumnEnd: 1 },
+    { CellContent: "千克", RowStart: 4, RowEnd: 4, ColumnStart: 2, ColumnEnd: 2 },
+    { CellContent: "USD", RowStart: 4, RowEnd: 4, ColumnStart: 3, ColumnEnd: 3 },
+    { CellContent: "200.00", RowStart: 4, RowEnd: 4, ColumnStart: 4, ColumnEnd: 4 },
+  ];
+  const items = extractCustomsItemsFromAliyunTableData({ TableInfo: { TableDetails: [{ CellDetails }] } });
+  assert.deepEqual(items.map((item) => ({
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+    currency: item.currency,
+    totalAmount: item.totalAmount,
+  })), [
+    { productName: "塑料制栅栏", quantity: 41636.05, unit: "千克", currency: "USD", totalAmount: 10320 },
+    { productName: "铝制工程结构", quantity: 3904.95, unit: "千克", currency: "USD", totalAmount: 200 },
+  ]);
 });
 
 test("customs recognition is controlled by OCR settings", () => {
