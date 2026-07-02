@@ -70,6 +70,14 @@ test("api performance logs are persisted and exposed through settings", () => {
   );
 });
 
+test("api client surfaces non-json route failures with request context", () => {
+  assert.match(appApi, /const responseForText = response\.clone\(\)/);
+  assert.match(appApi, /请求失败（\$\{response\.status\}）：\$\{normalizedApiPath\(path\) \|\| path\}/);
+  assert.match(appApi, /服务器返回非JSON响应，请查看服务端日志。/);
+  assert.match(appApi, /errorCode = code \|\| `HTTP_\$\{response\.status\}`/);
+  assert.match(appApi, /new ApiRequestError\(fallbackMessage, response\.status, errorCode\)/);
+});
+
 test("core cost and logistics list queries use lightweight DTO relations", () => {
   assert.match(costQueries, /function includeCostListRelations/);
   assert.match(costQueries, /include: includeCostListRelations\(\)/);

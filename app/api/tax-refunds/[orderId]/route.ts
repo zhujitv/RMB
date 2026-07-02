@@ -25,6 +25,7 @@ import {
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type RouteContext = {
   params: Promise<{ orderId: string }>;

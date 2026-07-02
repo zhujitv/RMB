@@ -52,6 +52,11 @@ test("tax refund detail guards missing Prisma models and masks read failures", (
   assert.match(taxRefundErrors, /TAX_REFUND_DATA_READ_FAILED/);
 });
 
+test("tax refund detail OCR extraction route has long-running timeout protection", () => {
+  assert.match(taxRefundDetailRoute, /export const maxDuration = 60/);
+  assert.match(taxRefundDetailRoute, /extractCustomsDeclarationItemsFromDocument/);
+});
+
 test("tax refund detail displays customs OCR results and empty-field exception", () => {
   assert.match(model, /customsOcrRawResult\?:/);
   assert.doesNotMatch(model, /domesticConsignor\?: string/);

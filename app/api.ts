@@ -135,20 +135,28 @@ export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
       throw error;
     }
 
-    const data: unknown = await response.json().catch(() => ({}));
+    let responseText = "";
+    const responseForText = response.clone();
+    const data: unknown = await response.json().catch(async () => {
+      responseText = await responseForText.text().catch(() => "");
+      return {};
+    });
     if (!response.ok) {
       const message = data && typeof data === "object"
         ? ("message" in data && typeof data.message === "string"
           ? data.message
           : "error" in data && typeof data.error === "string"
             ? data.error
-            : "请求失败，请稍后重试。")
-        : "请求失败，请稍后重试。";
+            : `请求失败（${response.status}）：${normalizedApiPath(path) || path}`)
+        : `请求失败（${response.status}）：${normalizedApiPath(path) || path}`;
       const code = data && typeof data === "object" && "code" in data && typeof data.code === "string"
         ? data.code
         : undefined;
-      errorCode = code || "";
-      throw new ApiRequestError(message, response.status, code);
+      const fallbackMessage = responseText
+        ? `${message}。服务器返回非JSON响应，请查看服务端日志。`
+        : message;
+      errorCode = code || `HTTP_${response.status}`;
+      throw new ApiRequestError(fallbackMessage, response.status, errorCode);
     }
     return data as T;
   } finally {
