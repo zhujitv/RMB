@@ -67,6 +67,7 @@ export type OcrRecognitionResult = {
   apiName?: string;
   confidence?: number | null;
   parser?: string;
+  diagnostics?: Record<string, unknown>;
 };
 
 type OcrRecognitionOptions = {
@@ -637,6 +638,13 @@ async function recognizeAliyunCustomsDeclarationWithDocMind(
     parsedJson,
     confidence: null,
     parser: "CUSTOMS_DECLARATION_DOCMIND",
+    diagnostics: {
+      docMindAttempted: true,
+      docMindSucceeded: true,
+      docMindErrorCode: "",
+      docMindErrorMessage: "",
+      fallbackUsed: false,
+    },
   };
 }
 
@@ -646,14 +654,45 @@ async function recognizeAliyunCustomsDeclaration(
   options: OcrRecognitionOptions = {},
 ): Promise<OcrRecognitionResult> {
   const effectiveSettings = customsOcrSettings(settings);
+  let docMindDiagnostics: Record<string, unknown> = {
+    docMindAttempted: Boolean(options.sourceUrl),
+    docMindSucceeded: false,
+    docMindErrorCode: "",
+    docMindErrorMessage: options.sourceUrl ? "" : "未提供可下载文件 URL，无法调用阿里云文档智能贸易单证结构化接口。",
+    fallbackUsed: false,
+  };
+  if (!options.sourceUrl && effectiveSettings.customsDeclarationMode === "STRICT") {
+    throw codedError(
+      "报关单严格结构化模式需要可下载文件 URL，不能回退到通用 OCR。",
+      400,
+      "ALIYUN_DOCMIND_FILE_URL_REQUIRED",
+    );
+  }
   if (options.sourceUrl) {
     try {
       return await recognizeAliyunCustomsDeclarationWithDocMind(effectiveSettings, options);
     } catch (error) {
+      const docMindErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCMIND_CUSTOMS_FAILED";
+      const docMindErrorMessage = ocrErrorText(error);
+      docMindDiagnostics = {
+        docMindAttempted: true,
+        docMindSucceeded: false,
+        docMindErrorCode,
+        docMindErrorMessage,
+        fallbackUsed: effectiveSettings.customsDeclarationMode !== "STRICT",
+      };
       console.error("aliyun-docmind-customs-ocr-failed", {
-        code: (error as { code?: string } | null)?.code || "",
-        message: ocrErrorText(error),
+        code: docMindErrorCode,
+        message: docMindErrorMessage,
+        mode: effectiveSettings.customsDeclarationMode,
       });
+      if (effectiveSettings.customsDeclarationMode === "STRICT") {
+        throw codedError(
+          `阿里云报关单严格结构化识别失败：${docMindErrorMessage}`,
+          (error as { status?: number } | null)?.status || 502,
+          docMindErrorCode,
+        );
+      }
     }
   }
   const client = createAliyunOcrClient(effectiveSettings);
@@ -755,6 +794,7 @@ async function recognizeAliyunCustomsDeclaration(
       provider: settings.provider,
       apiName: items.length ? "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK" : "ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_EMPTY",
       rawJson: {
+        docMind: docMindDiagnostics,
         primary: primaryRawJson,
         table: tableOnlyRawJson || tableRawJson,
         advancedTable: tableRawJson,
@@ -766,6 +806,7 @@ async function recognizeAliyunCustomsDeclaration(
       parsedJson: parsedWithTable,
       confidence: null,
       parser: "CUSTOMS_DECLARATION",
+      diagnostics: docMindDiagnostics,
     };
   }
   const parsedJson = mergeCustomsParsedData(pdfText, primaryFields, items);
@@ -775,6 +816,7 @@ async function recognizeAliyunCustomsDeclaration(
     provider: settings.provider,
     apiName: items.length ? "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE" : "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE_TABLE_EMPTY",
     rawJson: {
+      docMind: docMindDiagnostics,
       primary: primaryRawJson,
       table: tableRawJson,
       tableOnly: tableOnlyRawJson,
@@ -785,6 +827,7 @@ async function recognizeAliyunCustomsDeclaration(
     parsedJson,
     confidence: null,
     parser: "CUSTOMS_DECLARATION",
+    diagnostics: docMindDiagnostics,
   };
 }
 
@@ -952,6 +995,11 @@ export async function testCustomsDeclarationOcr(actor: SettingsActor, file: OcrT
       parser: recognized.parser || "",
       confidence: recognized.confidence ?? null,
       textLength: recognized.text.length,
+      docMindAttempted: recognized.diagnostics?.docMindAttempted === true,
+      docMindSucceeded: recognized.diagnostics?.docMindSucceeded === true,
+      docMindErrorCode: String(recognized.diagnostics?.docMindErrorCode || ""),
+      docMindErrorMessage: String(recognized.diagnostics?.docMindErrorMessage || ""),
+      fallbackUsed: recognized.diagnostics?.fallbackUsed === true,
       fields: {
         customsDeclarationNo: fields.customsDeclarationNo || "",
         customsDeclarationDate: fields.customsDeclarationDate || "",
