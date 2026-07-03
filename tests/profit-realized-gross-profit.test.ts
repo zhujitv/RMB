@@ -63,7 +63,7 @@ test("realized gross profit uses final receivable minus total cost after full co
   assert.equal(rounded(summary.netCashFlowCny), 32973.47);
 });
 
-test("expected tax refund income is displayed separately and added to profit", () => {
+test("removed tax refund calculation payload no longer affects profit summary", () => {
   const order = {
     ...pv252LikeOrder(),
     exportTaxRefundCalculations: [
@@ -76,6 +76,6 @@ test("expected tax refund income is displayed separately and added to profit", (
   const summary = summarizeOrder(order);
 
   assert.equal(rounded(summary.receivableCny), 157191.79);
-  assert.equal(rounded(summary.expectedTaxRefundIncomeCny), 8000);
-  assert.equal(rounded(summary.expectedGrossProfit), 38604.84);
+  assert.equal(rounded(summary.expectedTaxRefundIncomeCny), 0);
+  assert.equal(rounded(summary.expectedGrossProfit), 30604.84);
 });

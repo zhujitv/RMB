@@ -151,7 +151,7 @@ export function CompanyHsModule({
 
   async function disableItem(item: CompanyHsItem) {
     if (!canManage) return;
-    const ok = window.confirm(`确认停用企业HS编码 ${item.hsCode}？停用后退税计算将不再匹配该编码。`);
+    const ok = window.confirm(`确认停用企业HS编码 ${item.hsCode}？停用后该编码将不再作为企业 HS 参考。`);
     if (!ok) return;
     setSaving(true);
     setError("");

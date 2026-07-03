@@ -1,6 +1,6 @@
 import styles from "../../WorkspaceShell.module.css";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
-import { PRODUCT_SUPPLIER_TYPES, SALESPERSON_TAX_REFUND_UPLOAD_TYPES, TAX_CUSTOMS_UPLOAD_TYPES, TAX_EXPORT_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, TAX_LOGISTICS_INVOICE_COST_TYPES, TAX_REFUND_STATUS_OPTIONS, type CustomsRecognitionResult, type DocumentCompleteness, type ManualShippingDraft, type ManualShippingForm, type TaxCost, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
+import { PRODUCT_SUPPLIER_TYPES, SALESPERSON_TAX_REFUND_UPLOAD_TYPES, TAX_CUSTOMS_UPLOAD_TYPES, TAX_EXPORT_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, TAX_LOGISTICS_INVOICE_COST_TYPES, TAX_REFUND_STATUS_OPTIONS, type DocumentCompleteness, type ManualShippingDraft, type ManualShippingForm, type TaxCost, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
 
 export function normalizedMissingLabels(completeness: DocumentCompleteness) {
   const labels = completeness.missingLabels || completeness.missing || [];
@@ -35,7 +35,6 @@ export function taxCompletenessTooltipGroups(completeness: DocumentCompleteness,
     { category: "拖车费", items: [] },
     { category: "港杂费", items: [] },
     { category: "海运费", items: [] },
-    { category: "退税计算", items: [] },
   ];
   const groupByCategory = new Map(groups.map((group) => [group.category, group]));
   const pushItem = (category: string, item: string) => {
@@ -77,10 +76,6 @@ export function taxCompletenessTooltipGroups(completeness: DocumentCompleteness,
     } else {
       pushItem("物流费用发票", label || "物流费用发票");
     }
-  });
-
-  (completeness.calculation?.missing || []).forEach((item) => {
-    pushItem("退税计算", item.label || "退税金额待计算");
   });
 
   if (!groups.some((group) => group.items.length)) {
@@ -125,10 +120,6 @@ export function taxMissingTargets(completeness: DocumentCompleteness) {
     const targetKey = item.costId ? logisticsDocumentTargetKey(item.costId) : "logistics-section";
     pushTarget(item.invoiceLabel || item.label || logisticsDocumentLabel(item.documentType || "", item.costType || ""), targetKey);
   });
-  (completeness.calculation?.missing || []).forEach((item) => {
-    pushTarget(item.label || "退税金额待计算", "tax-refund-calculation");
-  });
-
   if (!targets.length) {
     normalizedMissingLabels(completeness).forEach((label) => {
       pushTarget(label, taxTargetKeyFromMissingLabel(label));
@@ -197,9 +188,6 @@ export function taxTargetKeyFromMissingLabel(label: string) {
     || text.includes("物流")
   ) {
     return "logistics-section";
-  }
-  if (text.includes("退税") || text.includes("HS") || text.includes("发票") || text.includes("金额") || text.includes("数量") || text.includes("品名") || text.includes("单位")) {
-    return "tax-refund-calculation";
   }
   return "tax-detail-top";
 }
@@ -312,16 +300,6 @@ export function logisticsInvoiceDocumentsForCost(cost: TaxCost, documents: TaxDo
       .map((group) => documentById.get(String(group.documentId || "")))
       .filter((document): document is TaxDocument => Boolean(document)));
   return uniqueTaxDocuments([...directDocuments, ...groupedDocuments]);
-}
-
-export function customsRecognitionStatusTextFromResult(result: CustomsRecognitionResult | null | undefined) {
-  if (!result) return "";
-  if (result.customsParseStatus === "FAILED") return "未识别成功，请手工填写报关单号和申报日期";
-  const missing: string[] = [];
-  if (!result.customsDeclarationNo) missing.push("未识别到报关单号");
-  if (!result.customsDeclarationDate) missing.push("未识别到申报日期");
-  if (missing.length) return missing.join(" / ");
-  return "识别成功";
 }
 
 export function upsertTaxDocument(documents: TaxDocument[], document: TaxDocument) {
@@ -521,7 +499,7 @@ export function taxRefundHasPackageContent(row: TaxRefundRow) {
 }
 
 export function statusClass(status = "") {
-  if (["READY", "REFUND_CALCULATED", "REFUND_RECEIVED"].includes(status)) return styles.statusSuccess;
+  if (["READY", "REFUND_RECEIVED"].includes(status)) return styles.statusSuccess;
   if (status === "PROBLEM") return styles.statusDanger;
   if (status === "SUBMITTED") return "";
   return styles.statusWarning;

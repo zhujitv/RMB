@@ -1,175 +1,76 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
-const taxCalculationService = readFileSync("lib/platform/export-tax-refund-calculations.ts", "utf8");
 const detail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
 const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
-const styles = readFileSync("app/WorkspaceShell.module.css", "utf8");
-const schema = readFileSync("prisma/schema.prisma", "utf8");
-const ocrIntegration = readFileSync("lib/platform/ocr-integration.ts", "utf8");
-const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
-const taxRefundErrors = readFileSync("lib/platform/tax-refund-errors.ts", "utf8");
+const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
+const overlays = readFileSync("app/modules/tax-refund/overlays.tsx", "utf8");
+const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const taxCalculationService = readFileSync("lib/platform/export-tax-refund-calculations.ts", "utf8");
+const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
-const taxRefundCustomsRoute = readFileSync("app/api/tax-refund/[orderId]/customs-documents/route.ts", "utf8");
+const customsOcrRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
-const customsRecognitionPanel = detail.match(/function CustomsRecognitionResultPanel[\s\S]*?\n}\n\nfunction SupplierDocumentReturnNotice/)?.[0] || "";
+const schema = readFileSync("prisma/schema.prisma", "utf8");
+const migration = readFileSync("prisma/migrations/20260703102000_remove_tax_refund_ocr_calculation/migration.sql", "utf8");
+const ocrIntegration = readFileSync("lib/platform/ocr-integration.ts", "utf8");
 
-test("customs document tab returns parsed declaration fields and internal raw OCR result", () => {
-  const customsSection = taxRefundService.match(/async function getTaxRefundCustomsDocumentsSection[\s\S]*?\n}\n\nasync function getTaxRefundCostDocumentSection/)?.[0] || "";
-  assert.match(customsSection, /guardedPrismaFindMany<TaxRefundCustomsItemLight\[\]>/);
-  assert.match(customsSection, /rawJson: true/);
-  assert.match(customsSection, /customsDeclarationItems: serializedItems/);
-  assert.match(customsSection, /guardedPrismaFindMany<Prisma\.OcrRawResultGetPayload<\{\}>\[\]>/);
-  assert.match(customsSection, /getTaxRefundCustomsDocumentsSection\.ocrRawResults/);
-  assert.match(customsSection, /canReadOcrRawResult\(actor\)/);
-  assert.match(customsSection, /guardedPrismaFindMany<TaxRefundDocumentLight\[\]>/);
-  assert.match(customsSection, /currentCustomsDocument/);
-  assert.match(customsSection, /historicalCustomsDocuments/);
-  assert.match(customsSection, /ensureCustomsOcrRawResultForDocument/);
-  assert.match(customsSection, /documentId: \{ in: customsDocumentIds \}/);
-  assert.match(customsSection, /customsOcrCallLogs/);
-  assert.match(taxRefundService, /function serializeTaxRefundCustomsItem/);
-  assert.doesNotMatch(taxRefundService.match(/function serializeTaxRefundCustomsItem[\s\S]*?\n}\n\nfunction serializeCustomsOcrRawResult/)?.[0] || "", /domesticConsignor/);
-  assert.match(taxRefundService, /serializeStoredOcrRawResult/);
+test("tax refund module no longer renders OCR and tax calculation panels", () => {
+  assert.doesNotMatch(detail, /function CustomsRecognitionResultPanel/);
+  assert.doesNotMatch(detail, /function TaxRefundCalculationPanel/);
+  assert.doesNotMatch(detail, /OCR原始结果|查看OCR原始结果|OCR调用日志|同步OCR商品明细/);
+  assert.doesNotMatch(detail, /退税计算数据|退税结果|理论退税额|发票匹配|新增到企业HS库/);
+  assert.doesNotMatch(overlays, /CustomsFilePickerDialog|onRecognizeCustomsDocument|onRecognizeFromUploadedCustoms/);
+  assert.doesNotMatch(controller, /recognizingDocumentId|recognitionStatusByDocument|customsFilePicker|patchCustomsRecognition/);
+  assert.match(detail, /CustomsRecognitionForm/);
+});
+
+test("tax refund DTO excludes OCR raw results and tax calculation payloads", () => {
+  for (const forbidden of [
+    "customsOcrRawResult",
+    "customsOcrCallLogs",
+    "customsDeclarationItems",
+    "currentCustomsDocument",
+    "historicalCustomsDocuments",
+    "exportTaxRefundCalculations",
+    "exportTaxRefundSummary",
+  ]) {
+    assert.doesNotMatch(model, new RegExp(forbidden));
+    assert.doesNotMatch(taxRefundService, new RegExp(forbidden));
+  }
+});
+
+test("tax refund OCR and calculation APIs are explicitly disabled", () => {
+  assert.match(taxRefundDetailRoute, /TAX_REFUND_OCR_CALC_DISABLED/);
+  assert.match(taxRefundDetailRoute, /previewCustomsRecognition/);
+  assert.match(taxRefundDetailRoute, /recalculateTaxRefund/);
+  assert.match(customsOcrRoute, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.match(taxRefundCalculationRoute, /TAX_REFUND_CALCULATION_DISABLED/);
+  assert.match(customsRecognition, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.match(taxCalculationService, /TAX_REFUND_OCR_CALC_DISABLED/);
+  assert.match(taxCalculationService, /customsDeclarationItems: \[\]/);
+  assert.match(taxCalculationService, /exportTaxRefundCalculations: \[\]/);
+});
+
+test("tax refund dedicated OCR and calculation database structures are removed by migration", () => {
+  assert.doesNotMatch(schema, /model ExportCustomsDeclarationItem/);
+  assert.doesNotMatch(schema, /model ExportTaxRefundCalculation/);
+  assert.doesNotMatch(schema, /model ExportTaxRebateRate/);
+  assert.match(migration, /DROP VIEW IF EXISTS "customs_declaration_items"/);
+  assert.match(migration, /DROP TABLE IF EXISTS "export_customs_declaration_items"/);
+  assert.match(migration, /DROP TABLE IF EXISTS "export_tax_refund_calculations"/);
+  assert.match(migration, /DROP TABLE IF EXISTS "export_tax_rebate_rates"/);
+  assert.match(migration, /'REFUND_CALCULATED'/);
+});
+
+test("generic OCR center and supplier return OCR remain available", () => {
+  assert.match(schema, /model OcrTask/);
   assert.match(schema, /model OcrRawResult/);
-  assert.match(schema, /@@map\("ocr_raw_results"\)/);
-});
-
-test("tax refund detail guards missing Prisma models and masks read failures", () => {
-  assert.match(sharedBaseUtils, /export function requirePrismaModel/);
-  assert.match(sharedBaseUtils, /export async function guardedPrismaFindMany/);
-  assert.match(sharedBaseUtils, /Prisma Model \$\{modelName\} not found/);
-  assert.match(sharedBaseUtils, /Prisma findMany failed/);
-  assert.match(sharedBaseUtils, /modelName/);
-  assert.match(sharedBaseUtils, /location/);
-  assert.match(sharedBaseUtils, /sql: prismaQueryForLog/);
-  assert.match(taxRefundDetailRoute, /taxRefundDataReadFailure/);
-  assert.match(taxRefundCustomsRoute, /taxRefundDataReadFailure/);
-  assert.match(taxRefundCalculationRoute, /taxRefundDataReadFailure/);
-  assert.match(taxRefundErrors, /退税数据读取失败，请联系管理员。/);
-  assert.match(taxRefundErrors, /TAX_REFUND_DATA_READ_FAILED/);
-});
-
-test("tax refund detail OCR extraction route has long-running timeout protection", () => {
-  assert.match(taxRefundDetailRoute, /export const maxDuration = 60/);
-  assert.match(taxRefundDetailRoute, /extractCustomsDeclarationItemsFromDocument/);
-});
-
-test("tax refund detail displays customs OCR results and empty-field exception", () => {
-  assert.match(model, /customsOcrRawResult\?:/);
-  assert.doesNotMatch(model, /domesticConsignor\?: string/);
-  assert.match(model, /apiName\?: string/);
-  assert.match(model, /rawJson\?: unknown/);
-  assert.match(model, /currentCustomsDocument\?: CustomsRecognitionDocument/);
-  assert.match(model, /historicalCustomsDocuments\?: CustomsRecognitionDocument\[\]/);
-  assert.match(model, /customsOcrCallLogs\?: OcrRawResultView\[\]/);
-  assert.match(detail, /function CustomsRecognitionResultPanel/);
-  assert.match(detail, /报关单识别结果/);
-  assert.match(detail, /当前识别文件/);
-  assert.match(detail, /历史识别文件/);
-  assert.match(detail, /OCR调用日志/);
-  assert.match(detail, /OCR识别成功，但未解析到报关单关键字段。/);
-  assert.match(detail, /OCR未识别到商品明细，请手工维护。/);
-  assert.match(detail, /OCR已解析到商品明细，但尚未同步到退税商品表，请点击同步。/);
-  assert.match(detail, /同步OCR商品明细/);
-  assert.match(detail, /OCR原始结果未保存，请重新识别。/);
-  assert.match(detail, /查看OCR原始结果/);
-  assert.match(detail, /canReadCustomsRawResult/);
-  assert.match(customsRecognitionPanel, /报关单号/);
-  assert.match(customsRecognitionPanel, /申报日期/);
-  assert.match(customsRecognitionPanel, /出口日期/);
-  assert.match(customsRecognitionPanel, /成交方式/);
-  assert.match(customsRecognitionPanel, /币种/);
-  assert.match(customsRecognitionPanel, /报关总金额/);
-  assert.match(customsRecognitionPanel, /商品名称/);
-  assert.match(customsRecognitionPanel, /总金额/);
-  assert.doesNotMatch(customsRecognitionPanel, /境内发货人/);
-  assert.doesNotMatch(customsRecognitionPanel, /申报单位/);
-  assert.doesNotMatch(customsRecognitionPanel, /运输方式/);
-  assert.doesNotMatch(customsRecognitionPanel, /提运单号/);
-  assert.doesNotMatch(customsRecognitionPanel, /贸易国别/);
-  assert.doesNotMatch(customsRecognitionPanel, /监管方式/);
-  assert.doesNotMatch(customsRecognitionPanel, /HS编码/);
-  assert.doesNotMatch(customsRecognitionPanel, /规格型号/);
-  assert.match(styles, /\.customsRecognitionResultCard/);
-  assert.match(styles, /\.customsRawResultSection/);
-  assert.match(styles, /\.customsOcrFilePanel/);
-  assert.match(styles, /\.customsOcrLogList/);
-  assert.match(styles, /\.customsOcrRawResult/);
-});
-
-test("tax refund calculation requires confirmed declaration items", () => {
-  assert.match(taxCalculationService, /saveOcrRawResult/);
-  assert.match(taxCalculationService, /logOcrCallFailure/);
-  assert.match(taxCalculationService, /customsParsedFromRecognition/);
-  assert.match(taxCalculationService, /已识别基础字段，但未解析到商品明细，请人工维护。/);
-  assert.match(taxCalculationService, /LOW_CONFIDENCE_CUSTOMS_ITEM_MESSAGE/);
-  assert.match(taxCalculationService, /OCR仅使用PDF全文兜底，商品明细未自动保存，请人工核对。/);
-  assert.match(taxCalculationService, /isLowConfidenceCustomsItemSource/);
-  assert.match(taxCalculationService, /source: \{ in: LOW_CONFIDENCE_CUSTOMS_ITEM_SOURCE_VALUES \}/);
-  assert.doesNotMatch(taxCalculationService, /items: items\.length \? items : fallback\.items/);
-  assert.match(taxCalculationService, /confirmationStatus: "CONFIRMED"/);
-  assert.match(taxCalculationService, /CUSTOMS_DECLARATION_ITEMS_CONFIRM_REQUIRED/);
-  assert.match(taxCalculationService, /没有确认报关商品明细，不允许进入退税计算。/);
-  assert.match(taxCalculationService, /customsDeclarationNo: firstItem\?\.declarationNo/);
-  assert.match(taxCalculationService, /customsDeclarationDate: firstItem\?\.declarationDate/);
-  assert.match(detail, /const confirmedItems = items\.filter/);
-  assert.match(detail, /没有确认报关商品明细，不允许进入退税计算。请先在“报关商品”中确认并保存。/);
-  assert.match(detail, /removeItem/);
-  assert.match(styles, /\.taxCalculationBlockedPanel/);
-});
-
-test("customs OCR uses structured recognition with table fallback and saves full raw JSON", () => {
-  assert.match(ocrIntegration, /CUSTOMS_DECLARATION_KEYS/);
-  assert.match(ocrIntegration, /RecognizeAllTextRequest/);
-  assert.match(ocrIntegration, /RecognizeAllTextRequestTableConfig/);
-  assert.match(ocrIntegration, /outputTable: true/);
-  assert.match(ocrIntegration, /type: "Table"/);
-  assert.match(ocrIntegration, /tableConfig: new RecognizeAllTextRequestTableConfig/);
-  assert.match(ocrIntegration, /recognizeAliyunCustomsDeclaration/);
-  assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_TRADE_DOCUMENT_WITH_TABLE/);
-  assert.match(ocrIntegration, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
-  assert.match(ocrIntegration, /advancedTable: tableRawJson/);
-  assert.match(ocrIntegration, /tableOnly: tableOnlyRawJson/);
-  assert.match(ocrIntegration, /parsedJson/);
-  assert.match(ocrIntegration, /customsTextFallbackParsedJson/);
-  assert.match(ocrIntegration, /itemParseSkippedReason: "LOW_CONFIDENCE_PDF_TEXT_FALLBACK"/);
-  assert.doesNotMatch(ocrIntegration, /\[\.\.\.structuredItems, \.\.\.fallback\.items\]/);
-});
-
-test("customs OCR parsed items can be synced into declaration item table", () => {
-  assert.match(taxCalculationService, /export async function syncCustomsDeclarationItemsFromOcrRawResult/);
-  assert.match(taxCalculationService, /replaceCustomsDeclarationItemsFromParsed/);
-  assert.match(taxCalculationService, /createMany/);
-  assert.match(taxCalculationService, /confirmationStatus: "PENDING_CONFIRMATION"/);
-  assert.match(taxCalculationService, /parsedItemsCount/);
-  assert.match(taxCalculationService, /insertedItemsCount/);
-  assert.match(taxCalculationService, /skippedReason/);
-  assert.match(taxRefundDetailRoute, /syncCustomsDeclarationItemsFromOcr/);
-});
-
-test("customs OCR persistence logs empty raw JSON and failed provider calls", () => {
-  const rawResultService = readFileSync("lib/platform/ocr-raw-results.ts", "utf8");
-  const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
-  assert.match(rawResultService, /OCR response received but rawJson was not persisted\./);
-  assert.match(rawResultService, /export async function getOcrRawResultByDocumentId/);
-  assert.match(rawResultService, /tx\.ocrRawResult\.create/);
-  assert.doesNotMatch(rawResultService, /tx\.ocrRawResult\.update/);
-  assert.match(customsRecognition, /persistCustomsRecognitionArtifacts/);
-  assert.match(customsRecognition, /persistHistoricalCustomsRecognitionArtifacts/);
-  assert.match(taxRefundService, /ensureCustomsOcrRawResultForDocument/);
-  assert.match(taxRefundService, /BACKFILLED_CUSTOMS_OCR_RAW_RESULT/);
-  assert.match(customsRecognition, /BACKFILLED_HISTORICAL_ORDER_FIELDS/);
-  assert.match(customsRecognition, /历史识别未保存原始 OCR 响应/);
-  assert.match(customsRecognition, /customs-ocr-result-persisted/);
-  assert.match(customsRecognition, /rawJsonSaved/);
-  assert.match(customsRecognition, /parsedJsonSaved/);
-  assert.match(rawResultService, /export function logOcrCallFailure/);
-  assert.match(rawResultService, /provider/);
-  assert.match(rawResultService, /apiName/);
-  assert.match(rawResultService, /errorCode/);
-  assert.match(rawResultService, /errorMessage/);
-  assert.match(customsRecognition, /logOcrCallFailure/);
+  assert.match(schema, /model OcrResult/);
+  assert.match(schema, /model SupplierDocumentRequest/);
+  assert.match(schema, /documents\s+OrderDocument\[\]/);
+  assert.match(schema, /requestId\s+String\?\s+@map\("request_id"\)/);
+  assert.match(ocrIntegration, /supplierDocumentReturnEnabled/);
+  assert.equal(existsSync("app/api/settings/ocr/route.ts"), true);
 });

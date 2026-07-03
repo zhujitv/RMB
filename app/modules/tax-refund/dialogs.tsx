@@ -1,10 +1,9 @@
 import type { FormEvent } from "react";
 import { DismissibleLayer } from "../../components";
 import { preventEnterFormSubmit } from "../../formGuards";
-import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
-import { type CustomsFilePickerState, type ManualShippingDraft, type ManualShippingForm, type TaxDocument, type TaxRefundDetail } from "./model";
+import { type ManualShippingDraft, type ManualShippingForm, type TaxRefundDetail } from "./model";
 
 export function ManualShippingDocumentsDialog({
   order,
@@ -122,54 +121,6 @@ export function ManualShippingDocumentsDialog({
         ) : (
           <div className={styles.inlineError}>{message || "清关资料发送信息生成失败"}</div>
         )}
-        </>
-      )}
-    </DismissibleLayer>
-  );
-}
-
-export function CustomsFilePickerDialog({
-  state,
-  recognizingDocumentId,
-  onClose,
-  onSelect,
-}: {
-  state: NonNullable<CustomsFilePickerState>;
-  recognizingDocumentId: string;
-  onClose: () => void;
-  onSelect: (order: TaxRefundDetail, document: TaxDocument) => void;
-}) {
-  return (
-    <DismissibleLayer
-      ariaLabel="选择报关单文件"
-      overlayClassName={styles.modalOverlay}
-      surfaceClassName={styles.customsFilePickerDialog}
-      dismissible
-      onClose={onClose}
-    >
-      {({ requestClose }) => (
-        <>
-          <div className={styles.modalHeader}>
-            <div>
-              <strong>选择报关单文件</strong>
-              <span>{state.order.orderNo || "-"} · 共 {state.documents.length} 个报关单文件</span>
-            </div>
-            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
-          </div>
-          <div className={styles.customsFilePickerList}>
-            {state.documents.map((document) => (
-              <button
-                key={document.id}
-                className={styles.customsFilePickerItem}
-                type="button"
-                disabled={recognizingDocumentId === document.id}
-                onClick={() => onSelect(state.order, document)}
-              >
-                <span>{document.fileName || "-"}</span>
-                <small>{document.uploadedByName || "-"} · {formatDateTime(document.uploadedAt)}</small>
-              </button>
-            ))}
-          </div>
         </>
       )}
     </DismissibleLayer>

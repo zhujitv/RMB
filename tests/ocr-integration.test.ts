@@ -374,12 +374,13 @@ test("customs table parser filters party and transport rows while trimming item 
   ]);
 });
 
-test("customs recognition is controlled by OCR settings", () => {
-  assert.match(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
-  assert.match(customsRecognition, /saveOcrRawResult/);
+test("OCR center diagnostics remain controlled by OCR settings while tax refund customs OCR is disabled", () => {
+  assert.match(customsRecognition, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.doesNotMatch(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
+  assert.doesNotMatch(customsRecognition, /saveOcrRawResult/);
   assert.match(customsParser, /export async function extractPdfTextFromPdfBuffer/);
-  assert.match(orderDocuments, /isOcrFeatureEnabled\("customsDeclaration"\)/);
-  assert.match(orderDocuments, /shouldAutoRecognizeCustoms/);
+  assert.doesNotMatch(orderDocuments, /isOcrFeatureEnabled\("customsDeclaration"\)/);
+  assert.doesNotMatch(orderDocuments, /shouldAutoRecognizeCustoms/);
   assert.match(service, /ensureOcrFeatureEnabled/);
   assert.match(service, /OCR_FEATURE_DISABLED/);
   assert.match(service, /settings\.customsDeclarationMode !== "MANUAL"/);
@@ -434,5 +435,5 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
   assert.match(r2, /export async function signedObjectReadUrl/);
-  assert.match(customsRecognition, /signedObjectReadUrl\(document\.storageKey, 900\)/);
+  assert.match(service, /signedObjectReadUrl/);
 });

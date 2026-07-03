@@ -26,7 +26,6 @@ import { serializeUser } from "./shared-users";
 import { paymentTermLabel } from "./shared-utils";
 import { summarizeOrder } from "./shared-order-calculations";
 import { businessEntityFieldsFromOrder } from "./business-entities";
-import { isUsableCustomsDeclarationItem, serializeCustomsDeclarationItem } from "./export-tax-refund-calculations";
 
 type ShippingCustomerLike = {
   country?: string | null;
@@ -135,35 +134,6 @@ type ShippingOrderLike = Record<string, unknown> & {
   updatedAt?: Date | string | null;
 };
 
-function serializeExportTaxRefundCalculation(row: Record<string, unknown> = {}) {
-  const invoiceMatchJson = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
-    ? row.invoiceMatchJson as Record<string, unknown>
-    : {};
-  return {
-    id: String(row.id || ""),
-    declarationItemId: String(row.declarationItemId || ""),
-    declarationNo: String(row.declarationNo || ""),
-    hsCode: String(row.hsCode || ""),
-    productName: String(row.productName || ""),
-    declarationDate: row.declarationDate || null,
-    fobCurrency: String(row.fobCurrency || ""),
-    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
-    exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
-    declarationAmountCny: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
-    customsRmbAmount: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
-    rebateRate: row.rebateRate == null ? null : Number(row.rebateRate),
-    vatRate: row.vatRate == null ? null : Number(row.vatRate),
-    theoreticalRefundAmount: row.theoreticalRefundAmount == null ? null : Number(row.theoreticalRefundAmount),
-    supplierInvoiceAmountWithoutTax: row.supplierInvoiceAmountWithoutTax == null ? null : Number(row.supplierInvoiceAmountWithoutTax),
-    availableInputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
-    inputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
-    estimatedRefundAmount: row.estimatedRefundAmount == null ? null : Number(row.estimatedRefundAmount),
-    invoiceMatchStatus: String(row.invoiceMatchStatus || ""),
-    calculationStatus: String(row.calculationStatus || ""),
-    abnormalReasons: Array.isArray(row.abnormalReasons) ? row.abnormalReasons : [],
-    invoiceMatch: invoiceMatchJson,
-  };
-}
 type ShippingDocumentBundleItem = {
   typeKey: string;
   label: string;
@@ -300,21 +270,6 @@ export function serializeOrder(orderInput: unknown) {
   const taxRefundStatus = derivedTaxRefundStatus(order as Parameters<typeof derivedTaxRefundStatus>[0], order.documents || []);
   const domesticLogisticsRows = Array.isArray(order.domesticLogisticsInfos) ? order.domesticLogisticsInfos : [];
   const domesticLogisticsInfo = serializeDomesticLogisticsInfo(domesticLogisticsRows[0]);
-  const customsDeclarationItems = Array.isArray(order.customsDeclarationItems)
-    ? order.customsDeclarationItems
-      .filter((item) => isUsableCustomsDeclarationItem(item as never))
-      .map((item) => serializeCustomsDeclarationItem(item as never))
-    : [];
-  const exportTaxRefundCalculations = Array.isArray(order.exportTaxRefundCalculations)
-    ? order.exportTaxRefundCalculations.map((row) => serializeExportTaxRefundCalculation(row as Record<string, unknown>))
-    : [];
-  const exportTaxRefundSummary = {
-    estimatedRefundAmount: exportTaxRefundCalculations.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0),
-    calculationStatus: exportTaxRefundCalculations.some((row) => row.calculationStatus === "资料异常") ? "资料异常" : exportTaxRefundCalculations.length ? "退税金额已计算" : "",
-    abnormalReasons: exportTaxRefundCalculations
-      .flatMap((row) => row.abnormalReasons.map((reason) => String(reason || "")))
-      .filter((reason, index, arr) => reason && arr.indexOf(reason) === index),
-  };
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
   return {
@@ -387,9 +342,6 @@ export function serializeOrder(orderInput: unknown) {
     shippingDocumentNotifications: shippingNotifications.map((row) => serializeShippingDocumentNotification(row, order)),
     shippingDocumentNotification: serializeShippingDocumentNotification(latestShippingNotification, order),
     shippingDocumentManualDraft: shippingDocumentDraft(order),
-    customsDeclarationItems,
-    exportTaxRefundCalculations,
-    exportTaxRefundSummary,
     costs,
     creditDays: order.creditDays ?? "",
     dueDate: dateToInput(order.dueDate),

@@ -4,12 +4,10 @@ import {
   type ConfirmationDialogState,
 } from "../../components";
 import {
-  CustomsFilePickerDialog,
   ManualShippingDocumentsDialog,
   TaxRefundDetailDrawer,
 } from "./detail-components";
 import type {
-  CustomsFilePickerState,
   ManualShippingDraft,
   ManualShippingForm,
   TaxDocument,
@@ -33,19 +31,13 @@ type TaxRefundOverlaysProps = {
   submittingTaxId: string;
   cancelingArchiveId: string;
   refreshingCompletenessId: string;
-  calculatingTaxRefundId: string;
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
-  recognizingDocumentId: string;
-  recognitionStatusByDocument: Record<string, string>;
   canSendShippingDocuments: boolean;
   canRefreshCompleteness: boolean;
   canWriteDocuments: boolean;
-  canRecalculateTaxRefund: boolean;
-  canCreateCompanyHsFromOcr: boolean;
   currentUserRole: string;
-  customsFilePicker: CustomsFilePickerState;
   manualShippingOrder: TaxRefundDetail | null;
   manualShippingDraft: ManualShippingDraft | null;
   manualShippingForm: ManualShippingForm | null;
@@ -59,20 +51,12 @@ type TaxRefundOverlaysProps = {
   onSubmitTaxRefund: (row: TaxRefundRow) => void;
   onCancelArchive: (row: TaxRefundRow) => void;
   onRefreshCompleteness: (row: TaxRefundRow) => void;
-  onRecalculateTaxRefund: (row: TaxRefundRow) => void;
-  onSaveCustomsDeclarationItems: (orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) => Promise<void> | void;
-  onSyncCustomsDeclarationItemsFromOcr: (orderId: string, documentId: string) => Promise<void> | void;
-  onCreateCompanyHsFromDeclarationItem: (orderId: string, payload: Record<string, unknown>) => Promise<void> | void;
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
   onDelete: (orderId: string, document: TaxDocument) => Promise<void> | void;
-  onRecognizeCustomsDocument: (order: TaxRefundDetail, document?: TaxDocument) => Promise<void> | void;
-  onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
   onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenSupplierDocuments: (keyword: string) => void;
   onOpenDomesticLogistics: () => void;
-  onCloseCustomsFilePicker: () => void;
-  onSelectCustomsFile: (order: TaxRefundDetail, document: TaxDocument) => void;
   onCloseManualShippingDocuments: () => void;
   onSubmitManualShippingDocuments: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
   onChangeManualShippingForm: (form: ManualShippingForm | null) => void;
@@ -96,19 +80,13 @@ export function TaxRefundOverlays({
   submittingTaxId,
   cancelingArchiveId,
   refreshingCompletenessId,
-  calculatingTaxRefundId,
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
-  recognizingDocumentId,
-  recognitionStatusByDocument,
   canSendShippingDocuments,
   canRefreshCompleteness,
   canWriteDocuments,
-  canRecalculateTaxRefund,
-  canCreateCompanyHsFromOcr,
   currentUserRole,
-  customsFilePicker,
   manualShippingOrder,
   manualShippingDraft,
   manualShippingForm,
@@ -122,20 +100,12 @@ export function TaxRefundOverlays({
   onSubmitTaxRefund,
   onCancelArchive,
   onRefreshCompleteness,
-  onRecalculateTaxRefund,
-  onSaveCustomsDeclarationItems,
-  onSyncCustomsDeclarationItemsFromOcr,
-  onCreateCompanyHsFromDeclarationItem,
   onCustomsSaved,
   onUpload,
   onDelete,
-  onRecognizeCustomsDocument,
-  onRecognizeFromUploadedCustoms,
   onOpenManualShippingDocuments,
   onOpenSupplierDocuments,
   onOpenDomesticLogistics,
-  onCloseCustomsFilePicker,
-  onSelectCustomsFile,
   onCloseManualShippingDocuments,
   onSubmitManualShippingDocuments,
   onChangeManualShippingForm,
@@ -160,44 +130,25 @@ export function TaxRefundOverlays({
           submittingTax={submittingTaxId === detailRow.id}
           cancelingArchive={cancelingArchiveId === detailRow.id}
           refreshingCompleteness={refreshingCompletenessId === detailRow.id}
-          calculatingTaxRefund={calculatingTaxRefundId === detailRow.id}
           uploadingKey={uploadingKey}
           uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
-          recognizingDocumentId={recognizingDocumentId}
-          recognitionStatusByDocument={recognitionStatusByDocument}
           canSendShippingDocuments={canSendShippingDocuments}
           canRefreshCompleteness={canRefreshCompleteness}
-          canRecalculateTaxRefund={canRecalculateTaxRefund}
           onClose={onCloseDetailDrawer}
           onSelectTab={onSelectDetailTab}
           onDownloadPackage={() => onDownloadPackage(detailRow)}
           onSubmitTaxRefund={() => onSubmitTaxRefund(detailRow)}
           onCancelArchive={() => onCancelArchive(detailRow)}
           onRefreshCompleteness={() => onRefreshCompleteness(detailRow)}
-          onRecalculateTaxRefund={() => onRecalculateTaxRefund(detailRow)}
-          onSaveCustomsDeclarationItems={onSaveCustomsDeclarationItems}
-          onSyncCustomsDeclarationItemsFromOcr={onSyncCustomsDeclarationItemsFromOcr}
-          onCreateCompanyHsFromDeclarationItem={onCreateCompanyHsFromDeclarationItem}
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}
           onDelete={onDelete}
-          onRecognizeCustomsDocument={onRecognizeCustomsDocument}
-          onRecognizeFromUploadedCustoms={onRecognizeFromUploadedCustoms}
           onOpenManualShippingDocuments={onOpenManualShippingDocuments}
           onOpenSupplierDocuments={onOpenSupplierDocuments}
           onOpenDomesticLogistics={onOpenDomesticLogistics}
           currentUserRole={currentUserRole}
           canWriteDocuments={canWriteDocuments}
-          canCreateCompanyHsFromOcr={canCreateCompanyHsFromOcr}
-        />
-      ) : null}
-      {customsFilePicker ? (
-        <CustomsFilePickerDialog
-          state={customsFilePicker}
-          recognizingDocumentId={recognizingDocumentId}
-          onClose={onCloseCustomsFilePicker}
-          onSelect={onSelectCustomsFile}
         />
       ) : null}
       {manualShippingOrder ? (

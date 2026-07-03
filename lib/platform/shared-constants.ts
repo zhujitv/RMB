@@ -128,9 +128,9 @@ export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["未通知", "已通知开票
 export const LOGISTICS_EXPENSE_PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
 export const TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS = [
   { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "缺少报关费发票", costTypes: ["报关费"] },
-  { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "缺少拖车发票", costTypes: ["拖车费", "国内物流费", "国内拖车费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他物流费用"] },
+  { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "缺少拖车发票", costTypes: ["拖车费", "国内物流费", "国内拖车费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他本地费用", "其他物流费用"] },
   { key: "PORT", label: "港杂费发票", missingCostLabel: "缺少港杂费发票", costTypes: ["港杂费", "文件费", "订舱费"] },
-  { key: "SEA", label: "海运费发票", missingCostLabel: "缺少海运费发票", costTypes: ["海运费"] },
+  { key: "SEA", label: "海运费发票", missingCostLabel: "缺少海运费发票", costTypes: ["海运费", "其他国际费用"] },
 ];
 export const SEA_FREIGHT_REQUIREMENT_KEY = "SEA";
 export const SEA_FREIGHT_REQUIRED_TRADE_TERMS = ["CIF", "CFR"];
@@ -149,7 +149,7 @@ export const DOMESTIC_LOGISTICS_TRANSPORT_LABELS = {
 export const COMMISSION_LOGISTICS_COST_TYPES = ["国内物流费", "国内拖车费", ...LOGISTICS_COST_TYPES]
   .filter((item, index, arr) => arr.indexOf(item) === index);
 export const FACTORY_SUPPLIER_COST_TYPES = ["工厂货款", "原材料货款", "采购货款", "产品货款"];
-export const CNY_ONLY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "拖车费", "报关费", "港杂费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "银行手续费", "样品费", "其他费用"];
+export const CNY_ONLY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "拖车费", "报关费", "港杂费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他本地费用", "银行手续费", "样品费", "其他费用"];
 export const FOREIGN_CURRENCY_COST_TYPES = [...LOGISTICS_USD_COST_TYPES, "国外佣金", "国外代理费", "其他物流费用"];
 export const LEGACY_FOREIGN_CURRENCY_COST_TYPES = ["佣金"];
 export const COST_TYPES = [...CNY_ONLY_COST_TYPES, ...FOREIGN_CURRENCY_COST_TYPES, ...LEGACY_FOREIGN_CURRENCY_COST_TYPES]
@@ -275,17 +275,11 @@ export const CUSTOMS_DECLARATION_DOCUMENT_TYPE_ALIASES = new Set(["CUSTOMS_ENTRY
 export const TAX_REFUND_SUPPLIER_TYPES = PRODUCT_SUPPLIER_TYPES;
 export const UPLOAD_STATUSES = ["PENDING", "UPLOADING", "SUCCESS", "FAILED"];
 export const TAX_REFUND_STATUS_LABELS = {
-  NO_CUSTOMS: "未上传报关单",
-  CUSTOMS_RECOGNIZED_PENDING_CONFIRM: "已识别待确认",
-  HS_NOT_MAINTAINED: "HS编码未维护",
-  REBATE_RATE_MATCHED: "HS退税率已匹配",
-  SUPPLIER_INVOICE_MATCHED: "供应商发票已匹配",
-  REFUND_CALCULATED: "退税金额已计算",
   NOT_READY: "资料不完整",
   READY: "资料完整待提交",
+  PROBLEM: "资料异常",
   SUBMITTED: "已提交退税",
   REFUND_RECEIVED: "已收到退税款",
-  PROBLEM: "资料异常",
 };
 export const TAX_REFUND_STATUSES = Object.keys(TAX_REFUND_STATUS_LABELS);
 export const CUSTOMS_PARSE_STATUSES = ["SUCCESS", "PARTIAL", "FAILED", "MANUAL"];
@@ -300,12 +294,6 @@ export const CUSTOMS_PARSE_SOURCE_LABELS = {
   MANUAL: "手工填写",
 };
 export const ACTIVE_TAX_REFUND_STATUSES = [
-  "NO_CUSTOMS",
-  "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
-  "HS_NOT_MAINTAINED",
-  "REBATE_RATE_MATCHED",
-  "SUPPLIER_INVOICE_MATCHED",
-  "REFUND_CALCULATED",
   "NOT_READY",
   "READY",
   "PROBLEM",
@@ -586,8 +574,8 @@ export const TAX_REFUND_FEATURES_SETTING_KEY = "tax_refund_features";
 export const DEFAULT_TAX_REFUND_FEATURE_SETTINGS = {
   enabled: true,
   companyHsLibraryEnabled: true,
-  calculationEnabled: true,
-  addCompanyHsFromOcrEnabled: true,
+  calculationEnabled: false,
+  addCompanyHsFromOcrEnabled: false,
 };
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {

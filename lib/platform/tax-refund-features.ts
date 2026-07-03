@@ -25,8 +25,8 @@ export function normalizeTaxRefundFeatureSettings(value: unknown = {}): TaxRefun
   return {
     enabled,
     companyHsLibraryEnabled: enabled && input.companyHsLibraryEnabled !== false,
-    calculationEnabled: enabled && input.calculationEnabled !== false,
-    addCompanyHsFromOcrEnabled: enabled && input.addCompanyHsFromOcrEnabled !== false,
+    calculationEnabled: false,
+    addCompanyHsFromOcrEnabled: false,
   };
 }
 
@@ -66,10 +66,10 @@ export async function saveTaxRefundFeatureSettings(request: AuditRequestLike, ac
     update: { value },
     create: { key: TAX_REFUND_FEATURES_SETTING_KEY, value },
   });
-  await runNonCriticalTask("退税计算功能设置日志写入", () => writeAudit(
+  await runNonCriticalTask("企业HS编码设置日志写入", () => writeAudit(
     request,
     actor,
-    "更新退税计算功能设置",
+    "更新企业HS编码设置",
     "system_settings",
     TAX_REFUND_FEATURES_SETTING_KEY,
     before,
@@ -85,6 +85,5 @@ export async function assertTaxRefundFeatureEnabled(feature: keyof TaxRefundFeat
 }
 
 export async function isTaxRefundCalculationFeatureEnabled() {
-  const settings = await getTaxRefundFeatureSettings();
-  return settings.enabled && settings.calculationEnabled;
+  return false;
 }

@@ -6,7 +6,6 @@ import styles from "../../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../../types";
 import { canWritePermission, downloadBlob, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import {
-  customsEntryDocuments,
   manualShippingTemplate,
   normalizedMissingLabels,
   taxMissingTargets,
@@ -22,9 +21,6 @@ import {
 import {
   PAGE_SIZE,
   type BusinessEntityOption,
-  type CustomsFilePickerState,
-  type CustomsRecognitionResponse,
-  type CustomsRecognitionResult,
   type ManualShippingDraft,
   type ManualShippingForm,
   type TaxDocument,
@@ -57,7 +53,6 @@ export type TaxRefundModuleProps = {
 export function useTaxRefundController({
   currentUser,
   permissions,
-  features,
   initialKeyword = "",
   initialAction = "",
   initialOpenToken = 0,
@@ -85,7 +80,6 @@ export function useTaxRefundController({
   const [detailActiveTab, setDetailActiveTab] = useState<TaxRefundDetailTab>("basic");
   const [detailLoadedSections, setDetailLoadedSections] = useState<Record<TaxRefundDetailTab, boolean>>({
     basic: false,
-    calculation: false,
     "export-documents": false,
     "customs-documents": false,
     "factory-documents": false,
@@ -93,7 +87,6 @@ export function useTaxRefundController({
   });
   const [detailSectionLoading, setDetailSectionLoading] = useState<Record<TaxRefundDetailTab, boolean>>({
     basic: false,
-    calculation: false,
     "export-documents": false,
     "customs-documents": false,
     "factory-documents": false,
@@ -104,13 +97,9 @@ export function useTaxRefundController({
   const [submittingTaxId, setSubmittingTaxId] = useState("");
   const [cancelingArchiveId, setCancelingArchiveId] = useState("");
   const [refreshingCompletenessId, setRefreshingCompletenessId] = useState("");
-  const [calculatingTaxRefundId, setCalculatingTaxRefundId] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
-  const [recognizingDocumentId, setRecognizingDocumentId] = useState("");
-  const [recognitionStatusByDocument, setRecognitionStatusByDocument] = useState<Record<string, string>>({});
-  const [customsFilePicker, setCustomsFilePicker] = useState<CustomsFilePickerState>(null);
   const [manualShippingOrder, setManualShippingOrder] = useState<TaxRefundDetail | null>(null);
   const [manualShippingDraft, setManualShippingDraft] = useState<ManualShippingDraft | null>(null);
   const [manualShippingForm, setManualShippingForm] = useState<ManualShippingForm | null>(null);
@@ -133,13 +122,6 @@ export function useTaxRefundController({
   const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
-  const taxRefundCalculationEnabled = !features || (features.enabled !== false && features.calculationEnabled !== false);
-  const canCreateCompanyHsFromOcr = currentUser.role === "管理员"
-    && (!features || (
-      features.enabled !== false
-      && features.companyHsLibraryEnabled !== false
-      && features.addCompanyHsFromOcrEnabled !== false
-    ));
 
   async function loadRows(
     nextPage = page,
@@ -305,7 +287,6 @@ export function useTaxRefundController({
   function resetDetailSectionState() {
     setDetailLoadedSections({
       basic: false,
-      calculation: false,
       "export-documents": false,
       "customs-documents": false,
       "factory-documents": false,
@@ -313,7 +294,6 @@ export function useTaxRefundController({
     });
     setDetailSectionLoading({
       basic: false,
-      calculation: false,
       "export-documents": false,
       "customs-documents": false,
       "factory-documents": false,
@@ -419,24 +399,6 @@ export function useTaxRefundController({
     });
   }
 
-  function patchCustomsRecognition(orderId: string, result: CustomsRecognitionResult | null | undefined) {
-    if (!result) return;
-    if (result.order) {
-      patchDetailForOrder(orderId, result.order);
-      return;
-    }
-    if (!result.applied) return;
-    patchDetailForOrder(orderId, {
-      ...(result.customsDeclarationNo !== undefined ? { customsDeclarationNo: result.customsDeclarationNo || "" } : {}),
-      ...(result.customsDeclarationDate !== undefined ? {
-        customsDeclarationDate: result.customsDeclarationDate || "",
-        declarationDate: result.customsDeclarationDate || "",
-      } : {}),
-      ...(result.customsParseStatus !== undefined ? { customsParseStatusLabel: result.customsParseStatusLabel || result.customsParseStatus || "" } : {}),
-      ...(result.customsParseMessage !== undefined ? { customsParseMessage: result.customsParseMessage || "" } : {}),
-    });
-  }
-
   async function openMissingTarget(row: TaxRefundRow, targetKey: string) {
     setPendingDetailTarget(targetKey || "tax-detail-top");
     await loadDetail(row);
@@ -452,8 +414,6 @@ export function useTaxRefundController({
     setDetailActiveTab("basic");
     resetDetailSectionState();
     setPendingDetailTarget("");
-    setRecognitionStatusByDocument({});
-    setCustomsFilePicker(null);
     setManualShippingOrder(null);
     setManualShippingDraft(null);
     setManualShippingForm(null);
@@ -480,94 +440,6 @@ export function useTaxRefundController({
     } finally {
       setPackageDownloadingId("");
     }
-  }
-
-  function setDocumentRecognitionStatus(documentId: string, status: string) {
-    if (!documentId) return;
-    setRecognitionStatusByDocument((current) => ({ ...current, [documentId]: status }));
-  }
-
-  function customsRecognitionStatusText(result: CustomsRecognitionResult | null | undefined) {
-    if (!result) return "";
-    if (result.customsParseStatus === "FAILED") return "未识别成功，请手工填写报关单号和申报日期";
-    const missing: string[] = [];
-    if (!result.customsDeclarationNo) missing.push("未识别到报关单号");
-    if (!result.customsDeclarationDate) missing.push("未识别到申报日期");
-    if (missing.length) return missing.join(" / ");
-    return "识别成功";
-  }
-
-  async function recognizeCustomsDocument(order: TaxRefundDetail, document?: TaxDocument) {
-    const targetDocumentId = document?.id || order.currentCustomsDocument?.id || "";
-    const recognitionKey = targetDocumentId || order.id;
-    setRecognizingDocumentId(recognitionKey);
-    setDocumentRecognitionStatus(recognitionKey, "识别中...");
-    setDetailError("");
-    setError("");
-    setNotice("");
-    try {
-      const response = await apiJson<CustomsRecognitionResponse>(`/api/tax-refund/${encodeURIComponent(order.id)}/recognize-customs-declaration`, {
-        method: "POST",
-        body: JSON.stringify({ documentId: targetDocumentId }),
-      });
-      const result = response.data || response.customsRecognition;
-      if (!result) throw new Error(response.message || "报关单识别失败");
-      const statusText = customsRecognitionStatusText(result);
-      setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText);
-      patchCustomsRecognition(order.id, result);
-      const recognizedDocumentId = result.documentId || targetDocumentId;
-      if (recognizedDocumentId) {
-        try {
-          const extractResult = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(order.id)}`, {
-            method: "PATCH",
-            body: JSON.stringify({ action: "extractCustomsDeclarationItems", documentId: recognizedDocumentId }),
-          });
-          if (extractResult.order) patchDetailForOrder(order.id, extractResult.order);
-          setDocumentRecognitionStatus(recognizedDocumentId, statusText || "识别成功");
-          setNotice(extractResult.message || "报关单信息和商品明细已重新识别，请确认。");
-          return;
-        } catch (extractError) {
-          const extractMessage = extractError instanceof Error ? extractError.message : "报关商品明细识别失败，请人工维护。";
-          setNotice(`报关单基础字段已识别，但商品明细识别失败：${extractMessage}`);
-        }
-      }
-      if (!result.customsDeclarationNo && !result.customsDeclarationDate) {
-        setNotice(response.message || result.customsParseMessage || "未识别成功，请手工填写报关单号和申报日期");
-        return;
-      }
-      setDocumentRecognitionStatus(result.documentId || recognitionKey, statusText || "识别成功");
-      setNotice(response.message || "报关单信息已自动回填，并同步更新退税资料列表申报日期。");
-    } catch (recognizeError) {
-      const message = recognizeError instanceof Error ? recognizeError.message : "未识别成功，请手工填写报关单号和申报日期";
-      setDocumentRecognitionStatus(recognitionKey, message);
-      setDetailError(message);
-    } finally {
-      setRecognizingDocumentId("");
-    }
-  }
-
-  async function handleUploadedCustomsRecognition(orderId: string, document: TaxDocument, result: CustomsRecognitionResult | null | undefined) {
-    if (!result?.attempted || !document.id) {
-      setNotice("上传成功");
-      return;
-    }
-    const statusText = customsRecognitionStatusText(result);
-    setDocumentRecognitionStatus(document.id, statusText);
-    patchCustomsRecognition(orderId, result);
-    setNotice("上传成功");
-  }
-
-  function recognizeFromUploadedCustoms(order: TaxRefundDetail) {
-    const documents = customsEntryDocuments(order.documents || []);
-    if (documents.length === 1) {
-      void recognizeCustomsDocument(order, documents[0]);
-      return;
-    }
-    if (documents.length > 1) {
-      setCustomsFilePicker({ order, documents });
-      return;
-    }
-    void recognizeCustomsDocument(order);
   }
 
   async function submitTaxRefund(row: TaxRefundRow) {
@@ -700,88 +572,6 @@ export function useTaxRefundController({
     }
   }
 
-  async function recalculateTaxRefund(row: TaxRefundRow) {
-    setCalculatingTaxRefundId(row.id);
-    setDetailError("");
-    setError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "recalculateTaxRefund" }),
-      });
-      if (result.success !== true || !result.order) throw new Error(result.message || "退税金额重新计算失败");
-      patchDetailForOrder(row.id, result.order);
-      setNotice(result.message || "退税金额已重新计算");
-    } catch (calcError) {
-      const message = calcError instanceof Error ? calcError.message : "退税金额重新计算失败";
-      if (detailOrderId === row.id) setDetailError(message);
-      else setError(message);
-    } finally {
-      setCalculatingTaxRefundId("");
-    }
-  }
-
-  async function saveCustomsDeclarationItems(orderId: string, items: NonNullable<TaxRefundDetail["customsDeclarationItems"]>) {
-    setCalculatingTaxRefundId(orderId);
-    setDetailError("");
-    setError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "confirmCustomsDeclarationItems", items }),
-      });
-      if (result.success !== true || !result.order) throw new Error(result.message || "报关商品明细保存失败");
-      patchDetailForOrder(orderId, result.order);
-      setNotice(result.message || "报关商品明细已保存");
-    } catch (saveError) {
-      setDetailError(saveError instanceof Error ? saveError.message : "报关商品明细保存失败");
-    } finally {
-      setCalculatingTaxRefundId("");
-    }
-  }
-
-  async function syncCustomsDeclarationItemsFromOcr(orderId: string, documentId: string) {
-    setCalculatingTaxRefundId(orderId);
-    setDetailError("");
-    setError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "syncCustomsDeclarationItemsFromOcr", documentId }),
-      });
-      if (result.success !== true || !result.order) throw new Error(result.message || "OCR商品明细同步失败");
-      patchDetailForOrder(orderId, result.order);
-      setNotice(result.message || "OCR商品明细已同步，请确认");
-    } catch (syncError) {
-      setDetailError(syncError instanceof Error ? syncError.message : "OCR商品明细同步失败");
-    } finally {
-      setCalculatingTaxRefundId("");
-    }
-  }
-
-  async function createCompanyHsFromDeclarationItem(orderId: string, payload: Record<string, unknown>) {
-    setCalculatingTaxRefundId(orderId);
-    setDetailError("");
-    setError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "createCompanyHsFromDeclarationItem", ...payload }),
-      });
-      if (result.success !== true || !result.order) throw new Error(result.message || "新增企业HS编码失败");
-      patchDetailForOrder(orderId, result.order);
-      setNotice(result.message || "企业HS编码已新增，退税金额已重新计算");
-    } catch (saveError) {
-      setDetailError(saveError instanceof Error ? saveError.message : "新增企业HS编码失败");
-    } finally {
-      setCalculatingTaxRefundId("");
-    }
-  }
-
   async function cancelTaxRefundArchive(row: TaxRefundRow) {
     const result = await requestConfirmation({
       title: "确认取消归档？",
@@ -823,7 +613,7 @@ export function useTaxRefundController({
     setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setDetailError("");
     setError("");
-    setNotice(isCustomsDeclaration ? "识别中..." : "");
+    setNotice("");
     try {
       const validationError = validatePdfUploadFile(file);
       if (validationError) throw new Error(validationError);
@@ -841,21 +631,7 @@ export function useTaxRefundController({
       if (uploadedDocument?.id) {
         patchUploadedDocument(orderId, uploadedDocument);
       }
-      if (isCustomsDeclaration && uploadedDocument?.id) {
-        await handleUploadedCustomsRecognition(orderId, uploadedDocument, uploadedDocument.customsRecognition || data.customsRecognition || null);
-        try {
-          const extractResult = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(orderId)}`, {
-            method: "PATCH",
-            body: JSON.stringify({ action: "extractCustomsDeclarationItems", documentId: uploadedDocument.id }),
-          });
-          if (extractResult.order) patchDetailForOrder(orderId, extractResult.order);
-          setNotice(extractResult.message || "报关商品明细已识别，请确认");
-        } catch (extractError) {
-          setNotice(extractError instanceof Error ? `上传成功，报关商品明细识别失败：${extractError.message}` : "上传成功，报关商品明细识别失败，请人工录入。");
-        }
-      } else {
-        setNotice("上传成功");
-      }
+      setNotice(isCustomsDeclaration ? "报关单已上传，请手工维护报关单号和申报日期。" : "上传成功");
       if (detailOrderId === orderId) await fetchDetail(orderId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
@@ -866,7 +642,6 @@ export function useTaxRefundController({
         delete next[uploadKey];
         return next;
       });
-      setRecognizingDocumentId("");
     }
   }
 
@@ -904,11 +679,6 @@ export function useTaxRefundController({
           nextDetail.customsParseMessage = "";
         }
         return nextDetail;
-      });
-      setRecognitionStatusByDocument((current) => {
-        const next = { ...current };
-        delete next[document.id];
-        return next;
       });
       if (document.documentType === "CUSTOMS_ENTRY_FORM") {
         patchRowsForOrder(orderId, {
@@ -1032,10 +802,6 @@ export function useTaxRefundController({
     if (keywordValue) onOpenDomesticLogistics?.(keywordValue);
   }
 
-  function selectCustomsFile(order: TaxRefundDetail, document: TaxDocument) {
-    setCustomsFilePicker(null);
-    void recognizeCustomsDocument(order, document);
-  }
 
   return {
     mode,
@@ -1055,8 +821,6 @@ export function useTaxRefundController({
     businessEntities,
     canManageTaxRefund,
     canCancelArchive,
-    taxRefundCalculationEnabled,
-    canCreateCompanyHsFromOcr,
     canWriteDocuments,
     canSendShippingDocuments,
     submittingTaxId,
@@ -1071,13 +835,9 @@ export function useTaxRefundController({
     packageDownloadingId,
     cancelingArchiveId,
     refreshingCompletenessId,
-    calculatingTaxRefundId,
     uploadingKey,
     uploadProgressByKey,
     deletingDocumentId,
-    recognizingDocumentId,
-    recognitionStatusByDocument,
-    customsFilePicker,
     manualShippingOrder,
     manualShippingDraft,
     manualShippingForm,
@@ -1102,22 +862,14 @@ export function useTaxRefundController({
     submitTaxRefund,
     cancelTaxRefundArchive,
     refreshCompleteness,
-    recalculateTaxRefund,
-    saveCustomsDeclarationItems,
-    syncCustomsDeclarationItemsFromOcr,
-    createCompanyHsFromDeclarationItem,
     updateTaxRefundStatus,
     closeDetailDrawer,
     downloadPackage,
     handleCustomsSaved,
     uploadDocument,
     deleteDocument,
-    recognizeCustomsDocument,
-    recognizeFromUploadedCustoms,
     openManualShippingDocuments,
     openDomesticLogisticsFromDetail,
-    closeCustomsFilePicker: () => setCustomsFilePicker(null),
-    selectCustomsFile,
     closeManualShippingDocuments,
     sendManualShippingDocuments,
     setManualShippingForm,

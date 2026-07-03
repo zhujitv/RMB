@@ -17,7 +17,6 @@ import {
 } from "./shared-constants";
 import { logisticsInvoiceGroupForExpense } from "./logistics-invoice-groups";
 import { serializeDomesticLogisticsInfo } from "./shared-serialization";
-import { normalizeCustomsDeclarationItemForTaxRefund } from "../customs-declaration-parser";
 
 type NumericLike = number | string | { toString(): string };
 type OrderDocumentLike = {
@@ -80,25 +79,6 @@ type TaxOrderLike = {
   billOfLadingNo?: string | null;
   documents?: OrderDocumentLike[] | null;
   costs?: CostLike[] | null;
-  customsDeclarationItems?: Array<{
-    id?: string | null;
-    productName?: string | null;
-    quantity?: NumericLike | null;
-    unit?: string | null;
-    totalAmount?: NumericLike | null;
-    fobAmount?: NumericLike | null;
-    currency?: string | null;
-    tradeTerm?: string | null;
-    confirmationStatus?: string | null;
-    deletedAt?: Date | string | null;
-  }> | null;
-  exportTaxRefundCalculations?: Array<{
-    calculationStatus?: string | null;
-    invoiceMatchStatus?: string | null;
-    abnormalReasons?: unknown;
-    estimatedRefundAmount?: NumericLike | null;
-    deletedAt?: Date | string | null;
-  }> | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
   domesticLogisticsInfo?: DomesticLogisticsInfoLike | null;
   taxRefundCompleteness?: unknown;
@@ -692,57 +672,19 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   });
   const logisticsTotal = logisticsRequirements.length;
   const logisticsCompleted = logisticsTotal - logisticsMissing.length;
-  const activeCustomsItems = (order.customsDeclarationItems || []).filter((item) => (
-    !item.deletedAt
-    && normalizeCustomsDeclarationItemForTaxRefund({
-      productName: item.productName || "",
-      quantity: numberValue(item.quantity),
-      unit: item.unit || "",
-      totalAmount: numberValue(item.totalAmount) || numberValue(item.fobAmount),
-      currency: item.currency || "",
-      tradeTerm: item.tradeTerm || "",
-    })
-  ));
-  const activeCalculations = (order.exportTaxRefundCalculations || []).filter((item) => !item.deletedAt);
-  const calculationMissing: MissingEntry[] = [];
-  if (customsMissing.includes("CUSTOMS_ENTRY_FORM")) {
-    calculationMissing.push({ label: "未上传报关单", documentType: "CUSTOMS_ENTRY_FORM" });
-  } else if (!activeCustomsItems.length) {
-    calculationMissing.push({ label: "报关商品明细待确认", documentType: "CUSTOMS_DECLARATION_ITEMS" });
-  } else if (activeCustomsItems.some((item) => item.confirmationStatus !== "CONFIRMED")) {
-    calculationMissing.push({ label: "报关商品明细待确认", documentType: "CUSTOMS_DECLARATION_ITEMS" });
-  }
-  if (activeCustomsItems.length && !activeCalculations.length) {
-    calculationMissing.push({ label: "退税金额待计算", documentType: "EXPORT_TAX_REFUND_CALCULATION" });
-  }
-  activeCalculations.forEach((calculation) => {
-    const reasons = Array.isArray(calculation.abnormalReasons) ? calculation.abnormalReasons : [];
-    if (calculation.calculationStatus === "资料异常" || reasons.length) {
-      reasons.forEach((reason) => calculationMissing.push({
-        label: String(reason || "退税计算异常"),
-        documentType: "EXPORT_TAX_REFUND_CALCULATION",
-      }));
-      if (!reasons.length) {
-        calculationMissing.push({ label: "退税计算异常", documentType: "EXPORT_TAX_REFUND_CALCULATION" });
-      }
-    }
-  });
-  const calculationTotal = 1;
-  const calculationCompleted = calculationMissing.length ? 0 : 1;
   const missingLabels = [
     ...customsMissing.map((type) => (ORDER_DOCUMENT_LABELS as Record<string, string>)[type] || type),
     ...exportMissing.map((type) => (ORDER_DOCUMENT_LABELS as Record<string, string>)[type] || type),
     ...domesticLogisticsMissing.map((item) => item.label),
     ...supplierMissing.map((item) => item.label),
     ...logisticsMissing.map((item) => item.label),
-    ...calculationMissing.map((item) => item.label),
   ].map(displayDocumentLabel).filter((item, index, arr) => arr.indexOf(item) === index);
   const domesticLogisticsTotal = 1;
   const customsTotal = DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length;
   const customsCompleted = customsTotal - customsMissing.length;
   const domesticLogisticsCompleted = domesticLogisticsComplete ? 1 : 0;
-  const total = customsTotal + TAX_EXPORT_DOCUMENT_TYPES.length + domesticLogisticsTotal + supplierTotal + logisticsTotal + calculationTotal;
-  const completed = customsCompleted + exportCompleted + domesticLogisticsCompleted + supplierCompleted + logisticsCompleted + calculationCompleted;
+  const total = customsTotal + TAX_EXPORT_DOCUMENT_TYPES.length + domesticLogisticsTotal + supplierTotal + logisticsTotal;
+  const completed = customsCompleted + exportCompleted + domesticLogisticsCompleted + supplierCompleted + logisticsCompleted;
   const factory = {
     completed: supplierCompleted,
     total: supplierTotal,
@@ -793,13 +735,6 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     factory,
     supplier: factory,
     logistics,
-    calculation: {
-      completed: calculationCompleted,
-      total: calculationTotal,
-      complete: calculationMissing.length === 0,
-      missing: calculationMissing,
-      estimatedRefundAmount: activeCalculations.reduce((sum, item) => sum + numberValue(item.estimatedRefundAmount), 0),
-    },
     text: missingLabels.length === 0 ? "资料完整" : `缺失：${missingLabels.join("、")}`,
   };
 }
@@ -807,14 +742,24 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
 export function derivedTaxRefundStatus(order: TaxOrderLike | null | undefined, documents: OrderDocumentLike[] = order?.documents || []) {
   const status = order?.taxRefundStatus || "NOT_READY";
   if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
-  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM", "HS_NOT_MAINTAINED"].includes(status)) return status;
+  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM"].includes(status)) return status;
   return taxDocumentCompleteness({ ...order, documents }).complete ? "READY" : "NOT_READY";
 }
+
+const LEGACY_TAX_REFUND_WORKFLOW_STATUSES = new Set([
+  "NO_CUSTOMS",
+  "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
+  "HS_NOT_MAINTAINED",
+  "REBATE_RATE_MATCHED",
+  "SUPPLIER_INVOICE_MATCHED",
+  "REFUND_CALCULATED",
+]);
 
 export function taxRefundStatusFromCompleteness(currentStatus: unknown, completeness: TaxRefundCompletenessSummary | null | undefined) {
   const status = String(currentStatus || "");
   if (["COMPLETED", "ARCHIVED"].includes(status)) return "SUBMITTED";
-  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM", "HS_NOT_MAINTAINED"].includes(status)) return status;
+  if (["SUBMITTED", "REFUND_RECEIVED", "PROBLEM"].includes(status)) return status;
+  if (LEGACY_TAX_REFUND_WORKFLOW_STATUSES.has(status)) return "NOT_READY";
   if (completeness && !completeness.complete && status && !["READY", "NOT_READY"].includes(status)) return status;
   return completeness?.complete ? "READY" : "NOT_READY";
 }
@@ -831,7 +776,7 @@ export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
   };
   return {
     complete: false,
-    total: DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length + TAX_EXPORT_DOCUMENT_TYPES.length + 1 + supplierTotal + 3 + 1,
+    total: DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length + TAX_EXPORT_DOCUMENT_TYPES.length + 1 + supplierTotal + 3,
     completed: 0,
     missingTypes: [],
     missingLabels: [],
@@ -858,13 +803,6 @@ export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
       missingCustomsInvoices: [],
       missingPortInvoices: [],
     },
-    calculation: {
-      completed: 0,
-      total: 1,
-      complete: false,
-      missing: [{ documentType: "EXPORT_TAX_REFUND_CALCULATION", label: "退税金额待计算" }],
-      estimatedRefundAmount: 0,
-    },
     text: "完整度缓存未生成",
   };
 }
@@ -885,13 +823,11 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   const exportSection = asRecord(cached.export);
   const customs = asRecord(cached.customs);
   const domesticLogistics = asRecord(cached.domesticLogistics);
-  const calculation = asRecord(cached.calculation);
   if (!cached || typeof cached !== "object" || Array.isArray(cached)) return true;
   if (Number(supplier.total || 0) < SUPPLIER_DOCUMENT_TYPES.length) return true;
   if (typeof supplier.missingFactoryCost === "undefined") return true;
   if (!Object.keys(factory).length) return true;
   if (!Object.keys(logistics).length || !Array.isArray(logistics.missing)) return true;
-  if (!Object.keys(calculation).length || !Array.isArray(calculation.missing)) return true;
   if (logistics.ruleVersion !== TAX_REFUND_LOGISTICS_RULE_VERSION) return true;
   if (Number(exportSection.total || 0) < TAX_EXPORT_DOCUMENT_TYPES.length) return true;
   if (!Object.keys(customs).length || Number(customs.total || 0) !== DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length) return true;

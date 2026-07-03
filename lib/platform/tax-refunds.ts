@@ -44,8 +44,6 @@ import {
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
-import { canReadOcrRawResult, saveOcrRawResult, serializeOcrRawResult as serializeStoredOcrRawResult } from "./ocr-raw-results";
-import { isUsableCustomsDeclarationItem } from "./export-tax-refund-calculations";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -151,27 +149,6 @@ const taxRefundCostLightSelect = Prisma.validator<Prisma.OrderCostSelect>()({
 });
 type TaxRefundDocumentLight = Prisma.OrderDocumentGetPayload<{ select: typeof taxRefundDocumentLightSelect }>;
 type TaxRefundCostLight = Prisma.OrderCostGetPayload<{ select: typeof taxRefundCostLightSelect }>;
-type TaxRefundCustomsItemLight = {
-  id: string;
-  documentId: string | null;
-  declarationNo: string;
-  declarationDate: Date | null;
-  exportDate: Date | null;
-  hsCode: string;
-  productName: string;
-  quantity: Prisma.Decimal | number | null;
-  unit: string | null;
-  totalAmount?: Prisma.Decimal | number | null;
-  tradeTerm: string | null;
-  currency: string | null;
-  fobAmount: Prisma.Decimal | number | null;
-  exchangeRate: Prisma.Decimal | number | null;
-  fobAmountCny: Prisma.Decimal | number | null;
-  rawJson?: Prisma.JsonValue | null;
-  confirmationStatus: string;
-  source: string;
-  sortOrder: number;
-};
 type TaxRefundPackageDocument = Prisma.OrderDocumentGetPayload<{
   include: { uploadedBy: true; cost: { include: { supplier: true } }; supplier: true };
 }>;
@@ -198,19 +175,7 @@ function taxRefundDetailBillOfLadingNumbers(order: Pick<TaxRefundOrderWithRelati
 
 function serializeTaxRefundOrderForActor(order: unknown, actor: ActorLike) {
   const serialized = serializeOrder(order);
-  const role = String(actor?.role || "");
-  if (role === "管理员" || role === "财务") return serialized;
-  return {
-    ...serialized,
-    exportTaxRefundCalculations: [],
-    exportTaxRefundSummary: {
-      estimatedRefundAmount: null,
-      calculationStatus: "",
-      abnormalReasons: [],
-    },
-    expectedTaxRefundIncomeCny: null,
-    estimatedTaxRefundIncome: null,
-  };
+  return serialized;
 }
 
 function transportItemStableKey(item: TaxRefundDomesticTransportItem) {
@@ -397,182 +362,6 @@ function serializeTaxRefundLightDocument(document: TaxRefundDocumentLight, order
   };
 }
 
-function rawJsonRecord(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function serializeTaxRefundCustomsItem(item: TaxRefundCustomsItemLight, fallback: Record<string, unknown> = {}) {
-  return {
-    id: item.id,
-    documentId: item.documentId || "",
-    declarationNo: item.declarationNo || "",
-    declarationDate: dateToInput(item.declarationDate),
-    exportDate: dateToInput(item.exportDate),
-    hsCode: item.hsCode || "",
-    productName: item.productName || "",
-    quantity: item.quantity == null ? null : Number(item.quantity),
-    unit: item.unit || "",
-    totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
-    tradeTerm: item.tradeTerm || "",
-    currency: item.currency || "",
-    fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
-    exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
-    fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
-    confirmationStatus: item.confirmationStatus,
-    source: item.source,
-    sortOrder: item.sortOrder,
-  };
-}
-
-function serializeCustomsOcrRawResult(task: {
-  id?: string;
-  status?: string | null;
-  validationStatus?: string | null;
-  errorMessage?: string | null;
-  rawText?: string | null;
-  resultJson?: Prisma.JsonValue | null;
-  createdAt?: Date | null;
-  updatedAt?: Date | null;
-} | null, items: TaxRefundCustomsItemLight[] = []) {
-  const rawItems = items
-    .map((item) => rawJsonRecord(item.rawJson))
-    .filter((item) => Object.keys(item).length > 0);
-  if (!task && !rawItems.length) return null;
-  return {
-    taskId: task?.id || "",
-    status: task?.status || "",
-    validationStatus: task?.validationStatus || "",
-    errorMessage: task?.errorMessage || "",
-    createdAt: task?.createdAt || null,
-    updatedAt: task?.updatedAt || null,
-    resultJson: task?.resultJson || (rawItems.length ? { customsDeclarationItems: rawItems } : null),
-    rawText: task?.rawText || "",
-  };
-}
-
-function rawResultForDocument(
-  rawResults: Array<Prisma.OcrRawResultGetPayload<{}>> = [],
-  documentId = "",
-) {
-  if (!documentId) return null;
-  return rawResults.find((row) => row.documentId === documentId) || null;
-}
-
-function customsItemsForDocument(items: TaxRefundCustomsItemLight[] = [], documentId = "") {
-  if (!documentId) return [];
-  return items.filter((item) => item.documentId === documentId);
-}
-
-function customsItemBackfillJson(item: TaxRefundCustomsItemLight) {
-  return {
-    id: item.id,
-    declarationNo: item.declarationNo || "",
-    declarationDate: dateToInput(item.declarationDate),
-    exportDate: dateToInput(item.exportDate),
-    productName: item.productName || "",
-    quantity: item.quantity == null ? null : Number(item.quantity),
-    unit: item.unit || "",
-    currency: item.currency || "",
-    totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
-    confirmationStatus: item.confirmationStatus,
-    source: item.source,
-    rawJson: rawJsonRecord(item.rawJson),
-  };
-}
-
-async function ensureCustomsOcrRawResultForDocument(
-  document: TaxRefundDocumentLight | null,
-  basic: Record<string, unknown>,
-  items: TaxRefundCustomsItemLight[] = [],
-  existing: Prisma.OcrRawResultGetPayload<{}> | null = null,
-) {
-  if (!document) return existing;
-  if (existing?.rawJson && existing?.parsedJson) return existing;
-  const documentItems = customsItemsForDocument(items, document.id);
-  const declarationNo = nonEmpty(basic.customsDeclarationNo);
-  const declarationDate = nonEmpty(basic.customsDeclarationDate) || nonEmpty(basic.declarationDate);
-  if (!declarationNo && !declarationDate && !documentItems.length) return existing;
-  const backfilledItems = documentItems.map(customsItemBackfillJson);
-  const firstItem = documentItems[0] || null;
-  const totalAmount = documentItems.reduce((sum, item) => sum + Number(item.totalAmount || item.fobAmount || 0), 0);
-  try {
-    return await saveOcrRawResult({
-      documentId: document.id,
-      taxRefundId: document.orderId,
-      orderId: document.orderId,
-      documentType: "CUSTOMS_DECLARATION",
-      provider: "SYSTEM",
-      apiName: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
-      rawJson: {
-        source: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
-        provider: "SYSTEM",
-        apiName: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
-        documentId: document.id,
-        orderId: document.orderId,
-        fileName: document.fileName || document.originalName || "",
-        previousOcrRawResultId: existing?.id || "",
-        previousRawJsonSaved: Boolean(existing?.rawJson),
-        previousParsedJsonSaved: Boolean(existing?.parsedJson),
-        note: "历史识别记录缺少 rawJson 或 parsedJson，系统根据当前报关业务字段和商品明细补写；服务商原始响应不可恢复。",
-        businessFields: {
-          customsDeclarationNo: declarationNo,
-          customsDeclarationDate: declarationDate,
-          customsParseStatus: nonEmpty(basic.customsParseStatusLabel) || "",
-          customsParseMessage: nonEmpty(basic.customsParseMessage) || "",
-        },
-        itemCount: backfilledItems.length,
-        items: backfilledItems,
-      },
-      parsedJson: {
-        source: "BACKFILLED_CUSTOMS_OCR_RAW_RESULT",
-        backfilled: true,
-        customsDeclarationNo: declarationNo || firstItem?.declarationNo || "",
-        customsDeclarationDate: declarationDate || dateToInput(firstItem?.declarationDate),
-        exportDate: dateToInput(firstItem?.exportDate),
-        tradeTerm: firstItem?.tradeTerm || "",
-        currency: firstItem?.currency || "",
-        totalAmount: totalAmount || null,
-        itemCount: backfilledItems.length,
-        items: backfilledItems,
-      },
-      status: "PARTIAL",
-      errorMessage: "历史OCR记录缺少原始结果，已根据当前业务字段补写；服务商原始响应不可恢复。",
-    });
-  } catch (error) {
-    console.error("customs-ocr-backfill-raw-result-failed", {
-      documentId: document.id,
-      orderId: document.orderId,
-      previousOcrRawResultId: existing?.id || "",
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return existing;
-  }
-}
-
-function serializeCustomsRecognitionDocument(
-  document: TaxRefundDocumentLight | null,
-  order: Record<string, unknown>,
-  rawResult: Prisma.OcrRawResultGetPayload<{}> | null = null,
-  isCurrent = false,
-  canReadRaw = false,
-) {
-  if (!document) return null;
-  const serialized = serializeTaxRefundLightDocument(document, order);
-  const raw = canReadRaw ? serializeStoredOcrRawResult(rawResult) : null;
-  return {
-    ...serialized,
-    isCurrent,
-    ocrRawResultId: rawResult?.id || "",
-    ocrStatus: rawResult?.status || "",
-    ocrApiName: rawResult?.apiName || "",
-    ocrRecognizedAt: rawResult?.createdAt || null,
-    hasRawJson: Boolean(rawResult?.rawJson),
-    hasParsedJson: Boolean(rawResult?.parsedJson),
-    ocrErrorMessage: rawResult?.errorMessage || "",
-    ocrRawResult: raw,
-  };
-}
-
 function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<string, unknown> = {}) {
   return {
     id: cost.id,
@@ -598,46 +387,6 @@ function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<str
   };
 }
 
-function serializeTaxRefundCalculationRow(row: Record<string, unknown> = {}) {
-  const invoiceMatchJson = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
-    ? row.invoiceMatchJson as Record<string, unknown>
-    : {};
-  return {
-    id: String(row.id || ""),
-    declarationItemId: String(row.declarationItemId || ""),
-    declarationNo: String(row.declarationNo || ""),
-    hsCode: String(row.hsCode || ""),
-    productName: String(row.productName || ""),
-    declarationDate: row.declarationDate || null,
-    fobCurrency: String(row.fobCurrency || ""),
-    fobAmount: row.fobAmount == null ? null : Number(row.fobAmount),
-    exchangeRate: row.exchangeRate == null ? null : Number(row.exchangeRate),
-    declarationAmountCny: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
-    customsRmbAmount: row.declarationAmountCny == null ? null : Number(row.declarationAmountCny),
-    rebateRate: row.rebateRate == null ? null : Number(row.rebateRate),
-    vatRate: row.vatRate == null ? null : Number(row.vatRate),
-    theoreticalRefundAmount: row.theoreticalRefundAmount == null ? null : Number(row.theoreticalRefundAmount),
-    supplierInvoiceAmountWithoutTax: row.supplierInvoiceAmountWithoutTax == null ? null : Number(row.supplierInvoiceAmountWithoutTax),
-    availableInputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
-    inputVatAmount: row.availableInputVatAmount == null ? null : Number(row.availableInputVatAmount),
-    estimatedRefundAmount: row.estimatedRefundAmount == null ? null : Number(row.estimatedRefundAmount),
-    invoiceMatchStatus: String(row.invoiceMatchStatus || ""),
-    calculationStatus: String(row.calculationStatus || ""),
-    abnormalReasons: Array.isArray(row.abnormalReasons) ? row.abnormalReasons : [],
-    invoiceMatch: invoiceMatchJson,
-  };
-}
-
-function exportTaxRefundSummaryFromRows(rows: ReturnType<typeof serializeTaxRefundCalculationRow>[]) {
-  return {
-    estimatedRefundAmount: rows.reduce((sum, row) => sum + Number(row.estimatedRefundAmount || 0), 0),
-    calculationStatus: rows.some((row) => row.calculationStatus === "资料异常") ? "资料异常" : rows.length ? "退税金额已计算" : "",
-    abnormalReasons: rows
-      .flatMap((row) => row.abnormalReasons.map((reason) => String(reason || "")))
-      .filter((reason, index, arr) => reason && arr.indexOf(reason) === index),
-  };
-}
-
 function taxRefundCompletenessPercent(order: TaxRefundCompletenessOrder = {}) {
   const completeness = cachedTaxRefundCompleteness(order);
   const total = Number(completeness.total || 0);
@@ -647,16 +396,11 @@ function taxRefundCompletenessPercent(order: TaxRefundCompletenessOrder = {}) {
 
 function taxRefundStatusSortRank(status: string = "") {
   return ({
-    NO_CUSTOMS: 1,
-    CUSTOMS_RECOGNIZED_PENDING_CONFIRM: 2,
-    REBATE_RATE_MATCHED: 3,
-    SUPPLIER_INVOICE_MATCHED: 4,
-    REFUND_CALCULATED: 5,
-    NOT_READY: 6,
-    PROBLEM: 7,
-    READY: 8,
-    SUBMITTED: 9,
-    REFUND_RECEIVED: 10,
+    NOT_READY: 1,
+    PROBLEM: 2,
+    READY: 3,
+    SUBMITTED: 4,
+    REFUND_RECEIVED: 5,
   } as Record<string, number>)[status] || 5;
 }
 
@@ -850,119 +594,6 @@ async function getTaxRefundBasicSection(orderId: string, actor: ActorLike) {
   return serializeTaxRefundBasicOrder(await getTaxRefundBaseOrder(orderId, actor));
 }
 
-async function getTaxRefundCalculationSection(orderId: string, actor: ActorLike) {
-  const order = await prisma.receivableOrder.findFirst({
-    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
-    select: {
-      id: true,
-      orderNo: true,
-      blNo: true,
-      currency: true,
-      customsDeclarationNo: true,
-      customsDeclarationDate: true,
-      customerNameSnapshot: true,
-      taxRefundStatus: true,
-      taxRefundCompleteness: true,
-      taxRefundOverallCompleteness: true,
-      customer: { select: { name: true, shortName: true } },
-      customsDeclarationItems: {
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          documentId: true,
-          declarationNo: true,
-          declarationDate: true,
-          exportDate: true,
-          hsCode: true,
-          productName: true,
-          quantity: true,
-          unit: true,
-          totalAmount: true,
-          tradeTerm: true,
-          currency: true,
-          fobAmount: true,
-          exchangeRate: true,
-          fobAmountCny: true,
-          confirmationStatus: true,
-          source: true,
-          sortOrder: true,
-        },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        take: 200,
-      },
-      exportTaxRefundCalculations: {
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          declarationItemId: true,
-          declarationNo: true,
-          hsCode: true,
-          productName: true,
-          declarationDate: true,
-          fobCurrency: true,
-          fobAmount: true,
-          exchangeRate: true,
-          declarationAmountCny: true,
-          rebateRate: true,
-          vatRate: true,
-          theoreticalRefundAmount: true,
-          supplierInvoiceAmountWithoutTax: true,
-          availableInputVatAmount: true,
-          estimatedRefundAmount: true,
-          invoiceMatchStatus: true,
-          calculationStatus: true,
-          abnormalReasons: true,
-          invoiceMatchJson: true,
-        },
-        orderBy: [{ createdAt: "asc" }],
-        take: 200,
-      },
-    },
-  });
-  if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const calculations = (order.exportTaxRefundCalculations || []).map((row) => serializeTaxRefundCalculationRow(row as Record<string, unknown>));
-  const role = String(actor?.role || "");
-  const canReadAmount = role === "管理员" || role === "财务";
-  return {
-    id: order.id,
-    orderNo: order.orderNo,
-    blNo: order.blNo || "",
-    billOfLadingNo: order.blNo || "",
-    currency: order.currency,
-    customerName: customerShortName(order.customer) || customerFullName(order.customer, order.customerNameSnapshot),
-    customsDeclarationNo: order.customsDeclarationNo || "",
-    customsDeclarationDate: dateToInput(order.customsDeclarationDate),
-    declarationDate: dateToInput(order.customsDeclarationDate),
-    taxRefundStatus: taxRefundStatusFromCompleteness(order.taxRefundStatus, cachedTaxRefundCompleteness(order)),
-    customsDeclarationItems: (order.customsDeclarationItems || []).filter((item) => isUsableCustomsDeclarationItem(item as never)).map((item) => ({
-      id: item.id,
-      documentId: item.documentId || "",
-      declarationNo: item.declarationNo || "",
-      declarationDate: dateToInput(item.declarationDate),
-      exportDate: dateToInput(item.exportDate),
-      hsCode: item.hsCode || "",
-      productName: item.productName || "",
-      quantity: item.quantity == null ? null : Number(item.quantity),
-      unit: item.unit || "",
-      totalAmount: item.totalAmount == null ? null : Number(item.totalAmount),
-      tradeTerm: item.tradeTerm || "",
-      currency: item.currency || "",
-      fobAmount: item.fobAmount == null ? null : Number(item.fobAmount),
-      exchangeRate: item.exchangeRate == null ? null : Number(item.exchangeRate),
-      fobAmountCny: item.fobAmountCny == null ? null : Number(item.fobAmountCny),
-      confirmationStatus: item.confirmationStatus,
-      source: item.source,
-      sortOrder: item.sortOrder,
-    })),
-    exportTaxRefundCalculations: canReadAmount ? calculations : [],
-    exportTaxRefundSummary: canReadAmount ? exportTaxRefundSummaryFromRows(calculations) : {
-      estimatedRefundAmount: null,
-      calculationStatus: "",
-      abnormalReasons: [],
-    },
-  };
-}
-
 async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, documentTypes: string[]) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
@@ -995,66 +626,10 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
 }
 
 async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: ActorLike) {
-  const canReadRaw = canReadOcrRawResult(actor);
-  const [basic, documents, customsItems, customsDocuments] = await Promise.all([
+  const [basic, documents] = await Promise.all([
     getTaxRefundBasicSection(orderId, actor),
     getTaxRefundDocumentSection(orderId, actor, DOMESTIC_LOGISTICS_DOCUMENT_TYPES),
-    guardedPrismaFindMany<TaxRefundCustomsItemLight[]>(prisma.exportCustomsDeclarationItem, "exportCustomsDeclarationItem", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.customsItems", {
-      where: { orderId, deletedAt: null },
-      select: {
-        id: true,
-        documentId: true,
-        declarationNo: true,
-        declarationDate: true,
-        exportDate: true,
-        hsCode: true,
-        productName: true,
-        quantity: true,
-        unit: true,
-        totalAmount: true,
-        tradeTerm: true,
-        currency: true,
-        fobAmount: true,
-        exchangeRate: true,
-        fobAmountCny: true,
-        rawJson: true,
-        confirmationStatus: true,
-        source: true,
-        sortOrder: true,
-      },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      take: 200,
-    }),
-    guardedPrismaFindMany<TaxRefundDocumentLight[]>(prisma.orderDocument, "orderDocument", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.customsDocuments", {
-      where: { orderId, deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
-      select: taxRefundDocumentLightSelect,
-      orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
-      take: 20,
-    }),
   ]);
-  const usableCustomsItems = (customsItems || []).filter((item) => isUsableCustomsDeclarationItem(item as never));
-  const serializedItems = usableCustomsItems.map((item) => serializeTaxRefundCustomsItem(item, basic));
-  const currentCustomsDocument = customsDocuments[0] || null;
-  const customsDocumentIds = customsDocuments.map((document) => document.id).filter(Boolean);
-  const ocrRawRows = canReadRaw && customsDocumentIds.length
-    ? await guardedPrismaFindMany<Prisma.OcrRawResultGetPayload<{}>[]>(prisma.ocrRawResult, "ocrRawResult", "lib/platform/tax-refunds.ts:getTaxRefundCustomsDocumentsSection.ocrRawResults", {
-      where: { documentId: { in: customsDocumentIds }, documentType: { in: ["CUSTOMS_ENTRY_FORM", "CUSTOMS_DECLARATION"] } },
-      orderBy: [{ createdAt: "desc" }],
-      take: 100,
-    })
-    : [];
-  const ensuredRawResults = canReadRaw
-    ? await Promise.all(customsDocuments.map((document) => (
-      ensureCustomsOcrRawResultForDocument(document, basic, usableCustomsItems, rawResultForDocument(ocrRawRows, document.id))
-    )))
-    : [];
-  const ocrRawResults = [
-    ...ensuredRawResults.filter((row): row is Prisma.OcrRawResultGetPayload<{}> => Boolean(row)),
-    ...ocrRawRows.filter((row) => !ensuredRawResults.some((ensured) => ensured?.id === row.id)),
-  ];
-  const currentRawResult = currentCustomsDocument?.id ? rawResultForDocument(ocrRawResults, currentCustomsDocument.id) : null;
-  const historicalCustomsDocuments = customsDocuments.slice(1);
-  const currentItemRawFallback = usableCustomsItems.filter((item) => item.documentId === currentCustomsDocument?.id);
   return {
     ...documents,
     ...basic,
@@ -1064,17 +639,6 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
     customsParseStatusLabel: basic.customsParseStatusLabel || "",
     customsParseSourceLabel: basic.customsParseSourceLabel || "",
     customsParseMessage: basic.customsParseMessage || "",
-    customsDeclarationItems: serializedItems,
-    currentCustomsDocument: serializeCustomsRecognitionDocument(currentCustomsDocument, basic, currentRawResult, true, canReadRaw),
-    historicalCustomsDocuments: historicalCustomsDocuments.map((document) => (
-      serializeCustomsRecognitionDocument(document, basic, rawResultForDocument(ocrRawResults, document.id), false, canReadRaw)
-    )).filter(Boolean),
-    customsOcrCallLogs: canReadRaw
-      ? ocrRawResults.map((row) => serializeStoredOcrRawResult(row)).filter(Boolean)
-      : [],
-    customsOcrRawResult: canReadRaw
-      ? serializeStoredOcrRawResult(currentRawResult) || serializeCustomsOcrRawResult(null, currentItemRawFallback)
-      : null,
   };
 }
 
@@ -1153,7 +717,6 @@ async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: Act
 
 export type TaxRefundDetailSection =
   | "basic"
-  | "calculation"
   | "export-documents"
   | "customs-documents"
   | "factory-documents"
@@ -1162,7 +725,6 @@ export type TaxRefundDetailSection =
 export async function getTaxRefundOrderDetailSection(orderId: string, actor: ActorLike, section: TaxRefundDetailSection) {
   assertRead(actor, "taxRefund");
   if (section === "basic") return getTaxRefundBasicSection(orderId, actor);
-  if (section === "calculation") return getTaxRefundCalculationSection(orderId, actor);
   if (section === "export-documents") return getTaxRefundDocumentSection(orderId, actor, TAX_EXPORT_DOCUMENT_TYPES);
   if (section === "customs-documents") return getTaxRefundCustomsDocumentsSection(orderId, actor);
   if (section === "factory-documents") return getTaxRefundCostDocumentSection(orderId, actor, "factory");
@@ -1218,16 +780,6 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
     throw permissionError("已提交退税档案只允许查看和下载资料。", 400);
   }
   const completeness = taxDocumentCompleteness(beforeWithLogistics);
-  const calculationMissing = Array.isArray((completeness as Record<string, unknown>).calculation && ((completeness as Record<string, unknown>).calculation as Record<string, unknown>).missing)
-    ? (((completeness as Record<string, unknown>).calculation as Record<string, unknown>).missing as unknown[])
-    : [];
-  if (status === "SUBMITTED" && calculationMissing.length) {
-    const error = codedError("退税计算或供应商发票一致性校验存在异常，无法提交退税。", 400, "TAX_REFUND_CALCULATION_EXCEPTION");
-    error.details = {
-      missingLabels: calculationMissing.map((item) => String((item as Record<string, unknown>)?.label || item || "")).filter(Boolean),
-    };
-    throw error;
-  }
   if (status === "SUBMITTED" && before.taxRefundStatus === "SUBMITTED" && beforeArchived) {
     throw codedError("该订单已提交退税并归档，不能重复提交。", 400, "TAX_REFUND_ALREADY_SUBMITTED");
   }

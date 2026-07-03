@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, ok, parseJsonBody, recognizeUploadedCustomsDocument } from "../../../../../lib/platform-db";
+import { apiError, codedError } from "../../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
@@ -11,26 +11,12 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-type CustomsRecognitionRouteResult = {
-  order?: unknown;
-};
-
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await requireApiActor(request);
-    const { id } = await params;
-    const body = await parseJsonBody(request, { allowEmpty: true });
-    const result = await recognizeUploadedCustomsDocument(request, actor, id, {
-      confirmOverride: body.confirmOverride === true,
-    }) as CustomsRecognitionRouteResult;
-    return ok({
-      success: true,
-      data: result,
-      customsRecognition: result,
-      order: result?.order || null,
-      message: "报关单识别已完成",
-    });
+    await requireApiActor(request);
+    await params;
+    throw codedError("退税资料报关单 OCR 已停用，请手工维护报关单号和申报日期。", 410, "TAX_REFUND_CUSTOMS_OCR_DISABLED");
   } catch (error: unknown) {
-    return apiError(error, "报关单识别失败");
+    return apiError(error, "退税资料报关单 OCR 已停用");
   }
 }

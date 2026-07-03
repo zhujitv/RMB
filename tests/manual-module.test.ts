@@ -11,7 +11,7 @@ test("manual explains current tax refund document upload workflow", () => {
   assert.match(manualModule, /出口资料上传和报关资料上传区域，按资料卡片上传 PDF/);
   assert.match(manualModule, /退税详情仅显示状态提示和前往资料回传入口/);
   assert.match(manualModule, /预览、下载、删除或替换当前 PDF/);
-  assert.match(manualModule, /重新识别报关单/);
+  assert.match(manualModule, /报关单号和申报日期由人工维护/);
   assert.match(manualModule, /删除报关单会同步清空报关单号和申报日期/);
 });
 
@@ -24,10 +24,10 @@ test("manual explains tax refund logistics transport summary", () => {
   assert.match(manualModule, /点击重新计算完整度，系统重新拉取物流明细、物流费用发票和产品供应商回传资料状态/);
 });
 
-test("manual explains customs declaration recognition from logistics upload", () => {
-  assert.match(manualModule, /报关单 PDF 上传成功后，系统自动识别报关单号和申报日期/);
+test("manual explains customs declaration manual maintenance from logistics upload", () => {
+  assert.match(manualModule, /报关单 PDF 上传成功后，可在退税资料详情中手工维护报关单号和申报日期/);
   assert.match(manualModule, /报关单只保留一个当前有效 PDF/);
-  assert.match(manualModule, /识别失败，不影响文件上传/);
+  assert.doesNotMatch(manualModule, /识别失败，不影响文件上传/);
 });
 
 test("manual explains unified logistics cost entry and review flow", () => {

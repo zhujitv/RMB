@@ -371,8 +371,6 @@ model ReceivableOrder {
   logisticsBills                LogisticsBill[]
   logisticsSuppliers            OrderLogisticsSupplier[]
   supplierDocumentRequests      SupplierDocumentRequest[]
-  customsDeclarationItems       ExportCustomsDeclarationItem[]
-  exportTaxRefundCalculations   ExportTaxRefundCalculation[]
   shipsgoTrackings              ShipsgoTracking[]
   ocrTasks                      OcrTask[]
   ocrRawResults                 OcrRawResult[]
@@ -632,7 +630,6 @@ model OrderDocument {
   logisticsExpenseInvoices LogisticsExpense[]       @relation("LogisticsExpenseInvoiceDocument")
   ocrTasks                 OcrTask[]
   ocrRawResults            OcrRawResult[]
-  customsDeclarationItems  ExportCustomsDeclarationItem[]
 
   @@index([orderId])
   @@index([costId])
@@ -646,53 +643,6 @@ model OrderDocument {
   @@index([deletedAt, orderId, relatedModule, documentType, uploadStatus], map: "order_documents_order_module_status_idx")
   @@index([deletedAt, supplierId, documentType, uploadStatus], map: "order_documents_supplier_status_idx")
   @@map("order_documents")
-}
-
-model ExportCustomsDeclarationItem {
-  id                 String    @id @default(cuid())
-  orderId            String    @map("order_id")
-  documentId         String?   @map("document_id")
-  declarationNo      String    @map("declaration_no")
-  declarationDate    DateTime? @map("declaration_date") @db.Date
-  exportDate         DateTime? @map("export_date") @db.Date
-  hsCode             String    @map("hs_code")
-  productName        String    @map("product_name")
-  specification      String?
-  quantity           Decimal?  @db.Decimal(18, 4)
-  unit               String?
-  unitPrice          Decimal?  @map("unit_price") @db.Decimal(18, 6)
-  totalAmount        Decimal?  @map("total_amount") @db.Decimal(18, 2)
-  tradeTerm          String?   @map("trade_term")
-  currency           String?
-  fobAmount          Decimal?  @map("fob_amount") @db.Decimal(18, 2)
-  grossWeight        Decimal?  @map("gross_weight") @db.Decimal(18, 4)
-  netWeight          Decimal?  @map("net_weight") @db.Decimal(18, 4)
-  originCountry      String?   @map("origin_country")
-  destinationCountry String?   @map("destination_country")
-  exchangeRate       Decimal?  @map("exchange_rate") @db.Decimal(18, 6)
-  fobAmountCny       Decimal?  @map("fob_amount_cny") @db.Decimal(18, 2)
-  rawJson            Json?     @map("raw_json")
-  confirmationStatus String    @default("PENDING_CONFIRMATION") @map("confirmation_status")
-  source             String    @default("OCR_PDF")
-  sortOrder          Int       @default(0) @map("sort_order")
-  confirmedById      String?   @map("confirmed_by")
-  confirmedAt        DateTime? @map("confirmed_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  deletedAt          DateTime? @map("deleted_at")
-
-  order    ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  document OrderDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  calculation ExportTaxRefundCalculation?
-
-  @@index([orderId])
-  @@index([documentId])
-  @@index([declarationNo])
-  @@index([hsCode])
-  @@index([confirmationStatus])
-  @@index([deletedAt])
-  @@index([orderId, declarationNo, hsCode, productName, unit], map: "export_customs_items_match_idx")
-  @@map("export_customs_declaration_items")
 }
 
 model CompanyHs {
@@ -716,71 +666,6 @@ model CompanyHs {
   @@index([isEnabled])
   @@index([deletedAt])
   @@map("company_hs")
-}
-
-model ExportTaxRebateRate {
-  id            String    @id @default(cuid())
-  hsCode        String    @map("hs_code")
-  productName   String?   @map("product_name")
-  rebateRate    Decimal   @map("rebate_rate") @db.Decimal(8, 4)
-  vatRate       Decimal   @map("vat_rate") @db.Decimal(8, 4)
-  specialFlag   String?   @map("special_flag")
-  effectiveFrom DateTime  @map("effective_from") @db.Date
-  effectiveTo   DateTime? @map("effective_to") @db.Date
-  source        String?
-  version       String    @default("default")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  calculations ExportTaxRefundCalculation[]
-
-  @@unique([hsCode, effectiveFrom, version], map: "export_tax_rebate_rates_unique_version")
-  @@index([hsCode])
-  @@index([effectiveFrom, effectiveTo])
-  @@map("export_tax_rebate_rates")
-}
-
-model ExportTaxRefundCalculation {
-  id                            String    @id @default(cuid())
-  orderId                       String    @map("order_id")
-  declarationItemId             String    @unique @map("declaration_item_id")
-  rateId                        String?   @map("rate_id")
-  declarationNo                 String    @map("declaration_no")
-  hsCode                        String    @map("hs_code")
-  productName                   String    @map("product_name")
-  declarationDate               DateTime? @map("declaration_date") @db.Date
-  fobCurrency                   String?   @map("fob_currency")
-  fobAmount                     Decimal?  @map("fob_amount") @db.Decimal(18, 2)
-  exchangeRate                  Decimal?  @map("exchange_rate") @db.Decimal(18, 6)
-  declarationAmountCny          Decimal?  @map("declaration_amount_cny") @db.Decimal(18, 2)
-  rebateRate                    Decimal?  @map("rebate_rate") @db.Decimal(8, 4)
-  vatRate                       Decimal?  @map("vat_rate") @db.Decimal(8, 4)
-  theoreticalRefundAmount       Decimal?  @map("theoretical_refund_amount") @db.Decimal(18, 2)
-  supplierInvoiceAmountWithoutTax Decimal? @map("supplier_invoice_amount_without_tax") @db.Decimal(18, 2)
-  availableInputVatAmount       Decimal?  @map("available_input_vat_amount") @db.Decimal(18, 2)
-  estimatedRefundAmount         Decimal?  @map("estimated_refund_amount") @db.Decimal(18, 2)
-  invoiceMatchStatus            String    @default("发票缺失") @map("invoice_match_status")
-  calculationStatus             String    @default("资料异常") @map("calculation_status")
-  abnormalReasons               Json?     @map("abnormal_reasons")
-  invoiceMatchJson              Json?     @map("invoice_match_json")
-  calculatedAt                  DateTime? @map("calculated_at")
-  calculatedById                String?   @map("calculated_by")
-  createdAt                     DateTime  @default(now()) @map("created_at")
-  updatedAt                     DateTime  @updatedAt @map("updated_at")
-  deletedAt                     DateTime? @map("deleted_at")
-
-  order           ReceivableOrder              @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  declarationItem ExportCustomsDeclarationItem @relation(fields: [declarationItemId], references: [id], onDelete: Cascade)
-  rate            ExportTaxRebateRate?         @relation(fields: [rateId], references: [id], onDelete: SetNull)
-
-  @@index([orderId])
-  @@index([rateId])
-  @@index([declarationNo])
-  @@index([hsCode])
-  @@index([invoiceMatchStatus])
-  @@index([calculationStatus])
-  @@index([deletedAt])
-  @@map("export_tax_refund_calculations")
 }
 
 model FileAsset {

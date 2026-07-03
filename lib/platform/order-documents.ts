@@ -1,8 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { buildOrderDocumentKey, readR2Object, safeFileName } from "../r2";
-import { parseAndApplyCustomsDocument } from "./customs-recognition";
-import { isOcrFeatureEnabled } from "./ocr-integration";
 import {
   canAccessDomesticLogisticsOrder,
   canUseDomesticLogisticsDocumentScope,
@@ -29,7 +27,6 @@ import {
   effectivePermissions,
   isCustomsDeclarationDocumentType,
   isProductSupplierOperatorRole,
-  logServerError,
   nextStandardFilenameForUpload,
   normalizeOrderDocumentType,
   normalizeUploadSource,
@@ -448,44 +445,11 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     uploadSource: normalizedUploadSource,
     replacedCustomsDocumentCount,
   }));
-  let customsRecognition: Record<string, unknown> | null = null;
-  const shouldAutoRecognizeCustoms = isCustomsDeclarationDocumentType(documentType)
-    && await isOcrFeatureEnabled("customsDeclaration");
-  if (shouldAutoRecognizeCustoms) {
-    customsRecognition = await parseAndApplyCustomsDocument(request, actor, document, body, {
-      allowManualFailure: true,
-      replaceWithParsedFields: true,
-      clearFieldsOnFailure: true,
-      returnDetails: true,
-    }).catch((error) => {
-      logServerError("报关单自动识别异常", error, {
-        orderId: order.id,
-        documentId: document.id,
-      });
-      return {
-        attempted: true,
-        documentId: document.id,
-        orderId: order.id,
-        documentType,
-        customsDeclarationNo: "",
-        customsDeclarationDate: "",
-        customsParseStatus: "FAILED",
-        customsParseStatusLabel: "识别失败",
-        customsParseMessage: "未识别成功，请手工填写报关单号和申报日期",
-        applied: false,
-        requiresConfirmation: false,
-        conflictFields: [],
-      };
-    });
-  }
   if (["COMMERCIAL_INVOICE", "PACKING_LIST", "CUSTOMS_ENTRY_FORM"].includes(documentType)) {
     await tryAutoShippingDocumentsNotification(request, actor, order.id);
   }
   scheduleTaxRefundCompletenessRefresh(order.id);
-  return {
-    ...serializeOrderDocument(document),
-    ...(customsRecognition ? { customsRecognition } : {}),
-  };
+  return serializeOrderDocument(document);
 }
 
 export async function deleteOrderDocument(request: AuditRequestLike, actor: ActorLike, id: string) {

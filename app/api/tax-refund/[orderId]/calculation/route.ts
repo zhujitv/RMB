@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getTaxRefundOrderDetailSection, ok, taxRefundDataReadFailure } from "../../../../../lib/platform-db";
+import { apiError, codedError } from "../../../../../lib/platform-db";
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
@@ -10,16 +10,10 @@ type RouteContext = {
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
-    const actor = await requireApiActor(request);
-    const { orderId } = await params;
-    return ok({ order: await getTaxRefundOrderDetailSection(orderId, actor, "calculation") });
+    await requireApiActor(request);
+    await params;
+    throw codedError("退税计算功能已停用，请使用资料完整度和人工维护流程。", 410, "TAX_REFUND_CALCULATION_DISABLED");
   } catch (error: unknown) {
-    const { orderId } = await params.catch(() => ({ orderId: "" }));
-    return taxRefundDataReadFailure(error, {
-      path: request.nextUrl.pathname,
-      taxRefundRecordId: orderId,
-      orderId,
-      section: "calculation",
-    });
+    return apiError(error, "退税计算功能已停用");
   }
 }

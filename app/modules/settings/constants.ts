@@ -39,6 +39,8 @@ export const SUPPLIER_LOGISTICS_COST_TYPE_UI_META: Record<string, { label?: stri
   进港费: { description: "集装箱进港、入场及相关操作费用。" },
   落箱费: { description: "落箱、堆存或场站临时操作费用。" },
   预提费: { description: "预提箱、提前操作及相关服务费用。" },
+  其他本地费用: { description: "不属于上述类型的人民币本地物流费用。" },
+  其他国际费用: { description: "不属于上述类型的美元国际物流费用。" },
   其他物流费用: { description: "不属于上述类型的零散物流费用。" },
 };
 export const EXCHANGE_RATE_SOURCES = ["中国银行", "中国外汇交易中心", "国家外汇管理局", "第三方API"];
@@ -300,7 +302,7 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "customers", label: "客户资料" },
   { key: "suppliers", label: "供应商资料" },
   { key: "users", label: "用户与权限" },
-  { key: "taxRefundFeatures", label: "退税计算" },
+  { key: "taxRefundFeatures", label: "企业HS编码" },
   { key: "ocrIntegration", label: "OCR识别" },
   { key: "shipsgoIntegration", label: "物流接口" },
   { key: "notificationTemplates", label: "通知模板" },

@@ -36,10 +36,6 @@ const documentPreviewClient = readFileSync(
   "utf8",
 );
 const sharedComponents = readFileSync("app/components.tsx", "utf8");
-const taxRefundRecognizeRoute = readFileSync(
-  "app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts",
-  "utf8",
-);
 const taxRefundModule = readTaxRefundModuleSource();
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 const costsModule = readCostsModuleSource();
@@ -54,10 +50,7 @@ const orderDocumentsService = readFileSync(
   "lib/platform/order-documents.ts",
   "utf8",
 );
-const customsRecognitionService = readFileSync(
-  "lib/platform/customs-recognition.ts",
-  "utf8",
-);
+const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const sharedConstants = readFileSync(
   "lib/platform/shared-constants.ts",
   "utf8",
@@ -230,7 +223,7 @@ test("tax refund detail uses one file table for preview download and delete", ()
   assert.match(taxRefundModule, /function DocumentFileTable\(/);
   assert.match(
     taxRefundModule,
-    /<th>文件名<\/th>[\s\S]*<th>上传人<\/th>[\s\S]*<th>上传时间<\/th>[\s\S]*<th>识别状态<\/th>[\s\S]*<th>预览<\/th>[\s\S]*<th>下载<\/th>[\s\S]*<th>删除<\/th>/,
+    /<th>文件名<\/th>[\s\S]*<th>上传人<\/th>[\s\S]*<th>上传时间<\/th>[\s\S]*<th>预览<\/th>[\s\S]*<th>下载<\/th>[\s\S]*<th>删除<\/th>/,
   );
   assert.match(
     taxRefundModule,
@@ -247,14 +240,10 @@ test("tax refund detail uses one file table for preview download and delete", ()
     taxRefundModule,
     /documents: \(current\.documents \|\| \[\]\)\.filter\(\(item\) => item\.id !== document\.id\)/,
   );
-  assert.match(
-    taxRefundModule,
-    /<DocumentFileTable[\s\S]*canRecognize=\{false\}/,
-  );
-  assert.match(taxRefundModule, /重新识别报关单/);
+  assert.doesNotMatch(taxRefundModule, /canRecognizeCustoms|onRecognize=\{|recognitionStatus=|重新识别报关单|识别状态/);
 });
 
-test("tax refund detail keeps upload delete and recognition updates local", () => {
+test("tax refund detail keeps upload and delete updates local", () => {
   assert.doesNotMatch(taxRefundModule, /window\.location\.reload/);
   assert.match(
     taxRefundModule,
@@ -262,19 +251,13 @@ test("tax refund detail keeps upload delete and recognition updates local", () =
   );
   assert.match(
     taxRefundModule,
-    /function patchCustomsRecognition\(orderId: string, result: CustomsRecognitionResult \| null \| undefined\)/,
-  );
-  assert.match(
-    taxRefundModule,
     /patchUploadedDocument\(orderId, uploadedDocument\)/,
   );
-  assert.match(taxRefundModule, /patchCustomsRecognition\(order\.id, result\)/);
-  assert.match(taxRefundModule, /patchCustomsRecognition\(orderId, result\)/);
+  assert.doesNotMatch(taxRefundModule, /patchCustomsRecognition|CustomsRecognitionResult/);
   assert.match(
     taxRefundModule,
     /documents: \(current\.documents \|\| \[\]\)\.filter\(\(item\) => item\.id !== document\.id\)/,
   );
-  assert.match(taxRefundModule, /delete next\[document\.id\]/);
   assert.doesNotMatch(
     taxRefundModule,
     /await fetchDetail\(orderId\);\s*await loadRows\(page, submittedKeyword, mode\);/,
@@ -299,7 +282,7 @@ test("tax refund detail drawer close only clears local detail state", () => {
   assert.match(closeBody, /setDetailError\(""\)/);
   assert.match(closeBody, /setDetailLoading\(false\)/);
   assert.match(closeBody, /setPendingDetailTarget\(""\)/);
-  assert.match(closeBody, /setCustomsFilePicker\(null\)/);
+  assert.doesNotMatch(closeBody, /setCustomsFilePicker\(null\)/);
   assert.match(closeBody, /setManualShippingOrder\(null\)/);
   assert.doesNotMatch(
     closeBody,
@@ -351,12 +334,7 @@ test("tax refund customs uploads share the file upload card layout", () => {
     taxRefundModule,
     /<strong>报关资料上传<\/strong>[\s\S]*styles\.fileUploadGrid[\s\S]*TAX_CUSTOMS_UPLOAD_TYPES\.map/,
   );
-  assert.match(
-    taxRefundModule,
-    /canRecognize = documentType\.value === "CUSTOMS_ENTRY_FORM" && canRecognizeCustoms/,
-  );
-  assert.match(taxRefundModule, /onRecognize=\{onRecognize\}/);
-  assert.match(taxRefundModule, /recognitionStatus=\{recognitionStatus\}/);
+  assert.doesNotMatch(taxRefundModule, /canRecognizeCustoms|onRecognize=\{onRecognize\}|recognitionStatus=\{recognitionStatus\}/);
   assert.match(
     taxRefundModule,
     /function TaxUploadItem\([\s\S]*<FileUploadCard/,
@@ -385,7 +363,7 @@ test("domestic logistics customs declaration keeps one current upload", () => {
   assert.match(orderDocumentsService, /softDeleteFileAssetBySource\(/);
 });
 
-test("tax refund customs recognition stores raw OCR while backfilling current declaration fields", () => {
+test("tax refund customs documents use manual declaration fields without OCR", () => {
   const customsRecognitionFormSource = taxRefundModule.match(/export function CustomsRecognitionForm[\s\S]*?\n}\n\nexport function CustomsUploadCard/)?.[0] || "";
   assert.match(taxRefundModule, /latestTaxDocument\(matchedDocuments\)/);
   assert.match(taxRefundModule, /UPLOAD_REPLACE_TEXT/);
@@ -397,62 +375,23 @@ test("tax refund customs recognition stores raw OCR while backfilling current de
     `${taxRefundModule}\n${domesticLogisticsModule}`,
     /"上传新版PDF"/,
   );
-  assert.match(
-    taxRefundModule,
-    /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/,
-  );
-  assert.match(
-    customsRecognitionService,
-    /customsDeclarationNo: String\(parsed\.customsDeclarationNo \|\| result\.customsDeclarationNo \|\| ""\)/,
-  );
-  assert.match(
-    customsRecognitionService,
-    /customsDeclarationDate: String\(parsed\.customsDeclarationDate \|\| result\.customsDeclarationDate \|\| ""\)/,
-  );
-  assert.match(customsRecognitionService, /saveOcrRawResult/);
-  assert.match(customsRecognitionService, /rawJson/);
-  assert.match(customsRecognitionService, /parsedJson/);
+  assert.doesNotMatch(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
+  assert.match(customsRecognitionService, /function customsUpdateData/);
+  assert.match(customsRecognitionService, /customsDeclarationNo: fields\.customsDeclarationNo/);
+  assert.match(customsRecognitionService, /customsDeclarationDate: fields\.customsDeclarationDate/);
+  assert.doesNotMatch(customsRecognitionService, /saveOcrRawResult|persistCustomsRecognitionArtifacts/);
   assert.doesNotMatch(
     customsRecognitionFormSource,
     /车牌号|起运地|到达地/,
   );
 });
 
-test("tax refund re-recognition uses order route and surfaces specific backend reasons", () => {
-  assert.match(
-    taxRefundRecognizeRoute,
-    /parseJsonBody\(request\)/,
-  );
-  assert.match(
-    taxRefundRecognizeRoute,
-    /recognizeOrderCustomsDeclaration\(request, actor, orderId, body as Record<string, unknown>\)/,
-  );
-  assert.match(
-    taxRefundRecognizeRoute,
-    /apiError\(error, "重新识别报关单失败"\)/,
-  );
+test("tax refund re-recognition endpoints are disabled", () => {
+  const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
+  assert.match(taxRefundRecognizeRoute, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
   assert.match(taxRefundModule, /setDetailError\(message\)/);
   assert.doesNotMatch(taxRefundModule, /\/api\/tax-refunds\/customs\/reparse/);
-  assert.match(customsRecognitionService, /未找到报关单文件，请先上传报关单。/);
-  assert.match(customsRecognitionService, /文件不存在/);
-  assert.match(customsRecognitionService, /文件无法读取/);
-  assert.match(
-    customsRecognitionService,
-    /PDF未提取到文字，请手工填写报关单号和申报日期。/,
-  );
-  assert.match(customsRecognitionService, /未识别到报关单号/);
-  assert.match(customsRecognitionService, /未识别到申报日期/);
-  assert.match(
-    customsRecognitionService,
-    /hasCustomsRecognitionValue\(fields\)/,
-  );
-  assert.match(
-    customsRecognitionService,
-    /customsUpdateData\(fields, effectiveStatus, message, source\)/,
-  );
-  assert.match(customsRecognitionService, /persistCustomsRecognitionArtifacts\(orderId, document, parsed\)/);
-  assert.match(customsRecognitionService, /识别部分成功：原始结果未保存/);
-  assert.match(customsRecognitionService, /OCR未识别到商品明细，请手工维护。/);
+  assert.match(customsRecognitionService, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
 });
 
 test("admin can delete uploaded customs documents with confirmation", () => {

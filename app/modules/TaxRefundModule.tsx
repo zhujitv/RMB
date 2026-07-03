@@ -61,19 +61,13 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         submittingTaxId={taxRefund.submittingTaxId}
         cancelingArchiveId={taxRefund.cancelingArchiveId}
         refreshingCompletenessId={taxRefund.refreshingCompletenessId}
-        calculatingTaxRefundId={taxRefund.calculatingTaxRefundId}
         uploadingKey={taxRefund.uploadingKey}
         uploadProgressByKey={taxRefund.uploadProgressByKey}
         deletingDocumentId={taxRefund.deletingDocumentId}
-        recognizingDocumentId={taxRefund.recognizingDocumentId}
-        recognitionStatusByDocument={taxRefund.recognitionStatusByDocument}
         canSendShippingDocuments={taxRefund.canSendShippingDocuments}
         canRefreshCompleteness={taxRefund.canManageTaxRefund}
         canWriteDocuments={taxRefund.canWriteDocuments}
-        canRecalculateTaxRefund={taxRefund.taxRefundCalculationEnabled}
-        canCreateCompanyHsFromOcr={taxRefund.canCreateCompanyHsFromOcr}
         currentUserRole={taxRefund.currentUserRole}
-        customsFilePicker={taxRefund.customsFilePicker}
         manualShippingOrder={taxRefund.manualShippingOrder}
         manualShippingDraft={taxRefund.manualShippingDraft}
         manualShippingForm={taxRefund.manualShippingForm}
@@ -87,20 +81,12 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onSubmitTaxRefund={(row) => void taxRefund.submitTaxRefund(row)}
         onCancelArchive={(row) => void taxRefund.cancelTaxRefundArchive(row)}
         onRefreshCompleteness={(row) => void taxRefund.refreshCompleteness(row)}
-        onRecalculateTaxRefund={(row) => void taxRefund.recalculateTaxRefund(row)}
-        onSaveCustomsDeclarationItems={taxRefund.saveCustomsDeclarationItems}
-        onSyncCustomsDeclarationItemsFromOcr={taxRefund.syncCustomsDeclarationItemsFromOcr}
-        onCreateCompanyHsFromDeclarationItem={taxRefund.createCompanyHsFromDeclarationItem}
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}
         onDelete={taxRefund.deleteDocument}
-        onRecognizeCustomsDocument={taxRefund.recognizeCustomsDocument}
-        onRecognizeFromUploadedCustoms={taxRefund.recognizeFromUploadedCustoms}
         onOpenManualShippingDocuments={taxRefund.openManualShippingDocuments}
         onOpenSupplierDocuments={(keyword) => props.onOpenSupplierDocuments?.(keyword)}
         onOpenDomesticLogistics={taxRefund.openDomesticLogisticsFromDetail}
-        onCloseCustomsFilePicker={taxRefund.closeCustomsFilePicker}
-        onSelectCustomsFile={taxRefund.selectCustomsFile}
         onCloseManualShippingDocuments={taxRefund.closeManualShippingDocuments}
         onSubmitManualShippingDocuments={taxRefund.sendManualShippingDocuments}
         onChangeManualShippingForm={taxRefund.setManualShippingForm}

@@ -6,7 +6,7 @@ import styles from "../../WorkspaceShell.module.css";
 import { UPLOAD_REPLACE_TEXT } from "../../uploadTexts";
 import { PDF_UPLOAD_ACCEPT } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
-import { canDeleteTaxDocument, canRecognizeTaxCustoms, canUploadTaxDocument, customsRecognitionStatusTextFromResult, documentMatchesFactoryCostSlot, factoryDocumentTargetKey, formatFactoryCostAmount, latestTaxDocument, logisticsDocumentTargetKey, logisticsInvoiceDocumentsForCost, logisticsInvoiceLabel, taxDocumentTargetKey, taxTargetDomId, uploadScopeKey } from "./helpers";
+import { canDeleteTaxDocument, canUploadTaxDocument, documentMatchesFactoryCostSlot, factoryDocumentTargetKey, formatFactoryCostAmount, latestTaxDocument, logisticsDocumentTargetKey, logisticsInvoiceDocumentsForCost, logisticsInvoiceLabel, taxDocumentTargetKey, taxTargetDomId, uploadScopeKey } from "./helpers";
 import { TAX_CUSTOMS_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, type DocumentCompleteness, type TaxCost, type TaxDocument, type TaxRefundDetail, type UploadScope } from "./model";
 
 export function TaxUploadItem({
@@ -63,21 +63,16 @@ export function FileUploadCard({
   orderId,
   type,
   label,
-  order,
   document,
   uploading,
   uploadProgress = 0,
   deletingDocumentId,
-  recognizingDocumentId = "",
-  recognitionStatus = "-",
   scope,
   canUpload,
   canDelete,
   canPreviewOrDownload,
-  canRecognize = false,
   onUpload,
   onDelete,
-  onRecognize,
 }: {
   targetKey?: string;
   orderId: string;
@@ -88,21 +83,15 @@ export function FileUploadCard({
   uploading: boolean;
   uploadProgress?: number;
   deletingDocumentId: string;
-  recognizingDocumentId?: string;
-  recognitionStatus?: string;
   scope?: UploadScope;
   canUpload: boolean;
   canDelete: boolean;
   canPreviewOrDownload: boolean;
-  canRecognize?: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  onRecognize?: (order: TaxRefundDetail, document: TaxDocument) => void;
 }) {
   const uploaded = Boolean(document);
   const deleting = Boolean(document?.id && deletingDocumentId === document.id);
-  const recognizing = Boolean(document?.id && recognizingDocumentId === document.id);
-  const statusText = recognizing ? "识别中..." : recognitionStatus;
   return (
     <div className={styles.fileUploadCard} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
       <div className={styles.fileUploadHeader}>
@@ -118,7 +107,6 @@ export function FileUploadCard({
             <span>上传人：{document.uploadedByName || "-"}</span>
             <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
           </div>
-          <div className={styles.fileUploadStatus}>识别状态：{statusText || "-"}</div>
           <div className={styles.fileUploadActions}>
             <span className={styles.fileUploadActionLabel}>操作：</span>
             {canPreviewOrDownload ? (
@@ -135,16 +123,6 @@ export function FileUploadCard({
                 onClick={() => onDelete(orderId, document)}
               >
                 {deleting ? "删除中..." : "删除"}
-              </button>
-            ) : null}
-            {canRecognize && order && onRecognize ? (
-              <button
-                className={styles.fileActionButton}
-                type="button"
-                disabled={recognizing}
-                onClick={() => onRecognize(order, document)}
-              >
-                {recognizing ? "识别中..." : "重新识别报关单"}
               </button>
             ) : null}
           </div>
@@ -193,17 +171,11 @@ export function UploadProgressInline({ progress }: { progress: number }) {
 export function CustomsRecognitionForm({
   detail,
   readOnly,
-  recognizing,
-  canRecognize,
   onSaved,
-  onRecognizeFromUploadedCustoms,
 }: {
   detail: TaxRefundDetail;
   readOnly: boolean;
-  recognizing: boolean;
-  canRecognize: boolean;
   onSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
-  onRecognizeFromUploadedCustoms: (order: TaxRefundDetail) => void;
 }) {
   const [customsDeclarationNo, setCustomsDeclarationNo] = useState(detail.customsDeclarationNo || "");
   const [customsDeclarationDate, setCustomsDeclarationDate] = useState(detail.customsDeclarationDate || "");
@@ -271,11 +243,6 @@ export function CustomsRecognitionForm({
         {message ? <span>{message}</span> : <span>保存后将同步更新退税资料列表的申报日期。</span>}
         {readOnly ? null : (
           <div className={styles.inlineActionGroup}>
-            {canRecognize ? (
-              <button className={styles.secondaryButton} type="button" disabled={saving || recognizing} onClick={() => onRecognizeFromUploadedCustoms(detail)}>
-                {recognizing ? "识别中..." : "重新识别报关单"}
-              </button>
-            ) : null}
             <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
               {saving ? "保存中..." : "保存报关单信息"}
             </button>
@@ -292,30 +259,22 @@ export function CustomsUploadCard({
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
-  recognizingDocumentId,
-  recognitionStatusByDocument,
   currentUserRole,
   canWriteDocuments,
-  canRecognizeCustoms,
   readOnly,
   onUpload,
   onDelete,
-  onRecognize,
 }: {
   order: TaxRefundDetail;
   documents: TaxDocument[];
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
-  recognizingDocumentId: string;
-  recognitionStatusByDocument: Record<string, string>;
   currentUserRole: string;
   canWriteDocuments: boolean;
-  canRecognizeCustoms: boolean;
   readOnly: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  onRecognize: (order: TaxRefundDetail, document: TaxDocument) => void;
 }) {
   const canPreviewOrDownload = ["管理员", "财务", "物流资料录入员", "物流供应商"].includes(currentUserRole);
   return (
@@ -330,10 +289,6 @@ export function CustomsUploadCard({
           const canUpload = canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly);
           const canDelete = canDeleteTaxDocument(canWriteDocuments, readOnly);
           const uploading = uploadingKey === uploadScopeKey(order.id, documentType.value);
-          const canRecognize = documentType.value === "CUSTOMS_ENTRY_FORM" && canRecognizeCustoms;
-          const recognitionStatus = document
-            ? recognitionStatusByDocument[document.id] || customsRecognitionStatusTextFromResult(document.customsRecognition) || "-"
-            : "-";
           return (
             <FileUploadCard
               key={documentType.value}
@@ -346,15 +301,11 @@ export function CustomsUploadCard({
               uploading={uploading}
               uploadProgress={uploadProgressByKey[uploadScopeKey(order.id, documentType.value)] || 0}
               deletingDocumentId={deletingDocumentId}
-              recognizingDocumentId={recognizingDocumentId}
-              recognitionStatus={recognitionStatus}
               canUpload={canUpload}
               canDelete={canDelete}
               canPreviewOrDownload={canPreviewOrDownload}
-              canRecognize={canRecognize}
               onUpload={onUpload}
               onDelete={onDelete}
-              onRecognize={onRecognize}
             />
           );
         })}
@@ -365,30 +316,20 @@ export function CustomsUploadCard({
 
 export function DocumentFileTable({
   orderId,
-  order,
   documents,
   deletingDocumentId,
-  recognizingDocumentId,
-  recognitionStatusByDocument,
   canPreviewOrDownload,
   canDelete,
-  canRecognize,
   onDelete,
-  onRecognize,
 }: {
   orderId: string;
   order?: TaxRefundDetail;
   documents: TaxDocument[];
   deletingDocumentId: string;
-  recognizingDocumentId: string;
-  recognitionStatusByDocument: Record<string, string>;
   canPreviewOrDownload: boolean;
   canDelete: boolean;
-  canRecognize: boolean;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  onRecognize?: (order: TaxRefundDetail, document: TaxDocument) => void;
 }) {
-  const showRecognize = Boolean(canRecognize && order && onRecognize);
   if (!documents.length) {
     return <div className={styles.emptyState}>暂未上传</div>;
   }
@@ -400,25 +341,18 @@ export function DocumentFileTable({
             <th>文件名</th>
             <th>上传人</th>
             <th>上传时间</th>
-            <th>识别状态</th>
             <th>预览</th>
             <th>下载</th>
             <th>删除</th>
-            {showRecognize ? <th>重新识别</th> : null}
           </tr>
         </thead>
         <tbody>
           {documents.map((document) => {
-            const recognizing = recognizingDocumentId === document.id;
-            const recognitionStatus = recognizing
-              ? "识别中..."
-              : recognitionStatusByDocument[document.id] || "-";
             return (
               <tr key={document.id}>
                 <td title={document.fileName || "-"}>{document.fileName || "-"}</td>
                 <td>{document.uploadedByName || "-"}</td>
                 <td>{formatDateTime(document.uploadedAt)}</td>
-                <td><span className={styles.recognitionStatus}>{recognitionStatus}</span></td>
                 <td>
                   {canPreviewOrDownload ? (
                     <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
@@ -441,18 +375,6 @@ export function DocumentFileTable({
                     </button>
                   ) : <span className={styles.mutedText}>-</span>}
                 </td>
-                {showRecognize ? (
-                  <td>
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      disabled={recognizing}
-                      onClick={() => onRecognize?.(order as TaxRefundDetail, document)}
-                    >
-                      {recognizing ? "识别中..." : "重新识别报关单"}
-                    </button>
-                  </td>
-                ) : null}
               </tr>
             );
           })}

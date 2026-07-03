@@ -1172,7 +1172,7 @@ export function TaxRefundFeatureSettingsCard({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
-  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载退税计算设置</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载企业HS编码设置</div>;
   const currentForm = form || taxRefundFeatureFormFromSettings(settings);
   const statusTone = currentForm.enabled ? "success" : "muted";
   const statusLabel = currentForm.enabled ? "已启用" : "已关闭";
@@ -1189,8 +1189,8 @@ export function TaxRefundFeatureSettingsCard({
 
   return (
     <SettingsPage
-      title="退税计算"
-      description="控制企业HS编码库、退税计算和OCR结果加入企业库能力。关闭后服务端接口同步禁用。"
+      title="企业HS编码"
+      description="控制企业HS编码库入口和 company_hs API。"
       status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
       onSubmit={onSubmit}
       actions={(
@@ -1206,11 +1206,11 @@ export function TaxRefundFeatureSettingsCard({
         </div>
       ) : null}
 
-      <SettingsCard title="模块开关" icon="税">
+      <SettingsCard title="模块开关" icon="HS">
         <div className={styles.settingsFieldGrid}>
           <SettingsSwitch
-            label="启用退税计算功能"
-            tooltip="关闭后企业HS入口、退税计算和从OCR新增企业HS能力都会停用。"
+            label="启用企业HS编码库"
+            tooltip="关闭后企业HS维护入口和 company_hs API 将不可用。"
             checked={currentForm.enabled}
             onChange={(value) => setField("enabled", value)}
           />
@@ -1225,18 +1225,6 @@ export function TaxRefundFeatureSettingsCard({
               description="控制基础资料中的企业HS维护入口和 company_hs API。"
               checked={currentForm.enabled && currentForm.companyHsLibraryEnabled}
               onChange={() => setField("companyHsLibraryEnabled", !currentForm.companyHsLibraryEnabled)}
-            />
-            <PermissionSelectItem
-              label="退税金额计算"
-              description="控制报关明细保存后的自动计算和手动重新计算。"
-              checked={currentForm.enabled && currentForm.calculationEnabled}
-              onChange={() => setField("calculationEnabled", !currentForm.calculationEnabled)}
-            />
-            <PermissionSelectItem
-              label="OCR新增企业HS"
-              description="控制退税详情中“新增到企业HS库”操作。"
-              checked={currentForm.enabled && currentForm.addCompanyHsFromOcrEnabled}
-              onChange={() => setField("addCompanyHsFromOcrEnabled", !currentForm.addCompanyHsFromOcrEnabled)}
             />
           </div>
         </SettingsSection>

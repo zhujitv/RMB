@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const actor = await requireApiActor(request);
     return ok({ settings: await readTaxRefundFeatureSettings(actor) });
   } catch (error: unknown) {
-    return apiError(error, "读取退税计算功能设置失败");
+    return apiError(error, "读取企业HS编码设置失败");
   }
 }
 
@@ -18,8 +18,8 @@ export async function PATCH(request: NextRequest) {
     const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const settings = await saveTaxRefundFeatureSettings(request, actor, body);
-    return ok({ success: true, settings, message: "退税计算功能设置已保存" });
+    return ok({ success: true, settings, message: "企业HS编码设置已保存" });
   } catch (error: unknown) {
-    return apiError(error, "保存退税计算功能设置失败");
+    return apiError(error, "保存企业HS编码设置失败");
   }
 }

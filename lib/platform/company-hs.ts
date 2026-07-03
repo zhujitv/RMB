@@ -3,8 +3,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { assertRead, assertWrite, permissionError } from "./shared-access";
 import { codedError, nonEmpty, num, runNonCriticalTask } from "./shared";
 import { writeAudit } from "./shared-audit";
-import { recalculateExportTaxRefund } from "./export-tax-refund-calculations";
-import { assertTaxRefundFeatureEnabled, isTaxRefundCalculationFeatureEnabled } from "./tax-refund-features";
+import { assertTaxRefundFeatureEnabled } from "./tax-refund-features";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -158,35 +157,9 @@ export async function createCompanyHsFromDeclarationItem(
   orderId: string,
   input: Record<string, unknown>,
 ) {
-  await assertTaxRefundFeatureEnabled("addCompanyHsFromOcrEnabled", "从OCR结果新增企业HS编码功能已关闭。");
-  assertWrite(actor, "companyHs");
-  const itemId = cleanText(input.declarationItemId);
-  if (!itemId) throw codedError("请选择报关商品明细。", 400, "DECLARATION_ITEM_REQUIRED");
-  const item = await prisma.exportCustomsDeclarationItem.findFirst({
-    where: { id: itemId, orderId, deletedAt: null },
-  });
-  if (!item) throw codedError("报关商品明细不存在。", 404, "DECLARATION_ITEM_NOT_FOUND");
-  const row = await saveCompanyHs(request, actor, {
-    hsCode: item.hsCode,
-    cnName: input.cnName || item.productName,
-    unit: input.unit || item.unit,
-    rebateRate: input.rebateRate,
-    vatRate: input.vatRate,
-    enName: input.enName,
-    keywords: input.keywords || item.productName,
-    remark: input.remark || "由报关单OCR识别结果加入",
-  });
-  await runNonCriticalTask("报关HS加入企业库日志写入", () => writeAudit(
-    request,
-    actor,
-    "新HS加入企业库",
-    "company_hs",
-    row.id,
-    null,
-    { orderId, declarationItemId: itemId, hsCode: row.hsCode, cnName: row.cnName },
-  ));
-  if (await isTaxRefundCalculationFeatureEnabled()) {
-    await recalculateExportTaxRefund(request, actor, orderId);
-  }
-  return row;
+  void request;
+  void actor;
+  void orderId;
+  void input;
+  throw codedError("退税资料 OCR 加入企业HS功能已停用，请在企业HS编码模块手工维护。", 410, "TAX_REFUND_OCR_CALC_DISABLED");
 }

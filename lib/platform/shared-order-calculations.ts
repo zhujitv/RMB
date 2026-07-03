@@ -48,11 +48,6 @@ type OrderLike = {
   reminderDays?: NumericLike | null;
   payments?: PaymentLike[] | null;
   costs?: CostLike[] | null;
-  exportTaxRefundCalculations?: Array<{
-    estimatedRefundAmount?: NumericLike | null;
-    calculationStatus?: string | null;
-    deletedAt?: Date | string | null;
-  }> | null;
 };
 
 type TaxLogisticsMissingItem = {
@@ -288,9 +283,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const requiredDepositAmount = depositRatio == null ? 0 : Math.round(receivableCny * depositRatio * 100) / 100;
   const depositGapCny = Math.max(requiredDepositAmount - receivedDepositCny, 0);
   const depositOverpaidCny = Math.max(receivedDepositCny - requiredDepositAmount, 0);
-  const expectedTaxRefundIncomeCny = (order.exportTaxRefundCalculations || [])
-    .filter((calculation) => !calculation.deletedAt && calculation.calculationStatus !== "资料异常")
-    .reduce((sum, calculation) => sum + Number(calculation.estimatedRefundAmount || 0), 0);
+  const expectedTaxRefundIncomeCny = 0;
   const expectedGrossProfit = receivableCny - confirmedTotalCostCny + expectedTaxRefundIncomeCny;
   const expectedGrossMargin = receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
   const revenueRecognized = receivableCny > 0 && arrivedPaymentsCny >= receivableCny;

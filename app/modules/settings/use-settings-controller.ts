@@ -945,14 +945,14 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
           body: JSON.stringify(taxRefundFeatureForm),
         },
       );
-      if (result.success !== true) throw new Error(result.message || "退税计算功能设置保存失败");
+      if (result.success !== true) throw new Error(result.message || "企业HS编码设置保存失败");
       const nextSettings = result.settings || taxRefundFeatureForm;
       setTaxRefundFeatureSettings(nextSettings);
       setTaxRefundFeatureForm(taxRefundFeatureFormFromSettings(nextSettings));
       markLoaded("taxRefundFeatures");
-      setTaxRefundFeatureMessage(result.message || "退税计算功能设置已保存");
+      setTaxRefundFeatureMessage(result.message || "企业HS编码设置已保存");
     } catch (saveError) {
-      setTaxRefundFeatureMessage(saveError instanceof Error ? saveError.message : "退税计算功能设置保存失败");
+      setTaxRefundFeatureMessage(saveError instanceof Error ? saveError.message : "企业HS编码设置保存失败");
     } finally {
       setTaxRefundFeatureSaving(false);
     }
