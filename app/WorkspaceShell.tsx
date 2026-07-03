@@ -62,6 +62,10 @@ const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogistic
   ssr: false,
   loading: () => <BusinessModuleLoading />,
 });
+const CustomerCommunicationModule = dynamic(() => import("./modules/CustomerCommunicationModule").then((module) => module.CustomerCommunicationModule), {
+  ssr: false,
+  loading: () => <BusinessModuleLoading />,
+});
 const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
@@ -166,6 +170,7 @@ export function WorkspaceShell() {
   const [profitFocus, setProfitFocus] = useState({ keyword: "", token: 0 });
   const [taxRefundFocus, setTaxRefundFocus] = useState({ keyword: "", action: "", token: 0 });
   const [domesticLogisticsFocus, setDomesticLogisticsFocus] = useState({ keyword: "", token: 0 });
+  const [customerCommunicationFocus, setCustomerCommunicationFocus] = useState({ keyword: "", orderId: "", token: 0 });
   const [oceanControlTowerFocus, setOceanControlTowerFocus] = useState({ keyword: "", token: 0 });
   const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
   const [supplierDocumentsFocus, setSupplierDocumentsFocus] = useState({ keyword: "", requestId: "", token: 0 });
@@ -502,6 +507,15 @@ export function WorkspaceShell() {
       setActiveMenu("domesticLogistics");
       return;
     }
+    if (path === "customer-communication") {
+      setCustomerCommunicationFocus({
+        keyword,
+        orderId: parsed.searchParams.get("orderId") || "",
+        token,
+      });
+      setActiveMenu("customerCommunication");
+      return;
+    }
     if (path === "ocean-control-tower") {
       setOceanControlTowerFocus({ keyword, token });
       setActiveMenu("oceanControlTower");
@@ -619,6 +633,14 @@ export function WorkspaceShell() {
           currentUserRole={payload.user.role}
           currentUserSupplierId={payload.user.supplierId || ""}
           canCreateExpense={canWritePermission(payload.user, payload.permissions, "logistics", ["管理员", "物流供应商"])}
+        />
+      ) : activeMenu === "customerCommunication" ? (
+        <CustomerCommunicationModule
+          currentUser={payload.user}
+          permissions={payload.permissions}
+          initialKeyword={customerCommunicationFocus.keyword}
+          initialOrderId={customerCommunicationFocus.orderId}
+          initialOpenToken={customerCommunicationFocus.token}
         />
       ) : activeMenu === "oceanControlTower" ? (
         <DomesticLogisticsModule

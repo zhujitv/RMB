@@ -6,11 +6,8 @@ import {
   getTaxRefundOrderDetail,
   ok,
   parseJsonBody,
-  prepareManualShippingDocumentsNotification,
   requireText,
-  resendShippingDocumentsNotification,
   refreshTaxRefundCompletenessNow,
-  sendManualShippingDocumentsNotification,
   taxRefundDataReadFailure,
   updateCustomsRecognition,
   updateTaxRefundStatus,
@@ -60,17 +57,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const order = await updateCustomsRecognition(request, actor, orderId, body);
       return ok({ success: true, order, message: "报关单信息已保存" });
     }
-    if (body.action === "resendShippingDocuments") {
-      const order = await resendShippingDocumentsNotification(request, actor, orderId);
-      return ok({ success: true, order, message: "清关资料通知已处理" });
-    }
-    if (body.action === "prepareManualShippingDocuments") {
-      const data = await prepareManualShippingDocumentsNotification(actor, orderId);
-      return ok({ success: true, data, message: "清关资料发送信息已生成" });
-    }
-    if (body.action === "sendManualShippingDocuments") {
-      const order = await sendManualShippingDocumentsNotification(request, actor, orderId, body);
-      return ok({ success: true, order, message: "清关资料已发送" });
+    if ([
+      "resendShippingDocuments",
+      "prepareManualShippingDocuments",
+      "sendManualShippingDocuments",
+    ].includes(String(body.action || ""))) {
+      throw codedError("清关资料发送已迁移至客户沟通模块，请从客户沟通发起。", 410, "SHIPPING_DOCUMENTS_MOVED_TO_CUSTOMER_COMMUNICATION");
     }
     if (body.action === "refreshCompleteness") {
       const order = await refreshTaxRefundCompletenessNow(request, actor, orderId);

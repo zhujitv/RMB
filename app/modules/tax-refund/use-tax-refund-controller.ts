@@ -1,4 +1,3 @@
-import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { useConfirmationDialog } from "../../components";
@@ -6,7 +5,6 @@ import styles from "../../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../../types";
 import { canWritePermission, downloadBlob, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import {
-  manualShippingTemplate,
   normalizedMissingLabels,
   taxMissingTargets,
   taxRefundHasPackageContent,
@@ -21,8 +19,6 @@ import {
 import {
   PAGE_SIZE,
   type BusinessEntityOption,
-  type ManualShippingDraft,
-  type ManualShippingForm,
   type TaxDocument,
   type TaxRefundDetail,
   type TaxRefundDetailResponse,
@@ -93,12 +89,6 @@ export function useTaxRefundController({
   const [uploadingKey, setUploadingKey] = useState("");
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
-  const [manualShippingOrder, setManualShippingOrder] = useState<TaxRefundDetail | null>(null);
-  const [manualShippingDraft, setManualShippingDraft] = useState<ManualShippingDraft | null>(null);
-  const [manualShippingForm, setManualShippingForm] = useState<ManualShippingForm | null>(null);
-  const [manualShippingLoading, setManualShippingLoading] = useState(false);
-  const [manualShippingSending, setManualShippingSending] = useState(false);
-  const [manualShippingMessage, setManualShippingMessage] = useState("");
   const {
     confirmation,
     requestConfirmation,
@@ -112,7 +102,6 @@ export function useTaxRefundController({
   const detailRequestTokenRef = useRef(0);
 
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务"]);
-  const canSendShippingDocuments = ["管理员", "业务员"].includes(currentUser.role);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
 
@@ -393,10 +382,6 @@ export function useTaxRefundController({
     setDetailActiveTab("basic");
     resetDetailSectionState();
     setPendingDetailTarget("");
-    setManualShippingOrder(null);
-    setManualShippingDraft(null);
-    setManualShippingForm(null);
-    setManualShippingMessage("");
   }
 
   async function downloadPackage(row: TaxRefundRow) {
@@ -685,92 +670,6 @@ export function useTaxRefundController({
     }
   }
 
-  async function openManualShippingDocuments(order: TaxRefundDetail) {
-    setManualShippingOrder(order);
-    setManualShippingDraft(null);
-    setManualShippingForm(null);
-    setManualShippingMessage("");
-    setManualShippingLoading(true);
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; data?: ManualShippingDraft }>(`/api/tax-refunds/${encodeURIComponent(order.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "prepareManualShippingDocuments" }),
-      });
-      if (result.success !== true || !result.data) throw new Error(result.message || "读取清关资料发送信息失败");
-      const draft = result.data;
-      setManualShippingDraft(draft);
-      setManualShippingForm({
-        recipientEmails: (draft.recipientEmails || []).join("\n"),
-        ccEmails: (draft.ccEmails || []).join("\n"),
-        emailLanguage: String(draft.language || "EN").toUpperCase(),
-        emailSubject: draft.subject || "",
-        emailBody: draft.body || "",
-      });
-    } catch (loadError) {
-      setManualShippingMessage(loadError instanceof Error ? loadError.message : "读取清关资料发送信息失败");
-    } finally {
-      setManualShippingLoading(false);
-    }
-  }
-
-  function closeManualShippingDocuments() {
-    if (manualShippingSending) return;
-    setManualShippingOrder(null);
-    setManualShippingDraft(null);
-    setManualShippingForm(null);
-    setManualShippingMessage("");
-  }
-
-  function updateManualShippingLanguage(language: string) {
-    if (!manualShippingDraft || !manualShippingForm) return;
-    setManualShippingForm({
-      ...manualShippingForm,
-      ...manualShippingTemplate(manualShippingDraft, language),
-      emailLanguage: language,
-    });
-  }
-
-  async function sendManualShippingDocuments(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!manualShippingOrder || !manualShippingDraft || !manualShippingForm) return;
-    if ((manualShippingDraft.missingLabels || []).length) {
-      const result = await requestConfirmation({
-        title: "当前资料不完整，是否仍然发送？",
-        message: "清关资料缺失时仍可手动发送，但建议先确认客户是否接受。",
-        details: manualShippingDraft.missingLabels || [],
-        confirmLabel: "仍然发送",
-        cancelLabel: "返回补充资料",
-        variant: "warning",
-      });
-      if (!result.confirmed) return;
-    }
-    setManualShippingSending(true);
-    setManualShippingMessage("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(manualShippingOrder.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          action: "sendManualShippingDocuments",
-          recipientEmails: manualShippingForm.recipientEmails,
-          ccEmails: manualShippingForm.ccEmails,
-          emailLanguage: manualShippingForm.emailLanguage,
-          emailSubject: manualShippingForm.emailSubject,
-          emailBody: manualShippingForm.emailBody,
-          confirmIncomplete: true,
-        }),
-      });
-      if (result.success !== true) throw new Error(result.message || "手动发送清关资料失败");
-      await fetchDetail(manualShippingOrder.id);
-      await loadRows(page, submittedKeyword, mode);
-      closeManualShippingDocuments();
-      setNotice(result.message || "清关资料发送成功");
-    } catch (sendError) {
-      setManualShippingMessage(sendError instanceof Error ? sendError.message : "手动发送清关资料失败");
-    } finally {
-      setManualShippingSending(false);
-    }
-  }
-
   function refreshRows() {
     setNotice("");
     void loadRows(page);
@@ -807,7 +706,6 @@ export function useTaxRefundController({
     canManageTaxRefund,
     canCancelArchive,
     canWriteDocuments,
-    canSendShippingDocuments,
     submittingTaxId,
     detailRow,
     detail,
@@ -823,12 +721,6 @@ export function useTaxRefundController({
     uploadingKey,
     uploadProgressByKey,
     deletingDocumentId,
-    manualShippingOrder,
-    manualShippingDraft,
-    manualShippingForm,
-    manualShippingLoading,
-    manualShippingSending,
-    manualShippingMessage,
     confirmation,
     readOnly: mode === "archive" || Boolean(detailRow?.taxArchived),
     refreshRows,
@@ -852,12 +744,7 @@ export function useTaxRefundController({
     handleCustomsSaved,
     uploadDocument,
     deleteDocument,
-    openManualShippingDocuments,
     openDomesticLogisticsFromDetail,
-    closeManualShippingDocuments,
-    sendManualShippingDocuments,
-    setManualShippingForm,
-    updateManualShippingLanguage,
     cancelConfirmation,
     confirmConfirmation,
     updateConfirmationInput,

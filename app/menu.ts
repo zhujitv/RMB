@@ -7,6 +7,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "costs", label: "成本管理", description: "维护工厂、物流、港杂等成本资料。" },
   { key: "profit", label: "利润分析", description: "查看预计毛利、已实现毛利和提成状态。" },
   { key: "domesticLogistics", label: "物流信息", description: "录入国内运输信息和报关资料。" },
+  { key: "customerCommunication", label: "客户沟通", description: "按订单发送和追踪客户清关资料邮件。" },
   { key: "oceanControlTower", label: "运输监控", description: "集中查看在途海运跟踪和 ETA 预警。", parentKey: "domesticLogistics" },
   { key: "logisticsFees", label: "物流费用", description: "录入、审核、月结和维护物流费用。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
@@ -17,13 +18,13 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
+  物流供应商: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
+  物流资料录入员: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
 };
 
 const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];

@@ -16,6 +16,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
   costs: ["管理员", "业务员"],
   logistics: ["管理员", "物流供应商"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
+  customerCommunication: ["管理员", "业务员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "财务"],
@@ -26,13 +27,13 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
-  物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
+  物流供应商: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
   产品供应商: ["supplierDocuments", "manual"],
   工厂供应商账号: ["supplierDocuments", "manual"],
-  物流资料录入员: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
+  物流资料录入员: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
 };
 
 const OCEAN_CONTROL_TOWER_ROLES = ["管理员", "业务员", "物流供应商", "物流资料录入员"];
@@ -72,6 +73,7 @@ export const READ_PERMISSIONS: Record<string, string[]> = {
   payments: ["管理员", "业务员", "财务"],
   costs: ["管理员", "业务员", "财务"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
+  customerCommunication: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "业务员", "财务"],
@@ -97,6 +99,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     costs: "成本管理",
     profit: "利润分析",
     domesticLogistics: "物流信息",
+    customerCommunication: "客户沟通",
     oceanControlTower: "运输监控",
     logisticsFees: "物流费用",
     supplierDocuments: "资料回传",
@@ -113,6 +116,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     payments: "收款查看",
     costs: "成本查看",
     domesticLogistics: "物流信息查看",
+    customerCommunication: "客户沟通查看",
     documents: "单证查看",
     supplierDocuments: "供应商资料回传查看",
     taxRefund: "退税查看",
@@ -129,6 +133,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     costs: "成本录入",
     logistics: "物流费用",
     domesticLogistics: "物流信息录入",
+    customerCommunication: "客户邮件发送",
     documents: "单证上传/删除",
     supplierDocuments: "供应商资料回传",
     taxRefund: "退税状态",

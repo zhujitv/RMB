@@ -64,6 +64,7 @@ const HOME_OPTIONS = [
   { value: "payments", label: "收款管理" },
   { value: "costs", label: "成本管理" },
   { value: "domesticLogistics", label: "物流信息" },
+  { value: "customerCommunication", label: "客户沟通" },
   { value: "logisticsFees", label: "物流费用" },
   { value: "taxRefund", label: "退税资料" },
   { value: "reports", label: "报表中心" },

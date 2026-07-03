@@ -316,8 +316,10 @@ export const SHIPPING_NOTIFICATION_STATUS_LABELS = {
 };
 export const SHIPPING_EMAIL_LANGUAGE_LABELS = {
   EN: "English",
+  ZH: "中文",
   RU: "Русский",
   en: "English",
+  zh: "中文",
   ru: "Русский",
 };
 
@@ -327,7 +329,7 @@ export function defaultClearanceEmailLanguage(country: unknown = "") {
 
 export function normalizeClearanceEmailLanguage(value: unknown = "", country: unknown = "") {
   const normalized = String(value || "").trim().toUpperCase();
-  if (["EN", "RU"].includes(normalized)) return normalized;
+  if (["EN", "ZH", "CN", "RU"].includes(normalized)) return normalized === "CN" ? "ZH" : normalized;
   return defaultClearanceEmailLanguage(country);
 }
 

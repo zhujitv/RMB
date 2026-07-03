@@ -5,6 +5,9 @@ import {
   DEFAULT_SHIPPING_DOCUMENT_TYPES,
   SHIPPING_DOCUMENT_TYPE_CONFIG,
   SHIPPING_EMAIL_LANGUAGE_LABELS,
+  assertRead,
+  assertWrite,
+  canWrite,
   codedError,
   customerFullName,
   customerShortName,
@@ -33,6 +36,8 @@ import {
 type ActorLike = {
   id?: string | null;
   role?: string | null;
+  supplierId?: string | null;
+  customPermissions?: unknown;
 } | null | undefined;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
 type ShippingCustomerLike = {
@@ -203,18 +208,28 @@ async function loadOrderForShippingNotification(orderId: string, actor: ActorLik
 }
 
 async function loadOrderForManualShippingNotification(orderId: string, actor: ActorLike = null) {
-  const actorRole = String(actor?.role || "");
-  if (!["管理员", "业务员"].includes(actorRole)) throw permissionError("没有权限手动发送清关资料", 403);
+  assertWrite(actor, "customerCommunication");
   const order = await prisma.receivableOrder.findFirst({
     where: {
       id: orderId,
       deletedAt: null,
-      ...(actorRole === "业务员" ? orderAccessWhere(actor) : {}),
+      ...customerCommunicationOrderAccessWhere(actor),
     },
     include: includeOrderRelations(),
   });
   if (!order) throw permissionError("订单不存在或无权发送清关资料", 404);
   return order;
+}
+
+function customerCommunicationOrderAccessWhere(actor: ActorLike = null) {
+  const actorRole = String(actor?.role || "");
+  if (actorRole === "管理员" || actorRole === "物流资料录入员") return {};
+  if (actorRole === "业务员") return orderAccessWhere(actor);
+  if (actorRole === "物流供应商") {
+    const supplierId = nonEmpty(actor?.supplierId);
+    return supplierId ? { logisticsSuppliers: { some: { supplierId } } } : { id: "__no_customer_communication_access__" };
+  }
+  return orderAccessWhere(actor);
 }
 
 function resendMailConfig() {
@@ -241,6 +256,28 @@ function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: Sh
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
   const labels = (bundle.items || []).filter((item) => item.document).map((item) => item.emailLabel);
+  if (normalizedLanguage === "ZH") {
+    return {
+      language: "ZH",
+      subject: `订单 ${order.orderNo || "-"} / 提单 ${billOfLadingNo} 清关资料`,
+      body: [
+        `${customerFullName(order.customer || {}, order.customerNameSnapshot || "") || "客户"}：`,
+        "",
+        "您好！",
+        "",
+        "请查收本邮件附件中的清关资料：",
+        "",
+        ...(labels.length ? labels : ["Commercial Invoice", "Packing List", "Customs Declaration"]).map((label) => `- ${label}`),
+        "",
+        `提单号：${billOfLadingNo}`,
+        `申报日期：${customsDeclarationDate}`,
+        "",
+        "如需补充资料，请及时与我们联系。",
+        "",
+        "NEXTWOOD",
+      ].join("\n"),
+    };
+  }
   if (normalizedLanguage === "RU") {
     return {
       language: "RU",
@@ -316,7 +353,7 @@ async function shippingDocumentDraft(order: ShippingOrderLike = {}) {
   const customer = order.customer || {};
   const bundle = shippingDocumentManualBundle(order);
   const template = await renderShippingDocumentEmail(order, bundle, customer.clearanceEmailLanguage || "EN");
-  const recipientEmails = parseEmailList(customer.shippingDocsEmails || []);
+  const recipientEmails = shippingRecipientEmails(customer);
   const ccEmails = parseEmailList(customer.shippingDocsCcEmails || []);
   return {
     customerShortName: customerShortName(customer) || customerFullName(customer, order.customerNameSnapshot || ""),
@@ -341,7 +378,7 @@ async function shippingDocumentDraft(order: ShippingOrderLike = {}) {
     })),
     missingLabels: bundle.missing.map((item) => item.label),
     attachmentCount: bundle.documents.length,
-    canSendWithIncomplete: bundle.documents.length > 0 && bundle.missing.length > 0,
+    canSendWithIncomplete: false,
     incompleteMessage: bundle.missing.length ? `当前资料不完整，缺少${bundle.missing.map((item) => item.label).join("、")}。` : "",
   };
 }
@@ -433,8 +470,10 @@ function publicShippingError(error: unknown) {
 
 async function attemptShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string, sendMode = "auto") {
   const manual = sendMode === "manual";
-  const accessActor = manual ? actor : null;
-  const order = await loadOrderForShippingNotification(orderId, accessActor);
+  const loadOrder = () => manual
+    ? loadOrderForManualShippingNotification(orderId, actor)
+    : loadOrderForShippingNotification(orderId, null);
+  const order = await loadOrder();
   const customer = order.customer || {};
   if (!manual) {
     if (!customer.enableAutoShippingDocsNotification) return serializeOrder(order);
@@ -453,7 +492,7 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
       ? await prisma.shippingDocumentNotification.create({ data: { ...baseData, sendStatus: "failed", errorMessage: message } })
       : await upsertAutoShippingNotification(order, { ...baseData, sendStatus: "failed", errorMessage: message });
     await runNonCriticalTask("清关资料通知失败日志写入", () => writeAudit(request, actor, "清关资料通知发送失败", "shipping_document_notifications", row.id, null, { orderNo: order.orderNo, errorMessage: message }));
-    return serializeOrder(await loadOrderForShippingNotification(orderId, accessActor));
+    return serializeOrder(await loadOrder());
   }
 
   if (missingLabels.length) {
@@ -462,7 +501,7 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
       ? await prisma.shippingDocumentNotification.create({ data: { ...baseData, sendStatus: "failed", errorMessage: message } })
       : await upsertAutoShippingNotification(order, { ...baseData, sendStatus: "pending", errorMessage: message });
     await runNonCriticalTask("清关资料通知未发送日志写入", () => writeAudit(request, actor, "清关资料通知未发送", "shipping_document_notifications", row.id, null, { orderNo: order.orderNo, errorMessage: message }));
-    return serializeOrder(await loadOrderForShippingNotification(orderId, accessActor));
+    return serializeOrder(await loadOrder());
   }
 
   const row = manual
@@ -511,7 +550,7 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
       technicalError: errorMessage(error),
     }));
   }
-  return serializeOrder(await loadOrderForShippingNotification(orderId, accessActor));
+  return serializeOrder(await loadOrder());
 }
 
 export async function tryAutoShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string) {
@@ -524,7 +563,7 @@ export async function tryAutoShippingDocumentsNotification(request: AuditRequest
 }
 
 export async function resendShippingDocumentsNotification(request: AuditRequestLike, actor: ActorLike, orderId: string) {
-  if (!["管理员", "业务员"].includes(String(actor?.role || ""))) throw permissionError("没有权限手动发送清关资料", 403);
+  assertWrite(actor, "customerCommunication");
   return attemptShippingDocumentsNotification(request, actor, orderId, "manual");
 }
 
@@ -541,13 +580,10 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
   if (!order.customerId || !order.customer) throw codedError("订单未关联客户，不能发送清关资料。", 400, "SHIPPING_CUSTOMER_REQUIRED");
   const bundle = shippingDocumentManualBundle(order);
   const missingLabels = bundle.missing.map((item) => item.label);
-  if (!parseEmailList(order.customer.shippingDocsEmails || []).length) {
-    throw codedError("客户未配置清关资料接收邮箱，不能发送。", 400, "SHIPPING_RECIPIENT_REQUIRED");
-  }
   if (!bundle.documents.length) {
     throw codedError("商业发票、装箱单、报关单均未上传，不能发送。", 400, "SHIPPING_ATTACHMENTS_REQUIRED");
   }
-  if (missingLabels.length && input.confirmIncomplete !== true) {
+  if (missingLabels.length) {
     throw codedError(`当前资料不完整，缺少${missingLabels.join("、")}。`, 409, "SHIPPING_DOCUMENTS_INCOMPLETE");
   }
   const emailInput = await normalizeManualShippingEmailInput(input, order, bundle);
@@ -617,4 +653,18 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
     throw codedError("清关资料发送失败，请稍后重试或联系管理员。", 502, "SHIPPING_EMAIL_SEND_FAILED");
   }
   return serializeOrder(await loadOrderForManualShippingNotification(orderId, actor));
+}
+
+export async function getShippingDocumentDraftForOrder(actor: ActorLike, orderId: string) {
+  assertRead(actor, "customerCommunication");
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, deletedAt: null, ...customerCommunicationOrderAccessWhere(actor) },
+    include: includeOrderRelations(),
+  });
+  if (!order) throw permissionError("订单不存在或无权查看客户沟通资料", 404);
+  return shippingDocumentDraft(order);
+}
+
+export function canSendCustomerCommunication(actor: ActorLike) {
+  return canWrite(actor, "customerCommunication");
 }

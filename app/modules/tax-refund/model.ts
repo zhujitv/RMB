@@ -207,43 +207,6 @@ export type TaxRefundDetailResponse = {
   order: TaxRefundDetail;
 };
 
-export type ShippingDocumentDraftItem = {
-  typeKey?: string;
-  label?: string;
-  emailLabel?: string;
-  documentId?: string;
-  fileName?: string;
-  originalFilename?: string;
-  exists?: boolean;
-};
-
-export type ManualShippingDraft = {
-  customerShortName?: string;
-  orderNo?: string;
-  billOfLadingNo?: string;
-  blNo?: string;
-  customsDeclarationDate?: string;
-  recipientEmails?: string[];
-  ccEmails?: string[];
-  language?: string;
-  languageLabel?: string;
-  subject?: string;
-  body?: string;
-  documents?: ShippingDocumentDraftItem[];
-  missingLabels?: string[];
-  attachmentCount?: number;
-  canSendWithIncomplete?: boolean;
-  incompleteMessage?: string;
-};
-
-export type ManualShippingForm = {
-  recipientEmails: string;
-  ccEmails: string;
-  emailLanguage: string;
-  emailSubject: string;
-  emailBody: string;
-};
-
 export type SupplierOption = {
   id: string;
   supplierName?: string;

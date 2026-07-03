@@ -1,15 +1,11 @@
-import type { FormEvent } from "react";
 import {
   ConfirmationDialog,
   type ConfirmationDialogState,
 } from "../../components";
 import {
-  ManualShippingDocumentsDialog,
   TaxRefundDetailDrawer,
 } from "./detail-components";
 import type {
-  ManualShippingDraft,
-  ManualShippingForm,
   TaxDocument,
   TaxRefundDetail,
   TaxRefundDetailTab,
@@ -34,16 +30,9 @@ type TaxRefundOverlaysProps = {
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
-  canSendShippingDocuments: boolean;
   canRefreshCompleteness: boolean;
   canWriteDocuments: boolean;
   currentUserRole: string;
-  manualShippingOrder: TaxRefundDetail | null;
-  manualShippingDraft: ManualShippingDraft | null;
-  manualShippingForm: ManualShippingForm | null;
-  manualShippingLoading: boolean;
-  manualShippingSending: boolean;
-  manualShippingMessage: string;
   confirmation: ConfirmationDialogState | null;
   onCloseDetailDrawer: () => void;
   onSelectDetailTab: (tab: TaxRefundDetailTab) => void;
@@ -54,13 +43,8 @@ type TaxRefundOverlaysProps = {
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => Promise<void> | void;
   onDelete: (orderId: string, document: TaxDocument) => Promise<void> | void;
-  onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenSupplierDocuments: (keyword: string) => void;
   onOpenDomesticLogistics: () => void;
-  onCloseManualShippingDocuments: () => void;
-  onSubmitManualShippingDocuments: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
-  onChangeManualShippingForm: (form: ManualShippingForm | null) => void;
-  onManualShippingLanguageChange: (language: string) => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
   onUpdateConfirmationInput: (value: string) => void;
@@ -83,16 +67,9 @@ export function TaxRefundOverlays({
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
-  canSendShippingDocuments,
   canRefreshCompleteness,
   canWriteDocuments,
   currentUserRole,
-  manualShippingOrder,
-  manualShippingDraft,
-  manualShippingForm,
-  manualShippingLoading,
-  manualShippingSending,
-  manualShippingMessage,
   confirmation,
   onCloseDetailDrawer,
   onSelectDetailTab,
@@ -103,13 +80,8 @@ export function TaxRefundOverlays({
   onCustomsSaved,
   onUpload,
   onDelete,
-  onOpenManualShippingDocuments,
   onOpenSupplierDocuments,
   onOpenDomesticLogistics,
-  onCloseManualShippingDocuments,
-  onSubmitManualShippingDocuments,
-  onChangeManualShippingForm,
-  onManualShippingLanguageChange,
   onCancelConfirmation,
   onConfirmConfirmation,
   onUpdateConfirmationInput,
@@ -133,7 +105,6 @@ export function TaxRefundOverlays({
           uploadingKey={uploadingKey}
           uploadProgressByKey={uploadProgressByKey}
           deletingDocumentId={deletingDocumentId}
-          canSendShippingDocuments={canSendShippingDocuments}
           canRefreshCompleteness={canRefreshCompleteness}
           onClose={onCloseDetailDrawer}
           onSelectTab={onSelectDetailTab}
@@ -144,25 +115,10 @@ export function TaxRefundOverlays({
           onCustomsSaved={onCustomsSaved}
           onUpload={onUpload}
           onDelete={onDelete}
-          onOpenManualShippingDocuments={onOpenManualShippingDocuments}
           onOpenSupplierDocuments={onOpenSupplierDocuments}
           onOpenDomesticLogistics={onOpenDomesticLogistics}
           currentUserRole={currentUserRole}
           canWriteDocuments={canWriteDocuments}
-        />
-      ) : null}
-      {manualShippingOrder ? (
-        <ManualShippingDocumentsDialog
-          order={manualShippingOrder}
-          draft={manualShippingDraft}
-          form={manualShippingForm}
-          loading={manualShippingLoading}
-          sending={manualShippingSending}
-          message={manualShippingMessage}
-          onClose={onCloseManualShippingDocuments}
-          onSubmit={onSubmitManualShippingDocuments}
-          onChange={onChangeManualShippingForm}
-          onLanguageChange={onManualShippingLanguageChange}
         />
       ) : null}
       {confirmation ? (

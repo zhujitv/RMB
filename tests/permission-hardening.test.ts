@@ -28,16 +28,16 @@ const SECURITY_ROLE_MATRIX = [
   {
     role: "管理员",
     dataScope: "ALL",
-    allowedReads: ["users", "customers", "suppliers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
-    allowedWrites: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "suppliers", "settings"],
+    allowedReads: ["users", "customers", "suppliers", "orders", "payments", "costs", "customerCommunication", "taxRefund", "commissions", "reports", "settings", "auditLogs"],
+    allowedWrites: ["users", "customers", "orders", "payments", "costs", "customerCommunication", "taxRefund", "commissions", "suppliers", "settings"],
     deniedReads: [],
     deniedWrites: [],
   },
   {
     role: "业务员",
     dataScope: "OWN",
-    allowedReads: ["customers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "reports"],
-    allowedWrites: ["orders", "costs", "documents", "domesticLogistics"],
+    allowedReads: ["customers", "orders", "payments", "costs", "domesticLogistics", "customerCommunication", "documents", "taxRefund", "reports"],
+    allowedWrites: ["orders", "costs", "documents", "domesticLogistics", "customerCommunication"],
     deniedReads: ["users", "suppliers", "settings", "auditLogs", "commissions"],
     deniedWrites: ["users", "customers", "payments", "taxRefund", "commissions", "suppliers", "settings"],
   },
@@ -46,32 +46,32 @@ const SECURITY_ROLE_MATRIX = [
     dataScope: "ALL",
     allowedReads: ["orders", "payments", "costs", "documents", "taxRefund", "commissions", "reports"],
     allowedWrites: ["payments", "documents", "taxRefund", "commissions", "exchangeRates"],
-    deniedReads: ["users", "customers", "suppliers", "domesticLogistics", "settings", "auditLogs"],
-    deniedWrites: ["users", "customers", "orders", "suppliers", "settings"],
+    deniedReads: ["users", "customers", "suppliers", "domesticLogistics", "customerCommunication", "settings", "auditLogs"],
+    deniedWrites: ["users", "customers", "orders", "customerCommunication", "suppliers", "settings"],
   },
   {
     role: "物流供应商",
     dataScope: "OWN",
-    allowedReads: ["domesticLogistics", "documents"],
+    allowedReads: ["domesticLogistics", "customerCommunication", "documents"],
     allowedWrites: ["logistics", "domesticLogistics", "documents"],
     deniedReads: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings"],
-    deniedWrites: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "suppliers", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "customerCommunication", "taxRefund", "commissions", "suppliers", "settings"],
   },
   {
     role: "产品供应商",
     dataScope: "OWN",
     allowedReads: ["supplierDocuments"],
     allowedWrites: ["supplierDocuments"],
-    deniedReads: ["users", "customers", "orders", "payments", "costs", "domesticLogistics", "documents", "taxRefund", "commissions", "reports", "settings"],
-    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "documents", "taxRefund", "commissions", "suppliers", "settings"],
+    deniedReads: ["users", "customers", "orders", "payments", "costs", "domesticLogistics", "customerCommunication", "documents", "taxRefund", "commissions", "reports", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "domesticLogistics", "customerCommunication", "documents", "taxRefund", "commissions", "suppliers", "settings"],
   },
   {
     role: "物流资料录入员",
     dataScope: "OWN",
-    allowedReads: ["domesticLogistics", "documents"],
+    allowedReads: ["domesticLogistics", "customerCommunication", "documents"],
     allowedWrites: ["domesticLogistics", "documents"],
     deniedReads: ["users", "customers", "orders", "payments", "costs", "taxRefund", "commissions", "reports", "settings"],
-    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "taxRefund", "commissions", "suppliers", "settings"],
+    deniedWrites: ["users", "customers", "orders", "payments", "costs", "logistics", "customerCommunication", "taxRefund", "commissions", "suppliers", "settings"],
   },
 ] as const;
 
@@ -85,12 +85,12 @@ test("fixed role menus do not expose forbidden global modules", () => {
     assert(!roleMenuLine(source, "业务员").includes('"profit"'));
     assert(!roleMenuLine(source, "财务").includes('"dashboard"'));
   }
-  assert.match(backend, /物流供应商: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
-  assert.match(menuFile, /物流供应商: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
-  assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
-  assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
-  assert.match(backend, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
-  assert.match(menuFile, /物流资料录入员: \["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(backend, /物流供应商: \["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(menuFile, /物流供应商: \["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(backend, /业务员: \["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
+  assert.match(menuFile, /业务员: \["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"\]/);
+  assert.match(backend, /物流资料录入员: \["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"\]/);
+  assert.match(menuFile, /物流资料录入员: \["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"\]/);
   assert.match(backend, /export function menusWithDerivedAccess/);
   assert.match(menuFile, /function menusWithDerivedAccess/);
   assert.match(menuFile, /key: "oceanControlTower", label: "运输监控"[\s\S]*parentKey: "domesticLogistics"/);
@@ -140,11 +140,14 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(salesperson.menus.includes("profit"), false);
   assert.equal(salesperson.menus.includes("logisticsReview"), false);
   assert.equal(salesperson.menus.includes("logisticsFees"), true);
+  assert.equal(salesperson.menus.includes("customerCommunication"), true);
   assert.equal(salesperson.menus.includes("oceanControlTower"), true);
+  assert.equal(salesperson.reads.customerCommunication, true);
   assert.equal(salesperson.reads.payments, true);
   assert.equal(salesperson.reads.taxRefund, true);
   assert.equal(salesperson.reads.commissions, false);
   assert.equal(salesperson.writes.payments, false);
+  assert.equal(salesperson.writes.customerCommunication, true);
   assert.equal(salesperson.writes.taxRefund, false);
   assert.equal(salesperson.writes.commissions, false);
 
@@ -158,17 +161,22 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(finance.writes.users, false);
   assert.equal(finance.menus.includes("logisticsReview"), false);
   assert.equal(finance.menus.includes("logisticsFees"), true);
+  assert.equal(finance.menus.includes("customerCommunication"), false);
+  assert.equal(finance.reads.customerCommunication, false);
+  assert.equal(finance.writes.customerCommunication, false);
 
   const logisticsSupplier = rolePermissionSnapshot("物流供应商");
-  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
+  assert.deepEqual(logisticsSupplier.menus, ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"]);
   assert.equal(logisticsSupplier.menus.includes("supplierDocuments"), false);
   assert.equal(logisticsSupplier.menus.includes("logisticsReview"), false);
   assert.equal(logisticsSupplier.dataScope, "OWN");
   assert.equal(logisticsSupplier.reads.payments, false);
+  assert.equal(logisticsSupplier.reads.customerCommunication, true);
   assert.equal(logisticsSupplier.reads.costs, false);
   assert.equal(logisticsSupplier.reads.commissions, false);
   assert.equal(logisticsSupplier.writes.logistics, true);
   assert.equal(logisticsSupplier.writes.domesticLogistics, true);
+  assert.equal(logisticsSupplier.writes.customerCommunication, false);
   assert.equal(logisticsSupplier.writes.documents, true);
   assert.equal(logisticsSupplier.writes.supplierDocuments, false);
   assert.equal(logisticsSupplier.writes.settings, false);
@@ -177,7 +185,9 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.deepEqual(factorySupplier.menus, ["supplierDocuments", "manual"]);
   assert.equal(factorySupplier.dataScope, "OWN");
   assert.equal(factorySupplier.reads.supplierDocuments, true);
+  assert.equal(factorySupplier.reads.customerCommunication, false);
   assert.equal(factorySupplier.writes.supplierDocuments, true);
+  assert.equal(factorySupplier.writes.customerCommunication, false);
   assert.equal(factorySupplier.reads.domesticLogistics, false);
   assert.equal(factorySupplier.writes.logistics, false);
   assert.equal(factorySupplier.writes.documents, false);
@@ -192,12 +202,14 @@ test("role permission matrix protects financial and supplier scoped data", () =>
   assert.equal(legacyFactorySupplier.reads.supplierDocuments, true);
 
   const logisticsClerk = rolePermissionSnapshot("物流资料录入员");
-  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"]);
+  assert.deepEqual(logisticsClerk.menus, ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"]);
   assert.equal(logisticsClerk.dataScope, "OWN");
   assert.equal(logisticsClerk.reads.domesticLogistics, true);
+  assert.equal(logisticsClerk.reads.customerCommunication, true);
   assert.equal(logisticsClerk.reads.documents, true);
   assert.equal(logisticsClerk.reads.payments, false);
   assert.equal(logisticsClerk.writes.domesticLogistics, true);
+  assert.equal(logisticsClerk.writes.customerCommunication, false);
   assert.equal(logisticsClerk.writes.documents, true);
   assert.equal(logisticsClerk.writes.logistics, false);
 

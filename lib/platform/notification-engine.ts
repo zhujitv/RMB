@@ -78,6 +78,7 @@ const TEXT_LIMITS = {
 const NOTIFICATION_TYPES = {
   USER_EMAIL_VERIFICATION: "USER_EMAIL_VERIFICATION",
   SHIPPING_DOCUMENTS: "SHIPPING_DOCUMENTS",
+  SHIPPING_DOCUMENTS_ZH: "SHIPPING_DOCUMENTS_ZH",
   SHIPPING_DOCUMENTS_RU: "SHIPPING_DOCUMENTS_RU",
   LOGISTICS_INVOICE_NOTICE: "LOGISTICS_INVOICE_NOTICE",
   SUPPLIER_DOCUMENT_REQUEST: "SUPPLIER_DOCUMENT_REQUEST",
@@ -115,7 +116,7 @@ const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
   {
     type: NOTIFICATION_TYPES.SHIPPING_DOCUMENTS,
     name: "清关资料通知",
-    module: "退税资料",
+    module: "客户沟通",
     description: "向客户发送商业发票、装箱单、报关单等清关资料附件。",
     editable: true,
     supportsAttachments: true,
@@ -141,9 +142,41 @@ const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
     ],
   },
   {
+    type: NOTIFICATION_TYPES.SHIPPING_DOCUMENTS_ZH,
+    name: "清关资料通知（中文）",
+    module: "客户沟通",
+    description: "中文客户清关资料邮件模板，附件逻辑与清关资料通知一致。",
+    editable: true,
+    supportsAttachments: true,
+    subjectTemplate: "订单 {orderNo} / 提单 {blNo} 清关资料",
+    bodyTemplate: [
+      "{customerName}：",
+      "",
+      "您好！",
+      "",
+      "请查收本邮件附件中的清关资料：",
+      "",
+      "{documentLines}",
+      "",
+      "提单号：{blNo}",
+      "申报日期：{customsDeclarationDate}",
+      "",
+      "如需补充资料，请及时与我们联系。",
+      "",
+      "NEXTWOOD",
+    ].join("\n"),
+    variables: [
+      { key: "customerName", label: "客户名称" },
+      { key: "orderNo", label: "订单号", required: true },
+      { key: "blNo", label: "提单号" },
+      { key: "documentLines", label: "附件资料清单" },
+      { key: "customsDeclarationDate", label: "申报日期" },
+    ],
+  },
+  {
     type: NOTIFICATION_TYPES.SHIPPING_DOCUMENTS_RU,
     name: "清关资料通知（俄语）",
-    module: "退税资料",
+    module: "客户沟通",
     description: "俄罗斯客户清关资料邮件模板，附件逻辑与清关资料通知一致。",
     editable: true,
     supportsAttachments: true,
@@ -508,9 +541,10 @@ async function sendResendEmail({
 }
 
 export function notificationTemplateTypeForShippingLanguage(language: unknown) {
-  return String(language || "").toUpperCase() === "RU"
-    ? NOTIFICATION_TYPES.SHIPPING_DOCUMENTS_RU
-    : NOTIFICATION_TYPES.SHIPPING_DOCUMENTS;
+  const normalized = String(language || "").toUpperCase();
+  if (normalized === "RU") return NOTIFICATION_TYPES.SHIPPING_DOCUMENTS_RU;
+  if (["ZH", "CN"].includes(normalized)) return NOTIFICATION_TYPES.SHIPPING_DOCUMENTS_ZH;
+  return NOTIFICATION_TYPES.SHIPPING_DOCUMENTS;
 }
 
 export function notificationTypeDefinitions() {

@@ -34,7 +34,6 @@ const TAX_REFUND_MODULE_FILES = [
   "app/modules/tax-refund/overlays.tsx",
   "app/modules/tax-refund/model.ts",
   "app/modules/tax-refund/helpers.ts",
-  "app/modules/tax-refund/dialogs.tsx",
   "app/modules/tax-refund/detail-components.tsx",
   "app/modules/tax-refund/table-row.tsx",
   "app/modules/tax-refund/upload-components.tsx",

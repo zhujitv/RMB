@@ -61,16 +61,9 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         uploadingKey={taxRefund.uploadingKey}
         uploadProgressByKey={taxRefund.uploadProgressByKey}
         deletingDocumentId={taxRefund.deletingDocumentId}
-        canSendShippingDocuments={taxRefund.canSendShippingDocuments}
         canRefreshCompleteness={taxRefund.canManageTaxRefund}
         canWriteDocuments={taxRefund.canWriteDocuments}
         currentUserRole={taxRefund.currentUserRole}
-        manualShippingOrder={taxRefund.manualShippingOrder}
-        manualShippingDraft={taxRefund.manualShippingDraft}
-        manualShippingForm={taxRefund.manualShippingForm}
-        manualShippingLoading={taxRefund.manualShippingLoading}
-        manualShippingSending={taxRefund.manualShippingSending}
-        manualShippingMessage={taxRefund.manualShippingMessage}
         confirmation={taxRefund.confirmation}
         onCloseDetailDrawer={taxRefund.closeDetailDrawer}
         onSelectDetailTab={taxRefund.selectDetailTab}
@@ -81,13 +74,8 @@ export function TaxRefundModule(props: TaxRefundModuleProps) {
         onCustomsSaved={taxRefund.handleCustomsSaved}
         onUpload={taxRefund.uploadDocument}
         onDelete={taxRefund.deleteDocument}
-        onOpenManualShippingDocuments={taxRefund.openManualShippingDocuments}
         onOpenSupplierDocuments={(keyword) => props.onOpenSupplierDocuments?.(keyword)}
         onOpenDomesticLogistics={taxRefund.openDomesticLogisticsFromDetail}
-        onCloseManualShippingDocuments={taxRefund.closeManualShippingDocuments}
-        onSubmitManualShippingDocuments={taxRefund.sendManualShippingDocuments}
-        onChangeManualShippingForm={taxRefund.setManualShippingForm}
-        onManualShippingLanguageChange={taxRefund.updateManualShippingLanguage}
         onCancelConfirmation={taxRefund.cancelConfirmation}
         onConfirmConfirmation={taxRefund.confirmConfirmation}
         onUpdateConfirmationInput={taxRefund.updateConfirmationInput}

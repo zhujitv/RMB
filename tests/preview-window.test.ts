@@ -283,7 +283,8 @@ test("tax refund detail drawer close only clears local detail state", () => {
   assert.match(closeBody, /setDetailLoading\(false\)/);
   assert.match(closeBody, /setPendingDetailTarget\(""\)/);
   assert.doesNotMatch(closeBody, /setCustomsFilePicker\(null\)/);
-  assert.match(closeBody, /setManualShippingOrder\(null\)/);
+  assert.doesNotMatch(closeBody, /setManualShippingOrder\(null\)/);
+  assert.doesNotMatch(taxRefundModule, /ManualShipping|manualShipping/);
   assert.doesNotMatch(
     closeBody,
     /loadRows\(|fetchDetail\(|window\.location|location\.href|router\.refresh|reloadData|reload\(/,

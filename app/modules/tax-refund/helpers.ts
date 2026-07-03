@@ -1,6 +1,6 @@
 import styles from "../../WorkspaceShell.module.css";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
-import { PRODUCT_SUPPLIER_TYPES, SALESPERSON_TAX_REFUND_UPLOAD_TYPES, TAX_CUSTOMS_UPLOAD_TYPES, TAX_EXPORT_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, TAX_LOGISTICS_INVOICE_COST_TYPES, TAX_REFUND_STATUS_OPTIONS, type DocumentCompleteness, type ManualShippingDraft, type ManualShippingForm, type TaxCost, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
+import { PRODUCT_SUPPLIER_TYPES, SALESPERSON_TAX_REFUND_UPLOAD_TYPES, TAX_CUSTOMS_UPLOAD_TYPES, TAX_EXPORT_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, TAX_LOGISTICS_INVOICE_COST_TYPES, TAX_REFUND_STATUS_OPTIONS, type DocumentCompleteness, type TaxCost, type TaxDocument, type TaxRefundDetail, type TaxRefundRow, type UploadScope } from "./model";
 
 export function normalizedMissingLabels(completeness: DocumentCompleteness) {
   const labels = completeness.missingLabels || completeness.missing || [];
@@ -437,53 +437,6 @@ export function groupDocuments(documents: TaxDocument[]) {
     }
   });
   return groups;
-}
-
-export function manualShippingTemplate(draft: ManualShippingDraft, language: string): Pick<ManualShippingForm, "emailSubject" | "emailBody"> {
-  const normalizedLanguage = String(language || "EN").toUpperCase();
-  const orderNo = draft.orderNo || "-";
-  const billOfLadingNo = draft.billOfLadingNo || draft.blNo || "-";
-  const customsDeclarationDate = draft.customsDeclarationDate || "-";
-  const labels = (draft.documents || [])
-    .filter((item) => item.exists)
-    .map((item) => item.emailLabel || item.label)
-    .filter(Boolean) as string[];
-  if (normalizedLanguage === "RU") {
-    return {
-      emailSubject: `Отгрузочные документы по заказу ${orderNo} / коносамент ${billOfLadingNo}`,
-      emailBody: [
-        "Здравствуйте!",
-        "",
-        `Во вложении направляем отгрузочные документы по заказу ${orderNo}.`,
-        "",
-        "Документы во вложении:",
-        ...(labels.length ? labels : ["Commercial Invoice", "Packing List", "Customs Declaration"]).map((label) => `- ${label}`),
-        "",
-        `Номер коносамента: ${billOfLadingNo}`,
-        `Дата декларации: ${customsDeclarationDate}`,
-        "",
-        "Пожалуйста, проверьте документы и сообщите нам, если потребуется дополнительная информация.",
-        "",
-        "С уважением,",
-        "Zhejiang Lainuo Building Materials Co., Ltd.",
-      ].join("\n"),
-    };
-  }
-  return {
-    emailSubject: `Shipping Documents for Order ${orderNo} / B/L ${billOfLadingNo}`,
-    emailBody: [
-      "Dear Customer,",
-      "",
-      "Please find attached the shipping documents for your customs clearance:",
-      "",
-      ...labels.map((label) => `- ${label}`),
-      "",
-      "This email also serves as the shipment notification.",
-      "",
-      "Best regards,",
-      "NEXTWOOD",
-    ].join("\n"),
-  };
 }
 
 export function completenessClass(percent: number) {

@@ -30,7 +30,6 @@ export function TaxRefundDetailDrawer({
   uploadingKey,
   uploadProgressByKey,
   deletingDocumentId,
-  canSendShippingDocuments,
   canRefreshCompleteness,
   onClose,
   onSelectTab,
@@ -41,7 +40,6 @@ export function TaxRefundDetailDrawer({
   onCustomsSaved,
   onUpload,
   onDelete,
-  onOpenManualShippingDocuments,
   onOpenSupplierDocuments,
   onOpenDomesticLogistics,
   currentUserRole,
@@ -62,7 +60,6 @@ export function TaxRefundDetailDrawer({
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
-  canSendShippingDocuments: boolean;
   canRefreshCompleteness: boolean;
   onClose: () => void;
   onSelectTab: (tab: TaxRefundDetailTab) => void;
@@ -73,7 +70,6 @@ export function TaxRefundDetailDrawer({
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenSupplierDocuments: (keyword: string) => void;
   onOpenDomesticLogistics?: () => void;
   currentUserRole: string;
@@ -143,8 +139,6 @@ export function TaxRefundDetailDrawer({
             onCustomsSaved={onCustomsSaved}
             onUpload={onUpload}
             onDelete={onDelete}
-            canSendShippingDocuments={canSendShippingDocuments}
-            onOpenManualShippingDocuments={onOpenManualShippingDocuments}
             onOpenDomesticLogistics={onOpenDomesticLogistics}
             onOpenSupplierDocuments={onOpenSupplierDocuments}
             currentUserRole={currentUserRole}
@@ -239,8 +233,6 @@ function TaxRefundDetailPanel({
   onCustomsSaved,
   onUpload,
   onDelete,
-  canSendShippingDocuments,
-  onOpenManualShippingDocuments,
   onOpenDomesticLogistics,
   onOpenSupplierDocuments,
   currentUserRole,
@@ -261,8 +253,6 @@ function TaxRefundDetailPanel({
   onCustomsSaved: (orderId: string, order?: TaxRefundDetail | null) => Promise<void>;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
-  canSendShippingDocuments: boolean;
-  onOpenManualShippingDocuments: (order: TaxRefundDetail) => void;
   onOpenDomesticLogistics?: () => void;
   onOpenSupplierDocuments: (keyword: string) => void;
   currentUserRole: string;
@@ -390,15 +380,6 @@ function TaxRefundDetailPanel({
               {domesticRemarkText || domesticExportInvoiceRemark ? "暂无结构化集装箱明细，请前往物流信息维护。" : "暂无运输信息摘要，请前往物流信息维护。"}
             </div>
           )}
-          </div>
-        ) : null}
-        {activeTab === "logistics-documents" && canSendShippingDocuments ? (
-          <div className={styles.documentGroupCard}>
-            <strong>清关资料发送</strong>
-            <span className={styles.mutedText}>向客户发送商业发票、装箱单和报关单。发送前可临时调整收件邮箱、抄送、语言、标题和正文。</span>
-            <button className={styles.secondaryButton} type="button" onClick={() => onOpenManualShippingDocuments(detail)}>
-              手动发送清关资料
-            </button>
           </div>
         ) : null}
         {activeTab === "customs-documents" ? (
@@ -569,5 +550,3 @@ function LogisticsInvoiceRequirementStatus({ completeness }: { completeness: Doc
     </div>
   );
 }
-
-export { ManualShippingDocumentsDialog } from "./dialogs";

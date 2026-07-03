@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { preventEnterFormSubmit } from "../app/formGuards.ts";
-import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readCostsModuleSource, readDomesticLogisticsModuleSource } from "./source-helpers.ts";
 
 function keyboardEvent(key: string, tagName: string) {
   let defaultPrevented = false;
@@ -33,9 +33,9 @@ const logisticsFeesModule = [
 ]
   .map((file) => readFileSync(file, "utf8"))
   .join("\n");
-const taxRefundModule = readTaxRefundModuleSource();
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 const costsModule = readCostsModuleSource();
+const customerCommunicationModule = readFileSync("app/modules/CustomerCommunicationModule.tsx", "utf8");
 const sharedSerialization = readFileSync(
   "lib/platform/shared-serialization.ts",
   "utf8",
@@ -78,7 +78,7 @@ test("legacy full logistics cost permissions include newly added document fee", 
 test("risky business forms use the shared Enter submit guard", () => {
   for (const source of [
     logisticsFeesModule,
-    taxRefundModule,
+    customerCommunicationModule,
     domesticLogisticsModule,
     costsModule,
   ]) {
@@ -97,7 +97,7 @@ test("risky business forms use the shared Enter submit guard", () => {
     /<form[\s\S]*?className=\{styles\.inlineInvoiceForm\}[\s\S]*?onKeyDown=\{preventEnterFormSubmit\}/,
   );
   assert.match(
-    taxRefundModule,
+    customerCommunicationModule,
     /<form className=\{styles\.shippingDocsForm\} onKeyDown=\{preventEnterFormSubmit\}/,
   );
   assert.match(
