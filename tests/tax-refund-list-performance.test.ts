@@ -51,6 +51,16 @@ test("tax refund completeness is cached for list rendering", () => {
   assert.match(list, /tableSkeletonLine/);
 });
 
+test("tax refund list keeps lower completeness rows before completed rows", () => {
+  const orderByHelper = service.match(/function taxRefundListOrderBy[\s\S]*?return orderBy;\n}/)?.[0] || "";
+  assert.match(orderByHelper, /taxRefundOverallCompleteness:\s*\{\s*sort:\s*"asc",\s*nulls:\s*"first"\s*\}/);
+  assert.match(orderByHelper, /orderBy\.push\(\{ businessEntity: \{ name: filters\.businessEntitySortDirection \} \}\)/);
+  assert.match(
+    orderByHelper,
+    /taxRefundOverallCompleteness[\s\S]*businessEntity[\s\S]*updatedAt[\s\S]*createdAt/,
+  );
+});
+
 test("tax refund completeness ignores removed customs detail confirmation state", () => {
   assert.match(completeness, /DISABLED_TAX_REFUND_COMPLETENESS_MARKERS = \[[\s\S]*"报关明细待确认"[\s\S]*"CUSTOMS_RECOGNIZED_PENDING_CONFIRM"/);
   assert.match(completeness, /hasDisabledTaxRefundCompletenessMarker\(cachedValue\)/);

@@ -504,23 +504,23 @@ type TaxRefundListResult = {
   mode: TaxRefundListMode;
 };
 
+function taxRefundListOrderBy(filters: TaxRefundListFilters): Prisma.ReceivableOrderOrderByWithRelationInput[] {
+  const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = [
+    { taxRefundOverallCompleteness: { sort: "asc", nulls: "first" } },
+  ];
+  if (filters.businessEntitySortDirection) {
+    orderBy.push({ businessEntity: { name: filters.businessEntitySortDirection } });
+  }
+  orderBy.push({ updatedAt: "desc" }, { createdAt: "desc" });
+  return orderBy;
+}
+
 export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): Promise<TaxRefundListResult> {
   assertRead(actor, "taxRefund");
   const filters = taxRefundListFiltersFromQuery(query);
   const where = taxRefundListWhere(filters, actor);
   const skip = (filters.page - 1) * filters.pageSize;
-  const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = filters.businessEntitySortDirection
-    ? [
-      { businessEntity: { name: filters.businessEntitySortDirection } },
-      { taxRefundOverallCompleteness: "asc" },
-      { updatedAt: "desc" },
-      { createdAt: "desc" },
-    ]
-    : [
-      { taxRefundOverallCompleteness: "asc" },
-      { updatedAt: "desc" },
-      { createdAt: "desc" },
-    ];
+  const orderBy = taxRefundListOrderBy(filters);
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     guardedPrismaFindMany<Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>[]>(prisma.receivableOrder, "receivableOrder", "lib/platform/tax-refunds.ts:listTaxRefundOrders.rows", {
