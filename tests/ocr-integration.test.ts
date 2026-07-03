@@ -12,6 +12,8 @@ const customsTestRoute = readFileSync("app/api/settings/ocr/test-customs/route.t
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
 const r2 = readFileSync("lib/r2.ts", "utf8");
+const nextConfig = readFileSync("next.config.mjs", "utf8");
+const packageJson = readFileSync("package.json", "utf8");
 const settingsModule = readSettingsModuleSource();
 
 test("OCR integration settings are modular and stored in system settings", () => {
@@ -386,6 +388,13 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /recognizeDocumentStructure\(request\)/);
   assert.match(service, /ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE/);
   assert.match(service, /ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_EMPTY/);
+  assert.match(service, /rasterizeFirstPdfPageForOcr/);
+  assert.match(service, /pdfjs-dist\/legacy\/build\/pdf\.mjs/);
+  assert.match(service, /@napi-rs\/canvas/);
+  assert.match(service, /pdfRasterized: Boolean\(rasterized\)/);
+  assert.match(packageJson, /"pdfjs-dist"/);
+  assert.match(packageJson, /"@napi-rs\/canvas"/);
+  assert.match(nextConfig, /serverExternalPackages: \["@napi-rs\/canvas", "geoip-lite", "pdfjs-dist"\]/);
   assert.match(service, /let structuredError: unknown = null/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocumentStructure\(buffer, effectiveSettings, options\)/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind\(effectiveSettings, options\)/);
