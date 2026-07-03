@@ -10,6 +10,7 @@ import {
   ORDER_DOCUMENT_LABELS,
   ORDER_DOCUMENT_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
+  TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
   TAX_REFUND_STATUS_LABELS,
   TAX_REFUND_STATUSES,
   TAX_EXPORT_DOCUMENT_TYPES,
@@ -21,7 +22,6 @@ import {
   customerShortName,
   dateToInput,
   domesticLogisticsInfoSafeSelect,
-  getExchangeRateSettings,
   getCommissionFormulaSettings,
   guardedPrismaFindMany,
   includeOrderRelations,
@@ -29,6 +29,7 @@ import {
   num,
   optional,
   permissionError,
+  refreshTaxRefundCompletenessForCustomsDeclaration,
   refreshTaxRefundCompletenessForOrder,
   roundMoney,
   runNonCriticalTask,
@@ -45,6 +46,11 @@ import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
 import { scheduleRepairTaxRelationsOnStartup } from "./repair-tax-relations";
+import { customsDeclarationSupplierCompletenessIssues } from "./customs-declaration-supplier-validation";
+import {
+  allocateLogisticsCostForCustomsDeclaration,
+  logisticsCostMatchesCustomsDeclaration,
+} from "./logistics-cost-allocation";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -97,6 +103,8 @@ const taxRefundCustomsDeclarationListSelect = Prisma.validator<Prisma.CustomsDec
   billOfLadingNo: true,
   declarationNo: true,
   declarationDate: true,
+  declarationAmount: true,
+  containerCount: true,
   purchaseOrderId: true,
   supplierId: true,
   pdfDocumentId: true,
@@ -113,6 +121,15 @@ const taxRefundCustomsDeclarationListSelect = Prisma.validator<Prisma.CustomsDec
   createdAt: true,
   supplier: { select: { id: true, supplierName: true, supplierType: true } },
   purchaseOrder: { select: { id: true, supplierNameSnapshot: true, supplier: { select: { id: true, supplierName: true, supplierType: true } } } },
+  suppliers: {
+    where: { deletedAt: null },
+    select: {
+      supplierId: true,
+      supplier: { select: { id: true, supplierName: true, supplierType: true } },
+      purchaseOrder: { select: { id: true, supplierNameSnapshot: true, supplier: { select: { id: true, supplierName: true, supplierType: true } } } },
+    },
+    take: 20,
+  },
   order: { select: taxRefundLightListSelect },
 });
 type TaxRefundCustomsDeclarationListRow = Prisma.CustomsDeclarationGetPayload<{ select: typeof taxRefundCustomsDeclarationListSelect }>;
@@ -166,6 +183,14 @@ const taxRefundCostLightSelect = Prisma.validator<Prisma.OrderCostSelect>()({
   createdAt: true,
   updatedAt: true,
   supplier: { select: { id: true, supplierName: true, supplierType: true } },
+  generatedLogisticsExpense: {
+    select: {
+      customsDeclarationId: true,
+      allocationMethod: true,
+      allocatedAmount: true,
+      invoiceDocument: { select: taxRefundDocumentLightSelect },
+    },
+  },
   documents: {
     where: { deletedAt: null },
     select: taxRefundDocumentLightSelect,
@@ -190,47 +215,113 @@ type TaxRefundPackageOrder = Prisma.ReceivableOrderGetPayload<{
 type TaxRefundOrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 type TaxRefundDomesticLogisticsInfo = Prisma.DomesticLogisticsInfoGetPayload<{ select: ReturnType<typeof domesticLogisticsInfoSafeSelect> }>;
 type TaxRefundDomesticTransportItem = TaxRefundDomesticLogisticsInfo["transportItems"][number];
-const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
 const TAX_REFUND_SUPPLIER_DOCUMENT_LIMIT = 160;
+const TAX_REFUND_BATCH_OWNED_DOCUMENT_TYPES = new Set<OrderDocumentType>([
+  ...DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
+  "COMMERCIAL_INVOICE",
+  "PACKING_LIST",
+  "SALES_CONTRACT",
+  ...SUPPLIER_DOCUMENT_TYPES,
+]);
+
+function isTaxRefundBatchOwnedDocumentType(documentType: unknown) {
+  return TAX_REFUND_BATCH_OWNED_DOCUMENT_TYPES.has(String(documentType || "") as OrderDocumentType);
+}
+
+function taxRefundOrderHasMultipleDeclarations(order: Record<string, unknown>) {
+  const declarations = Array.isArray(order.customsDeclarations)
+    ? order.customsDeclarations.filter((item) => Boolean(item && typeof item === "object" && (item as { id?: string }).id))
+    : [];
+  return declarations.length > 1;
+}
+
+function taxRefundDeclarationHasScopedOwnership(declaration: TaxRefundRecordDeclaration | null, order: Record<string, unknown> = {}) {
+  return Boolean(
+    declaration?.pdfDocumentId
+    || declaration?.documents?.length
+    || declaration?.suppliers?.length
+    || taxRefundOrderHasMultipleDeclarations(order)
+  );
+}
+
+function taxRefundLogisticsCostMatchesDeclaration(
+  cost: { generatedLogisticsExpense?: { customsDeclarationId?: string | null; allocationMethod?: string | null; allocatedAmount?: unknown } | null },
+  declaration: TaxRefundRecordDeclaration | null,
+  order: Record<string, unknown>,
+) {
+  return logisticsCostMatchesCustomsDeclaration(cost, declaration, order);
+}
 
 function scopeTaxRefundOrderForDeclaration<T extends Record<string, unknown>>(order: T, declaration: TaxRefundRecordDeclaration | null) {
   if (!declaration) return order;
-  const purchaseOrderId = declaration.purchaseOrderId || "";
-  const supplierId = declaration.supplierId || declaration.purchaseOrder?.supplier?.id || "";
+  const purchaseOrderIds = taxRefundDeclarationPurchaseOrderIds(declaration);
+  const supplierIds = taxRefundDeclarationSupplierIds(declaration);
+  const fallbackSupplierIds = taxRefundUniqueSupplierFallbackIds(order, declaration, supplierIds);
+  const linkedFileIds = taxRefundDeclarationLinkedFileIds(declaration);
+  const linkedDocuments = taxRefundDeclarationLinkedDocuments(declaration);
   const costs = Array.isArray(order.costs) ? order.costs : [];
   const scopedFactoryCostIds = new Set<string>();
   const scopedCosts = costs.filter((cost) => {
     const record = cost && typeof cost === "object" ? cost as Record<string, unknown> : {};
     if (!record || record.deletedAt) return false;
     const isFactoryCost = FACTORY_SUPPLIER_COST_TYPES.includes(String(record.costType || ""));
-    if (!isFactoryCost) return true;
-    if (purchaseOrderId) {
-      const matched = record.id === purchaseOrderId;
-      if (matched && record.id) scopedFactoryCostIds.add(String(record.id));
-      return matched;
+    if (!isFactoryCost) {
+      const generatedLogisticsExpense = record.generatedLogisticsExpense && typeof record.generatedLogisticsExpense === "object"
+        ? record.generatedLogisticsExpense as Record<string, unknown>
+        : {};
+      return taxRefundLogisticsCostMatchesDeclaration({
+        generatedLogisticsExpense: {
+          customsDeclarationId: String(generatedLogisticsExpense.customsDeclarationId || ""),
+          allocationMethod: String(generatedLogisticsExpense.allocationMethod || ""),
+          allocatedAmount: generatedLogisticsExpense.allocatedAmount,
+        },
+      }, declaration, order);
     }
-    if (supplierId) {
-      const matched = record.supplierId === supplierId;
-      if (matched && record.id) scopedFactoryCostIds.add(String(record.id));
-      return matched;
+    const matchedByPurchaseOrder = purchaseOrderIds.has(String(record.id || ""));
+    const matchedBySupplier = fallbackSupplierIds.has(String(record.supplierId || ""));
+    if (matchedByPurchaseOrder || matchedBySupplier) {
+      if (record.id) scopedFactoryCostIds.add(String(record.id));
+      return true;
     }
     return false;
+  }).map((cost) => {
+    const record = cost && typeof cost === "object" ? cost as Record<string, unknown> : {};
+    if (FACTORY_SUPPLIER_COST_TYPES.includes(String(record.costType || ""))) return cost;
+    const allocatedCost = allocateLogisticsCostForCustomsDeclaration(cost, declaration, order);
+    const allocatedRecord = allocatedCost && typeof allocatedCost === "object" ? allocatedCost as Record<string, unknown> : {};
+    const generated = allocatedRecord.generatedLogisticsExpense && typeof allocatedRecord.generatedLogisticsExpense === "object"
+      ? allocatedRecord.generatedLogisticsExpense as Record<string, unknown>
+      : {};
+    const invoiceDocument = generated.invoiceDocument && typeof generated.invoiceDocument === "object"
+      ? generated.invoiceDocument as { id?: string | null }
+      : null;
+    if (!invoiceDocument?.id) return allocatedCost;
+    const costDocuments = Array.isArray(allocatedRecord.documents)
+      ? allocatedRecord.documents as Array<{ id?: string | null }>
+      : [];
+    return {
+      ...allocatedRecord,
+      documents: uniqueTaxRefundDocuments([...costDocuments, invoiceDocument]),
+    } as typeof allocatedCost;
   });
   const documents = Array.isArray(order.documents) ? order.documents : [];
   const scopedDocuments = documents.filter((document) => {
     const record = document && typeof document === "object" ? document as Record<string, unknown> : {};
     if (!record || record.deletedAt) return false;
     const documentType = String(record.documentType || "");
+    if (linkedFileIds.has(String(record.id || ""))) return true;
     if (documentType === "CUSTOMS_ENTRY_FORM") return Boolean(declaration.pdfDocumentId && record.id === declaration.pdfDocumentId);
+    if (isTaxRefundBatchOwnedDocumentType(documentType) && taxRefundDeclarationHasScopedOwnership(declaration, order)) return false;
     if (!SUPPLIER_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) return true;
     if (!scopedFactoryCostIds.size) return false;
     if (record.costId) return scopedFactoryCostIds.has(String(record.costId));
-    return Boolean(supplierId && record.supplierId === supplierId);
+    return fallbackSupplierIds.has(String(record.supplierId || ""));
   });
   return {
     ...order,
+    customsDeclarationSupplierIssues: customsDeclarationSupplierCompletenessIssues(declaration.suppliers || []),
     costs: scopedCosts,
-    documents: scopedDocuments,
+    documents: uniqueTaxRefundDocuments([...linkedDocuments, ...scopedDocuments]),
   };
 }
 
@@ -455,7 +546,18 @@ export function serializeTaxRefundListCustomsDeclarationLight(row: TaxRefundCust
   const shortCustomerName = customerShortName(row.order.customer);
   const businessEntityFields = businessEntityFieldsFromOrder(row.order);
   const completenessIssuesSummary = taxRefundCompletenessSummaryText(completeness, row.taxRefundCompletenessIssuesSummary || "");
-  const supplierName = row.supplier?.supplierName || row.purchaseOrder?.supplierNameSnapshot || row.purchaseOrder?.supplier?.supplierName || "";
+  const supplierNames = [
+    row.supplier?.supplierName || row.purchaseOrder?.supplierNameSnapshot || row.purchaseOrder?.supplier?.supplierName || "",
+    ...(row.suppliers || []).map((supplier) => (
+      supplier.supplier?.supplierName
+      || supplier.purchaseOrder?.supplierNameSnapshot
+      || supplier.purchaseOrder?.supplier?.supplierName
+      || ""
+    )),
+  ].map((name) => String(name || "").trim()).filter((name, index, arr) => name && arr.indexOf(name) === index);
+  const supplierName = supplierNames.length > 3
+    ? `${supplierNames.slice(0, 3).join("、")} 等 ${supplierNames.length} 家`
+    : supplierNames.join("、");
   const billOfLadingNo = row.billOfLadingNo || row.order.blNo || "";
   return {
     id: row.id,
@@ -472,6 +574,8 @@ export function serializeTaxRefundListCustomsDeclarationLight(row: TaxRefundCust
     customerFullName: fullCustomerName,
     supplierId: row.supplierId || row.purchaseOrder?.supplier?.id || "",
     supplierName,
+    supplierCount: supplierNames.length,
+    supplierNames,
     purchaseOrderId: row.purchaseOrderId || "",
     businessEntityId: row.order.businessEntityId || "",
     businessEntityName: businessEntityFields.businessEntityDisplayName || businessEntityFields.businessEntityName || "",
@@ -521,6 +625,10 @@ function serializeTaxRefundLightDocument(document: TaxRefundDocumentLight, order
 }
 
 function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<string, unknown> = {}) {
+  const costDocuments = uniqueTaxRefundDocuments([
+    ...(cost.documents || []),
+    ...(cost.generatedLogisticsExpense?.invoiceDocument ? [cost.generatedLogisticsExpense.invoiceDocument] : []),
+  ]);
   return {
     id: cost.id,
     supplierId: cost.supplierId || "",
@@ -535,12 +643,12 @@ function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<str
     invoiceStatus: cost.invoiceStatus,
     sourceType: cost.sourceType,
     sourceId: cost.sourceId || "",
-    documents: (cost.documents || []).map((document) => serializeTaxRefundLightDocument(document, {
+    documents: costDocuments.map((document) => serializeTaxRefundLightDocument(document, {
       ...order,
       id: cost.orderId,
       orderNo: String(order.orderNo || ""),
       blNo: String(order.blNo || ""),
-      documents: cost.documents || [],
+      documents: costDocuments,
     })),
   };
 }
@@ -552,6 +660,90 @@ function uniqueTaxRefundDocuments<T extends { id?: string | null }>(documents: T
     seen.add(document.id);
     return true;
   });
+}
+
+function taxRefundDeclarationPurchaseOrderIds(declaration: TaxRefundRecordDeclaration | null) {
+  return new Set([
+    declaration?.purchaseOrderId || "",
+    ...(declaration?.suppliers || []).map((supplier) => supplier.purchaseOrderId || ""),
+  ].filter(Boolean));
+}
+
+function taxRefundDeclarationSupplierIds(declaration: TaxRefundRecordDeclaration | null) {
+  return new Set([
+    declaration?.supplierId || declaration?.purchaseOrder?.supplier?.id || "",
+    ...(declaration?.suppliers || []).flatMap((supplier) => [
+      supplier.supplierId || "",
+      supplier.purchaseOrder?.supplier?.id || "",
+    ]),
+  ].filter(Boolean));
+}
+
+function taxRefundDeclarationSupplierIdSet(declaration: unknown) {
+  const row = declaration && typeof declaration === "object" ? declaration as {
+    supplierId?: string | null;
+    purchaseOrder?: { supplier?: { id?: string | null } | null } | null;
+    suppliers?: Array<{
+      supplierId?: string | null;
+      purchaseOrder?: { supplier?: { id?: string | null } | null } | null;
+    }> | null;
+  } : {};
+  return new Set([
+    row.supplierId || row.purchaseOrder?.supplier?.id || "",
+    ...(row.suppliers || []).flatMap((supplier) => [
+      supplier.supplierId || "",
+      supplier.purchaseOrder?.supplier?.id || "",
+    ]),
+  ].filter(Boolean));
+}
+
+function taxRefundUniqueSupplierFallbackIds(
+  order: Record<string, unknown>,
+  declaration: TaxRefundRecordDeclaration | null,
+  supplierIds: Set<string>,
+) {
+  if (!declaration || !supplierIds.size) return new Set<string>();
+  const declarations = Array.isArray(order.customsDeclarations)
+    ? order.customsDeclarations.filter((item) => Boolean(item && typeof item === "object" && (item as { id?: string }).id))
+    : [];
+  if (declarations.length <= 1) return new Set(supplierIds);
+  const currentSupplierIds = taxRefundDeclarationSupplierIdSet(declaration);
+  const supplierDeclarationCount = new Map<string, number>();
+  for (const item of declarations) {
+    for (const supplierId of taxRefundDeclarationSupplierIdSet(item)) {
+      supplierDeclarationCount.set(supplierId, (supplierDeclarationCount.get(supplierId) || 0) + 1);
+    }
+  }
+  return new Set([...supplierIds].filter((supplierId) => (
+    currentSupplierIds.has(supplierId)
+    && supplierDeclarationCount.get(supplierId) === 1
+  )));
+}
+
+function taxRefundDeclarationLinkedFileIds(declaration: TaxRefundRecordDeclaration | null) {
+  const ids = [
+    declaration?.pdfDocumentId || "",
+    ...(declaration?.documents || []).map((document) => document.fileId || document.file?.id || ""),
+    ...(declaration?.suppliers || []).flatMap((supplier) => [
+      supplier.contractFileId || supplier.contractFile?.id || "",
+      supplier.vatInvoiceFileId || supplier.vatInvoiceFile?.id || "",
+    ]),
+  ];
+  return new Set(ids.filter(Boolean));
+}
+
+function taxRefundDeclarationLinkedDocuments(declaration: TaxRefundRecordDeclaration | null) {
+  if (!declaration) return [] as TaxRefundDocumentLight[];
+  const documents = [
+    ...(declaration.documents || []).map((document) => document.file),
+    ...(declaration.suppliers || []).flatMap((supplier) => [supplier.contractFile, supplier.vatInvoiceFile]),
+  ].filter((document): document is TaxRefundDocumentLight => Boolean(document && document.uploadStatus === "SUCCESS"));
+  return uniqueTaxRefundDocuments(documents);
+}
+
+function taxRefundDeclarationDocumentTypesForSection(declaration: TaxRefundRecordDeclaration | null, documentTypes: string[] = []) {
+  const documentTypeSet = new Set(documentTypes);
+  return taxRefundDeclarationLinkedDocuments(declaration).filter((document) => documentTypeSet.has(document.documentType));
 }
 
 function taxRefundFactoryDocumentMatchesCost(document: TaxRefundDocumentLight, cost: TaxRefundCostLight) {
@@ -666,6 +858,7 @@ function taxRefundDeclarationKeywordWhere(keyword: string): Prisma.CustomsDeclar
     : [];
   return keyword ? {
     OR: [
+      { id: keyword },
       { declarationNo: { contains: keyword, mode: "insensitive" } },
       { billOfLadingNo: { contains: keyword, mode: "insensitive" } },
       { taxRefundStatus: { contains: keyword, mode: "insensitive" } },
@@ -794,6 +987,8 @@ const taxRefundRecordDeclarationSelect = Prisma.validator<Prisma.CustomsDeclarat
   billOfLadingNo: true,
   declarationNo: true,
   declarationDate: true,
+  declarationAmount: true,
+  containerCount: true,
   purchaseOrderId: true,
   supplierId: true,
   pdfDocumentId: true,
@@ -810,6 +1005,35 @@ const taxRefundRecordDeclarationSelect = Prisma.validator<Prisma.CustomsDeclarat
   taxSubmittedAt: true,
   supplier: { select: { id: true, supplierName: true } },
   purchaseOrder: { select: { id: true, supplierNameSnapshot: true, supplier: { select: { id: true, supplierName: true } } } },
+  documents: {
+    where: { deletedAt: null },
+    select: {
+      documentType: true,
+      fileId: true,
+      file: { select: taxRefundDocumentLightSelect },
+    },
+    take: 120,
+  },
+  suppliers: {
+    where: { deletedAt: null },
+    select: {
+      supplierId: true,
+      purchaseOrderId: true,
+      requiredInvoiceAmount: true,
+      vatInvoiceAmount: true,
+      contractAmount: true,
+      splitAmount: true,
+      contractFileId: true,
+      vatInvoiceFileId: true,
+      validationStatus: true,
+      validationMessage: true,
+      supplier: { select: { id: true, supplierName: true } },
+      purchaseOrder: { select: { id: true, supplierNameSnapshot: true, supplier: { select: { id: true, supplierName: true } } } },
+      contractFile: { select: taxRefundDocumentLightSelect },
+      vatInvoiceFile: { select: taxRefundDocumentLightSelect },
+    },
+    take: 120,
+  },
 });
 type TaxRefundRecordDeclaration = Prisma.CustomsDeclarationGetPayload<{ select: typeof taxRefundRecordDeclarationSelect }>;
 
@@ -841,6 +1065,10 @@ function decorateTaxRefundOrderWithDeclaration<T extends Record<string, unknown>
     blNo: declaration.billOfLadingNo || String(order.blNo || ""),
     customsDeclarationNo: declaration.declarationNo || "",
     customsDeclarationDate: declaration.declarationDate || null,
+    customsDeclarationAmount: declaration.declarationAmount == null ? null : Number(declaration.declarationAmount || 0),
+    declarationAmount: declaration.declarationAmount == null ? null : Number(declaration.declarationAmount || 0),
+    customsDeclarationContainerCount: declaration.containerCount ?? null,
+    containerCount: declaration.containerCount ?? null,
     taxRefundStatus: declaration.taxRefundStatus || String(order.taxRefundStatus || "NOT_READY"),
     taxRefundCompleteness: declaration.taxRefundCompleteness || null,
     taxRefundCompletenessUpdatedAt: declaration.taxRefundCompletenessUpdatedAt || null,
@@ -858,6 +1086,95 @@ function decorateTaxRefundOrderWithDeclaration<T extends Record<string, unknown>
   };
 }
 
+async function refreshTaxRefundRecordDeclarationForRead(declaration: TaxRefundRecordDeclaration | null) {
+  if (!declaration) return declaration;
+  const completeness = await refreshTaxRefundCompletenessForCustomsDeclaration(declaration.id);
+  if (!completeness) return declaration;
+  return {
+    ...declaration,
+    taxRefundCompleteness: completeness,
+    taxRefundCompletenessUpdatedAt: new Date(),
+    taxRefundOverallCompleteness: taxRefundOverallCompletenessPercent({ taxRefundCompleteness: completeness }),
+    taxRefundCompletenessIssuesSummary: taxRefundCompletenessSummaryText(completeness),
+    taxRefundStatus: taxRefundStatusFromCompleteness(declaration.taxRefundStatus, completeness),
+  } as TaxRefundRecordDeclaration;
+}
+
+function isArchivedCustomsDeclaration(row: {
+  taxArchived?: boolean | null;
+  taxRefundArchivedAt?: Date | string | null;
+  taxRefundStatus?: string | null;
+}) {
+  return Boolean(
+    row.taxArchived
+    || row.taxRefundArchivedAt
+    || ARCHIVE_TAX_REFUND_STATUSES.includes(String(row.taxRefundStatus || "")),
+  );
+}
+
+function activeDeclarationAggregateStatus(rows: Array<{ taxRefundStatus?: string | null }>) {
+  const statuses = rows.map((row) => String(row.taxRefundStatus || "NOT_READY"));
+  if (!statuses.length) return "NOT_READY";
+  if (statuses.some((status) => status === "PROBLEM")) return "PROBLEM";
+  if (statuses.every((status) => status === "READY")) return "READY";
+  return "NOT_READY";
+}
+
+async function syncOrderTaxArchiveFromDeclarations(orderId: string, actorId: string, now = new Date()) {
+  const declarations = await prisma.customsDeclaration.findMany({
+    where: { orderId, deletedAt: null },
+    select: {
+      taxArchived: true,
+      taxRefundStatus: true,
+      taxRefundArchivedById: true,
+      taxRefundArchivedAt: true,
+      taxSubmittedById: true,
+      taxSubmittedAt: true,
+    },
+    orderBy: [{ taxRefundArchivedAt: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }],
+    take: 200,
+  });
+  if (!declarations.length) {
+    return prisma.receivableOrder.findFirst({
+      where: { id: orderId, deletedAt: null },
+      include: includeOrderRelations(),
+    });
+  }
+  const activeDeclarations = declarations.filter((row) => !isArchivedCustomsDeclaration(row));
+  if (activeDeclarations.length) {
+    return prisma.receivableOrder.update({
+      where: { id: orderId },
+      data: {
+        taxArchived: false,
+        taxRefundArchivedById: null,
+        taxRefundArchivedAt: null,
+        taxRefundArchiveRemark: null,
+        taxSubmittedById: null,
+        taxSubmittedAt: null,
+        taxRefundStatus: activeDeclarationAggregateStatus(activeDeclarations),
+        updatedById: actorId,
+      },
+      include: includeOrderRelations(),
+    });
+  }
+  const latestArchived = declarations.find((row) => isArchivedCustomsDeclaration(row)) || declarations[0];
+  const allRefundReceived = declarations.every((row) => row.taxRefundStatus === "REFUND_RECEIVED");
+  return prisma.receivableOrder.update({
+    where: { id: orderId },
+    data: {
+      taxArchived: true,
+      taxRefundStatus: allRefundReceived ? "REFUND_RECEIVED" : "SUBMITTED",
+      taxRefundArchivedById: latestArchived?.taxRefundArchivedById || actorId,
+      taxRefundArchivedAt: latestArchived?.taxRefundArchivedAt || now,
+      taxRefundArchiveRemark: null,
+      taxSubmittedById: latestArchived?.taxSubmittedById || latestArchived?.taxRefundArchivedById || actorId,
+      taxSubmittedAt: latestArchived?.taxSubmittedAt || latestArchived?.taxRefundArchivedAt || now,
+      updatedById: actorId,
+    },
+    include: includeOrderRelations(),
+  });
+}
+
 export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike) {
   assertRead(actor, "taxRefund");
   const context = await resolveTaxRefundRecordContext(orderId, actor);
@@ -869,15 +1186,16 @@ export async function getTaxRefundOrderDetail(orderId: string, actor: ActorLike)
   const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(order);
   const scopedOrder = scopeTaxRefundOrderForDeclaration(orderWithLogistics as unknown as Record<string, unknown>, context.declaration);
   const completeness = context.declaration
-    ? cachedTaxRefundCompletenessForDeclaration(order, context.declaration)
+    ? await refreshTaxRefundCompletenessForCustomsDeclaration(context.declaration.id) || cachedTaxRefundCompletenessForDeclaration(order, context.declaration)
     : await refreshTaxRefundCompletenessForOrder(orderWithLogistics);
+  const refreshedAt = completeness ? new Date() : null;
   const decoratedOrder = decorateTaxRefundOrderWithDeclaration(scopedOrder, context.declaration);
   const status = taxRefundStatusFromCompleteness(String(decoratedOrder.taxRefundStatus || order.taxRefundStatus), completeness);
   return serializeTaxRefundOrderForActor({
     ...scopedOrder,
     ...decoratedOrder,
     taxRefundCompleteness: completeness || context.declaration?.taxRefundCompleteness || order.taxRefundCompleteness,
-    taxRefundCompletenessUpdatedAt: context.declaration?.taxRefundCompletenessUpdatedAt || (completeness ? new Date() : order.taxRefundCompletenessUpdatedAt),
+    taxRefundCompletenessUpdatedAt: refreshedAt || context.declaration?.taxRefundCompletenessUpdatedAt || order.taxRefundCompletenessUpdatedAt,
     taxRefundStatus: status,
   }, actor);
 }
@@ -895,7 +1213,8 @@ async function getTaxRefundBaseOrder(orderId: string, actor: ActorLike) {
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  return decorateTaxRefundOrderWithDeclaration(order as unknown as Record<string, unknown>, context.declaration) as typeof order & Record<string, unknown>;
+  const declaration = await refreshTaxRefundRecordDeclarationForRead(context.declaration);
+  return decorateTaxRefundOrderWithDeclaration(order as unknown as Record<string, unknown>, declaration) as typeof order & Record<string, unknown>;
 }
 
 function serializeTaxRefundBasicOrder(order: Awaited<ReturnType<typeof getTaxRefundBaseOrder>>) {
@@ -910,6 +1229,10 @@ function serializeTaxRefundBasicOrder(order: Awaited<ReturnType<typeof getTaxRef
       customsDeclarationNo: String(order.customsDeclarationNo || ""),
       declarationDate: dateToInput(order.customsDeclarationDate as Date | null),
       customsDeclarationDate: dateToInput(order.customsDeclarationDate as Date | null),
+      customsDeclarationAmount: order.customsDeclarationAmount == null ? null : Number(order.customsDeclarationAmount || 0),
+      declarationAmount: order.declarationAmount == null ? null : Number(order.declarationAmount || 0),
+      customsDeclarationContainerCount: order.customsDeclarationContainerCount == null ? null : Number(order.customsDeclarationContainerCount || 0),
+      containerCount: order.containerCount == null ? null : Number(order.containerCount || 0),
       supplierId: String(order.supplierId || ""),
       supplierName: String(order.supplierName || ""),
       purchaseOrderId: String(order.purchaseOrderId || ""),
@@ -921,6 +1244,10 @@ function serializeTaxRefundBasicOrder(order: Awaited<ReturnType<typeof getTaxRef
     taxSubmittedByName: order.taxSubmittedBy?.name || order.taxRefundArchivedBy?.name || "",
     customsDeclarationNo: order.customsDeclarationNo || "",
     customsDeclarationDate: dateToInput(order.customsDeclarationDate),
+    customsDeclarationAmount: order.customsDeclarationAmount == null ? null : Number(order.customsDeclarationAmount || 0),
+    declarationAmount: order.declarationAmount == null ? null : Number(order.declarationAmount || 0),
+    customsDeclarationContainerCount: order.customsDeclarationContainerCount == null ? null : Number(order.customsDeclarationContainerCount || 0),
+    containerCount: order.containerCount == null ? null : Number(order.containerCount || 0),
     documentCompleteness: cachedTaxRefundCompleteness(order),
     taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
   };
@@ -940,6 +1267,11 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
       blNo: true,
       customerNameSnapshot: true,
       customer: { select: { name: true, shortName: true } },
+      customsDeclarations: {
+        where: { deletedAt: null },
+        select: { id: true },
+        take: 100,
+      },
       documents: {
         where: {
           deletedAt: null,
@@ -952,11 +1284,19 @@ async function getTaxRefundDocumentSection(orderId: string, actor: ActorLike, do
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const filteredDocuments = context.declaration && documentTypes.includes("CUSTOMS_ENTRY_FORM")
-    ? (order.documents || []).filter((document) => (
-      document.documentType !== "CUSTOMS_ENTRY_FORM"
-      || document.id === context.declaration?.pdfDocumentId
-    ))
+  const declarationDocuments = taxRefundDeclarationDocumentTypesForSection(context.declaration, documentTypes);
+  const declarationDocumentIds = new Set(declarationDocuments.map((document) => document.id));
+  const declarationOwnsScopedDocuments = taxRefundDeclarationHasScopedOwnership(context.declaration, order as unknown as Record<string, unknown>);
+  const filteredDocuments = context.declaration
+    ? uniqueTaxRefundDocuments([
+      ...declarationDocuments,
+      ...(order.documents || []).filter((document) => {
+        if (declarationDocumentIds.has(document.id)) return false;
+        if (!isTaxRefundBatchOwnedDocumentType(document.documentType)) return true;
+        if (document.documentType === "CUSTOMS_ENTRY_FORM") return Boolean(context.declaration?.pdfDocumentId && document.id === context.declaration.pdfDocumentId);
+        return !declarationOwnsScopedDocuments;
+      }),
+    ])
     : (order.documents || []);
   return {
     id: context.declaration?.id || order.id,
@@ -987,11 +1327,8 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
 async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike, type: "factory" | "logistics") {
   const context = await resolveTaxRefundRecordContext(orderId, actor);
   const costTypes = type === "factory" ? FACTORY_SUPPLIER_COST_TYPES : TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES;
-  const declarationCostWhere: Prisma.OrderCostWhereInput = type === "factory" && context.declaration?.purchaseOrderId
-    ? { id: context.declaration.purchaseOrderId }
-    : type === "factory" && context.declaration?.supplierId
-      ? { supplierId: context.declaration.supplierId }
-      : {};
+  const declarationPurchaseOrderIds = taxRefundDeclarationPurchaseOrderIds(context.declaration);
+  const declarationSupplierIds = taxRefundDeclarationSupplierIds(context.declaration);
   const order = await prisma.receivableOrder.findFirst({
     where: { id: context.orderId, deletedAt: null, ...orderAccessWhere(actor) },
     select: {
@@ -1000,11 +1337,27 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
       blNo: true,
       taxRefundCompleteness: true,
       taxRefundCompletenessUpdatedAt: true,
+      customsDeclarations: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          supplierId: true,
+          purchaseOrderId: true,
+          declarationAmount: true,
+          containerCount: true,
+          suppliers: {
+            where: { deletedAt: null },
+            select: { supplierId: true, purchaseOrderId: true, requiredInvoiceAmount: true, vatInvoiceAmount: true, contractAmount: true, splitAmount: true },
+            take: 200,
+          },
+        },
+        take: 100,
+      },
       costs: {
-        where: { deletedAt: null, costType: { in: costTypes }, ...declarationCostWhere },
+        where: { deletedAt: null, costType: { in: costTypes } },
         select: taxRefundCostLightSelect,
         orderBy: [{ createdAt: "desc" }],
-        take: 80,
+        take: 200,
       },
       ...(type === "factory" ? {
         documents: {
@@ -1025,10 +1378,32 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const orderCosts = (order.costs || []) as TaxRefundCostLight[];
+  const fallbackSupplierIds = taxRefundUniqueSupplierFallbackIds(order as unknown as Record<string, unknown>, context.declaration, declarationSupplierIds);
+  let orderCosts = ((order.costs || []) as TaxRefundCostLight[]).filter((cost) => {
+    if (type === "factory" && context.declaration) {
+      if (declarationPurchaseOrderIds.has(cost.id)) return true;
+      if (fallbackSupplierIds.size) return Boolean(cost.supplierId && fallbackSupplierIds.has(cost.supplierId));
+      return false;
+    }
+    if (type !== "logistics" || !context.declaration) return true;
+    return taxRefundLogisticsCostMatchesDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+  }).map((cost) => {
+    if (type !== "logistics" || !context.declaration) return cost;
+    return allocateLogisticsCostForCustomsDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+  });
+  if (type === "factory" && context.declaration && taxRefundDeclarationHasScopedOwnership(context.declaration, order as unknown as Record<string, unknown>)) {
+    const linkedFileIds = taxRefundDeclarationLinkedFileIds(context.declaration);
+    orderCosts = orderCosts.map((cost) => ({
+      ...cost,
+      documents: (cost.documents || []).filter((document) => linkedFileIds.has(document.id)),
+    }));
+  }
+  const declarationSupplierDocuments = taxRefundDeclarationDocumentTypesForSection(context.declaration, SUPPLIER_DOCUMENT_TYPES);
   const historicalDocuments = (
-    type === "factory" && "documents" in order && Array.isArray(order.documents)
-      ? order.documents
+    type === "factory"
+      ? (declarationSupplierDocuments.length || taxRefundDeclarationHasScopedOwnership(context.declaration, order as unknown as Record<string, unknown>)
+        ? declarationSupplierDocuments
+        : "documents" in order && Array.isArray(order.documents) ? order.documents : [])
       : []
   ) as unknown as TaxRefundDocumentLight[];
   const costRows = type === "factory"
@@ -1060,6 +1435,20 @@ async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: Act
       blNo: true,
       taxRefundCompleteness: true,
       taxRefundCompletenessUpdatedAt: true,
+      customsDeclarations: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          declarationAmount: true,
+          containerCount: true,
+          suppliers: {
+            where: { deletedAt: null },
+            select: { requiredInvoiceAmount: true, vatInvoiceAmount: true, contractAmount: true, splitAmount: true },
+            take: 200,
+          },
+        },
+        take: 100,
+      },
       domesticLogisticsInfos: {
         where: { deletedAt: null },
         select: domesticLogisticsInfoSafeSelect(),
@@ -1075,7 +1464,14 @@ async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: Act
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const costs = (order.costs || []).map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
+  const scopedLogisticsCosts = (order.costs || []).filter((cost) => {
+    if (!context.declaration) return true;
+    return taxRefundLogisticsCostMatchesDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+  }).map((cost) => {
+    if (!context.declaration) return cost;
+    return allocateLogisticsCostForCustomsDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+  });
+  const costs = scopedLogisticsCosts.map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
   const documents = costs.flatMap((cost) => cost.documents || []);
   const domesticLogisticsInfo = combineTaxRefundDomesticLogisticsInfos(order.domesticLogisticsInfos || [])[0] || null;
   return {
@@ -1177,19 +1573,20 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
   const beforeArchived = context.declaration
     ? Boolean(context.declaration.taxArchived || context.declaration.taxRefundStatus === "SUBMITTED" || context.declaration.taxRefundArchivedAt)
     : Boolean(before.taxArchived || before.taxRefundStatus === "SUBMITTED" || before.taxRefundArchivedAt);
-  if (beforeArchived && status !== "SUBMITTED" && input.cancelArchive !== true) {
+  const beforeSubmitted = context.declaration
+    ? Boolean(context.declaration.taxSubmittedAt || context.declaration.taxRefundStatus === "SUBMITTED" || context.declaration.taxArchived || context.declaration.taxRefundArchivedAt)
+    : Boolean(before.taxSubmittedAt || before.taxRefundStatus === "SUBMITTED" || before.taxArchived || before.taxRefundArchivedAt);
+  if (beforeArchived && !["SUBMITTED", "REFUND_RECEIVED"].includes(status) && input.cancelArchive !== true) {
     throw permissionError("已提交退税档案只允许查看和下载资料。", 400);
   }
   const completeness = taxDocumentCompleteness(scopedBefore);
+  if (status === "REFUND_RECEIVED" && !beforeSubmitted) {
+    throw codedError("请先提交退税并归档，再登记已收到退税款。", 400, "TAX_REFUND_SUBMISSION_REQUIRED");
+  }
   if (status === "SUBMITTED" && (context.declaration?.taxRefundStatus || before.taxRefundStatus) === "SUBMITTED" && beforeArchived) {
     throw codedError("该订单已提交退税并归档，不能重复提交。", 400, "TAX_REFUND_ALREADY_SUBMITTED");
   }
-  const settings = await getExchangeRateSettings();
-  const forceSubmit = status === "SUBMITTED"
-    && actor?.role === "管理员"
-    && settings.allowAdminIncompleteTaxSubmit === true
-    && input.forceSubmit === true;
-  if (["READY", "SUBMITTED"].includes(status) && !completeness.complete && !forceSubmit) {
+  if (["READY", "SUBMITTED"].includes(status) && !completeness.complete) {
     const error = codedError("资料尚未完整，无法提交退税。", 400, "TAX_REFUND_COMPLETENESS_REQUIRED");
     error.details = {
       completed: Number(completeness.completed || 0),
@@ -1201,9 +1598,6 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
       text: completeness.text || "",
     };
     throw error;
-  }
-  if (forceSubmit && !optional(input.forceReason)) {
-    throw codedError("强制提交退税必须填写原因。", 400, "FORCE_SUBMIT_REASON_REQUIRED");
   }
   const archiveRemark = optional(input.archiveRemark || input.remark);
   const now = new Date();
@@ -1222,9 +1616,12 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
           taxArchived: true,
           taxRefundArchivedById: actorId,
           taxRefundArchivedAt: now,
-          taxRefundArchiveRemark: forceSubmit ? optional(input.forceReason) : archiveRemark,
+          taxRefundArchiveRemark: archiveRemark,
           taxSubmittedById: actorId,
           taxSubmittedAt: now,
+        } : {}),
+        ...(status === "REFUND_RECEIVED" ? {
+          taxArchived: true,
         } : {}),
       },
       select: taxRefundRecordDeclarationSelect,
@@ -1239,13 +1636,20 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
           taxArchived: true,
           taxRefundArchivedById: actorId,
           taxRefundArchivedAt: now,
-          taxRefundArchiveRemark: forceSubmit ? optional(input.forceReason) : archiveRemark,
+          taxRefundArchiveRemark: archiveRemark,
           taxSubmittedById: actorId,
           taxSubmittedAt: now,
+        } : {}),
+        ...(status === "REFUND_RECEIVED" ? {
+          taxArchived: true,
         } : {}),
       },
       include: includeOrderRelations(),
     });
+  }
+  if (context.declaration) {
+    const syncedOrder = await syncOrderTaxArchiveFromDeclarations(context.orderId, actorId, now);
+    if (syncedOrder) order = syncedOrder;
   }
   await writeAudit(
     request,
@@ -1266,8 +1670,6 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
       declarationNo: updatedDeclaration?.declarationNo || "",
       taxRefundStatus: context.declaration ? updatedDeclaration?.taxRefundStatus : order.taxRefundStatus,
       taxArchived: context.declaration ? Boolean(updatedDeclaration?.taxArchived) : Boolean(order.taxArchived),
-      forceSubmit,
-      forceReason: forceSubmit ? optional(input.forceReason) : undefined,
     },
   ).catch(() => null);
   const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(order);
@@ -1322,6 +1724,10 @@ export async function cancelTaxRefundArchive(request: AuditRequestLike, actor: A
       },
       include: includeOrderRelations(),
     });
+  }
+  if (context.declaration) {
+    const syncedOrder = await syncOrderTaxArchiveFromDeclarations(context.orderId, actorId);
+    if (syncedOrder) order = syncedOrder;
   }
   await writeAudit(
     request,
@@ -1445,21 +1851,46 @@ function supplierArchiveFileName(document: TaxRefundPackageDocument, _index: num
 }
 
 function isTaxRefundLogisticsInvoiceDocument(document: TaxRefundPackageDocument) {
-  return document?.relatedModule === "SUPPLIER" && document?.documentType && /_INVOICE$/.test(document.documentType);
+  return Boolean(
+    document?.relatedModule === "SUPPLIER"
+    && document?.documentType
+    && !SUPPLIER_DOCUMENT_TYPES.includes(document.documentType)
+    && /_INVOICE$/.test(document.documentType)
+  );
 }
 
 function isTaxRefundSupplierDocument(document: TaxRefundPackageDocument) {
   return document?.relatedModule === "SUPPLIER";
 }
 
-function packageDocumentMatchesDeclaration(document: TaxRefundPackageDocument, declaration: TaxRefundRecordDeclaration | null) {
+function packageDocumentMatchesDeclaration(
+  document: TaxRefundPackageDocument,
+  declaration: TaxRefundRecordDeclaration | null,
+  order: Record<string, unknown>,
+) {
   if (!declaration) return true;
+  const linkedFileIds = taxRefundDeclarationLinkedFileIds(declaration);
+  if (linkedFileIds.size && linkedFileIds.has(document.id)) return true;
+  if (linkedFileIds.size && [
+    "CUSTOMS_ENTRY_FORM",
+    "RELEASE_NOTICE",
+    "CUSTOMS_POWER_OF_ATTORNEY",
+    "COMMERCIAL_INVOICE",
+    "PACKING_LIST",
+    "SALES_CONTRACT",
+    ...SUPPLIER_DOCUMENT_TYPES,
+  ].includes(document.documentType)) return false;
   if (document.documentType === "CUSTOMS_ENTRY_FORM") return Boolean(declaration.pdfDocumentId && document.id === declaration.pdfDocumentId);
+  if (isTaxRefundBatchOwnedDocumentType(document.documentType) && taxRefundDeclarationHasScopedOwnership(declaration, order)) return false;
   if (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType)) return true;
-  const purchaseOrderId = declaration.purchaseOrderId || "";
-  const supplierId = declaration.supplierId || declaration.purchaseOrder?.supplier?.id || "";
-  if (purchaseOrderId) return document.costId === purchaseOrderId;
-  if (supplierId) return document.supplierId === supplierId || document.cost?.supplierId === supplierId;
+  const purchaseOrderIds = taxRefundDeclarationPurchaseOrderIds(declaration);
+  const supplierIds = taxRefundDeclarationSupplierIds(declaration);
+  if (purchaseOrderIds.has(String(document.costId || ""))) return true;
+  const fallbackSupplierIds = taxRefundUniqueSupplierFallbackIds(order, declaration, supplierIds);
+  if (fallbackSupplierIds.size) {
+    return fallbackSupplierIds.has(String(document.supplierId || ""))
+      || fallbackSupplierIds.has(String(document.cost?.supplierId || ""));
+  }
   return false;
 }
 
@@ -1475,6 +1906,20 @@ export async function buildTaxRefundPackage(request: AuditRequestLike, actor: Ac
         where: { deletedAt: null, uploadStatus: "SUCCESS" },
         include: { uploadedBy: true, cost: { include: { supplier: true } }, supplier: true },
       },
+      customsDeclarations: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          supplierId: true,
+          purchaseOrderId: true,
+          suppliers: {
+            where: { deletedAt: null },
+            select: { supplierId: true, purchaseOrderId: true },
+            take: 200,
+          },
+        },
+        take: 100,
+      },
     },
   });
   if (!order) throw permissionError("应收订单不存在或已删除", 404);
@@ -1484,7 +1929,7 @@ export async function buildTaxRefundPackage(request: AuditRequestLike, actor: Ac
   const documents = order.documents
     .filter((document) => (
       selectedTypes.includes(document.documentType)
-      && packageDocumentMatchesDeclaration(document, context.declaration)
+      && packageDocumentMatchesDeclaration(document, context.declaration, order as unknown as Record<string, unknown>)
       && (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType) || isTaxRefundSupplierDocument(document))
       && canReadDocumentContent(actor, { ...document, order })
     ))

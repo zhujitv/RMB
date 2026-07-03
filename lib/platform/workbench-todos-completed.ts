@@ -202,28 +202,49 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
     }))));
   }
   if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
-    batches.push(prisma.receivableOrder.findMany({
+    batches.push(prisma.customsDeclaration.findMany({
       where: {
         deletedAt: null,
         taxArchived: true,
         taxRefundArchivedAt: { gte: today, lt: tomorrow },
-        AND: [orderAccessWhere(actor)],
+        order: { is: { deletedAt: null, ...orderAccessWhere(actor) } },
       },
-      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
+      include: { order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } } } },
       orderBy: [{ taxRefundArchivedAt: "desc" }],
       take: TODO_LIMIT_PER_SOURCE,
-    }).then((rows) => rows.map((order) => todoForOrder({
-      type: "TAX_REFUND_ARCHIVED",
-      title: "退税资料已归档",
-      module: "退税资料",
-      order,
-      context,
-      dueAt: order.taxRefundArchivedAt || order.updatedAt,
-      href: orderHref("/tax-refund", order),
-      owner: taxRefundArchiveOwner(context, order),
-      status: "completed",
-      updatedAt: order.updatedAt,
-    }))));
+    }).then((rows) => rows.map((row) => {
+      const order = {
+        ...row.order,
+        id: row.id,
+        orderId: row.orderId,
+        customsDeclarationId: row.id,
+        orderNo: row.order.orderNo,
+        blNo: row.billOfLadingNo || row.order.blNo,
+        billOfLadingNo: row.billOfLadingNo || row.order.blNo,
+        customsDeclarationNo: row.declarationNo || "",
+        customsDeclarationDate: row.declarationDate || null,
+        taxRefundStatus: row.taxRefundStatus,
+        taxArchived: row.taxArchived,
+        taxSubmittedAt: row.taxSubmittedAt,
+        taxRefundArchivedAt: row.taxRefundArchivedAt,
+        updatedAt: row.updatedAt || row.order.updatedAt,
+        createdAt: row.createdAt || row.order.createdAt,
+      };
+      return todoForOrder({
+        type: "TAX_REFUND_ARCHIVED",
+        title: "退税资料已归档",
+        module: "退税资料",
+        order,
+        context,
+        dueAt: row.taxRefundArchivedAt || row.updatedAt,
+        href: orderHref("/tax-refund", order, {
+          keyword: row.id,
+        }),
+        owner: taxRefundArchiveOwner(context, order),
+        status: "completed",
+        updatedAt: row.updatedAt,
+      });
+    })));
   }
   if (canRead(actor, "commissions") && isFinanceOperator(actor)) {
     batches.push(prisma.receivableOrder.findMany({

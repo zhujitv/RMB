@@ -179,6 +179,8 @@ export function CustomsRecognitionForm({
 }) {
   const [customsDeclarationNo, setCustomsDeclarationNo] = useState(detail.customsDeclarationNo || "");
   const [customsDeclarationDate, setCustomsDeclarationDate] = useState(detail.customsDeclarationDate || "");
+  const [customsDeclarationAmount, setCustomsDeclarationAmount] = useState(optionalNumberText(detail.customsDeclarationAmount ?? detail.declarationAmount));
+  const [customsDeclarationContainerCount, setCustomsDeclarationContainerCount] = useState(optionalNumberText(detail.customsDeclarationContainerCount ?? detail.containerCount));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const declarationNoRead = Boolean(detail.customsDeclarationNo);
@@ -187,8 +189,10 @@ export function CustomsRecognitionForm({
   useEffect(() => {
     setCustomsDeclarationNo(detail.customsDeclarationNo || "");
     setCustomsDeclarationDate(detail.customsDeclarationDate || "");
+    setCustomsDeclarationAmount(optionalNumberText(detail.customsDeclarationAmount ?? detail.declarationAmount));
+    setCustomsDeclarationContainerCount(optionalNumberText(detail.customsDeclarationContainerCount ?? detail.containerCount));
     setMessage("");
-  }, [detail.id, detail.customsDeclarationNo, detail.customsDeclarationDate]);
+  }, [detail.id, detail.customsDeclarationNo, detail.customsDeclarationDate, detail.customsDeclarationAmount, detail.declarationAmount, detail.customsDeclarationContainerCount, detail.containerCount]);
 
   async function saveCustomsRecognition() {
     setSaving(true);
@@ -200,6 +204,8 @@ export function CustomsRecognitionForm({
           action: "updateCustomsRecognition",
           customsDeclarationNo: customsDeclarationNo.trim(),
           customsDeclarationDate,
+          customsDeclarationAmount: customsDeclarationAmount.trim(),
+          customsDeclarationContainerCount: customsDeclarationContainerCount.trim(),
         }),
       });
       if (result.success !== true) throw new Error(result.message || "报关单信息保存失败");
@@ -239,6 +245,30 @@ export function CustomsRecognitionForm({
             onChange={(event) => setCustomsDeclarationDate(event.target.value)}
           />
         </label>
+        <label>
+          <span>报关金额</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={customsDeclarationAmount}
+            disabled={readOnly || saving}
+            onChange={(event) => setCustomsDeclarationAmount(event.target.value)}
+            placeholder="用于按报关金额分摊"
+          />
+        </label>
+        <label>
+          <span>柜数</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={customsDeclarationContainerCount}
+            disabled={readOnly || saving}
+            onChange={(event) => setCustomsDeclarationContainerCount(event.target.value)}
+            placeholder="用于按柜数分摊"
+          />
+        </label>
       </div>
       <div className={styles.customsReadMessage}>
         <div>{declarationNoRead ? "已读取：报关单号" : "未读取到报关单号，请手动填写"}</div>
@@ -256,6 +286,10 @@ export function CustomsRecognitionForm({
       </div>
     </div>
   );
+}
+
+function optionalNumberText(value: unknown) {
+  return value === null || value === undefined || value === "" ? "" : String(value);
 }
 
 export function CustomsUploadCard({

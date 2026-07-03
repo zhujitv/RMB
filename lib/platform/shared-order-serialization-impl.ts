@@ -140,6 +140,7 @@ type ShippingDocumentBundleItem = {
   emailLabel: string;
   documentType: string;
   document: OrderDocumentLike | null;
+  documents: OrderDocumentLike[];
 };
 type ShippingDocumentBundle = {
   items: ShippingDocumentBundleItem[];
@@ -147,7 +148,7 @@ type ShippingDocumentBundle = {
   missing: ShippingDocumentBundleItem[];
 };
 
-function latestSuccessfulDocumentByType(order: ShippingOrderLike = {}, documentType = "") {
+function successfulDocumentsByType(order: ShippingOrderLike = {}, documentType = "") {
   return (order.documents || [])
     .filter((document) => (
       document.documentType === documentType
@@ -155,30 +156,35 @@ function latestSuccessfulDocumentByType(order: ShippingOrderLike = {}, documentT
       && !document.deletedAt
       && String(document.mimeType || "").toLowerCase() === "application/pdf"
     ))
-    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime())[0] || null;
+    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime());
 }
 
 function shippingDocumentBundle(order: ShippingOrderLike = {}, options: { documentTypes?: unknown } = {}): ShippingDocumentBundle {
   const customer = order.customer || {};
   const documentTypes = normalizeShippingDocumentTypes(options.documentTypes || customer.autoSendDocumentTypes || DEFAULT_SHIPPING_DOCUMENT_TYPES);
-  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingDocumentBundleItem, "typeKey" | "document">>;
+  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingDocumentBundleItem, "typeKey" | "document" | "documents">>;
   const items = documentTypes.filter((typeKey) => Boolean(configMap[typeKey])).map((typeKey) => {
     const config = configMap[typeKey];
-    const document = latestSuccessfulDocumentByType(order, config.documentType);
-    return { typeKey, ...config, document };
+    const documents = successfulDocumentsByType(order, config.documentType);
+    return { typeKey, ...config, document: documents[0] || null, documents };
   });
   return {
     items,
-    documents: items.map((item) => item.document).filter((document): document is OrderDocumentLike => Boolean(document)),
-    missing: items.filter((item) => !item.document),
+    documents: items.flatMap((item) => item.documents || []),
+    missing: items.filter((item) => !(item.documents || []).length),
   };
+}
+
+function shippingBundleItemEmailLabel(item: ShippingDocumentBundleItem) {
+  const count = (item.documents || []).length;
+  return count > 1 ? `${item.emailLabel} x${count}` : item.emailLabel;
 }
 
 function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: ShippingDocumentBundle = shippingDocumentBundle(order), language = "EN") {
   const normalizedLanguage = normalizeClearanceEmailLanguage(language, order.customer?.country || order.country || "");
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
-  const labels = (bundle.items || []).filter((item) => item.document).map((item) => item.emailLabel);
+  const labels = (bundle.items || []).filter((item) => (item.documents || []).length).map(shippingBundleItemEmailLabel);
   if (normalizedLanguage === "RU") {
     return {
       language: "RU",
@@ -244,6 +250,7 @@ function shippingDocumentDraft(order: ShippingOrderLike = {}) {
       documentId: item.document?.id || "",
       fileName: item.document ? standardFilenameForDocument(item.document, order as Parameters<typeof standardFilenameForDocument>[1]) : "",
       originalFilename: item.document?.originalFilename || item.document?.originalName || item.document?.fileName || "",
+      fileCount: item.documents.length,
       exists: Boolean(item.document),
     })),
     missingLabels: bundle.missing.map((item) => item.label),

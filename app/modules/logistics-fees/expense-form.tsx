@@ -8,10 +8,12 @@ import styles from "../../WorkspaceShell.module.css";
 import {
   logisticsCostTypeDefaultCurrency,
   logisticsCostTypeLabel,
+  logisticsCostTypeRequiresDeclarationScope,
 } from "../../../lib/platform/logistics-cost-types";
 import {
   CURRENCIES,
   DEFAULT_BILLING_METHOD,
+  LOGISTICS_EXPENSE_ALLOCATION_METHODS,
   emptyExpenseForm,
   emptyExpenseItem,
   type ExchangeRateResponse,
@@ -23,6 +25,7 @@ import {
 import {
   allowedCostTypeOptions,
   containerSummaryText,
+  customsDeclarationLabel,
   filterLogisticsFeeSuppliers,
   formatOriginalCurrencyAccounting,
   lineSubtotal,
@@ -94,6 +97,9 @@ export function LogisticsExpenseForm({
                 )
               ? current.supplierId
               : "",
+        items: current.items.map((item) =>
+          normalizeItemOwnershipForOrder(item, order),
+        ),
       }));
     }
   }, [initialOrder, isLockedSupplier, currentUserSupplierId]);
@@ -225,8 +231,64 @@ export function LogisticsExpenseForm({
     }));
   }
 
+  function normalizeItemOwnershipForOrder(
+    item: ExpenseItemForm,
+    order: ExpenseOrderOption,
+  ): ExpenseItemForm {
+    const declarations = order.customsDeclarations || [];
+    if (item.ownershipScope !== "DECLARATION") {
+      return { ...item, customsDeclarationId: "", allocatedAmount: "" };
+    }
+    if (declarations.some((declaration) => declaration.id === item.customsDeclarationId)) {
+      return item;
+    }
+    const fallbackDeclarationId = declarations.length === 1 ? declarations[0]?.id || "" : "";
+    return fallbackDeclarationId
+      ? { ...item, customsDeclarationId: fallbackDeclarationId }
+      : !declarations.length
+        ? {
+            ...item,
+            ownershipScope: "SHIPMENT",
+            customsDeclarationId: "",
+            allocationMethod: "",
+            allocatedAmount: "",
+          }
+      : {
+          ...item,
+          customsDeclarationId: "",
+          allocationMethod: "",
+          allocatedAmount: "",
+        };
+  }
+
+  function handleOwnershipScopeChange(index: number, scope: ExpenseItemForm["ownershipScope"]) {
+    const declarations = selectedOrder?.customsDeclarations || [];
+    const defaultDeclarationId = declarations.length === 1 ? declarations[0]?.id || "" : "";
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              ownershipScope: scope,
+              customsDeclarationId:
+                scope === "DECLARATION"
+                  ? item.customsDeclarationId || defaultDeclarationId
+                  : "",
+              allocationMethod: "",
+              allocatedAmount: "",
+            }
+          : item,
+      ),
+    }));
+  }
+
   function handleItemCostTypeChange(index: number, costType: string) {
     const defaultCurrency = logisticsCostTypeDefaultCurrency(costType);
+    const declarationScoped = logisticsCostTypeRequiresDeclarationScope(costType)
+      && (selectedOrder?.customsDeclarations || []).length > 1;
+    const declarations = selectedOrder?.customsDeclarations || [];
+    const defaultDeclarationId = declarations.length === 1 ? declarations[0]?.id || "" : "";
     setForm((current) => ({
       ...current,
       items: current.items.map((item, itemIndex) =>
@@ -234,6 +296,12 @@ export function LogisticsExpenseForm({
           ? {
               ...item,
               costType,
+              ownershipScope: declarationScoped ? "DECLARATION" : item.ownershipScope,
+              customsDeclarationId: declarationScoped
+                ? item.customsDeclarationId || defaultDeclarationId
+                : item.customsDeclarationId,
+              allocationMethod: declarationScoped ? "" : item.allocationMethod,
+              allocatedAmount: declarationScoped ? "" : item.allocatedAmount,
               currency: item.currencyTouched ? item.currency : defaultCurrency,
               exchangeRate: item.currencyTouched
                 ? item.exchangeRate
@@ -269,7 +337,7 @@ export function LogisticsExpenseForm({
         items: [
           ...current.items,
           copyLast && lastItem
-            ? { ...lastItem, amount: "", remark: "" }
+            ? { ...lastItem, amount: "", allocatedAmount: "", remark: "" }
             : emptyExpenseItem(),
         ],
       };
@@ -316,7 +384,10 @@ export function LogisticsExpenseForm({
           ? current.supplierId
           : ""),
       items: current.items.map((item) =>
-        normalizeExpenseItemCostType(item, nextCostTypes),
+        normalizeItemOwnershipForOrder(
+          normalizeExpenseItemCostType(item, nextCostTypes),
+          normalizedOrder,
+        ),
       ),
     }));
   }
@@ -326,16 +397,74 @@ export function LogisticsExpenseForm({
       setMessage("请选择关联订单");
       return;
     }
-    const normalizedItems = form.items.map((item) => ({
-      costType: item.costType,
-      billingMethod: DEFAULT_BILLING_METHOD,
-      amount: lineSubtotal(item),
-      billingQuantity: Number(item.appliedContainerCount || 1),
-      appliedContainerCount: Number(item.appliedContainerCount || 1),
-      currency: item.currency,
-      exchangeRate: Number(item.exchangeRate),
-      remark: item.remark.trim(),
-    }));
+    const normalizedItems = form.items.map((item) => {
+      const allocatedAmountText = item.allocatedAmount.trim();
+      return {
+        ownershipScope: item.ownershipScope,
+        customsDeclarationId:
+          item.ownershipScope === "DECLARATION"
+            ? item.customsDeclarationId
+            : "",
+        allocationMethod:
+          item.ownershipScope === "SHIPMENT"
+            ? item.allocationMethod
+            : allocatedAmountText
+              ? "手工金额"
+              : item.allocationMethod,
+        allocatedAmount:
+          item.ownershipScope === "DECLARATION" && allocatedAmountText
+            ? Number(allocatedAmountText)
+            : item.ownershipScope === "SHIPMENT"
+              ? null
+              : undefined,
+        costType: item.costType,
+        billingMethod: DEFAULT_BILLING_METHOD,
+        amount: lineSubtotal(item),
+        billingQuantity: Number(item.appliedContainerCount || 1),
+        appliedContainerCount: Number(item.appliedContainerCount || 1),
+        currency: item.currency,
+        exchangeRate: Number(item.exchangeRate),
+        remark: item.remark.trim(),
+      };
+    });
+    const declarationIds = new Set(
+      (selectedOrder?.customsDeclarations || []).map((declaration) => declaration.id),
+    );
+    const hasMultipleDeclarations = declarationIds.size > 1;
+    const ownershipErrorIndex = normalizedItems.findIndex((item) => (
+      item.ownershipScope === "DECLARATION"
+      && (!item.customsDeclarationId || !declarationIds.has(item.customsDeclarationId))
+    ));
+    if (ownershipErrorIndex >= 0) {
+      setMessage(`请为第 ${ownershipErrorIndex + 1} 行选择有效报关批次`);
+      return;
+    }
+    const shipmentAllocationMissingIndex = normalizedItems.findIndex((item) => (
+      hasMultipleDeclarations
+      && item.ownershipScope === "SHIPMENT"
+      && !item.allocationMethod
+    ));
+    if (shipmentAllocationMissingIndex >= 0) {
+      setMessage(`一票提单多次报关时，请为第 ${shipmentAllocationMissingIndex + 1} 行整票费用选择分摊方式`);
+      return;
+    }
+    const manualAllocationMissingIndex = normalizedItems.findIndex((item) => (
+      item.ownershipScope === "DECLARATION"
+      && item.allocationMethod === "手工金额"
+      && item.allocatedAmount == null
+    ));
+    if (manualAllocationMissingIndex >= 0) {
+      setMessage(`请填写第 ${manualAllocationMissingIndex + 1} 行手工分摊金额`);
+      return;
+    }
+    const allocationErrorIndex = normalizedItems.findIndex((item) => (
+      item.allocatedAmount != null
+      && (!Number.isFinite(item.allocatedAmount) || item.allocatedAmount < 0 || item.allocatedAmount - item.amount > 0.01)
+    ));
+    if (allocationErrorIndex >= 0) {
+      setMessage(`第 ${allocationErrorIndex + 1} 行分摊金额必须大于等于 0，且不能超过小计`);
+      return;
+    }
     const invalidIndex = normalizedItems.findIndex(
       (item) =>
         !item.costType ||
@@ -389,6 +518,7 @@ export function LogisticsExpenseForm({
   }
 
   const selectedOrder = orders.find((order) => order.id === form.orderId);
+  const customsDeclarationOptions = selectedOrder?.customsDeclarations || [];
   const selectedSupplier =
     suppliers.find((supplier) => supplier.id === form.supplierId) || null;
   useEffect(() => {
@@ -536,6 +666,10 @@ export function LogisticsExpenseForm({
         <div className={styles.logisticsItemsTable}>
           <div className={styles.logisticsItemsHead}>
             <span>费用类型</span>
+            <span>费用归属</span>
+            <span>报关批次</span>
+            <span>分摊方式</span>
+            <span>分摊金额</span>
             <span>适用数量</span>
             <span>单价/金额</span>
             <span>币种</span>
@@ -561,6 +695,75 @@ export function LogisticsExpenseForm({
                   </option>
                 ))}
               </select>
+              <select
+                value={item.ownershipScope}
+                onChange={(event) =>
+                  handleOwnershipScopeChange(
+                    index,
+                    event.target.value as ExpenseItemForm["ownershipScope"],
+                  )
+                }
+              >
+                <option
+                  value="SHIPMENT"
+                  disabled={logisticsCostTypeRequiresDeclarationScope(item.costType) && customsDeclarationOptions.length > 1}
+                >
+                  整票提单
+                </option>
+                <option value="DECLARATION" disabled={!customsDeclarationOptions.length}>
+                  指定报关批次
+                </option>
+              </select>
+              <select
+                value={item.customsDeclarationId}
+                disabled={item.ownershipScope !== "DECLARATION" || !customsDeclarationOptions.length}
+                onChange={(event) =>
+                  setItemField(index, "customsDeclarationId", event.target.value)
+                }
+              >
+                <option value="">
+                  {customsDeclarationOptions.length ? "请选择" : "暂无报关批次"}
+                </option>
+                {customsDeclarationOptions.map((declaration) => (
+                  <option key={declaration.id} value={declaration.id}>
+                    {customsDeclarationLabel(declaration)}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={item.allocationMethod}
+                onChange={(event) =>
+                  setItemField(index, "allocationMethod", event.target.value)
+                }
+              >
+                <option value="">
+                  {item.ownershipScope === "DECLARATION"
+                    ? "直接计入"
+                    : customsDeclarationOptions.length > 1
+                      ? "请选择分摊方式"
+                      : "整票费用"}
+                </option>
+                {(item.ownershipScope === "DECLARATION"
+                  ? LOGISTICS_EXPENSE_ALLOCATION_METHODS.filter((method) => method === "手工金额")
+                  : LOGISTICS_EXPENSE_ALLOCATION_METHODS.filter((method) => method !== "手工金额")
+                ).map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={item.allocatedAmount}
+                disabled={item.ownershipScope !== "DECLARATION"}
+                onChange={(event) =>
+                  setItemField(index, "allocatedAmount", event.target.value)
+                }
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder={item.ownershipScope === "DECLARATION" ? "默认小计" : "-"}
+              />
               <input
                 value={item.appliedContainerCount}
                 onChange={(event) =>

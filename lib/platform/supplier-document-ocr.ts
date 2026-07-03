@@ -18,6 +18,7 @@ import { getCompanyProfileSettings } from "./company-profile";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
 import { saveOcrRawResult } from "./ocr-raw-results";
 import { refreshSupplierDocumentRequestCompletion, type CompletionRefreshOptions } from "./supplier-document-request-completion";
+import { refreshCustomsDeclarationAfterOwnershipChange, upsertCustomsDeclarationSupplierLink } from "./customs-declaration-ownership";
 import {
   contractOrderNoMatches,
   contractOrderSetKey,
@@ -42,6 +43,7 @@ type OcrDocumentRow = Prisma.OrderDocumentGetPayload<{
     cost: true;
     factoryDocumentRequest: {
       include: {
+        customsDeclaration: true;
         order: {
           include: {
             businessEntity: true;
@@ -308,6 +310,8 @@ function supplierDocumentLabels(documentType: string) {
 }
 
 function expectedAmountFromDocument(document: OcrDocumentRow) {
+  const requestAmount = num(document.factoryDocumentRequest?.requiredInvoiceAmount, 0);
+  if (requestAmount > 0) return requestAmount;
   if (document.cost) {
     const currency = String(document.cost.currency || "CNY").toUpperCase();
     const amount = currency === "CNY" ? num(document.cost.amount, 0) : num(document.cost.amountCny, 0);
@@ -495,6 +499,24 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
     });
     if (!staleTasks.length) return 0;
     const ids = staleTasks.map((task) => task.id);
+    const staleDocuments = await prisma.orderDocument.findMany({
+      where: { id: { in: staleTasks.map((task) => task.documentId) }, deletedAt: null },
+      select: {
+        id: true,
+        documentType: true,
+        supplierId: true,
+        costId: true,
+        factoryDocumentRequestId: true,
+        factoryDocumentRequest: {
+          select: {
+            id: true,
+            customsDeclarationId: true,
+            costId: true,
+          },
+        },
+      },
+      take: Math.min(staleTasks.length, 500),
+    });
     await prisma.ocrTask.updateMany({
       where: { id: { in: ids } },
       data: {
@@ -507,6 +529,36 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
         },
       },
     });
+    const requestIds = [...new Set(staleTasks.map((task) => task.requestId).filter((requestId): requestId is string => Boolean(requestId)))];
+    for (const requestId of requestIds) {
+      await refreshSupplierDocumentRequestQualification(requestId);
+    }
+    const customsDeclarationIds = new Set<string>();
+    for (const document of staleDocuments) {
+      const customsDeclarationId = document.factoryDocumentRequest?.customsDeclarationId || "";
+      if (!customsDeclarationId || !document.supplierId) continue;
+      const isContract = document.documentType === "SUPPLIER_PURCHASE_CONTRACT";
+      await prisma.customsDeclarationSupplier.updateMany({
+        where: {
+          customsDeclarationId,
+          supplierId: document.supplierId,
+          purchaseOrderId: document.costId || document.factoryDocumentRequest?.costId || null,
+          deletedAt: null,
+        },
+        data: {
+          validationStatus: "PENDING",
+          validationMessage: OCR_STALE_PROCESSING_MESSAGE,
+          manualApprovedByUserId: null,
+          manualApprovedAt: null,
+          manualApprovalReason: null,
+          ...(isContract ? { contractAmount: null } : { vatInvoiceAmount: null }),
+        },
+      });
+      customsDeclarationIds.add(customsDeclarationId);
+    }
+    for (const customsDeclarationId of customsDeclarationIds) {
+      await refreshCustomsDeclarationAfterOwnershipChange(customsDeclarationId, "供应商OCR超时后报关批次完整度刷新");
+    }
     console.warn("supplier-document-ocr-stale-processing-reconciled", {
       count: staleTasks.length,
       documentIds: staleTasks.map((task) => task.documentId),
@@ -583,6 +635,7 @@ async function loadSupplierReturnDocument(documentId: string, requestId = ""): P
       cost: true,
       factoryDocumentRequest: {
         include: {
+          customsDeclaration: true,
           order: {
             include: {
               businessEntity: true,
@@ -778,8 +831,39 @@ export async function runSupplierDocumentOcrForDocument(
         include: { results: true },
       });
     });
-    if (document.factoryDocumentRequestId) {
-      await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
+    const completion = document.factoryDocumentRequestId
+      ? await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId)
+      : null;
+    if (document.factoryDocumentRequest?.customsDeclarationId && document.supplierId) {
+      const documentAmount = document.documentType === "SUPPLIER_INVOICE"
+        ? ("amountWithTax" in fields ? fields.amountWithTax : null)
+        : ("contractAmount" in fields ? fields.contractAmount : null);
+      const forcePendingReason = completion?.status === "已完成" && status.validationStatus === VALIDATION_PASSED
+        ? ""
+        : issues.map((issue) => issue.message).filter(Boolean).join("；").slice(0, 500)
+          || (completion?.status === "已完成" ? "供应商资料OCR校验未通过" : "仍有供应商资料未完成校验");
+      await prisma.$transaction(async (tx) => {
+        await upsertCustomsDeclarationSupplierLink(tx, {
+          customsDeclarationId: document.factoryDocumentRequest?.customsDeclarationId || "",
+          supplierId: document.supplierId || "",
+          purchaseOrderId: document.costId || document.factoryDocumentRequest?.costId || null,
+          requiredInvoiceAmount: document.factoryDocumentRequest?.requiredInvoiceAmount || null,
+          documentType: document.documentType,
+          documentId: document.id,
+          documentAmount,
+          forcePendingReason,
+        });
+      });
+      if (completion?.status === "已完成") {
+        await markBatchSupplierManualApprovedIfRequestCompleted({
+          requestId: document.factoryDocumentRequestId || "",
+          customsDeclarationId: document.factoryDocumentRequest.customsDeclarationId,
+          supplierId: document.supplierId,
+          purchaseOrderId: document.costId || document.factoryDocumentRequest.costId || null,
+          actorId: document.uploadedById || null,
+        });
+      }
+      await refreshCustomsDeclarationAfterOwnershipChange(document.factoryDocumentRequest.customsDeclarationId, "供应商OCR后报关批次完整度刷新");
     }
     return saved;
   } catch (error) {
@@ -824,6 +908,26 @@ export async function runSupplierDocumentOcrForDocument(
     if (document.factoryDocumentRequestId) {
       await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
     }
+    if (document.factoryDocumentRequest?.customsDeclarationId && document.supplierId) {
+      const isContract = document.documentType === "SUPPLIER_PURCHASE_CONTRACT";
+      await prisma.customsDeclarationSupplier.updateMany({
+        where: {
+          customsDeclarationId: document.factoryDocumentRequest.customsDeclarationId,
+          supplierId: document.supplierId,
+          purchaseOrderId: document.costId || document.factoryDocumentRequest.costId || null,
+          deletedAt: null,
+        },
+        data: {
+          validationStatus: "PENDING",
+          validationMessage: message.slice(0, 500),
+          manualApprovedByUserId: null,
+          manualApprovedAt: null,
+          manualApprovalReason: null,
+          ...(isContract ? { contractAmount: null } : { vatInvoiceAmount: null }),
+        },
+      });
+      await refreshCustomsDeclarationAfterOwnershipChange(document.factoryDocumentRequest.customsDeclarationId, "供应商OCR失败后报关批次完整度刷新");
+    }
     return saved;
   }
 }
@@ -857,9 +961,60 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
   }
 }
 
-export async function confirmSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
+async function supplierDocumentRequestHasManualConfirmedOcr(requestId: string) {
+  const row = await prisma.supplierDocumentRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      documents: {
+        where: { deletedAt: null },
+        select: {
+          ocrTasks: {
+            orderBy: [{ createdAt: "desc" }],
+            take: 1,
+            select: { validationStatus: true },
+          },
+        },
+      },
+    },
+  });
+  return Boolean(row?.documents?.some((document) => document.ocrTasks?.[0]?.validationStatus === VALIDATION_CONFIRMED));
+}
+
+async function markBatchSupplierManualApprovedIfRequestCompleted(input: {
+  requestId: string;
+  customsDeclarationId?: string | null;
+  supplierId?: string | null;
+  purchaseOrderId?: string | null;
+  actorId?: string | null;
+  reason?: string | null;
+}) {
+  if (!input.requestId || !input.customsDeclarationId || !input.supplierId) return;
+  const hasManualConfirmation = await supplierDocumentRequestHasManualConfirmedOcr(input.requestId);
+  if (!hasManualConfirmation) return;
+  const reason = nonEmpty(input.reason).slice(0, 500) || "人工核对后确认通过";
+  await prisma.customsDeclarationSupplier.updateMany({
+    where: {
+      customsDeclarationId: input.customsDeclarationId,
+      supplierId: input.supplierId,
+      purchaseOrderId: input.purchaseOrderId || null,
+      deletedAt: null,
+    },
+    data: {
+      validationStatus: "MANUAL_APPROVED",
+      validationMessage: null,
+      manualApprovedByUserId: input.actorId || null,
+      manualApprovedAt: new Date(),
+      manualApprovalReason: reason,
+    },
+  });
+}
+
+export async function confirmSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string, input: unknown = {}) {
   assertWrite(actor, "supplierDocuments");
   assertInternalOcrManager(actor);
+  const reason = nonEmpty((input as { reason?: unknown; manualApprovalReason?: unknown } | null)?.reason
+    || (input as { manualApprovalReason?: unknown } | null)?.manualApprovalReason)
+    .slice(0, 500) || "人工核对后确认通过";
   const before = await prisma.ocrTask.findFirst({
     where: { documentId, requestId },
     orderBy: [{ createdAt: "desc" }],
@@ -879,8 +1034,45 @@ export async function confirmSupplierDocumentOcr(request: AuditRequestLike, acto
     },
     include: { results: true },
   });
-  await refreshSupplierDocumentRequestQualification(requestId, { completedById: actor?.id || null });
-  await runNonCriticalTask("资料回传OCR人工确认日志写入", () => writeAudit(request, actor, "人工确认供应商回传资料OCR", "ocr_tasks", saved.id, before, saved));
+  const completion = await refreshSupplierDocumentRequestQualification(requestId, { completedById: actor?.id || null });
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, factoryDocumentRequestId: requestId, deletedAt: null },
+    select: {
+      supplierId: true,
+      costId: true,
+      factoryDocumentRequest: { select: { customsDeclarationId: true, supplierId: true, costId: true } },
+    },
+  }).catch(() => null);
+  if (document?.factoryDocumentRequest?.customsDeclarationId) {
+    await prisma.customsDeclarationSupplier.updateMany({
+      where: {
+        customsDeclarationId: document.factoryDocumentRequest.customsDeclarationId,
+        supplierId: document.supplierId || document.factoryDocumentRequest.supplierId,
+        purchaseOrderId: document.costId || document.factoryDocumentRequest.costId || null,
+        deletedAt: null,
+      },
+      data: completion?.status === "已完成"
+        ? {
+            validationStatus: "MANUAL_APPROVED",
+            validationMessage: null,
+            manualApprovedByUserId: actor?.id || null,
+            manualApprovedAt: new Date(),
+            manualApprovalReason: reason,
+          }
+        : {
+            validationStatus: "PENDING",
+            validationMessage: "仍有供应商资料未完成校验",
+            manualApprovedByUserId: null,
+            manualApprovedAt: null,
+            manualApprovalReason: null,
+          },
+    });
+  }
+  await refreshCustomsDeclarationAfterOwnershipChange(document?.factoryDocumentRequest?.customsDeclarationId, "供应商OCR人工确认后报关批次完整度刷新");
+  await runNonCriticalTask("资料回传OCR人工确认日志写入", () => writeAudit(request, actor, "人工确认供应商回传资料OCR", "ocr_tasks", saved.id, before, {
+    ...saved,
+    manualApprovalReason: reason,
+  }));
   return serializeSupplierDocumentOcrTask(saved);
 }
 
@@ -911,6 +1103,35 @@ export async function rejectSupplierDocumentOcr(request: AuditRequestLike, actor
     include: { results: true },
   });
   await refreshSupplierDocumentRequestQualification(requestId);
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, factoryDocumentRequestId: requestId, deletedAt: null },
+    select: {
+      supplierId: true,
+      costId: true,
+      documentType: true,
+      factoryDocumentRequest: { select: { customsDeclarationId: true, supplierId: true, costId: true } },
+    },
+  }).catch(() => null);
+  if (document?.factoryDocumentRequest?.customsDeclarationId) {
+    const isContract = document.documentType === "SUPPLIER_PURCHASE_CONTRACT";
+    await prisma.customsDeclarationSupplier.updateMany({
+      where: {
+        customsDeclarationId: document.factoryDocumentRequest.customsDeclarationId,
+        supplierId: document.supplierId || document.factoryDocumentRequest.supplierId,
+        purchaseOrderId: document.costId || document.factoryDocumentRequest.costId || null,
+        deletedAt: null,
+      },
+      data: {
+        validationStatus: "PENDING",
+        validationMessage: reason,
+        manualApprovedByUserId: null,
+        manualApprovedAt: null,
+        manualApprovalReason: null,
+        ...(isContract ? { contractAmount: null } : { vatInvoiceAmount: null }),
+      },
+    });
+    await refreshCustomsDeclarationAfterOwnershipChange(document.factoryDocumentRequest.customsDeclarationId, "供应商OCR驳回后报关批次完整度刷新");
+  }
   await runNonCriticalTask("资料回传OCR驳回日志写入", () => writeAudit(request, actor, "驳回供应商回传资料OCR", "ocr_tasks", saved.id, before, saved));
   return serializeSupplierDocumentOcrTask(saved);
 }

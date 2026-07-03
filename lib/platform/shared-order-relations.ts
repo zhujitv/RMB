@@ -54,6 +54,24 @@ export function includeOrderRelations() {
         supplier: true,
         createdBy: true,
         updatedBy: true,
+        generatedLogisticsExpense: {
+          select: {
+            customsDeclarationId: true,
+            allocationMethod: true,
+            allocatedAmount: true,
+            invoiceDocument: {
+              include: {
+                uploadedBy: true,
+                cost: { include: { supplier: true } },
+                supplier: true,
+                logisticsExpenseInvoices: {
+                  where: { deletedAt: null },
+                  include: { bill: true, cost: true, supplier: true },
+                },
+              },
+            },
+          },
+        },
         documents: {
           where: { deletedAt: null },
           include: { uploadedBy: true, supplier: true },
@@ -78,6 +96,23 @@ export function includeOrderRelations() {
     logisticsSuppliers: {
       include: { supplier: true, assignedBy: true },
       orderBy: [{ assignedAt: "desc" as const }],
+    },
+    customsDeclarations: {
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        supplierId: true,
+        purchaseOrderId: true,
+        declarationAmount: true,
+        containerCount: true,
+        suppliers: {
+          where: { deletedAt: null },
+          select: { supplierId: true, purchaseOrderId: true, requiredInvoiceAmount: true, vatInvoiceAmount: true, contractAmount: true, splitAmount: true },
+          take: 200,
+        },
+      },
+      orderBy: [{ declarationDate: "asc" as const }, { createdAt: "asc" as const }],
+      take: 100,
     },
     shippingDocumentNotifications: {
       include: { sentBy: true },

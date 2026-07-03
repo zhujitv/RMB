@@ -573,6 +573,7 @@
 .supplierDocumentTaskDetail { composes: supplierDocumentTaskDetail from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskMeta { composes: supplierDocumentTaskMeta from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskMeta from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskOrder { composes: supplierDocumentTaskOrder from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentTaskBatch { composes: supplierDocumentTaskBatch from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskRequirement { composes: supplierDocumentTaskRequirement from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskRequirement from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskRow { composes: supplierDocumentTaskRow from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskRow from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentTaskRow from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskSupplier { composes: supplierDocumentTaskSupplier from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskSupplier from "./styles/workspace-shell/supplier-documents.module.css"; }

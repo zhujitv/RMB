@@ -928,13 +928,13 @@
 
 .logisticsItemsHead,
 .logisticsItemsRow {
-  grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;
-  min-width: 936px;
+  grid-template-columns: 140px 110px 220px 120px 110px 90px 120px 80px 90px 120px 160px 80px;
+  min-width: 1560px;
   box-sizing: border-box;
 }
 
 .logisticsItemsInlineActions {
-  min-width: 936px;
+  min-width: 1560px;
   box-sizing: border-box;
 }
 
@@ -973,17 +973,17 @@
   line-height: 18px;
 }
 
-.logisticsItemsRow > :nth-child(2) {
+.logisticsItemsRow > :nth-child(6) {
   width: 80px;
   justify-self: center;
 }
 
-.logisticsItemsRow > :nth-child(3) {
+.logisticsItemsRow > :nth-child(7) {
   width: 110px;
   justify-self: end;
 }
 
-.logisticsItemsRow > select:nth-of-type(2) {
+.logisticsItemsRow > :nth-child(8) {
   width: 72px;
   min-width: 72px;
   max-width: 72px;
@@ -997,17 +997,17 @@
   background-size: 14px 14px;
 }
 
-.logisticsTypographyScope .logisticsItemsRow > select:nth-of-type(2) {
+.logisticsTypographyScope .logisticsItemsRow > :nth-child(8) {
   padding: 0 8px;
   padding-right: 22px;
 }
 
-.logisticsItemsRow > :nth-child(5) {
+.logisticsItemsRow > :nth-child(9) {
   width: 80px;
   justify-self: center;
 }
 
-.logisticsItemsRow > strong:nth-child(6) {
+.logisticsItemsRow > strong:nth-child(10) {
   width: 110px;
   justify-self: end;
   overflow: hidden;
@@ -1016,7 +1016,7 @@
   text-align: right;
 }
 
-.logisticsItemsRow > :nth-child(8) {
+.logisticsItemsRow > :nth-child(12) {
   width: 80px;
   justify-self: center;
 }

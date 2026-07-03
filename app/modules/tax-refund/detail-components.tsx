@@ -271,12 +271,15 @@ function TaxRefundDetailPanel({
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail, fallback);
   const uploadOrderId = detail.orderId || detail.id;
   const factoryCosts = factorySupplierCosts(detail.costs || []);
-  const showTaxArchiveRecord = Boolean(
-    detail.taxRefundStatus === "SUBMITTED"
-    || fallback.taxRefundStatus === "SUBMITTED"
-    || detail.taxArchived
-    || fallback.taxArchived,
-  );
+  const hasCustomsDeclarationScope = Boolean(detail.customsDeclarationId);
+  const showTaxArchiveRecord = hasCustomsDeclarationScope
+    ? Boolean(detail.taxRefundStatus === "SUBMITTED" || detail.taxArchived)
+    : Boolean(
+      detail.taxRefundStatus === "SUBMITTED"
+      || fallback.taxRefundStatus === "SUBMITTED"
+      || detail.taxArchived
+      || fallback.taxArchived,
+    );
   const tabs: Array<{ key: TaxRefundDetailTab; label: string }> = [
     { key: "basic", label: "基础信息" },
     { key: "export-documents", label: "出口资料" },

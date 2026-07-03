@@ -264,7 +264,9 @@ export function DomesticLogisticsModule({
   async function uploadDocument(orderId: string, documentType: string, file: File | null, customsDeclarationId = "") {
     if (!file) return;
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
-    const uploadKey = isCustomsDeclaration ? `${orderId}:${documentType}:${customsDeclarationId || "new"}` : `${orderId}:${documentType}`;
+    const uploadKey = (customsDeclarationId || isCustomsDeclaration)
+      ? `${orderId}:${documentType}:${customsDeclarationId || "new"}`
+      : `${orderId}:${documentType}`;
     setUploadingKey(uploadKey);
     setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setError("");

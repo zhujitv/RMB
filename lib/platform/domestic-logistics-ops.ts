@@ -23,6 +23,7 @@ import {
 } from "./masters-access";
 import { Prisma } from "../generated/prisma/client.js";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark } from "./export-invoice-remark";
+import { orderTaxArchiveWhereForScope } from "./tax-archive-scope";
 
 type ActorLike = {
   id?: string | null;
@@ -100,8 +101,11 @@ type CustomsDeclarationLike = {
   id?: string | null;
   orderId?: string | null;
   billOfLadingNo?: string | null;
+  batchNo?: string | null;
   declarationNo?: string | null;
   declarationDate?: Date | string | null;
+  declarationAmount?: unknown;
+  containerCount?: number | null;
   pdfDocumentId?: string | null;
   taxRefundStatus?: string | null;
   taxRefundOverallCompleteness?: number | null;
@@ -110,6 +114,14 @@ type CustomsDeclarationLike = {
   supplier?: { supplierName?: string | null } | null;
   purchaseOrder?: { supplierNameSnapshot?: string | null; supplier?: { supplierName?: string | null } | null } | null;
   pdfDocument?: unknown | null;
+  documents?: Array<{ documentType?: string | null; file?: unknown | null }> | null;
+  suppliers?: Array<{
+    validationStatus?: string | null;
+    contractFileId?: string | null;
+    vatInvoiceFileId?: string | null;
+    supplier?: { supplierName?: string | null } | null;
+    purchaseOrder?: { supplierNameSnapshot?: string | null; supplier?: { supplierName?: string | null } | null } | null;
+  }> | null;
 } & Record<string, unknown>;
 type ShipsgoTrackingLike = Parameters<typeof serializeShipsgoTrackingSummary>[0];
 type DomesticOrderLike = {
@@ -139,9 +151,7 @@ export function archiveScope(query: QueryLike) {
 }
 
 export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
-  if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
-  if (scope === "all") return {};
-  return { taxArchived: false };
+  return orderTaxArchiveWhereForScope(scope);
 }
 
 export function orderLogisticsArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
@@ -210,6 +220,19 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
         supplier: true,
         purchaseOrder: { include: { supplier: true } },
         pdfDocument: { include: { uploadedBy: true } },
+        documents: {
+          where: { deletedAt: null },
+          include: { file: { include: { uploadedBy: true } } },
+          orderBy: [{ documentType: "asc" }, { uploadedAt: "desc" }],
+        },
+        suppliers: {
+          where: { deletedAt: null },
+          include: {
+            supplier: true,
+            purchaseOrder: { include: { supplier: true } },
+          },
+          orderBy: [{ createdAt: "asc" }],
+        },
       },
       orderBy: [{ declarationDate: "desc" }, { updatedAt: "desc" }],
       take: 50,
@@ -611,23 +634,55 @@ export function sortDomesticLogisticsOrders(a: DomesticOrderLike = {}, b: Domest
 
 function serializeDomesticCustomsDeclaration(row: CustomsDeclarationLike = {}, order: DomesticOrderLike = {}) {
   const pdfDocument = row.pdfDocument ? serializeOrderDocument(row.pdfDocument, order as Parameters<typeof serializeOrderDocument>[1]) : null;
+  const linkedDocuments = (row.documents || [])
+    .map((documentLink) => {
+      const file = documentLink?.file ? serializeOrderDocument(documentLink.file, order as Parameters<typeof serializeOrderDocument>[1]) : null;
+      return file ? { ...file, documentType: String(documentLink.documentType || file.documentType || "") } : null;
+    })
+    .filter(Boolean);
+  const documentMap = new Map<string, NonNullable<(typeof linkedDocuments)[number]>>();
+  if (pdfDocument?.id) documentMap.set(pdfDocument.id, { ...pdfDocument, documentType: "CUSTOMS_DECLARATION_FORM" });
+  for (const document of linkedDocuments) {
+    if (document?.id) documentMap.set(document.id, document);
+  }
+  const suppliers = row.suppliers || [];
   const supplierName = row.supplier?.supplierName
     || row.purchaseOrder?.supplierNameSnapshot
     || row.purchaseOrder?.supplier?.supplierName
+    || suppliers.map((item) => (
+      item.supplier?.supplierName
+      || item.purchaseOrder?.supplierNameSnapshot
+      || item.purchaseOrder?.supplier?.supplierName
+      || ""
+    )).filter(Boolean).join("、")
     || "";
   const completeness = row.taxRefundOverallCompleteness == null ? null : Math.max(0, Math.min(100, Math.round(Number(row.taxRefundOverallCompleteness))));
+  const supplierCompleteCount = suppliers.filter((item) => ["PASSED", "MANUAL_APPROVED"].includes(String(item.validationStatus || ""))).length;
+  const supplierCompleteness = suppliers.length ? Math.round((supplierCompleteCount / suppliers.length) * 100) : null;
+  const supplierValidationStatus = suppliers.some((item) => String(item.validationStatus || "") === "AMOUNT_MISMATCH")
+    ? "校验异常"
+    : suppliers.length && supplierCompleteCount === suppliers.length ? "已完整" : suppliers.length ? "待补齐" : "未绑定";
   return {
     id: row.id || "",
     orderId: row.orderId || order.id || "",
     billOfLadingNo: row.billOfLadingNo || order.blNo || "",
+    batchNo: row.batchNo || "",
     declarationNo: row.declarationNo || "",
     customsDeclarationNo: row.declarationNo || "",
     declarationDate: dateToInput(row.declarationDate),
     customsDeclarationDate: dateToInput(row.declarationDate),
+    declarationAmount: row.declarationAmount == null ? null : Number(row.declarationAmount || 0),
+    customsDeclarationAmount: row.declarationAmount == null ? null : Number(row.declarationAmount || 0),
+    containerCount: row.containerCount == null ? null : Number(row.containerCount || 0),
+    customsDeclarationContainerCount: row.containerCount == null ? null : Number(row.containerCount || 0),
     pdfDocumentId: row.pdfDocumentId || pdfDocument?.id || "",
     pdfStatus: pdfDocument ? "已上传" : "未上传",
     pdfDocument,
+    documents: Array.from(documentMap.values()),
     supplierName,
+    supplierCount: suppliers.length,
+    supplierValidationStatus,
+    supplierCompleteness,
     taxRefundStatus: row.taxRefundStatus || "NOT_READY",
     overallCompleteness: completeness,
     taxArchived: Boolean(row.taxArchived),

@@ -7,6 +7,7 @@ import styles from "../../WorkspaceShell.module.css";
 import {
   logisticsCostTypeDefaultCurrency,
   logisticsCostTypeLabel,
+  logisticsCostTypeRequiresDeclarationScope,
 } from "../../../lib/platform/logistics-cost-types";
 import {
   CURRENCIES,
@@ -268,7 +269,7 @@ export function LogisticsExpenseRows({
       const draft = drafts[item.id];
       return (
         (item.isTemporary || logisticsExpenseDraftChanged(item, draft)) &&
-        !validLogisticsExpenseDraft(draft, item.isTemporary)
+        !validLogisticsExpenseDraft(draft, item.isTemporary, item)
       );
     });
     if (invalidIndex >= 0) {
@@ -664,6 +665,7 @@ function LogisticsExpenseDetailsTable({
         <thead>
           <tr>
             <th>费用类型</th>
+            <th>费用归属</th>
             <th>柜型</th>
             <th>数量</th>
             <th className={styles.numericCell}>金额</th>
@@ -733,6 +735,7 @@ function LogisticsExpenseDetailLine({
   const recommendedCurrency = logisticsCostTypeDefaultCurrency(draft.costType);
   const shouldShowCurrencySuggestion =
     Boolean(draft.currencyTouched) && originalCurrency !== recommendedCurrency;
+  const cannotUseDeclarationScopedCost = !expense.customsDeclarationId;
   const deleteBlockReason = billEditable
     ? logisticsExpenseDeleteBlockReason(expense)
     : `账单${billAuditStatus}，不能删除明细`;
@@ -749,7 +752,11 @@ function LogisticsExpenseDetailLine({
             aria-label="费用类型"
           >
             {COST_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={cannotUseDeclarationScopedCost && logisticsCostTypeRequiresDeclarationScope(option.value)}
+              >
                 {option.label}
               </option>
             ))}
@@ -758,6 +765,7 @@ function LogisticsExpenseDetailLine({
           logisticsCostTypeLabel(expense.costType || "") || "-"
         )}
       </td>
+      <td>{logisticsExpenseOwnershipText(expense)}</td>
       <td>{logisticsExpenseLineContainerType(expense)}</td>
       <td>
         {canEditThisAmount ? (
@@ -880,4 +888,22 @@ function LogisticsExpenseDetailLine({
       </td>
     </tr>
   );
+}
+
+function logisticsExpenseOwnershipText(expense: LogisticsExpense) {
+  if (!expense.customsDeclarationId) {
+    return expense.allocationMethod
+      ? `整票提单 / ${expense.allocationMethod}`
+      : "整票提单";
+  }
+  const declarationLabel = [
+    expense.customsDeclarationBatchNo || "",
+    expense.customsDeclarationNo ? `报关单 ${expense.customsDeclarationNo}` : "",
+    expense.customsDeclarationDate || "",
+  ].filter(Boolean).join(" / ") || "指定报关批次";
+  const allocationLabel = expense.allocationMethod ? ` / ${expense.allocationMethod}` : "";
+  const amountLabel = expense.allocatedAmount != null
+    ? ` / 分摊 ${formatOriginalCurrencyAccounting(expense.currency || "CNY", expense.allocatedAmount)}`
+    : "";
+  return `${declarationLabel}${allocationLabel}${amountLabel}`;
 }

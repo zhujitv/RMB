@@ -24,6 +24,7 @@ type SupplierDocument = {
   uploadStatusLabel?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+  createdAt?: string;
   ocrTask?: SupplierDocumentOcrTask | null;
 };
 
@@ -66,6 +67,12 @@ type SupplierFactoryCostSlot = {
 type SupplierDocumentTask = {
   id: string;
   orderNo?: string;
+  billOfLadingNo?: string;
+  customsDeclarationId?: string;
+  customsDeclarationBatchNo?: string;
+  customsDeclarationNo?: string;
+  customsDeclarationDate?: string;
+  requiredInvoiceAmount?: number | null;
   supplierName?: string;
   requestedByName?: string;
   requiredDocumentTypes?: string[];
@@ -351,6 +358,11 @@ export function SupplierDocumentsModule({
   }
 
   async function confirmOcr(task: SupplierDocumentTask, document: SupplierDocument) {
+    const reason = window.prompt("请填写人工确认原因", "人工核对后确认通过")?.trim() || "";
+    if (!reason) {
+      setError("请填写人工确认原因。");
+      return;
+    }
     const busyKey = supplierOcrActionKey(task.id, document.id, "confirm");
     setOcrBusyKey(busyKey);
     setError("");
@@ -358,7 +370,7 @@ export function SupplierDocumentsModule({
     try {
       const data = await apiJson<SupplierDocumentOcrResponse>(
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr/confirm`,
-        { method: "POST" },
+        { method: "POST", body: JSON.stringify({ reason }) },
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
       setNotice(data.message || "已人工确认通过");
@@ -593,6 +605,7 @@ function SupplierDocumentTaskCard({
   const defaultUploadCostId = factoryCostSlots.length === 1 ? factoryCostSlots[0]?.id || "" : "";
   const taskStatus = task.status || "待上传";
   const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
+  const batchText = supplierDocumentBatchText(task);
   return (
     <article className={styles.supplierDocumentTaskCard}>
       <div className={styles.supplierDocumentTaskRow}>
@@ -601,6 +614,9 @@ function SupplierDocumentTaskCard({
         </span>
         <span className={styles.supplierDocumentTaskSupplier} title={task.supplierName || "-"}>
           {task.supplierName || "-"}
+        </span>
+        <span className={styles.supplierDocumentTaskBatch} title={batchText}>
+          {batchText}
         </span>
         <span className={`${styles.statusPill} ${supplierDocumentStatusClass(taskStatus)}`}>{taskStatus}</span>
         <span className={styles.supplierDocumentTaskDate}>{formatDate(task.dueDate) || "-"}</span>
@@ -633,6 +649,18 @@ function SupplierDocumentTaskCard({
             <span>
               <small>通知人</small>
               <b>{task.requestedByName || "-"}</b>
+            </span>
+            <span>
+              <small>报关批次 / 报关单号</small>
+              <b title={batchText}>{batchText}</b>
+            </span>
+            <span>
+              <small>提单号</small>
+              <b>{task.billOfLadingNo || "-"}</b>
+            </span>
+            <span>
+              <small>要求开票金额</small>
+              <b>{formatMoney(task.requiredInvoiceAmount)}</b>
             </span>
             {task.sendError ? (
               <span title={task.sendError}>
@@ -741,6 +769,21 @@ function normalizeSupplierDocumentType(value: unknown) {
   return type;
 }
 
+function supplierDocumentBatchText(task: SupplierDocumentTask) {
+  const parts = [
+    task.customsDeclarationBatchNo || "",
+    task.customsDeclarationNo || "",
+    formatDate(task.customsDeclarationDate) || "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" / ") : "未绑定报关批次";
+}
+
+function formatMoney(value: unknown) {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) return "-";
+  return amount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function supplierDocumentTypeCandidates(document: SupplierDocument) {
   return [
     document.documentType,
@@ -769,8 +812,14 @@ function latestDocumentByType(documents: SupplierDocument[], documentType: strin
   const normalizedType = normalizeSupplierDocumentType(documentType);
   const matches = documents
     .filter((document) => supplierDocumentTypeCandidates(document).includes(normalizedType))
-    .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
+    .sort((a, b) => documentSortTime(b) - documentSortTime(a));
   return matches[0] || null;
+}
+
+function documentSortTime(document: SupplierDocument) {
+  const value = document.uploadedAt || document.createdAt || "";
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
 }
 
 function supplierDocumentFileName(document: SupplierDocument) {

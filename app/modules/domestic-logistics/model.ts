@@ -64,14 +64,23 @@ export type DomesticCustomsDeclaration = {
   id: string;
   orderId?: string;
   billOfLadingNo?: string;
+  batchNo?: string;
   declarationNo?: string;
   customsDeclarationNo?: string;
   declarationDate?: string | null;
   customsDeclarationDate?: string | null;
+  declarationAmount?: number | null;
+  customsDeclarationAmount?: number | null;
+  containerCount?: number | null;
+  customsDeclarationContainerCount?: number | null;
   pdfDocumentId?: string;
   pdfStatus?: string;
   pdfDocument?: DomesticLogisticsDocument | null;
+  documents?: DomesticLogisticsDocument[];
   supplierName?: string;
+  supplierCount?: number;
+  supplierValidationStatus?: string;
+  supplierCompleteness?: number | null;
   taxRefundStatus?: string;
   overallCompleteness?: number | null;
   taxArchived?: boolean;
@@ -316,6 +325,9 @@ export const CUSTOMS_DOCUMENT_TYPES = [
   { value: "CUSTOMS_ENTRY_FORM", label: "报关单" },
   { value: "RELEASE_NOTICE", label: "放行通知书" },
   { value: "CUSTOMS_POWER_OF_ATTORNEY", label: "报关委托书" },
+  { value: "PACKING_LIST", label: "装箱单" },
+  { value: "COMMERCIAL_INVOICE", label: "商业发票" },
+  { value: "SALES_CONTRACT", label: "销售合同" },
 ];
 export const ARCHIVE_SCOPE_OPTIONS = [
   { value: "current", label: "当前业务" },

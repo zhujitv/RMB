@@ -561,6 +561,7 @@ function taxRefundReportKeywordWhere(keyword: string): Prisma.CustomsDeclaration
     .map(([status]) => status);
   return {
     OR: [
+      { id: keyword },
       { declarationNo: { contains: keyword, mode: "insensitive" } },
       { billOfLadingNo: { contains: keyword, mode: "insensitive" } },
       { taxRefundStatus: { contains: keyword, mode: "insensitive" } },

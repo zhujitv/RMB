@@ -1,5 +1,8 @@
 
-import { logisticsCostTypeDefaultCurrency } from "../../../lib/platform/logistics-cost-types";
+import {
+  logisticsCostTypeDefaultCurrency,
+  logisticsCostTypeRequiresDeclarationScope,
+} from "../../../lib/platform/logistics-cost-types";
 import {
   CURRENCIES,
   COST_TYPES,
@@ -108,6 +111,9 @@ export function logisticsExpenseDraftSignature(expense: LogisticsExpense) {
     expense.billingMethod || "",
     expense.billingQuantity || "",
     expense.exchangeRate || 1,
+    expense.customsDeclarationId || "",
+    expense.allocationMethod || "",
+    expense.allocatedAmount ?? "",
     expense.remark || "",
   ].join(":");
 }
@@ -130,9 +136,11 @@ export function logisticsExpenseDraftChanged(
 export function validLogisticsExpenseDraft(
   draft?: LogisticsExpenseDraft,
   isCreate = false,
+  expense?: LogisticsExpense,
 ) {
   if (!draft) return false;
   if (!draft.costType || !COST_TYPES.includes(draft.costType)) return false;
+  if (expense && !expense.customsDeclarationId && logisticsCostTypeRequiresDeclarationScope(draft.costType)) return false;
   if (!draft.currency || !CURRENCIES.includes(normalizeCurrencyCode(draft.currency)))
     return false;
   if (!draft.unitAmount.trim()) return false;
@@ -150,8 +158,11 @@ export function logisticsExpenseDraftPayload(
 ): LogisticsExpenseBatchUpdateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
   const currency = normalizeCurrencyCode(safeDraft.currency || expense.currency);
+  const allocationMethod = expense.allocationMethod === "手工金额" ? "" : expense.allocationMethod;
   return {
     id: expense.id,
+    ...(expense.customsDeclarationId ? { customsDeclarationId: expense.customsDeclarationId } : {}),
+    ...(allocationMethod ? { allocationMethod } : {}),
     costType: safeDraft.costType,
     amount: Number(safeDraft.unitAmount),
     billingMethod: DEFAULT_BILLING_METHOD,
@@ -171,8 +182,11 @@ export function logisticsExpenseDraftCreatePayload(
 ): LogisticsExpenseBatchCreateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
   const currency = normalizeCurrencyCode(safeDraft.currency || expense.currency);
+  const allocationMethod = expense.allocationMethod === "手工金额" ? "" : expense.allocationMethod;
   return {
     expenseType: safeDraft.costType,
+    ...(expense.customsDeclarationId ? { customsDeclarationId: expense.customsDeclarationId } : {}),
+    ...(allocationMethod ? { allocationMethod } : {}),
     amount: Number(safeDraft.unitAmount),
     billingMethod: DEFAULT_BILLING_METHOD,
     billingQuantity: Number(safeDraft.appliedContainerCount),
@@ -193,6 +207,9 @@ export function logisticsExpenseDraftValidationMessage(
   const lineNo = index + 1;
   if (!draft?.costType || !COST_TYPES.includes(draft.costType))
     return `第 ${lineNo} 行请选择费用类型`;
+  if (!expense.customsDeclarationId && logisticsCostTypeRequiresDeclarationScope(draft.costType)) {
+    return `第 ${lineNo} 行${draft.costType}属于单次报关费用，请在新增物流费用中选择具体报关批次后录入`;
+  }
   if (!draft.currency || !CURRENCIES.includes(normalizeCurrencyCode(draft.currency)))
     return `第 ${lineNo} 行请选择币种`;
   if (!draft.unitAmount.trim()) return `第 ${lineNo} 行金额不能为空`;
@@ -257,6 +274,9 @@ export function createTemporaryLogisticsExpenseRow(
     customerShortName: expense.customerShortName || base.customerShortName,
     supplierId: base.supplierId,
     supplierName: base.supplierName,
+    customsDeclarationId: base.customsDeclarationId || "",
+    allocationMethod: base.allocationMethod === "手工金额" ? "" : base.allocationMethod || "",
+    allocatedAmount: null,
     costType: "拖车费",
     currency: logisticsCostTypeDefaultCurrency("拖车费"),
     exchangeRate: 1,

@@ -10,7 +10,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const actor = await requireApiActor(request);
     const { id, documentId } = await params;
-    const ocrTask = await confirmSupplierDocumentOcr(request, actor, id, documentId);
+    const body = await request.json().catch(() => ({}));
+    const ocrTask = await confirmSupplierDocumentOcr(request, actor, id, documentId, body);
     return NextResponse.json({
       success: true,
       ocrTask,

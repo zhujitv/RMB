@@ -89,10 +89,21 @@ export type LogisticsExpenseLike = {
   billId?: string | null;
   orderId?: string;
   supplierId?: string;
+  customsDeclarationId?: string | null;
+  allocationMethod?: string | null;
+  allocatedAmount?: unknown;
   bill?: LogisticsBillLike | null;
   costId?: string | null;
   supplierNameSnapshot?: string | null;
   supplier?: LogisticsSupplierLike | null;
+  customsDeclaration?: {
+    id?: string | null;
+    batchNo?: string | null;
+    declarationNo?: string | null;
+    declarationDate?: unknown;
+    declarationAmount?: unknown;
+    containerCount?: number | null;
+  } | null;
   costType?: string | null;
   currency?: string | null;
   exchangeRate?: unknown;
@@ -164,6 +175,7 @@ export type LogisticsExpenseOrderForAccess = LogisticsOrderLike & {
   id: string;
   customer?: ({ salespersonUserId?: string | null } & UnknownRecord) | null;
   logisticsSuppliers?: Array<{ supplierId?: string | null } & UnknownRecord> | null;
+  customsDeclarations?: Array<{ id?: string | null } & UnknownRecord> | null;
 };
 export type LogisticsSupplierForExpense = LogisticsSupplierLike & {
   id: string;
