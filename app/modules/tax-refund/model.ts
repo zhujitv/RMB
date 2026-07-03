@@ -61,13 +61,19 @@ export type DocumentCompleteness = {
 
 export type TaxRefundRow = {
   id: string;
+  orderId?: string;
+  customsDeclarationId?: string;
   orderNo?: string;
   blNo?: string;
   billOfLadingNo?: string;
   billOfLadingNumbers?: string[];
+  declarationNo?: string;
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  supplierId?: string;
+  supplierName?: string;
+  purchaseOrderId?: string;
   businessEntityId?: string;
   businessEntityName?: string;
   businessEntityShortName?: string;
@@ -143,6 +149,7 @@ export type TaxCost = {
 export type UploadScope = {
   costId?: string;
   supplierId?: string;
+  customsDeclarationId?: string;
 };
 
 export type DomesticLogisticsInfo = {

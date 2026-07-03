@@ -269,6 +269,7 @@ function TaxRefundDetailPanel({
   const logisticsArchiveStatus = taxLogisticsStatusLabel(detail.domesticLogisticsInfo?.archiveStatusLabel || "", Boolean(detail.domesticLogisticsInfo));
   const transportCards = taxTransportSummaryItems(detail);
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail, fallback);
+  const uploadOrderId = detail.orderId || detail.id;
   const factoryCosts = factorySupplierCosts(detail.costs || []);
   const showTaxArchiveRecord = Boolean(
     detail.taxRefundStatus === "SUBMITTED"
@@ -397,14 +398,14 @@ function TaxRefundDetailPanel({
               <FileUploadCard
                 key={documentType.value}
                 targetKey={taxDocumentTargetKey(documentType.value)}
-                orderId={detail.id}
+                orderId={uploadOrderId}
                 type={documentType.value}
                 label={documentType.label}
                 document={latestTaxDocument((detail.documents || []).filter((document) => (
                   document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
                 )))[0] || null}
-                uploading={uploadingKey === uploadScopeKey(detail.id, documentType.value)}
-                uploadProgress={uploadProgressByKey[uploadScopeKey(detail.id, documentType.value)] || 0}
+                uploading={uploadingKey === uploadScopeKey(uploadOrderId, documentType.value)}
+                uploadProgress={uploadProgressByKey[uploadScopeKey(uploadOrderId, documentType.value)] || 0}
                 deletingDocumentId={deletingDocumentId}
                 canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
                 canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
@@ -445,7 +446,7 @@ function TaxRefundDetailPanel({
             return (
               <FactoryCostUploadGroup
                 key={cost.id}
-                orderId={detail.id}
+                orderId={uploadOrderId}
                 cost={cost}
                 documents={detail.documents || []}
                 sameSupplierFactoryCostCount={ordinal.total}
@@ -470,7 +471,7 @@ function TaxRefundDetailPanel({
           {logisticsInvoiceCosts(detail.costs || []).length ? logisticsInvoiceCosts(detail.costs || []).map((cost) => (
             <LogisticsInvoiceUploadItem
               key={cost.id}
-              orderId={detail.id}
+              orderId={uploadOrderId}
               cost={cost}
               documents={detail.documents || []}
               completeness={detail.documentCompleteness || {}}
@@ -490,7 +491,7 @@ function TaxRefundDetailPanel({
           <div className={styles.documentGroupCard} key={groupName}>
             <strong>{groupName}</strong>
             <DocumentFileTable
-              orderId={detail.id}
+              orderId={uploadOrderId}
               documents={documents}
               deletingDocumentId={deletingDocumentId}
               canPreviewOrDownload

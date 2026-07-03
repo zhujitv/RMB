@@ -147,7 +147,9 @@ export function TaxRefundListPanel({
           <colgroup>
             <col className={styles.taxRefundOrderNoColumn} />
             <col className={styles.taxRefundBlNoColumn} />
+            <col className={styles.taxRefundDeclarationNoColumn} />
             <col className={styles.taxRefundCustomerColumn} />
+            <col className={styles.taxRefundSupplierColumn} />
             <col className={styles.taxRefundBusinessEntityColumn} />
             <col className={styles.taxRefundDateColumn} />
             <col className={styles.taxRefundCompletenessColumn} />
@@ -158,7 +160,9 @@ export function TaxRefundListPanel({
             <tr>
               <th className={styles.taxRefundOrderNoColumn}>订单号</th>
               <th className={styles.taxRefundBlNoColumn}>提单号</th>
+              <th className={styles.taxRefundDeclarationNoColumn}>报关单号</th>
               <th className={styles.taxRefundCustomerColumn}>客户简称</th>
+              <th className={styles.taxRefundSupplierColumn}>供应商</th>
               <th className={styles.taxRefundBusinessEntityColumn}>业务主体</th>
               <th className={styles.taxRefundDateColumn}>申报日期</th>
               <th className={styles.taxRefundCompletenessColumn}>总体完整度</th>
@@ -170,7 +174,7 @@ export function TaxRefundListPanel({
             {loading ? (
               Array.from({ length: 6 }).map((_, index) => (
                 <tr key={`tax-refund-skeleton-${index}`}>
-                  {Array.from({ length: 8 }).map((__, cellIndex) => (
+                  {Array.from({ length: 10 }).map((__, cellIndex) => (
                     <td key={cellIndex}>
                       <span className={styles.tableSkeletonLine} />
                     </td>
@@ -195,7 +199,7 @@ export function TaxRefundListPanel({
               );
             }) : (
               <tr>
-                <td colSpan={8}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
+                <td colSpan={10}><div className={styles.emptyState}>未找到匹配的退税资料订单</div></td>
               </tr>
             )}
           </tbody>

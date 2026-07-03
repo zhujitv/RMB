@@ -72,7 +72,7 @@ export function DomesticLogisticsRows({
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
-  onUploadDocument: (orderId: string, documentType: string, file: File | null) => void;
+  onUploadDocument: (orderId: string, documentType: string, file: File | null, customsDeclarationId?: string) => void;
   onDeleteDocument: (document: DomesticLogisticsDocument) => void;
   selectionEnabled: boolean;
   selected: boolean;
@@ -194,6 +194,7 @@ export function DomesticLogisticsRows({
               <CustomsDocumentPanel
                 orderId={row.id}
                 documents={row.documents || []}
+                customsDeclarations={row.customsDeclarations || []}
                 uploadingKey={uploadingKey}
                 uploadProgressByKey={uploadProgressByKey}
                 deletingDocumentId={deletingDocumentId}

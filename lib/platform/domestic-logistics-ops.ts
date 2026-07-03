@@ -7,6 +7,7 @@ import {
   customerFullName,
   customerShortName,
   dateFromInput,
+  dateToInput,
   nonEmpty,
   optional,
   requireText,
@@ -95,6 +96,21 @@ type LogisticsBillLike = {
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
 };
+type CustomsDeclarationLike = {
+  id?: string | null;
+  orderId?: string | null;
+  billOfLadingNo?: string | null;
+  declarationNo?: string | null;
+  declarationDate?: Date | string | null;
+  pdfDocumentId?: string | null;
+  taxRefundStatus?: string | null;
+  taxRefundOverallCompleteness?: number | null;
+  taxArchived?: boolean | null;
+  status?: string | null;
+  supplier?: { supplierName?: string | null } | null;
+  purchaseOrder?: { supplierNameSnapshot?: string | null; supplier?: { supplierName?: string | null } | null } | null;
+  pdfDocument?: unknown | null;
+} & Record<string, unknown>;
 type ShipsgoTrackingLike = Parameters<typeof serializeShipsgoTrackingSummary>[0];
 type DomesticOrderLike = {
   id?: string;
@@ -108,6 +124,7 @@ type DomesticOrderLike = {
   logisticsBills?: LogisticsBillLike[] | null;
   shipsgoTrackings?: ShipsgoTrackingLike[] | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
+  customsDeclarations?: CustomsDeclarationLike[] | null;
   documents?: unknown[] | null;
   taxArchived?: boolean | null;
   isArchived?: boolean | null;
@@ -186,6 +203,16 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
       where: { deletedAt: null, documentType: { in: DOMESTIC_LOGISTICS_DOCUMENT_TYPES } },
       include: { uploadedBy: true },
       orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+    },
+    customsDeclarations: {
+      where: { deletedAt: null },
+      include: {
+        supplier: true,
+        purchaseOrder: { include: { supplier: true } },
+        pdfDocument: { include: { uploadedBy: true } },
+      },
+      orderBy: [{ declarationDate: "desc" }, { updatedAt: "desc" }],
+      take: 50,
     },
     logisticsSuppliers: {
       include: { supplier: true },
@@ -582,6 +609,32 @@ export function sortDomesticLogisticsOrders(a: DomesticOrderLike = {}, b: Domest
   return dateSortValue(b.createdAt) - dateSortValue(a.createdAt);
 }
 
+function serializeDomesticCustomsDeclaration(row: CustomsDeclarationLike = {}, order: DomesticOrderLike = {}) {
+  const pdfDocument = row.pdfDocument ? serializeOrderDocument(row.pdfDocument, order as Parameters<typeof serializeOrderDocument>[1]) : null;
+  const supplierName = row.supplier?.supplierName
+    || row.purchaseOrder?.supplierNameSnapshot
+    || row.purchaseOrder?.supplier?.supplierName
+    || "";
+  const completeness = row.taxRefundOverallCompleteness == null ? null : Math.max(0, Math.min(100, Math.round(Number(row.taxRefundOverallCompleteness))));
+  return {
+    id: row.id || "",
+    orderId: row.orderId || order.id || "",
+    billOfLadingNo: row.billOfLadingNo || order.blNo || "",
+    declarationNo: row.declarationNo || "",
+    customsDeclarationNo: row.declarationNo || "",
+    declarationDate: dateToInput(row.declarationDate),
+    customsDeclarationDate: dateToInput(row.declarationDate),
+    pdfDocumentId: row.pdfDocumentId || pdfDocument?.id || "",
+    pdfStatus: pdfDocument ? "已上传" : "未上传",
+    pdfDocument,
+    supplierName,
+    taxRefundStatus: row.taxRefundStatus || "NOT_READY",
+    overallCompleteness: completeness,
+    taxArchived: Boolean(row.taxArchived),
+    status: row.status || "ACTIVE",
+  };
+}
+
 export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, actor: ActorLike = null) {
   const info = serializeDomesticLogisticsInfo((order.domesticLogisticsInfos || [])[0]);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot || "");
@@ -612,6 +665,7 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     submittedAt: info?.submittedAt || null,
     domesticLogisticsInfo: info,
     documents: (order.documents || []).map((document) => serializeOrderDocument(document, order as Parameters<typeof serializeOrderDocument>[1])),
+    customsDeclarations: (order.customsDeclarations || []).map((declaration) => serializeDomesticCustomsDeclaration(declaration, order)),
     logisticsSupplierIds: (order.logisticsSuppliers || []).map((row) => row.supplierId),
     logisticsSuppliers: (order.logisticsSuppliers || []).map((row) => serializeSupplier(row.supplier)).filter((item) => item.id),
     shipsgoTrackings: (order.shipsgoTrackings || []).map((row) => serializeShipsgoTrackingSummary(row)),

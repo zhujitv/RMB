@@ -60,6 +60,24 @@ export type UploadedDocument = DomesticLogisticsDocument & {
   customsRecognition?: CustomsRecognitionResult | null;
 };
 
+export type DomesticCustomsDeclaration = {
+  id: string;
+  orderId?: string;
+  billOfLadingNo?: string;
+  declarationNo?: string;
+  customsDeclarationNo?: string;
+  declarationDate?: string | null;
+  customsDeclarationDate?: string | null;
+  pdfDocumentId?: string;
+  pdfStatus?: string;
+  pdfDocument?: DomesticLogisticsDocument | null;
+  supplierName?: string;
+  taxRefundStatus?: string;
+  overallCompleteness?: number | null;
+  taxArchived?: boolean;
+  status?: string;
+};
+
 export type ShipsgoTimelineEvent = {
   time?: string;
   location?: string;
@@ -144,6 +162,7 @@ export type DomesticLogisticsRow = {
   submittedAt?: string | null;
   domesticLogisticsInfo?: DomesticLogisticsInfo | null;
   documents?: DomesticLogisticsDocument[];
+  customsDeclarations?: DomesticCustomsDeclaration[];
   logisticsSuppliers?: Array<{ id: string; supplierName?: string; name?: string; supplierType?: string }>;
   shipsgoTrackings?: ShipsgoTrackingRow[];
 };
@@ -279,6 +298,7 @@ const ALLOWED_LOGISTICS_ROW_KEYS = [
   "logisticsExpenseCount",
   "submittedAt",
   "documents",
+  "customsDeclarations",
   "logisticsSuppliers",
   "shipsgoTrackings",
 ] satisfies Array<keyof DomesticLogisticsRow>;

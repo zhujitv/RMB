@@ -255,7 +255,7 @@ test("critical write paths use shared input schemas", () => {
   );
   assert.match(
     orderDocumentsService,
-    /assertInputSchema\(assertJsonObject\(\{ orderId, documentType, costId, supplierId, uploadSource \}\), ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA\)/,
+    /assertInputSchema\(assertJsonObject\(\{ orderId, documentType, costId, supplierId, customsDeclarationId, uploadSource \}\), ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA\)/,
   );
 });
 

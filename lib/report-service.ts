@@ -1,7 +1,11 @@
 import JSZip from "jszip";
+import { prisma } from "./prisma";
+import { Prisma } from "./generated/prisma/client.js";
 import {
   apiError,
   assertRead,
+  ACTIVE_TAX_REFUND_STATUSES,
+  ARCHIVE_TAX_REFUND_STATUSES,
   canRead,
   codedError,
   getActor,
@@ -12,9 +16,15 @@ import {
   listOrders,
   listPayments,
   parseJsonBody,
+  serializeOrder,
+  TAX_REFUND_STATUS_LABELS,
+  TAX_REFUND_STATUSES,
 } from "./platform-db";
 import type { AccessUser } from "./platform/shared-access";
+import { businessEntityWhereFromQuery } from "./platform/business-entities";
 import { logisticsCostTypeLabel } from "./platform/logistics-cost-types";
+import { orderAccessWhere, scopeOrderForActor } from "./platform/order-access";
+import { includeOrderRelations } from "./platform/shared-order-relations";
 
 export const REPORT_TYPES = {
   receivables: { label: "应收订单明细", area: "orders", filename: "receivable-orders" },
@@ -94,6 +104,13 @@ type BusinessReportRow = DomesticLogisticsReportOrder & {
   summary?: ReportRow;
   documentCompleteness?: CompletenessReport;
 };
+const TAX_REFUND_REPORT_SCAN_LIMIT = 1000;
+const TAX_REFUND_REPORT_DECLARATION_INCLUDE = Prisma.validator<Prisma.CustomsDeclarationInclude>()({
+  supplier: { select: { id: true, supplierName: true, supplierType: true } },
+  purchaseOrder: { select: { id: true, supplierNameSnapshot: true, supplier: { select: { id: true, supplierName: true, supplierType: true } } } },
+  order: { include: includeOrderRelations() },
+});
+type TaxRefundReportDeclaration = Prisma.CustomsDeclarationGetPayload<{ include: typeof TAX_REFUND_REPORT_DECLARATION_INCLUDE }>;
 
 function reportTypeFrom(value: unknown): ReportType {
   const type = text(value) as ReportType;
@@ -362,24 +379,60 @@ function missingCostItems(value: unknown): MissingCostItem[] {
   return Array.isArray(value) ? value as MissingCostItem[] : [];
 }
 
-function orderToTaxRefund(order: BusinessReportRow) {
+function taxRefundDeclarationToReport(row: TaxRefundReportDeclaration, actor: ActorLike) {
+  const supplierName = row.supplier?.supplierName || row.purchaseOrder?.supplierNameSnapshot || row.purchaseOrder?.supplier?.supplierName || "";
+  const refundStatus = String(row.taxRefundStatus || row.order.taxRefundStatus || "");
+  const order = {
+    ...serializeOrder(scopeOrderForActor(row.order, actor)),
+    id: row.id,
+    orderId: row.orderId,
+    customsDeclarationId: row.id,
+    blNo: row.billOfLadingNo || row.order.blNo || "",
+    billOfLadingNo: row.billOfLadingNo || row.order.blNo || "",
+    supplierId: row.supplierId || row.purchaseOrder?.supplier?.id || "",
+    supplierName,
+    purchaseOrderId: row.purchaseOrderId || "",
+    taxRefundStatus: refundStatus,
+    taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[refundStatus] || refundStatus,
+    taxArchived: Boolean(row.taxArchived || row.taxRefundArchivedAt || refundStatus === "SUBMITTED"),
+    taxRefundArchivedAt: row.taxRefundArchivedAt || null,
+    taxRefundArchiveRemark: row.taxRefundArchiveRemark || "",
+    taxSubmittedAt: row.taxSubmittedAt || row.taxRefundArchivedAt || null,
+    customsDeclarationNo: row.declarationNo || "",
+    customsDeclarationDate: row.declarationDate || null,
+    declarationNo: row.declarationNo || "",
+    declarationDate: row.declarationDate || null,
+  } as BusinessReportRow;
   const customer = reportRecord(order.customer);
-  const completeness = order.documentCompleteness || {};
+  const completeness = reportRecord(row.taxRefundCompleteness || {});
   const factory = (completeness.factory || completeness.supplier || {}) as ReportRow;
   const logistics = (completeness.logistics || {}) as ReportRow;
   const missingDetail = (items: MissingCostItem[] = []) => items.map((item) => (
     `${item.costType || "-"} / ${item.supplierName || "-"} / ${item.currency || "CNY"} ${Number(item.amount || 0).toFixed(2)}`
   )).join("；");
+  const completed = Number(completeness.completed || 0);
+  const total = Number(completeness.total || 0);
+  const overallCompleteness = row.taxRefundOverallCompleteness == null
+    ? `${completed}/${total}`
+    : `${Number(row.taxRefundOverallCompleteness || 0)}%`;
   return {
     ...orderToReceivable(order),
+    id: row.id,
+    orderId: row.orderId,
+    customsDeclarationId: row.id,
     customerName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || customer.name || order.customerName || ""),
-    taxRefundStatus: order.taxRefundStatus,
-    taxRefundStatusLabel: order.taxRefundStatusLabel,
-    taxArchived: Boolean(order.taxArchived || order.taxRefundStatus === "SUBMITTED"),
-    customsDeclarationNo: order.customsDeclarationNo || "",
-    customsDeclarationDate: toReportDate(order.customsDeclarationDate),
-    customsCompleteness: `${completeness.customs?.completed || 0}/${completeness.customs?.total || 3}`,
-    exportCompleteness: `${completeness.export?.completed || 0}/${completeness.export?.total || 5}`,
+    supplierName,
+    taxRefundStatus: refundStatus,
+    taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[refundStatus] || refundStatus,
+    taxArchived: Boolean(order.taxArchived || row.taxRefundArchivedAt || refundStatus === "SUBMITTED"),
+    taxRefundArchivedAt: row.taxRefundArchivedAt || "",
+    taxRefundArchiveRemark: row.taxRefundArchiveRemark || "",
+    customsDeclarationNo: row.declarationNo || "",
+    declarationNo: row.declarationNo || "",
+    customsDeclarationDate: toReportDate(row.declarationDate),
+    declarationDate: toReportDate(row.declarationDate),
+    customsCompleteness: `${reportRecord(completeness.customs).completed || 0}/${reportRecord(completeness.customs).total || 3}`,
+    exportCompleteness: `${reportRecord(completeness.export).completed || 0}/${reportRecord(completeness.export).total || 5}`,
     factoryCompleteness: factory.missingFactoryCost
       ? "0/2（未录入产品供应商）"
       : `${factory.completed || 0}/${Math.max(2, Number(factory.total || 0))}`,
@@ -387,11 +440,12 @@ function orderToTaxRefund(order: BusinessReportRow) {
       ? "0/2（未录入产品供应商）"
       : `${factory.completed || 0}/${Math.max(2, Number(factory.total || 0))}`,
     logisticsInvoiceCompleteness: `${logistics.completed || 0}/${logistics.total || 0}`,
-    domesticLogisticsCompleteness: `${completeness.domesticLogistics?.completed || 0}/${completeness.domesticLogistics?.total || 1}`,
+    domesticLogisticsCompleteness: `${reportRecord(completeness.domesticLogistics).completed || 0}/${reportRecord(completeness.domesticLogistics).total || 1}`,
     missingLogisticsInvoices: missingDetail(missingCostItems(logistics.missingLogisticsInvoices)),
     missingCustomsInvoices: missingDetail(missingCostItems(logistics.missingCustomsInvoices)),
     missingPortInvoices: missingDetail(missingCostItems(logistics.missingPortInvoices)),
-    overallCompleteness: `${completeness.completed || 0}/${completeness.total || 0}`,
+    overallCompleteness,
+    completenessIssuesSummary: row.taxRefundCompletenessIssuesSummary || "",
   };
 }
 
@@ -443,10 +497,20 @@ function safeMapReportRows<T>(items: T[], type: ReportType, mapper: (item: T) =>
 
 function reportQueryForBaseRows(type: ReportType, query: URLSearchParams, filters: ReportFilters) {
   const next = new URLSearchParams(query);
-  const archiveScope = nonEmptyText(filters.archiveScope || filters.businessScope || query.get("archiveScope") || query.get("businessScope") || "current");
+  const archiveScope = nonEmptyText(filters.archiveScope || filters.businessScope || query.get("archiveScope") || query.get("businessScope") || query.get("mode") || "current");
   if (["current", "archive", "all"].includes(archiveScope)) {
     next.set("archiveScope", archiveScope);
     next.set("businessScope", archiveScope);
+  }
+  if (type === "tax-refunds") {
+    next.set("mode", archiveScope === "archive" ? "archive" : "current");
+    const taxRefundStatus = nonEmptyText(filters.taxRefundStatus || query.get("taxRefundStatus"));
+    if (taxRefundStatus) next.set("status", taxRefundStatus);
+    const declarationMonth = nonEmptyText(filters.declarationMonth || query.get("declarationMonth"));
+    if (declarationMonth) {
+      next.set("declarationStartMonth", declarationMonth);
+      next.set("declarationEndMonth", declarationMonth);
+    }
   }
 
   const explicitKeyword = nonEmptyText(filters.keyword || query.get("keyword"));
@@ -490,6 +554,69 @@ function friendlyReportQueryError(error: unknown, filters: ReportFilters) {
   return codedError("报表查询失败：请稍后重试或联系管理员查看服务器日志。", 500, "REPORT_QUERY_FAILED");
 }
 
+function taxRefundReportKeywordWhere(keyword: string): Prisma.CustomsDeclarationWhereInput {
+  if (!keyword) return {};
+  const statusMatches = Object.entries(TAX_REFUND_STATUS_LABELS as Record<string, string>)
+    .filter(([status, label]) => status.toLowerCase().includes(keyword.toLowerCase()) || label.toLowerCase().includes(keyword.toLowerCase()))
+    .map(([status]) => status);
+  return {
+    OR: [
+      { declarationNo: { contains: keyword, mode: "insensitive" } },
+      { billOfLadingNo: { contains: keyword, mode: "insensitive" } },
+      { taxRefundStatus: { contains: keyword, mode: "insensitive" } },
+      { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
+      { purchaseOrder: { is: { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } } } },
+      { purchaseOrder: { is: { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } } } },
+      { order: { is: { orderNo: { contains: keyword, mode: "insensitive" } } } },
+      { order: { is: { blNo: { contains: keyword, mode: "insensitive" } } } },
+      { order: { is: { customerNameSnapshot: { contains: keyword, mode: "insensitive" } } } },
+      { order: { is: { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } } } },
+      { order: { is: { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } } } },
+      ...(statusMatches.length ? [{ taxRefundStatus: { in: statusMatches } }] : []),
+    ],
+  };
+}
+
+function taxRefundReportWhere(query: URLSearchParams, actor: ActorLike): Prisma.CustomsDeclarationWhereInput {
+  const archiveScope = nonEmptyText(query.get("archiveScope") || query.get("businessScope") || query.get("mode") || "current");
+  const statusFilter = nonEmptyText(query.get("status") || query.get("taxRefundStatus"));
+  const businessEntityId = nonEmptyText(query.get("businessEntityId") || query.get("businessEntity"));
+  const declarationStartMonth = nonEmptyText(query.get("declarationStartMonth") || query.get("declarationMonth"));
+  const declarationEndMonth = nonEmptyText(query.get("declarationEndMonth") || query.get("declarationMonth"));
+  const declarationStart = declarationStartMonth && /^\d{4}-\d{2}$/.test(declarationStartMonth)
+    ? new Date(`${declarationStartMonth}-01T00:00:00.000Z`)
+    : null;
+  const declarationEnd = declarationEndMonth && /^\d{4}-\d{2}$/.test(declarationEndMonth)
+    ? new Date(`${declarationEndMonth}-01T00:00:00.000Z`)
+    : null;
+  const orderWhere: Prisma.ReceivableOrderWhereInput = {
+    deletedAt: null,
+    AND: [
+      orderAccessWhere(actor),
+      businessEntityWhereFromQuery(businessEntityId),
+    ],
+  };
+  return {
+    deletedAt: null,
+    AND: [
+      taxRefundReportKeywordWhere(nonEmptyText(query.get("keyword"))),
+      { order: { is: orderWhere } },
+      ...(archiveScope === "archive"
+        ? [{ OR: [{ taxArchived: true }, { taxRefundStatus: { in: ARCHIVE_TAX_REFUND_STATUSES } }] }]
+        : archiveScope === "all"
+          ? []
+          : [{ taxArchived: false }, { taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES } }]),
+      ...(TAX_REFUND_STATUSES.includes(statusFilter) ? [{ taxRefundStatus: statusFilter }] : []),
+      ...(declarationStart || declarationEnd ? [{
+        declarationDate: {
+          ...(declarationStart ? { gte: declarationStart } : {}),
+          ...(declarationEnd ? { lt: new Date(Date.UTC(declarationEnd.getUTCFullYear(), declarationEnd.getUTCMonth() + 1, 1)) } : {}),
+        },
+      }] : []),
+    ],
+  };
+}
+
 async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLike): Promise<ReportRow[]> {
   if (!REPORT_TYPES[type]) {
     throw codedError("请选择有效报表类型", 400, "REPORT_TYPE_INVALID");
@@ -502,7 +629,15 @@ async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLi
   if (type === "overdue") return safeMapReportRows(await getReminders(query, actor), type, orderToOverdue);
   if (type === "profits") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToProfit);
   if (type === "commissions") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToCommission);
-  if (type === "tax-refunds") return safeMapReportRows(await listOrders(query, actor), type, orderToTaxRefund);
+  if (type === "tax-refunds") {
+    const rows = await prisma.customsDeclaration.findMany({
+      where: taxRefundReportWhere(query, actor),
+      include: TAX_REFUND_REPORT_DECLARATION_INCLUDE,
+      orderBy: [{ declarationDate: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }, { createdAt: "desc" }],
+      take: TAX_REFUND_REPORT_SCAN_LIMIT,
+    });
+    return safeMapReportRows(rows, type, (row) => taxRefundDeclarationToReport(row, actor));
+  }
   return safeMapReportRows(await listOrders(query, actor), type, orderToReceivable);
 }
 

@@ -4,6 +4,7 @@ import {
   parseCustomsDeclarationPdf,
   type CustomsDeclarationPdfTextParseResult,
 } from "../pdf/parse-customs-declaration";
+import { CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO } from "../customs-declaration-parser";
 import { buildOrderDocumentKey, readR2Object, safeFileName } from "../r2";
 import {
   canAccessDomesticLogisticsOrder,
@@ -17,6 +18,7 @@ import { assertCanDeleteOrderDocumentFile } from "./file-delete-policy";
 import { tryAutoShippingDocumentsNotification } from "./shipping-documents";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
+  FACTORY_SUPPLIER_COST_TYPES,
   LOGISTICS_OPERATOR_ROLE,
   ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA,
   ORDER_DOCUMENT_TYPES,
@@ -56,6 +58,7 @@ import {
   softDeleteFileAssetBySource,
   standardFilenameForDocument,
   syncCostInvoiceStatus,
+  TAX_REFUND_SUPPLIER_TYPES,
   uploadManagedFileToStorage,
   upsertFileAssetForOrderDocument,
   writeAudit,
@@ -67,6 +70,7 @@ type OrderDocumentUploadParams = {
   file: unknown;
   costId?: string;
   supplierId?: string;
+  customsDeclarationId?: string;
   uploadSource?: string;
 };
 
@@ -77,6 +81,24 @@ type ActorLike = {
   supplierId?: string | null;
   customPermissions?: unknown;
 } | null | undefined;
+
+async function resolveUnambiguousFactoryCostForCustomsDeclaration(orderId: string) {
+  const costs = await prisma.orderCost.findMany({
+    where: {
+      orderId,
+      deletedAt: null,
+      costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+      supplier: { is: { supplierType: { in: TAX_REFUND_SUPPLIER_TYPES } } },
+    },
+    select: {
+      id: true,
+      supplierId: true,
+    },
+    orderBy: [{ createdAt: "asc" }],
+    take: 2,
+  });
+  return costs.length === 1 ? costs[0] : null;
+}
 type QueryLike = Pick<URLSearchParams, "get">;
 type DocumentOrderCostLike = {
   id?: string | null;
@@ -343,18 +365,26 @@ export async function listOrderDocuments(query: QueryLike, actor: ActorLike) {
   }));
 }
 
-export async function uploadOrderDocument(request: AuditRequestLike, actor: ActorLike, { orderId, documentType, file, costId = "", supplierId = "", uploadSource = "" }: OrderDocumentUploadParams) {
+export async function uploadOrderDocument(request: AuditRequestLike, actor: ActorLike, { orderId, documentType, file, costId = "", supplierId = "", customsDeclarationId = "", uploadSource = "" }: OrderDocumentUploadParams) {
   assertWrite(actor, "documents");
   const uploadedById = actorId(actor);
-  const uploadInput = assertInputSchema(assertJsonObject({ orderId, documentType, costId, supplierId, uploadSource }), ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA);
+  const uploadInput = assertInputSchema(assertJsonObject({ orderId, documentType, costId, supplierId, customsDeclarationId, uploadSource }), ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA);
   orderId = String(uploadInput.orderId || "");
   documentType = String(uploadInput.documentType || "");
   costId = String(uploadInput.costId || "");
   supplierId = String(uploadInput.supplierId || "");
+  customsDeclarationId = String(uploadInput.customsDeclarationId || "");
   uploadSource = String(uploadInput.uploadSource || "");
   documentType = normalizeOrderDocumentType(documentType);
   if (!ORDER_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) throw permissionError("请选择有效单证类型", 400);
   const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId, uploadSource }, actor);
+  if (customsDeclarationId && isCustomsDeclarationDocumentType(documentType)) {
+    const declaration = await prisma.customsDeclaration.findFirst({
+      where: { id: customsDeclarationId, orderId: order.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!declaration) throw permissionError("请选择有效报关单子项", 400);
+  }
   if (isLogisticsGeneratedCostInvoice(documentType, cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。", 400);
   }
@@ -376,7 +406,6 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   });
   const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName: standardFilename });
   let document;
-  let replacedCustomsDocumentCount = 0;
   try {
     document = await prisma.$transaction(async (tx) => {
       const created = await tx.orderDocument.create({
@@ -403,38 +432,6 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
         include: { order: { include: { customer: true } }, cost: { include: { supplier: true } }, supplier: true, uploadedBy: true },
       });
       await upsertFileAssetForOrderDocument(tx, created);
-      if (isCustomsDeclarationDocumentType(documentType)) {
-        const replacedAt = new Date();
-        const replacedDocuments = await tx.orderDocument.findMany({
-          where: {
-            orderId: order.id,
-            documentType: "CUSTOMS_ENTRY_FORM",
-            id: { not: created.id },
-            deletedAt: null,
-          },
-          select: { id: true, documentType: true },
-          take: 20,
-        });
-        const replaced = await tx.orderDocument.updateMany({
-          where: {
-            orderId: order.id,
-            documentType: "CUSTOMS_ENTRY_FORM",
-            id: { not: created.id },
-            deletedAt: null,
-          },
-          data: { deletedAt: replacedAt },
-        });
-        for (const replacedDocument of replacedDocuments) {
-          await softDeleteFileAssetBySource(
-            tx,
-            FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
-            replacedDocument.id,
-            String(replacedDocument.documentType),
-            replacedAt,
-          );
-        }
-        replacedCustomsDocumentCount = replaced.count || 0;
-      }
       return created;
     });
   } catch (error: unknown) {
@@ -452,13 +449,16 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     fileName: document.standardFilename || document.fileName,
     documentType,
     uploadSource: normalizedUploadSource,
-    replacedCustomsDocumentCount,
   }));
   if (isCustomsDeclarationDocumentType(documentType)) {
+    const fallbackFactoryCost = cost?.id ? null : await resolveUnambiguousFactoryCostForCustomsDeclaration(order.id);
     customsPdfTextParse = await parseAndApplyUploadedCustomsDeclarationPdf(request, actor, {
       orderId: order.id,
       orderNo: order.orderNo || "",
       documentId: document.id,
+      customsDeclarationId,
+      purchaseOrderId: cost?.id || fallbackFactoryCost?.id || null,
+      supplierId: resolvedSupplierId || fallbackFactoryCost?.supplierId || null,
       fileName: document.standardFilename || document.fileName || originalFileName,
       pdfBody: body,
     });
@@ -469,8 +469,16 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   scheduleTaxRefundCompletenessRefresh(order.id);
   const serializedDocument = serializeOrderDocument(document) as ReturnType<typeof serializeOrderDocument> & {
     customsPdfTextParse?: CustomsDeclarationPdfTextParseResult;
+    customsDeclarationId?: string;
   };
   if (customsPdfTextParse) serializedDocument.customsPdfTextParse = customsPdfTextParse;
+  if (isCustomsDeclarationDocumentType(documentType)) {
+    const declaration = await prisma.customsDeclaration.findFirst({
+      where: { pdfDocumentId: document.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (declaration) serializedDocument.customsDeclarationId = declaration.id;
+  }
   return serializedDocument;
 }
 
@@ -481,6 +489,9 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
     orderId: string;
     orderNo: string;
     documentId: string;
+    customsDeclarationId?: string | null;
+    purchaseOrderId?: string | null;
+    supplierId?: string | null;
     fileName: string;
     pdfBody: Buffer | ArrayBuffer | Uint8Array | null | undefined;
   },
@@ -491,6 +502,18 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
       where: { id: input.orderId },
       select: {
         id: true,
+        blNo: true,
+        taxRefundStatus: true,
+        taxRefundCompleteness: true,
+        taxRefundCompletenessUpdatedAt: true,
+        taxRefundOverallCompleteness: true,
+        taxRefundCompletenessIssuesSummary: true,
+        taxArchived: true,
+        taxRefundArchivedById: true,
+        taxRefundArchivedAt: true,
+        taxRefundArchiveRemark: true,
+        taxSubmittedById: true,
+        taxSubmittedAt: true,
         customsDeclarationNo: true,
         customsDeclarationDate: true,
         customsParsedAt: true,
@@ -500,37 +523,121 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
       },
     });
     const parsed = await parseCustomsDeclarationPdf(input.pdfBody);
-    const data: Prisma.ReceivableOrderUpdateInput = {
-      customsDeclarationNo: parsed.customsDeclarationNo || null,
-      customsDeclarationDate: parsed.customsDeclarationDate ? dateFromInput(parsed.customsDeclarationDate) : null,
+    if (!before) throw codedError("订单不存在或已删除", 404, "ORDER_NOT_FOUND");
+    const parsedDate = parsed.customsDeclarationDate ? dateFromInput(parsed.customsDeclarationDate) : null;
+    const orderData: Prisma.ReceivableOrderUpdateInput = {
+      ...(parsed.customsDeclarationNo ? { customsDeclarationNo: parsed.customsDeclarationNo } : {}),
+      ...(parsedDate ? { customsDeclarationDate: parsedDate } : {}),
       customsParsedAt: new Date(),
       customsParseStatus: parsed.customsDeclarationParseStatus,
       customsParseMessage: parsed.customsDeclarationParseMessage,
       customsDeclarationParseSource: parsed.customsDeclarationParseSource,
     };
-    const updated = await prisma.receivableOrder.update({
-      where: { id: input.orderId },
-      data,
-      select: {
-        id: true,
-        customsDeclarationNo: true,
-        customsDeclarationDate: true,
-        customsParsedAt: true,
-        customsParseStatus: true,
-        customsParseMessage: true,
-        customsDeclarationParseSource: true,
-      },
+    let replacedCustomsDeclarationPdfDocumentId = "";
+    const { updated, declaration } = await prisma.$transaction(async (tx) => {
+      const updatedOrder = await tx.receivableOrder.update({
+        where: { id: input.orderId },
+        data: orderData,
+        select: {
+          id: true,
+          customsDeclarationNo: true,
+          customsDeclarationDate: true,
+          customsParsedAt: true,
+          customsParseStatus: true,
+          customsParseMessage: true,
+          customsDeclarationParseSource: true,
+        },
+      });
+      const previousDeclaration = input.customsDeclarationId
+        ? await tx.customsDeclaration.findUnique({
+          where: { id: input.customsDeclarationId },
+          select: {
+            declarationNo: true,
+            declarationDate: true,
+            pdfDocumentId: true,
+            purchaseOrderId: true,
+            supplierId: true,
+            taxRefundStatus: true,
+            taxRefundCompleteness: true,
+            taxRefundCompletenessUpdatedAt: true,
+            taxRefundOverallCompleteness: true,
+            taxRefundCompletenessIssuesSummary: true,
+            taxArchived: true,
+            taxRefundArchivedById: true,
+            taxRefundArchivedAt: true,
+            taxRefundArchiveRemark: true,
+            taxSubmittedById: true,
+            taxSubmittedAt: true,
+          },
+        })
+        : null;
+      let previousDeclarationPdfDocumentId = previousDeclaration?.pdfDocumentId || "";
+      const declarationData = {
+        billOfLadingNo: before.blNo || null,
+        pdfDocumentId: input.documentId,
+        purchaseOrderId: input.purchaseOrderId || previousDeclaration?.purchaseOrderId || null,
+        supplierId: input.supplierId || previousDeclaration?.supplierId || null,
+        ...((parsed.customsDeclarationNo || previousDeclaration?.declarationNo) ? { declarationNo: parsed.customsDeclarationNo || previousDeclaration?.declarationNo } : {}),
+        ...((parsedDate || previousDeclaration?.declarationDate) ? { declarationDate: parsedDate || previousDeclaration?.declarationDate } : {}),
+        taxRefundStatus: previousDeclaration?.taxRefundStatus || "NOT_READY",
+        ...(previousDeclaration?.taxRefundCompleteness != null ? {
+          taxRefundCompleteness: previousDeclaration.taxRefundCompleteness as Prisma.InputJsonValue,
+        } : {}),
+        taxRefundCompletenessUpdatedAt: previousDeclaration?.taxRefundCompletenessUpdatedAt || null,
+        taxRefundOverallCompleteness: previousDeclaration?.taxRefundOverallCompleteness ?? null,
+        taxRefundCompletenessIssuesSummary: previousDeclaration?.taxRefundCompletenessIssuesSummary || null,
+        taxArchived: previousDeclaration ? Boolean(previousDeclaration.taxArchived) : false,
+        taxRefundArchivedById: previousDeclaration?.taxRefundArchivedById || null,
+        taxRefundArchivedAt: previousDeclaration?.taxRefundArchivedAt || null,
+        taxRefundArchiveRemark: previousDeclaration?.taxRefundArchiveRemark || null,
+        taxSubmittedById: previousDeclaration?.taxSubmittedById || null,
+        taxSubmittedAt: previousDeclaration?.taxSubmittedAt || null,
+        status: "ACTIVE",
+        source: input.customsDeclarationId ? "UPLOAD" : "PDF_UPLOAD",
+        deletedAt: null,
+      };
+      const savedDeclaration = input.customsDeclarationId
+        ? await tx.customsDeclaration.update({
+            where: { id: input.customsDeclarationId },
+            data: declarationData,
+            select: { id: true, declarationNo: true, declarationDate: true },
+          })
+        : await tx.customsDeclaration.create({
+          data: {
+            orderId: input.orderId,
+            ...declarationData,
+          },
+          select: { id: true, declarationNo: true, declarationDate: true },
+        });
+      if (previousDeclarationPdfDocumentId && previousDeclarationPdfDocumentId !== input.documentId) {
+        const replacedAt = new Date();
+        await tx.orderDocument.updateMany({
+          where: { id: previousDeclarationPdfDocumentId, deletedAt: null },
+          data: { deletedAt: replacedAt },
+        });
+        await softDeleteFileAssetBySource(
+          tx,
+          FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+          previousDeclarationPdfDocumentId,
+          "CUSTOMS_ENTRY_FORM",
+          replacedAt,
+        );
+        replacedCustomsDeclarationPdfDocumentId = previousDeclarationPdfDocumentId;
+      }
+      return { updated: updatedOrder, declaration: savedDeclaration };
     });
     console.info("customs-pdf-text-parse", sanitizeForLog({
       orderId: input.orderId,
       orderNo: input.orderNo,
       documentId: input.documentId,
+      customsDeclarationId: declaration.id,
       fileName: input.fileName,
       textLength: parsed.textLength,
       parsedDeclarationNo: parsed.customsDeclarationNo,
       parsedDeclarationDate: parsed.customsDeclarationDate,
       parseStatus: parsed.customsDeclarationParseStatus,
       parseFailedReason: parsed.parseFailedReason || "",
+      replacedCustomsDeclarationPdfDocumentId,
       durationMs: Date.now() - startedAt,
     }));
     await runNonCriticalTask("报关单PDF文本解析日志写入", () => writeAudit(
@@ -542,6 +649,9 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
       serializeCustomsRecognition(before || {}),
       {
         ...serializeCustomsRecognition(updated),
+        customsDeclarationId: declaration.id,
+        declarationNo: declaration.declarationNo || "",
+        declarationDate: declaration.declarationDate || null,
         documentId: input.documentId,
         fileName: input.fileName,
         textLength: parsed.textLength,
@@ -552,15 +662,140 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
     ), { context: { orderId: input.orderId, documentId: input.documentId } });
     return parsed;
   } catch (error) {
+    const fallbackDeclaration = await persistCustomsDeclarationPdfBindingAfterParseFailure(input, error).catch((fallbackError) => {
+      logServerError("报关单PDF解析失败后的子项绑定失败", fallbackError, {
+        orderId: input.orderId,
+        orderNo: input.orderNo,
+        documentId: input.documentId,
+        customsDeclarationId: input.customsDeclarationId || "",
+        fileName: input.fileName,
+      });
+      return null;
+    });
     logServerError("报关单PDF文本解析失败", error, {
       orderId: input.orderId,
       orderNo: input.orderNo,
       documentId: input.documentId,
+      customsDeclarationId: fallbackDeclaration?.id || input.customsDeclarationId || "",
       fileName: input.fileName,
       durationMs: Date.now() - startedAt,
     });
     return null;
   }
+}
+
+async function persistCustomsDeclarationPdfBindingAfterParseFailure(
+  input: {
+    orderId: string;
+    documentId: string;
+    customsDeclarationId?: string | null;
+    purchaseOrderId?: string | null;
+    supplierId?: string | null;
+  },
+  error: unknown,
+) {
+  const before = await prisma.receivableOrder.findUnique({
+    where: { id: input.orderId },
+    select: { id: true, blNo: true },
+  });
+  if (!before) return null;
+  const failureMessage = error instanceof Error ? error.message : String(error || "报关单 PDF 文本解析失败");
+  let replacedCustomsDeclarationPdfDocumentId = "";
+  const declaration = await prisma.$transaction(async (tx) => {
+    const previousDeclaration = input.customsDeclarationId
+      ? await tx.customsDeclaration.findUnique({
+        where: { id: input.customsDeclarationId },
+        select: {
+          declarationNo: true,
+          declarationDate: true,
+          pdfDocumentId: true,
+          purchaseOrderId: true,
+          supplierId: true,
+          taxRefundStatus: true,
+          taxRefundCompleteness: true,
+          taxRefundCompletenessUpdatedAt: true,
+          taxRefundOverallCompleteness: true,
+          taxRefundCompletenessIssuesSummary: true,
+          taxArchived: true,
+          taxRefundArchivedById: true,
+          taxRefundArchivedAt: true,
+          taxRefundArchiveRemark: true,
+          taxSubmittedById: true,
+          taxSubmittedAt: true,
+        },
+      })
+      : null;
+    const declarationData = {
+      billOfLadingNo: before.blNo || null,
+      pdfDocumentId: input.documentId,
+      purchaseOrderId: input.purchaseOrderId || previousDeclaration?.purchaseOrderId || null,
+      supplierId: input.supplierId || previousDeclaration?.supplierId || null,
+      ...(previousDeclaration?.declarationNo ? { declarationNo: previousDeclaration.declarationNo } : {}),
+      ...(previousDeclaration?.declarationDate ? { declarationDate: previousDeclaration.declarationDate } : {}),
+      taxRefundStatus: previousDeclaration?.taxRefundStatus || "NOT_READY",
+      ...(previousDeclaration?.taxRefundCompleteness != null ? {
+        taxRefundCompleteness: previousDeclaration.taxRefundCompleteness as Prisma.InputJsonValue,
+      } : {}),
+      taxRefundCompletenessUpdatedAt: previousDeclaration?.taxRefundCompletenessUpdatedAt || null,
+      taxRefundOverallCompleteness: previousDeclaration?.taxRefundOverallCompleteness ?? null,
+      taxRefundCompletenessIssuesSummary: previousDeclaration?.taxRefundCompletenessIssuesSummary || null,
+      taxArchived: previousDeclaration ? Boolean(previousDeclaration.taxArchived) : false,
+      taxRefundArchivedById: previousDeclaration?.taxRefundArchivedById || null,
+      taxRefundArchivedAt: previousDeclaration?.taxRefundArchivedAt || null,
+      taxRefundArchiveRemark: previousDeclaration?.taxRefundArchiveRemark || null,
+      taxSubmittedById: previousDeclaration?.taxSubmittedById || null,
+      taxSubmittedAt: previousDeclaration?.taxSubmittedAt || null,
+      status: "ACTIVE",
+      source: input.customsDeclarationId ? "UPLOAD_PARSE_FAILED" : "PDF_UPLOAD_PARSE_FAILED",
+      deletedAt: null,
+    };
+    const savedDeclaration = input.customsDeclarationId
+      ? await tx.customsDeclaration.update({
+        where: { id: input.customsDeclarationId },
+        data: declarationData,
+        select: { id: true },
+      })
+      : await tx.customsDeclaration.create({
+        data: {
+          orderId: input.orderId,
+          ...declarationData,
+        },
+        select: { id: true },
+      });
+    if (previousDeclaration?.pdfDocumentId && previousDeclaration.pdfDocumentId !== input.documentId) {
+      const replacedAt = new Date();
+      await tx.orderDocument.updateMany({
+        where: { id: previousDeclaration.pdfDocumentId, deletedAt: null },
+        data: { deletedAt: replacedAt },
+      });
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+        previousDeclaration.pdfDocumentId,
+        "CUSTOMS_ENTRY_FORM",
+        replacedAt,
+      );
+      replacedCustomsDeclarationPdfDocumentId = previousDeclaration.pdfDocumentId;
+    }
+    await tx.receivableOrder.update({
+      where: { id: input.orderId },
+      data: {
+        customsParsedAt: new Date(),
+        customsParseStatus: "FAILED",
+        customsParseMessage: "报关单 PDF 文本解析失败，请手工填写报关单号和申报日期。",
+        customsDeclarationParseSource: CUSTOMS_DECLARATION_PARSE_SOURCE_AUTO,
+      },
+    });
+    return savedDeclaration;
+  });
+  console.info("customs-pdf-text-parse-fallback-binding", sanitizeForLog({
+    orderId: input.orderId,
+    documentId: input.documentId,
+    customsDeclarationId: declaration.id,
+    replacedCustomsDeclarationPdfDocumentId,
+    parseFailedReason: failureMessage,
+  }));
+  return declaration;
 }
 
 export async function deleteOrderDocument(request: AuditRequestLike, actor: ActorLike, id: string) {
@@ -575,6 +810,8 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
   }
   assertCanDeleteOrderDocumentFile(actor, before);
   const deletedAt = new Date();
+  let clearedCustomsRecognition = false;
+  let deletedCustomsDeclarationCount = 0;
   const document = await prisma.$transaction(async (tx) => {
     const updated = await tx.orderDocument.update({
       where: { id },
@@ -588,26 +825,55 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
       String(before.documentType),
       deletedAt,
     );
+    if (isCustomsDeclarationDocumentType(before.documentType)) {
+      const deletedDeclarations = await tx.customsDeclaration.updateMany({
+        where: { pdfDocumentId: id, deletedAt: null },
+        data: {
+          pdfDocumentId: null,
+          status: "DELETED",
+          deletedAt,
+        },
+      });
+      deletedCustomsDeclarationCount = deletedDeclarations.count || 0;
+      const remainingDeclaration = await tx.customsDeclaration.findFirst({
+        where: {
+          orderId: before.orderId,
+          deletedAt: null,
+          OR: [
+            { pdfDocumentId: { not: null } },
+            { declarationNo: { not: null } },
+            { declarationDate: { not: null } },
+          ],
+        },
+        select: { declarationNo: true, declarationDate: true },
+        orderBy: [{ updatedAt: "desc" }],
+      });
+      await tx.receivableOrder.update({
+        where: { id: before.orderId },
+        data: remainingDeclaration
+          ? {
+            customsDeclarationNo: remainingDeclaration.declarationNo || null,
+            customsDeclarationDate: remainingDeclaration.declarationDate || null,
+          }
+          : {
+            customsDeclarationNo: null,
+            customsDeclarationDate: null,
+            customsParsedAt: null,
+            customsParseStatus: null,
+            customsParseMessage: null,
+            customsDeclarationParseSource: null,
+          },
+      });
+      clearedCustomsRecognition = !remainingDeclaration;
+    }
     return updated;
   });
-  if (isCustomsDeclarationDocumentType(before.documentType)) {
-    await prisma.receivableOrder.update({
-      where: { id: before.orderId },
-      data: {
-        customsDeclarationNo: null,
-        customsDeclarationDate: null,
-        customsParsedAt: null,
-        customsParseStatus: null,
-        customsParseMessage: null,
-        customsDeclarationParseSource: null,
-      },
-    });
-  }
   await runNonCriticalTask("成本发票状态同步", () => syncCostInvoiceStatus(before.costId));
   await runNonCriticalTask("文件删除操作日志写入", () => writeAudit(request, actor, "删除文件", "order_documents", id, before, {
     orderNo: before.order?.orderNo,
     fileName: standardFilenameForDocument(before),
-    clearedCustomsRecognition: isCustomsDeclarationDocumentType(before.documentType),
+    deletedCustomsDeclarationCount,
+    clearedCustomsRecognition,
   }));
   scheduleTaxRefundCompletenessRefresh(before.orderId);
   return serializeOrderDocument(document);

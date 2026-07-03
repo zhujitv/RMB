@@ -105,7 +105,8 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
   assert.match(taxSync, /TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3/);
   const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
-  assert.match(listFunction, /select: taxRefundLightListSelect/);
+  assert.match(listFunction, /select: taxRefundCustomsDeclarationListSelect/);
+  assert.match(listFunction, /prisma\.customsDeclaration/);
   assert.doesNotMatch(listFunction, /scheduleTaxRefundCompletenessRefreshBatch|needsTaxRefundCompletenessRefresh|refreshTaxRefundCompletenessForOrder/);
   assert.match(taxSync, /taxRefundOverallCompleteness/);
   assert.match(taxSync, /taxRefundCompletenessIssuesSummary/);

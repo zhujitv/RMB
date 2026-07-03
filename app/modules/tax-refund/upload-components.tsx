@@ -282,6 +282,7 @@ export function CustomsUploadCard({
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
   const canPreviewOrDownload = ["管理员", "财务", "物流资料录入员", "物流供应商"].includes(currentUserRole);
+  const uploadOrderId = order.orderId || order.id;
   return (
     <div className={styles.customsUploadCard} id={taxTargetDomId("customs-documents")}>
       <strong>报关资料上传</strong>
@@ -293,18 +294,18 @@ export function CustomsUploadCard({
           const document = latestTaxDocument(matchedDocuments)[0] || null;
           const canUpload = canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly);
           const canDelete = canDeleteTaxDocument(canWriteDocuments, readOnly);
-          const uploading = uploadingKey === uploadScopeKey(order.id, documentType.value);
+          const uploading = uploadingKey === uploadScopeKey(uploadOrderId, documentType.value);
           return (
             <FileUploadCard
               key={documentType.value}
               targetKey={taxDocumentTargetKey(documentType.value)}
-              orderId={order.id}
+              orderId={uploadOrderId}
               type={documentType.value}
               label={documentType.label}
               order={order}
               document={document}
               uploading={uploading}
-              uploadProgress={uploadProgressByKey[uploadScopeKey(order.id, documentType.value)] || 0}
+              uploadProgress={uploadProgressByKey[uploadScopeKey(uploadOrderId, documentType.value)] || 0}
               deletingDocumentId={deletingDocumentId}
               canUpload={canUpload}
               canDelete={canDelete}

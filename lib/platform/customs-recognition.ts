@@ -74,27 +74,73 @@ export async function updateCustomsRecognition(request: AuditRequestLike, actor:
     throw permissionError("没有权限修改报关单信息", 403);
   }
   if (actor?.role === LOGISTICS_OPERATOR_ROLE) throw permissionError("物流供应商不能修改报关单字段");
+  const declaration = await prisma.customsDeclaration.findFirst({
+    where: {
+      id: orderId,
+      deletedAt: null,
+      order: { is: { deletedAt: null, ...orderAccessWhere(actor) } },
+    },
+    select: {
+      id: true,
+      orderId: true,
+      declarationNo: true,
+      declarationDate: true,
+      billOfLadingNo: true,
+    },
+  });
+  const targetOrderId = declaration?.orderId || orderId;
   const before = await prisma.receivableOrder.findFirst({
-    where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
+    where: { id: targetOrderId, deletedAt: null, ...orderAccessWhere(actor) },
   });
   if (!before) throw permissionError("应收订单不存在或无权修改", 404);
   const fields = normalizeCustomsInput(input);
-  const order = await prisma.receivableOrder.update({
-    where: { id: orderId },
-    data: customsUpdateData(fields),
-    include: includeOrderRelations(),
+  const order = await prisma.$transaction(async (tx) => {
+    if (declaration) {
+      await tx.customsDeclaration.update({
+        where: { id: declaration.id },
+        data: {
+          declarationNo: fields.customsDeclarationNo || null,
+          declarationDate: fields.customsDeclarationDate,
+          source: "MANUAL",
+        },
+      });
+    }
+    return tx.receivableOrder.update({
+      where: { id: targetOrderId },
+      data: customsUpdateData(fields),
+      include: includeOrderRelations(),
+    });
   });
   await runNonCriticalTask("报关单字段人工修改日志写入", () => writeAudit(
     request,
     actor,
     "手工修改申报日期/报关单号",
-    "receivable_orders",
-    order.id,
-    serializeCustomsRecognition(before),
-    serializeCustomsRecognition(order),
+    declaration ? "customs_declarations" : "receivable_orders",
+    declaration?.id || order.id,
+    declaration ? {
+      customsDeclarationId: declaration.id,
+      customsDeclarationNo: declaration.declarationNo || "",
+      customsDeclarationDate: dateToInput(declaration.declarationDate),
+    } : serializeCustomsRecognition(before),
+    declaration ? {
+      customsDeclarationId: declaration.id,
+      customsDeclarationNo: fields.customsDeclarationNo || "",
+      customsDeclarationDate: dateToInput(fields.customsDeclarationDate),
+    } : serializeCustomsRecognition(order),
   ));
   const notifiedOrder = await tryAutoShippingDocumentsNotification(request, actor, order.id);
-  return notifiedOrder || serializeOrder(order);
+  const serialized = notifiedOrder || serializeOrder(order);
+  if (!declaration) return serialized;
+  return {
+    ...serialized,
+    id: declaration.id,
+    orderId: order.id,
+    customsDeclarationId: declaration.id,
+    blNo: declaration.billOfLadingNo || serialized.blNo || "",
+    billOfLadingNo: declaration.billOfLadingNo || serialized.billOfLadingNo || "",
+    customsDeclarationNo: fields.customsDeclarationNo || "",
+    customsDeclarationDate: dateToInput(fields.customsDeclarationDate),
+  };
 }
 
 export function customsRecognitionManualFields(input: CustomsRecognitionInput = {}) {

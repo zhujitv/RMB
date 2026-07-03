@@ -15,7 +15,8 @@ const list = readFileSync("app/modules/tax-refund/list-panel.tsx", "utf8");
 test("tax refund list endpoint is lightweight and paginated", () => {
   assert.equal(existsSync("app/api/tax-refund/list/route.ts"), true);
   assert.match(service, /const taxRefundLightListSelect = Prisma\.validator<Prisma\.ReceivableOrderSelect>/);
-  assert.match(service, /select: taxRefundLightListSelect/);
+  assert.match(service, /const taxRefundCustomsDeclarationListSelect = Prisma\.validator<Prisma\.CustomsDeclarationSelect>/);
+  assert.match(service, /select: taxRefundCustomsDeclarationListSelect/);
   assert.match(service, /skip,\s*\n\s*take: filters\.pageSize/);
   assert.doesNotMatch(
     service.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "",
@@ -52,12 +53,12 @@ test("tax refund completeness is cached for list rendering", () => {
 });
 
 test("tax refund list keeps lower completeness rows before completed rows", () => {
-  const orderByHelper = service.match(/function taxRefundListOrderBy[\s\S]*?return orderBy;\n}/)?.[0] || "";
+  const orderByHelper = service.match(/function taxRefundDeclarationListOrderBy[\s\S]*?\n}/)?.[0] || "";
   assert.match(orderByHelper, /taxRefundOverallCompleteness:\s*\{\s*sort:\s*"asc",\s*nulls:\s*"first"\s*\}/);
   assert.doesNotMatch(orderByHelper, /businessEntity|businessEntitySortDirection/);
   assert.match(
     orderByHelper,
-    /taxRefundOverallCompleteness[\s\S]*updatedAt[\s\S]*createdAt/,
+    /taxRefundOverallCompleteness[\s\S]*declarationDate[\s\S]*updatedAt[\s\S]*createdAt/,
   );
 });
 

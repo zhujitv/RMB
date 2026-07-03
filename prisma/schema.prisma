@@ -88,6 +88,8 @@ model User {
   salespersonCommissionSettlementRecords CommissionSettlement[]         @relation("CommissionSettlementSalesperson")
   archivedTaxRefundOrders                ReceivableOrder[]              @relation("TaxRefundArchivedBy")
   submittedTaxRefundOrders               ReceivableOrder[]              @relation("TaxRefundSubmittedBy")
+  archivedCustomsDeclarations            CustomsDeclaration[]           @relation("CustomsDeclarationTaxRefundArchivedBy")
+  submittedCustomsDeclarations           CustomsDeclaration[]           @relation("CustomsDeclarationTaxRefundSubmittedBy")
   sessions                               UserSession[]
   loginAttempts                          LoginAttempt[]
   emailVerificationTokens                EmailVerificationToken[]
@@ -271,6 +273,7 @@ model Supplier {
   logisticsBills          LogisticsBill[]
   assignedOrders          OrderLogisticsSupplier[]
   factoryDocumentRequests SupplierDocumentRequest[]
+  customsDeclarations     CustomsDeclaration[]
   ocrTasks                OcrTask[]
 
   @@index([supplierName])
@@ -371,6 +374,7 @@ model ReceivableOrder {
   logisticsBills                LogisticsBill[]
   logisticsSuppliers            OrderLogisticsSupplier[]
   supplierDocumentRequests      SupplierDocumentRequest[]
+  customsDeclarations           CustomsDeclaration[]
   shipsgoTrackings              ShipsgoTracking[]
   ocrTasks                      OcrTask[]
   ocrRawResults                 OcrRawResult[]
@@ -403,6 +407,56 @@ model ReceivableOrder {
   @@index([deletedAt, actualShipmentDate, blDate, createdAt], map: "receivable_orders_list_sort_idx")
   @@index([deletedAt, businessEntityId, updatedAt], map: "receivable_orders_business_entity_idx")
   @@map("receivable_orders")
+}
+
+model CustomsDeclaration {
+  id                                 String    @id @default(cuid())
+  shipmentId                         String?   @map("shipment_id")
+  orderId                            String    @map("order_id")
+  billOfLadingNo                     String?   @map("bill_of_lading_no")
+  declarationNo                      String?   @map("declaration_no")
+  declarationDate                    DateTime? @map("declaration_date") @db.Date
+  purchaseOrderId                    String?   @map("purchase_order_id")
+  supplierId                         String?   @map("supplier_id")
+  pdfDocumentId                      String?   @unique @map("pdf_document_id")
+  taxRefundStatus                    String    @default("NOT_READY") @map("tax_refund_status")
+  taxRefundCompleteness              Json?     @map("tax_refund_completeness")
+  taxRefundCompletenessUpdatedAt     DateTime? @map("tax_refund_completeness_updated_at")
+  taxRefundOverallCompleteness       Int?      @map("tax_refund_overall_completeness")
+  taxRefundCompletenessIssuesSummary String?   @map("tax_refund_completeness_issues_summary") @db.Text
+  taxArchived                        Boolean   @default(false) @map("tax_archived")
+  taxRefundArchivedById              String?   @map("tax_refund_archived_by")
+  taxRefundArchivedAt                DateTime? @map("tax_refund_archived_at")
+  taxRefundArchiveRemark             String?   @map("tax_refund_archive_remark")
+  taxSubmittedById                   String?   @map("tax_submitted_by")
+  taxSubmittedAt                     DateTime? @map("tax_submitted_at")
+  status                             String    @default("ACTIVE")
+  source                             String    @default("MANUAL")
+  createdAt                          DateTime  @default(now()) @map("created_at")
+  updatedAt                          DateTime  @updatedAt @map("updated_at")
+  deletedAt                          DateTime? @map("deleted_at")
+
+  order               ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  purchaseOrder       OrderCost?      @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  supplier            Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  pdfDocument         OrderDocument?  @relation("CustomsDeclarationPdfDocument", fields: [pdfDocumentId], references: [id], onDelete: SetNull)
+  taxRefundArchivedBy User?           @relation("CustomsDeclarationTaxRefundArchivedBy", fields: [taxRefundArchivedById], references: [id], onDelete: SetNull)
+  taxSubmittedBy      User?           @relation("CustomsDeclarationTaxRefundSubmittedBy", fields: [taxSubmittedById], references: [id], onDelete: SetNull)
+
+  @@index([shipmentId])
+  @@index([orderId])
+  @@index([billOfLadingNo])
+  @@index([declarationNo])
+  @@index([declarationDate])
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@index([taxRefundStatus])
+  @@index([taxRefundOverallCompleteness])
+  @@index([taxArchived])
+  @@index([deletedAt])
+  @@index([deletedAt, billOfLadingNo, declarationDate], map: "customs_declarations_bl_date_idx")
+  @@index([deletedAt, taxArchived, taxRefundStatus, updatedAt], map: "customs_declarations_tax_list_idx")
+  @@map("customs_declarations")
 }
 
 model DomesticLogisticsInfo {
@@ -628,6 +682,7 @@ model OrderDocument {
   factoryDocumentRequest   SupplierDocumentRequest? @relation(fields: [factoryDocumentRequestId], references: [id], onDelete: SetNull)
   uploadedBy               User?                    @relation("DocumentsUploaded", fields: [uploadedById], references: [id])
   logisticsExpenseInvoices LogisticsExpense[]       @relation("LogisticsExpenseInvoiceDocument")
+  customsDeclarationPdf    CustomsDeclaration?      @relation("CustomsDeclarationPdfDocument")
   ocrTasks                 OcrTask[]
   ocrRawResults            OcrRawResult[]
 
@@ -941,6 +996,7 @@ model OrderCost {
   documents                 OrderDocument[]
   generatedLogisticsExpense LogisticsExpense? @relation("LogisticsExpenseGeneratedCost")
   supplierDocumentRequests  SupplierDocumentRequest[]
+  customsDeclarations       CustomsDeclaration[]
 
   @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@index([orderId])

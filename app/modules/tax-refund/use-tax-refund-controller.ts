@@ -571,8 +571,10 @@ export function useTaxRefundController({
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null, scope: UploadScope = {}) {
     if (!file) return;
-    const uploadKey = uploadScopeKey(orderId, documentType, scope);
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
+    const effectiveCustomsDeclarationId = scope.customsDeclarationId || (isCustomsDeclaration && detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : "");
+    const recordId = effectiveCustomsDeclarationId || (detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : orderId);
+    const uploadKey = uploadScopeKey(orderId, documentType, scope);
     setUploadingKey(uploadKey);
     setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setDetailError("");
@@ -587,16 +589,17 @@ export function useTaxRefundController({
       formData.append("uploadSource", "REACT_TAX_REFUND");
       if (scope.costId) formData.append("costId", scope.costId);
       if (scope.supplierId) formData.append("supplierId", scope.supplierId);
+      if (effectiveCustomsDeclarationId) formData.append("customsDeclarationId", effectiveCustomsDeclarationId);
       formData.append("file", file);
       const data = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
         setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
       const uploadedDocument = data.document || data.data;
       if (uploadedDocument?.id) {
-        patchUploadedDocument(orderId, uploadedDocument);
+        patchUploadedDocument(recordId, uploadedDocument);
       }
       setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
-      if (detailOrderId === orderId) await fetchDetail(orderId);
+      if (detailOrderId === recordId) await fetchDetail(recordId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -635,8 +638,9 @@ export function useTaxRefundController({
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
+      const recordId = detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : orderId;
       setDetail((current) => {
-        if (!current || current.id !== orderId) return current;
+        if (!current || current.id !== recordId) return current;
         const nextDetail: TaxRefundDetail = {
           ...current,
           documents: (current.documents || []).filter((item) => item.id !== document.id),
@@ -649,13 +653,13 @@ export function useTaxRefundController({
         return nextDetail;
       });
       if (document.documentType === "CUSTOMS_ENTRY_FORM") {
-        patchRowsForOrder(orderId, {
+        patchRowsForOrder(recordId, {
           customsDeclarationNo: "",
           customsDeclarationDate: "",
           declarationDate: "",
         });
       }
-      if (detailOrderId === orderId) await fetchDetail(orderId);
+      if (detailOrderId === recordId) await fetchDetail(recordId);
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");

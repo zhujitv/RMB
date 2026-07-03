@@ -71,7 +71,11 @@ export function TaxRefundTableRow({
           </span>
         ) : "-"}
       </td>
+      <td className={styles.taxRefundDeclarationNoColumn} title={row.customsDeclarationNo || row.declarationNo || "-"}>
+        {row.customsDeclarationNo || row.declarationNo || "-"}
+      </td>
       <td className={styles.taxRefundCustomerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
+      <td className={styles.taxRefundSupplierColumn} title={row.supplierName || "-"}>{row.supplierName || "-"}</td>
       <td className={styles.taxRefundBusinessEntityColumn} title={businessEntityFullName || "-"}>
         {businessEntityDisplayName || "-"}
       </td>

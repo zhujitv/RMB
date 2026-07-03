@@ -390,7 +390,7 @@ export function canRecognizeTaxCustoms(role: string, canWriteDocuments: boolean,
 }
 
 export function uploadScopeKey(orderId: string, documentType: string, scope: UploadScope = {}) {
-  return [orderId, documentType, scope.costId || "", scope.supplierId || ""].join(":");
+  return [orderId, documentType, scope.costId || "", scope.supplierId || "", scope.customsDeclarationId || ""].join(":");
 }
 
 export function zipFileNameFromResponse(response: Response, row: TaxRefundRow) {
