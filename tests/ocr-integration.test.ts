@@ -386,6 +386,10 @@ test("customs recognition is controlled by OCR settings", () => {
   assert.match(service, /recognizeDocumentStructure\(request\)/);
   assert.match(service, /ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE/);
   assert.match(service, /ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_EMPTY/);
+  assert.match(service, /let structuredError: unknown = null/);
+  assert.match(service, /recognizeAliyunCustomsDeclarationWithDocumentStructure\(buffer, effectiveSettings, options\)/);
+  assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind\(effectiveSettings, options\)/);
+  assert.match(service, /const finalStructuredError = docMindError \|\| structuredError/);
   assert.match(service, /ALIYUN_CUSTOMS_STRUCTURE_FAILED_PDF_TEXT/);
   assert.match(service, /报关单严格结构化模式需要配置 AccessKey ID 和 AccessKey Secret。/);
   assert.match(service, /@alicloud\/docmind-api20220711/);

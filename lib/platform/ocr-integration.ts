@@ -952,73 +952,77 @@ async function recognizeAliyunCustomsDeclaration(
   options: OcrRecognitionOptions = {},
 ): Promise<OcrRecognitionResult> {
   const effectiveSettings = customsOcrSettings(settings);
-  let docMindDiagnostics: Record<string, unknown> = {
-    docMindAttempted: Boolean(options.sourceUrl),
-    docMindSucceeded: false,
-    docMindErrorCode: "",
-    docMindErrorMessage: "",
-    fallbackUsed: false,
-  };
+  let structuredError: unknown = null;
+  let structuredErrorCode = "";
+  let structuredErrorMessage = "";
   try {
     return await recognizeAliyunCustomsDeclarationWithDocumentStructure(buffer, effectiveSettings, options);
   } catch (error) {
-    const structureErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_FAILED";
-    const structureErrorMessage = ocrErrorText(error);
-    docMindDiagnostics = {
-      docMindAttempted: true,
-      docMindSucceeded: false,
-      docMindErrorCode: structureErrorCode,
-      docMindErrorMessage: structureErrorMessage,
-      fallbackUsed: effectiveSettings.customsDeclarationMode !== "STRICT",
-    };
+    structuredError = error;
+    structuredErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCUMENT_STRUCTURE_CUSTOMS_FAILED";
+    structuredErrorMessage = ocrErrorText(error);
     console.error("aliyun-document-structure-customs-ocr-failed", {
-      code: structureErrorCode,
-      message: structureErrorMessage,
+      code: structuredErrorCode,
+      message: structuredErrorMessage,
       mode: effectiveSettings.customsDeclarationMode,
     });
-    if (effectiveSettings.customsDeclarationMode === "STRICT") {
-      const strictError = codedError(
-        `阿里云报关单严格结构化识别失败：${structureErrorMessage}`,
-        (error as { status?: number } | null)?.status || 502,
-        structureErrorCode,
-      );
-      strictError.details = ocrErrorDetails(error);
-      throw strictError;
-    }
-    return recognizeWithPdfTextFallback(buffer, "customsDeclaration", effectiveSettings, {
-      ...options,
-      source: "ALIYUN_CUSTOMS_STRUCTURE_FAILED_PDF_TEXT",
-      error,
-    });
   }
+  let docMindError: unknown = null;
+  let docMindErrorCode = "";
+  let docMindErrorMessage = "";
   if (options.sourceUrl) {
     try {
       return await recognizeAliyunCustomsDeclarationWithDocMind(effectiveSettings, options);
     } catch (error) {
-      const docMindErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCMIND_CUSTOMS_FAILED";
-      const docMindErrorMessage = ocrErrorText(error);
-      docMindDiagnostics = {
-        docMindAttempted: true,
-        docMindSucceeded: false,
-        docMindErrorCode,
-        docMindErrorMessage,
-        fallbackUsed: effectiveSettings.customsDeclarationMode !== "STRICT",
-      };
+      docMindError = error;
+      docMindErrorCode = (error as { code?: string } | null)?.code || "ALIYUN_DOCMIND_CUSTOMS_FAILED";
+      docMindErrorMessage = ocrErrorText(error);
       console.error("aliyun-docmind-customs-ocr-failed", {
         code: docMindErrorCode,
         message: docMindErrorMessage,
         mode: effectiveSettings.customsDeclarationMode,
       });
-      if (effectiveSettings.customsDeclarationMode === "STRICT") {
-        const strictError = codedError(
-          `阿里云报关单严格结构化识别失败：${docMindErrorMessage}`,
-          (error as { status?: number } | null)?.status || 502,
-          docMindErrorCode,
-        );
-        strictError.details = ocrErrorDetails(error);
-        throw strictError;
-      }
     }
+  }
+  const structuredFailure = [
+    structuredErrorMessage && `文档结构化：${structuredErrorMessage}`,
+    docMindErrorMessage && `贸易单证结构化：${docMindErrorMessage}`,
+  ].filter(Boolean).join("；");
+  const finalStructuredError = docMindError || structuredError;
+  if (effectiveSettings.customsDeclarationMode === "STRICT") {
+    const strictError = codedError(
+      `阿里云报关单严格结构化识别失败：${structuredFailure || "结构化接口未返回可用报关单数据。"}`,
+      (finalStructuredError as { status?: number } | null)?.status || 502,
+      docMindErrorCode || structuredErrorCode || "ALIYUN_CUSTOMS_STRUCTURED_OCR_FAILED",
+    );
+    strictError.details = {
+      documentStructure: {
+        code: structuredErrorCode,
+        message: structuredErrorMessage,
+        details: ocrErrorDetails(structuredError),
+      },
+      tradeDocument: {
+        attempted: Boolean(options.sourceUrl),
+        code: docMindErrorCode,
+        message: docMindErrorMessage,
+        details: ocrErrorDetails(docMindError),
+      },
+    };
+    throw strictError;
+  }
+  const docMindDiagnostics: Record<string, unknown> = {
+    docMindAttempted: Boolean(options.sourceUrl),
+    docMindSucceeded: false,
+    docMindErrorCode: docMindErrorCode || structuredErrorCode,
+    docMindErrorMessage: structuredFailure || structuredErrorMessage || docMindErrorMessage,
+    fallbackUsed: true,
+  };
+  if (finalStructuredError) {
+    return recognizeWithPdfTextFallback(buffer, "customsDeclaration", effectiveSettings, {
+      ...options,
+      source: "ALIYUN_CUSTOMS_STRUCTURE_FAILED_PDF_TEXT",
+      error: finalStructuredError,
+    });
   }
   const client = createAliyunOcrClient(effectiveSettings);
   let primaryRawJson: unknown = null;
