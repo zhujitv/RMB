@@ -385,6 +385,18 @@ test("tax refund customs documents use manual declaration fields without OCR", (
     customsRecognitionFormSource,
     /车牌号|起运地|到达地/,
   );
+  assert.match(
+    customsRecognitionFormSource,
+    /上传报关单 PDF 后，系统将读取 PDF 文本内容，并自动回填报关单号和申报日期。/,
+  );
+  assert.match(customsRecognitionFormSource, /已读取：报关单号/);
+  assert.match(customsRecognitionFormSource, /已读取：申报日期/);
+  assert.match(customsRecognitionFormSource, /未读取到报关单号，请手动填写/);
+  assert.match(customsRecognitionFormSource, /未读取到申报日期，请手动填写/);
+  assert.doesNotMatch(
+    customsRecognitionFormSource,
+    /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT|OCR|Aliyun|ALIYUN|fallback|raw|parsed|商品明细|请确认商品明细|识别状态|parseSourceLabel|parseStatusLabel|customsParseSourceLabel/,
+  );
 });
 
 test("tax refund re-recognition endpoints are disabled", () => {

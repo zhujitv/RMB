@@ -20,7 +20,7 @@ test("parses declaration number and declaration date near explicit labels", () =
   assert.equal(result.customsDeclarationDate, "2024-05-12");
   assert.equal(result.customsDeclarationParseStatus, "SUCCESS");
   assert.equal(result.customsDeclarationParseSource, "AUTO_PDF_TEXT");
-  assert.equal(result.customsDeclarationParseMessage, "已识别：\n✓ 报关单号\n✓ 申报日期");
+  assert.equal(result.customsDeclarationParseMessage, "已读取：\n✓ 报关单号\n✓ 申报日期");
   assert.deepEqual(Object.keys(result).sort(), [
     "customsDeclarationDate",
     "customsDeclarationNo",
@@ -109,7 +109,7 @@ test("returns failed status without blocking upload when fields are absent", () 
   assert.equal(result.customsDeclarationNo, "");
   assert.equal(result.customsDeclarationDate, "");
   assert.equal(result.customsDeclarationParseStatus, "FAILED");
-  assert.equal(result.customsDeclarationParseMessage, "未识别成功，请手工填写报关单号和申报日期");
+  assert.equal(result.customsDeclarationParseMessage, "未读取到报关单号和申报日期，请手动填写");
 });
 
 test("normalizes valid declaration dates and rejects invalid dates", () => {

@@ -197,12 +197,12 @@ export function customsParseStatusFromFields(fields: Partial<CustomsFields> = {}
 }
 
 export function customsParseMessage(fields: Partial<CustomsFields> = {}, status = customsParseStatusFromFields(fields)) {
-  if (status === "SUCCESS") return "已识别：\n✓ 报关单号\n✓ 申报日期";
+  if (status === "SUCCESS") return "已读取：\n✓ 报关单号\n✓ 申报日期";
   const missing: string[] = [];
   if (!fields.customsDeclarationDate) missing.push("申报日期");
   if (!fields.customsDeclarationNo) missing.push("报关单号");
-  if (status === "PARTIAL") return `文件已上传，已自动识别部分信息，未自动识别到${missing.join("/")}，请手工填写。`;
-  return "未识别成功，请手工填写报关单号和申报日期";
+  if (status === "PARTIAL") return `文件已上传，已读取部分信息，未读取到${missing.join("/")}，请手动填写。`;
+  return "未读取到报关单号和申报日期，请手动填写";
 }
 
 function normalizeDateParts(year: string, month: string, day: string) {

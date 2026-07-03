@@ -181,10 +181,8 @@ export function CustomsRecognitionForm({
   const [customsDeclarationDate, setCustomsDeclarationDate] = useState(detail.customsDeclarationDate || "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const parseStatus = detail.customsParseStatus || "";
-  const parseStatusLabel = detail.customsParseStatusLabel || "未识别";
-  const parseSourceLabel = detail.customsParseSourceLabel || "";
-  const parseMessage = detail.customsParseMessage || "";
+  const declarationNoRead = Boolean(detail.customsDeclarationNo);
+  const declarationDateRead = Boolean(detail.customsDeclarationDate);
 
   useEffect(() => {
     setCustomsDeclarationNo(detail.customsDeclarationNo || "");
@@ -219,9 +217,8 @@ export function CustomsRecognitionForm({
       <div className={styles.customsFormHeader}>
         <div>
           <strong>报关单信息</strong>
-          <span>上传报关单 PDF 后，系统会读取本地 PDF 文本层并自动回填关键信息。</span>
+          <span>上传报关单 PDF 后，系统将读取 PDF 文本内容，并自动回填报关单号和申报日期。</span>
         </div>
-        <span className={styles.statusPill}>{parseSourceLabel ? `${parseStatusLabel} · ${parseSourceLabel}` : parseStatusLabel}</span>
       </div>
       <div className={styles.customsFormGrid}>
         <label>
@@ -243,11 +240,10 @@ export function CustomsRecognitionForm({
           />
         </label>
       </div>
-      {parseMessage ? (
-        <div className={styles.customsParseMessage} data-status={parseStatus || undefined}>
-          {parseMessage}
-        </div>
-      ) : null}
+      <div className={styles.customsReadMessage}>
+        <div>{declarationNoRead ? "已读取：报关单号" : "未读取到报关单号，请手动填写"}</div>
+        <div>{declarationDateRead ? "已读取：申报日期" : "未读取到申报日期，请手动填写"}</div>
+      </div>
       <div className={styles.customsFormActions}>
         {message ? <span>{message}</span> : <span>保存后将同步更新退税资料列表的申报日期。</span>}
         {readOnly ? null : (

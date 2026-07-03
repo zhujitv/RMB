@@ -76,11 +76,6 @@ export type TaxRefundRow = {
   currency?: string;
   customsDeclarationNo?: string;
   customsDeclarationDate?: string | null;
-  customsParseStatus?: string;
-  customsParseSource?: string;
-  customsParseStatusLabel?: string;
-  customsParseSourceLabel?: string;
-  customsParseMessage?: string;
   declarationDate?: string | null;
   taxRefundStatus?: string;
   taxRefundStatusLabel?: string;
@@ -126,12 +121,8 @@ export type TaxDocument = {
   previewUrl?: string;
   downloadUrl?: string;
   customsPdfTextParse?: {
-    textLength?: number;
     customsDeclarationNo?: string;
     customsDeclarationDate?: string;
-    customsDeclarationParseStatus?: string;
-    customsDeclarationParseMessage?: string;
-    parseFailedReason?: string;
   };
 };
 

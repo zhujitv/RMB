@@ -35,7 +35,6 @@ import {
   sanitizeTaxRefundCompletenessText,
   serializeOrder,
   serializeOrderDocument,
-  serializeCustomsRecognition,
   standardFilenameForDocument,
   summarizeOrder,
   taxDocumentCompleteness,
@@ -598,9 +597,6 @@ async function getTaxRefundBaseOrder(orderId: string, actor: ActorLike) {
       ...taxRefundLightListSelect,
       customsDeclarationNo: true,
       customsDeclarationDate: true,
-      customsParseStatus: true,
-      customsParseMessage: true,
-      customsDeclarationParseSource: true,
       taxRefundArchivedBy: { select: { id: true, name: true } },
       taxSubmittedBy: { select: { id: true, name: true } },
     },
@@ -615,7 +611,8 @@ function serializeTaxRefundBasicOrder(order: Awaited<ReturnType<typeof getTaxRef
     ...light,
     taxRefundArchivedByName: order.taxRefundArchivedBy?.name || "",
     taxSubmittedByName: order.taxSubmittedBy?.name || order.taxRefundArchivedBy?.name || "",
-    ...serializeCustomsRecognition(order),
+    customsDeclarationNo: order.customsDeclarationNo || "",
+    customsDeclarationDate: dateToInput(order.customsDeclarationDate),
     documentCompleteness: cachedTaxRefundCompleteness(order),
     taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt || null,
   };
@@ -667,9 +664,6 @@ async function getTaxRefundCustomsDocumentsSection(orderId: string, actor: Actor
     customsDeclarationNo: basic.customsDeclarationNo || "",
     customsDeclarationDate: basic.customsDeclarationDate || null,
     declarationDate: basic.declarationDate || null,
-    customsParseStatusLabel: basic.customsParseStatusLabel || "",
-    customsParseSourceLabel: basic.customsParseSourceLabel || "",
-    customsParseMessage: basic.customsParseMessage || "",
   };
 }
 

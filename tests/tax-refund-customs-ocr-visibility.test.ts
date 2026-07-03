@@ -6,6 +6,7 @@ const detail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf
 const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const overlays = readFileSync("app/modules/tax-refund/overlays.tsx", "utf8");
+const uploadComponents = readFileSync("app/modules/tax-refund/upload-components.tsx", "utf8");
 const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const taxProfitBarrel = readFileSync("lib/platform/tax-profit.ts", "utf8");
@@ -23,6 +24,13 @@ test("tax refund module no longer renders OCR and tax calculation panels", () =>
   assert.doesNotMatch(detail, /退税计算数据|退税结果|理论退税额|发票匹配/);
   assert.doesNotMatch(overlays, /CustomsFilePickerDialog|onRecognizeCustomsDocument|onRecognizeFromUploadedCustoms/);
   assert.doesNotMatch(controller, /recognizingDocumentId|recognitionStatusByDocument|customsFilePicker|patchCustomsRecognition/);
+  assert.doesNotMatch(
+    uploadComponents,
+    /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT|OCR|Aliyun|ALIYUN|fallback|raw|parsed|商品明细识别|请确认商品明细|OCR识别状态|Aliyun识别状态|fallback识别状态|识别状态/,
+  );
+  assert.match(uploadComponents, /上传报关单 PDF 后，系统将读取 PDF 文本内容，并自动回填报关单号和申报日期。/);
+  assert.match(uploadComponents, /已读取：报关单号/);
+  assert.match(uploadComponents, /未读取到报关单号，请手动填写/);
   assert.match(detail, /CustomsRecognitionForm/);
 });
 

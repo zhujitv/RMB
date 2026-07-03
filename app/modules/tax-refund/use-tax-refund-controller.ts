@@ -610,10 +610,10 @@ export function useTaxRefundController({
   }
 
   function customsUploadNotice(parseResult: TaxDocument["customsPdfTextParse"] | undefined) {
-    if (!parseResult) return "报关单已上传，正在刷新报关单信息。";
-    if (parseResult.customsDeclarationParseStatus === "SUCCESS") return "报关单已上传，已自动回填报关单号和申报日期。";
-    if (parseResult.customsDeclarationParseStatus === "PARTIAL") return parseResult.customsDeclarationParseMessage || "报关单已上传，已自动回填部分报关信息。";
-    return parseResult.customsDeclarationParseMessage || "报关单已上传，请手工填写报关单号和申报日期。";
+    if (!parseResult) return "报关单已上传，正在读取报关单信息。";
+    const declarationNoMessage = parseResult.customsDeclarationNo ? "已读取：报关单号" : "未读取到报关单号，请手动填写";
+    const declarationDateMessage = parseResult.customsDeclarationDate ? "已读取：申报日期" : "未读取到申报日期，请手动填写";
+    return `报关单已上传，${declarationNoMessage}；${declarationDateMessage}`;
   }
 
   async function deleteDocument(orderId: string, document: TaxDocument) {
@@ -645,9 +645,6 @@ export function useTaxRefundController({
           nextDetail.customsDeclarationNo = "";
           nextDetail.customsDeclarationDate = "";
           nextDetail.declarationDate = "";
-          nextDetail.customsParseStatusLabel = "";
-          nextDetail.customsParseSourceLabel = "";
-          nextDetail.customsParseMessage = "";
         }
         return nextDetail;
       });
@@ -656,9 +653,6 @@ export function useTaxRefundController({
           customsDeclarationNo: "",
           customsDeclarationDate: "",
           declarationDate: "",
-          customsParseStatusLabel: "",
-          customsParseSourceLabel: "",
-          customsParseMessage: "",
         });
       }
       if (detailOrderId === orderId) await fetchDetail(orderId);
