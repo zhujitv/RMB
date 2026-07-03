@@ -556,6 +556,12 @@
 .supplierDocumentRequestCostField { composes: supplierDocumentRequestCostField from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentRequestMessage { composes: supplierDocumentRequestMessage from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentRequestTypes { composes: supplierDocumentRequestTypes from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeCard { composes: supplierDocumentRequestTypeCard from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeCardSelected { composes: supplierDocumentRequestTypeCardSelected from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeCheck { composes: supplierDocumentRequestTypeCheck from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeDescription { composes: supplierDocumentRequestTypeDescription from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeText { composes: supplierDocumentRequestTypeText from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypeTitle { composes: supplierDocumentRequestTypeTitle from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsPage { composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStats { composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/supplier-documents.module.css"; }

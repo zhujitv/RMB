@@ -54,24 +54,99 @@
 .supplierDocumentRequestTypes {
   grid-column: span 2;
   min-width: 0;
-  border: 1px solid #dbeafe;
-  border-radius: 14px;
-  background: #fff;
-  padding: 10px 12px 12px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
 }
 
 .supplierDocumentRequestTypes legend {
   color: #64748b;
   font-size: 12px;
   font-weight: 700;
-  padding: 0 4px;
+  padding: 0 0 8px;
+  grid-column: 1 / -1;
 }
 
-.supplierDocumentRequestTypes label {
-  display: inline-flex;
+.supplierDocumentRequestTypeCard {
+  width: 100%;
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  padding: 13px 14px;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.supplierDocumentRequestTypeCard:hover:not(:disabled) {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.supplierDocumentRequestTypeCard:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.supplierDocumentRequestTypeCard:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.supplierDocumentRequestTypeCardSelected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.supplierDocumentRequestTypeCheck {
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: transparent;
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.supplierDocumentRequestTypeCardSelected .supplierDocumentRequestTypeCheck {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.supplierDocumentRequestTypeText {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.supplierDocumentRequestTypeTitle {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.supplierDocumentRequestTypeDescription {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .supplierDocumentRequestCostField {

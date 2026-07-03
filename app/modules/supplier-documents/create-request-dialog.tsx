@@ -34,8 +34,8 @@ export type CreateSupplierDocumentRequestResult = {
 };
 
 const DOCUMENT_TYPE_OPTIONS = [
-  { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同" },
-  { value: "SUPPLIER_INVOICE", label: "工厂增值税发票" },
+  { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同", description: "上传供应商签章采购合同 PDF" },
+  { value: "SUPPLIER_INVOICE", label: "工厂增值税发票", description: "上传供应商开具的增值税专用发票 PDF" },
 ];
 
 const DEFAULT_DOCUMENT_TYPES = DOCUMENT_TYPE_OPTIONS.map((item) => item.value);
@@ -178,14 +178,27 @@ export function CreateSupplierDocumentRequestDialog({
           <fieldset className={styles.supplierDocumentRequestTypes}>
             <legend>需要回传的资料</legend>
             {DOCUMENT_TYPE_OPTIONS.map((item) => (
-              <label key={item.value} className={styles.inlineCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={requiredTypes.includes(item.value)}
-                  onChange={(event) => toggleRequiredType(item.value, event.target.checked)}
-                />
-                {item.label}
-              </label>
+              <button
+                key={item.value}
+                type="button"
+                role="checkbox"
+                aria-checked={requiredTypes.includes(item.value)}
+                aria-describedby={`${item.value}-description`}
+                className={[
+                  styles.supplierDocumentRequestTypeCard,
+                  requiredTypes.includes(item.value) ? styles.supplierDocumentRequestTypeCardSelected : "",
+                ].filter(Boolean).join(" ")}
+                onClick={() => toggleRequiredType(item.value, !requiredTypes.includes(item.value))}
+                disabled={saving}
+              >
+                <span className={styles.supplierDocumentRequestTypeCheck} aria-hidden="true">✓</span>
+                <span className={styles.supplierDocumentRequestTypeText}>
+                  <span className={styles.supplierDocumentRequestTypeTitle}>{item.label}</span>
+                  <span id={`${item.value}-description`} className={styles.supplierDocumentRequestTypeDescription}>
+                    {item.description}
+                  </span>
+                </span>
+              </button>
             ))}
           </fieldset>
           <label className={styles.supplierDocumentRequestMessage}>

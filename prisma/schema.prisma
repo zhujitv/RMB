@@ -694,6 +694,7 @@ model SupplierDocumentRequest {
   id                    String    @id @default(cuid())
   orderId               String    @map("order_id")
   supplierId            String    @map("supplier_id")
+  costId                String?   @map("cost_id")
   requestedById         String?   @map("requested_by")
   completedById         String?   @map("completed_by")
   requiredDocumentTypes Json      @map("required_document_types")
@@ -721,6 +722,7 @@ model SupplierDocumentRequest {
 
   order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   supplier    Supplier        @relation(fields: [supplierId], references: [id])
+  cost        OrderCost?      @relation(fields: [costId], references: [id], onDelete: SetNull)
   requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   completedBy User?           @relation("SupplierDocumentRequestCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
   deletedBy   User?           @relation("SupplierDocumentRequestDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
@@ -729,6 +731,7 @@ model SupplierDocumentRequest {
 
   @@index([orderId])
   @@index([supplierId])
+  @@index([costId])
   @@index([requestedById])
   @@index([completedById])
   @@index([deletedById])
@@ -937,6 +940,7 @@ model OrderCost {
   updatedBy                 User?             @relation("CostsUpdated", fields: [updatedById], references: [id])
   documents                 OrderDocument[]
   generatedLogisticsExpense LogisticsExpense? @relation("LogisticsExpenseGeneratedCost")
+  supplierDocumentRequests  SupplierDocumentRequest[]
 
   @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@index([orderId])

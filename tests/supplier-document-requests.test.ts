@@ -8,6 +8,7 @@ const service = readFileSync("lib/platform/supplier-document-requests.ts", "utf8
 const notificationEngine = readFileSync("lib/platform/notification-engine.ts", "utf8");
 const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
+const supplierDocumentStyles = readFileSync("app/styles/workspace-shell/supplier-documents.module.css", "utf8");
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
 const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");
@@ -23,6 +24,9 @@ const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole
 
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
+  assert.match(schema, /costId\s+String\?\s+@map\("cost_id"\)/);
+  assert.match(schema, /cost\s+OrderCost\?\s+@relation\(fields: \[costId\], references: \[id\], onDelete: SetNull\)/);
+  assert.match(schema, /@@index\(\[costId\]\)/);
   assert.match(schema, /allowFactoryDocumentUpload\s+Boolean\s+@default\(false\)\s+@map\("allow_factory_document_upload"\)/);
   assert.match(schema, /factoryDocumentRequestId\s+String\?\s+@map\("factory_document_request_id"\)/);
   assert.match(schema, /documents\s+OrderDocument\[\]/);
@@ -68,13 +72,20 @@ test("supplier callback email uses formal PDF-only request template", () => {
 test("product supplier callback email attaches only matching cost payment voucher", () => {
   assert.match(service, /function paymentVoucherAttachmentFileName/);
   assert.match(service, /return `汇款水单\.\$\{extension\}`/);
-  assert.match(service, /async function latestProductSupplierPaymentVoucherAttachment\(orderId: string, supplierId: string\)/);
-  assert.match(service, /sourceType: \{ not: "LOGISTICS_EXPENSE" \}/);
-  assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
-  assert.match(service, /paymentVoucherStorageKey: \{ not: null \}/);
+  assert.match(service, /function isPaidFactorySupplierCost/);
+  assert.match(service, /paymentStatus === "已支付" \|\| cost\.paymentStatus === "部分支付"/);
+  assert.match(service, /async function selectedProductSupplierPaymentVoucherAttachment\(cost: FactorySupplierReturnCost\)/);
+  assert.match(service, /if \(!isPaidFactorySupplierCost\(cost\)\) return null/);
   assert.match(service, /findActiveFileAssetBySource\(/);
-  assert.match(service, /const storageKey = asset\?\.storageKey \|\| voucherCost\.paymentVoucherStorageKey/);
+  assert.match(service, /const storageKey = asset\?\.storageKey \|\| cost\.paymentVoucherStorageKey \|\| ""/);
+  assert.match(service, /if \(!storageKey\) return null/);
   assert.match(service, /readR2Object\(storageKey\)/);
+  assert.match(service, /selectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
+  assert.match(service, /costId: factoryCost\.id/);
+  assert.match(service, /resolveUniqueFactoryCostForSupplierReturn\(row\.orderId, row\.supplierId, nonEmpty\(row\.costId\)\)/);
+  assert.match(service, /供应商资料回传重发付款凭证成本匹配失败，已跳过水单附件/);
+  assert.match(service, /selectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
+  assert.match(service, /if \(paymentVoucherAttachment\) attachments\.push\(paymentVoucherAttachment\)/);
   assert.match(service, /已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。/);
   assert.match(service, /paymentVoucherAttached: Boolean\(paymentVoucherAttachment\)/);
   assert.match(service, /\.\.\.\(paymentVoucherAttachment \? \[paymentVoucherAttachment\] : \[\]\)/);
@@ -120,6 +131,17 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierCreateDialog, /formData\.append\("requiredDocumentTypes", requiredTypes\.join\(","\)\)/);
   assert.match(supplierCreateDialog, /SUPPLIER_PURCHASE_CONTRACT/);
   assert.match(supplierCreateDialog, /SUPPLIER_INVOICE/);
+  assert.match(supplierCreateDialog, /上传供应商签章采购合同 PDF/);
+  assert.match(supplierCreateDialog, /上传供应商开具的增值税专用发票 PDF/);
+  assert.match(supplierCreateDialog, /role="checkbox"/);
+  assert.match(supplierCreateDialog, /aria-checked=\{requiredTypes\.includes\(item\.value\)\}/);
+  assert.match(supplierCreateDialog, /supplierDocumentRequestTypeCardSelected/);
+  assert.doesNotMatch(supplierCreateDialog, /type="checkbox"/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard:hover/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard:focus-visible/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCardSelected/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCheck/);
   assert.match(supplierCostCandidatesRoute, /listSupplierDocumentRequestCostCandidates/);
   assert.match(supplierRequestListRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
   assert.match(service, /export async function listSupplierDocumentRequestCostCandidates/);

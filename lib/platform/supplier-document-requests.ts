@@ -400,40 +400,27 @@ function paymentVoucherAttachmentFileName(fileName = "", mimeType = "") {
   return `汇款水单.${extension}`;
 }
 
-async function latestProductSupplierPaymentVoucherAttachment(orderId: string, supplierId: string) {
-  const where = {
-    orderId,
-    supplierId,
-    deletedAt: null,
-    sourceType: { not: "LOGISTICS_EXPENSE" },
-    costType: { in: FACTORY_SUPPLIER_COST_TYPES },
-    paymentVoucherStorageKey: { not: null },
-  } as Prisma.OrderCostWhereInput;
-  const orderBy = [
-    { paymentVoucherUploadedAt: "desc" },
-    { updatedAt: "desc" },
-  ] as Prisma.OrderCostOrderByWithRelationInput[];
-  const cost = await prisma.orderCost.findFirst({ where, orderBy });
-  const voucherCost = cost as typeof cost & {
-    paymentVoucherStorageKey?: string | null;
-    paymentVoucherFileName?: string | null;
-    paymentVoucherMimeType?: string | null;
-  };
-  if (!voucherCost?.paymentVoucherStorageKey) return null;
+function isPaidFactorySupplierCost(cost: { paid?: boolean | null; paymentStatus?: string | null }) {
+  return Boolean(cost.paid) || cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+}
+
+async function selectedProductSupplierPaymentVoucherAttachment(cost: FactorySupplierReturnCost) {
+  if (!isPaidFactorySupplierCost(cost)) return null;
   const asset = await findActiveFileAssetBySource(
     FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
-    voucherCost.id,
+    cost.id,
     FILE_ASSET_ROLES.PAYMENT_VOUCHER,
   );
-  const storageKey = asset?.storageKey || voucherCost.paymentVoucherStorageKey;
+  const storageKey = asset?.storageKey || cost.paymentVoucherStorageKey || "";
+  if (!storageKey) return null;
   const content = await readR2Object(storageKey).catch((error) => {
-    logServerError("产品供应商资料回传通知付款凭证读取失败", error, { orderId, supplierId, costId: cost?.id || "" });
+    logServerError("产品供应商资料回传通知付款凭证读取失败", error, { orderId: cost.orderId, supplierId: cost.supplierId || "", costId: cost.id });
     return null;
   });
   if (!content) return null;
-  const contentType = asset?.mimeType || voucherCost.paymentVoucherMimeType || "image/jpeg";
+  const contentType = asset?.mimeType || cost.paymentVoucherMimeType || "image/jpeg";
   return {
-    filename: paymentVoucherAttachmentFileName(asset?.fileName || voucherCost.paymentVoucherFileName || "", contentType),
+    filename: paymentVoucherAttachmentFileName(asset?.fileName || cost.paymentVoucherFileName || "", contentType),
     content,
     contentType,
   };
@@ -880,7 +867,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
 
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
-  const paymentVoucherAttachment = await latestProductSupplierPaymentVoucherAttachment(order.id, supplier.id);
+  const paymentVoucherAttachment = await selectedProductSupplierPaymentVoucherAttachment(factoryCost);
   const templateVariables = supplierDocumentRequestTemplateVariables({
     supplierName: supplier.supplierName,
     orderNo: order.orderNo || order.id,
@@ -902,6 +889,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
         data: {
           orderId: order.id,
           supplierId: supplier.id,
+          costId: factoryCost.id,
           requestedById,
           requiredDocumentTypes: requiredTypes,
           status: "待上传",
@@ -1006,6 +994,15 @@ export async function resendSupplierDocumentRequestNotice(request: AuditRequestL
         contentType: row.templateMimeType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
     }
+  }
+  const resendFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(row.costId)).catch((error) => {
+    logServerError("供应商资料回传重发付款凭证成本匹配失败，已跳过水单附件", error, { requestId: row.id, orderId: row.orderId, supplierId: row.supplierId, costId: row.costId || "" });
+    return null;
+  });
+  if (resendFactoryCost?.id) {
+    const factoryCost = await loadFactorySupplierReturnCostForRequest({ costId: resendFactoryCost.id, orderId: row.orderId, supplierId: row.supplierId });
+    const paymentVoucherAttachment = await selectedProductSupplierPaymentVoucherAttachment(factoryCost);
+    if (paymentVoucherAttachment) attachments.push(paymentVoucherAttachment);
   }
   let updated = row;
   try {
