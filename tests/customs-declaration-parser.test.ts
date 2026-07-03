@@ -41,6 +41,17 @@ test("normalizes full-width text and compact yyyyMMdd dates", () => {
   assert.equal(result.customsDeclarationParseStatus, "SUCCESS");
 });
 
+test("parses English declaration number and declaration date labels", () => {
+  const result = parseCustomsDeclarationText(`
+    Customs Declaration No. 223120260002528894
+    Declaration Date 2026/06/17
+  `);
+
+  assert.equal(result.customsDeclarationNo, "223120260002528894");
+  assert.equal(result.customsDeclarationDate, "2026-06-17");
+  assert.equal(result.customsDeclarationParseStatus, "SUCCESS");
+});
+
 test("prefers declaration date over export, input and print dates", () => {
   const result = parseCustomsDeclarationText(`
     出口日期：2024-03-01

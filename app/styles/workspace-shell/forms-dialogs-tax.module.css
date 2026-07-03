@@ -921,6 +921,35 @@
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
+.customsParseMessage {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.customsParseMessage[data-status="FAILED"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.customsParseMessage[data-status="PARTIAL"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.customsParseMessage[data-status="SUCCESS"] {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+
 .customsFormActions {
   display: flex;
   align-items: center;

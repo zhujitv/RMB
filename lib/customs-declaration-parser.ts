@@ -88,8 +88,8 @@ type Pdf2JsonModule = {
   PDFParser?: Pdf2JsonParserConstructor;
 };
 
-const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"];
-const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间"];
+const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号", "Customs Declaration No.", "Customs Declaration No", "Declaration No.", "Declaration No"];
+const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间", "Declaration Date"];
 const EXPORT_DATE_LABELS = ["出口日期", "出口时间", "离境日期"];
 const DOMESTIC_CONSIGNOR_LABELS = ["境内发货人", "境内收发货人", "发货人"];
 const DECLARATION_UNIT_LABELS = ["申报单位", "报关单位", "代理报关企业"];
@@ -332,7 +332,7 @@ function findBestDeclarationNo(text = "") {
   DECLARATION_NO_LABELS.forEach((label, labelIndex) => {
     const pattern = new RegExp(`${escapeRegExp(label)}\\s*[:：]?\\s*([A-Z0-9\\s-]{8,48})`, "gi");
     for (const match of compact.matchAll(pattern)) {
-      const raw = (match[1] || "").replace(/[\s-]+/g, "");
+      const raw = trimBeforeKnownLabels(match[1] || "").replace(/[\s-]+/g, "");
       const declarationNo = raw.match(/^[A-Z0-9]{8,32}/i)?.[0] || raw.match(DECLARATION_NO_PATTERN)?.[0] || "";
       if (isLikelyDeclarationNo(declarationNo)) {
         candidates.push({ value: declarationNo.toUpperCase(), score: 100 - labelIndex * 10, index: match.index || 0 });

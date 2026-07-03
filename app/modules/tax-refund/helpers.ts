@@ -333,6 +333,8 @@ export function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
   if (detail.customsDeclarationNo !== undefined) patch.customsDeclarationNo = detail.customsDeclarationNo;
   if (detail.customsDeclarationDate !== undefined) patch.customsDeclarationDate = detail.customsDeclarationDate;
   if (detail.declarationDate !== undefined) patch.declarationDate = detail.declarationDate;
+  if (detail.customsParseStatus !== undefined) patch.customsParseStatus = detail.customsParseStatus;
+  if (detail.customsParseSource !== undefined) patch.customsParseSource = detail.customsParseSource;
   if (detail.customsParseStatusLabel !== undefined) patch.customsParseStatusLabel = detail.customsParseStatusLabel;
   if (detail.customsParseSourceLabel !== undefined) patch.customsParseSourceLabel = detail.customsParseSourceLabel;
   if (detail.customsParseMessage !== undefined) patch.customsParseMessage = detail.customsParseMessage;

@@ -1,5 +1,9 @@
 import { prisma } from "../prisma";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
+import {
+  parseCustomsDeclarationPdf,
+  type CustomsDeclarationPdfTextParseResult,
+} from "../pdf/parse-customs-declaration";
 import { buildOrderDocumentKey, readR2Object, safeFileName } from "../r2";
 import {
   canAccessDomesticLogisticsOrder,
@@ -24,9 +28,11 @@ import {
   assertWrite,
   canRead,
   codedError,
+  dateFromInput,
   effectivePermissions,
   isCustomsDeclarationDocumentType,
   isProductSupplierOperatorRole,
+  logServerError,
   nextStandardFilenameForUpload,
   normalizeOrderDocumentType,
   normalizeUploadSource,
@@ -44,6 +50,8 @@ import {
   runNonCriticalTask,
   SALESPERSON_TAX_REFUND_UPLOAD_DOCUMENT_TYPES,
   scheduleTaxRefundCompletenessRefresh,
+  sanitizeForLog,
+  serializeCustomsRecognition,
   serializeOrderDocument,
   softDeleteFileAssetBySource,
   standardFilenameForDocument,
@@ -437,6 +445,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   await runNonCriticalTask("成本发票状态同步", () => syncCostInvoiceStatus(document.costId));
   const normalizedUploadSource = normalizeUploadSource(uploadSource, relatedModule);
   (document as typeof document & { uploadSource?: string }).uploadSource = normalizedUploadSource;
+  let customsPdfTextParse: CustomsDeclarationPdfTextParseResult | null = null;
   const uploadAction = isCustomsDeclarationDocumentType(documentType) ? "报关单上传" : "上传文件";
   await runNonCriticalTask("文件上传操作日志写入", () => writeAudit(request, actor, uploadAction, "order_documents", document.id, null, {
     orderNo: order.orderNo,
@@ -445,11 +454,113 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     uploadSource: normalizedUploadSource,
     replacedCustomsDocumentCount,
   }));
+  if (isCustomsDeclarationDocumentType(documentType)) {
+    customsPdfTextParse = await parseAndApplyUploadedCustomsDeclarationPdf(request, actor, {
+      orderId: order.id,
+      orderNo: order.orderNo || "",
+      documentId: document.id,
+      fileName: document.standardFilename || document.fileName || originalFileName,
+      pdfBody: body,
+    });
+  }
   if (["COMMERCIAL_INVOICE", "PACKING_LIST", "CUSTOMS_ENTRY_FORM"].includes(documentType)) {
     await tryAutoShippingDocumentsNotification(request, actor, order.id);
   }
   scheduleTaxRefundCompletenessRefresh(order.id);
-  return serializeOrderDocument(document);
+  const serializedDocument = serializeOrderDocument(document) as ReturnType<typeof serializeOrderDocument> & {
+    customsPdfTextParse?: CustomsDeclarationPdfTextParseResult;
+  };
+  if (customsPdfTextParse) serializedDocument.customsPdfTextParse = customsPdfTextParse;
+  return serializedDocument;
+}
+
+async function parseAndApplyUploadedCustomsDeclarationPdf(
+  request: AuditRequestLike,
+  actor: ActorLike,
+  input: {
+    orderId: string;
+    orderNo: string;
+    documentId: string;
+    fileName: string;
+    pdfBody: Buffer | ArrayBuffer | Uint8Array | null | undefined;
+  },
+) {
+  const startedAt = Date.now();
+  try {
+    const before = await prisma.receivableOrder.findUnique({
+      where: { id: input.orderId },
+      select: {
+        id: true,
+        customsDeclarationNo: true,
+        customsDeclarationDate: true,
+        customsParsedAt: true,
+        customsParseStatus: true,
+        customsParseMessage: true,
+        customsDeclarationParseSource: true,
+      },
+    });
+    const parsed = await parseCustomsDeclarationPdf(input.pdfBody);
+    const data: Prisma.ReceivableOrderUpdateInput = {
+      customsDeclarationNo: parsed.customsDeclarationNo || null,
+      customsDeclarationDate: parsed.customsDeclarationDate ? dateFromInput(parsed.customsDeclarationDate) : null,
+      customsParsedAt: new Date(),
+      customsParseStatus: parsed.customsDeclarationParseStatus,
+      customsParseMessage: parsed.customsDeclarationParseMessage,
+      customsDeclarationParseSource: parsed.customsDeclarationParseSource,
+    };
+    const updated = await prisma.receivableOrder.update({
+      where: { id: input.orderId },
+      data,
+      select: {
+        id: true,
+        customsDeclarationNo: true,
+        customsDeclarationDate: true,
+        customsParsedAt: true,
+        customsParseStatus: true,
+        customsParseMessage: true,
+        customsDeclarationParseSource: true,
+      },
+    });
+    console.info("customs-pdf-text-parse", sanitizeForLog({
+      orderId: input.orderId,
+      orderNo: input.orderNo,
+      documentId: input.documentId,
+      fileName: input.fileName,
+      textLength: parsed.textLength,
+      parsedDeclarationNo: parsed.customsDeclarationNo,
+      parsedDeclarationDate: parsed.customsDeclarationDate,
+      parseStatus: parsed.customsDeclarationParseStatus,
+      parseFailedReason: parsed.parseFailedReason || "",
+      durationMs: Date.now() - startedAt,
+    }));
+    await runNonCriticalTask("报关单PDF文本解析日志写入", () => writeAudit(
+      request,
+      actor,
+      "报关单PDF文本解析",
+      "receivable_orders",
+      input.orderId,
+      serializeCustomsRecognition(before || {}),
+      {
+        ...serializeCustomsRecognition(updated),
+        documentId: input.documentId,
+        fileName: input.fileName,
+        textLength: parsed.textLength,
+        parsedDeclarationNo: parsed.customsDeclarationNo,
+        parsedDeclarationDate: parsed.customsDeclarationDate,
+        parseFailedReason: parsed.parseFailedReason || "",
+      },
+    ), { context: { orderId: input.orderId, documentId: input.documentId } });
+    return parsed;
+  } catch (error) {
+    logServerError("报关单PDF文本解析失败", error, {
+      orderId: input.orderId,
+      orderNo: input.orderNo,
+      documentId: input.documentId,
+      fileName: input.fileName,
+      durationMs: Date.now() - startedAt,
+    });
+    return null;
+  }
 }
 
 export async function deleteOrderDocument(request: AuditRequestLike, actor: ActorLike, id: string) {

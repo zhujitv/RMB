@@ -76,6 +76,8 @@ export type TaxRefundRow = {
   currency?: string;
   customsDeclarationNo?: string;
   customsDeclarationDate?: string | null;
+  customsParseStatus?: string;
+  customsParseSource?: string;
   customsParseStatusLabel?: string;
   customsParseSourceLabel?: string;
   customsParseMessage?: string;
@@ -123,6 +125,14 @@ export type TaxDocument = {
   uploadedAt?: string;
   previewUrl?: string;
   downloadUrl?: string;
+  customsPdfTextParse?: {
+    textLength?: number;
+    customsDeclarationNo?: string;
+    customsDeclarationDate?: string;
+    customsDeclarationParseStatus?: string;
+    customsDeclarationParseMessage?: string;
+    parseFailedReason?: string;
+  };
 };
 
 export type TaxCost = {

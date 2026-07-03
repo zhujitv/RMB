@@ -610,7 +610,7 @@ export function useTaxRefundController({
       if (uploadedDocument?.id) {
         patchUploadedDocument(orderId, uploadedDocument);
       }
-      setNotice(isCustomsDeclaration ? "报关单已上传，请手工维护报关单号和申报日期。" : "上传成功");
+      setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
       if (detailOrderId === orderId) await fetchDetail(orderId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
@@ -622,6 +622,13 @@ export function useTaxRefundController({
         return next;
       });
     }
+  }
+
+  function customsUploadNotice(parseResult: TaxDocument["customsPdfTextParse"] | undefined) {
+    if (!parseResult) return "报关单已上传，正在刷新报关单信息。";
+    if (parseResult.customsDeclarationParseStatus === "SUCCESS") return "报关单已上传，已自动回填报关单号和申报日期。";
+    if (parseResult.customsDeclarationParseStatus === "PARTIAL") return parseResult.customsDeclarationParseMessage || "报关单已上传，已自动回填部分报关信息。";
+    return parseResult.customsDeclarationParseMessage || "报关单已上传，请手工填写报关单号和申报日期。";
   }
 
   async function deleteDocument(orderId: string, document: TaxDocument) {

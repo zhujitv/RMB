@@ -178,6 +178,7 @@
 .customsFormCard { composes: customsFormCard from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .customsFormGrid { composes: customsFormGrid from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: customsFormGrid from "./styles/workspace-shell/responsive-typography.module.css"; }
 .customsFormHeader { composes: customsFormHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: customsFormHeader from "./styles/workspace-shell/responsive-typography.module.css"; }
+.customsParseMessage { composes: customsParseMessage from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .customsUploadCard { composes: customsUploadCard from "./styles/workspace-shell/supplier-documents.module.css"; }
 .dangerButton { composes: dangerButton from "./styles/workspace-shell/auth-controls.module.css"; composes: dangerButton from "./styles/workspace-shell/manual-table.module.css"; composes: dangerButton from "./styles/workspace-shell/responsive-typography.module.css"; }
 .dashboardEmpty { composes: dashboardEmpty from "./styles/workspace-shell/responsive-typography.module.css"; composes: dashboardEmpty from "./styles/workspace-shell/tables-dashboard.module.css"; }
