@@ -1563,9 +1563,10 @@ export async function recognizeSupplierDocumentWithOcr(
       documentType,
       message: error instanceof Error ? error.message : String(error),
     });
+    if (documentType === "SUPPLIER_INVOICE") throw error;
     return recognizeWithPdfTextFallback(fileBuffer, "supplierDocumentReturn", settings, {
       ...options,
-      source: documentType === "SUPPLIER_INVOICE" ? "ALIYUN_INVOICE_FALLBACK_PDF_TEXT" : "ALIYUN_CONTRACT_FALLBACK_PDF_TEXT",
+      source: "ALIYUN_CONTRACT_FALLBACK_PDF_TEXT",
       error,
     });
   }
