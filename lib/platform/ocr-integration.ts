@@ -102,24 +102,6 @@ const SUPPLIER_CONTRACT_KEYS = [
   "单价",
   "签订日期",
 ];
-const SUPPLIER_INVOICE_KEYS = [
-  "发票代码",
-  "发票号码",
-  "开票日期",
-  "购买方名称",
-  "购买方税号",
-  "销售方名称",
-  "销售方税号",
-  "项目名称",
-  "规格型号",
-  "单位",
-  "数量",
-  "单价",
-  "金额",
-  "税率",
-  "税额",
-  "价税合计",
-];
 const CUSTOMS_DECLARATION_MIN_TIMEOUT_MS = 60000;
 const DOCMIND_CUSTOMS_POLL_INTERVAL_MS = 1500;
 const DOCMIND_CUSTOMS_MAX_POLLS = 12;
@@ -197,25 +179,6 @@ const CONTRACT_FIELD_ALIASES: Record<string, string[]> = {
   quantity: ["数量", "Quantity"],
   unitPrice: ["单价", "UnitPrice"],
   signingDate: ["签订日期", "合同日期", "日期", "SigningDate", "ContractDate"],
-};
-
-const SUPPLIER_INVOICE_FIELD_ALIASES: Record<string, string[]> = {
-  invoiceCode: ["发票代码", "InvoiceCode"],
-  invoiceNo: ["发票号码", "发票号", "InvoiceNo", "InvoiceNumber"],
-  invoiceDate: ["开票日期", "日期", "InvoiceDate"],
-  buyer: ["购买方名称", "购买方", "购方名称", "Buyer", "BuyerName"],
-  buyerTaxNo: ["购买方税号", "购买方纳税人识别号", "购方税号", "BuyerTaxNo"],
-  seller: ["销售方名称", "销售方", "销方名称", "Seller", "SellerName"],
-  sellerTaxNo: ["销售方税号", "销售方纳税人识别号", "销方税号", "SellerTaxNo"],
-  productName: ["项目名称", "货物或应税劳务、服务名称", "商品名称", "品名", "ProductName", "ItemName"],
-  specModel: ["规格型号", "规格", "型号", "Spec", "Specification"],
-  unit: ["单位", "Unit"],
-  quantity: ["数量", "Quantity"],
-  unitPrice: ["单价", "UnitPrice"],
-  amountWithoutTax: ["金额", "不含税金额", "AmountWithoutTax"],
-  taxRate: ["税率", "TaxRate"],
-  taxAmount: ["税额", "TaxAmount"],
-  amountWithTax: ["价税合计", "含税金额", "合计金额", "TotalAmount", "AmountWithTax"],
 };
 
 const CUSTOMS_DECLARATION_KEYS = [
@@ -832,38 +795,6 @@ async function recognizeAliyunVatInvoice(
     extractedFields,
     parsedJson: extractedFields,
     parser: "VAT_INVOICE",
-  };
-}
-
-async function recognizeAliyunSupplierInvoiceWithGeneralStructure(
-  buffer: Buffer,
-  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-  primaryError: unknown,
-): Promise<OcrRecognitionResult> {
-  const client = createAliyunOcrClient(settings);
-  const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
-    body: Readable.from(buffer),
-    keys: SUPPLIER_INVOICE_KEYS,
-  }));
-  const rawJson = toPlainJson(response);
-  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
-  const data = parseJsonMaybe(responseField(responseBody, "data"));
-  const extractedFields = collectFieldsFromObject(data, SUPPLIER_INVOICE_FIELD_ALIASES);
-  const text = collectText(data).join("\n");
-  return {
-    text,
-    source: "ALIYUN_INVOICE_GENERAL_STRUCTURE_FALLBACK",
-    provider: settings.provider,
-    apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
-    rawJson: {
-      fallbackFrom: "ALIYUN_RECOGNIZE_INVOICE",
-      fallbackReason: ocrErrorText(primaryError).slice(0, 1000),
-      generalStructure: rawJson,
-    },
-    extractedFields,
-    parsedJson: extractedFields,
-    parser: "VAT_INVOICE_GENERAL_STRUCTURE",
-    diagnostics: { fallbackUsed: true, fallbackFrom: "ALIYUN_RECOGNIZE_INVOICE" },
   };
 }
 
@@ -1624,14 +1555,7 @@ export async function recognizeSupplierDocumentWithOcr(
   const fileBuffer = bufferFromInput(buffer);
   try {
     if (documentType === "SUPPLIER_INVOICE") {
-      try {
-        return await recognizeAliyunVatInvoice(fileBuffer, settings);
-      } catch (invoiceError) {
-        console.warn("aliyun-invoice-ocr-specialized-failed-fallback-general-structure", {
-          message: ocrErrorText(invoiceError),
-        });
-        return await recognizeAliyunSupplierInvoiceWithGeneralStructure(fileBuffer, settings, invoiceError);
-      }
+      return await recognizeAliyunVatInvoice(fileBuffer, settings);
     }
     return await recognizeAliyunSupplierContract(fileBuffer, settings);
   } catch (error) {

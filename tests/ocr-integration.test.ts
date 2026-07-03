@@ -99,12 +99,10 @@ test("OCR integration uses Aliyun structured APIs for supplier documents with PD
   assert.match(service, /recognizeGeneralStructure\(new RecognizeGeneralStructureRequest/);
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /ALIYUN_RECOGNIZE_GENERAL_STRUCTURE/);
-  assert.match(service, /SUPPLIER_INVOICE_KEYS/);
-  assert.match(service, /SUPPLIER_INVOICE_FIELD_ALIASES/);
-  assert.match(service, /recognizeAliyunSupplierInvoiceWithGeneralStructure/);
-  assert.match(service, /ALIYUN_INVOICE_GENERAL_STRUCTURE_FALLBACK/);
-  assert.match(service, /aliyun-invoice-ocr-specialized-failed-fallback-general-structure/);
   assert.match(service, /recognizeSupplierDocumentWithOcr/);
+  assert.match(service, /return await recognizeAliyunVatInvoice\(fileBuffer, settings\)/);
+  assert.doesNotMatch(service, /ALIYUN_INVOICE_GENERAL_STRUCTURE_FALLBACK/);
+  assert.doesNotMatch(service, /recognizeAliyunSupplierInvoiceWithGeneralStructure/);
   assert.match(service, /OCR_ACCESS_KEY_REQUIRED/);
   assert.match(service, /ALIYUN_INVOICE_FALLBACK_PDF_TEXT/);
   assert.match(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
