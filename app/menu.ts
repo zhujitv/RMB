@@ -11,14 +11,13 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "logisticsFees", label: "物流费用", description: "录入、审核、月结和维护物流费用。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
-  { key: "companyHs", label: "企业HS编码", description: "维护企业常用报关 HS 编码、法定单位和退税率。", parentKey: "settings" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
   { key: "manual", label: "操作手册", description: "查看平台业务流程、操作规范和资料要求。" },
   { key: "settings", label: "系统设置", description: "维护用户、客户、供应商、汇率和日志。" },
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "companyHs", "reports", "manual", "settings"],
+  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
   业务员: ["orders", "payments", "costs", "domesticLogistics", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
   财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "oceanControlTower", "logisticsFees", "manual"],
@@ -53,17 +52,11 @@ function menusWithDerivedAccess(role: string, menus: string[]) {
   return nextMenus;
 }
 
-function taxRefundFeaturesEnabled(features?: { taxRefund?: { enabled?: boolean; companyHsLibraryEnabled?: boolean } }) {
-  const taxRefund = features?.taxRefund;
-  return !taxRefund || (taxRefund.enabled !== false && taxRefund.companyHsLibraryEnabled !== false);
-}
-
-export function availableMenus(user: User, permissions?: PermissionSnapshot, features?: { taxRefund?: { enabled?: boolean; companyHsLibraryEnabled?: boolean } }) {
+export function availableMenus(user: User, permissions?: PermissionSnapshot) {
   const role = normalizeMenuRole(user.role);
-  const featureMenuAllowed = (item: MenuItem) => item.key !== "companyHs" || taxRefundFeaturesEnabled(features);
   if (role === "管理员") {
-    return MENU_ITEMS.filter((item) => ROLE_MENU_FALLBACK["管理员"].includes(item.key) && featureMenuAllowed(item));
+    return MENU_ITEMS.filter((item) => ROLE_MENU_FALLBACK["管理员"].includes(item.key));
   }
   const allowed = menusWithDerivedAccess(role, permissions?.menus?.length ? permissions.menus : ROLE_MENU_FALLBACK[role] || ["manual"]);
-  return MENU_ITEMS.filter((item) => allowed.includes(item.key) && featureMenuAllowed(item));
+  return MENU_ITEMS.filter((item) => allowed.includes(item.key));
 }

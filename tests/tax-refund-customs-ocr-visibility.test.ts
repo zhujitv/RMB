@@ -20,7 +20,7 @@ test("tax refund module no longer renders OCR and tax calculation panels", () =>
   assert.doesNotMatch(detail, /function CustomsRecognitionResultPanel/);
   assert.doesNotMatch(detail, /function TaxRefundCalculationPanel/);
   assert.doesNotMatch(detail, /OCR原始结果|查看OCR原始结果|OCR调用日志|同步OCR商品明细/);
-  assert.doesNotMatch(detail, /退税计算数据|退税结果|理论退税额|发票匹配|新增到企业HS库/);
+  assert.doesNotMatch(detail, /退税计算数据|退税结果|理论退税额|发票匹配/);
   assert.doesNotMatch(overlays, /CustomsFilePickerDialog|onRecognizeCustomsDocument|onRecognizeFromUploadedCustoms/);
   assert.doesNotMatch(controller, /recognizingDocumentId|recognitionStatusByDocument|customsFilePicker|patchCustomsRecognition/);
   assert.match(detail, /CustomsRecognitionForm/);

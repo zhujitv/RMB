@@ -83,7 +83,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       "confirmCustomsDeclarationItems",
       "syncCustomsDeclarationItemsFromOcr",
       "recalculateTaxRefund",
-      "createCompanyHsFromDeclarationItem",
     ].includes(String(body.action || ""))) {
       throw codedError("退税资料 OCR 和退税计算功能已停用，请使用资料完整度和人工维护流程。", 410, "TAX_REFUND_OCR_CALC_DISABLED");
     }

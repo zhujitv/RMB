@@ -19,7 +19,6 @@ import {
   ocrIntegrationFormFromSettings,
   placeholderFor,
   shipsgoIntegrationFormFromSettings,
-  taxRefundFeatureFormFromSettings,
 } from "./helpers";
 import {
   CommissionFormulaSettingsCard,
@@ -29,7 +28,6 @@ import {
   NotificationTemplateSettingsCard,
   OcrIntegrationSettingsCard,
   ShipsgoIntegrationSettingsCard,
-  TaxRefundFeatureSettingsCard,
 } from "./settings-cards";
 import { SettingsTable } from "./settings-table";
 import type { SettingsTabKey, SupplierRow } from "./types";
@@ -44,7 +42,6 @@ const SETTINGS_HOME_CARDS: Array<{ tab: SettingsTabKey; title: string; descripti
   { tab: "customers", title: "客户资料", description: "客户管理", icon: "客" },
   { tab: "suppliers", title: "供应商资料", description: "供应商管理", icon: "供" },
   { tab: "users", title: "用户与权限", description: "角色权限", icon: "权" },
-  { tab: "taxRefundFeatures", title: "企业HS编码", description: "企业HS编码库入口", icon: "HS" },
   { tab: "ocrIntegration", title: "OCR识别", description: "OCR 服务配置", icon: "OCR" },
   { tab: "shipsgoIntegration", title: "物流接口", description: "大掌柜、ShipsGo", icon: "船" },
   { tab: "notificationTemplates", title: "通知模板", description: "邮件模板", icon: "邮" },
@@ -61,7 +58,6 @@ const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
   customers: "维护客户资料、自动通知和负责业务员。",
   suppliers: "维护产品供应商、物流供应商和业务权限。",
   users: "维护用户账号、角色权限和供应商绑定。",
-  taxRefundFeatures: "维护企业HS编码库入口。",
   ocrIntegration: "维护 OCR 服务配置、密钥和识别能力。",
   shipsgoIntegration: "维护大掌柜海运跟踪接口和同步能力。",
   notificationTemplates: "维护系统邮件模板和发送规则。",
@@ -87,8 +83,6 @@ export function SettingsModuleView(settings: SettingsController) {
     notificationTemplateSettings,
     notificationTemplateForm,
     selectedNotificationTemplateType,
-    taxRefundFeatureSettings,
-    taxRefundFeatureForm,
     ocrIntegrationSettings,
     ocrIntegrationForm,
     shipsgoIntegrationSettings,
@@ -119,8 +113,6 @@ export function SettingsModuleView(settings: SettingsController) {
     commissionFormulaMessage,
     notificationTemplateSaving,
     notificationTemplateMessage,
-    taxRefundFeatureSaving,
-    taxRefundFeatureMessage,
     ocrIntegrationSaving,
     ocrIntegrationMessage,
     shipsgoIntegrationSaving,
@@ -161,7 +153,6 @@ export function SettingsModuleView(settings: SettingsController) {
     saveNotificationTemplateSettings,
     selectNotificationTemplate,
     testNotificationTemplate,
-    saveTaxRefundFeatureSettings,
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     updateFilter,
@@ -186,14 +177,12 @@ export function SettingsModuleView(settings: SettingsController) {
     setNotificationTemplateMessage,
     setOcrIntegrationForm,
     setOcrIntegrationMessage,
-    setTaxRefundFeatureForm,
-    setTaxRefundFeatureMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
   } = settings;
   const activeTabLabel = SETTINGS_TABS.find((tab) => tab.key === activeTab)?.label || "系统设置";
   const isTableTab = TABLE_SETTING_TABS.has(activeTab);
-  const showTopHeader = activeTab !== "ocrIntegration" && activeTab !== "shipsgoIntegration" && activeTab !== "taxRefundFeatures";
+  const showTopHeader = activeTab !== "ocrIntegration" && activeTab !== "shipsgoIntegration";
   const headerActions = (
     <>
       {activeTab === "customers" ? (
@@ -474,20 +463,6 @@ export function SettingsModuleView(settings: SettingsController) {
           }}
           onTestSend={() => void testNotificationTemplate()}
           onSubmit={saveNotificationTemplateSettings}
-        />
-      ) : activeTab === "taxRefundFeatures" ? (
-        <TaxRefundFeatureSettingsCard
-          settings={taxRefundFeatureSettings}
-          form={taxRefundFeatureForm}
-          loading={loading && !taxRefundFeatureSettings}
-          saving={taxRefundFeatureSaving}
-          message={taxRefundFeatureMessage}
-          onChange={setTaxRefundFeatureForm}
-          onReset={() => {
-            setTaxRefundFeatureForm(taxRefundFeatureFormFromSettings(taxRefundFeatureSettings));
-            setTaxRefundFeatureMessage("");
-          }}
-          onSubmit={saveTaxRefundFeatureSettings}
         />
       ) : activeTab === "ocrIntegration" ? (
         <OcrIntegrationSettingsCard

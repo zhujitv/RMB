@@ -27,7 +27,6 @@ import {
   notificationTemplateRows,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
-  taxRefundFeatureFormFromSettings,
 } from "./helpers";
 import {
   SecretField,
@@ -52,8 +51,6 @@ import type {
   OcrIntegrationSettings,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
-  TaxRefundFeatureForm,
-  TaxRefundFeatureSettings,
 } from "./types";
 
 export function BusinessEntitySettingsCard({
@@ -1148,85 +1145,6 @@ export function OcrIntegrationSettingsCard({
       </SettingsCard>
 
       <div className={styles.emptyState}>增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。</div>
-    </SettingsPage>
-  );
-}
-
-export function TaxRefundFeatureSettingsCard({
-  settings,
-  form,
-  loading,
-  saving,
-  message,
-  onChange,
-  onReset,
-  onSubmit,
-}: {
-  settings: TaxRefundFeatureSettings | null;
-  form: TaxRefundFeatureForm | null;
-  loading: boolean;
-  saving: boolean;
-  message: string;
-  onChange: (form: TaxRefundFeatureForm) => void;
-  onReset: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
-  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载企业HS编码设置</div>;
-  const currentForm = form || taxRefundFeatureFormFromSettings(settings);
-  const statusTone = currentForm.enabled ? "success" : "muted";
-  const statusLabel = currentForm.enabled ? "已启用" : "已关闭";
-
-  function setField<K extends keyof TaxRefundFeatureForm>(key: K, value: TaxRefundFeatureForm[K]) {
-    const next = { ...currentForm, [key]: value };
-    if (key === "enabled" && value === false) {
-      next.companyHsLibraryEnabled = false;
-    }
-    onChange(next);
-  }
-
-  return (
-    <SettingsPage
-      title="企业HS编码"
-      description="控制企业HS编码库入口和 company_hs API。"
-      status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
-      onSubmit={onSubmit}
-      actions={(
-        <>
-          <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存"}</button>
-          <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复</button>
-        </>
-      )}
-    >
-      {message ? (
-        <div className={message.includes("失败") || message.includes("无权限") || message.includes("错误") ? styles.inlineError : styles.emptyState}>
-          {message}
-        </div>
-      ) : null}
-
-      <SettingsCard title="模块开关" icon="HS">
-        <div className={styles.settingsFieldGrid}>
-          <SettingsSwitch
-            label="启用企业HS编码库"
-            tooltip="关闭后企业HS维护入口和 company_hs API 将不可用。"
-            checked={currentForm.enabled}
-            onChange={(value) => setField("enabled", value)}
-          />
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title="子能力" icon="HS">
-        <SettingsSection title="启用范围">
-          <div className={styles.commissionDeductionGrid}>
-            <PermissionSelectItem
-              label="企业HS编码库"
-              description="控制基础资料中的企业HS维护入口和 company_hs API。"
-              checked={currentForm.enabled && currentForm.companyHsLibraryEnabled}
-              onChange={() => setField("companyHsLibraryEnabled", !currentForm.companyHsLibraryEnabled)}
-            />
-          </div>
-        </SettingsSection>
-      </SettingsCard>
     </SettingsPage>
   );
 }

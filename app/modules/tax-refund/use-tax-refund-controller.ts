@@ -37,10 +37,6 @@ import {
 export type TaxRefundModuleProps = {
   currentUser: User;
   permissions?: PermissionSnapshot;
-  features?: {
-    enabled?: boolean;
-    companyHsLibraryEnabled?: boolean;
-  };
   initialKeyword?: string;
   initialAction?: string;
   initialOpenToken?: number;

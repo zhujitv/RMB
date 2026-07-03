@@ -54,12 +54,6 @@ export type CompanyProfileSettings = {
 export type AuthPayload = {
   user: User;
   permissions?: PermissionSnapshot;
-  features?: {
-    taxRefund?: {
-      enabled?: boolean;
-      companyHsLibraryEnabled?: boolean;
-    };
-  };
   scopeText?: string;
   session?: SessionInfo;
   companyProfile?: CompanyProfileSettings;

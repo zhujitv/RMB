@@ -36,7 +36,6 @@ import {
   shipsgoIntegrationFormFromSettings,
   supplierFormFromRow,
   supplierMatchesUserRole,
-  taxRefundFeatureFormFromSettings,
   userFormFromRow,
 } from "./helpers";
 import type {
@@ -66,8 +65,6 @@ import type {
   ShipsgoIntegrationSettings,
   SupplierForm,
   SupplierRow,
-  TaxRefundFeatureForm,
-  TaxRefundFeatureSettings,
   UserForm,
   UserRow,
 } from "./types";
@@ -100,8 +97,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [selectedNotificationTemplateType, setSelectedNotificationTemplateType] = useState("");
   const [ocrIntegrationSettings, setOcrIntegrationSettings] = useState<OcrIntegrationSettings | null>(null);
   const [ocrIntegrationForm, setOcrIntegrationForm] = useState<OcrIntegrationForm | null>(null);
-  const [taxRefundFeatureSettings, setTaxRefundFeatureSettings] = useState<TaxRefundFeatureSettings | null>(null);
-  const [taxRefundFeatureForm, setTaxRefundFeatureForm] = useState<TaxRefundFeatureForm | null>(null);
   const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
@@ -114,7 +109,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     customers: emptyPagination(PAGE_SIZE),
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
-    taxRefundFeatures: emptyPagination(PAGE_SIZE),
     ocrIntegration: emptyPagination(PAGE_SIZE),
     exchangeRates: emptyPagination(PAGE_SIZE),
     commissionFormula: emptyPagination(PAGE_SIZE),
@@ -148,8 +142,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
   const [commissionFormulaMessage, setCommissionFormulaMessage] = useState("");
   const [notificationTemplateSaving, setNotificationTemplateSaving] = useState(false);
   const [notificationTemplateMessage, setNotificationTemplateMessage] = useState("");
-  const [taxRefundFeatureSaving, setTaxRefundFeatureSaving] = useState(false);
-  const [taxRefundFeatureMessage, setTaxRefundFeatureMessage] = useState("");
   const [ocrIntegrationSaving, setOcrIntegrationSaving] = useState(false);
   const [ocrIntegrationMessage, setOcrIntegrationMessage] = useState("");
   const [shipsgoIntegrationSaving, setShipsgoIntegrationSaving] = useState(false);
@@ -230,14 +222,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
         setNotificationTemplateSettings(settings);
         setSelectedNotificationTemplateType(nextType);
         setNotificationTemplateForm(notificationTemplateFormFromSettings(settings, nextType));
-        markLoaded(tab);
-        return;
-      }
-      if (tab === "taxRefundFeatures") {
-        const result = await apiJson<{ settings: TaxRefundFeatureSettings }>("/api/settings/tax-refund-features");
-        const settings = result.settings || {};
-        setTaxRefundFeatureSettings(settings);
-        setTaxRefundFeatureForm(taxRefundFeatureFormFromSettings(settings));
         markLoaded(tab);
         return;
       }
@@ -932,33 +916,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     }
   }
 
-  async function saveTaxRefundFeatureSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!taxRefundFeatureForm) return;
-    setTaxRefundFeatureSaving(true);
-    setTaxRefundFeatureMessage("");
-    try {
-      const result = await apiJson<{ success?: boolean; settings?: TaxRefundFeatureSettings; message?: string }>(
-        "/api/settings/tax-refund-features",
-        {
-          method: "PATCH",
-          body: JSON.stringify(taxRefundFeatureForm),
-        },
-      );
-      if (result.success !== true) throw new Error(result.message || "企业HS编码设置保存失败");
-      const nextSettings = result.settings || taxRefundFeatureForm;
-      setTaxRefundFeatureSettings(nextSettings);
-      setTaxRefundFeatureForm(taxRefundFeatureFormFromSettings(nextSettings));
-      markLoaded("taxRefundFeatures");
-      setTaxRefundFeatureMessage(result.message || "企业HS编码设置已保存");
-    } catch (saveError) {
-      setTaxRefundFeatureMessage(saveError instanceof Error ? saveError.message : "企业HS编码设置保存失败");
-    } finally {
-      setTaxRefundFeatureSaving(false);
-    }
-  }
-
-
   function updateFilter(tab: SettingsTabKey, key: string, value: string) {
     setFilters((current) => {
       if (tab === "customers") return { ...current, customers: { ...current.customers, [key]: value } };
@@ -989,8 +946,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     selectedNotificationTemplateType,
     ocrIntegrationSettings,
     ocrIntegrationForm,
-    taxRefundFeatureSettings,
-    taxRefundFeatureForm,
     shipsgoIntegrationSettings,
     shipsgoIntegrationForm,
     permissionConfig,
@@ -1021,8 +976,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     commissionFormulaMessage,
     notificationTemplateSaving,
     notificationTemplateMessage,
-    taxRefundFeatureSaving,
-    taxRefundFeatureMessage,
     ocrIntegrationSaving,
     ocrIntegrationMessage,
     shipsgoIntegrationSaving,
@@ -1061,7 +1014,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     saveExchangeSettings,
     saveCommissionFormulaSettings,
     saveNotificationTemplateSettings,
-    saveTaxRefundFeatureSettings,
     selectNotificationTemplate,
     testNotificationTemplate,
     saveOcrIntegrationSettings,
@@ -1088,8 +1040,6 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     setNotificationTemplateMessage,
     setOcrIntegrationForm,
     setOcrIntegrationMessage,
-    setTaxRefundFeatureForm,
-    setTaxRefundFeatureMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
   };

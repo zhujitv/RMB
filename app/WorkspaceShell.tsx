@@ -78,10 +78,6 @@ const TaxRefundModule = dynamic(() => import("./modules/TaxRefundModule").then((
   ssr: false,
   loading: () => <BusinessModuleLoading />,
 });
-const CompanyHsModule = dynamic(() => import("./modules/CompanyHsModule").then((module) => module.CompanyHsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
 const ReportsModule = dynamic(() => import("./modules/ReportsModule").then((module) => module.ReportsModule), {
   ssr: false,
   loading: () => <BusinessModuleLoading />,
@@ -239,9 +235,9 @@ export function WorkspaceShell() {
 
   async function loadBasicPermissions() {
     try {
-      const result = await apiJson<{ permissions?: PermissionSnapshot; features?: AuthPayload["features"] }>("/api/auth/permissions", { timeoutMs: PERMISSIONS_BOOT_TIMEOUT_MS });
+      const result = await apiJson<{ permissions?: PermissionSnapshot }>("/api/auth/permissions", { timeoutMs: PERMISSIONS_BOOT_TIMEOUT_MS });
       setAuth((current) => current.status === "ready"
-        ? { ...current, payload: { ...current.payload, permissions: result.permissions, features: result.features || current.payload.features } }
+        ? { ...current, payload: { ...current.payload, permissions: result.permissions } }
         : current);
       setBootWarnings((current) => current.filter((item) => !item.startsWith("权限初始化失败")));
     } catch (error) {
@@ -279,7 +275,7 @@ export function WorkspaceShell() {
   const activeCompanyProfile = readyPayload?.companyProfile || publicCompanyProfile;
   const menus = useMemo(() => {
     if (!readyPayload) return [];
-    return availableMenus(readyPayload.user, readyPayload.permissions, readyPayload.features);
+    return availableMenus(readyPayload.user, readyPayload.permissions);
   }, [readyPayload]);
 
   const allowedMenuKeys = useMemo(() => new Set([...ALWAYS_ALLOWED_MENUS, ...menus.map((item) => item.key)]), [menus]);
@@ -651,7 +647,6 @@ export function WorkspaceShell() {
         <TaxRefundModule
           currentUser={payload.user}
           permissions={payload.permissions}
-          features={payload.features?.taxRefund}
           initialKeyword={taxRefundFocus.keyword}
           initialAction={taxRefundFocus.action}
           initialOpenToken={taxRefundFocus.token}
@@ -664,8 +659,6 @@ export function WorkspaceShell() {
             setActiveMenu("supplierDocuments");
           }}
         />
-      ) : activeMenu === "companyHs" ? (
-        <CompanyHsModule currentUser={payload.user} permissions={payload.permissions} features={payload.features?.taxRefund} />
       ) : activeMenu === "reports" ? (
         <ReportsModule
           currentUser={payload.user}

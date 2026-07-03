@@ -1,4 +1,4 @@
-import type { NotificationTemplateForm, OcrIntegrationForm, SettingsTabKey, ShipsgoIntegrationForm, TaxRefundFeatureForm } from "./types";
+import type { NotificationTemplateForm, OcrIntegrationForm, SettingsTabKey, ShipsgoIntegrationForm } from "./types";
 
 export const PAGE_SIZE = 20;
 export const AUDIT_PAGE_SIZE = 50;
@@ -180,10 +180,6 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   fallbackToPdfText: true,
   timeoutMs: "15000",
 };
-export const DEFAULT_TAX_REFUND_FEATURE_FORM: TaxRefundFeatureForm = {
-  enabled: true,
-  companyHsLibraryEnabled: true,
-};
 export const CUSTOMS_DECLARATION_MODE_OPTIONS = [
   {
     value: "AUTO",
@@ -300,7 +296,6 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "customers", label: "客户资料" },
   { key: "suppliers", label: "供应商资料" },
   { key: "users", label: "用户与权限" },
-  { key: "taxRefundFeatures", label: "企业HS编码" },
   { key: "ocrIntegration", label: "OCR识别" },
   { key: "shipsgoIntegration", label: "物流接口" },
   { key: "notificationTemplates", label: "通知模板" },
