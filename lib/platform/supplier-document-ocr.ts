@@ -63,6 +63,7 @@ const OCR_STATUS_PASSED = "OCR识别成功，校验通过";
 const OCR_STATUS_EXCEPTION = "OCR识别成功，存在异常";
 const OCR_STATUS_FAILED = "OCR识别失败，需人工核对";
 const OCR_STATUS_MANUAL = "待人工确认";
+const OCR_STALE_PROCESSING_MESSAGE = "OCR识别超时，请点击重新识别或人工核对。";
 const VALIDATION_PASSED = "PASSED";
 const VALIDATION_EXCEPTION = "EXCEPTION";
 const VALIDATION_FAILED = "FAILED";
@@ -70,6 +71,7 @@ const VALIDATION_MANUAL = "PENDING_MANUAL";
 const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
 const VALIDATION_REJECTED = "REJECTED";
 const INTERNAL_OCR_ROLES = ["管理员", "财务", "业务员", "采购"];
+const DEFAULT_SUPPLIER_OCR_PROCESSING_STALE_MS = 2 * 60 * 1000;
 
 type ValidationIssue = {
   level: "error" | "warning" | "manual";
@@ -95,6 +97,36 @@ function cleanText(value: unknown) {
     .replace(/\u3000/g, " ")
     .replace(/[ \t]+/g, " ")
     .trim();
+}
+
+function supplierOcrProcessingStaleMs() {
+  const configured = Number.parseInt(String(process.env.SUPPLIER_DOCUMENT_OCR_STALE_MS || ""), 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUPPLIER_OCR_PROCESSING_STALE_MS;
+}
+
+function supplierOcrErrorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "");
+}
+
+function supplierOcrErrorCode(error: unknown) {
+  return String((error as { code?: unknown } | null)?.code || "");
+}
+
+function isSupplierOcrNetworkError(error: unknown) {
+  const text = [supplierOcrErrorCode(error), supplierOcrErrorText(error)].join(" ");
+  return /(ConnectTimeout|ReadTimeout|Timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed|Connect HTTPS)/i.test(text);
+}
+
+function supplierDocumentOcrFailureMessage(error: unknown) {
+  if (isSupplierOcrNetworkError(error)) {
+    return "阿里云 OCR 服务连接超时，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
+  }
+  const message = supplierOcrErrorText(error).trim();
+  if (!message) return "OCR识别失败，需人工核对。";
+  if (/https?:\/\/|Connect HTTPS|ocr-api|accessKey|access key|secret/i.test(message)) {
+    return "OCR服务调用失败，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
+  }
+  return message.slice(0, 500);
 }
 
 function normalizeComparable(value: unknown) {
@@ -400,6 +432,52 @@ function taskStatusFromIssues(issues: ValidationIssue[]) {
   return { status: OCR_STATUS_PASSED, validationStatus: VALIDATION_PASSED };
 }
 
+export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string[] = []) {
+  const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
+  if (!uniqueDocumentIds.length) return 0;
+  const staleBefore = new Date(Date.now() - supplierOcrProcessingStaleMs());
+  try {
+    const staleTasks = await prisma.ocrTask.findMany({
+      where: {
+        module: SUPPLIER_DOCUMENT_OCR_MODULE,
+        documentId: { in: uniqueDocumentIds },
+        OR: [
+          { status: OCR_STATUS_PROCESSING },
+          { validationStatus: "PROCESSING" },
+        ],
+        updatedAt: { lt: staleBefore },
+      },
+      select: { id: true, documentId: true, requestId: true, updatedAt: true },
+      take: Math.min(Math.max(uniqueDocumentIds.length * 2, 20), 500),
+    });
+    if (!staleTasks.length) return 0;
+    const ids = staleTasks.map((task) => task.id);
+    await prisma.ocrTask.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        status: OCR_STATUS_FAILED,
+        validationStatus: VALIDATION_FAILED,
+        errorMessage: OCR_STALE_PROCESSING_MESSAGE,
+        validationJson: {
+          issues: [{ level: "manual", message: OCR_STALE_PROCESSING_MESSAGE }],
+          parserStatus: "OCR后台任务超时",
+        },
+      },
+    });
+    console.warn("supplier-document-ocr-stale-processing-reconciled", {
+      count: staleTasks.length,
+      documentIds: staleTasks.map((task) => task.documentId),
+      requestIds: staleTasks.map((task) => task.requestId).filter(Boolean),
+      staleBefore: staleBefore.toISOString(),
+    });
+    return staleTasks.length;
+  } catch (error) {
+    throwIfSupplierOcrTableMissing(error);
+    logServerError("供应商资料回传OCR处理中任务自愈失败", error, { documentCount: uniqueDocumentIds.length });
+    return 0;
+  }
+}
+
 function assertInternalOcrManager(actor: ActorLike) {
   if (!actor?.id || !INTERNAL_OCR_ROLES.includes(String(actor.role || ""))) {
     throw codedError("没有权限处理 OCR 校验结果。", 403, "OCR_MANAGE_PERMISSION_DENIED");
@@ -662,7 +740,8 @@ export async function runSupplierDocumentOcrForDocument(
     return saved;
   } catch (error) {
     throwIfSupplierOcrTableMissing(error);
-    const message = error instanceof Error ? error.message : "OCR识别失败，需人工核对";
+    const originalMessage = supplierOcrErrorText(error);
+    const message = supplierDocumentOcrFailureMessage(error);
     let saved: OcrTaskRow;
     try {
       saved = await prisma.ocrTask.update({
@@ -675,6 +754,9 @@ export async function runSupplierDocumentOcrForDocument(
           validationJson: {
             issues: [{ level: "manual", message }],
             parserStatus: latestRawText ? "OCR原文已识别但解析失败" : "OCR原文未识别",
+            technicalError: originalMessage.slice(0, 1000),
+            provider: latestProvider,
+            apiName: latestApiName || "SUPPLIER_DOCUMENT_OCR",
           },
         },
         include: { results: true },
@@ -688,7 +770,7 @@ export async function runSupplierDocumentOcrForDocument(
         rawJson: latestRawJson || (latestRawText ? { text: latestRawText } : null),
         parsedJson: latestRawText ? { rawText: latestRawText } : null,
         status: "FAILED",
-        errorMessage: message.slice(0, 1000),
+        errorMessage: [message, originalMessage && originalMessage !== message ? `technical: ${originalMessage}` : ""].filter(Boolean).join("；").slice(0, 1000),
       }).catch(() => null);
     } catch (updateError: unknown) {
       throwIfSupplierOcrTableMissing(updateError);

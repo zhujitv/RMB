@@ -4,6 +4,7 @@ import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
 import {
   createSupplierDocumentOcrTaskForUpload,
+  reconcileStaleSupplierDocumentOcrTasks,
   refreshSupplierDocumentRequestQualification,
   runSupplierDocumentOcrTask,
   serializeSupplierDocumentOcrTask,
@@ -415,6 +416,7 @@ async function attachSupplierDocumentOcrTasks(rows: SupplierDocumentRequestRow[]
     }));
   }
   try {
+    await reconcileStaleSupplierDocumentOcrTasks(documentIds);
     const tasks = await prisma.ocrTask.findMany({
       where: { documentId: { in: documentIds } },
       include: { results: true },
@@ -953,9 +955,12 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   try {
     const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
     if (ocrTask?.id) {
-      void runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
-        await runSupplierDocumentOcrTask(ocrTask.id);
+      const completedTask = await runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
+        return runSupplierDocumentOcrTask(ocrTask.id);
       }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
+      if (completedTask?.status === "OCR识别失败，需人工核对") {
+        ocrWarning = completedTask.errorMessage || "OCR识别失败，需人工核对或稍后重新识别。";
+      }
     } else {
       await refreshSupplierDocumentRequestQualification(row.id);
     }

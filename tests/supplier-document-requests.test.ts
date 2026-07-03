@@ -265,5 +265,8 @@ test("supplier document upload is not blocked when OCR task creation fails", () 
   assert.match(service, /let ocrWarning = ""/);
   assert.match(service, /供应商回传资料上传成功但OCR任务创建失败/);
   assert.match(service, /message: ocrWarning \? `上传成功；\$\{ocrWarning\}` : "上传成功"/);
+  assert.match(service, /const completedTask = await runNonCriticalTask\("产品供应商回传资料OCR识别"/);
+  assert.match(service, /return runSupplierDocumentOcrTask\(ocrTask\.id\)/);
+  assert.match(service, /completedTask\?\.status === "OCR识别失败，需人工核对"/);
   assert.doesNotMatch(service, /const ocrTask = await createSupplierDocumentOcrTaskForUpload\(document\.id\);[\s\S]{0,180}throw error/);
 });

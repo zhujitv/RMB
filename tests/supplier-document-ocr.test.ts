@@ -84,6 +84,9 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /OCR原文未识别，请人工核对。/);
   assert.match(service, /OCR原文已识别但解析失败，请人工核对。/);
   assert.match(service, /parserStatus: latestRawText \? "OCR原文已识别但解析失败" : "OCR原文未识别"/);
+  assert.match(service, /supplierDocumentOcrFailureMessage/);
+  assert.match(service, /阿里云 OCR 服务连接超时，请稍后点击“重新识别”/);
+  assert.match(service, /technicalError: originalMessage\.slice\(0, 1000\)/);
   assert.match(service, /rawText: task\.rawText \|\| ""/);
   assert.match(supplierModule, /查看 OCR 原始文本/);
   assert.match(supplierModule, /ocrTask\.rawText/);
@@ -253,4 +256,14 @@ test("supplier OCR missing table errors are converted into migration guidance", 
   assert.match(service, /OCR_TABLE_NOT_INITIALIZED/);
   assert.match(service, /throwIfSupplierOcrTableMissing\(error\)/);
   assert.match(service, /throwIfSupplierOcrTableMissing\(updateError\)/);
+});
+
+test("supplier OCR reconciles stale processing tasks instead of leaving them stuck", () => {
+  assert.match(service, /OCR_STALE_PROCESSING_MESSAGE/);
+  assert.match(service, /export async function reconcileStaleSupplierDocumentOcrTasks/);
+  assert.match(service, /status: OCR_STATUS_PROCESSING/);
+  assert.match(service, /validationStatus: "PROCESSING"/);
+  assert.match(service, /status: OCR_STATUS_FAILED/);
+  assert.match(service, /validationStatus: VALIDATION_FAILED/);
+  assert.match(supplierRequests, /reconcileStaleSupplierDocumentOcrTasks\(documentIds\)/);
 });
