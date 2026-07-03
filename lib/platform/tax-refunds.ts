@@ -65,7 +65,6 @@ type TaxRefundListFilters = {
   mode: TaxRefundListMode;
   statusFilter: string;
   businessEntityId: string;
-  businessEntitySortDirection: "" | "asc" | "desc";
   declarationMonthStart: Date | null;
   declarationMonthEnd: Date | null;
 };
@@ -431,7 +430,6 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
   const mode = nonEmpty(query.get("mode")) === "archive" ? "archive" : "current";
   const statusFilter = nonEmpty(query.get("status"));
   const businessEntityId = nonEmpty(query.get("businessEntityId") || query.get("businessEntity"));
-  const businessEntitySortDirection = nonEmpty(query.get("businessEntitySortDirection")) === "desc" ? "desc" : nonEmpty(query.get("businessEntitySortDirection")) === "asc" ? "asc" : "";
   const declarationStartMonth = nonEmpty(query.get("declarationStartMonth"));
   const declarationEndMonth = nonEmpty(query.get("declarationEndMonth"));
   const declarationStart = declarationStartMonth && /^\d{4}-\d{2}$/.test(declarationStartMonth) ? new Date(`${declarationStartMonth}-01T00:00:00.000Z`) : null;
@@ -443,7 +441,6 @@ function taxRefundListFiltersFromQuery(query: QueryLike): TaxRefundListFilters {
     mode,
     statusFilter,
     businessEntityId,
-    businessEntitySortDirection,
     declarationMonthStart: declarationStart || null,
     declarationMonthEnd: declarationEnd ? new Date(Date.UTC(declarationEnd.getUTCFullYear(), declarationEnd.getUTCMonth() + 1, 1)) : null,
   };
@@ -504,13 +501,10 @@ type TaxRefundListResult = {
   mode: TaxRefundListMode;
 };
 
-function taxRefundListOrderBy(filters: TaxRefundListFilters): Prisma.ReceivableOrderOrderByWithRelationInput[] {
+function taxRefundListOrderBy(): Prisma.ReceivableOrderOrderByWithRelationInput[] {
   const orderBy: Prisma.ReceivableOrderOrderByWithRelationInput[] = [
     { taxRefundOverallCompleteness: { sort: "asc", nulls: "first" } },
   ];
-  if (filters.businessEntitySortDirection) {
-    orderBy.push({ businessEntity: { name: filters.businessEntitySortDirection } });
-  }
   orderBy.push({ updatedAt: "desc" }, { createdAt: "desc" });
   return orderBy;
 }
@@ -520,7 +514,7 @@ export async function listTaxRefundOrders(query: QueryLike, actor: ActorLike): P
   const filters = taxRefundListFiltersFromQuery(query);
   const where = taxRefundListWhere(filters, actor);
   const skip = (filters.page - 1) * filters.pageSize;
-  const orderBy = taxRefundListOrderBy(filters);
+  const orderBy = taxRefundListOrderBy();
   const [total, rows] = await Promise.all([
     prisma.receivableOrder.count({ where }),
     guardedPrismaFindMany<Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>[]>(prisma.receivableOrder, "receivableOrder", "lib/platform/tax-refunds.ts:listTaxRefundOrders.rows", {

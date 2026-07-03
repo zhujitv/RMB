@@ -96,12 +96,14 @@ test("reports expose business entity columns and filters", () => {
 test("tax refund list exposes business entity filter display and export column", () => {
   assert.match(taxRefundService, /businessEntityWhereFromQuery\(filters\.businessEntityId\)/);
   assert.match(taxRefundService, /businessEntityFieldsFromOrder\(order\)/);
-  assert.match(taxRefundService, /businessEntitySortDirection/);
+  assert.doesNotMatch(taxRefundService, /businessEntitySortDirection/);
   assert.match(taxRefundController, /\/api\/business-entities/);
   assert.match(taxRefundController, /params\.set\("businessEntityId"/);
+  assert.doesNotMatch(taxRefundController, /businessEntitySortDirection|toggleBusinessEntitySort/);
   assert.match(taxRefundListPanel, /全部业务主体/);
   assert.match(taxRefundListPanel, /taxRefundBusinessEntityColumn/);
-  assert.match(taxRefundListPanel, /onToggleBusinessEntitySort/);
+  assert.match(taxRefundListPanel, /<th className=\{styles\.taxRefundBusinessEntityColumn\}>业务主体<\/th>/);
+  assert.doesNotMatch(taxRefundListPanel, /onToggleBusinessEntitySort|tableSortButton|业务主体\{businessEntitySortDirection/);
   assert.match(taxRefundTableRow, /businessEntityDisplayName \|\| row\.businessEntityShortName \|\| businessEntityFullName/);
   assert.match(taxRefundTableRow, /title=\{businessEntityFullName \|\| "-"\}/);
   assert.match(taxRefundHelpers, /businessEntityNameSnapshot/);

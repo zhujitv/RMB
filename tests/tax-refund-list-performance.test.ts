@@ -54,10 +54,10 @@ test("tax refund completeness is cached for list rendering", () => {
 test("tax refund list keeps lower completeness rows before completed rows", () => {
   const orderByHelper = service.match(/function taxRefundListOrderBy[\s\S]*?return orderBy;\n}/)?.[0] || "";
   assert.match(orderByHelper, /taxRefundOverallCompleteness:\s*\{\s*sort:\s*"asc",\s*nulls:\s*"first"\s*\}/);
-  assert.match(orderByHelper, /orderBy\.push\(\{ businessEntity: \{ name: filters\.businessEntitySortDirection \} \}\)/);
+  assert.doesNotMatch(orderByHelper, /businessEntity|businessEntitySortDirection/);
   assert.match(
     orderByHelper,
-    /taxRefundOverallCompleteness[\s\S]*businessEntity[\s\S]*updatedAt[\s\S]*createdAt/,
+    /taxRefundOverallCompleteness[\s\S]*updatedAt[\s\S]*createdAt/,
   );
 });
 

@@ -18,9 +18,7 @@ type TaxRefundListPanelProps = {
   declarationEndMonth: string;
   statusFilter: string;
   businessEntityId: string;
-  businessEntitySortDirection: "" | "asc" | "desc";
   businessEntities: BusinessEntityOption[];
-  canSortBusinessEntity: boolean;
   canManageTaxRefund: boolean;
   canCancelArchive: boolean;
   submittingTaxId: string;
@@ -31,7 +29,6 @@ type TaxRefundListPanelProps = {
   onDeclarationEndMonthChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
   onBusinessEntityChange: (value: string) => void;
-  onToggleBusinessEntitySort: () => void;
   onSubmitSearch: () => void;
   onResetSearch: () => void;
   onPage: (page: number) => void;
@@ -55,9 +52,7 @@ export function TaxRefundListPanel({
   declarationEndMonth,
   statusFilter,
   businessEntityId,
-  businessEntitySortDirection,
   businessEntities,
-  canSortBusinessEntity,
   canManageTaxRefund,
   canCancelArchive,
   submittingTaxId,
@@ -68,7 +63,6 @@ export function TaxRefundListPanel({
   onDeclarationEndMonthChange,
   onStatusFilterChange,
   onBusinessEntityChange,
-  onToggleBusinessEntitySort,
   onSubmitSearch,
   onResetSearch,
   onPage,
@@ -165,13 +159,7 @@ export function TaxRefundListPanel({
               <th className={styles.taxRefundOrderNoColumn}>订单号</th>
               <th className={styles.taxRefundBlNoColumn}>提单号</th>
               <th className={styles.taxRefundCustomerColumn}>客户简称</th>
-              <th className={styles.taxRefundBusinessEntityColumn}>
-                {canSortBusinessEntity ? (
-                  <button type="button" className={styles.tableSortButton} onClick={onToggleBusinessEntitySort}>
-                    业务主体{businessEntitySortDirection === "asc" ? " ↑" : businessEntitySortDirection === "desc" ? " ↓" : ""}
-                  </button>
-                ) : "业务主体"}
-              </th>
+              <th className={styles.taxRefundBusinessEntityColumn}>业务主体</th>
               <th className={styles.taxRefundDateColumn}>申报日期</th>
               <th className={styles.taxRefundCompletenessColumn}>总体完整度</th>
               <th className={styles.taxRefundStatusColumn}>退税状态</th>
