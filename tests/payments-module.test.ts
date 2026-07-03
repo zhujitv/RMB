@@ -5,6 +5,10 @@ import test from "node:test";
 const paymentsModule = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
 const paymentsService = readFileSync("lib/platform/payments-module.ts", "utf8");
 const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const orderAccess = readFileSync("lib/platform/order-access.ts", "utf8");
+const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const sharedSerialization = readFileSync("lib/platform/shared-serialization.ts", "utf8");
+const schema = readFileSync("prisma/schema.prisma", "utf8");
 
 test("payments page keeps summary cards and avoids duplicate recent payment list", () => {
   assert.match(paymentsModule, /已到账金额/);
@@ -66,4 +70,37 @@ test("payments list uses backend keyword fuzzy search and keeps detail-only expa
   assert.match(paymentsModule, /<DetailField label="订单号"/);
   assert.match(paymentsModule, /<DetailField label="创建时间"/);
   assert.match(paymentsModule, /<DetailField label="更新时间"/);
+});
+
+test("payment types support phased receipts without defaulting to final payment", () => {
+  assert.match(sharedConstants, /PAYMENT_TYPES = \["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"\]/);
+  assert.match(paymentsModule, /const PAYMENT_TYPES = \["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"\]/);
+  assert.match(paymentsModule, /paymentType: ""/);
+  assert.match(paymentsModule, /<option value="">请选择收款类型<\/option>/);
+  assert.match(paymentsService, /paymentType: PAYMENT_TYPES\.includes\(String\(inputData\.paymentType \|\| ""\)\) \? String\(inputData\.paymentType\) : ""/);
+  assert.match(sharedSerialization, /paymentType: payment\.paymentType \|\| ""/);
+  assert.match(schema, /paymentType\s+String\s+@default\(""\)\s+@map\("payment_type"\)/);
+  assert.doesNotMatch(paymentsModule, /paymentType: "尾款"/);
+  assert.doesNotMatch(paymentsService, /: "尾款"/);
+});
+
+test("payments list exposes payment type filter and row display", () => {
+  assert.match(paymentsModule, /paymentType: string;/);
+  assert.match(paymentsModule, /params\.set\(key, text\)/);
+  assert.match(paymentsModule, /全部收款类型/);
+  assert.match(paymentsModule, /setFilter\("paymentType"/);
+  assert.match(paymentsModule, /<th>收款类型<\/th>/);
+  assert.match(paymentsModule, /<td>\{payment\.paymentType \|\| "-"\}<\/td>/);
+  assert.match(paymentsService, /paymentType: nonEmpty\(query\?\.get\("paymentType"\)\)/);
+  assert.match(paymentsService, /if \(filters\.paymentType\) clauses\.push\(\{ paymentType: filters\.paymentType \}\)/);
+});
+
+test("payment completion is based on arrived amount, not payment type", () => {
+  assert.match(ordersService, /if \(Number\(summary\.overpaidCny \|\| 0\) > 0\) status = "多收款"/);
+  assert.match(ordersService, /else if \(Number\(summary\.outstandingCny \|\| 0\) <= 0\) status = "已收齐"/);
+  assert.match(ordersService, /else if \(Number\(summary\.confirmedPaymentsCny \|\| 0\) > 0\) status = "部分收款"/);
+  assert.match(orderAccess, /throw codedError\("已关闭或已取消订单不能新增收款"/);
+  assert.doesNotMatch(orderAccess, /ORDER_FULLY_PAID/);
+  assert.doesNotMatch(orderAccess, /订单已收齐，不能新增收款/);
+  assert.match(ordersService, /return !\["已关闭", "已取消"\]\.includes\(order\.status\)/);
 });

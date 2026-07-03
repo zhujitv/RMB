@@ -895,7 +895,7 @@ model Payment {
   exchangeRateType   String?   @map("exchange_rate_type")
   amount             Decimal   @db.Decimal(18, 2)
   amountCny          Decimal   @map("amount_cny") @db.Decimal(18, 2)
-  paymentType        String    @default("尾款") @map("payment_type")
+  paymentType        String    @default("") @map("payment_type")
   status             String    @default("待确认")
   bankReference      String?   @map("bank_reference")
   remark             String?

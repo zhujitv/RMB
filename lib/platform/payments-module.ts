@@ -47,6 +47,7 @@ type PaymentInput = Record<string, unknown>;
 type PaymentListFilters = {
   keyword: string;
   currency: string;
+  paymentType: string;
   paymentStatus: string;
   month: string;
 };
@@ -160,6 +161,7 @@ function paymentListFiltersFromQuery(query: QueryLike): PaymentListFilters {
   return {
     keyword,
     currency: nonEmpty(query?.get("currency")),
+    paymentType: nonEmpty(query?.get("paymentType")),
     paymentStatus: nonEmpty(query?.get("paymentStatus")),
     month: nonEmpty(query?.get("month")),
   };
@@ -169,6 +171,7 @@ function paymentListWhere(filters: PaymentListFilters, accessWhere: Prisma.Recei
   const keyword = filters.keyword;
   const clauses: Prisma.PaymentWhereInput[] = [{ deletedAt: null }, { order: { is: accessWhere } }];
   if (filters.currency) clauses.push({ currency: filters.currency });
+  if (filters.paymentType) clauses.push({ paymentType: filters.paymentType });
   if (filters.paymentStatus) clauses.push({ status: filters.paymentStatus });
   if (filters.month && /^\d{4}-\d{2}$/.test(filters.month)) {
     const start = new Date(`${filters.month}-01T00:00:00.000Z`);
@@ -236,7 +239,7 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
     exchangeRateType: exchange.exchangeRateType,
     amount,
     amountCny: amountCny(amount, exchangeRate),
-    paymentType: PAYMENT_TYPES.includes(String(inputData.paymentType || "")) ? String(inputData.paymentType) : "尾款",
+    paymentType: PAYMENT_TYPES.includes(String(inputData.paymentType || "")) ? String(inputData.paymentType) : "",
     status: requestedStatus,
     bankReference: optional(inputData.bankReference),
     remark: optional(inputData.remark),

@@ -12,7 +12,7 @@ import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 
 const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
-const PAYMENT_TYPES = ["预付款", "尾款", "补差款", "其他"];
+const PAYMENT_TYPES = ["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"];
 const PAYMENT_STATUSES = ["待确认", "已到账", "已退回", "已取消"];
 
 type UserLite = {
@@ -126,6 +126,7 @@ type PaymentFilters = {
   keyword: string;
   month: string;
   currency: string;
+  paymentType: string;
   paymentStatus: string;
 };
 
@@ -134,7 +135,7 @@ const PAGE_SIZE = 20;
 const emptyQuickPaymentForm: QuickPaymentForm = {
   orderId: "",
   paymentDate: new Date().toISOString().slice(0, 10),
-  paymentType: "尾款",
+  paymentType: "",
   amount: "",
   currency: "",
   exchangeRate: "",
@@ -147,6 +148,7 @@ const emptyPaymentFilters: PaymentFilters = {
   keyword: "",
   month: "",
   currency: "",
+  paymentType: "",
   paymentStatus: "",
 };
 
@@ -270,6 +272,7 @@ export function PaymentsModule({
         keyword: value,
         month: filters.month.trim(),
         currency: filters.currency.trim(),
+        paymentType: filters.paymentType.trim(),
         paymentStatus: filters.paymentStatus.trim(),
       };
       setSubmittedFilters(nextFilters);
@@ -278,7 +281,7 @@ export function PaymentsModule({
       void loadPayments(1, nextFilters);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [filters.keyword, filters.month, filters.currency, filters.paymentStatus, submittedFilters.keyword]);
+  }, [filters.keyword, filters.month, filters.currency, filters.paymentType, filters.paymentStatus, submittedFilters.keyword]);
 
   function setFilter<K extends keyof PaymentFilters>(key: K, value: PaymentFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -383,6 +386,10 @@ export function PaymentsModule({
           <option value="">全部币种</option>
           {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
         </select>
+        <select value={filters.paymentType} onChange={(event) => setFilter("paymentType", event.target.value)} disabled={loading}>
+          <option value="">全部收款类型</option>
+          {PAYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
         <select value={filters.paymentStatus} onChange={(event) => setFilter("paymentStatus", event.target.value)} disabled={loading}>
           <option value="">全部收款状态</option>
           {PAYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
@@ -401,6 +408,7 @@ export function PaymentsModule({
               <th className={styles.orderNoColumn}>订单号</th>
               <th className={styles.customerColumn}>客户简称</th>
               <th>收款日期</th>
+              <th>收款类型</th>
               <th className={styles.amountColumn}>金额</th>
               <th>状态</th>
               <th>详情</th>
@@ -409,7 +417,7 @@ export function PaymentsModule({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : payments.length ? payments.map((payment) => (
               <PaymentTableRows
@@ -429,7 +437,7 @@ export function PaymentsModule({
               />
             )) : (
               <tr>
-                <td colSpan={6}><div className={styles.emptyState}>未找到匹配的收款明细</div></td>
+                <td colSpan={7}><div className={styles.emptyState}>未找到匹配的收款明细</div></td>
               </tr>
             )}
           </tbody>
@@ -759,6 +767,7 @@ function QuickCreatePaymentPanel({
         <label>
           收款类型
           <select value={form.paymentType} onChange={(event) => setFormValue("paymentType", event.target.value)}>
+            <option value="">请选择收款类型</option>
             {PAYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
         </label>
@@ -840,6 +849,7 @@ function PaymentTableRows({
         <td className={styles.orderNoColumn}><strong>{payment.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
         <td>{payment.paymentDate || "-"}</td>
+        <td>{payment.paymentType || "-"}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={payment.currency} amount={payment.amount} amountCny={payment.amountCny} /></td>
         <td><span className={`${styles.statusPill} ${paymentStatusClass(payment.status)}`}>{payment.status || "-"}</span></td>
         <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
@@ -917,7 +927,7 @@ function paymentFormFromRow(payment?: PaymentRow | null): QuickPaymentForm {
   return {
     orderId: payment.orderId || "",
     paymentDate: payment.paymentDate || new Date().toISOString().slice(0, 10),
-    paymentType: payment.paymentType || "尾款",
+    paymentType: payment.paymentType || "",
     amount: payment.amount == null ? "" : String(payment.amount),
     currency: payment.currency || "",
     exchangeRate: payment.exchangeRate == null ? "" : String(payment.exchangeRate),

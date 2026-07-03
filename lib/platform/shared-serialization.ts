@@ -418,7 +418,7 @@ export function serializePayment(paymentInput: unknown) {
     exchangeRateType: payment.exchangeRateType || "",
     amount: Number(payment.amount),
     amountCny: Number(payment.amountCny),
-    paymentType: payment.paymentType || "尾款",
+    paymentType: payment.paymentType || "",
     status: payment.status,
     bankReference: payment.bankReference || "",
     remark: payment.remark || "",

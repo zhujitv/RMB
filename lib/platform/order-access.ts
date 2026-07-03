@@ -151,17 +151,4 @@ export async function assertOrderCanReceivePayment(order: OrderLike) {
   if (["已关闭", "已取消"].includes(nonEmpty(order.status))) {
     throw codedError("已关闭或已取消订单不能新增收款", 400, "ORDER_CLOSED");
   }
-  const confirmed = await prisma.payment.aggregate({
-    where: {
-      orderId,
-      deletedAt: null,
-      status: "已到账",
-    },
-    _sum: { amountCny: true },
-  });
-  const finalReceivableCny = Number(order.finalReceivableAmountCny ?? order.receivableAmountCny);
-  const outstandingCny = finalReceivableCny - Number(confirmed._sum?.amountCny || 0);
-  if (outstandingCny <= 0) {
-    throw codedError("订单已收齐，不能新增收款", 400, "ORDER_FULLY_PAID");
-  }
 }

@@ -3,7 +3,6 @@ import { Prisma, type PaymentTermType } from "../generated/prisma/client.js";
 import {
   CURRENCIES,
   ORDER_STATUSES,
-  PAYMENT_TYPES,
   RECEIVABLE_ORDER_INPUT_SCHEMA,
   TRADE_TERMS,
   addDays,
@@ -282,8 +281,7 @@ function serializeReceivableSearchOrder(order: OrderWithRelations) {
 }
 
 function receivableOrderCanAcceptPayment(order: OrderWithRelations) {
-  if (["已关闭", "已取消"].includes(order.status)) return false;
-  return Number(summarizeOrder(order).outstandingCny || 0) > 0;
+  return !["已关闭", "已取消"].includes(order.status);
 }
 
 export async function searchReceivableOrders(query: QueryLike, actor: ActorLike) {
