@@ -1,7 +1,11 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import { includeOrderRelations } from "./shared-order-relations";
-import { taxDocumentCompleteness, taxRefundStatusFromCompleteness } from "./shared-tax-completeness";
+import {
+  sanitizeTaxRefundCompletenessText,
+  taxDocumentCompleteness,
+  taxRefundStatusFromCompleteness,
+} from "./shared-tax-completeness";
 import { hasCostBusinessDocument } from "./business-documents";
 import { runNonCriticalTask } from "./shared-constants";
 
@@ -44,8 +48,9 @@ function taxRefundCompletenessIssuesSummary(completeness: TaxRefundCompletenessR
   const labels = Array.isArray(record.missingLabels)
     ? record.missingLabels.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
-  if (labels.length) return labels.slice(0, 30).join(" / ");
-  const text = String(record.text || "").trim();
+  const sanitizedLabels = labels.map(sanitizeTaxRefundCompletenessText).filter(Boolean);
+  if (sanitizedLabels.length) return sanitizedLabels.slice(0, 30).join(" / ");
+  const text = sanitizeTaxRefundCompletenessText(record.text);
   return text.length > 500 ? `${text.slice(0, 500)}...` : text;
 }
 

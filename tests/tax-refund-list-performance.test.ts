@@ -6,6 +6,7 @@ const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260702161000_tax_refund_list_performance/migration.sql", "utf8");
 const service = readFileSync("lib/platform/tax-refunds.ts", "utf8");
 const sync = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");
+const completeness = readFileSync("lib/platform/shared-tax-completeness.ts", "utf8");
 const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const detail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
 const row = readFileSync("app/modules/tax-refund/table-row.tsx", "utf8");
@@ -48,6 +49,14 @@ test("tax refund completeness is cached for list rendering", () => {
   assert.match(row, /row\.overallCompleteness/);
   assert.match(row, /row\.completenessIssuesSummary/);
   assert.match(list, /tableSkeletonLine/);
+});
+
+test("tax refund completeness ignores removed customs detail confirmation state", () => {
+  assert.match(completeness, /DISABLED_TAX_REFUND_COMPLETENESS_MARKERS = \[[\s\S]*"报关明细待确认"[\s\S]*"CUSTOMS_RECOGNIZED_PENDING_CONFIRM"/);
+  assert.match(completeness, /hasDisabledTaxRefundCompletenessMarker\(cachedValue\)/);
+  assert.match(completeness, /sanitizeTaxRefundCompletenessSummary\(cached as TaxRefundCompletenessSummary\)/);
+  assert.match(service, /sanitizeTaxRefundCompletenessText\(fallback\)/);
+  assert.match(sync, /sanitizeTaxRefundCompletenessText\(record\.text\)/);
 });
 
 test("tax refund detail does not render tax calculation review workspace", () => {

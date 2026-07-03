@@ -32,6 +32,7 @@ import {
   refreshTaxRefundCompletenessForOrder,
   roundMoney,
   runNonCriticalTask,
+  sanitizeTaxRefundCompletenessText,
   serializeOrder,
   serializeOrderDocument,
   serializeCustomsRecognition,
@@ -278,7 +279,8 @@ async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelat
 }
 
 function taxRefundCompletenessSummaryText(completeness: ReturnType<typeof cachedTaxRefundCompleteness>, fallback = "") {
-  if (fallback) return fallback;
+  const sanitizedFallback = sanitizeTaxRefundCompletenessText(fallback);
+  if (sanitizedFallback) return sanitizedFallback;
   const labels = Array.isArray(completeness.missingLabels)
     ? completeness.missingLabels.map((item) => String(item || "").trim()).filter(Boolean)
     : [];

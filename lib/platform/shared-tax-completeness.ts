@@ -124,10 +124,77 @@ type TaxRefundCompletenessSummary = Record<string, unknown> & {
   complete?: boolean;
   total?: number;
   completed?: number;
+  text?: string;
 };
+
+const DISABLED_TAX_REFUND_COMPLETENESS_MARKERS = [
+  "报关明细待确认",
+  "已识别待确认",
+  "CUSTOMS_RECOGNIZED_PENDING_CONFIRM",
+];
 
 function asRecord(value: unknown): Record<string, unknown> {
   return isPlainRecord(value) ? value : {};
+}
+
+export function hasDisabledTaxRefundCompletenessMarker(value: unknown): boolean {
+  if (typeof value === "string") {
+    return DISABLED_TAX_REFUND_COMPLETENESS_MARKERS.some((marker) => value.includes(marker));
+  }
+  if (Array.isArray(value)) return value.some(hasDisabledTaxRefundCompletenessMarker);
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(hasDisabledTaxRefundCompletenessMarker);
+  }
+  return false;
+}
+
+export function sanitizeTaxRefundCompletenessText(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const sanitized = DISABLED_TAX_REFUND_COMPLETENESS_MARKERS.reduce(
+    (current, marker) => current.replaceAll(marker, ""),
+    text,
+  )
+    .replace(/缺失：\s*[、/，,\s]+/g, "缺失：")
+    .replace(/[、/，,\s]+$/g, "")
+    .replace(/([、/，,]){2,}/g, "$1")
+    .trim();
+  return sanitized === "缺失：" ? "" : sanitized;
+}
+
+function sanitizeTaxRefundCompletenessValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !hasDisabledTaxRefundCompletenessMarker(item))
+      .map(sanitizeTaxRefundCompletenessValue);
+  }
+  if (typeof value === "string") return sanitizeTaxRefundCompletenessText(value);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        sanitizeTaxRefundCompletenessValue(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+export function sanitizeTaxRefundCompletenessSummary<T extends TaxRefundCompletenessSummary>(summary: T): T {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return summary;
+  if (!hasDisabledTaxRefundCompletenessMarker(summary)) return summary;
+  const sanitized = sanitizeTaxRefundCompletenessValue(summary) as T;
+  const total = Number(sanitized.total || 0);
+  const completed = Number(sanitized.completed || 0);
+  if (Number.isFinite(total) && total > 0) {
+    sanitized.total = Math.max(completed, total - 1);
+  }
+  const missingLabels = Array.isArray(sanitized.missingLabels) ? sanitized.missingLabels : [];
+  sanitized.complete = missingLabels.length === 0 && Number(sanitized.completed || 0) >= Number(sanitized.total || 0);
+  if (!sanitizeTaxRefundCompletenessText(sanitized.text)) {
+    sanitized.text = sanitized.complete ? "资料完整" : "";
+  }
+  return sanitized;
 }
 
 export function documentCompleteness(documents: OrderDocumentLike[] = []) {
@@ -809,7 +876,9 @@ export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
 
 export function cachedTaxRefundCompleteness(order: TaxOrderLike = {}): TaxRefundCompletenessSummary {
   const cached = order.taxRefundCompleteness;
-  if (cached && typeof cached === "object" && !Array.isArray(cached)) return cached as TaxRefundCompletenessSummary;
+  if (cached && typeof cached === "object" && !Array.isArray(cached)) {
+    return sanitizeTaxRefundCompletenessSummary(cached as TaxRefundCompletenessSummary);
+  }
   return emptyTaxRefundCompleteness();
 }
 
@@ -817,6 +886,7 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   const cachedValue = order.taxRefundCompleteness;
   const cached = asRecord(cachedValue);
   if (!cachedValue || typeof cachedValue !== "object" || Array.isArray(cachedValue)) return true;
+  if (hasDisabledTaxRefundCompletenessMarker(cachedValue)) return true;
   const supplier = asRecord(cached.supplier);
   const factory = asRecord(cached.factory);
   const logistics = asRecord(cached.logistics);
