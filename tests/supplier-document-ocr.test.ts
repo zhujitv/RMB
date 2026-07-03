@@ -90,6 +90,8 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /ocrServiceNotOpen/);
   assert.match(service, /sanitizeSupplierOcrMessage\(task\.errorMessage, ""\)/);
   assert.match(service, /sanitizeSupplierOcrMessage\(record\.message, ""\)/);
+  assert.match(service, /OCR正在识别，请稍候。/);
+  assert.match(service, /errorMessage\s*\?\s*\[\{ level: "manual", message: errorMessage, field: "" \}\]/);
   assert.match(service, /technicalError: originalMessage\.slice\(0, 1000\)/);
   assert.match(service, /rawText: task\.rawText \|\| ""/);
   assert.match(supplierModule, /查看 OCR 原始文本/);

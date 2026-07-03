@@ -889,7 +889,7 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
   const validationJson = task.validationJson && typeof task.validationJson === "object" && !Array.isArray(task.validationJson)
     ? task.validationJson as Record<string, unknown>
     : {};
-  const issues = Array.isArray(validationJson.issues)
+  const persistedIssues = Array.isArray(validationJson.issues)
     ? validationJson.issues.map((issue) => {
         const record = issue && typeof issue === "object" ? issue as Record<string, unknown> : {};
         return {
@@ -899,6 +899,14 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
         };
       }).filter((issue) => issue.message)
     : [];
+  const errorMessage = sanitizeSupplierOcrMessage(task.errorMessage, "");
+  const issues = persistedIssues.length
+    ? persistedIssues
+    : errorMessage
+      ? [{ level: "manual", message: errorMessage, field: "" }]
+      : task.status === OCR_STATUS_PROCESSING || task.validationStatus === "PROCESSING"
+        ? [{ level: "manual", message: "OCR正在识别，请稍候。", field: "" }]
+        : [];
   return {
     id: task.id,
     documentId: task.documentId,
@@ -906,7 +914,7 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
     documentType: task.documentType,
     status: task.status,
     validationStatus: task.validationStatus || "",
-    errorMessage: sanitizeSupplierOcrMessage(task.errorMessage, ""),
+    errorMessage,
     rejectReason: task.rejectReason || "",
     rawText: task.rawText || "",
     confirmedAt: task.confirmedAt,
