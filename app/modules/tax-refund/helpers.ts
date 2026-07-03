@@ -236,10 +236,10 @@ export function formatFactoryCostAmount(cost: TaxCost) {
   return "";
 }
 
-export function documentMatchesFactoryCostSlot(document: TaxDocument, cost: TaxCost, sameSupplierFactoryCostCount: number) {
+export function documentMatchesFactoryCostSlot(document: TaxDocument, cost: TaxCost, _sameSupplierFactoryCostCount: number) {
   if (document.uploadStatus !== "SUCCESS") return false;
   if (document.costId) return document.costId === cost.id;
-  return sameSupplierFactoryCostCount === 1 && Boolean(cost.supplierId && document.supplierId === cost.supplierId);
+  return Boolean(cost.supplierId && document.supplierId === cost.supplierId);
 }
 
 export function logisticsInvoiceCosts(costs: TaxCost[]) {

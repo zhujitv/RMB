@@ -611,7 +611,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     const daysSinceCostCreated = costCreatedAt ? Math.floor((Date.now() - costCreatedAt.getTime()) / 86400000) : 0;
     SUPPLIER_DOCUMENT_TYPES.forEach((type) => {
       const cost = factoryCosts.find((item) => item.id && item.id === entry.costId) || null;
-      const allowLegacySupplierFallback = Boolean(cost && entry.sameSupplierCostCount === 1);
+      const allowLegacySupplierFallback = Boolean(cost);
       const exists = entry.missingFactoryCost ? false : successDocs.some((doc) => (
         doc.documentType === type
         && cost

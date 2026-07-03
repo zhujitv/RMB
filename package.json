@@ -14,7 +14,7 @@
     "audit": "npm audit --omit=dev",
     "security:audit": "node scripts/security-audit.mjs",
     "performance:audit": "node scripts/performance-audit.mjs",
-    "repair:supplier-return-documents": "jiti scripts/repair-supplier-return-documents.mjs",
+    "repair:supplier-return-documents": "node scripts/run-with-env.mjs jiti scripts/repair-supplier-return-documents.mjs",
     "refresh:tax-refund-completeness": "jiti scripts/refresh-tax-refund-completeness.mjs",
     "verify:ci": "npm run lint && npm run db:generate && npm run typecheck && npm test && npm run security:audit && npm run build:app && npm run audit",
     "verify:release": "npm run lint && npm run db:generate && npm run typecheck && npm test && npm run security:audit && npm run build:release && npm run audit",

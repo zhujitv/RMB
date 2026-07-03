@@ -19,6 +19,7 @@ const settingsModule = readSettingsModuleSource();
 const menu = readFileSync("app/menu.ts", "utf8");
 const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8");
 const repairSupplierReturnDocumentsScript = readFileSync("scripts/repair-supplier-return-documents.mjs", "utf8");
+const repairTaxRelationService = readFileSync("lib/platform/repair-tax-relations.ts", "utf8");
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 
@@ -173,7 +174,7 @@ test("tax refund factory document slots are bound by cost item", () => {
   assert.match(taxModule, /factoryDocumentTargetKey\(item\.costId, item\.documentType \|\| ""\)/);
   assert.match(taxModule, /function documentMatchesFactoryCostSlot/);
   assert.match(taxModule, /if \(document\.costId\) return document\.costId === cost\.id/);
-  assert.match(taxModule, /sameSupplierFactoryCostCount === 1 && Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
+  assert.match(taxModule, /Boolean\(cost\.supplierId && document\.supplierId === cost\.supplierId\)/);
   assert.match(taxModule, /工厂货款 \$\{displayIndex\}/);
 });
 
@@ -272,17 +273,22 @@ test("supplier document request completion requires OCR qualification or manual 
 });
 
 test("supplier return repair script backfills business document associations", () => {
-  assert.match(repairSupplierReturnDocumentsScript, /factoryDocumentRequestId: \{ not: null \}/);
-  assert.match(repairSupplierReturnDocumentsScript, /refreshTaxRefundCompleteness/);
-  assert.match(repairSupplierReturnDocumentsScript, /syncCostInvoiceStatus/);
-  assert.match(repairSupplierReturnDocumentsScript, /data\.orderId = task\.orderId/);
-  assert.match(repairSupplierReturnDocumentsScript, /data\.supplierId = task\.supplierId \|\| null/);
-  assert.match(repairSupplierReturnDocumentsScript, /data\.relatedModule = "SUPPLIER"/);
-  assert.match(repairSupplierReturnDocumentsScript, /affectedOrderIds\.add\(task\.orderId\)/);
-  assert.match(repairSupplierReturnDocumentsScript, /affectedSupplierInvoicePairs\.set/);
-  assert.match(repairSupplierReturnDocumentsScript, /source: "SUPPLIER_RETURN"/);
-  assert.match(repairSupplierReturnDocumentsScript, /刷新订单完整度/);
-  assert.match(repairSupplierReturnDocumentsScript, /同步成本发票状态/);
+  assert.match(repairSupplierReturnDocumentsScript, /repairTaxRelations/);
+  assert.match(repairSupplierReturnDocumentsScript, /REPAIR_TAX_RELATION_ORDER_NOS/);
+  assert.match(repairTaxRelationService, /export async function repairTaxRelations/);
+  assert.match(repairTaxRelationService, /documentType: \{ in: SUPPLIER_DOCUMENT_TYPES \}/);
+  assert.match(repairTaxRelationService, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
+  assert.match(repairTaxRelationService, /data\.cost = \{ connect: \{ id: targetCost\.id \} \}/);
+  assert.match(repairTaxRelationService, /requestData\.cost = \{ connect: \{ id: targetCost\.id \} \}/);
+  assert.match(repairTaxRelationService, /supplierId missing/);
+  assert.match(repairTaxRelationService, /purchaseOrderId mismatch/);
+  assert.match(repairTaxRelationService, /uploadTaskId missing/);
+  assert.match(repairTaxRelationService, /status filtered/);
+  assert.match(repairTaxRelationService, /tax-relation-repaired/);
+  assert.match(repairTaxRelationService, /refreshTaxRefundCompleteness/);
+  assert.match(repairTaxRelationService, /syncCostInvoiceStatus/);
+  assert.match(repairSupplierReturnDocumentsScript, /refreshedOrders/);
+  assert.match(repairSupplierReturnDocumentsScript, /syncedCosts/);
 });
 
 test("supplier callback upload only auto-binds an unambiguous factory cost", () => {

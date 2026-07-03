@@ -152,7 +152,7 @@ export async function attachBusinessDocumentsToCosts<T extends CostDocumentCarri
   }, new Map());
   return costs.map((cost) => {
     const key = `${cost.orderId || ""}:${cost.supplierId || ""}`;
-    const allowLegacySupplierFallback = (factoryCostCountsByOrderSupplier.get(key) || 0) === 1;
+    const allowLegacySupplierFallback = Boolean(factoryCostCountsByOrderSupplier.get(key));
     const merged = mergeCostBusinessDocuments(cost, documentsByOrderId.get(cost.orderId || "") || [], { allowLegacySupplierFallback });
     logMissingCostBusinessDocuments(merged);
     return merged;

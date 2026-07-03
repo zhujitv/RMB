@@ -45,6 +45,7 @@ import {
 import { canReadDocumentContent } from "./order-documents";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
+import { scheduleRepairTaxRelationsOnStartup } from "./repair-tax-relations";
 
 type TaxRefundCompletenessOrder = Parameters<typeof cachedTaxRefundCompleteness>[0];
 type TaxRefundSortableOrder = TaxRefundCompletenessOrder & {
@@ -165,6 +166,7 @@ type TaxRefundOrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: R
 type TaxRefundDomesticLogisticsInfo = Prisma.DomesticLogisticsInfoGetPayload<{ select: ReturnType<typeof domesticLogisticsInfoSafeSelect> }>;
 type TaxRefundDomesticTransportItem = TaxRefundDomesticLogisticsInfo["transportItems"][number];
 const TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
+const TAX_REFUND_SUPPLIER_DOCUMENT_LIMIT = 160;
 
 function taxRefundDetailBillOfLadingNumbers(order: Pick<TaxRefundOrderWithRelations, "blNo"> & { logisticsBills?: Array<{ billOfLadingNo?: string | null }> }) {
   return [
@@ -386,6 +388,39 @@ function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<str
       documents: cost.documents || [],
     })),
   };
+}
+
+function uniqueTaxRefundDocuments<T extends { id?: string | null }>(documents: T[] = []) {
+  const seen = new Set<string>();
+  return documents.filter((document) => {
+    if (!document?.id || seen.has(document.id)) return false;
+    seen.add(document.id);
+    return true;
+  });
+}
+
+function taxRefundFactoryDocumentMatchesCost(document: TaxRefundDocumentLight, cost: TaxRefundCostLight) {
+  if (document.uploadStatus !== "SUCCESS") return false;
+  if (document.orderId !== cost.orderId) return false;
+  if (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType)) return false;
+  if (document.relatedModule !== "SUPPLIER" && !document.factoryDocumentRequestId) return false;
+  if (document.costId) return document.costId === cost.id;
+  if (!document.supplierId || !cost.supplierId) return false;
+  return document.supplierId === cost.supplierId;
+}
+
+function withHistoricalSupplierDocuments(
+  costs: TaxRefundCostLight[] = [],
+  documents: TaxRefundDocumentLight[] = [],
+) {
+  if (!documents.length) return costs;
+  return costs.map((cost) => ({
+    ...cost,
+    documents: uniqueTaxRefundDocuments([
+      ...(cost.documents || []),
+      ...documents.filter((document) => taxRefundFactoryDocumentMatchesCost(document, cost)),
+    ]),
+  }));
 }
 
 function taxRefundCompletenessPercent(order: TaxRefundCompletenessOrder = {}) {
@@ -654,11 +689,36 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
         orderBy: [{ createdAt: "desc" }],
         take: 80,
       },
+      ...(type === "factory" ? {
+        documents: {
+          where: {
+            deletedAt: null,
+            documentType: { in: SUPPLIER_DOCUMENT_TYPES },
+            OR: [
+              { relatedModule: "SUPPLIER" },
+              { factoryDocumentRequestId: { not: null } },
+              { costId: { not: null } },
+            ],
+          },
+          select: taxRefundDocumentLightSelect,
+          orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
+          take: TAX_REFUND_SUPPLIER_DOCUMENT_LIMIT,
+        },
+      } : {}),
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
-  const costs = (order.costs || []).map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
-  const documents = costs.flatMap((cost) => cost.documents || []);
+  const orderCosts = (order.costs || []) as TaxRefundCostLight[];
+  const historicalDocuments = (
+    type === "factory" && "documents" in order && Array.isArray(order.documents)
+      ? order.documents
+      : []
+  ) as unknown as TaxRefundDocumentLight[];
+  const costRows = type === "factory"
+    ? withHistoricalSupplierDocuments(orderCosts, historicalDocuments)
+    : orderCosts;
+  const costs = costRows.map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
+  const documents = uniqueTaxRefundDocuments(costs.flatMap((cost) => cost.documents || []));
   return {
     id: order.id,
     orderNo: order.orderNo,
@@ -720,6 +780,7 @@ export type TaxRefundDetailSection =
 
 export async function getTaxRefundOrderDetailSection(orderId: string, actor: ActorLike, section: TaxRefundDetailSection) {
   assertRead(actor, "taxRefund");
+  scheduleRepairTaxRelationsOnStartup();
   if (section === "basic") return getTaxRefundBasicSection(orderId, actor);
   if (section === "export-documents") return getTaxRefundDocumentSection(orderId, actor, TAX_EXPORT_DOCUMENT_TYPES);
   if (section === "customs-documents") return getTaxRefundCustomsDocumentsSection(orderId, actor);
