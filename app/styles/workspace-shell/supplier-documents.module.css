@@ -16,6 +16,14 @@
   margin-bottom: 12px;
 }
 
+.supplierDocumentHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .supplierDocumentsHeader h1 {
   margin: 0;
   color: #0f172a;
@@ -35,6 +43,43 @@
 .supplierDocumentsHeader button:hover:not(:disabled) {
   background: #1d4ed8 !important;
   color: #fff !important;
+}
+
+.supplierDocumentRequestDialog {
+  width: min(820px, calc(100vw - 40px));
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
+}
+
+.supplierDocumentRequestTypes {
+  grid-column: span 2;
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px 12px 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.supplierDocumentRequestTypes legend {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.supplierDocumentRequestTypes label {
+  display: inline-flex;
+}
+
+.supplierDocumentRequestCostField {
+  grid-column: span 2;
+}
+
+.supplierDocumentRequestMessage {
+  grid-column: 1 / -1;
 }
 
 .supplierDocumentsStats {

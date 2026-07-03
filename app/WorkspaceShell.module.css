@@ -544,6 +544,7 @@
 .supplierSettingsTable { composes: supplierSettingsTable from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .supplierSettingsTableWrap { composes: supplierSettingsTableWrap from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
 .supplierDocumentsHeader { composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsHeader from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentHeaderActions { composes: supplierDocumentHeaderActions from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsListToolbar from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentNoticeActions {
   display: flex;
@@ -551,6 +552,10 @@
   justify-content: flex-start;
   gap: 8px;
 }
+.supplierDocumentRequestDialog { composes: supplierDocumentRequestDialog from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestCostField { composes: supplierDocumentRequestCostField from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestMessage { composes: supplierDocumentRequestMessage from "./styles/workspace-shell/supplier-documents.module.css"; }
+.supplierDocumentRequestTypes { composes: supplierDocumentRequestTypes from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsPage { composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsPage from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentsStats { composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentsStats from "./styles/workspace-shell/supplier-documents.module.css"; }

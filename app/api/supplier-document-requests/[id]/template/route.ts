@@ -28,7 +28,7 @@ function excelContentDisposition(fileName = "factory-document-template.xlsx") {
     .replace(/[\u0000-\u001f\u007f\r\n"]/g, "_")
     .replace(/[\\/:*?<>|;]+/g, "_")
     .trim() || "factory-document-template.xlsx";
-  const normalized = /\.xlsx$/i.test(safeFileName) ? safeFileName : `${safeFileName}.xlsx`;
+  const normalized = /\.(xls|xlsx)$/i.test(safeFileName) ? safeFileName : `${safeFileName}.xlsx`;
   const asciiFileName = normalized
     .normalize("NFKD")
     .replace(/[^\x20-\x7E]/g, "_");

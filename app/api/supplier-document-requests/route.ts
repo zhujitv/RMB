@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     const actor = await requireApiActor(request);
     const formData = await request.formData();
     const requestRow = await createSupplierDocumentRequest(request, actor, {
+      costId: String(formData.get("costId") || ""),
       orderId: String(formData.get("orderId") || ""),
       supplierId: String(formData.get("supplierId") || ""),
       requiredDocumentTypes: String(formData.get("requiredDocumentTypes") || ""),

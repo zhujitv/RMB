@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { ConfirmationDialog, PaginationBar, PdfPreviewButton, fileDownloadUrl, useConfirmationDialog } from "../components";
 import { formatDate, formatDateTime } from "../formatters";
+import { CreateSupplierDocumentRequestDialog, type CreateSupplierDocumentRequestResult } from "./supplier-documents/create-request-dialog";
 import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
 import { PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL, uploadFormDataWithProgress, validatePdfUploadFile } from "../utils";
@@ -161,6 +162,7 @@ export function SupplierDocumentsModule({
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
   const [ocrBusyKey, setOcrBusyKey] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const {
     confirmation,
     requestConfirmation,
@@ -300,6 +302,16 @@ export function SupplierDocumentsModule({
     }
   }
 
+  async function handleRequestCreated(result: CreateSupplierDocumentRequestResult) {
+    const createdId = result.request?.id || "";
+    setCreateDialogOpen(false);
+    setNotice(result.message || "已发起资料回传通知");
+    setError("");
+    await loadRows(1, pageSize);
+    if (createdId) setExpandedTaskId(createdId);
+    void onRefreshTodos?.();
+  }
+
   function updateDocumentOcrTask(taskId: string, documentId: string, ocrTask: SupplierDocumentOcrTask | null | undefined) {
     if (!ocrTask) return;
     setRows((current) => current.map((row) => {
@@ -417,9 +429,16 @@ export function SupplierDocumentsModule({
         <div>
           <h1>{isAdmin ? "供应商资料回传" : "产品供应商资料回传"}</h1>
         </div>
-        <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
-          {loading ? "刷新中..." : "刷新任务"}
-        </button>
+        <div className={styles.supplierDocumentHeaderActions}>
+          {isAdmin ? (
+            <button className={styles.primaryButtonCompact} type="button" onClick={() => setCreateDialogOpen(true)}>
+              发起资料回传通知
+            </button>
+          ) : null}
+          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
+            {loading ? "刷新中..." : "刷新任务"}
+          </button>
+        </div>
       </header>
 
       {!loadError ? (
@@ -520,6 +539,12 @@ export function SupplierDocumentsModule({
           onCancel={cancelConfirmation}
           onConfirm={confirmConfirmation}
           onInputChange={updateConfirmationInput}
+        />
+      ) : null}
+      {createDialogOpen ? (
+        <CreateSupplierDocumentRequestDialog
+          onClose={() => setCreateDialogOpen(false)}
+          onCreated={handleRequestCreated}
         />
       ) : null}
     </section>
