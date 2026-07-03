@@ -93,7 +93,7 @@ const SUPPLIER_DOCUMENT_EMAIL_LABELS: Record<string, string> = {
   PURCHASE_CONTRACT: "工厂采购合同（盖章扫描件，PDF）",
   VAT_INVOICE: "工厂增值税发票（PDF）",
 };
-const MAX_EXCEL_TEMPLATE_BYTES = 5 * 1024 * 1024;
+const MAX_EXCEL_TEMPLATE_BYTES = 4 * 1024 * 1024;
 const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const LEGACY_EXCEL_TEMPLATE_MIME = "application/vnd.ms-excel";
 const SUPPLIER_DOCUMENT_COST_CANDIDATE_LIMIT = 50;
@@ -426,6 +426,17 @@ async function selectedProductSupplierPaymentVoucherAttachment(cost: FactorySupp
   };
 }
 
+async function safeSelectedProductSupplierPaymentVoucherAttachment(cost: FactorySupplierReturnCost) {
+  return selectedProductSupplierPaymentVoucherAttachment(cost).catch((error) => {
+    logServerError("产品供应商资料回传通知付款凭证附件准备失败，已跳过水单附件", error, {
+      orderId: cost.orderId,
+      supplierId: cost.supplierId || "",
+      costId: cost.id,
+    });
+    return null;
+  });
+}
+
 function supplierDocumentRequestTemplateVariables({
   supplierName,
   orderNo,
@@ -473,11 +484,11 @@ async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUploadFil
     throw codedError("合同样本仅支持 .xls 或 .xlsx Excel 文件，不能上传其它格式。", 400, "INVALID_TEMPLATE_TYPE");
   }
   if (Number(file.size || 0) > MAX_EXCEL_TEMPLATE_BYTES) {
-    throw codedError("合同样本文件大小不能超过 5MB", 413, "TEMPLATE_FILE_TOO_LARGE");
+    throw codedError("合同样本文件大小不能超过 4MB", 413, "TEMPLATE_FILE_TOO_LARGE");
   }
   const body = Buffer.from(await file.arrayBuffer());
   if (body.byteLength > MAX_EXCEL_TEMPLATE_BYTES) {
-    throw codedError("合同样本文件大小不能超过 5MB", 413, "TEMPLATE_FILE_TOO_LARGE");
+    throw codedError("合同样本文件大小不能超过 4MB", 413, "TEMPLATE_FILE_TOO_LARGE");
   }
   const signature = body.subarray(0, 4).toString("hex");
   if ((isXlsx && signature !== "504b0304") || (isXls && signature !== "d0cf11e0")) {
@@ -867,7 +878,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
 
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
-  const paymentVoucherAttachment = await selectedProductSupplierPaymentVoucherAttachment(factoryCost);
+  const paymentVoucherAttachment = await safeSelectedProductSupplierPaymentVoucherAttachment(factoryCost);
   const templateVariables = supplierDocumentRequestTemplateVariables({
     supplierName: supplier.supplierName,
     orderNo: order.orderNo || order.id,
@@ -1001,7 +1012,7 @@ export async function resendSupplierDocumentRequestNotice(request: AuditRequestL
   });
   if (resendFactoryCost?.id) {
     const factoryCost = await loadFactorySupplierReturnCostForRequest({ costId: resendFactoryCost.id, orderId: row.orderId, supplierId: row.supplierId });
-    const paymentVoucherAttachment = await selectedProductSupplierPaymentVoucherAttachment(factoryCost);
+    const paymentVoucherAttachment = await safeSelectedProductSupplierPaymentVoucherAttachment(factoryCost);
     if (paymentVoucherAttachment) attachments.push(paymentVoucherAttachment);
   }
   let updated = row;

@@ -46,6 +46,7 @@ test("supplier document workflow uses existing factory tax document types", () =
   assert.match(service, /readManagedUploadFile\(input\.file, "pdf", "supplier-document\.pdf"\)/);
   assert.match(service, /readValidatedExcelTemplate/);
   assert.match(service, /合同样本仅支持 \.xls 或 \.xlsx Excel 文件/);
+  assert.match(service, /MAX_EXCEL_TEMPLATE_BYTES = 4 \* 1024 \* 1024/);
   assert.match(service, /LEGACY_EXCEL_TEMPLATE_MIME/);
   assert.match(service, /signature !== "d0cf11e0"/);
   assert.match(service, /orderId: row\.orderId/);
@@ -80,11 +81,11 @@ test("product supplier callback email attaches only matching cost payment vouche
   assert.match(service, /const storageKey = asset\?\.storageKey \|\| cost\.paymentVoucherStorageKey \|\| ""/);
   assert.match(service, /if \(!storageKey\) return null/);
   assert.match(service, /readR2Object\(storageKey\)/);
-  assert.match(service, /selectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
+  assert.match(service, /safeSelectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
   assert.match(service, /costId: factoryCost\.id/);
   assert.match(service, /resolveUniqueFactoryCostForSupplierReturn\(row\.orderId, row\.supplierId, nonEmpty\(row\.costId\)\)/);
   assert.match(service, /供应商资料回传重发付款凭证成本匹配失败，已跳过水单附件/);
-  assert.match(service, /selectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
+  assert.match(service, /safeSelectedProductSupplierPaymentVoucherAttachment\(factoryCost\)/);
   assert.match(service, /if \(paymentVoucherAttachment\) attachments\.push\(paymentVoucherAttachment\)/);
   assert.match(service, /已付款的汇款水单已随邮件附件发送，请核对后回传对应资料。/);
   assert.match(service, /paymentVoucherAttached: Boolean\(paymentVoucherAttachment\)/);
@@ -144,6 +145,10 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCheck/);
   assert.match(supplierCostCandidatesRoute, /listSupplierDocumentRequestCostCandidates/);
   assert.match(supplierRequestListRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
+  assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES/);
+  assert.match(supplierRequestListRoute, /content-length/);
+  assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_FORM_PARSE_FAILED/);
+  assert.match(supplierRequestListRoute, /回传表格读取失败，请确认文件小于 4MB/);
   assert.match(service, /export async function listSupplierDocumentRequestCostCandidates/);
   assert.match(service, /supplierDocumentRequestFactoryCostWhere/);
   assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
@@ -152,6 +157,8 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(service, /loadFactorySupplierReturnCostForRequest\(input\)/);
   assert.match(service, /TEMPLATE_FILE_REQUIRED/);
   assert.match(service, /请上传回传表格 Excel。/);
+  assert.match(service, /safeSelectedProductSupplierPaymentVoucherAttachment/);
+  assert.match(service, /付款凭证附件准备失败，已跳过水单附件/);
   assert.match(service, /activeSupplierDocumentRequestWhere/);
   assert.match(service, /SUPPLIER_DOCUMENT_REQUEST_DUPLICATE/);
   assert.match(service, /activeSupplierDocumentRequestPairSet/);

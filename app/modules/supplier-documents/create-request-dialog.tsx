@@ -39,7 +39,7 @@ const DOCUMENT_TYPE_OPTIONS = [
 ];
 
 const DEFAULT_DOCUMENT_TYPES = DOCUMENT_TYPE_OPTIONS.map((item) => item.value);
-const EXCEL_TEMPLATE_MAX_SIZE = 5 * 1024 * 1024;
+const EXCEL_TEMPLATE_MAX_SIZE = 4 * 1024 * 1024;
 const EXCEL_TEMPLATE_ACCEPT = [
   ".xls",
   ".xlsx",
@@ -215,7 +215,7 @@ export function CreateSupplierDocumentRequestDialog({
 
         <div className={styles.quickCreateMeta}>
           <span>只能基于成本管理中已登记的工厂供应商成本创建。</span>
-          <span>回传表格支持 .xls / .xlsx，单个文件最大 5MB；供应商回传资料仍只支持 PDF。</span>
+          <span>回传表格支持 .xls / .xlsx，单个文件最大 4MB；供应商回传资料仍只支持 PDF。</span>
         </div>
 
         <div className={styles.modalFooter}>
@@ -235,7 +235,7 @@ function validateTemplateFile(file: File | null) {
   if (!lowerName.endsWith(".xls") && !lowerName.endsWith(".xlsx")) {
     return "回传表格仅支持 .xls 或 .xlsx 文件。";
   }
-  if (file.size > EXCEL_TEMPLATE_MAX_SIZE) return "回传表格不能超过 5MB。";
+  if (file.size > EXCEL_TEMPLATE_MAX_SIZE) return "回传表格不能超过 4MB。";
   return "";
 }
 

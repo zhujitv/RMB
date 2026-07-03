@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, createSupplierDocumentRequest, listSupplierDocumentRequests, ok } from "../../../lib/platform-db";
+import { apiError, codedError, createSupplierDocumentRequest, listSupplierDocumentRequests, logServerError, ok } from "../../../lib/platform-db";
 
 import { requireApiActor } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES = Math.floor(4.25 * 1024 * 1024);
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireApiActor(request);
-    const formData = await request.formData();
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (contentLength > SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES) {
+      throw codedError("回传表格不能超过 4MB，请压缩后重新上传。", 413, "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE");
+    }
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (error: unknown) {
+      logServerError("供应商资料回传任务表单解析失败", error, { contentLength });
+      throw codedError("回传表格读取失败，请确认文件小于 4MB 且格式为 .xls / .xlsx。", 400, "SUPPLIER_DOCUMENT_FORM_PARSE_FAILED");
+    }
     const requestRow = await createSupplierDocumentRequest(request, actor, {
       costId: String(formData.get("costId") || ""),
       orderId: String(formData.get("orderId") || ""),
