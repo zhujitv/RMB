@@ -18,9 +18,14 @@ const INVOICE_FIELD_ALIASES: Record<string, string[]> = {
     "buyerName",
     "purchaser",
     "buyer",
+    "buyerTitle",
     "购方名称",
+    "购方信息名称",
     "购买方名称",
+    "购买方信息名称",
     "购买方",
+    "受票方名称",
+    "购货方名称",
   ],
   buyerTaxNo: [
     "purchaserTaxNumber",
@@ -29,24 +34,44 @@ const INVOICE_FIELD_ALIASES: Record<string, string[]> = {
     "buyerTaxNumber",
     "buyerRegisterNum",
     "buyerTaxNo",
+    "buyerTaxId",
     "购方税号",
+    "购方信息纳税人识别号",
     "购买方纳税人识别号",
     "购买方税号",
+    "购买方信息纳税人识别号",
+    "受票方税号",
+    "受票方纳税人识别号",
   ],
   seller: [
     "sellerName",
+    "sellerTitle",
     "seller",
+    "salesName",
+    "salesPartyName",
     "销方名称",
+    "销方信息名称",
     "销售方名称",
+    "销售方信息名称",
     "销售方",
+    "销货方名称",
+    "出售方名称",
+    "开票方名称",
   ],
   sellerTaxNo: [
     "sellerTaxNumber",
     "sellerRegisterNum",
     "sellerTaxNo",
+    "sellerTaxId",
+    "salesTaxNumber",
+    "salesTaxNo",
     "销方税号",
+    "销方信息纳税人识别号",
     "销售方纳税人识别号",
     "销售方税号",
+    "销售方信息纳税人识别号",
+    "开票方税号",
+    "开票方纳税人识别号",
   ],
   amountWithTax: [
     "totalAmount",
@@ -113,6 +138,20 @@ const DETAIL_ARRAY_KEYS = [
   "明细",
 ];
 
+type KeyValueEntry = {
+  key: string;
+  normalizedKey: string;
+  value: unknown;
+};
+
+const PARTY_MARKERS = {
+  buyer: ["purchaser", "buyer", "购方", "购买方", "受票方", "购货方"],
+  seller: ["seller", "sales", "销方", "销售方", "销货方", "出售方", "开票方"],
+};
+
+const PARTY_NAME_MARKERS = ["name", "title", "名称", "纳税人名称"];
+const PARTY_TAX_MARKERS = ["taxnumber", "taxno", "taxid", "registernum", "registercode", "纳税人识别号", "统一社会信用代码", "税号"];
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -121,6 +160,10 @@ function normalizeKey(value: unknown) {
   return String(value || "")
     .toUpperCase()
     .replace(/[\s_\-:：,，.。()（）【】\[\]{}《》<>/\\]/g, "");
+}
+
+function normalizedMarkers(values: string[]) {
+  return values.map(normalizeKey).filter(Boolean);
 }
 
 function normalizeFieldValue(value: unknown) {
@@ -225,6 +268,42 @@ function keyValuePairsFromPayload(payload: unknown) {
   return pairs;
 }
 
+function keyValueEntriesFromPayload(payload: unknown) {
+  const entries: KeyValueEntry[] = [];
+  function addEntry(key: unknown, value: unknown) {
+    const textKey = normalizeFieldValue(key);
+    const normalizedKey = normalizeKey(textKey);
+    if (!textKey || !normalizedKey || value == null) return;
+    entries.push({ key: textKey, normalizedKey, value });
+  }
+  function walk(value: unknown, depth = 0) {
+    if (depth > 7 || value == null) return;
+    const parsed = parseJsonMaybe(value);
+    if (parsed !== value) {
+      walk(parsed, depth + 1);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, depth + 1);
+      return;
+    }
+    if (!isPlainRecord(value)) return;
+
+    const key = value.key ?? value.Key ?? value.field ?? value.Field ?? value.fieldName ?? value.FieldName ?? value.name ?? value.Name ?? value.label ?? value.Label;
+    const val = value.value ?? value.Value ?? value.fieldValue ?? value.FieldValue ?? value.text ?? value.Text ?? value.content ?? value.Content ?? value.word ?? value.Word;
+    if (key != null && val != null) addEntry(key, val);
+
+    for (const [recordKey, recordValue] of Object.entries(value)) {
+      if (!["key", "Key", "field", "Field", "fieldName", "FieldName", "name", "Name", "label", "Label", "value", "Value", "fieldValue", "FieldValue", "text", "Text", "content", "Content", "word", "Word"].includes(recordKey)) {
+        addEntry(recordKey, recordValue);
+      }
+      walk(recordValue, depth + 1);
+    }
+  }
+  walk(payload);
+  return entries;
+}
+
 function valueByAliasesFromRecord(record: unknown, aliases: string[]) {
   if (!isPlainRecord(record)) return "";
   for (const [key, value] of Object.entries(record)) {
@@ -250,6 +329,35 @@ function valueByAliasesFromPairs(pairs: Map<string, unknown>, aliases: string[])
     }
   }
   return "";
+}
+
+function contextualPartyValue(entries: KeyValueEntry[], party: "buyer" | "seller", kind: "name" | "taxNo") {
+  const partyMarkers = normalizedMarkers(PARTY_MARKERS[party]);
+  const fieldMarkers = normalizedMarkers(kind === "name" ? PARTY_NAME_MARKERS : PARTY_TAX_MARKERS);
+  for (const entry of entries) {
+    if (
+      partyMarkers.some((marker) => entry.normalizedKey.includes(marker))
+      && fieldMarkers.some((marker) => entry.normalizedKey.includes(marker))
+    ) {
+      const text = normalizeFieldValue(entry.value);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function genericPartyValueBySequence(entries: KeyValueEntry[], party: "buyer" | "seller", kind: "name" | "taxNo") {
+  const exactKeys = normalizedMarkers(kind === "name" ? ["名称", "name"] : ["纳税人识别号", "统一社会信用代码", "税号", "taxNo", "taxNumber"]);
+  const values = entries
+    .filter((entry) => exactKeys.includes(entry.normalizedKey))
+    .map((entry) => normalizeFieldValue(entry.value))
+    .filter(Boolean);
+  const uniqueValues = Array.from(new Set(values));
+  return party === "buyer" ? uniqueValues[0] || "" : uniqueValues[1] || "";
+}
+
+function partyValueFromStructuredEntries(entries: KeyValueEntry[], party: "buyer" | "seller", kind: "name" | "taxNo") {
+  return contextualPartyValue(entries, party, kind) || genericPartyValueBySequence(entries, party, kind);
 }
 
 function detailRowsFromPayload(payload: unknown, candidates: unknown[], pairs: Map<string, unknown>) {
@@ -346,6 +454,7 @@ export function extractAliyunInvoiceRecognitionData(responseBody: unknown) {
   const data = parseJsonMaybe(responseField(responseBody, "data"));
   const candidates = officialDataCandidates(data);
   const pairs = keyValuePairsFromPayload(data);
+  const entries = keyValueEntriesFromPayload(data);
   const details = detailRowsFromPayload(data, candidates, pairs);
   const extractedFields: Record<string, unknown> = {};
 
@@ -359,6 +468,11 @@ export function extractAliyunInvoiceRecognitionData(responseBody: unknown) {
     const value = official || detail || kv || fallback;
     if (value) extractedFields[canonicalKey] = value;
   }
+
+  extractedFields.buyer ||= partyValueFromStructuredEntries(entries, "buyer", "name");
+  extractedFields.seller ||= partyValueFromStructuredEntries(entries, "seller", "name");
+  extractedFields.buyerTaxNo ||= partyValueFromStructuredEntries(entries, "buyer", "taxNo");
+  extractedFields.sellerTaxNo ||= partyValueFromStructuredEntries(entries, "seller", "taxNo");
 
   return {
     data,

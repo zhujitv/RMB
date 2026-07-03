@@ -188,6 +188,42 @@ test("Aliyun invoice parser falls back to prism key value pairs without merging 
   assert.equal(result.extractedFields.productName, "*有色金属压延材*铝制工程结构件");
 });
 
+test("Aliyun invoice parser reads seller from contextual and repeated key value entries", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractAliyunInvoiceRecognitionData } = await import("../lib/platform/aliyun-invoice-ocr-parser.ts");
+  const payload = {
+    Data: JSON.stringify({
+      prism_keyValueInfo: [
+        { key: "名称", value: "浙江莱诺建材有限公司" },
+        { key: "纳税人识别号", value: "91330681MA2D86XM28" },
+        { key: "销售方信息-名称", value: "安徽科蓝特铝业股份有限公司" },
+        { key: "销售方信息-纳税人识别号", value: "91341822070917615C" },
+        { key: "价税合计", value: "114672.71" },
+      ],
+    }),
+  };
+  const result = extractAliyunInvoiceRecognitionData(payload);
+  assert.equal(result.extractedFields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(result.extractedFields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(result.extractedFields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(result.extractedFields.sellerTaxNo, "91341822070917615C");
+
+  const repeatedOnly = extractAliyunInvoiceRecognitionData({
+    Data: JSON.stringify({
+      prism_keyValueInfo: [
+        { key: "名称", value: "浙江莱诺建材有限公司" },
+        { key: "纳税人识别号", value: "91330681MA2D86XM28" },
+        { key: "名称", value: "安徽科蓝特铝业股份有限公司" },
+        { key: "纳税人识别号", value: "91341822070917615C" },
+      ],
+    }),
+  });
+  assert.equal(repeatedOnly.extractedFields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(repeatedOnly.extractedFields.buyerTaxNo, "91330681MA2D86XM28");
+  assert.equal(repeatedOnly.extractedFields.seller, "安徽科蓝特铝业股份有限公司");
+  assert.equal(repeatedOnly.extractedFields.sellerTaxNo, "91341822070917615C");
+});
+
 test("customs table parser reads Aliyun table cells by row and column", async () => {
   process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
   const { extractCustomsItemsFromAliyunTableData } = await import("../lib/platform/aliyun-customs-table-parser.ts");
