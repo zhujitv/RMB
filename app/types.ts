@@ -58,8 +58,6 @@ export type AuthPayload = {
     taxRefund?: {
       enabled?: boolean;
       companyHsLibraryEnabled?: boolean;
-      calculationEnabled?: boolean;
-      addCompanyHsFromOcrEnabled?: boolean;
     };
   };
   scopeText?: string;

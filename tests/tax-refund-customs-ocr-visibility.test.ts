@@ -7,8 +7,8 @@ const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const overlays = readFileSync("app/modules/tax-refund/overlays.tsx", "utf8");
 const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
-const taxCalculationService = readFileSync("lib/platform/export-tax-refund-calculations.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
+const taxProfitBarrel = readFileSync("lib/platform/tax-profit.ts", "utf8");
 const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
 const customsOcrRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
@@ -48,9 +48,8 @@ test("tax refund OCR and calculation APIs are explicitly disabled", () => {
   assert.match(customsOcrRoute, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
   assert.match(taxRefundCalculationRoute, /TAX_REFUND_CALCULATION_DISABLED/);
   assert.match(customsRecognition, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
-  assert.match(taxCalculationService, /TAX_REFUND_OCR_CALC_DISABLED/);
-  assert.match(taxCalculationService, /customsDeclarationItems: \[\]/);
-  assert.match(taxCalculationService, /exportTaxRefundCalculations: \[\]/);
+  assert.equal(existsSync("lib/platform/export-tax-refund-calculations.ts"), false);
+  assert.doesNotMatch(taxProfitBarrel, /export-tax-refund-calculations/);
 });
 
 test("tax refund dedicated OCR and calculation database structures are removed by migration", () => {

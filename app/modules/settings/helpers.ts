@@ -425,8 +425,6 @@ export function taxRefundFeatureFormFromSettings(settings: TaxRefundFeatureSetti
   return {
     enabled: settings?.enabled !== false,
     companyHsLibraryEnabled: settings?.companyHsLibraryEnabled !== false,
-    calculationEnabled: settings?.calculationEnabled !== false,
-    addCompanyHsFromOcrEnabled: settings?.addCompanyHsFromOcrEnabled !== false,
   };
 }
 

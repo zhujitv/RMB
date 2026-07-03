@@ -1181,8 +1181,6 @@ export function TaxRefundFeatureSettingsCard({
     const next = { ...currentForm, [key]: value };
     if (key === "enabled" && value === false) {
       next.companyHsLibraryEnabled = false;
-      next.calculationEnabled = false;
-      next.addCompanyHsFromOcrEnabled = false;
     }
     onChange(next);
   }

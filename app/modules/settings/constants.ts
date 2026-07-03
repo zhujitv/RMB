@@ -183,8 +183,6 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
 export const DEFAULT_TAX_REFUND_FEATURE_FORM: TaxRefundFeatureForm = {
   enabled: true,
   companyHsLibraryEnabled: true,
-  calculationEnabled: true,
-  addCompanyHsFromOcrEnabled: true,
 };
 export const CUSTOMS_DECLARATION_MODE_OPTIONS = [
   {

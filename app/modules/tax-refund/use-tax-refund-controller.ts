@@ -40,8 +40,6 @@ export type TaxRefundModuleProps = {
   features?: {
     enabled?: boolean;
     companyHsLibraryEnabled?: boolean;
-    calculationEnabled?: boolean;
-    addCompanyHsFromOcrEnabled?: boolean;
   };
   initialKeyword?: string;
   initialAction?: string;

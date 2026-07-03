@@ -221,8 +221,6 @@ export type TaxRefundFeatureSettings = Record<string, unknown>;
 export type TaxRefundFeatureForm = {
   enabled: boolean;
   companyHsLibraryEnabled: boolean;
-  calculationEnabled: boolean;
-  addCompanyHsFromOcrEnabled: boolean;
 };
 
 export type ExchangeRateForm = {

@@ -574,8 +574,6 @@ export const TAX_REFUND_FEATURES_SETTING_KEY = "tax_refund_features";
 export const DEFAULT_TAX_REFUND_FEATURE_SETTINGS = {
   enabled: true,
   companyHsLibraryEnabled: true,
-  calculationEnabled: false,
-  addCompanyHsFromOcrEnabled: false,
 };
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {

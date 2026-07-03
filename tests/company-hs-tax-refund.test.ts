@@ -45,8 +45,8 @@ test("enterprise HS feature is controlled by modular settings", () => {
   assert.match(taxRefundFeatures, /fallback to defaults/);
   assert.match(service, /assertTaxRefundFeatureEnabled\("companyHsLibraryEnabled"/);
   assert.match(service, /TAX_REFUND_OCR_CALC_DISABLED/);
-  assert.match(taxRefundFeatures, /calculationEnabled: false/);
-  assert.match(taxRefundFeatures, /addCompanyHsFromOcrEnabled: false/);
+  assert.doesNotMatch(taxRefundFeatures, /calculationEnabled/);
+  assert.doesNotMatch(taxRefundFeatures, /addCompanyHsFromOcrEnabled/);
   assert.match(menu, /features\?: \{ taxRefund\?:/);
   assert.match(menu, /item\.key !== "companyHs" \|\| taxRefundFeaturesEnabled/);
   assert.match(authMeRoute, /readSafeTaxRefundFeatureFlags/);

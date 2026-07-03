@@ -25,8 +25,6 @@ export function normalizeTaxRefundFeatureSettings(value: unknown = {}): TaxRefun
   return {
     enabled,
     companyHsLibraryEnabled: enabled && input.companyHsLibraryEnabled !== false,
-    calculationEnabled: false,
-    addCompanyHsFromOcrEnabled: false,
   };
 }
 
@@ -82,8 +80,4 @@ export async function assertTaxRefundFeatureEnabled(feature: keyof TaxRefundFeat
   const settings = await getTaxRefundFeatureSettings();
   if (settings.enabled && settings[feature]) return settings;
   throw codedError(message, 403, "TAX_REFUND_FEATURE_DISABLED");
-}
-
-export async function isTaxRefundCalculationFeatureEnabled() {
-  return false;
 }
