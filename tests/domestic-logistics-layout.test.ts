@@ -68,7 +68,7 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(taxModuleSource, /<td colSpan=\{10\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
-  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
+  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nconst taxRefundRecordDeclarationSelect/)?.[0] || "";
   assert.match(listFunction, /select: taxRefundCustomsDeclarationListSelect/);
   assert.match(listFunction, /prisma\.customsDeclaration/);
   assert.doesNotMatch(listFunction, /logisticsBills:\s*\{|documents:\s*\{|costs:\s*\{/);
@@ -102,9 +102,9 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
 test("customs document upload cards share one action order", () => {
   const customsPanelSource = moduleSource.match(/function CustomsDocumentPanel[\s\S]*?\n}\n\nfunction UploadProgressInline/)?.[0] || "";
   assert.match(customsPanelSource, /customsDeclarations\.length/);
-  assert.match(customsPanelSource, /customsDocumentTypes\.map/);
+  assert.match(customsPanelSource, /CUSTOMS_DOCUMENT_TYPES\.map/);
   assert.doesNotMatch(customsPanelSource, /if \(documentType\.value === "CUSTOMS_ENTRY_FORM"\)/);
-  assert.ok(customsPanelSource.indexOf("报关单列表") < customsPanelSource.indexOf("其它报关资料"));
+  assert.ok(customsPanelSource.indexOf("报关批次") < customsPanelSource.indexOf("新增报关批次"));
   assert.ok(customsPanelSource.indexOf("<PdfPreviewButton") < customsPanelSource.indexOf(">下载</a>"));
   assert.ok(customsPanelSource.indexOf(">下载</a>") < customsPanelSource.indexOf("onClick={() => onDelete(currentDocument)}"));
   assert.match(customsPanelSource, /<PdfPreviewButton documentId=\{currentDocument\.id\} fileName=\{currentDocument\.fileName \|\| ""\} \/>/);
@@ -157,7 +157,7 @@ test("tax refund detail hydrates archived logistics transport items by bill of l
   assert.match(taxRefundService, /taxDocumentCompleteness\(scopedBefore\)/);
   assert.match(taxRefundService, /documentType === "CUSTOMS_ENTRY_FORM"/);
   assert.match(taxRefundService, /function packageDocumentMatchesDeclaration/);
-  assert.match(taxRefundService, /packageDocumentMatchesDeclaration\(document, context\.declaration\)/);
+  assert.match(taxRefundService, /packageDocumentMatchesDeclaration\(document, context\.declaration, order as unknown as Record<string, unknown>\)/);
   assert.match(taxRefundService, /taxPackageName\(order, context\.declaration\)/);
   const declarationCompletenessSource = taxRefundService.match(/function declarationCompletenessInput[\s\S]*?\n}\n\nexport function serializeTaxRefundListCustomsDeclarationLight/)?.[0] || "";
   assert.doesNotMatch(declarationCompletenessSource, /row\.order\.taxRefundCompleteness|row\.order\.taxRefundOverallCompleteness|row\.order\.taxRefundCompletenessIssuesSummary/);

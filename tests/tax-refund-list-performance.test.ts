@@ -19,7 +19,7 @@ test("tax refund list endpoint is lightweight and paginated", () => {
   assert.match(service, /select: taxRefundCustomsDeclarationListSelect/);
   assert.match(service, /skip,\s*\n\s*take: filters\.pageSize/);
   assert.doesNotMatch(
-    service.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "",
+    service.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nconst taxRefundRecordDeclarationSelect/)?.[0] || "",
     /includeOrderRelations\(\)|scheduleTaxRefundCompletenessRefreshBatch|documents:\s*\{|costs:\s*\{|customsDeclarationItems:\s*\{|exportTaxRefundCalculations:\s*\{/,
   );
   assert.match(controller, /`\/api\/tax-refund\/list\?\$\{params\}`/);

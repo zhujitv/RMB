@@ -354,13 +354,16 @@ test("detail drawers and cards now own file management layout", () => {
 
 test("domestic logistics customs declarations allow multiple uploads", () => {
   assert.match(domesticLogisticsModule, /UPLOAD_REPLACE_TEXT/);
-  assert.match(domesticLogisticsModule, /报关单列表/);
+  assert.match(domesticLogisticsModule, /报关批次/);
   assert.match(domesticLogisticsModule, /customsDeclarations/);
   assert.match(orderDocumentsService, /isCustomsDeclarationDocumentType\(documentType\)/);
   assert.match(orderDocumentsService, /tx\.customsDeclaration\.create/);
   assert.match(orderDocumentsService, /tx\.customsDeclaration\.update/);
   assert.doesNotMatch(orderDocumentsService, /id: \{ not: created\.id \}/);
-  assert.doesNotMatch(orderDocumentsService, /orderId: order\.id,[\s\S]*documentType: "CUSTOMS_ENTRY_FORM",[\s\S]*data: \{ deletedAt: replacedAt \}/);
+  assert.doesNotMatch(
+    orderDocumentsService,
+    /tx\.orderDocument\.updateMany\(\{[\s\S]{0,240}where: \{[\s\S]{0,160}orderId: order\.id[\s\S]{0,160}documentType: "CUSTOMS_ENTRY_FORM"[\s\S]{0,240}data: \{ deletedAt: replacedAt \}/,
+  );
 });
 
 test("tax refund customs documents use manual declaration fields without OCR", () => {
