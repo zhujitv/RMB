@@ -78,6 +78,13 @@ test("api client surfaces non-json route failures with request context", () => {
   assert.match(appApi, /new ApiRequestError\(fallbackMessage, response\.status, errorCode\)/);
 });
 
+test("api client lets multipart uploads set their own content type", () => {
+  assert.match(appApi, /function bodyManagesContentType/);
+  assert.match(appApi, /body instanceof FormData/);
+  assert.match(appApi, /apiRequestHeaders\(fetchInit\.headers, fetchInit\.body\)/);
+  assert.match(appApi, /headers\.set\("Content-Type", "application\/json"\)/);
+});
+
 test("core cost and logistics list queries use lightweight DTO relations", () => {
   assert.match(costQueries, /function includeCostListRelations/);
   assert.match(costQueries, /include: includeCostListRelations\(\)/);

@@ -6,7 +6,7 @@ import { requireApiActor } from "../../../lib/api-route-guard";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES = Math.floor(4.25 * 1024 * 1024);
+const SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const actor = await requireApiActor(request);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES) {
-      throw codedError("回传表格不能超过 4MB，请压缩后重新上传。", 413, "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE");
+      throw codedError("回传表格请求体过大，请确认 Excel 文件小于 4MB 后重新上传。", 413, "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE");
     }
     let formData: FormData;
     try {

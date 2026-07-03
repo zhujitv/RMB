@@ -59,6 +59,22 @@ function shouldReportApiRequestTiming(path: string) {
   return pathname.startsWith("/api/") && pathname !== API_PERFORMANCE_REPORT_PATH;
 }
 
+function bodyManagesContentType(body: BodyInit | null | undefined) {
+  return Boolean(
+    (typeof FormData !== "undefined" && body instanceof FormData)
+    || (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams)
+    || (typeof Blob !== "undefined" && body instanceof Blob)
+  );
+}
+
+function apiRequestHeaders(headersInit: HeadersInit | undefined, body: BodyInit | null | undefined) {
+  const headers = new Headers(headersInit || {});
+  if (!headers.has("Content-Type") && !bodyManagesContentType(body)) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
+}
+
 function reportApiRequestTiming(input: {
   path: string;
   method: string;
@@ -118,10 +134,7 @@ export async function apiJson<T>(path: string, init?: ApiJsonInit): Promise<T> {
     try {
       response = await fetch(path, {
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(fetchInit.headers || {}),
-        },
+        headers: apiRequestHeaders(fetchInit.headers, fetchInit.body),
         ...fetchInit,
         signal: controller?.signal || signal,
       });
