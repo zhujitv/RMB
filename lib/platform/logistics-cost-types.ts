@@ -12,6 +12,8 @@ export const LOGISTICS_COST_TYPE_OPTIONS = [
   { value: "超重费", label: "超重费" },
   { value: "海运费", label: "海运费" },
   { value: "保险费", label: "保险费" },
+  { value: "其他本地费用", label: "其他本地费用" },
+  { value: "其他国际费用", label: "其他国际费用" },
   { value: "其他物流费用", label: "其他物流费用" },
 ];
 
@@ -21,7 +23,23 @@ export const LOGISTICS_COST_TYPE_LABELS: Record<string, string> = Object.fromEnt
   LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
 );
 
-export const LOGISTICS_USD_COST_TYPES = ["海运费", "ENS", "保险费"];
+export const LOGISTICS_CNY_COST_TYPES = [
+  "拖车费",
+  "报关费",
+  "港杂费",
+  "打单费",
+  "进港费",
+  "提箱费",
+  "落箱费",
+  "预提费",
+  "查验费",
+  "超重费",
+  "其他本地费用",
+];
+
+export const LOGISTICS_USD_COST_TYPES = ["海运费", "ENS", "保险费", "其他国际费用"];
+
+export const LOGISTICS_EXPENSE_CURRENCIES = ["CNY", "USD"];
 
 export function logisticsCostTypeLabel(costType = "") {
   return LOGISTICS_COST_TYPE_LABELS[costType] || costType || "";
@@ -31,8 +49,8 @@ export function logisticsCostTypeDefaultCurrency(costType = "") {
   return LOGISTICS_USD_COST_TYPES.includes(costType) ? "USD" : "CNY";
 }
 
-export function logisticsCostTypeLocksCurrency(costType = "") {
-  return LOGISTICS_USD_COST_TYPES.includes(costType);
+export function logisticsCostTypeLocksCurrency(_costType = "") {
+  return false;
 }
 
 export const LOGISTICS_COST_TYPE_ENGLISH_LABELS: Record<string, string> = {
@@ -49,6 +67,8 @@ export const LOGISTICS_COST_TYPE_ENGLISH_LABELS: Record<string, string> = {
   超重费: "Overweight Fee",
   海运费: "Ocean Freight",
   保险费: "Insurance Fee",
+  其他本地费用: "Other Local Fee",
+  其他国际费用: "Other International Fee",
   其他物流费用: "Other Logistics Fee",
 };
 
@@ -66,5 +86,7 @@ export const LOGISTICS_INVOICE_ENGLISH_LABELS: Record<string, string> = {
   超重费: "Overweight-Invoice",
   海运费: "Ocean-Freight-Invoice",
   保险费: "Insurance-Invoice",
+  其他本地费用: "Other-Local-Fee-Invoice",
+  其他国际费用: "Other-International-Fee-Invoice",
   其他物流费用: "Other-Logistics-Invoice",
 };

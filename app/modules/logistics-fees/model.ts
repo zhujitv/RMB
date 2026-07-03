@@ -11,7 +11,7 @@ export const PAGE_SIZE = 20;
 export const COST_TYPES = [...LOGISTICS_COST_TYPES];
 export const COST_TYPE_OPTIONS = [...LOGISTICS_COST_TYPE_OPTIONS];
 export const DEFAULT_BILLING_METHOD = "按柜";
-export const CURRENCIES = ["CNY", "USD", "EUR", "GBP", "HKD"];
+export const CURRENCIES = ["CNY", "USD"];
 export const FOREIGN_CURRENCY_ORDER = ["USD", "EUR", "HKD", "GBP"];
 export const LOGISTICS_EXPENSE_BILL_SORT_PRIORITY: Record<string, number> = {
   草稿: 10,
@@ -237,6 +237,7 @@ export type ExpenseItemForm = {
   amount: string;
   appliedContainerCount: string;
   currency: string;
+  currencyTouched?: boolean;
   exchangeRate: string;
   remark: string;
 };
@@ -246,6 +247,8 @@ export type LogisticsExpenseDraft = {
   billingMethod: string;
   unitAmount: string;
   appliedContainerCount: string;
+  currency: string;
+  currencyTouched?: boolean;
   remark: string;
 };
 
@@ -344,6 +347,7 @@ export const emptyExpenseItem = (): ExpenseItemForm => ({
   amount: "",
   appliedContainerCount: "1",
   currency: "CNY",
+  currencyTouched: false,
   exchangeRate: "1",
   remark: "",
 });

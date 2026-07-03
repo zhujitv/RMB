@@ -2,7 +2,6 @@ import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import {
   amountCny,
-  CURRENCIES,
   dateFromInput,
   getExchangeRateQuote,
   nonEmpty,
@@ -49,9 +48,9 @@ import {
   logisticsInvoiceGroupForKey,
 } from "./logistics-invoice-groups";
 import {
+  LOGISTICS_EXPENSE_CURRENCIES,
   LOGISTICS_COST_TYPES,
   logisticsCostTypeDefaultCurrency,
-  logisticsCostTypeLocksCurrency,
 } from "./logistics-cost-types";
 import {
   canMarkLogisticsBillPaid,
@@ -253,10 +252,12 @@ export async function logisticsExpenseBatchUpdateData(item: UnknownRecord, befor
   const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
   const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
     || Object.prototype.hasOwnProperty.call(item, "container_type");
-  const currency = logisticsCostTypeDefaultCurrency(costType) === "USD"
-    ? "USD"
-    : nonEmpty(item.currency || before.currency || "CNY").toUpperCase();
-  if (!CURRENCIES.includes(currency)) throw codedError(`第 ${index + 1} 行请选择有效币种。`, 400, "CURRENCY_REQUIRED");
+  const currency = nonEmpty(
+    item.currency || before.currency || logisticsCostTypeDefaultCurrency(costType),
+  ).toUpperCase();
+  if (!LOGISTICS_EXPENSE_CURRENCIES.includes(currency)) {
+    throw codedError(`第 ${index + 1} 行请选择有效币种。`, 400, "CURRENCY_REQUIRED");
+  }
   const exchange = await resolveLogisticsExpenseBatchExchange(costType, item, before, actor, currency, index);
   const exchangeRate = Number(exchange.exchangeRate);
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
@@ -281,9 +282,18 @@ export async function logisticsExpenseBatchUpdateData(item: UnknownRecord, befor
 }
 
 export async function resolveLogisticsExpenseBatchExchange(costType: string, item: UnknownRecord, before: LogisticsExpenseRow, actor: ActorContext, currency: string, index: number): Promise<BatchExchangeSnapshot> {
-  if (logisticsCostTypeLocksCurrency(costType)) {
+  if (currency === "CNY") {
+    return {
+      currency: "CNY",
+      exchangeRate: 1,
+      exchangeRateDate: dateFromInput(item.exchangeRateDate || item.rateDate || todayInputInChina()),
+      exchangeRateSource: "系统",
+      exchangeRateType: "",
+    };
+  }
+  if (currency === "USD") {
     const quote = await getExchangeRateQuote({
-      currency: "USD",
+      currency,
       date: item.exchangeRateDate || item.rateDate || todayInputInChina(),
     }, exchangeActor(actor));
     const exchangeRate = Number(quote.rateToCny ?? quote.exchangeRate ?? quote.rate ?? 0);
@@ -291,20 +301,14 @@ export async function resolveLogisticsExpenseBatchExchange(costType: string, ite
       throw codedError(`第 ${index + 1} 行${costType}保存失败：未找到可用美元汇率，请先刷新系统汇率。`, 400, "EXCHANGE_RATE_REQUIRED");
     }
     return {
-      currency: "USD",
+      currency,
       exchangeRate,
       exchangeRateDate: dateFromInput(quote.rateDate || todayInputInChina()),
       exchangeRateSource: quote.source || "系统",
       exchangeRateType: quote.rateType || "",
     };
   }
-  return {
-    currency,
-    exchangeRate: Number(item.exchangeRate ?? item.exchange_rate ?? before.exchangeRate ?? 1),
-    exchangeRateDate: before.exchangeRateDate,
-    exchangeRateSource: before.exchangeRateSource || "",
-    exchangeRateType: before.exchangeRateType || "",
-  };
+  throw codedError(`第 ${index + 1} 行请选择有效币种。`, 400, "CURRENCY_REQUIRED");
 }
 
 export async function loadBatchSaveBaseExpense(input: UnknownRecord, actor: ActorContext) {

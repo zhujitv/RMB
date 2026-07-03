@@ -8,7 +8,6 @@ import styles from "../../WorkspaceShell.module.css";
 import {
   logisticsCostTypeDefaultCurrency,
   logisticsCostTypeLabel,
-  logisticsCostTypeLocksCurrency,
 } from "../../../lib/platform/logistics-cost-types";
 import {
   CURRENCIES,
@@ -235,18 +234,30 @@ export function LogisticsExpenseForm({
           ? {
               ...item,
               costType,
-              currency: defaultCurrency,
-              exchangeRate: defaultCurrency === "CNY" ? "1" : "",
+              currency: item.currencyTouched ? item.currency : defaultCurrency,
+              exchangeRate: item.currencyTouched
+                ? item.exchangeRate
+                : defaultCurrency === "CNY"
+                  ? "1"
+                  : "",
             }
           : item,
       ),
     }));
-    if (defaultCurrency !== "CNY")
+    const currentItem = form.items[index];
+    if (!currentItem?.currencyTouched && defaultCurrency !== "CNY")
       void resolveExpenseItemExchangeRate(index, defaultCurrency);
   }
 
   function handleItemCurrencyChange(index: number, currency: string) {
-    setItemField(index, "currency", currency);
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, currency, currencyTouched: true }
+          : item,
+      ),
+    }));
     void resolveExpenseItemExchangeRate(index, currency);
   }
 
@@ -578,12 +589,6 @@ export function LogisticsExpenseForm({
                 onChange={(event) =>
                   handleItemCurrencyChange(index, event.target.value)
                 }
-                disabled={logisticsCostTypeLocksCurrency(item.costType)}
-                title={
-                  logisticsCostTypeLocksCurrency(item.costType)
-                    ? "海运费、ENS费、保险费默认锁定 USD"
-                    : undefined
-                }
               >
                 {CURRENCIES.map((currency) => (
                   <option key={currency} value={currency}>
@@ -596,10 +601,7 @@ export function LogisticsExpenseForm({
                 onChange={(event) =>
                   setItemField(index, "exchangeRate", event.target.value)
                 }
-                readOnly={
-                  item.currency === "CNY" ||
-                  logisticsCostTypeLocksCurrency(item.costType)
-                }
+                readOnly={item.currency === "CNY"}
                 inputMode="decimal"
                 required
               />

@@ -1,6 +1,7 @@
 
 import { logisticsCostTypeDefaultCurrency } from "../../../lib/platform/logistics-cost-types";
 import {
+  CURRENCIES,
   COST_TYPES,
   DEFAULT_BILLING_METHOD,
   type LogisticsExpense,
@@ -16,6 +17,7 @@ import {
   finiteNumber,
   logisticsExpenseDisplayCurrency,
   logisticsExpenseOriginalAmount,
+  normalizeCurrencyCode,
 } from "./shared-currency";
 import {
   billingQuantityLegacyInteger,
@@ -79,6 +81,10 @@ export function logisticsExpenseDraftFromItem(
     appliedContainerCount: editableQuantityText(
       expenseBillingQuantity(expense),
     ),
+    currency: normalizeCurrencyCode(
+      expense.currency || logisticsCostTypeDefaultCurrency(expense.costType || "拖车费"),
+    ),
+    currencyTouched: false,
     remark: expense.remark || "",
   };
 }
@@ -96,6 +102,7 @@ export function logisticsExpenseDraftSignature(expense: LogisticsExpense) {
     expense.costType || "",
     expense.amount || 0,
     expense.amountCny || 0,
+    expense.currency || "",
     expense.containerType || "",
     expense.appliedContainerCount || 1,
     expense.billingMethod || "",
@@ -115,6 +122,7 @@ export function logisticsExpenseDraftChanged(
     draft.costType !== initial.costType ||
     draft.unitAmount.trim() !== initial.unitAmount ||
     draft.appliedContainerCount !== initial.appliedContainerCount ||
+    draft.currency !== initial.currency ||
     draft.remark !== initial.remark
   );
 }
@@ -125,6 +133,8 @@ export function validLogisticsExpenseDraft(
 ) {
   if (!draft) return false;
   if (!draft.costType || !COST_TYPES.includes(draft.costType)) return false;
+  if (!draft.currency || !CURRENCIES.includes(normalizeCurrencyCode(draft.currency)))
+    return false;
   if (!draft.unitAmount.trim()) return false;
   const unitAmount = Number(draft.unitAmount);
   return (
@@ -139,10 +149,7 @@ export function logisticsExpenseDraftPayload(
   draft?: LogisticsExpenseDraft,
 ): LogisticsExpenseBatchUpdateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
-  const currency =
-    logisticsCostTypeDefaultCurrency(safeDraft.costType) === "USD"
-      ? "USD"
-      : expense.currency || "CNY";
+  const currency = normalizeCurrencyCode(safeDraft.currency || expense.currency);
   return {
     id: expense.id,
     costType: safeDraft.costType,
@@ -163,10 +170,7 @@ export function logisticsExpenseDraftCreatePayload(
   draft?: LogisticsExpenseDraft,
 ): LogisticsExpenseBatchCreateItem {
   const safeDraft = draft || logisticsExpenseDraftFromItem(expense);
-  const currency =
-    logisticsCostTypeDefaultCurrency(safeDraft.costType) === "USD"
-      ? "USD"
-      : expense.currency || "CNY";
+  const currency = normalizeCurrencyCode(safeDraft.currency || expense.currency);
   return {
     expenseType: safeDraft.costType,
     amount: Number(safeDraft.unitAmount),
@@ -189,6 +193,8 @@ export function logisticsExpenseDraftValidationMessage(
   const lineNo = index + 1;
   if (!draft?.costType || !COST_TYPES.includes(draft.costType))
     return `第 ${lineNo} 行请选择费用类型`;
+  if (!draft.currency || !CURRENCIES.includes(normalizeCurrencyCode(draft.currency)))
+    return `第 ${lineNo} 行请选择币种`;
   if (!draft.unitAmount.trim()) return `第 ${lineNo} 行金额不能为空`;
   const unitAmount = Number(draft.unitAmount);
   if (!Number.isFinite(unitAmount) || unitAmount < 0)
@@ -252,8 +258,8 @@ export function createTemporaryLogisticsExpenseRow(
     supplierId: base.supplierId,
     supplierName: base.supplierName,
     costType: "拖车费",
-    currency: base.currency || "CNY",
-    exchangeRate: Number(base.exchangeRate || 1),
+    currency: logisticsCostTypeDefaultCurrency("拖车费"),
+    exchangeRate: 1,
     amount: 0,
     amountCny: 0,
     appliedContainerCount: 1,

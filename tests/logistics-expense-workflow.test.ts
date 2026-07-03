@@ -450,7 +450,7 @@ test("port charge logistics invoice filenames do not fall back to factory invoic
 test("logistics cost type dictionary includes document ENS advance and drop-off fees in business order", () => {
   assert.match(
     backend,
-    /value: "拖车费"[\s\S]*value: "报关费"[\s\S]*value: "港杂费"[\s\S]*value: "打单费"[\s\S]*value: "ENS", label: "ENS费"[\s\S]*value: "进港费"[\s\S]*value: "提箱费"[\s\S]*value: "落箱费"[\s\S]*value: "预提费"[\s\S]*value: "查验费"[\s\S]*value: "超重费"[\s\S]*value: "海运费"[\s\S]*value: "保险费"[\s\S]*value: "其他物流费用"/,
+    /value: "拖车费"[\s\S]*value: "报关费"[\s\S]*value: "港杂费"[\s\S]*value: "打单费"[\s\S]*value: "ENS", label: "ENS费"[\s\S]*value: "进港费"[\s\S]*value: "提箱费"[\s\S]*value: "落箱费"[\s\S]*value: "预提费"[\s\S]*value: "查验费"[\s\S]*value: "超重费"[\s\S]*value: "海运费"[\s\S]*value: "保险费"[\s\S]*value: "其他本地费用"[\s\S]*value: "其他国际费用"/,
   );
   assert.match(
     backend,
@@ -458,8 +458,10 @@ test("logistics cost type dictionary includes document ENS advance and drop-off 
   );
   assert.match(
     backend,
-    /LOGISTICS_USD_COST_TYPES = \["海运费", "ENS", "保险费"\]/,
+    /LOGISTICS_USD_COST_TYPES = \["海运费", "ENS", "保险费", "其他国际费用"\]/,
   );
+  assert.match(backend, /LOGISTICS_EXPENSE_CURRENCIES = \["CNY", "USD"\]/);
+  assert.match(backend, /LOGISTICS_CNY_COST_TYPES = \[[\s\S]*"其他本地费用"/);
   assert.match(backend, /ENS费: "ENS"/);
   assert.match(backend, /打单费: "Document Processing Fee"/);
   assert.match(backend, /ENS: "ENS Fee"/);
@@ -474,10 +476,9 @@ test("logistics cost type dictionary includes document ENS advance and drop-off 
     /export const COST_TYPES = \[\.\.\.LOGISTICS_COST_TYPES\]/,
   );
   assert.match(logisticsModule, /COST_TYPE_OPTIONS\.map/);
-  assert.match(
-    logisticsModule,
-    /logisticsCostTypeLocksCurrency\(item\.costType\)/,
-  );
+  assert.doesNotMatch(logisticsModule, /logisticsCostTypeLocksCurrency\(item\.costType\)/);
+  assert.match(logisticsModule, /export const CURRENCIES = \["CNY", "USD"\]/);
+  assert.match(logisticsModule, /CURRENCIES\.map\(\(currency\)/);
   assert.match(
     logisticsModule,
     /apiJson<ExchangeRateResponse>\(\s*`\/api\/exchange-rates\?\$\{new URLSearchParams\(\{ currency: normalized \}\)\}`,\s*\)/,
@@ -1516,6 +1517,10 @@ test("logistics expense bill details can add create and delete rows through one 
   assert.match(logisticsModule, /\+ 新增费用明细/);
   assert.match(logisticsModule, /createTemporaryLogisticsExpenseRow/);
   assert.match(logisticsModule, /logisticsExpenseDraftCreatePayload/);
+  assert.match(logisticsFeesShared, /const currency = normalizeCurrencyCode\(safeDraft\.currency \|\| expense\.currency\)/);
+  assert.match(logisticsModule, /currencyTouched/);
+  assert.match(logisticsModule, /建议币种为 \{recommendedCurrency\}/);
+  assert.match(logisticsExpenseDetailLineSource, /aria-label="物流费用币种"[\s\S]*CURRENCIES\.map/);
   assert.match(logisticsModule, /creates: newExpenseRows\.map/);
   assert.match(logisticsModule, /deletes: deletedExpenseIds/);
   assert.match(logisticsModule, /onStageDelete/);
@@ -1533,6 +1538,10 @@ test("logistics expense bill details can add create and delete rows through one 
   assert.match(logisticsExpenseBatchSaveRoute, /batchSaveLogisticsExpenses/);
   assert.match(logisticsExpenseBatchSaveRoute, /message: "✓ 已保存"/);
   assert.match(backend, /export async function batchSaveLogisticsExpenses/);
+  assert.match(backend, /item\.currency \|\| logisticsCostTypeDefaultCurrency\(costType\)/);
+  assert.match(backend, /resolveLogisticsExpenseBatchExchange\(\s*costType,\s*item,\s*baseExpense,\s*actor,\s*currency,\s*index,\s*\)/);
+  assert.match(backend, /LOGISTICS_EXPENSE_CURRENCIES\.includes\(currency\)/);
+  assert.doesNotMatch(backend, /logisticsCostTypeDefaultCurrency\(costType\) === "USD"[\s\S]*\? "USD"/);
   assert.match(backend, /const updates = Array\.isArray\(input\.updates\)/);
   assert.match(backend, /const creates = Array\.isArray\(input\.creates\)/);
   assert.match(backend, /const deletes = Array\.isArray\(input\.deletes\)/);

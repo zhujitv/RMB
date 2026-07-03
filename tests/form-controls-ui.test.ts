@@ -110,7 +110,7 @@ test("supplier logistics cost types use card multi-select options", () => {
   assert.match(supplierPanelSnippet, /\{logisticsCapable \? \(/);
   assert.doesNotMatch(supplierPanelSnippet, /allowDomesticLogisticsEntry: LOGISTICS_SUPPLIER_TYPES\.includes\(supplierType\) \? form\.allowDomesticLogisticsEntry : false/);
   assert.doesNotMatch(supplierPanelSnippet, /allowFactoryDocumentUpload: supplierType === "工厂供应商" \? form\.allowFactoryDocumentUpload : false/);
-  for (const label of ["拖车费", "报关费", "港杂费", "海运费", "保险费", "ENS", "打单费", "查验费", "超重费", "提箱费", "进港费", "其他物流费用"]) {
+  for (const label of ["拖车费", "报关费", "港杂费", "海运费", "保险费", "ENS", "打单费", "查验费", "超重费", "提箱费", "进港费", "其他本地费用", "其他国际费用", "其他物流费用"]) {
     assert.match(settingsModule, new RegExp(label));
   }
   assert.match(supplierCostSnippet, /styles\.supplierLogisticsCostGrid/);

@@ -1,6 +1,5 @@
 
 import { formatAmount } from "../../formatters";
-import { logisticsCostTypeDefaultCurrency } from "../../../lib/platform/logistics-cost-types";
 import {
   FOREIGN_CURRENCY_ORDER,
   type ExpenseItemForm,
@@ -250,9 +249,7 @@ export function logisticsExpenseDisplayCurrency(
   expense: LogisticsExpense,
   draft?: LogisticsExpenseDraft,
 ) {
-  const costType = draft?.costType || expense.costType || "";
-  if (logisticsCostTypeDefaultCurrency(costType) === "USD") return "USD";
-  return normalizeCurrencyCode(expense.currency);
+  return normalizeCurrencyCode(draft?.currency || expense.currency);
 }
 
 export function logisticsExpenseAmountCny(

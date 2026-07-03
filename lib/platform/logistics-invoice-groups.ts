@@ -29,7 +29,7 @@ export const LOGISTICS_INVOICE_GROUPS: LogisticsInvoiceGroupDefinition[] = [
   {
     key: OCEAN_FREIGHT_INVOICE_GROUP_KEY,
     label: "海运费发票",
-    costTypes: ["海运费", "ENS", "保险费"],
+    costTypes: ["海运费", "ENS", "保险费", "其他国际费用"],
   },
   {
     key: TRUCKING_OTHER_INVOICE_GROUP_KEY,
@@ -43,6 +43,7 @@ export const LOGISTICS_INVOICE_GROUPS: LogisticsInvoiceGroupDefinition[] = [
       "预提费",
       "查验费",
       "超重费",
+      "其他本地费用",
       "其他物流费用",
     ],
   },

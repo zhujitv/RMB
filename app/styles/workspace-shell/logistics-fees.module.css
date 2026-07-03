@@ -695,6 +695,7 @@
 }
 
 .inlineAmountEditor input,
+.inlineAmountEditor select,
 .inlineCostTypeSelect,
 .inlineQuantityInput,
 .inlineRemarkInput {
@@ -722,6 +723,12 @@
   flex: 0 0 100px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.inlineAmountEditor select {
+  width: 72px;
+  flex: 0 0 72px;
+  padding-right: 20px;
 }
 
 .inlineAmountEditor span {

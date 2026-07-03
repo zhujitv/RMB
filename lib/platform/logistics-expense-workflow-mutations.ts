@@ -1,17 +1,13 @@
 import { prisma } from "../prisma";
 import {
-  CURRENCIES,
   amountCny,
   codedError,
-  dateFromInput,
-  getExchangeRateQuote,
   nonEmpty,
   normalizedCostType,
   optional,
   permissionError,
   runNonCriticalTask,
   scheduleTaxRefundCompletenessRefresh,
-  todayInputInChina,
   writeAudit,
 } from "./shared";
 import {
@@ -28,7 +24,7 @@ import {
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
-import { LOGISTICS_COST_TYPES, logisticsCostTypeDefaultCurrency, logisticsCostTypeLocksCurrency } from "./logistics-cost-types";
+import { LOGISTICS_COST_TYPES, logisticsCostTypeDefaultCurrency } from "./logistics-cost-types";
 import { canSubmitLogisticsBill, canWithdrawLogisticsBill } from "./logistics-bill-state-machine";
 import {
   actorId,
@@ -43,6 +39,7 @@ import {
   logisticsExpenseBatchUpdateData,
   logisticsExpenseBillEditBlockReason,
   logisticsExpenseDeleteBlock,
+  resolveLogisticsExpenseBatchExchange,
   logisticsExpenseUpdateBlockReason,
   normalizeBatchBillingMethod,
   normalizeBatchBillingQuantity,
@@ -355,17 +352,26 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
       throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_STATUS_BLOCKED");
     }
 	    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+	    const currency = nonEmpty(item.currency || logisticsCostTypeDefaultCurrency(costType)).toUpperCase();
+	    const exchange = await resolveLogisticsExpenseBatchExchange(
+	      costType,
+	      item,
+	      baseExpense,
+	      actor,
+	      currency,
+	      index,
+	    );
 	    const data = await buildLogisticsExpenseData(order, supplier, actor, {
 	      costType,
 	      amount,
 	      appliedContainerCount,
 	      billingMethod,
 	      billingQuantity,
-	      currency: nonEmpty(item.currency || baseExpense.currency || "CNY").toUpperCase(),
-      exchangeRate: item.exchangeRate ?? item.exchange_rate ?? baseExpense.exchangeRate ?? 1,
-      exchangeRateDate: baseExpense.exchangeRateDate,
-      exchangeRateSource: baseExpense.exchangeRateSource,
-      exchangeRateType: baseExpense.exchangeRateType,
+	      currency: exchange.currency,
+      exchangeRate: exchange.exchangeRate,
+      exchangeRateDate: exchange.exchangeRateDate,
+      exchangeRateSource: exchange.exchangeRateSource,
+      exchangeRateType: exchange.exchangeRateType,
       remark: item.remark,
       auditStatus: ["草稿", "已驳回"].includes(rowAuditStatus(baseExpense)) ? rowAuditStatus(baseExpense) : "草稿",
       supplierId: baseExpense.supplierId,

@@ -4,8 +4,12 @@ import { formatDate, formatDateTime } from "../../formatters";
 import { preventEnterFormSubmit } from "../../formGuards";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
-import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import {
+  logisticsCostTypeDefaultCurrency,
+  logisticsCostTypeLabel,
+} from "../../../lib/platform/logistics-cost-types";
+import {
+  CURRENCIES,
   COST_TYPE_OPTIONS,
   PAY_BUTTON_DISABLED_TOOLTIP,
   type LogisticsExpense,
@@ -172,11 +176,7 @@ export function LogisticsExpenseRows({
         Boolean(item.invoiceNotificationError),
     );
 
-  function updateDraft(
-    id: string,
-    field: keyof LogisticsExpenseDraft,
-    value: string,
-  ) {
+  function updateDraft(id: string, field: keyof LogisticsExpenseDraft, value: string) {
     setBillSaved(false);
     setDrafts((current) => {
       const currentDraft =
@@ -184,10 +184,28 @@ export function LogisticsExpenseRows({
         logisticsExpenseDraftFromItem(
           items.find((item) => item.id === id) || ({ id } as LogisticsExpense),
         );
-      const nextDraft = {
-        ...currentDraft,
-        [field]: value,
-      };
+      let nextDraft: LogisticsExpenseDraft;
+      if (field === "costType") {
+        const recommendedCurrency = logisticsCostTypeDefaultCurrency(value);
+        nextDraft = {
+          ...currentDraft,
+          costType: value,
+          currency: currentDraft.currencyTouched
+            ? currentDraft.currency
+            : recommendedCurrency,
+        };
+      } else if (field === "currency") {
+        nextDraft = {
+          ...currentDraft,
+          currency: value,
+          currencyTouched: true,
+        };
+      } else {
+        nextDraft = {
+          ...currentDraft,
+          [field]: value,
+        };
+      }
       return {
         ...current,
         [id]: nextDraft,
@@ -712,6 +730,9 @@ function LogisticsExpenseDetailLine({
   const shouldRenderRemarkInput = canEditThisAmount;
   const originalAmount = logisticsExpenseOriginalAmount(expense);
   const originalCurrency = logisticsExpenseDisplayCurrency(expense, draft);
+  const recommendedCurrency = logisticsCostTypeDefaultCurrency(draft.costType);
+  const shouldShowCurrencySuggestion =
+    Boolean(draft.currencyTouched) && originalCurrency !== recommendedCurrency;
   const deleteBlockReason = billEditable
     ? logisticsExpenseDeleteBlockReason(expense)
     : `账单${billAuditStatus}，不能删除明细`;
@@ -762,14 +783,29 @@ function LogisticsExpenseDetailLine({
       <td className={styles.numericCell}>
         <div className={styles.inlineAmountEditor}>
           {canEditThisAmount ? (
-            <input
-              value={draft.unitAmount}
-              onChange={(event) =>
-                onDraftChange(expense.id, "unitAmount", event.target.value)
-              }
-              inputMode="decimal"
-              aria-label="物流费用单价"
-            />
+            <>
+              <input
+                value={draft.unitAmount}
+                onChange={(event) =>
+                  onDraftChange(expense.id, "unitAmount", event.target.value)
+                }
+                inputMode="decimal"
+                aria-label="物流费用单价"
+              />
+              <select
+                value={originalCurrency}
+                onChange={(event) =>
+                  onDraftChange(expense.id, "currency", event.target.value)
+                }
+                aria-label="物流费用币种"
+              >
+                {CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
+            </>
           ) : (
             <strong>
               {formatOriginalCurrencyAccounting(
@@ -778,7 +814,11 @@ function LogisticsExpenseDetailLine({
               )}
             </strong>
           )}
-          {canEditThisAmount ? <span>{originalCurrency}</span> : null}
+          {canEditThisAmount && shouldShowCurrencySuggestion ? (
+            <span className={styles.inlineEditHint}>
+              建议币种为 {recommendedCurrency}
+            </span>
+          ) : null}
         </div>
       </td>
       <td
