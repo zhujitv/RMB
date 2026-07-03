@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
+import { isSuspiciousInvoiceParty, parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
 import {
   contractOrderNoMatches,
   normalizeContractOrderNoSet,
@@ -66,8 +66,12 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /recognizeSupplierDocumentWithOcr/);
   assert.match(service, /export function parseVatInvoiceFields\(text: string, structuredFields: Record<string, unknown> = \{\}\)/);
   assert.match(service, /parseVatInvoiceFieldsCore\(text, structuredFields\)/);
+  assert.match(service, /enrichVatInvoiceFields\(parseVatInvoiceFields\(text, structuredFields\), context, text\)/);
+  assert.match(service, /supplierTaxNo/);
+  assert.match(service, /normalizeTaxIdentifier/);
   assert.match(vatParser, /structuredPartyFallback\(structuredFields, "seller"\)/);
   assert.match(vatParser, /extractInvoiceNameSequence\(text\)/);
+  assert.match(vatParser, /companyNameCandidates/);
   assert.match(vatParser, /extractInvoiceTaxNoSequence\(text\)/);
   assert.match(vatParser, /structuredAmount\(structuredFields, "amountWithTax"\)/);
   assert.match(vatParser, /function extractPartyName\(section: string, partyLabel: string\)/);
@@ -170,6 +174,44 @@ test("VAT invoice parser prefers trusted structured fields over noisy raw party 
   assert.equal(fields.taxAmount, 13192.44);
   assert.equal(fields.taxRate, "13%");
   assert.equal(fields.productName, "*有色金属压延材*铝制工程结构件");
+});
+
+test("VAT invoice parser accepts group company seller names from Aliyun structured fields", () => {
+  const fields = parseVatInvoiceFields("", {
+    invoiceNo: "2634200002105865616",
+    invoiceDate: "2026年07月03日",
+    buyer: "浙江莱诺建材有限公司",
+    buyerTaxNo: "91330681MA2D86XM28",
+    seller: "安徽森泰木塑集团股份有限公司",
+    sellerTaxNo: "91341822796423104J",
+    amountWithTax: "137401.92",
+    amountWithoutTax: "121594.62",
+    taxAmount: "15807.30",
+    taxRate: "13%",
+    productName: "塑料制栅栏",
+  });
+  assert.equal(isSuspiciousInvoiceParty("安徽森泰木塑集团股份有限公司"), false);
+  assert.equal(fields.seller, "安徽森泰木塑集团股份有限公司");
+  assert.equal(fields.sellerTaxNo, "91341822796423104J");
+  assert.equal(fields.buyer, "浙江莱诺建材有限公司");
+});
+
+test("VAT invoice parser infers seller from plain company sequence in Aliyun text", () => {
+  const fields = parseVatInvoiceFields(`
+电子发票（增值税专用发票）
+发票号码 2634200002105865616
+开票日期 2026年07月03日
+浙江莱诺建材有限公司
+91330681MA2D86XM28
+安徽森泰木塑集团股份有限公司
+91341822796423104J
+项目名称 规格型号 单位 数量 单价 金额 税率 税额
+塑料制栅栏 千克 18792.65 6.47 121594.62 13% 15807.30
+价税合计 ¥137401.92
+`, {});
+  assert.equal(fields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(fields.seller, "安徽森泰木塑集团股份有限公司");
+  assert.equal(fields.sellerTaxNo, "91341822796423104J");
 });
 
 test("VAT invoice parser handles reversed PDF fallback text from supplier invoice", () => {

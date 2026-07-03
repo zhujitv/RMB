@@ -89,6 +89,7 @@ type FieldResult = {
 type OcrValidationContext = {
   document: OcrDocumentRow;
   supplierName: string;
+  supplierTaxNo: string;
   businessEntityName: string;
   orderNo: string;
   purchaseOrderNo: string;
@@ -146,6 +147,12 @@ function normalizeComparable(value: unknown) {
   return cleanText(value)
     .toUpperCase()
     .replace(/[（）()【】\[\]{}《》<>，,。.\s·\-_/\\:：;；"'“”‘’]/g, "");
+}
+
+function normalizeTaxIdentifier(value: unknown) {
+  return cleanText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function looselyMatches(left: unknown, right: unknown) {
@@ -319,6 +326,7 @@ function expectedAmountFromDocument(document: OcrDocumentRow) {
 async function ocrValidationContext(document: OcrDocumentRow): Promise<OcrValidationContext> {
   const profile = await runNonCriticalTask("OCR校验公司资料读取", () => getCompanyProfileSettings(), { track: false });
   const supplierName = document.supplier?.supplierName || document.factoryDocumentRequest?.supplier?.supplierName || "";
+  const supplierTaxNo = document.supplier?.taxNumber || document.factoryDocumentRequest?.supplier?.taxNumber || "";
   const businessEntityName = document.order.businessEntity?.name
     || document.order.businessEntityNameSnapshot
     || document.factoryDocumentRequest?.order?.businessEntity?.name
@@ -329,11 +337,33 @@ async function ocrValidationContext(document: OcrDocumentRow): Promise<OcrValida
   return {
     document,
     supplierName,
+    supplierTaxNo,
     businessEntityName,
     orderNo,
     purchaseOrderNo: orderNo,
     expectedAmount: expectedAmountFromDocument(document),
   };
+}
+
+function enrichVatInvoiceFields(
+  fields: ReturnType<typeof parseVatInvoiceFields>,
+  context: OcrValidationContext,
+  rawText: string,
+) {
+  const enriched = { ...fields };
+  if (!enriched.seller && context.supplierName) {
+    const recognizedSellerTaxNo = normalizeTaxIdentifier(enriched.sellerTaxNo);
+    const expectedSupplierTaxNo = normalizeTaxIdentifier(context.supplierTaxNo);
+    if (recognizedSellerTaxNo && expectedSupplierTaxNo && recognizedSellerTaxNo === expectedSupplierTaxNo) {
+      enriched.seller = context.supplierName;
+    } else if (rawText && looselyMatches(rawText, context.supplierName)) {
+      enriched.seller = context.supplierName;
+    }
+  }
+  if (!enriched.buyer && context.businessEntityName && rawText && looselyMatches(rawText, context.businessEntityName)) {
+    enriched.buyer = context.businessEntityName;
+  }
+  return enriched;
 }
 
 async function validateInvoice(fields: ReturnType<typeof parseVatInvoiceFields>, context: OcrValidationContext, documentId: string): Promise<ValidationIssue[]> {
@@ -666,7 +696,7 @@ export async function runSupplierDocumentOcrForDocument(
     if (!text && !hasStructuredFields) throw codedError("OCR原文未识别，请人工核对。", 422, "SUPPLIER_DOCUMENT_OCR_NO_TEXT");
     const context = await ocrValidationContext(document);
     const fields = document.documentType === "SUPPLIER_INVOICE"
-      ? parseVatInvoiceFields(text, structuredFields)
+      ? enrichVatInvoiceFields(parseVatInvoiceFields(text, structuredFields), context, text)
       : parseContractFields(text, structuredFields);
     const labels = supplierDocumentLabels(document.documentType) as unknown as Record<string, string>;
     const parserIssues = document.documentType === "SUPPLIER_INVOICE"
@@ -734,6 +764,7 @@ export async function runSupplierDocumentOcrForDocument(
             issues,
             expectedAmount: context.expectedAmount,
             supplierName: context.supplierName,
+            supplierTaxNo: context.supplierTaxNo,
             businessEntityName: context.businessEntityName,
             orderNo: context.orderNo,
             source: recognized.source,
