@@ -64,6 +64,9 @@ const OCR_STATUS_EXCEPTION = "OCR识别成功，存在异常";
 const OCR_STATUS_FAILED = "OCR识别失败，需人工核对";
 const OCR_STATUS_MANUAL = "待人工确认";
 const OCR_STALE_PROCESSING_MESSAGE = "OCR识别超时，请点击重新识别或人工核对。";
+const OCR_NETWORK_FAILURE_MESSAGE = "阿里云 OCR 服务连接超时，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
+const OCR_PERMISSION_FAILURE_MESSAGE = "阿里云 OCR 服务未开通或权限配置异常，请管理员检查 OCR 服务开通状态、接口权限和 AccessKey 配置。";
+const OCR_PROVIDER_FAILURE_MESSAGE = "OCR服务调用失败，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
 const VALIDATION_PASSED = "PASSED";
 const VALIDATION_EXCEPTION = "EXCEPTION";
 const VALIDATION_FAILED = "FAILED";
@@ -117,16 +120,26 @@ function isSupplierOcrNetworkError(error: unknown) {
   return /(ConnectTimeout|ReadTimeout|Timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed|Connect HTTPS)/i.test(text);
 }
 
-function supplierDocumentOcrFailureMessage(error: unknown) {
-  if (isSupplierOcrNetworkError(error)) {
-    return "阿里云 OCR 服务连接超时，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
+function sanitizeSupplierOcrMessage(value: unknown, fallback = "OCR识别失败，需人工核对。") {
+  const message = cleanText(value);
+  if (!message) return fallback;
+  if (/(ConnectTimeout|ReadTimeout|Timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed|Connect HTTPS)/i.test(message)) {
+    return OCR_NETWORK_FAILURE_MESSAGE;
   }
-  const message = supplierOcrErrorText(error).trim();
-  if (!message) return "OCR识别失败，需人工核对。";
-  if (/https?:\/\/|Connect HTTPS|ocr-api|accessKey|access key|secret/i.test(message)) {
-    return "OCR服务调用失败，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
+  if (/(ocrServiceNotOpen|not activated the OCR service|未开通|未启用|code[:=]?\s*401|Unauthorized|Forbidden|AccessDenied|NoPermission|InvalidAccessKeyId|SignatureDoesNotMatch)/i.test(message)) {
+    return OCR_PERMISSION_FAILURE_MESSAGE;
+  }
+  if (/(https?:\/\/|ocr-api|accessKey|access key|secret|Keys=|request id|requestId|code[:=]\s*\d{3})/i.test(message)) {
+    return OCR_PROVIDER_FAILURE_MESSAGE;
   }
   return message.slice(0, 500);
+}
+
+function supplierDocumentOcrFailureMessage(error: unknown) {
+  if (isSupplierOcrNetworkError(error)) {
+    return OCR_NETWORK_FAILURE_MESSAGE;
+  }
+  return sanitizeSupplierOcrMessage(supplierOcrErrorText(error));
 }
 
 function normalizeComparable(value: unknown) {
@@ -881,7 +894,7 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
         const record = issue && typeof issue === "object" ? issue as Record<string, unknown> : {};
         return {
           level: String(record.level || "manual"),
-          message: String(record.message || ""),
+          message: sanitizeSupplierOcrMessage(record.message, ""),
           field: String(record.field || ""),
         };
       }).filter((issue) => issue.message)
@@ -893,7 +906,7 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
     documentType: task.documentType,
     status: task.status,
     validationStatus: task.validationStatus || "",
-    errorMessage: task.errorMessage || "",
+    errorMessage: sanitizeSupplierOcrMessage(task.errorMessage, ""),
     rejectReason: task.rejectReason || "",
     rawText: task.rawText || "",
     confirmedAt: task.confirmedAt,
