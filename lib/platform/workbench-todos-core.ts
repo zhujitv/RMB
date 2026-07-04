@@ -6,9 +6,10 @@ import {
   addDays,
   startOfChinaDay,
   summarizeWorkbenchTodos,
+  todoActivationRuleForType,
   todoPriorityFromDueAt,
 } from "./workbench-todo-rules";
-import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
+import type { WorkbenchFlowStage, WorkbenchTodoPriority, WorkbenchTodoStatus, WorkbenchTodoSummary } from "./workbench-todo-rules";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   COMPANY_PROFILE_SETTING_KEY,
@@ -36,14 +37,16 @@ import {
   validCost,
 } from "./shared";
 
-export type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
-export type WorkbenchTodoStatus = "pending" | "completed";
+export type { WorkbenchFlowStage, WorkbenchTodoPriority, WorkbenchTodoStatus, WorkbenchTodoSummary } from "./workbench-todo-rules";
 export type WorkbenchTodoOwnerRole = "LOGISTICS_SUPPLIER" | "SALESPERSON" | "ADMIN" | "FINANCE" | "PURCHASE" | "PRODUCT_SUPPLIER";
 export type WorkbenchTodo = {
   id: string;
   type: string;
   title: string;
   module: string;
+  flowStage: WorkbenchFlowStage;
+  prerequisiteStage?: WorkbenchFlowStage | null;
+  activationCondition: string;
   orderId?: string;
   orderNo?: string;
   customerShortName?: string;
@@ -73,19 +76,27 @@ export type ActorLike = {
 export type TodoOrder = {
   id: string;
   orderNo: string;
+  blNo?: string | null;
+  status?: string | null;
   customerNameSnapshot?: string | null;
   dueDate?: Date | string | null;
   expectedShipmentDate?: Date | string | null;
   expectedArrivalDate?: Date | string | null;
+  actualShipmentDate?: Date | string | null;
+  blDate?: Date | string | null;
   updatedAt?: Date | string | null;
   createdAt?: Date | string | null;
   taxRefundCompletenessUpdatedAt?: Date | string | null;
   taxRefundArchivedAt?: Date | string | null;
   taxSubmittedAt?: Date | string | null;
+  taxArchived?: boolean | null;
+  taxRefundStatus?: string | null;
   salespersonUserId?: string | null;
   customer?: { shortName?: string | null; salespersonUserId?: string | null } | null;
   salesperson?: { id?: string | null; name?: string | null; email?: string | null; role?: string | null } | null;
   logisticsSuppliers?: TodoLogisticsSupplierAssignment[] | null;
+  supplierDocumentRequests?: Array<{ status?: string | null; supplierId?: string | null; costId?: string | null; completedAt?: Date | string | null; deletedAt?: Date | string | null }> | null;
+  documents?: Array<{ documentType?: string | null; uploadStatus?: string | null; relatedModule?: string | null; deletedAt?: Date | string | null }> | null;
 };
 
 export type TodoUser = {
@@ -142,7 +153,7 @@ export const WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS = [
 export const PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE = ["已完成", "已关闭"];
 export const LOGISTICS_INVOICE_DONE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
 export const LOGISTICS_INVOICE_REVIEW_STATUSES = ["已上传发票", "部分上传发票", "部分已确认"];
-export const LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = ["已上传发票", "已确认", "已确认发票"];
+export const LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = ["已确认", "已确认发票"];
 export const LOGISTICS_PAYMENT_DONE_STATUSES = ["已付款"];
 export const NEGATIVE_PROFIT_THRESHOLD = 0;
 export const PROFIT_COST_REVIEW_STATUSES = ["生产中", "已发货", "部分收款", "已收齐", "多收款"];
@@ -161,6 +172,7 @@ export function paymentVoucherReminderStartDateFromSettings(settings: unknown) {
 export type TodoCost = {
   id: string;
   order: TodoOrder;
+  supplierId?: string | null;
   supplier?: { id?: string | null; supplierName?: string | null; supplierType?: string | null } | null;
   supplierNameSnapshot?: string | null;
   vendorName?: string | null;
@@ -173,6 +185,7 @@ export type TodoCost = {
   paymentVoucherUrl?: string | null;
   paymentVoucherStorageKey?: string | null;
   paymentVoucherUploadedAt?: Date | string | null;
+  documents?: Array<{ documentType?: string | null; uploadStatus?: string | null; relatedModule?: string | null; costId?: string | null; supplierId?: string | null; deletedAt?: Date | string | null }> | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 };
@@ -608,16 +621,20 @@ export function todoForOrder(input: {
   const visibleToUserIds = input.context ? visibleUserIds(input.context, input.order, owner) : uniqueIds(owner.ownerUserIds || []);
   const actorUserId = input.context?.actorUserId || "";
   const ownerUserIds = uniqueIds(owner.ownerUserIds || [owner.ownerUserId]);
+  const activationRule = todoActivationRuleForType(input.type);
   return {
     id: input.id || `${input.type.toLowerCase()}-${input.order.id}`,
     type: input.type,
     title: input.title,
     module: input.module,
+    flowStage: activationRule.flowStage,
+    prerequisiteStage: activationRule.prerequisiteStage || null,
+    activationCondition: activationRule.activationCondition,
     orderId: input.order.id,
     orderNo: input.order.orderNo,
     customerShortName: orderCustomerShortName(input.order),
     priority: todoPriorityFromDueAt(dueAt),
-    status: input.status || "pending",
+    status: input.status || "ACTIVE",
     dueAt,
     ownerUserId: owner.ownerUserId || null,
     ownerUserIds,

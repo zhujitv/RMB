@@ -93,7 +93,7 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
   const reminderDate = today;
   const { todos } = await listWorkbenchTodos(actor);
   const eligibleTodoOwners = todos
-    .filter((todo) => todo.status === "pending")
+    .filter((todo) => todo.status === "ACTIVE")
     .map((todo) => ({ todo, overdueDays: overdueDaysForTodo(todo, today) }))
     .filter(({ overdueDays }) => overdueDays > OVERDUE_REMINDER_DAYS)
     .flatMap(({ todo, overdueDays }) => reminderOwnerUserIds(todo).map((ownerUserId) => ({ todo, overdueDays, ownerUserId })));

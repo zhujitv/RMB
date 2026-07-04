@@ -58,7 +58,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       payment,
       context,
       owner: roleOwner(context, "FINANCE"),
-      status: "completed",
+      status: "DONE",
     }))));
   }
   if (canRead(actor, "costs") && isFinanceOperator(actor)) {
@@ -91,7 +91,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       context,
       dueAt: cost.paidAt || cost.paymentDate || cost.updatedAt,
       owner: roleOwner(context, "FINANCE"),
-      status: "completed",
+      status: "DONE",
     }))));
   }
   if (canRead(actor, "supplierDocuments") && (isAdmin(actor) || isProductSupplierOperatorRole(actorRole(actor)))) {
@@ -130,7 +130,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
         keyword: row.order.orderNo,
       }),
       owner: supplierOwner(context, row.supplier, "PRODUCT_SUPPLIER", "产品供应商"),
-      status: "completed",
+      status: "DONE",
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }))));
@@ -169,7 +169,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
         dueAt: invoiceDone ? bill.updatedAt : (bill.reviewedAt || bill.updatedAt),
         owner,
         ownerName: owner.ownerName || (invoiceDone ? "物流供应商" : "财务/管理员"),
-        status: "completed",
+        status: "DONE",
       });
     })));
   }
@@ -198,7 +198,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       dueAt: bill.paymentDate || bill.updatedAt,
       owner: roleOwner(context, "FINANCE"),
       ownerName: "财务/管理员",
-      status: "completed",
+      status: "DONE",
     }))));
   }
   if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
@@ -221,7 +221,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       dueAt: order.taxRefundArchivedAt || order.updatedAt,
       href: orderHref("/tax-refund", order),
       owner: taxRefundArchiveOwner(context, order),
-      status: "completed",
+      status: "DONE",
       updatedAt: order.updatedAt,
     }))));
   }
@@ -245,7 +245,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       dueAt: order.commissionSettledAt || order.updatedAt,
       href: orderHref("/profit", order),
       owner: roleOwner(context, "FINANCE"),
-      status: "completed",
+      status: "DONE",
       updatedAt: order.updatedAt,
     }))));
   }
@@ -280,7 +280,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
         keyword: row.order.orderNo,
       }),
       owner: salespersonOwner(row.order),
-      status: "completed",
+      status: "DONE",
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }))));

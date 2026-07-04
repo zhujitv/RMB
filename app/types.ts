@@ -82,17 +82,36 @@ export type LoginResponse = {
 
 export type WorkbenchTodoPriority = "urgent" | "important" | "normal";
 export type WorkbenchTodoOwnerRole = "LOGISTICS_SUPPLIER" | "SALESPERSON" | "ADMIN" | "FINANCE" | "PURCHASE" | "PRODUCT_SUPPLIER";
+export type WorkbenchTodoStatus = "DRAFT" | "BLOCKED" | "ACTIVE" | "DONE" | "CANCELLED" | "ARCHIVED" | "pending" | "completed";
+export type WorkbenchFlowStage =
+  | "SALES_ORDER_CREATED"
+  | "PURCHASE_ORDER_CREATED"
+  | "SUPPLIER_DOCUMENT_REQUESTED"
+  | "SUPPLIER_DOCUMENT_COMPLETED"
+  | "LOGISTICS_INFO_COMPLETED"
+  | "CUSTOMS_DOCUMENT_UPLOADED"
+  | "LOGISTICS_COST_RECORDED"
+  | "LOGISTICS_INVOICE_UPLOADED"
+  | "LOGISTICS_COST_AUDITED"
+  | "SUPPLIER_PAYMENT_COMPLETED"
+  | "TAX_REFUND_READY"
+  | "TAX_ARCHIVE_SUBMITTED"
+  | "PROFIT_REVIEWED"
+  | "COMMISSION_SETTLED";
 
 export type WorkbenchTodo = {
   id: string;
   type: string;
   title: string;
   module: string;
+  flowStage?: WorkbenchFlowStage;
+  prerequisiteStage?: WorkbenchFlowStage | null;
+  activationCondition?: string;
   orderId?: string;
   orderNo?: string;
   customerShortName?: string;
   priority: WorkbenchTodoPriority;
-  status: "pending" | "completed";
+  status: WorkbenchTodoStatus;
   dueAt?: string | null;
   ownerUserId?: string | null;
   ownerUserIds?: string[];

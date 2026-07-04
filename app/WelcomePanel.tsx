@@ -28,7 +28,7 @@ function priorityClass(priority: WorkbenchTodo["priority"], dueAt?: string | nul
 }
 
 function statusText(status: WorkbenchTodo["status"]) {
-  return status === "completed" ? "已完成" : "待处理";
+  return status === "DONE" || status === "ARCHIVED" || status === "completed" ? "已完成" : "待处理";
 }
 
 function isDueToday(dueAt?: string | null) {
@@ -121,7 +121,7 @@ export function WelcomePanel({
     (todosState.completedTodos || []).filter((todo) => todoMatchesFilters(todo, filters))
   ), [filters, todosState.completedTodos]);
   const summary = useMemo(() => {
-    const pending = filteredTodos.filter((todo) => todo.status !== "completed");
+    const pending = filteredTodos.filter((todo) => todo.status === "ACTIVE" || todo.status === "pending");
     return {
       pending: pending.length,
       todayDue: pending.filter((todo) => isDueToday(todo.dueAt)).length,

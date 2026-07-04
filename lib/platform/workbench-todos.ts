@@ -1,4 +1,4 @@
-import { summarizeWorkbenchTodos } from "./workbench-todo-rules";
+import { canActivateTodo, summarizeWorkbenchTodos } from "./workbench-todo-rules";
 import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 import { SUPPLIER_DOCUMENT_TYPES } from "./shared";
 import { completedTodayTodos } from "./workbench-todos-completed";
@@ -75,7 +75,7 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
     listOceanTrackingTodos(context),
     completedTodayTodos(context),
   ]);
-  const todos = uniqueTodos([
+  const generatedTodos = uniqueTodos([
     ...orderTodos,
     ...domesticLogisticsTodos,
     ...logisticsFeeTodos,
@@ -85,7 +85,10 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
     ...taxRefundTodos,
     ...profitTodos,
     ...oceanTrackingTodos,
-  ]).sort(sortWorkbenchTodos);
+  ]);
+  const todos = generatedTodos
+    .filter(canActivateTodo)
+    .sort(sortWorkbenchTodos);
   return {
     todos,
     completedTodos,

@@ -18,6 +18,7 @@ const workbenchSource = [
   "lib/platform/workbench-todos-sources.ts",
   "lib/platform/workbench-todos-completed.ts",
 ].map((path) => readFileSync(path, "utf8")).join("\n");
+const missingTaxRefundTodosSource = workbenchSource.match(/function missingTaxRefundTodos[\s\S]*?function normalizedMissingLabels/)?.[0] || "";
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
 const notificationEngineSource = readFileSync("lib/platform/notification-engine.ts", "utf8");
 const sharedConstantsSource = readFileSync("lib/platform/shared-constants.ts", "utf8");
@@ -69,10 +70,38 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /supplierId: actorSupplierId\(actor\) \|\| "__no_supplier_bound__"/);
   assert.match(workbenchSource, /status: \{ notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE \}/);
   assert.match(workbenchSource, /refreshTaxRefundCompletenessBatch/);
+  assert.match(workbenchSource, /canActivateTodo/);
+  assert.match(workbenchSource, /\.filter\(canActivateTodo\)/);
+  assert.match(workbenchSource, /flowStage: activationRule\.flowStage/);
+  assert.match(workbenchSource, /prerequisiteStage: activationRule\.prerequisiteStage \|\| null/);
+  assert.match(workbenchSource, /activationCondition: activationRule\.activationCondition/);
+  assert.match(workbenchSource, /status: input\.status \|\| "ACTIVE"/);
+  assert.match(workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.LOGISTICS_INVOICE_UPLOAD.activationCondition, /invoice notification has been sent/);
+  assert.equal(workbenchRules.canActivateTodo({ status: "ACTIVE" }), true);
+  assert.equal(workbenchRules.canActivateTodo({ status: "BLOCKED" }), false);
+  assert.equal(workbenchRules.canActivateTodo({ status: "DRAFT" }), false);
+  for (const completedType of [
+    "CUSTOMER_PAYMENT_CONFIRMED",
+    "FACTORY_PAYMENT_COMPLETED",
+    "SUPPLIER_DOCUMENT_RETURN_COMPLETED",
+    "LOGISTICS_FEE_REVIEW_COMPLETED",
+    "LOGISTICS_INVOICE_UPLOAD_COMPLETED",
+    "LOGISTICS_PAYMENT_REGISTER_COMPLETED",
+    "TAX_REFUND_ARCHIVED",
+    "COMMISSION_SETTLED",
+    "CONTAINER_TRACKING_SYNCED",
+  ]) {
+    assert.notEqual(
+      workbenchRules.todoActivationRuleForType(completedType).activationCondition,
+      "source-specific active business condition",
+    );
+  }
   assert.match(workbenchSource, /listCustomerPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listFactoryPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listProfitTodos\(context\)/);
   assert.match(workbenchSource, /listOceanTrackingTodos\(context\)/);
+  assert.match(workbenchSource, /supplierDocumentRequestHasFactoryCost/);
+  assert.match(workbenchSource, /rows\.filter\(supplierDocumentRequestHasFactoryCost\)\.map/);
   assert.match(workbenchSource, /completedTodayTodos\(context\)/);
   assert.match(workbenchSource, /completedTodos/);
   assert.match(workbenchSource, /CUSTOMER_PAYMENT_CONFIRMATION/);
@@ -89,6 +118,29 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /handledCostIds/);
   assert.match(workbenchSource, /shouldCreateProfitCostIncompleteTodo/);
   assert.match(workbenchSource, /PROFIT_COST_REVIEW_STATUSES/);
+  assert.match(workbenchSource, /doneSupplierDocumentRequests\(workflowOrder\)/);
+  assert.match(workbenchSource, /supplierDocumentRequestsForFactoryCosts/);
+  assert.match(workbenchSource, /if \(nonEmpty\(row\.costId\)\) return isActiveFactorySupplierCostRef\(row\.cost, supplierId\)/);
+  assert.match(workbenchSource, /if \(!costs\.length\) return false/);
+  assert.match(workbenchSource, /cost\.sourceType !== "LOGISTICS_EXPENSE"/);
+  assert.match(workbenchSource, /return requestsDone && supplierDocumentsUploadedForFactoryCosts\(order\)/);
+  assert.match(workbenchSource, /supplierDocumentRequestMatchesCost/);
+  assert.match(workbenchSource, /supplierDocumentRequests = \(\(cost\.order as WorkbenchWorkflowOrder\)\.supplierDocumentRequests \|\| \[\]\)[\s\S]*supplierDocumentRequestMatchesCost/);
+  assert.match(workbenchSource, /orderEnteredLogisticsStage\(workflowOrder\)/);
+  assert.match(workbenchSource, /logisticsSupplierAssigned\(workflowOrder\)/);
+  assert.match(workbenchSource, /function logisticsBillReviewAccessWhere/);
+  assert.match(workbenchSource, /isAdmin\(actor\) \|\| isFinance\(actor\) \|\| isSalesperson\(actor\)/);
+  assert.match(workbenchSource, /reviewAccessWhere/);
+  assert.match(workbenchSource, /invoiceNotifiedAt: \{ not: null \}/);
+  assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已确认", "已确认发票"\]/);
+  assert.match(workbenchSource, /type: "TAX_CUSTOMS_DECLARATION_MISSING"[\s\S]*title: "报关资料待上传"[\s\S]*module: "物流信息"/);
+  assert.match(workbenchSource, /documents: \{[\s\S]*some: \{[\s\S]*documentType: "CUSTOMS_ENTRY_FORM"[\s\S]*uploadStatus: "SUCCESS"/);
+  assert.match(workbenchSource, /customsDeclarationUploaded\(workflowOrder\)/);
+  assert.doesNotMatch(missingTaxRefundTodosSource, /TAX_CUSTOMS_DECLARATION_MISSING/);
+  assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\)/);
+  assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\) \|\| !doneSupplierDocumentRequests\(workflowOrder\)/);
+  assert.match(workbenchSource, /summary\.commissionCanSettle && taxFinalized/);
+  assert.match(workbenchSource, /hasProfitException && summary\.allCostsConfirmed && summary\.logisticsCostConfirmed && taxFinalized/);
   assert.match(workbenchSource, /listShipsgoControlTowerTrackings\(new URLSearchParams\(\), actor\)/);
   assert.match(workbenchSource, /summarizeOrder\(order, commissionFormulaSettings\)/);
   assert.match(workbenchSource, /sourceTypes:[\s\S]*"payments"[\s\S]*"factoryPayments"[\s\S]*"profit"[\s\S]*"oceanTracking"/);
@@ -125,7 +177,7 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
   assert.match(overdueRoute, /assertCronSecret\(request\)/);
   assert.match(overdueRoute, /sendOverdueWorkbenchTodoReminders\(actor\)/);
   assert.match(reminderSource, /listWorkbenchTodos\(actor\)/);
-  assert.match(reminderSource, /todo\.status === "pending"/);
+  assert.match(reminderSource, /todo\.status === "ACTIVE"/);
   assert.match(reminderSource, /overdueDays > OVERDUE_REMINDER_DAYS/);
   assert.match(reminderSource, /MULTI_OWNER_REMINDER_TODO_TYPES = new Set\(\["TAX_REFUND_READY_NOT_ARCHIVED"\]\)/);
   assert.match(reminderSource, /function reminderOwnerUserIds\(todo: WorkbenchTodo\)/);
