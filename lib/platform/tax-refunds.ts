@@ -11,6 +11,7 @@ import {
   ORDER_DOCUMENT_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
+  TAX_REFUND_SUPPLIER_TYPES,
   TAX_REFUND_STATUS_LABELS,
   TAX_REFUND_STATUSES,
   TAX_EXPORT_DOCUMENT_TYPES,
@@ -97,6 +98,26 @@ const taxRefundLightListSelect = Prisma.validator<Prisma.ReceivableOrderSelect>(
   businessEntity: { select: { id: true, name: true, shortName: true } },
 });
 type TaxRefundLightListOrder = Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>;
+const taxRefundCustomsDeclarationOrderListSelect = Prisma.validator<Prisma.ReceivableOrderSelect>()({
+  ...taxRefundLightListSelect,
+  customsDeclarations: {
+    where: { deletedAt: null },
+    select: { id: true },
+    take: 100,
+  },
+  costs: {
+    where: { deletedAt: null, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
+    select: {
+      id: true,
+      supplierId: true,
+      supplierNameSnapshot: true,
+      vendorName: true,
+      supplier: { select: { id: true, supplierName: true, supplierType: true } },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    take: 100,
+  },
+});
 const taxRefundCustomsDeclarationListSelect = Prisma.validator<Prisma.CustomsDeclarationSelect>()({
   id: true,
   orderId: true,
@@ -130,7 +151,7 @@ const taxRefundCustomsDeclarationListSelect = Prisma.validator<Prisma.CustomsDec
     },
     take: 20,
   },
-  order: { select: taxRefundLightListSelect },
+  order: { select: taxRefundCustomsDeclarationOrderListSelect },
 });
 type TaxRefundCustomsDeclarationListRow = Prisma.CustomsDeclarationGetPayload<{ select: typeof taxRefundCustomsDeclarationListSelect }>;
 const taxRefundDocumentLightSelect = Prisma.validator<Prisma.OrderDocumentSelect>()({
@@ -569,6 +590,56 @@ function declarationCompletenessInput(row: TaxRefundCustomsDeclarationListRow) {
   };
 }
 
+function uniqueNonEmptyNames(values: unknown[]) {
+  return values
+    .map((name) => String(name || "").trim())
+    .filter((name, index, arr) => name && arr.indexOf(name) === index);
+}
+
+function formatSupplierNamesForList(names: string[]) {
+  if (names.length > 3) return `${names.slice(0, 3).join("、")} 等 ${names.length} 家`;
+  return names.join("、");
+}
+
+function declarationScopedSupplierNames(row: TaxRefundCustomsDeclarationListRow) {
+  return uniqueNonEmptyNames([
+    row.supplier?.supplierName || row.purchaseOrder?.supplierNameSnapshot || row.purchaseOrder?.supplier?.supplierName || "",
+    ...(row.suppliers || []).map((supplier) => (
+      supplier.supplier?.supplierName
+      || supplier.purchaseOrder?.supplierNameSnapshot
+      || supplier.purchaseOrder?.supplier?.supplierName
+      || ""
+    )),
+  ]);
+}
+
+function isTaxRefundListFallbackCost(cost: TaxRefundCustomsDeclarationListRow["order"]["costs"][number]) {
+  const supplierType = String(cost.supplier?.supplierType || "");
+  return !supplierType || TAX_REFUND_SUPPLIER_TYPES.includes(supplierType);
+}
+
+function orderFactorySupplierNames(row: TaxRefundCustomsDeclarationListRow) {
+  return uniqueNonEmptyNames((row.order.costs || [])
+    .filter(isTaxRefundListFallbackCost)
+    .map((cost) => (
+      cost.supplierNameSnapshot
+      || cost.supplier?.supplierName
+      || cost.vendorName
+      || ""
+    )));
+}
+
+function orderFactorySupplierIds(row: TaxRefundCustomsDeclarationListRow) {
+  return (row.order.costs || [])
+    .filter(isTaxRefundListFallbackCost)
+    .map((cost) => cost.supplierId || cost.supplier?.id || "")
+    .filter((id, index, arr) => id && arr.indexOf(id) === index);
+}
+
+function taxRefundListDeclarationCount(row: TaxRefundCustomsDeclarationListRow) {
+  return (row.order.customsDeclarations || []).filter((declaration) => declaration?.id).length;
+}
+
 export function serializeTaxRefundListCustomsDeclarationLight(row: TaxRefundCustomsDeclarationListRow) {
   const order = declarationCompletenessInput(row);
   const completeness = cachedTaxRefundCompleteness(order);
@@ -578,18 +649,13 @@ export function serializeTaxRefundListCustomsDeclarationLight(row: TaxRefundCust
   const shortCustomerName = customerShortName(row.order.customer);
   const businessEntityFields = businessEntityFieldsFromOrder(row.order);
   const completenessIssuesSummary = taxRefundCompletenessSummaryText(completeness, row.taxRefundCompletenessIssuesSummary || "");
-  const supplierNames = [
-    row.supplier?.supplierName || row.purchaseOrder?.supplierNameSnapshot || row.purchaseOrder?.supplier?.supplierName || "",
-    ...(row.suppliers || []).map((supplier) => (
-      supplier.supplier?.supplierName
-      || supplier.purchaseOrder?.supplierNameSnapshot
-      || supplier.purchaseOrder?.supplier?.supplierName
-      || ""
-    )),
-  ].map((name) => String(name || "").trim()).filter((name, index, arr) => name && arr.indexOf(name) === index);
-  const supplierName = supplierNames.length > 3
-    ? `${supplierNames.slice(0, 3).join("、")} 等 ${supplierNames.length} 家`
-    : supplierNames.join("、");
+  const scopedSupplierNames = declarationScopedSupplierNames(row);
+  const fallbackSupplierNames = scopedSupplierNames.length ? [] : orderFactorySupplierNames(row);
+  const supplierNames = scopedSupplierNames.length ? scopedSupplierNames : fallbackSupplierNames;
+  const supplierNameText = formatSupplierNamesForList(supplierNames);
+  const supplierPendingAssignment = !scopedSupplierNames.length && fallbackSupplierNames.length && taxRefundListDeclarationCount(row) > 1;
+  const supplierName = supplierPendingAssignment ? `待归属：${supplierNameText}` : supplierNameText;
+  const fallbackSupplierIds = scopedSupplierNames.length || supplierPendingAssignment ? [] : orderFactorySupplierIds(row);
   const billOfLadingNo = row.billOfLadingNo || row.order.blNo || "";
   return {
     id: row.id,
@@ -604,10 +670,11 @@ export function serializeTaxRefundListCustomsDeclarationLight(row: TaxRefundCust
     customerShortName: shortCustomerName || fullCustomerName,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
-    supplierId: row.supplierId || row.purchaseOrder?.supplier?.id || "",
+    supplierId: row.supplierId || row.purchaseOrder?.supplier?.id || fallbackSupplierIds[0] || "",
     supplierName,
     supplierCount: supplierNames.length,
     supplierNames,
+    supplierOwnershipStatus: supplierPendingAssignment ? "PENDING_ASSIGNMENT" : "",
     purchaseOrderId: row.purchaseOrderId || "",
     businessEntityId: row.order.businessEntityId || "",
     businessEntityName: businessEntityFields.businessEntityDisplayName || businessEntityFields.businessEntityName || "",
@@ -900,6 +967,50 @@ function taxRefundDeclarationKeywordWhere(keyword: string): Prisma.CustomsDeclar
       { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
       { purchaseOrder: { is: { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } } } },
       { purchaseOrder: { is: { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } } } },
+      {
+        suppliers: {
+          some: {
+            deletedAt: null,
+            OR: [
+              { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
+              { purchaseOrder: { is: { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } } } },
+              { purchaseOrder: { is: { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } } } },
+            ],
+          },
+        },
+      },
+      {
+        AND: [
+          { supplierId: null },
+          { purchaseOrderId: null },
+          { suppliers: { none: { deletedAt: null } } },
+          {
+            order: {
+              is: {
+                costs: {
+                  some: {
+                    deletedAt: null,
+                    costType: { in: FACTORY_SUPPLIER_COST_TYPES },
+                    OR: [
+                      { supplierNameSnapshot: { contains: keyword, mode: "insensitive" } },
+                      { vendorName: { contains: keyword, mode: "insensitive" } },
+                      { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } },
+                    ],
+                    AND: [
+                      {
+                        OR: [
+                          { supplierId: null },
+                          { supplier: { is: { supplierType: { in: TAX_REFUND_SUPPLIER_TYPES } } } },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
       { order: { is: { orderNo: { contains: keyword, mode: "insensitive" } } } },
       { order: { is: { blNo: { contains: keyword, mode: "insensitive" } } } },
       { order: { is: { customerNameSnapshot: { contains: keyword, mode: "insensitive" } } } },

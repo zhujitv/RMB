@@ -62,6 +62,22 @@ test("tax refund list keeps lower completeness rows before completed rows", () =
   );
 });
 
+test("tax refund list shows supplier names from declaration scope or legacy factory costs", () => {
+  assert.match(service, /const taxRefundCustomsDeclarationOrderListSelect = Prisma\.validator<Prisma\.ReceivableOrderSelect>/);
+  assert.match(service, /costType:\s*\{\s*in:\s*FACTORY_SUPPLIER_COST_TYPES\s*\}/);
+  assert.match(service, /TAX_REFUND_SUPPLIER_TYPES/);
+  assert.match(service, /function isTaxRefundListFallbackCost/);
+  assert.match(service, /function declarationScopedSupplierNames/);
+  assert.match(service, /function orderFactorySupplierNames/);
+  assert.match(service, /supplierPendingAssignment/);
+  assert.match(service, /scopedSupplierNames\.length \|\| supplierPendingAssignment \? \[\] : orderFactorySupplierIds\(row\)/);
+  assert.match(service, /待归属：\$\{supplierNameText\}/);
+  assert.match(service, /supplierOwnershipStatus:\s*supplierPendingAssignment \? "PENDING_ASSIGNMENT" : ""/);
+  assert.match(service, /suppliers:\s*\{\s*some:\s*\{[\s\S]*supplierName:\s*\{\s*contains: keyword/);
+  assert.match(service, /supplierId:\s*null[\s\S]*purchaseOrderId:\s*null[\s\S]*suppliers:\s*\{\s*none:\s*\{\s*deletedAt:\s*null\s*\}/);
+  assert.match(service, /costs:\s*\{\s*some:\s*\{[\s\S]*FACTORY_SUPPLIER_COST_TYPES/);
+});
+
 test("tax refund completeness ignores removed customs detail confirmation state", () => {
   assert.match(completeness, /DISABLED_TAX_REFUND_COMPLETENESS_MARKERS = \[[\s\S]*"报关明细待确认"[\s\S]*"CUSTOMS_RECOGNIZED_PENDING_CONFIRM"/);
   assert.match(completeness, /hasDisabledTaxRefundCompletenessMarker\(cachedValue\)/);

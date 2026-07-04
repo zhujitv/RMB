@@ -73,6 +73,7 @@ export type TaxRefundRow = {
   customerShortName?: string;
   supplierId?: string;
   supplierName?: string;
+  supplierOwnershipStatus?: string;
   purchaseOrderId?: string;
   businessEntityId?: string;
   businessEntityName?: string;
