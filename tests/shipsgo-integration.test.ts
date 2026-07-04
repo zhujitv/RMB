@@ -162,7 +162,7 @@ test("ShipsGo map opens as a dedicated page and loads by trackingId", () => {
 test("ShipsGo tracking mutations are role-scoped to admin and owning sales", () => {
   assert.match(trackingService, /function assertShipsgoTrackingWriteAccess/);
   assert.match(trackingService, /role === "管理员"/);
-  assert.match(trackingService, /role === "业务员" && order\?\.customer\?\.salespersonUserId === actorId\(actor\)/);
+  assert.match(trackingService, /role === "业务员" && orderBelongsToSalesperson\(order, actorId\(actor\)\)/);
   assert.match(trackingService, /SHIPSGO_TRACKING_WRITE_FORBIDDEN/);
   assert.match(trackingService, /function assertShipsgoTrackingDeleteAccess/);
   assert.match(trackingService, /SHIPSGO_TRACKING_DELETE_ADMIN_ONLY/);

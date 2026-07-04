@@ -58,6 +58,7 @@ export function OrdersModule({
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [returnDetailOrder, setReturnDetailOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
+  const [repairingSalespeople, setRepairingSalespeople] = useState(false);
   const editPanelRef = useRef<HTMLDivElement | null>(null);
   const {
     confirmation,
@@ -67,6 +68,7 @@ export function OrdersModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canWriteOrders = canWritePermission(currentUser, permissions, "orders", ["管理员", "业务员"]);
+  const canManageOrderAssignments = currentUser.role === "管理员";
 
   async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus, nextBusinessEntityId = submittedBusinessEntityId) {
     setLoading(true);
@@ -250,6 +252,39 @@ export function OrdersModule({
     }
   }
 
+  async function repairMissingSalespeople() {
+    if (!canManageOrderAssignments) return;
+    const confirmationResult = await requestConfirmation({
+      title: "确认修正历史订单业务员归属？",
+      message: "系统只处理业务员为空的历史订单，不会覆盖已经明确分配过业务员的订单。",
+      details: [
+        "优先使用客户资料中的负责业务员。",
+        "客户未配置时，才使用业务员创建人作为兜底。",
+      ],
+      confirmLabel: "开始修正",
+      cancelLabel: "取消",
+    });
+    if (!confirmationResult.confirmed) return;
+    setRepairingSalespeople(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{
+        success?: boolean;
+        message?: string;
+        data?: { scanned?: number; repaired?: number; unresolved?: number };
+      }>("/api/orders/salesperson-repair", { method: "POST" });
+      if (result.success === false) throw new Error(result.message || "修正历史订单业务员失败");
+      const stats = result.data || {};
+      setNotice(result.message || `历史订单业务员修正完成：扫描 ${stats.scanned || 0} 条，修复 ${stats.repaired || 0} 条，无法修复 ${stats.unresolved || 0} 条。`);
+      await loadOrders(page, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
+    } catch (repairError) {
+      setError(repairError instanceof Error ? repairError.message : "修正历史订单业务员失败");
+    } finally {
+      setRepairingSalespeople(false);
+    }
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -275,6 +310,16 @@ export function OrdersModule({
           >
             {createOpen ? "收起新建" : "新建订单"}
           </button>
+          {canManageOrderAssignments ? (
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={repairingSalespeople || loading}
+              onClick={() => void repairMissingSalespeople()}
+            >
+              {repairingSalespeople ? "修正中..." : "修正业务员归属"}
+            </button>
+          ) : null}
           <button
             className={styles.secondaryButton}
             type="button"
@@ -293,6 +338,7 @@ export function OrdersModule({
         <div ref={editPanelRef}>
           <QuickCreateOrderPanel
             initialOrder={editOrder}
+            canManageOrderAssignments={canManageOrderAssignments}
             onCancel={handleOrderEditCancel}
             onSaved={() => void handleOrderSaved()}
           />

@@ -20,6 +20,7 @@ import {
   isExternalLogisticsSupplierAccount,
   isInternalLogisticsOperator,
 } from "./masters-access";
+import { orderOwnedBySalesperson } from "./order-access";
 import { Prisma } from "../generated/prisma/client.js";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark } from "./export-invoice-remark";
 
@@ -100,6 +101,7 @@ type DomesticOrderLike = {
   id?: string;
   orderNo?: string | null;
   blNo?: string | null;
+  salespersonUserId?: string | null;
   customer?: { salespersonUserId?: string | null; country?: string | null } | null;
   customerNameSnapshot?: string | null;
   country?: string | null;
@@ -282,7 +284,12 @@ export function canReadDomesticLogisticsOrder(actor: ActorLike, order: DomesticO
     const supplierId = actor?.supplierId || "";
     return (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId);
   }
-  if (actor?.role === "业务员") return order?.customer?.salespersonUserId === actor.id;
+  if (actor?.role === "业务员") {
+    return orderOwnedBySalesperson({
+      salespersonUserId: order?.salespersonUserId,
+      customer: order?.customer,
+    }, actor.id || "");
+  }
   return false;
 }
 

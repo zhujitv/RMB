@@ -12,7 +12,7 @@ import {
   effectivePermissions,
   nonEmpty,
 } from "./shared";
-import { orderAccessWhere } from "./order-access";
+import { orderAccessWhere, orderOwnedBySalesperson, orderSalespersonOwnershipWhere } from "./order-access";
 
 type ActorLike = {
   id?: string | null;
@@ -27,6 +27,7 @@ type CustomerLike = { salespersonUserId?: string | null } | null | undefined;
 type DomesticOrderLike = {
   orderNo?: string | null;
   blNo?: string | null;
+  salespersonUserId?: string | null;
   customer?: CustomerLike;
   logisticsSuppliers?: Array<{ supplierId?: string | null } | null> | null;
 };
@@ -38,6 +39,10 @@ function actorId(actor: ActorLike) {
 
 function actorRole(actor: ActorLike) {
   return nonEmpty(actor?.role);
+}
+
+function inputHasOwnKey(input: SalespersonInput, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
 }
 
 export async function assertDomesticLogisticsSupplier(supplierId: string) {
@@ -113,7 +118,7 @@ export function canAccessDomesticLogisticsOrder(actor: ActorLike, order: Domesti
   if (isExternalLogisticsSupplierAccount(actor)) {
     return (order?.logisticsSuppliers || []).some((row) => row?.supplierId === actor.supplierId);
   }
-  if (actor?.role === "业务员") return order?.customer?.salespersonUserId === actorId(actor);
+  if (actor?.role === "业务员") return orderOwnedBySalesperson(order, actorId(actor));
   return false;
 }
 
@@ -164,8 +169,14 @@ export async function resolveSalespersonUserId(
   before: { salespersonUserId?: string | null } | null = null,
 ) {
   if (actor?.role === "业务员") return actorId(actor);
-  const requestedId = String(input.salespersonUserId || input.salespersonId || "").trim();
+  const isAdmin = actorRole(actor) === "管理员";
+  const hasRequestedField = inputHasOwnKey(input, "salespersonUserId") || inputHasOwnKey(input, "salespersonId");
+  const requestedId = String(input.salespersonUserId ?? input.salespersonId ?? "").trim();
+  if (hasRequestedField && !requestedId) {
+    return isAdmin ? null : (before?.salespersonUserId || customer?.salespersonUserId || actorId(actor));
+  }
   if (requestedId) {
+    if (!isAdmin) return before?.salespersonUserId || customer?.salespersonUserId || actorId(actor);
     const user = await prisma.user.findFirst({ where: { id: requestedId, isActive: true } });
     if (!user) {
       throw codedError("请选择有效业务员", 400, "SALESPERSON_REQUIRED");
@@ -198,7 +209,7 @@ export function costAccessWhere(actor: ActorLike): Prisma.OrderCostWhereInput {
   if (scope === "OWN") {
     const currentActorId = actorId(actor);
     if (!currentActorId) return { id: "__no_cost_access__" };
-    return { order: { is: { customer: { is: { salespersonUserId: currentActorId } } } } };
+    return { order: { is: orderSalespersonOwnershipWhere(currentActorId) } };
   }
   if (scope === "OWN_COST") {
     const currentActorId = actorId(actor);

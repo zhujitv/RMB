@@ -30,6 +30,7 @@ type OrderDocumentLike = {
 type OrderLike = {
   id?: string | null;
   status?: string | null;
+  salespersonUserId?: string | null;
   customer?: { salespersonUserId?: string | null } | null;
   costs?: OrderCostLike[] | null;
   documents?: OrderDocumentLike[] | null;
@@ -46,13 +47,35 @@ function actorRole(actor: ActorLike) {
   return nonEmpty(actor?.role);
 }
 
+export function orderSalespersonOwnershipWhere(currentActorId: string): Prisma.ReceivableOrderWhereInput {
+  return currentActorId
+    ? {
+        OR: [
+          { salespersonUserId: currentActorId },
+          {
+            AND: [
+              { salespersonUserId: null },
+              { customer: { is: { salespersonUserId: currentActorId } } },
+            ],
+          },
+        ],
+      }
+    : { id: "__no_order_access__" };
+}
+
+export function orderOwnedBySalesperson(order: OrderLike | null | undefined, currentActorId: string) {
+  if (!order || !currentActorId) return false;
+  if (order.salespersonUserId) return order.salespersonUserId === currentActorId;
+  return order.customer?.salespersonUserId === currentActorId;
+}
+
 export function orderAccessWhere(actor: ActorLike): Prisma.ReceivableOrderWhereInput {
   if (!canRead(actor, "orders")) return { id: "__no_order_access__" };
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "ALL") return {};
   if (scope === "OWN") {
     const currentActorId = actorId(actor);
-    return currentActorId ? { customer: { is: { salespersonUserId: currentActorId } } } : { id: "__no_order_access__" };
+    return orderSalespersonOwnershipWhere(currentActorId);
   }
   if (scope === "OWN_COST") {
     const currentActorId = actorId(actor);
@@ -79,7 +102,7 @@ export function canAccessOrder(actor: ActorLike, order: OrderLike | null | undef
   if (!canRead(actor, "orders")) return false;
   const scope = effectivePermissions(actor).dataScope;
   if (scope === "ALL") return true;
-  if (scope === "OWN") return order?.customer?.salespersonUserId === actorId(actor);
+  if (scope === "OWN") return orderOwnedBySalesperson(order, actorId(actor));
   if (scope === "OWN_COST") {
     const currentActorId = actorId(actor);
     return (order?.costs || []).some((cost) => !cost.deletedAt && cost.createdById === currentActorId);

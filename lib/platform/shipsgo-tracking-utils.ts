@@ -49,12 +49,21 @@ export function actorRole(actor: ShipsgoActor) {
 
 export function assertShipsgoTrackingWriteAccess(
   actor: ShipsgoActor,
-  order: { customer?: { salespersonUserId?: string | null } | null } | null | undefined,
+  order: { salespersonUserId?: string | null; customer?: { salespersonUserId?: string | null } | null } | null | undefined,
 ) {
   const role = actorRole(actor);
   if (role === "管理员") return;
-  if (role === "业务员" && order?.customer?.salespersonUserId === actorId(actor)) return;
+  if (role === "业务员" && orderBelongsToSalesperson(order, actorId(actor))) return;
   throw codedError("当前角色不允许创建、同步或删除大掌櫃跟踪。", 403, "SHIPSGO_TRACKING_WRITE_FORBIDDEN");
+}
+
+function orderBelongsToSalesperson(
+  order: { salespersonUserId?: string | null; customer?: { salespersonUserId?: string | null } | null } | null | undefined,
+  currentActorId: string,
+) {
+  if (!order || !currentActorId) return false;
+  if (order.salespersonUserId) return order.salespersonUserId === currentActorId;
+  return order.customer?.salespersonUserId === currentActorId;
 }
 
 export function assertShipsgoTrackingDeleteAccess(actor: ShipsgoActor) {

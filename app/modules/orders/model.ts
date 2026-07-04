@@ -47,6 +47,13 @@ export type BusinessEntityOption = {
   status?: string;
 };
 
+export type SalespersonOption = {
+  id: string;
+  name: string;
+  role?: string;
+  isActive?: boolean;
+};
+
 export type PaymentInstallment = {
   ratio: string;
   condition: string;
@@ -92,7 +99,11 @@ export type OrderRow = {
   expectedPaymentDate?: string;
   depositRatio?: number | string;
   reminderDays?: number | string;
+  salespersonId?: string;
+  salespersonUserId?: string;
   salespersonName?: string;
+  salespersonCommissionRate?: number;
+  commissionRate?: number;
   status?: string;
   remark?: string;
   logisticsSupplierIds?: string[];
@@ -160,6 +171,8 @@ export type QuickOrderForm = {
   reminderDays: string;
   status: string;
   businessEntityId: string;
+  salespersonUserId: string;
+  salespersonCommissionRate: string;
   logisticsSupplierIds: string[];
   paymentInstallments: PaymentInstallment[];
   remark: string;
@@ -190,6 +203,8 @@ export const emptyQuickOrderForm: QuickOrderForm = {
   reminderDays: "7",
   status: "草稿",
   businessEntityId: "",
+  salespersonUserId: "",
+  salespersonCommissionRate: "",
   logisticsSupplierIds: [],
   paymentInstallments: [{ ratio: "100", condition: "按约定付款" }],
   remark: "",

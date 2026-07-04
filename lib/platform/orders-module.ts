@@ -79,6 +79,22 @@ function actorRole(actor: ActorLike) {
   return String(actor?.role || "");
 }
 
+function resolveSalespersonCommissionRate(
+  inputData: OrderInput,
+  actor: ActorLike,
+  customer: { commissionStatus?: string | null; commissionRate?: unknown } | null | undefined,
+  before: { salespersonCommissionRate?: unknown } | null,
+) {
+  const fallback = before
+    ? Number(before.salespersonCommissionRate || 0)
+    : Math.max(0, Number(customer?.commissionStatus === "停用" ? 0 : customer?.commissionRate || 0));
+  if (actorRole(actor) !== "管理员") return fallback;
+  const hasInput = inputHasOwn(inputData, "salespersonCommissionRate") || inputHasOwn(inputData, "commissionRate");
+  if (!hasInput) return fallback;
+  const rawValue = inputData.salespersonCommissionRate ?? inputData.commissionRate;
+  return Math.max(0, Math.round(Number(rawValue || 0) * 100) / 100);
+}
+
 type PageResult<T> = {
   rows: T[];
   total: number;
@@ -382,9 +398,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
   });
   const exchangeRate = exchange.exchangeRate;
   const salespersonUserId = await resolveSalespersonUserId(inputData, actor, customer, before);
-  const salespersonCommissionRate = before
-    ? Number(before.salespersonCommissionRate || 0)
-    : Math.max(0, Number(customer.commissionStatus === "停用" ? 0 : customer.commissionRate || 0));
+  const salespersonCommissionRate = resolveSalespersonCommissionRate(inputData, actor, customer, before);
   const createdAt = before?.createdAt || new Date();
   const businessEntity = await resolveBusinessEntityForOrderInput(inputData, before);
   if (before && before.businessEntityId && businessEntity.id !== before.businessEntityId) {
@@ -506,6 +520,62 @@ export async function deleteOrder(request: AuditRequestLike, actor: ActorLike, i
     data: { deletedAt: new Date(), updatedById: currentActorId },
   });
   await runNonCriticalTask("订单删除操作日志写入", () => writeAudit(request, actor, "删除应收订单", "receivable_orders", id, before, row));
+}
+
+export async function repairMissingOrderSalespeople(request: AuditRequestLike, actor: ActorLike) {
+  assertWrite(actor, "orders");
+  if (actorRole(actor) !== "管理员") throw permissionError("只有管理员可以修正订单业务员归属", 403);
+  const rows = await prisma.receivableOrder.findMany({
+    where: {
+      deletedAt: null,
+      salespersonUserId: null,
+    },
+    include: {
+      customer: true,
+      createdBy: true,
+    },
+    orderBy: [{ createdAt: "asc" }],
+    take: 1000,
+  });
+  const repaired: Array<{ orderId: string; orderNo: string; salespersonUserId: string; source: string }> = [];
+  const unresolved: Array<{ orderId: string; orderNo: string; reason: string }> = [];
+  for (const row of rows) {
+    const customerSalespersonId = nonEmpty(row.customer?.salespersonUserId);
+    const createdBySalespersonId = row.createdBy?.role === "业务员" ? nonEmpty(row.createdById) : "";
+    const nextSalespersonId = customerSalespersonId || createdBySalespersonId;
+    if (!nextSalespersonId) {
+      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "缺少客户负责业务员，创建人也不是业务员" });
+      continue;
+    }
+    const patch: Prisma.ReceivableOrderUpdateInput = {
+      salesperson: { connect: { id: nextSalespersonId } },
+      updatedBy: { connect: { id: actorId(actor) } },
+    };
+    if (!Number(row.salespersonCommissionRate || 0) && customerSalespersonId) {
+      patch.salespersonCommissionRate = Math.max(0, Number(row.customer?.commissionStatus === "停用" ? 0 : row.customer?.commissionRate || 0));
+    }
+    const updated = await prisma.receivableOrder.update({
+      where: { id: row.id },
+      data: patch,
+      include: includeOrderRelations(),
+    });
+    repaired.push({
+      orderId: row.id,
+      orderNo: row.orderNo,
+      salespersonUserId: nextSalespersonId,
+      source: customerSalespersonId ? "customer.salespersonUserId" : "createdById",
+    });
+    await runNonCriticalTask("订单业务员历史修正日志写入", () => (
+      writeAudit(request, actor, "修正订单业务员归属", "receivable_orders", row.id, row, updated)
+    ), { context: { orderId: row.id, source: customerSalespersonId ? "customer" : "createdBy" } });
+  }
+  return {
+    scanned: rows.length,
+    repaired: repaired.length,
+    unresolved: unresolved.length,
+    repairedRows: repaired,
+    unresolvedRows: unresolved,
+  };
 }
 
 export async function syncOrderStatus(orderId: string) {

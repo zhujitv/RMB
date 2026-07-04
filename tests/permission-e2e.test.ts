@@ -62,8 +62,10 @@ test("E2E permission: salesperson data stays scoped to own customers across orde
     assertApiRouteUsesUnifiedAuth(route);
   }
 
-  assert.match(orderAccess, /if \(scope === "OWN"\)[\s\S]*customer:\s*\{\s*is:\s*\{\s*salespersonUserId: currentActorId/);
-  assert.match(orderAccess, /if \(scope === "OWN"\) return order\?\.customer\?\.salespersonUserId === actorId\(actor\)/);
+  assert.match(orderAccess, /export function orderSalespersonOwnershipWhere/);
+  assert.match(orderAccess, /\{ salespersonUserId: currentActorId \}/);
+  assert.match(orderAccess, /salespersonUserId: null[\s\S]*customer:\s*\{\s*is:\s*\{\s*salespersonUserId: currentActorId/);
+  assert.match(orderAccess, /if \(scope === "OWN"\) return orderOwnedBySalesperson\(order, actorId\(actor\)\)/);
   assert.match(ordersService, /orderAccessWhere\(actor\)/);
   assert.match(ordersService, /assertCustomerScope\(actor, requireText\(inputData\.customerId, "客户"\)\)/);
   assert.match(ordersService, /resolveSalespersonUserId\(inputData, actor, customer, before\)/);

@@ -19,6 +19,7 @@ import {
   type SuppliersResponse,
   type OrderRow,
   type PaymentInstallment,
+  type SalespersonOption,
   type SupplierOption,
 } from "./model";
 import {
@@ -31,13 +32,18 @@ import {
 type BusinessEntitiesResponse = {
   entities?: BusinessEntityOption[];
 };
+type SalespeopleResponse = {
+  salespeople?: SalespersonOption[];
+};
 
 export function QuickCreateOrderPanel({
   initialOrder,
+  canManageOrderAssignments = false,
   onCancel,
   onSaved,
 }: {
   initialOrder?: OrderRow | null;
+  canManageOrderAssignments?: boolean;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -45,6 +51,7 @@ export function QuickCreateOrderPanel({
   const [customers, setCustomers] = useState<CustomerAutocompleteOption[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
+  const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [allowMultipleLogisticsSuppliers, setAllowMultipleLogisticsSuppliers] = useState(false);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,14 +111,18 @@ export function QuickCreateOrderPanel({
 
   async function loadFormOptions() {
     try {
-      const [settingsResult, suppliersResult, businessEntitiesResult] = await Promise.all([
+      const [settingsResult, suppliersResult, businessEntitiesResult, salespeopleResult] = await Promise.all([
         apiJson<SettingsResponse>("/api/exchange-rates/settings").catch(() => null),
         apiJson<SuppliersResponse>("/api/suppliers/available").catch(() => null),
         apiJson<BusinessEntitiesResponse>("/api/business-entities").catch(() => null),
+        canManageOrderAssignments
+          ? apiJson<SalespeopleResponse>("/api/settings/customers?page=1&pageSize=1").catch(() => null)
+          : Promise.resolve(null),
       ]);
       setAllowMultipleLogisticsSuppliers(Boolean(settingsResult?.settings?.allowMultipleOrderLogisticsSuppliers));
       setSuppliers(Array.isArray(suppliersResult?.suppliers) ? suppliersResult.suppliers : []);
       setBusinessEntities(Array.isArray(businessEntitiesResult?.entities) ? businessEntitiesResult.entities : []);
+      setSalespeople(Array.isArray(salespeopleResult?.salespeople) ? salespeopleResult.salespeople : []);
     } catch (optionError) {
       setMessage(optionError instanceof Error ? optionError.message : "读取订单配置失败");
     }
@@ -204,6 +215,12 @@ export function QuickCreateOrderPanel({
       exchangeRateType: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateType,
       paymentTermType: customerOption.defaultPaymentTermType || current.paymentTermType,
       tradeTerm: customerOption.defaultTradeTerm || current.tradeTerm,
+      salespersonUserId: canManageOrderAssignments && !initialOrder?.id
+        ? (customerOption.salespersonUserId || current.salespersonUserId)
+        : current.salespersonUserId,
+      salespersonCommissionRate: canManageOrderAssignments && !initialOrder?.id && customerOption.commissionRate != null
+        ? String(customerOption.commissionStatus === "停用" ? 0 : customerOption.commissionRate)
+        : current.salespersonCommissionRate,
     }));
     if (customerOption.defaultCurrency) await resolveExchangeRate(customerOption.defaultCurrency);
   }
@@ -305,6 +322,12 @@ export function QuickCreateOrderPanel({
         reminderDays: Number(form.reminderDays || 7),
         status: form.status,
         businessEntityId: form.businessEntityId || undefined,
+        ...(canManageOrderAssignments
+          ? {
+              salespersonUserId: form.salespersonUserId,
+              salespersonCommissionRate: form.salespersonCommissionRate === "" ? undefined : Number(form.salespersonCommissionRate),
+            }
+          : {}),
         logisticsSupplierIds: selectedLogisticsSupplierIds(),
         remark: form.remark.trim(),
       };
@@ -376,6 +399,38 @@ export function QuickCreateOrderPanel({
             {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
           </select>
         </label>
+        {canManageOrderAssignments ? (
+          <>
+            <label>
+              业务员
+              <select
+                value={form.salespersonUserId}
+                onChange={(event) => {
+                  const nextSalespersonUserId = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    salespersonUserId: nextSalespersonUserId,
+                    salespersonCommissionRate: nextSalespersonUserId ? current.salespersonCommissionRate : "0",
+                  }));
+                }}
+              >
+                <option value="">未分配</option>
+                {salespeople.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name}{user.role ? ` · ${user.role}` : ""}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              提成比例 %
+              <input
+                value={form.salespersonCommissionRate}
+                onChange={(event) => setFormValue("salespersonCommissionRate", event.target.value)}
+                inputMode="decimal"
+                placeholder="例如 2.5"
+              />
+            </label>
+          </>
+        ) : null}
         <label>
           币种
           <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)}>

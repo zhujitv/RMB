@@ -13,6 +13,10 @@ export type CustomerAutocompleteOption = {
   defaultCurrency?: string;
   defaultPaymentTermType?: string;
   defaultTradeTerm?: string;
+  salespersonUserId?: string;
+  salespersonName?: string;
+  commissionRate?: number;
+  commissionStatus?: string;
   contactPerson?: string;
   contactEmail?: string;
   contactPhone?: string;

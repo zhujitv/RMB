@@ -108,6 +108,7 @@ export function OrderDetailDrawer({
         <DetailField label="客户全称" value={customerLegalName(order)} wide />
         <DetailField label="业务主体" value={order.businessEntityName || order.businessEntityNameSnapshot || "-"} />
         <DetailField label="业务员" value={order.salespersonName || "-"} />
+        <DetailField label="提成比例" value={`${Number(order.salespersonCommissionRate ?? order.commissionRate ?? 0).toFixed(2)}%`} />
         <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
         <DetailField label="付款条款" value={paymentTermText(order)} wide />
         <DetailField label="到期日" value={`${order.dueDate || "-"} ${order.summary?.reminderStatus ? `· ${order.summary.reminderStatus}` : ""}`} />

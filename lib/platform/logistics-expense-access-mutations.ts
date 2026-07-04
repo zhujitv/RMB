@@ -47,6 +47,7 @@ import {
   logisticsExpenseExchangeActor,
   normalizeBillingMethodValue,
 } from "./logistics-expense-access-model";
+import { orderOwnedBySalesperson } from "./order-access";
 
 export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, actor: LogisticsActor): Promise<LogisticsExpenseOrderForAccess> {
   const role = logisticsExpenseActorRole(actor);
@@ -80,7 +81,7 @@ export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, act
   });
   if (!order) throw codedError("未找到对应发货订单，请先建立或完善发货订单后再录入费用。", 404, "LOGISTICS_EXPENSE_ORDER_NOT_FOUND");
   if (role === "管理员") return order;
-  if (role === "业务员" && order.customer?.salespersonUserId === id) return order;
+  if (role === "业务员" && orderOwnedBySalesperson(order, id)) return order;
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
     if (supplierId && (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId)) return order;
   }

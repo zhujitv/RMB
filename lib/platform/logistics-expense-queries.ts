@@ -8,7 +8,7 @@ import {
   serializeSupplier,
 } from "./shared";
 import { summarizeCurrencyTotals, type CurrencyTotalInput } from "./currency-totals";
-import { orderAccessWhere } from "./order-access";
+import { orderAccessWhere, orderSalespersonOwnershipWhere } from "./order-access";
 import {
   assertCanReadLogisticsExpenses,
   includeLogisticsExpenseRelations,
@@ -203,7 +203,7 @@ function logisticsExpenseBillAccessWhere(actor: LogisticsQueryActor): Prisma.Log
   const supplierId = nonEmpty(actor?.supplierId);
   if (role === "管理员") return {};
   if (role === "财务") return { auditStatus: "审核通过" };
-  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId } } } } };
+  if (role === "业务员") return { order: { is: orderSalespersonOwnershipWhere(actorId) } };
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) return supplierId ? { supplierId } : { id: "__no_supplier_bound__" };
   return { id: "__no_logistics_bill_access__" };
 }

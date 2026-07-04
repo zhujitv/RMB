@@ -14,13 +14,14 @@ import {
   logisticsExpenseActorId,
   logisticsExpenseActorRole,
 } from "./logistics-expense-access-model";
+import { orderSalespersonOwnershipWhere } from "./order-access";
 
 export function logisticsExpenseAccessWhere(actor: LogisticsActor): Prisma.LogisticsExpenseWhereInput {
   const role = logisticsExpenseActorRole(actor);
   const id = logisticsExpenseActorId(actor);
   if (role === "管理员") return {};
   if (role === "财务") return { bill: { is: { auditStatus: "审核通过" } } };
-  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: id } } } } };
+  if (role === "业务员") return { order: { is: orderSalespersonOwnershipWhere(id) } };
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
     if (!actor) return { supplierId: "__no_supplier_bound__" };
     if (actor.supplierId) return { supplierId: actor.supplierId };

@@ -162,6 +162,7 @@ export type LogisticsActor = {
 } | null | undefined;
 export type LogisticsExpenseOrderForAccess = LogisticsOrderLike & {
   id: string;
+  salespersonUserId?: string | null;
   customer?: ({ salespersonUserId?: string | null } & UnknownRecord) | null;
   logisticsSuppliers?: Array<{ supplierId?: string | null } & UnknownRecord> | null;
 };

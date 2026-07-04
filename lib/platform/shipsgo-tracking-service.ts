@@ -44,6 +44,7 @@ async function getShipsgoTrackingOrder(orderId: string, actor: ShipsgoActor) {
       id: true,
       orderNo: true,
       blNo: true,
+      salespersonUserId: true,
       customerNameSnapshot: true,
       customer: { select: { salespersonUserId: true, shortName: true, name: true } },
       logisticsSuppliers: { select: { supplierId: true } },

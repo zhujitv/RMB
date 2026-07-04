@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
-import { orderAccessWhere } from "./order-access";
+import { orderAccessWhere, orderSalespersonOwnershipWhere } from "./order-access";
 import { canRead, canWrite } from "./shared-access";
 import {
   addDays,
@@ -790,7 +790,7 @@ export function logisticsBillAccessWhere(actor: ActorLike): Prisma.LogisticsBill
   const supplierId = actorSupplierId(actor);
   if (role === "管理员") return {};
   if (role === "财务") return { auditStatus: "审核通过" };
-  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId(actor) } } } } };
+  if (role === "业务员") return { order: { is: orderSalespersonOwnershipWhere(actorId(actor)) } };
   if (role === LOGISTICS_OPERATOR_ROLE) return supplierId ? { supplierId } : { id: "__no_supplier_bound__" };
   if (role === LEGACY_LOGISTICS_OPERATOR_ROLE) return {};
   return { id: "__no_logistics_bill_access__" };
@@ -800,7 +800,7 @@ export function shipsgoTrackingAccessWhere(actor: ActorLike): Prisma.ShipsgoTrac
   const role = actorRole(actor);
   const supplierId = actorSupplierId(actor);
   if (role === "管理员") return {};
-  if (role === "业务员") return { order: { is: { customer: { is: { salespersonUserId: actorId(actor) } } } } };
+  if (role === "业务员") return { order: { is: orderSalespersonOwnershipWhere(actorId(actor)) } };
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && supplierId) {
     return { order: { is: { logisticsSuppliers: { some: { supplierId } } } } };
   }
