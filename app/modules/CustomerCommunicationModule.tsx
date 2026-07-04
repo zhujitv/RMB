@@ -315,7 +315,7 @@ export function CustomerCommunicationModule({
                 <td><button className={styles.secondaryButton} type="button" onClick={() => void openDetail(row.id)}>详情</button></td>
               </tr>
             )) : (
-              <tr><td colSpan={9}><div className={styles.emptyState}>未找到客户沟通订单</div></td></tr>
+              <tr><td colSpan={9}><div className={styles.emptyState}>未找到需要发送清关资料的订单</div></td></tr>
             )}
           </tbody>
         </table>

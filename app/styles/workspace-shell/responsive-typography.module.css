@@ -54,6 +54,8 @@
 
   .appShell {
     grid-template-columns: 1fr;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .mobileNavBackdrop {
@@ -72,7 +74,10 @@
     top: 0;
     bottom: 0;
     width: min(280px, 84vw);
+    height: 100vh;
     min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
     z-index: 40;
     border-right: 1px solid #e2e8f0;
     border-bottom: 0;

@@ -1,4 +1,5 @@
 import * as customsDeclarationParser from "../customs-declaration-parser";
+import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { readR2Object } from "../r2";
 import {
@@ -130,6 +131,19 @@ type ShippingBundleItemWithDocument = ShippingBundleItem & {
   document: ShippingDocumentLike & { storageKey: string };
 };
 
+const CUSTOMER_COMMUNICATION_ENABLED_ORDER_WHERE: Prisma.ReceivableOrderWhereInput = {
+  customer: {
+    is: {
+      enableAutoShippingDocsNotification: true,
+      deletedAt: null,
+    },
+  },
+};
+
+function customerCommunicationEnabledOrderWhere(where: Prisma.ReceivableOrderWhereInput): Prisma.ReceivableOrderWhereInput {
+  return { AND: [where, CUSTOMER_COMMUNICATION_ENABLED_ORDER_WHERE] };
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "";
 }
@@ -210,11 +224,11 @@ async function loadOrderForShippingNotification(orderId: string, actor: ActorLik
 async function loadOrderForManualShippingNotification(orderId: string, actor: ActorLike = null) {
   assertWrite(actor, "customerCommunication");
   const order = await prisma.receivableOrder.findFirst({
-    where: {
+    where: customerCommunicationEnabledOrderWhere({
       id: orderId,
       deletedAt: null,
       ...customerCommunicationOrderAccessWhere(actor),
-    },
+    }),
     include: includeOrderRelations(),
   });
   if (!order) throw permissionError("订单不存在或无权发送清关资料", 404);
@@ -658,7 +672,7 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
 export async function getShippingDocumentDraftForOrder(actor: ActorLike, orderId: string) {
   assertRead(actor, "customerCommunication");
   const order = await prisma.receivableOrder.findFirst({
-    where: { id: orderId, deletedAt: null, ...customerCommunicationOrderAccessWhere(actor) },
+    where: customerCommunicationEnabledOrderWhere({ id: orderId, deletedAt: null, ...customerCommunicationOrderAccessWhere(actor) }),
     include: includeOrderRelations(),
   });
   if (!order) throw permissionError("订单不存在或无权查看客户沟通资料", 404);

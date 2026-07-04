@@ -2,9 +2,11 @@
  * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
 
 .appShell {
+  height: 100vh;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
   background: #f8fafc;
   color: #0f172a;
 }
@@ -16,9 +18,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  flex-shrink: 0;
   color: #334155;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
@@ -78,9 +82,13 @@
 .navList {
   display: grid;
   flex: 1 1 auto;
+  min-height: 0;
   align-content: start;
   gap: 6px;
   margin: 18px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .navItem {
@@ -169,8 +177,11 @@
 
 .mainColumn {
   min-width: 0;
+  min-height: 0;
+  height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
+  overflow: hidden;
 }
 
 .topbar {
@@ -184,6 +195,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .topbarTitleRow {
@@ -298,10 +310,16 @@
 
 .content {
   padding: 28px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .welcomeCard,
 .moduleCard {
+  min-width: 0;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 20px;
@@ -310,6 +328,7 @@
 }
 
 .subModuleCard {
+  min-width: 0;
   margin-top: 18px;
   background: #fff;
   border: 1px solid #e2e8f0;

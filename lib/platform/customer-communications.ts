@@ -35,6 +35,15 @@ type ActorLike = {
 type QueryLike = URLSearchParams;
 type AuditRequestLike = Parameters<typeof sendManualShippingDocumentsNotification>[0];
 
+const CUSTOMER_COMMUNICATION_ENABLED_WHERE: Prisma.ReceivableOrderWhereInput = {
+  customer: {
+    is: {
+      enableAutoShippingDocsNotification: true,
+      deletedAt: null,
+    },
+  },
+};
+
 const CUSTOMER_EMAIL_TYPES = {
   CUSTOMS_CLEARANCE_DOCS: "CUSTOMS_CLEARANCE_DOCS",
   SHIPPING_ADVICE: "SHIPPING_ADVICE",
@@ -113,18 +122,28 @@ const orderSelect = Prisma.validator<Prisma.ReceivableOrderSelect>()({
 
 type CommunicationOrder = Prisma.ReceivableOrderGetPayload<{ select: typeof orderSelect }>;
 
+function customerCommunicationEnabledWhere(where: Prisma.ReceivableOrderWhereInput): Prisma.ReceivableOrderWhereInput {
+  return { AND: [where, CUSTOMER_COMMUNICATION_ENABLED_WHERE] };
+}
+
 function customerCommunicationWhere(actor: ActorLike): Prisma.ReceivableOrderWhereInput {
   assertRead(actor, "customerCommunication");
   const role = String(actor?.role || "");
-  if (role === "管理员" || role === "物流资料录入员") return { deletedAt: null };
-  if (role === "业务员") return { deletedAt: null, ...orderAccessWhere(actor) };
+  if (role === "管理员" || role === "物流资料录入员") {
+    return customerCommunicationEnabledWhere({ deletedAt: null });
+  }
+  if (role === "业务员") {
+    return customerCommunicationEnabledWhere({ deletedAt: null, ...orderAccessWhere(actor) });
+  }
   if (role === "物流供应商") {
     const supplierId = nonEmpty(actor?.supplierId);
     return supplierId
-      ? { deletedAt: null, logisticsSuppliers: { some: { supplierId } } }
+      ? customerCommunicationEnabledWhere({ deletedAt: null, logisticsSuppliers: { some: { supplierId } } })
       : { id: "__no_customer_communication_access__" };
   }
-  if (canRead(actor, "orders")) return { deletedAt: null, ...orderAccessWhere(actor) };
+  if (canRead(actor, "orders")) {
+    return customerCommunicationEnabledWhere({ deletedAt: null, ...orderAccessWhere(actor) });
+  }
   return { id: "__no_customer_communication_access__" };
 }
 
