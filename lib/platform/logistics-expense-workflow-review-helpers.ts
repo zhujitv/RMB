@@ -28,6 +28,7 @@ import {
   type ReviewBill,
   type ReviewResult,
 } from "./logistics-expense-workflow-core";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function loadLogisticsExpenseReviewBills(identifiers: string[] = [], actor: ActorContext) {
   const results: ReviewResult[] = [];
@@ -91,7 +92,7 @@ export async function approveLogisticsExpenseBillsInTransaction(billIds: string[
         reviewRemark,
         rejectReason: null,
         invoiceNotificationError: null,
-        paymentStatus: "待付款",
+        paymentStatus: "待开票",
         invoiceStatus: "待开票",
         updatedById: actorId(actor),
       },
@@ -140,6 +141,7 @@ export function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestL
       });
     }
     await refreshTaxRefundCompletenessBatch(finalRows.map((row) => row.orderId));
+    invalidateWorkbenchTodosCache();
   });
 }
 
@@ -159,7 +161,7 @@ export async function approveLogisticsExpenseBillRowsInTransaction(rows: Logisti
           reviewRemark,
           rejectReason: null,
           invoiceNotificationError: null,
-          paymentStatus: "待付款",
+          paymentStatus: "待开票",
           invoiceStatus: "未通知",
           updatedById: actorId(actor),
         },

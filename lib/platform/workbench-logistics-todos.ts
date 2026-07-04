@@ -18,8 +18,8 @@ import {
   validCost,
 } from "./shared";
 import {
-  LOGISTICS_INVOICE_DONE_STATUSES,
-  LOGISTICS_INVOICE_REVIEW_STATUSES,
+  LOGISTICS_INVOICE_TO_UPLOAD_STATUSES,
+  LOGISTICS_INVOICE_UPLOADED_STATUSES,
   LOGISTICS_PAYMENT_DONE_STATUSES,
   LOGISTICS_PAYMENT_READY_INVOICE_STATUSES,
   NEGATIVE_PROFIT_THRESHOLD,
@@ -68,6 +68,24 @@ import {
   transportInfoExists,
   type WorkbenchWorkflowOrder,
 } from "./workbench-todos-workflow-helpers";
+
+function logisticsBillWorkflowFinished(bill: { auditStatus?: string | null; invoiceStatus?: string | null; paymentStatus?: string | null }) {
+  return bill.auditStatus === "审核通过"
+    && LOGISTICS_INVOICE_UPLOADED_STATUSES.includes(nonEmpty(bill.invoiceStatus))
+    && LOGISTICS_PAYMENT_DONE_STATUSES.includes(nonEmpty(bill.paymentStatus));
+}
+
+function logisticsBillNeedsInvoiceUpload(bill: { auditStatus?: string | null; invoiceStatus?: string | null; paymentStatus?: string | null }) {
+  return bill.auditStatus === "审核通过"
+    && LOGISTICS_INVOICE_TO_UPLOAD_STATUSES.includes(nonEmpty(bill.invoiceStatus))
+    && !LOGISTICS_PAYMENT_DONE_STATUSES.includes(nonEmpty(bill.paymentStatus));
+}
+
+function logisticsBillNeedsPaymentRegistration(bill: { auditStatus?: string | null; invoiceStatus?: string | null; paymentStatus?: string | null }) {
+  return bill.auditStatus === "审核通过"
+    && LOGISTICS_PAYMENT_READY_INVOICE_STATUSES.includes(nonEmpty(bill.invoiceStatus))
+    && !LOGISTICS_PAYMENT_DONE_STATUSES.includes(nonEmpty(bill.paymentStatus));
+}
 
 export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) {
   const actor = context.actor;
@@ -230,13 +248,14 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
   if (!(isAdmin(actor) || isSalesperson(actor) || isFinance(actor) || isLogisticsOperator(actor))) return [];
   const accessWhere = logisticsBillAccessWhere(actor);
   const reviewAccessWhere = logisticsBillReviewAccessWhere(actor);
-  const [reviewBills, invoiceBills, invoiceReviewBills, paymentBills] = await Promise.all([
+  const [reviewBills, invoiceBills, paymentBills] = await Promise.all([
     isAdmin(actor) || isFinance(actor) || isSalesperson(actor)
       ? prisma.logisticsBill.findMany({
           where: {
             deletedAt: null,
             AND: [
               { auditStatus: "待审核" },
+              { paymentStatus: { notIn: LOGISTICS_PAYMENT_DONE_STATUSES } },
               reviewAccessWhere,
             ],
           },
@@ -253,13 +272,8 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
         deletedAt: null,
         AND: [
           { auditStatus: "审核通过" },
-          { invoiceStatus: { notIn: LOGISTICS_INVOICE_DONE_STATUSES } },
-          {
-            OR: [
-              { invoiceNotifiedAt: { not: null } },
-              { expenses: { some: { deletedAt: null, invoiceNotifiedAt: { not: null } } } },
-            ],
-          },
+          { invoiceStatus: { in: LOGISTICS_INVOICE_TO_UPLOAD_STATUSES } },
+          { paymentStatus: { notIn: LOGISTICS_PAYMENT_DONE_STATUSES } },
           accessWhere,
         ],
       },
@@ -270,25 +284,6 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       orderBy: [{ reviewedAt: "asc" }, { updatedAt: "asc" }],
       take: TODO_LIMIT_PER_SOURCE,
     }),
-    isFinanceOperator(actor)
-      ? prisma.logisticsBill.findMany({
-          where: {
-            deletedAt: null,
-            AND: [
-              { auditStatus: "审核通过" },
-              { invoiceStatus: { in: LOGISTICS_INVOICE_REVIEW_STATUSES } },
-              { expenses: { some: { deletedAt: null, invoiceStatus: "已上传" } } },
-              accessWhere,
-            ],
-          },
-          include: {
-            order: { include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } }, logisticsSuppliers: { include: { supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } } }, orderBy: [{ assignedAt: "desc" }] } } },
-            supplier: { include: { operatorUsers: { where: { isActive: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, email: true, role: true, supplierId: true } } } },
-          },
-          orderBy: [{ updatedAt: "asc" }],
-          take: TODO_LIMIT_PER_SOURCE,
-        })
-      : Promise.resolve([]),
     isFinanceOperator(actor)
       ? prisma.logisticsBill.findMany({
           where: {
@@ -310,7 +305,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       : Promise.resolve([]),
   ]);
   return [
-    ...reviewBills.map((bill) => todoForLogisticsBill({
+    ...reviewBills.filter((bill) => !logisticsBillWorkflowFinished(bill)).map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_FEE_REVIEW",
       title: "物流费用待审核",
       bill,
@@ -318,7 +313,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       dueAt: bill.submittedAt || bill.updatedAt,
       owner: roleOwner(context, "FINANCE"),
     })),
-    ...invoiceBills.map((bill) => todoForLogisticsBill({
+    ...invoiceBills.filter(logisticsBillNeedsInvoiceUpload).map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_INVOICE_UPLOAD",
       title: "物流发票待上传",
       bill,
@@ -327,16 +322,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       owner: bill.supplier ? supplierOwner(context, bill.supplier, "LOGISTICS_SUPPLIER", "物流供应商") : logisticsOwnerForOrder(context, bill.order),
       ownerName: bill.supplier?.supplierName || "物流供应商",
     })),
-    ...invoiceReviewBills.map((bill) => todoForLogisticsBill({
-      type: "LOGISTICS_INVOICE_REVIEW",
-      title: "发票待审核",
-      bill,
-      context,
-      dueAt: bill.updatedAt,
-      owner: roleOwner(context, "FINANCE"),
-      ownerName: "财务/管理员",
-    })),
-    ...paymentBills.map((bill) => todoForLogisticsBill({
+    ...paymentBills.filter(logisticsBillNeedsPaymentRegistration).map((bill) => todoForLogisticsBill({
       type: "LOGISTICS_PAYMENT_REGISTER",
       title: "物流付款待登记",
       bill,

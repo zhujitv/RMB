@@ -56,8 +56,31 @@ export function logisticsExpenseBillInvoiceStatusValue(expense: LogisticsExpense
   return nonEmpty(logisticsExpenseBillRecord(expense).invoiceStatus || "待开票");
 }
 
+const LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES = new Set([
+  "待开票",
+  "未通知",
+  "已通知开票",
+  "通知失败",
+  "待开票 / 通知失败",
+  "部分未通知",
+  "部分已通知",
+  "部分待开票",
+  "部分上传发票",
+  "部分已确认",
+  "部分已上传",
+  "部分上传",
+]);
+
+function normalizeLogisticsBillPaymentStatus(invoiceStatus: unknown, paymentStatus: unknown) {
+  const invoice = nonEmpty(invoiceStatus || "待开票");
+  const payment = nonEmpty(paymentStatus || "待开票");
+  if (payment === "待付款" && LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES.has(invoice)) return "待开票";
+  return payment;
+}
+
 export function logisticsExpenseBillPaymentStatusValue(expense: LogisticsExpenseLike = {}) {
-  return nonEmpty(logisticsExpenseBillRecord(expense).paymentStatus || "待开票");
+  const bill = logisticsExpenseBillRecord(expense);
+  return normalizeLogisticsBillPaymentStatus(bill.invoiceStatus, bill.paymentStatus);
 }
 
 export function logisticsExpenseDetailInvoiceStatusValue(expense: LogisticsExpenseLike = {}) {
@@ -305,7 +328,7 @@ export function serializeLogisticsExpenseBill(rows: LogisticsExpenseLike[] = [])
     currencyTotals,
     auditStatus: bill.auditStatus || "草稿",
     invoiceStatus: bill.invoiceStatus || "待开票",
-    paymentStatus: bill.paymentStatus || "待开票",
+    paymentStatus: normalizeLogisticsBillPaymentStatus(bill.invoiceStatus, bill.paymentStatus),
     paymentDate: dateToInput(dateFromInput(bill.paymentDate)),
     submittedAt: bill.submittedAt || first.submittedAt || null,
     submittedBy: serializeUser(bill.submittedBy),

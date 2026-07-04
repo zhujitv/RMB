@@ -77,6 +77,17 @@ export function normalizePayButtonInvoiceStatus(values: unknown[]) {
     .map((value) => String(value || "").trim())
     .filter(Boolean);
   if (
+    statuses.some((status) =>
+      status.includes("部分") ||
+      status.includes("通知失败") ||
+      status.includes("待开票") ||
+      status.includes("未通知") ||
+      status.includes("已通知开票")
+    )
+  ) {
+    return "未上传发票";
+  }
+  if (
     statuses.some(
       (status) =>
         status.includes("已上传发票") ||
@@ -243,11 +254,17 @@ export function logisticsExpenseBillInvoiceStatusFromRow(
 export function logisticsExpenseBillPaymentStatusFromRow(
   expense: LogisticsExpense,
 ) {
-  return (
+  const invoiceStatus = logisticsExpenseBillInvoiceStatusFromRow(expense);
+  const paymentStatus = (
     String(
       expense.paymentStatus || expense.billPaymentStatus || "待开票",
     ).trim() || "待开票"
   );
+  if (
+    paymentStatus === "待付款" &&
+    ["待开票", "未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已确认", "部分已上传", "部分上传"].includes(invoiceStatus)
+  ) return "待开票";
+  return paymentStatus;
 }
 
 export function logisticsExpenseDetailInvoiceStatus(expense: LogisticsExpense) {

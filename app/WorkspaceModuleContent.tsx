@@ -99,13 +99,13 @@ export function WorkspaceModuleContent({
   setLogisticsFeesFocus: Dispatch<SetStateAction<LogisticsFeesFocus>>;
   setSupplierDocumentsFocus: Dispatch<SetStateAction<SupplierDocumentsFocus>>;
   selectWorkspaceMenu: (menuKey: string) => void;
-  loadWorkbenchTodos: () => Promise<void>;
+  loadWorkbenchTodos: (options?: { refresh?: boolean }) => Promise<void>;
   openWorkbenchTodo: (todo: WorkbenchTodo) => void;
   updateCurrentUser: (user: AuthPayload["user"]) => void;
   updateCompanyProfile: (settings: CompanyProfileSettings) => void;
 }) {
   if (activeMenu === "welcome") {
-    return <WelcomePanel payload={payload} menus={menus} todosState={workbenchTodos} bootWarnings={bootWarnings} onSelectMenu={selectWorkspaceMenu} onRefreshTodos={loadWorkbenchTodos} onOpenTodo={openWorkbenchTodo} />;
+    return <WelcomePanel payload={payload} menus={menus} todosState={workbenchTodos} bootWarnings={bootWarnings} onSelectMenu={selectWorkspaceMenu} onRefreshTodos={() => void loadWorkbenchTodos({ refresh: true })} onOpenTodo={openWorkbenchTodo} />;
   }
   if (activeMenu === "account") {
     return <AccountSettings user={payload.user} companyProfile={payload.companyProfile} onProfileSaved={updateCurrentUser} onPasswordChanged={(message) => setAuth({ status: "guest", message })} />;
@@ -132,7 +132,7 @@ export function WorkspaceModuleContent({
     );
   }
   if (activeMenu === "logisticsFees") {
-    return <LogisticsFeesModule title="物流费用" focusBillId={logisticsFeesFocus.billId} focusKeyword={logisticsFeesFocus.keyword} focusToken={logisticsFeesFocus.token} currentUserRole={payload.user.role} currentUserSupplierId={payload.user.supplierId || ""} canCreateExpense={canWritePermission(payload.user, payload.permissions, "logistics", ["管理员", "物流供应商"])} />;
+    return <LogisticsFeesModule title="物流费用" focusBillId={logisticsFeesFocus.billId} focusKeyword={logisticsFeesFocus.keyword} focusToken={logisticsFeesFocus.token} currentUserRole={payload.user.role} currentUserSupplierId={payload.user.supplierId || ""} canCreateExpense={canWritePermission(payload.user, payload.permissions, "logistics", ["管理员", "物流供应商"])} onRefreshTodos={() => loadWorkbenchTodos({ refresh: true })} />;
   }
   if (activeMenu === "customerCommunication") {
     return <CustomerCommunicationModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={customerCommunicationFocus.keyword} initialOrderId={customerCommunicationFocus.orderId} initialOpenToken={customerCommunicationFocus.token} />;
@@ -141,7 +141,7 @@ export function WorkspaceModuleContent({
     return <DomesticLogisticsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={oceanControlTowerFocus.keyword} initialOpenToken={oceanControlTowerFocus.token} initialView="controlTower" initialControlTowerFullscreen />;
   }
   if (activeMenu === "supplierDocuments") {
-    return <SupplierDocumentsModule currentUser={payload.user} initialKeyword={supplierDocumentsFocus.keyword} initialRequestId={supplierDocumentsFocus.requestId} initialOpenToken={supplierDocumentsFocus.token} onRefreshTodos={loadWorkbenchTodos} />;
+    return <SupplierDocumentsModule currentUser={payload.user} initialKeyword={supplierDocumentsFocus.keyword} initialRequestId={supplierDocumentsFocus.requestId} initialOpenToken={supplierDocumentsFocus.token} onRefreshTodos={() => loadWorkbenchTodos({ refresh: true })} />;
   }
   if (activeMenu === "profit") return <ProfitModule currentUser={payload.user} initialKeyword={profitFocus.keyword} initialOpenToken={profitFocus.token} />;
   if (activeMenu === "taxRefund") {

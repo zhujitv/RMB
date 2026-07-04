@@ -121,7 +121,12 @@ test("logistics expense approval works at bill level and groups invoice emails b
   );
   assert.match(backend, /发票上传入口/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
-  assert.match(backend, /paymentStatus: "待付款"/);
+  assert.match(backend, /paymentStatus: "待开票"/);
+  assert.match(backend, /function paymentStatusUpdateAfterInvoiceProgress/);
+  assert.match(backend, /billPaymentStatus === "待开票"/);
+  assert.match(backend, /\? \{ paymentStatus: "待付款" \}/);
+  assert.match(backend, /export async function uploadLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
+  assert.match(backend, /export async function confirmLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
   assert.match(backend, /reviewedById: actor\.id/);
   assert.match(backend, /reviewedAt: now/);
   assert.match(
@@ -277,6 +282,8 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(logisticsModule, /PdfPreviewButton/);
   assert.match(logisticsInvoiceRoute, /export async function DELETE/);
   assert.match(backend, /export async function deleteLogisticsExpenseInvoice/);
+  assert.match(backend, /currentPaymentStatus = aggregateLogisticsExpenseStatus\(rows, "paymentStatus"\)/);
+  assert.match(backend, /LOGISTICS_INVOICE_PAID_DELETE_BLOCKED/);
   assert.match(backend, /invoiceDocumentId: null/);
   assert.match(logisticsModule, /body\.set\("invoiceGroup", group\.key\)/);
   assert.match(invoiceUploadFormSource, /type="file"/);

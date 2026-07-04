@@ -8,6 +8,7 @@ import {
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
 import { canRejectLogisticsBill, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import {
   actorId,
   assertWorkflowActor,
@@ -85,6 +86,7 @@ export async function reviewLogisticsExpense(request: AuditRequestLike, actor: A
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }
   const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  invalidateWorkbenchTodosCache();
   await runNonCriticalTask("物流费用审核日志写入", () => writeAudit(request, actor, "重新打开物流费用账单", "logistics_bills", billId, rows.map(serializeLogisticsExpense), {
     bill: serializeLogisticsExpenseBill(savedRows),
   }));
@@ -131,6 +133,7 @@ export async function rejectLogisticsExpenseBill(request: AuditRequestLike, acto
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }
   const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  invalidateWorkbenchTodosCache();
   await runNonCriticalTask("物流费用账单驳回日志写入", () => writeAudit(request, actor, "驳回物流费用账单", "logistics_bills", billId, rows.map(serializeLogisticsExpense), {
     bill: serializeLogisticsExpenseBill(savedRows),
     rejectReason,
@@ -205,6 +208,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
   const approvedBillIds = [...new Set(results.filter((result) => result.auditStatus === "审核通过").map((result) => result.billId).filter(Boolean))];
   const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
   scheduleLogisticsExpenseReviewSideEffects(request, actor, approvedRows, now);
+  if (approvedRows.length) invalidateWorkbenchTodosCache();
   const serializedBills = approvedBillIds
     .map((billId) => serializeLogisticsExpenseBill(finalRows.filter((row) => rowBillId(row) === billId)))
     .filter((bill) => bill.items.length > 0);
@@ -233,6 +237,7 @@ export async function resendLogisticsExpenseInvoiceNotice(request: AuditRequestL
   const emailResults = await notifyLogisticsSupplierInvoiceBills(rows);
   const updatedRows = await applyLogisticsExpenseInvoiceNotificationResults(rows, emailResults, actor, new Date());
   const finalRows = await reloadLogisticsExpenseRowsForBillIds([rowBillId(rows[0])], actor).then((nextRows) => nextRows.length ? nextRows : updatedRows);
+  invalidateWorkbenchTodosCache();
   const emailErrors = emailResults.filter((result) => !result.sent).map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
   const emailError = emailErrors.join("；");
   await runNonCriticalTask("物流费用开票通知重发日志写入", () => writeAudit(request, actor, "重新发送物流费用开票通知", "logistics_bills", rowBillId(rows[0]), rows.map(serializeLogisticsExpense), {

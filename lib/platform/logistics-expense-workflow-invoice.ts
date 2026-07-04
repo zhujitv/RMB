@@ -31,6 +31,7 @@ import {
 } from "./logistics-invoice-groups";
 import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
 import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import {
   actorId,
   loadLogisticsExpenseBillRowsForAction,
@@ -43,6 +44,15 @@ import {
   type LogisticsExpenseRow,
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
+
+function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseRow[]) {
+  const billInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(billRows);
+  const billPaymentStatus = aggregateLogisticsExpenseStatus(billRows, "paymentStatus");
+  return billPaymentStatus === "待开票"
+    && ["已上传发票", "已上传", "已确认", "已确认发票"].includes(billInvoiceStatus)
+    ? { paymentStatus: "待付款" }
+    : {};
+}
 
 export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, formData: FormDataLike) {
   const before = await loadLogisticsExpenseForAction(id, actor);
@@ -97,7 +107,8 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     scheduleTaxRefundCompletenessRefresh(String(orderId));
   }
   const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
-  await refreshLogisticsBillWorkflowStatus(billRows, actor);
+  await refreshLogisticsBillWorkflowStatus(billRows, actor, paymentStatusUpdateAfterInvoiceProgress(billRows));
+  invalidateWorkbenchTodosCache();
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   return {
     bill: serializeLogisticsExpenseBill(finalRows),
@@ -111,6 +122,10 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
   const canManageInvoice = canUploadLogisticsExpenseInvoice(actor, before);
   assertCanDeleteLogisticsInvoiceFile({ canManageInvoice, invoiceConfirmed: false });
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  const currentPaymentStatus = aggregateLogisticsExpenseStatus(rows, "paymentStatus");
+  if (currentPaymentStatus.includes("已付款")) {
+    throw codedError("已付款账单不能删除发票。", 400, "LOGISTICS_INVOICE_PAID_DELETE_BLOCKED");
+  }
   const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
   const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
@@ -169,6 +184,7 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
     scheduleTaxRefundCompletenessRefresh(String(orderId));
   }
   await refreshLogisticsBillWorkflowStatus(savedRows, actor, { paymentStatus: "待开票" });
+  invalidateWorkbenchTodosCache();
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   return {
     bill: serializeLogisticsExpenseBill(finalRows),
@@ -198,7 +214,8 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
   await runNonCriticalTask("物流发票确认日志写入", () => writeAudit(request, actor, "确认物流发票", "logistics_expenses", id, before, saved));
   scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);
-  await refreshLogisticsBillWorkflowStatus(billRows, actor, { paymentStatus: "待付款" });
+  await refreshLogisticsBillWorkflowStatus(billRows, actor, paymentStatusUpdateAfterInvoiceProgress(billRows));
+  invalidateWorkbenchTodosCache();
   const reloadedRows = await loadLogisticsExpenseBillRowsForAction(rowBillId(saved), actor);
   return serializeLogisticsExpense(reloadedRows.find((row) => row.id === saved.id) || saved);
 }
@@ -248,6 +265,7 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
   const saved = savedRows.find((row) => row.id === before.id) || savedRows[0] || before;
   await runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_bills", billId, billRows.map(serializeLogisticsExpense), savedRows.map(serializeLogisticsExpense)));
   await refreshLogisticsBillWorkflowStatus(savedRows, actor, { paymentStatus, paymentDate });
+  invalidateWorkbenchTodosCache();
   const reloadedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   return serializeLogisticsExpense(reloadedRows.find((row) => row.id === saved.id) || reloadedRows[0] || saved);
 }

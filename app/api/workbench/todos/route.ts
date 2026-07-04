@@ -14,7 +14,9 @@ type ErrorLike = {
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
-  const path = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const bypassCache = ["1", "true", "yes"].includes((url.searchParams.get("refresh") || "").toLowerCase());
   let userId = "";
   let role = "";
   let outcome = "unknown";
@@ -23,8 +25,8 @@ export async function GET(request: NextRequest) {
     userId = actor?.id || "";
     role = actor?.role || "";
     const result = await timeServerStep("workbench-init-timing", "workbenchTodos.prismaQueries", () => (
-      listWorkbenchTodos(actor)
-    ), { path, userId, role });
+      listWorkbenchTodos(actor, { bypassCache })
+    ), { path, userId, role, bypassCache });
     outcome = "ready";
     return ok({ success: true, ...result });
   } catch (error: unknown) {

@@ -21,6 +21,7 @@ const controlTower = readDomesticLogisticsModuleSource();
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
 const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");
 const workbenchSource = readWorkbenchTodosSource();
+const diagnosticsSource = readFileSync("lib/platform/workbench-todo-diagnostics.ts", "utf8");
 const missingTaxRefundTodosSource = workbenchSource.match(/function missingTaxRefundTodos[\s\S]*?function normalizedMissingLabels/)?.[0] || "";
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
 const notificationEngineSource = readNotificationEngineSource();
@@ -68,7 +69,11 @@ test("workbench todo summary counts pending, today due, overdue and completed", 
 
 test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(route, /requireApiActor\(request\)/);
-  assert.match(route, /listWorkbenchTodos\(actor\)/);
+  assert.match(route, /const bypassCache = \["1", "true", "yes"\]\.includes/);
+  assert.match(route, /listWorkbenchTodos\(actor, \{ bypassCache \}\)/);
+  assert.match(workbenchSource, /export async function listWorkbenchTodos\(actor: ActorLike, options: \{ bypassCache\?: boolean \} = \{\}\)/);
+  assert.match(workbenchSource, /!options\.bypassCache && WORKBENCH_TODOS_CACHE_MS > 0/);
+  assert.match(workspaceShell, /options\.refresh \? "\/api\/workbench\/todos\?refresh=1" : "\/api\/workbench\/todos"/);
   assert.match(workbenchSource, /orderAccessWhere\(actor\)/);
   assert.match(workbenchSource, /supplierId: actorSupplierId\(actor\) \|\| "__no_supplier_bound__"/);
   assert.match(workbenchSource, /status: \{ notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE \}/);
@@ -79,7 +84,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /prerequisiteStage: activationRule\.prerequisiteStage \|\| null/);
   assert.match(workbenchSource, /activationCondition: activationRule\.activationCondition/);
   assert.match(workbenchSource, /status: input\.status \|\| "ACTIVE"/);
-  assert.match(workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.LOGISTICS_INVOICE_UPLOAD.activationCondition, /invoice notification has been sent/);
+  assert.match(workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.LOGISTICS_INVOICE_UPLOAD.activationCondition, /invoiceStatus is waiting for upload/);
   assert.equal(workbenchRules.canActivateTodo({ status: "ACTIVE" }), true);
   assert.equal(workbenchRules.canActivateTodo({ status: "BLOCKED" }), false);
   assert.equal(workbenchRules.canActivateTodo({ status: "DRAFT" }), false);
@@ -134,8 +139,15 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /function logisticsBillReviewAccessWhere/);
   assert.match(workbenchSource, /isAdmin\(actor\) \|\| isFinance\(actor\) \|\| isSalesperson\(actor\)/);
   assert.match(workbenchSource, /reviewAccessWhere/);
-  assert.match(workbenchSource, /invoiceNotifiedAt: \{ not: null \}/);
-  assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已确认", "已确认发票"\]/);
+  assert.match(workbenchSource, /\{ invoiceStatus: \{ in: LOGISTICS_INVOICE_TO_UPLOAD_STATUSES \} \}/);
+  assert.match(workbenchSource, /LOGISTICS_INVOICE_TO_UPLOAD_STATUSES = \["待开票", "未通知", "已通知开票", "通知失败", "待开票 \/ 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已上传", "部分上传", "部分已确认"\]/);
+  assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已上传发票", "已上传", "已确认", "已确认发票"\]/);
+  assert.match(workbenchSource, /LOGISTICS_INVOICE_TO_UPLOAD_STATUSES/);
+  assert.match(workbenchSource, /logisticsBillNeedsInvoiceUpload/);
+  assert.match(workbenchSource, /logisticsBillNeedsPaymentRegistration/);
+  assert.doesNotMatch(workbenchSource, /title: "发票待审核"/);
+  assert.match(diagnosticsSource, /const accessWhere = logisticsBillAccessWhere\(actor\)/);
+  assert.match(diagnosticsSource, /AND: \[[\s\S]*accessWhere[\s\S]*orderNo: \{ in: normalizedOrderNos \}/);
   assert.match(workbenchSource, /type: "TAX_CUSTOMS_DECLARATION_MISSING"[\s\S]*title: "报关资料待上传"[\s\S]*module: "物流信息"/);
   assert.match(workbenchSource, /documents: \{[\s\S]*some: \{[\s\S]*documentType: "CUSTOMS_ENTRY_FORM"[\s\S]*uploadStatus: "SUCCESS"/);
   assert.match(workbenchSource, /customsDeclarationUploaded\(workflowOrder\)/);
@@ -194,7 +206,7 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
 });
 
 test("workbench home and topbar consume unified todo DTO without opening new windows", () => {
-  assert.match(workspaceShell, /apiJson<Partial<WorkbenchTodosState>>\("\/api\/workbench\/todos"/);
+  assert.match(workspaceShell, /apiJson<Partial<WorkbenchTodosState>>\(options\.refresh \? "\/api\/workbench\/todos\?refresh=1" : "\/api\/workbench\/todos"/);
   assert.match(workspaceShell, /completedTodos: Array\.isArray\(result\.completedTodos\) \? result\.completedTodos : \[\]/);
   assert.match(workspaceShell, /function openWorkbenchTodo\(todo: WorkbenchTodo\)/);
   assert.match(workspaceShell, /setActiveMenu\("logisticsFees"\)/);

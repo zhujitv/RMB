@@ -42,6 +42,7 @@ export function LogisticsFeesModule({
   currentUserRole = "",
   currentUserSupplierId = "",
   canCreateExpense: canCreateExpenseProp,
+  onRefreshTodos,
 }: {
   embedded?: boolean;
   title?: string;
@@ -55,6 +56,7 @@ export function LogisticsFeesModule({
   currentUserRole?: string;
   currentUserSupplierId?: string;
   canCreateExpense?: boolean;
+  onRefreshTodos?: () => Promise<void> | void;
 }) {
   const [rows, setRows] = useState<LogisticsExpense[]>([]);
   const [total, setTotal] = useState(0);
@@ -275,6 +277,7 @@ export function LogisticsFeesModule({
     setError,
     setNotice,
     requestConfirmation,
+    onRefreshTodos,
   });
 
   return (
@@ -308,6 +311,7 @@ export function LogisticsFeesModule({
           setNotice(message || "物流费用已保存");
           void loadExpenses(1, submittedKeyword, status, costType);
           void loadStatement(statementMonth);
+          void onRefreshTodos?.();
         }}
       />
 
@@ -459,6 +463,7 @@ export function LogisticsFeesModule({
             applyLogisticsExpenseMutationResult(result);
             setNotice(result.message || "上传成功");
             void loadStatement(statementMonth);
+            void onRefreshTodos?.();
           }}
         />
       ) : null}

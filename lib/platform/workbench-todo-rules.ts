@@ -1,5 +1,5 @@
 export type WorkbenchTodoPriority = "urgent" | "important" | "normal";
-export type WorkbenchTodoStatus = "DRAFT" | "BLOCKED" | "ACTIVE" | "DONE" | "CANCELLED" | "ARCHIVED";
+export type WorkbenchTodoStatus = "DRAFT" | "BLOCKED" | "ACTIVE" | "DONE" | "CANCELLED" | "FINISHED" | "ARCHIVED";
 export type LegacyWorkbenchTodoStatus = "pending" | "completed";
 export type WorkbenchFlowStage =
   | "SALES_ORDER_CREATED"
@@ -126,22 +126,17 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
   LOGISTICS_INVOICE_UPLOAD: {
     flowStage: "LOGISTICS_INVOICE_UPLOADED",
     prerequisiteStage: "LOGISTICS_COST_AUDITED",
-    activationCondition: "logisticsBill.auditStatus == '审核通过' AND invoice notification has been sent AND invoice is not uploaded",
+    activationCondition: "logisticsBill.auditStatus == '审核通过' AND invoiceStatus is waiting for upload AND paymentStatus != '已付款'",
   },
   LOGISTICS_INVOICE_UPLOAD_COMPLETED: {
     flowStage: "LOGISTICS_INVOICE_UPLOADED",
     prerequisiteStage: "LOGISTICS_COST_AUDITED",
     activationCondition: "logistics invoice has been uploaded",
   },
-  LOGISTICS_INVOICE_REVIEW: {
-    flowStage: "LOGISTICS_COST_AUDITED",
-    prerequisiteStage: "LOGISTICS_INVOICE_UPLOADED",
-    activationCondition: "logistics invoice file exists AND invoiceStatus indicates pending review",
-  },
   LOGISTICS_PAYMENT_REGISTER: {
     flowStage: "SUPPLIER_PAYMENT_COMPLETED",
     prerequisiteStage: "LOGISTICS_COST_AUDITED",
-    activationCondition: "logistics invoice has been confirmed AND paymentStatus != '已付款'",
+    activationCondition: "logisticsBill.auditStatus == '审核通过' AND invoiceStatus is uploaded or confirmed AND paymentStatus != '已付款'",
   },
   LOGISTICS_PAYMENT_REGISTER_COMPLETED: {
     flowStage: "SUPPLIER_PAYMENT_COMPLETED",

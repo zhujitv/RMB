@@ -114,10 +114,10 @@ export function WorkspaceShell() {
     }
   }
 
-  async function loadWorkbenchTodos() {
+  async function loadWorkbenchTodos(options: { refresh?: boolean } = {}) {
     setWorkbenchTodos((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const result = await apiJson<Partial<WorkbenchTodosState>>("/api/workbench/todos", { timeoutMs: WORKBENCH_TODOS_TIMEOUT_MS });
+      const result = await apiJson<Partial<WorkbenchTodosState>>(options.refresh ? "/api/workbench/todos?refresh=1" : "/api/workbench/todos", { timeoutMs: WORKBENCH_TODOS_TIMEOUT_MS });
       setWorkbenchTodos({
         todos: Array.isArray(result.todos) ? result.todos : [],
         completedTodos: Array.isArray(result.completedTodos) ? result.completedTodos : [],
@@ -421,12 +421,12 @@ export function WorkspaceShell() {
       menus={menus}
       activeMenu={activeMenu}
       onSelectMenu={selectWorkspaceMenu}
-      onLogout={handleLogout}
-      onPasswordChange={(user) => setAuth({ status: "password-change", user })}
-      workbenchTodos={workbenchTodos}
-      onRefreshTodos={loadWorkbenchTodos}
-      onOpenTodo={openWorkbenchTodo}
-    >
+          onLogout={handleLogout}
+          onPasswordChange={(user) => setAuth({ status: "password-change", user })}
+          workbenchTodos={workbenchTodos}
+          onRefreshTodos={() => void loadWorkbenchTodos({ refresh: true })}
+          onOpenTodo={openWorkbenchTodo}
+        >
       <WorkspaceModuleContent
         payload={payload}
         menus={menus}

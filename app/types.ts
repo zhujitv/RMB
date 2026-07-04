@@ -82,7 +82,7 @@ export type LoginResponse = {
 
 export type WorkbenchTodoPriority = "urgent" | "important" | "normal";
 export type WorkbenchTodoOwnerRole = "LOGISTICS_SUPPLIER" | "SALESPERSON" | "ADMIN" | "FINANCE" | "PURCHASE" | "PRODUCT_SUPPLIER";
-export type WorkbenchTodoStatus = "DRAFT" | "BLOCKED" | "ACTIVE" | "DONE" | "CANCELLED" | "ARCHIVED" | "pending" | "completed";
+export type WorkbenchTodoStatus = "DRAFT" | "BLOCKED" | "ACTIVE" | "DONE" | "CANCELLED" | "FINISHED" | "ARCHIVED" | "pending" | "completed";
 export type WorkbenchFlowStage =
   | "SALES_ORDER_CREATED"
   | "PURCHASE_ORDER_CREATED"

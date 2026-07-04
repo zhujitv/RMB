@@ -229,10 +229,14 @@ test("logistics paid button is locked by bill state machine", () => {
     /<DetailField[\s\S]*?label="付款时间"[\s\S]*?value=\{formatDate\(expense\.paymentDate\)\}/,
   );
   assert.match(logisticsModule, /function logisticsExpensePayButtonState/);
+  assert.match(logisticsModule, /status\.includes\("部分"\)[\s\S]*return "未上传发票"[\s\S]*status\.includes\("已上传发票"\)/);
   assert.match(
     logisticsModule,
     /logisticsBillPayState\(\{ auditStatus, invoiceStatus, paymentStatus \}\)/,
   );
+  assert.match(backend, /LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES/);
+  assert.match(backend, /payment === "待付款"[\s\S]*LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES\.has\(invoice\)[\s\S]*return "待开票"/);
+  assert.match(logisticsFeesShared, /paymentStatus === "待付款"[\s\S]*"部分已通知"[\s\S]*"部分上传发票"[\s\S]*return "待开票"/);
   assert.match(
     logisticsBillStateMachine,
     /export function canMarkLogisticsBillPaid/,

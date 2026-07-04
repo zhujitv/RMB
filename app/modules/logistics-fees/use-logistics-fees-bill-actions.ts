@@ -46,6 +46,7 @@ type UseLogisticsFeesBillActionsParams = {
   setError: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string>>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
+  onRefreshTodos?: () => Promise<void> | void;
 };
 
 export function useLogisticsFeesBillActions({
@@ -66,6 +67,7 @@ export function useLogisticsFeesBillActions({
   setError,
   setNotice,
   requestConfirmation,
+  onRefreshTodos,
 }: UseLogisticsFeesBillActionsParams) {
   const [busyId, setBusyId] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -111,6 +113,7 @@ export function useLogisticsFeesBillActions({
       if (sourceExpense && expandedId === sourceExpense.id)
         setExpandedId(sourceExpense.id);
       void loadStatement(statementMonth);
+      void onRefreshTodos?.();
       setNotice(logisticsExpenseReviewNotice(result));
       if (failureMessage) setError(failureMessage);
     } catch (reviewError) {
@@ -209,6 +212,7 @@ export function useLogisticsFeesBillActions({
         return reconciliation.rows;
       });
       if (removedBill) setTotal((current) => Math.max(0, current - 1));
+      void onRefreshTodos?.();
       setNotice(result.message || "✓ 已保存");
       return { bill: result.bill, items: savedRows, deletedIds };
     } catch (saveError) {
@@ -254,6 +258,7 @@ export function useLogisticsFeesBillActions({
         throw new Error(result.message || "撤回物流费用账单失败");
       applyLogisticsExpenseMutationResult(result);
       await loadStatement(statementMonth);
+      void onRefreshTodos?.();
       setNotice(result.message || "物流费用账单已撤回为草稿");
     } catch (withdrawError) {
       setError(
@@ -315,6 +320,7 @@ export function useLogisticsFeesBillActions({
       setSelectedBillIds((current) =>
         current.filter((id) => id !== expense.id),
       );
+      void onRefreshTodos?.();
       setNotice(result.message || "物流费用已提交审核");
     } catch (submitError) {
       const message =
@@ -374,6 +380,7 @@ export function useLogisticsFeesBillActions({
       setSelectedBillIds((current) =>
         current.filter((id) => id !== expense.id),
       );
+      void onRefreshTodos?.();
       setNotice(result.message || "物流费用账单已驳回");
     } catch (rejectError) {
       setError(
@@ -402,6 +409,7 @@ export function useLogisticsFeesBillActions({
       if (result.success !== true)
         throw new Error(result.message || "重新发送开票通知失败");
       applyLogisticsExpenseMutationResult(result);
+      void onRefreshTodos?.();
       setNotice(result.message || "开票通知已重新发送");
     } catch (noticeError) {
       setError(
@@ -459,6 +467,7 @@ export function useLogisticsFeesBillActions({
         throw new Error(result.message || "标记已付款失败");
       applyLogisticsExpenseMutationResult(result);
       await loadStatement(statementMonth);
+      void onRefreshTodos?.();
       setNotice(result.message || "物流费用已标记为已付款");
     } catch (paymentError) {
       setError(
@@ -480,6 +489,7 @@ export function useLogisticsFeesBillActions({
     setError,
     setNotice,
     requestConfirmation,
+    onRefreshTodos,
   });
   return {
     busyId,

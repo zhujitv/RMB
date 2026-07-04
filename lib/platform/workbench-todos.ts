@@ -3,6 +3,7 @@ import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-to
 import { SUPPLIER_DOCUMENT_TYPES } from "./shared";
 import { completedTodayTodos } from "./workbench-todos-completed";
 import { createWorkbenchTodoContext, sortWorkbenchTodos, uniqueTodos, type ActorLike } from "./workbench-todos-core";
+import { WORKBENCH_TODOS_CACHE_MS, invalidateWorkbenchTodosCache, workbenchTodosCache, workbenchTodosCacheKey } from "./workbench-todos-cache";
 import {
   listCustomerPaymentTodos,
   listDomesticLogisticsTodos,
@@ -27,28 +28,7 @@ type WorkbenchTodosResult = {
   supportedDocumentTypes: typeof SUPPLIER_DOCUMENT_TYPES;
 };
 
-type WorkbenchTodosCacheEntry = {
-  expiresAt: number;
-  value: WorkbenchTodosResult;
-};
-
-const WORKBENCH_TODOS_CACHE_MS = Math.max(0, Number(process.env.WORKBENCH_TODOS_CACHE_MS || 15000));
-
-function workbenchTodosCache() {
-  const store = globalThis as typeof globalThis & {
-    __nextwoodWorkbenchTodosCache?: Map<string, WorkbenchTodosCacheEntry>;
-  };
-  store.__nextwoodWorkbenchTodosCache ||= new Map<string, WorkbenchTodosCacheEntry>();
-  return store.__nextwoodWorkbenchTodosCache;
-}
-
-function workbenchTodosCacheKey(actor: ActorLike) {
-  return [
-    actor?.id || "",
-    actor?.role || "",
-    actor?.supplierId || "",
-  ].join(":");
-}
+export { invalidateWorkbenchTodosCache };
 
 async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResult> {
   const context = await createWorkbenchTodoContext(actor);
@@ -109,11 +89,11 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
   };
 }
 
-export async function listWorkbenchTodos(actor: ActorLike) {
+export async function listWorkbenchTodos(actor: ActorLike, options: { bypassCache?: boolean } = {}) {
   const cacheKey = workbenchTodosCacheKey(actor);
   const cache = workbenchTodosCache();
   const cached = cache.get(cacheKey);
-  if (WORKBENCH_TODOS_CACHE_MS > 0 && cached && cached.expiresAt > Date.now()) return cached.value;
+  if (!options.bypassCache && WORKBENCH_TODOS_CACHE_MS > 0 && cached && cached.expiresAt > Date.now()) return cached.value as WorkbenchTodosResult;
   const value = await buildWorkbenchTodos(actor);
   if (WORKBENCH_TODOS_CACHE_MS > 0) {
     cache.set(cacheKey, {

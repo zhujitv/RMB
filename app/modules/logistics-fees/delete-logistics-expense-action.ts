@@ -20,6 +20,7 @@ type DeleteLogisticsExpenseParams = {
   setError: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string>>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
+  onRefreshTodos?: () => Promise<void> | void;
 };
 
 export function createDeleteLogisticsExpenseAction({
@@ -33,6 +34,7 @@ export function createDeleteLogisticsExpenseAction({
   setError,
   setNotice,
   requestConfirmation,
+  onRefreshTodos,
 }: DeleteLogisticsExpenseParams) {
   async function deleteExpense(expense: LogisticsExpense) {
     const blockReason = logisticsExpenseDeleteBlockReason(expense);
@@ -71,6 +73,7 @@ export function createDeleteLogisticsExpenseAction({
       setRows(removal.rows);
       if (removal.removedBill) setTotal((current) => Math.max(0, current - 1));
       await loadStatement(statementMonth);
+      void onRefreshTodos?.();
       setNotice("已删除");
     } catch (deleteError) {
       setError(

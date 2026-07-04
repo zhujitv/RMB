@@ -57,6 +57,7 @@ import {
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
 import { reviewLogisticsExpenseBills } from "./logistics-expense-workflow-review";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function saveLogisticsExpenses(request: AuditRequestLike, actor: ActorContext, input: UnknownRecord = {}) {
   assertCanWriteLogisticsExpense(actor);
@@ -79,6 +80,7 @@ export async function saveLogisticsExpenses(request: AuditRequestLike, actor: Ac
     expenses.push(expense);
     await runNonCriticalTask("物流费用提交日志写入", () => writeAudit(request, actor, rowAuditStatus(expense) === "草稿" ? "保存物流费用草稿" : "提交物流费用审核", "logistics_expenses", expense.id, null, expense));
   }
+  invalidateWorkbenchTodosCache();
   return {
     rows: expenses.map(serializeLogisticsExpense),
     totalAmountCny: expenses.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
@@ -98,6 +100,7 @@ export async function updateLogisticsExpense(request: AuditRequestLike, actor: A
   const supplier = await assertLogisticsExpenseSupplier(actor, order, { supplierId: before.supplierId });
   const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, supplierId: before.supplierId }, before);
   const saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
+  invalidateWorkbenchTodosCache();
   await runNonCriticalTask("物流费用修改日志写入", () => writeAudit(request, actor, "修改物流费用", "logistics_expenses", id, before, saved));
   return serializeLogisticsExpense(saved);
 }
@@ -139,6 +142,7 @@ export async function withdrawLogisticsExpenseBill(request: AuditRequestLike, ac
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }
   const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  invalidateWorkbenchTodosCache();
   void runNonCriticalTask("物流费用账单撤回日志写入", () => writeAudit(request, actor, "撤回物流费用账单", "logistics_bills", billId, rows.map(serializeLogisticsExpense), {
     bill: serializeLogisticsExpenseBill(savedRows),
     updatedIds: ids,
@@ -196,6 +200,7 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
       submittedById: actorId(actor),
     }));
     success = true;
+    invalidateWorkbenchTodosCache();
     return {
       billId,
       updatedIds: ids,
@@ -283,6 +288,7 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
   for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
     scheduleTaxRefundCompletenessRefresh(orderId);
   }
+  invalidateWorkbenchTodosCache();
   return savedRows.map(serializeLogisticsExpense);
 }
 
@@ -433,6 +439,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     deleteCount: deletedIds.length,
     durationMs: Date.now() - startedAt,
   });
+  invalidateWorkbenchTodosCache();
   return {
     billId,
     bill: serializedBill,
@@ -469,5 +476,6 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
   } else {
     await refreshLogisticsBillWorkflowStatus(billRows, actor).catch(() => null);
   }
+  invalidateWorkbenchTodosCache();
   return serializeLogisticsExpense(saved);
 }
