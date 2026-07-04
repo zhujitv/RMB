@@ -463,6 +463,9 @@ export function FactoryCostUploadGroup({
       <span className={styles.mutedText}>
         {[sameSupplierFactoryCostCount > 1 ? (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本") : costLabel, amountText].filter(Boolean).join(" · ")}
       </span>
+      {cost.batchOwnershipStatus === "PENDING_ASSIGNMENT" ? (
+        <span className={styles.mutedText}>{cost.batchOwnershipNote || "历史供应商资料尚未归属到当前报关批次"}</span>
+      ) : null}
       {TAX_FACTORY_UPLOAD_TYPES.map((documentType) => (
         <TaxUploadItem
           key={`${cost.id}-${documentType.value}`}

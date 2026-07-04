@@ -147,6 +147,8 @@ export type TaxCost = {
   amount?: number;
   amountCny?: number;
   currency?: string;
+  batchOwnershipStatus?: string;
+  batchOwnershipNote?: string;
   documents?: TaxDocument[];
 };
 

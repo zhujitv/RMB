@@ -235,6 +235,32 @@ function taxRefundOrderHasMultipleDeclarations(order: Record<string, unknown>) {
   return declarations.length > 1;
 }
 
+function taxRefundOrderDeclarationCount(order: Record<string, unknown>) {
+  return Array.isArray(order.customsDeclarations)
+    ? order.customsDeclarations.filter((item) => Boolean(item && typeof item === "object" && (item as { id?: string }).id)).length
+    : 0;
+}
+
+function taxRefundDeclarationHasSupplierScope(declaration: TaxRefundRecordDeclaration | null) {
+  if (!declaration) return false;
+  return Boolean(
+    declaration.purchaseOrderId
+    || declaration.supplierId
+    || declaration.purchaseOrder?.supplier?.id
+    || (declaration.suppliers || []).some((supplier) => (
+      supplier.purchaseOrderId
+      || supplier.supplierId
+      || supplier.purchaseOrder?.supplier?.id
+    ))
+  );
+}
+
+function taxRefundCanUseLegacyFactoryFallback(order: Record<string, unknown>, declaration: TaxRefundRecordDeclaration | null) {
+  if (!declaration) return true;
+  const declarationCount = taxRefundOrderDeclarationCount(order);
+  return declarationCount <= 1;
+}
+
 function taxRefundDeclarationHasScopedOwnership(declaration: TaxRefundRecordDeclaration | null, order: Record<string, unknown> = {}) {
   return Boolean(
     declaration?.pdfDocumentId
@@ -257,6 +283,7 @@ function scopeTaxRefundOrderForDeclaration<T extends Record<string, unknown>>(or
   const purchaseOrderIds = taxRefundDeclarationPurchaseOrderIds(declaration);
   const supplierIds = taxRefundDeclarationSupplierIds(declaration);
   const fallbackSupplierIds = taxRefundUniqueSupplierFallbackIds(order, declaration, supplierIds);
+  const useLegacyFactoryFallback = taxRefundCanUseLegacyFactoryFallback(order, declaration);
   const linkedFileIds = taxRefundDeclarationLinkedFileIds(declaration);
   const linkedDocuments = taxRefundDeclarationLinkedDocuments(declaration);
   const costs = Array.isArray(order.costs) ? order.costs : [];
@@ -276,6 +303,10 @@ function scopeTaxRefundOrderForDeclaration<T extends Record<string, unknown>>(or
           allocatedAmount: generatedLogisticsExpense.allocatedAmount,
         },
       }, declaration, order);
+    }
+    if (useLegacyFactoryFallback) {
+      if (record.id) scopedFactoryCostIds.add(String(record.id));
+      return true;
     }
     const matchedByPurchaseOrder = purchaseOrderIds.has(String(record.id || ""));
     const matchedBySupplier = fallbackSupplierIds.has(String(record.supplierId || ""));
@@ -311,8 +342,9 @@ function scopeTaxRefundOrderForDeclaration<T extends Record<string, unknown>>(or
     const documentType = String(record.documentType || "");
     if (linkedFileIds.has(String(record.id || ""))) return true;
     if (documentType === "CUSTOMS_ENTRY_FORM") return Boolean(declaration.pdfDocumentId && record.id === declaration.pdfDocumentId);
-    if (isTaxRefundBatchOwnedDocumentType(documentType) && taxRefundDeclarationHasScopedOwnership(declaration, order)) return false;
+    if (isTaxRefundBatchOwnedDocumentType(documentType) && taxRefundDeclarationHasScopedOwnership(declaration, order) && !useLegacyFactoryFallback) return false;
     if (!SUPPLIER_DOCUMENT_TYPES.includes(documentType as OrderDocumentType)) return true;
+    if (useLegacyFactoryFallback) return true;
     if (!scopedFactoryCostIds.size) return false;
     if (record.costId) return scopedFactoryCostIds.has(String(record.costId));
     return fallbackSupplierIds.has(String(record.supplierId || ""));
@@ -625,6 +657,7 @@ function serializeTaxRefundLightDocument(document: TaxRefundDocumentLight, order
 }
 
 function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<string, unknown> = {}) {
+  const costRecord = cost as TaxRefundCostLight & { batchOwnershipStatus?: string; batchOwnershipNote?: string };
   const costDocuments = uniqueTaxRefundDocuments([
     ...(cost.documents || []),
     ...(cost.generatedLogisticsExpense?.invoiceDocument ? [cost.generatedLogisticsExpense.invoiceDocument] : []),
@@ -643,6 +676,8 @@ function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Record<str
     invoiceStatus: cost.invoiceStatus,
     sourceType: cost.sourceType,
     sourceId: cost.sourceId || "",
+    batchOwnershipStatus: costRecord.batchOwnershipStatus || "",
+    batchOwnershipNote: costRecord.batchOwnershipNote || "",
     documents: costDocuments.map((document) => serializeTaxRefundLightDocument(document, {
       ...order,
       id: cost.orderId,
@@ -1379,19 +1414,35 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
   const fallbackSupplierIds = taxRefundUniqueSupplierFallbackIds(order as unknown as Record<string, unknown>, context.declaration, declarationSupplierIds);
+  const orderRecord = order as unknown as Record<string, unknown>;
+  const useLegacyFactoryFallback = type === "factory" && taxRefundCanUseLegacyFactoryFallback(orderRecord, context.declaration);
+  const showPendingBatchOwnership = Boolean(
+    type === "factory"
+    && context.declaration
+    && !useLegacyFactoryFallback
+    && !taxRefundDeclarationHasSupplierScope(context.declaration)
+  );
   let orderCosts = ((order.costs || []) as TaxRefundCostLight[]).filter((cost) => {
     if (type === "factory" && context.declaration) {
+      if (useLegacyFactoryFallback || showPendingBatchOwnership) return true;
       if (declarationPurchaseOrderIds.has(cost.id)) return true;
       if (fallbackSupplierIds.size) return Boolean(cost.supplierId && fallbackSupplierIds.has(cost.supplierId));
       return false;
     }
     if (type !== "logistics" || !context.declaration) return true;
-    return taxRefundLogisticsCostMatchesDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+    return taxRefundLogisticsCostMatchesDeclaration(cost, context.declaration, orderRecord);
   }).map((cost) => {
     if (type !== "logistics" || !context.declaration) return cost;
-    return allocateLogisticsCostForCustomsDeclaration(cost, context.declaration, order as unknown as Record<string, unknown>);
+    return allocateLogisticsCostForCustomsDeclaration(cost, context.declaration, orderRecord);
   });
-  if (type === "factory" && context.declaration && taxRefundDeclarationHasScopedOwnership(context.declaration, order as unknown as Record<string, unknown>)) {
+  if (showPendingBatchOwnership) {
+    orderCosts = orderCosts.map((cost) => ({
+      ...cost,
+      batchOwnershipStatus: "PENDING_ASSIGNMENT",
+      batchOwnershipNote: "历史供应商资料尚未归属到当前报关批次，请确认后再提交退税。",
+    } as TaxRefundCostLight));
+  }
+  if (type === "factory" && context.declaration && taxRefundDeclarationHasScopedOwnership(context.declaration, orderRecord) && !useLegacyFactoryFallback && !showPendingBatchOwnership) {
     const linkedFileIds = taxRefundDeclarationLinkedFileIds(context.declaration);
     orderCosts = orderCosts.map((cost) => ({
       ...cost,
@@ -1399,17 +1450,21 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
     }));
   }
   const declarationSupplierDocuments = taxRefundDeclarationDocumentTypesForSection(context.declaration, SUPPLIER_DOCUMENT_TYPES);
+  const orderSupplierDocuments = type === "factory" && "documents" in order && Array.isArray(order.documents)
+    ? order.documents as unknown as TaxRefundDocumentLight[]
+    : [];
   const historicalDocuments = (
     type === "factory"
-      ? (declarationSupplierDocuments.length || taxRefundDeclarationHasScopedOwnership(context.declaration, order as unknown as Record<string, unknown>)
-        ? declarationSupplierDocuments
-        : "documents" in order && Array.isArray(order.documents) ? order.documents : [])
+      ? uniqueTaxRefundDocuments([
+        ...declarationSupplierDocuments,
+        ...((useLegacyFactoryFallback || showPendingBatchOwnership) ? orderSupplierDocuments : []),
+      ])
       : []
   ) as unknown as TaxRefundDocumentLight[];
   const costRows = type === "factory"
     ? withHistoricalSupplierDocuments(orderCosts, historicalDocuments)
     : orderCosts;
-  const costs = costRows.map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
+  const costs = costRows.map((cost) => serializeTaxRefundLightCost(cost, orderRecord));
   const documents = uniqueTaxRefundDocuments(costs.flatMap((cost) => cost.documents || []));
   return {
     id: context.declaration?.id || order.id,

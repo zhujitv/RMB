@@ -219,6 +219,16 @@ function orderHasMultipleCustomsDeclarations(row: CustomsDeclarationCompleteness
   return declarations.length > 1;
 }
 
+function customsDeclarationCount(row: CustomsDeclarationCompletenessRow) {
+  return Array.isArray(row.order?.customsDeclarations)
+    ? row.order.customsDeclarations.filter((declaration) => declaration?.id).length
+    : 0;
+}
+
+function canUseLegacyFactoryFallback(row: CustomsDeclarationCompletenessRow) {
+  return customsDeclarationCount(row) <= 1;
+}
+
 function scopedDeclarationDocuments(row: CustomsDeclarationCompletenessRow) {
   const linkedDocuments = (row.documents || [])
     .map((item) => item.file)
@@ -238,6 +248,7 @@ function scopedDeclarationDocuments(row: CustomsDeclarationCompletenessRow) {
     || row.suppliers?.length
     || orderHasMultipleCustomsDeclarations(row)
   );
+  const useLegacyFactoryFallback = canUseLegacyFactoryFallback(row);
   const purchaseOrderIds = new Set([
     row.purchaseOrderId || "",
     ...(row.suppliers || []).map((supplier) => supplier.purchaseOrderId || ""),
@@ -251,9 +262,10 @@ function scopedDeclarationDocuments(row: CustomsDeclarationCompletenessRow) {
     if (!document || document.deletedAt || document.uploadStatus !== "SUCCESS") return false;
     if (explicitDocumentIds.has(document.id)) return false;
     if (document.documentType === "CUSTOMS_ENTRY_FORM") return Boolean(row.pdfDocumentId && document.id === row.pdfDocumentId);
-    if (isTaxRefundBatchOwnedDocumentType(document.documentType) && declarationOwnsScopedDocuments) return false;
+    if (isTaxRefundBatchOwnedDocumentType(document.documentType) && declarationOwnsScopedDocuments && !useLegacyFactoryFallback) return false;
     if ([...DOMESTIC_LOGISTICS_DOCUMENT_TYPES, ...TAX_EXPORT_DOCUMENT_TYPES].includes(document.documentType)) return true;
     if (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType)) return false;
+    if (useLegacyFactoryFallback) return true;
     if (document.costId && purchaseOrderIds.has(document.costId)) return true;
     if (document.supplierId && fallbackSupplierIds.has(document.supplierId)) return true;
     return false;
@@ -271,12 +283,14 @@ function scopedDeclarationCosts(row: CustomsDeclarationCompletenessRow) {
     ...(row.suppliers || []).map((supplier) => supplier.supplierId || ""),
   ].filter(Boolean));
   const fallbackSupplierIds = uniqueSupplierFallbackIds(row, supplierIds);
+  const useLegacyFactoryFallback = canUseLegacyFactoryFallback(row);
   return (row.order.costs || []).filter((cost) => {
     if (!cost || cost.deletedAt) return false;
     const isFactory = FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType);
     if (!isFactory) {
       return logisticsCostMatchesCustomsDeclaration(cost, row, row.order);
     }
+    if (useLegacyFactoryFallback) return true;
     if (cost.id && purchaseOrderIds.has(cost.id)) return true;
     if (fallbackSupplierIds.size) return Boolean(cost.supplierId && fallbackSupplierIds.has(cost.supplierId));
     return false;

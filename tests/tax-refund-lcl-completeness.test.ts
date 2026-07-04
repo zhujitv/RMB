@@ -138,3 +138,14 @@ test("factory tax refund documents are calculated per cost slot", () => {
   assert.match(completeness, /tax-refund-factory-document-match/);
   assert.doesNotMatch(completeness, /doc\.supplierId === entry\.supplierId \|\| entry\.costIds\.includes/);
 });
+
+test("tax refund declaration detail keeps legacy supplier documents visible without over-completing multi batches", () => {
+  assert.match(taxRefundService, /function taxRefundCanUseLegacyFactoryFallback/);
+  assert.match(taxRefundService, /return declarationCount <= 1/);
+  assert.match(taxRefundService, /if \(useLegacyFactoryFallback\) return true/);
+  assert.match(taxRefundService, /showPendingBatchOwnership/);
+  assert.match(taxRefundService, /PENDING_ASSIGNMENT/);
+  assert.match(taxSync, /function canUseLegacyFactoryFallback/);
+  assert.match(taxSync, /return customsDeclarationCount\(row\) <= 1/);
+  assert.match(taxSync, /if \(useLegacyFactoryFallback\) return true/);
+});
