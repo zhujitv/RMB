@@ -1,0 +1,278 @@
+/* manual-toc-layout: extracted from manual-table.module.css without changing selectors. */
+.manualEntryTip {
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8 !important;
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.manualSectionCard mark {
+  border-radius: 4px;
+  background: #fef3c7;
+  color: inherit;
+  padding: 0 2px;
+}
+
+.manualBackTop {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  height: 38px;
+  border: 1px solid #dbe1ea;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+}
+
+.inlineError {
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.inlineSuccess {
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: #f0fdf4;
+  color: #15803d;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.shipsgoCreateError {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.infoStrip {
+  margin: 12px 0 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tableWrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+}
+
+.desktopOnly {
+  display: block;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.mobileCardList {
+  display: grid;
+  gap: 12px;
+}
+
+.mobileDataCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.mobileDataHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobileDataHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.mobileDataMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobileDataMeta span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobileMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobileMetricItem {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.mobileMetricItem span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobileMetricItem strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.mobileDataActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.dataTable th {
+  color: #334155;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dataTable td {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.dataTable td strong {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.dataTable button,
+.dataTable select,
+.dataTable input,
+.dataTable textarea {
+  font-size: 13px;
+  font-weight: 400;
+  color: #334155;
+}
+
+.dataTable button:not(:disabled) {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.dataTable button:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.dataTable .dangerButton:not(:disabled),
+.dataTable .billRejectButton:not(:disabled),
+.dataTable .logisticsLineDeleteButton:not(:disabled) {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.dataTable .dangerButton:hover:not(:disabled),
+.dataTable .billRejectButton:hover:not(:disabled),
+.dataTable .logisticsLineDeleteButton:hover:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover {
+  background: #f8fafc;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-align: center;
+}
+
+.statusSuccess {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.statusWarning {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.statusDanger {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.statusInfo {
+  background: #eff6ff;
+  color: #1d4ed8;
+}

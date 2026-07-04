@@ -1,0 +1,212 @@
+/* mobile-table-layouts: extracted from responsive-main.module.css without changing selectors. */
+@media (max-width: 640px) {
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  .mobileCardList {
+    gap: 10px;
+  }
+
+  .mobileDataCard {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .mobileDataHeader {
+    align-items: flex-start;
+  }
+
+  .mobileMetricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobileMetricItem {
+    padding: 9px 10px;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tableWrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dataTable {
+    min-width: 720px;
+    table-layout: auto;
+  }
+
+  .dataTable th,
+  .dataTable td {
+    padding: 11px 10px;
+    font-size: 13px;
+  }
+
+  .dataTable th {
+    white-space: nowrap;
+  }
+
+  .tablePinnedTwoCols .dataTable th:nth-child(1),
+  .tablePinnedTwoCols .dataTable td:nth-child(1),
+  .tablePinnedTwoCols .dataTable th:nth-child(2),
+  .tablePinnedTwoCols .dataTable td:nth-child(2) {
+    position: static;
+    left: auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  .reportFilterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .shipsgoTrackingSummary {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .shipsgoTrackingSummary span:last-child {
+    text-align: left;
+  }
+
+  .shipsgoTrackingInfoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .shipsgoTrackingActions {
+    justify-content: flex-start;
+  }
+
+  .shipsgoTrackingActions button,
+  .shipsgoTrackingActions a {
+    flex: 1 1 150px;
+  }
+
+  .costFilterSearchRow,
+  .costFilterPrimaryRow,
+  .costFilterSecondaryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .costFilterActions {
+    grid-column: auto;
+    flex-wrap: wrap;
+  }
+
+  .costFilterActions button {
+    flex: 1 1 120px;
+  }
+
+  .installmentRow {
+    grid-template-columns: 1fr;
+  }
+
+  .autocompleteField {
+    grid-column: auto;
+  }
+
+  .autocompleteRoot,
+  .autocompletePanel {
+    width: 100%;
+  }
+
+  .drawerOverlay {
+    padding: 0;
+  }
+
+  .taxRefundDrawer {
+    width: 100vw;
+  }
+
+  .sideDrawer {
+    width: 100vw;
+  }
+
+  .taxRefundDrawerBody,
+  .sideDrawerBody {
+    padding: 12px;
+  }
+
+  .taxRefundDrawerActions,
+  .sideDrawerActions {
+    gap: 6px;
+  }
+
+  .taxDropdownGrid {
+    display: grid;
+  }
+
+  .taxDropdownSummary {
+    flex: auto;
+  }
+
+  .shippingDocsFormGrid,
+  .fileListItem {
+    grid-template-columns: 1fr;
+  }
+
+  .customsFormActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inlineActionGroup {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .documentFileTable {
+    min-width: 720px;
+  }
+
+  .manualFlow,
+  .metricGrid,
+  .overviewPanels,
+  .dashboardTwoColumns,
+  .manualSectionGrid,
+  .manualToc {
+    grid-template-columns: 1fr;
+  }
+
+  .costStructureLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .donutRing {
+    margin: 0 auto;
+  }
+
+  .rankItem {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .rankValue {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .overviewPanelWide {
+    grid-column: auto;
+  }
+
+  .manualSectionCard > button {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .manualSectionCard > button i {
+    grid-column: 2;
+  }
+
+  .manualBackTop {
+    right: 18px;
+    bottom: 18px;
+  }
+}

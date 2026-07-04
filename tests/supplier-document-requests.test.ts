@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readNotificationEngineSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readCssModuleGraphSource, readNotificationEngineSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readSupplierDocumentRequestsSource();
 const notificationEngine = readNotificationEngineSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
-const supplierDocumentStyles = readFileSync("app/styles/workspace-shell/supplier-documents.module.css", "utf8");
+const supplierDocumentStyles = readCssModuleGraphSource("app/styles/workspace-shell/supplier-documents.module.css");
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
 const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");

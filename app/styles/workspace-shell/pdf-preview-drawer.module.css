@@ -1,0 +1,279 @@
+/* pdf-preview-drawer: extracted from forms-dialogs-tax.module.css without changing selectors. */
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select,
+.shippingDocsFormGrid textarea {
+  width: 100%;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 11px;
+  font: inherit;
+}
+
+.shippingDocsFormGrid input,
+.shippingDocsFormGrid select {
+  height: 40px;
+}
+
+.shippingDocsFormGrid textarea {
+  min-height: 78px;
+  padding-top: 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.shippingDocsFormGrid input:focus,
+.shippingDocsFormGrid select:focus,
+.shippingDocsFormGrid textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.shippingDocsWideField {
+  grid-column: 1 / -1;
+}
+
+.customsFormCard {
+  grid-column: 1 / -1;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.customsFormHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customsFormHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.customsFormHeader strong {
+  color: #0f172a;
+}
+
+.customsFormHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.customsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.customsFormGrid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customsFormGrid input {
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.customsFormGrid input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.customsParseMessage {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.customsParseMessage[data-status="FAILED"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.customsParseMessage[data-status="PARTIAL"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.customsParseMessage[data-status="SUCCESS"] {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.customsFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.inlineActionGroup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fileUploadSection {
+  grid-column: 1 / -1;
+}
+
+.factoryDocumentSection {
+  grid-column: 1 / -1;
+  background: #ffffff;
+}
+
+.factorySupplierGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.factorySupplierCard {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.factorySupplierHeader {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.factorySupplierHeader strong,
+.factorySupplierHeader span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factorySupplierHeader strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.factorySupplierHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileUploadGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fileUploadCard {
+  min-width: 0;
+  height: 100%;
+  min-height: 210px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fileUploadHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fileUploadHeader strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.fileUploadHeader span {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fileUploadFile {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  align-content: flex-start;
+  gap: 7px;
+}
+
+.fileUploadFileName {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileUploadMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileUploadStatus,
+.fileUploadEmpty {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileUploadEmpty {
+  flex: 1 1 auto;
+}

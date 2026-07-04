@@ -1,0 +1,281 @@
+/* list-filter-layout: extracted from lists-reports-costs.module.css without changing selectors. */
+/* List toolbars, reports, cost filters and autocomplete.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.statusPanel {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.statusPanel h2 {
+  margin: 0 0 8px;
+}
+
+.statusPanel p {
+  margin: 0 0 16px;
+}
+
+.statusIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #fffbeb;
+  color: #b45309;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.listToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 16px;
+  flex-wrap: wrap;
+}
+
+.listToolbar input {
+  width: min(420px, 100%);
+  height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.listToolbar input[type="month"] {
+  width: 158px;
+}
+
+.listToolbar input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.listToolbar select {
+  height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.reportTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 16px;
+}
+
+.reportTabs button {
+  height: 36px;
+  border: 1px solid var(--button-secondary-border);
+  border-radius: 999px;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  padding: 0 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reportTabs button:hover {
+  background: var(--button-secondary-hover);
+  border-color: var(--button-secondary-border);
+}
+
+.reportTabs .reportTabActive {
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+}
+
+.reportFilterGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.reportFilterGrid label {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reportFilterGrid input,
+.reportFilterGrid select,
+.reportFilterGrid textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.reportFilterGrid input:focus,
+.reportFilterGrid select:focus,
+.reportFilterGrid textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.reportFilterGrid input,
+.reportFilterGrid select {
+  height: 38px;
+}
+
+.reportFilterGrid textarea {
+  padding-top: 9px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.costFilterPanel {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.costFilterSearchRow,
+.costFilterPrimaryRow,
+.costFilterSecondaryRow {
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+
+.costFilterSearchRow {
+  grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px);
+}
+
+.costFilterPrimaryRow {
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, auto);
+}
+
+.costFilterSecondaryRow {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.costFilterPanel label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.costFilterPanel input,
+.costFilterPanel select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background-color: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.costFilterPanel select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 8 4 4 4-4' fill='none' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+.costFilterPanel input[type="date"] {
+  padding-right: 10px;
+}
+
+.costFilterPanel input:focus,
+.costFilterPanel select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.costFilterActions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.costFilterActions button {
+  min-width: 76px;
+  height: 38px;
+  white-space: nowrap;
+}
+
+.costPage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.costContent {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  box-sizing: border-box;
+}
+
+.costTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.costTableWrap .dataTable {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.costTableWrap .dataTable th,
+.costTableWrap .dataTable td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+.costTableWrap .dataTable th.orderNoColumn,
+.costTableWrap .dataTable td.orderNoColumn {
+  width: 180px;
+  min-width: 180px;
+}
+
+.costTableWrap .dataTable th.customerColumn,
+.costTableWrap .dataTable td.customerColumn {
+  width: 120px;
+  min-width: 120px;
+}

@@ -1,0 +1,70 @@
+/* tracking-map-info-panel: extracted from tracking-map.module.css without changing selectors. */
+.primaryMapLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+}
+
+.primaryMapLink:hover {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.mapFallback {
+  border: 1px dashed #bfdbfe;
+  color: #475569;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.emptyPanel,
+.errorPanel {
+  width: min(760px, 100%);
+  margin: 10vh auto 0;
+  border-radius: 22px;
+  padding: 32px;
+  display: grid;
+  gap: 10px;
+}
+
+.emptyPanel p,
+.errorPanel p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.errorPanel {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.errorPanel span,
+.errorPanel h1 {
+  color: #b91c1c;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 14px;
+  }
+
+  .summaryGrid,
+  .detailGrid,
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+}

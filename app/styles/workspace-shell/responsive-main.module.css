@@ -1,360 +1,74 @@
-/* Main responsive rules for business views.
- * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
-
-@media (max-width: 920px) {
-  .detailGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .documentGroupGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .fileUploadGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .supplierDocumentsPage {
-    padding: 18px;
-  }
-
-  .supplierDocumentsHeader {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .supplierDocumentsHeader button {
-    align-self: flex-start;
-  }
-
-  .supplierDocumentsStats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .supplierDocumentsListToolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .supplierDocumentTaskRow {
-    grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
-    min-height: 78px;
-    align-items: center;
-  }
-
-  .supplierDocumentTaskSupplier,
-  .supplierDocumentTaskRequirement {
-    grid-column: 1 / -1;
-  }
-
-  .supplierDocumentTaskRow .statusPill {
-    justify-self: end;
-  }
-
-  .supplierDocumentTaskDate {
-    justify-self: end;
-  }
-
-  .supplierDocumentTaskActions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-
-  .supplierDocumentTaskMeta {
-    grid-template-columns: 1fr;
-  }
-
-  .supplierDocumentUploadGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .supplierLogisticsCostGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .taxRefundDrawer {
-    width: min(100vw, 900px);
-  }
-
-  .sideDrawer {
-    width: min(100vw, 900px);
-  }
-
-  .taxRefundDrawerHeader,
-  .sideDrawerHeader {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .taxRefundDrawerActions,
-  .sideDrawerActions {
-    justify-content: flex-start;
-  }
-
-  .subListItem {
-    grid-template-columns: 1fr;
-  }
-
-  .reportFilterGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .costFilterSearchRow,
-  .costFilterPrimaryRow,
-  .costFilterSecondaryRow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .costFilterActions {
-    grid-column: span 2;
-  }
-
-  .installmentRow {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .installmentRow button {
-    justify-self: flex-start;
-  }
-
-  .metricGrid,
-  .overviewPanels,
-  .dashboardTwoColumns {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overviewPanelWide {
-    grid-column: span 2;
-  }
-
-  .manualHero,
-  .manualToolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .manualFlow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .manualLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .manualToc {
-    position: static;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .desktopOnly {
-    display: none;
-  }
-
-  .mobileOnly {
-    display: block;
-  }
-
-  .mobileCardList {
-    gap: 10px;
-  }
-
-  .mobileDataCard {
-    padding: 12px;
-    border-radius: 14px;
-  }
-
-  .mobileDataHeader {
-    align-items: flex-start;
-  }
-
-  .mobileMetricGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .mobileMetricItem {
-    padding: 9px 10px;
-  }
-
-  .detailGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .tableWrap {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .dataTable {
-    min-width: 720px;
-    table-layout: auto;
-  }
-
-  .dataTable th,
-  .dataTable td {
-    padding: 11px 10px;
-    font-size: 13px;
-  }
-
-  .dataTable th {
-    white-space: nowrap;
-  }
-
-  .tablePinnedTwoCols .dataTable th:nth-child(1),
-  .tablePinnedTwoCols .dataTable td:nth-child(1),
-  .tablePinnedTwoCols .dataTable th:nth-child(2),
-  .tablePinnedTwoCols .dataTable td:nth-child(2) {
-    position: static;
-    left: auto;
-    min-width: auto;
-    width: auto;
-  }
-
-  .reportFilterGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .shipsgoTrackingSummary {
-    grid-template-columns: 1fr;
-    align-items: flex-start;
-  }
-
-  .shipsgoTrackingSummary span:last-child {
-    text-align: left;
-  }
-
-  .shipsgoTrackingInfoGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .shipsgoTrackingActions {
-    justify-content: flex-start;
-  }
-
-  .shipsgoTrackingActions button,
-  .shipsgoTrackingActions a {
-    flex: 1 1 150px;
-  }
-
-  .costFilterSearchRow,
-  .costFilterPrimaryRow,
-  .costFilterSecondaryRow {
-    grid-template-columns: 1fr;
-  }
-
-  .costFilterActions {
-    grid-column: auto;
-    flex-wrap: wrap;
-  }
-
-  .costFilterActions button {
-    flex: 1 1 120px;
-  }
-
-  .installmentRow {
-    grid-template-columns: 1fr;
-  }
-
-  .autocompleteField {
-    grid-column: auto;
-  }
-
-  .autocompleteRoot,
-  .autocompletePanel {
-    width: 100%;
-  }
-
-  .drawerOverlay {
-    padding: 0;
-  }
-
-  .taxRefundDrawer {
-    width: 100vw;
-  }
-
-  .sideDrawer {
-    width: 100vw;
-  }
-
-  .taxRefundDrawerBody,
-  .sideDrawerBody {
-    padding: 12px;
-  }
-
-  .taxRefundDrawerActions,
-  .sideDrawerActions {
-    gap: 6px;
-  }
-
-  .taxDropdownGrid {
-    display: grid;
-  }
-
-  .taxDropdownSummary {
-    flex: auto;
-  }
-
-  .shippingDocsFormGrid,
-  .fileListItem {
-    grid-template-columns: 1fr;
-  }
-
-  .customsFormActions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .inlineActionGroup {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .documentFileTable {
-    min-width: 720px;
-  }
-
-  .manualFlow,
-  .metricGrid,
-  .overviewPanels,
-  .dashboardTwoColumns,
-  .manualSectionGrid,
-  .manualToc {
-    grid-template-columns: 1fr;
-  }
-
-  .costStructureLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .donutRing {
-    margin: 0 auto;
-  }
-
-  .rankItem {
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-
-  .rankValue {
-    grid-column: 2;
-    text-align: left;
-  }
-
-  .overviewPanelWide {
-    grid-column: auto;
-  }
-
-  .manualSectionCard > button {
-    grid-template-columns: 42px minmax(0, 1fr);
-  }
-
-  .manualSectionCard > button i {
-    grid-column: 2;
-  }
-
-  .manualBackTop {
-    right: 18px;
-    bottom: 18px;
-  }
-}
+/* responsive-main.module.css is a CSS module export index. */
+/* Real style rules live in responsibility-focused sibling modules. */
+
+.detailGrid { composes: detailGrid from "./mobile-grid-layouts.module.css"; composes: detailGrid from "./mobile-table-layouts.module.css"; }
+.documentGroupGrid { composes: documentGroupGrid from "./mobile-grid-layouts.module.css"; }
+.fileUploadGrid { composes: fileUploadGrid from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentsPage { composes: supplierDocumentsPage from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentsHeader { composes: supplierDocumentsHeader from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentsStats { composes: supplierDocumentsStats from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskRow { composes: supplierDocumentTaskRow from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskSupplier { composes: supplierDocumentTaskSupplier from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskRequirement { composes: supplierDocumentTaskRequirement from "./mobile-grid-layouts.module.css"; }
+.statusPill { composes: statusPill from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskDate { composes: supplierDocumentTaskDate from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskActions { composes: supplierDocumentTaskActions from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentTaskMeta { composes: supplierDocumentTaskMeta from "./mobile-grid-layouts.module.css"; }
+.supplierDocumentUploadGrid { composes: supplierDocumentUploadGrid from "./mobile-grid-layouts.module.css"; }
+.supplierLogisticsCostGrid { composes: supplierLogisticsCostGrid from "./mobile-grid-layouts.module.css"; }
+.taxRefundDrawer { composes: taxRefundDrawer from "./mobile-grid-layouts.module.css"; composes: taxRefundDrawer from "./mobile-table-layouts.module.css"; }
+.sideDrawer { composes: sideDrawer from "./mobile-grid-layouts.module.css"; composes: sideDrawer from "./mobile-table-layouts.module.css"; }
+.taxRefundDrawerHeader { composes: taxRefundDrawerHeader from "./mobile-grid-layouts.module.css"; }
+.sideDrawerHeader { composes: sideDrawerHeader from "./mobile-grid-layouts.module.css"; }
+.taxRefundDrawerActions { composes: taxRefundDrawerActions from "./mobile-grid-layouts.module.css"; composes: taxRefundDrawerActions from "./mobile-table-layouts.module.css"; }
+.sideDrawerActions { composes: sideDrawerActions from "./mobile-grid-layouts.module.css"; composes: sideDrawerActions from "./mobile-table-layouts.module.css"; }
+.subListItem { composes: subListItem from "./mobile-grid-layouts.module.css"; }
+.reportFilterGrid { composes: reportFilterGrid from "./mobile-grid-layouts.module.css"; composes: reportFilterGrid from "./mobile-table-layouts.module.css"; }
+.costFilterSearchRow { composes: costFilterSearchRow from "./mobile-grid-layouts.module.css"; composes: costFilterSearchRow from "./mobile-table-layouts.module.css"; }
+.costFilterPrimaryRow { composes: costFilterPrimaryRow from "./mobile-grid-layouts.module.css"; composes: costFilterPrimaryRow from "./mobile-table-layouts.module.css"; }
+.costFilterSecondaryRow { composes: costFilterSecondaryRow from "./mobile-grid-layouts.module.css"; composes: costFilterSecondaryRow from "./mobile-table-layouts.module.css"; }
+.costFilterActions { composes: costFilterActions from "./mobile-grid-layouts.module.css"; composes: costFilterActions from "./mobile-table-layouts.module.css"; }
+.installmentRow { composes: installmentRow from "./mobile-grid-layouts.module.css"; composes: installmentRow from "./mobile-table-layouts.module.css"; }
+.metricGrid { composes: metricGrid from "./mobile-grid-layouts.module.css"; composes: metricGrid from "./mobile-table-layouts.module.css"; }
+.overviewPanels { composes: overviewPanels from "./mobile-grid-layouts.module.css"; composes: overviewPanels from "./mobile-table-layouts.module.css"; }
+.dashboardTwoColumns { composes: dashboardTwoColumns from "./mobile-grid-layouts.module.css"; composes: dashboardTwoColumns from "./mobile-table-layouts.module.css"; }
+.overviewPanelWide { composes: overviewPanelWide from "./mobile-grid-layouts.module.css"; composes: overviewPanelWide from "./mobile-table-layouts.module.css"; }
+.manualHero { composes: manualHero from "./mobile-grid-layouts.module.css"; }
+.manualToolbar { composes: manualToolbar from "./mobile-grid-layouts.module.css"; }
+.manualFlow { composes: manualFlow from "./mobile-grid-layouts.module.css"; composes: manualFlow from "./mobile-table-layouts.module.css"; }
+.manualLayout { composes: manualLayout from "./mobile-grid-layouts.module.css"; }
+.manualToc { composes: manualToc from "./mobile-grid-layouts.module.css"; composes: manualToc from "./mobile-table-layouts.module.css"; }
+.desktopOnly { composes: desktopOnly from "./mobile-table-layouts.module.css"; }
+.mobileOnly { composes: mobileOnly from "./mobile-table-layouts.module.css"; }
+.mobileCardList { composes: mobileCardList from "./mobile-table-layouts.module.css"; }
+.mobileDataCard { composes: mobileDataCard from "./mobile-table-layouts.module.css"; }
+.mobileDataHeader { composes: mobileDataHeader from "./mobile-table-layouts.module.css"; }
+.mobileMetricGrid { composes: mobileMetricGrid from "./mobile-table-layouts.module.css"; }
+.mobileMetricItem { composes: mobileMetricItem from "./mobile-table-layouts.module.css"; }
+.tableWrap { composes: tableWrap from "./mobile-table-layouts.module.css"; }
+.dataTable { composes: dataTable from "./mobile-table-layouts.module.css"; }
+.tablePinnedTwoCols { composes: tablePinnedTwoCols from "./mobile-table-layouts.module.css"; }
+.shipsgoTrackingSummary { composes: shipsgoTrackingSummary from "./mobile-table-layouts.module.css"; }
+.shipsgoTrackingInfoGrid { composes: shipsgoTrackingInfoGrid from "./mobile-table-layouts.module.css"; }
+.shipsgoTrackingActions { composes: shipsgoTrackingActions from "./mobile-table-layouts.module.css"; }
+.autocompleteField { composes: autocompleteField from "./mobile-table-layouts.module.css"; }
+.autocompleteRoot { composes: autocompleteRoot from "./mobile-table-layouts.module.css"; }
+.autocompletePanel { composes: autocompletePanel from "./mobile-table-layouts.module.css"; }
+.drawerOverlay { composes: drawerOverlay from "./mobile-table-layouts.module.css"; }
+.taxRefundDrawerBody { composes: taxRefundDrawerBody from "./mobile-table-layouts.module.css"; }
+.sideDrawerBody { composes: sideDrawerBody from "./mobile-table-layouts.module.css"; }
+.taxDropdownGrid { composes: taxDropdownGrid from "./mobile-table-layouts.module.css"; }
+.taxDropdownSummary { composes: taxDropdownSummary from "./mobile-table-layouts.module.css"; }
+.shippingDocsFormGrid { composes: shippingDocsFormGrid from "./mobile-table-layouts.module.css"; }
+.fileListItem { composes: fileListItem from "./mobile-table-layouts.module.css"; }
+.customsFormActions { composes: customsFormActions from "./mobile-table-layouts.module.css"; }
+.inlineActionGroup { composes: inlineActionGroup from "./mobile-table-layouts.module.css"; }
+.documentFileTable { composes: documentFileTable from "./mobile-table-layouts.module.css"; }
+.manualSectionGrid { composes: manualSectionGrid from "./mobile-table-layouts.module.css"; }
+.costStructureLayout { composes: costStructureLayout from "./mobile-table-layouts.module.css"; }
+.donutRing { composes: donutRing from "./mobile-table-layouts.module.css"; }
+.rankItem { composes: rankItem from "./mobile-table-layouts.module.css"; }
+.rankValue { composes: rankValue from "./mobile-table-layouts.module.css"; }
+.manualSectionCard { composes: manualSectionCard from "./mobile-table-layouts.module.css"; }
+.manualBackTop { composes: manualBackTop from "./mobile-table-layouts.module.css"; }

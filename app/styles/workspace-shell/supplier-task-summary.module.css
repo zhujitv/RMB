@@ -1,0 +1,188 @@
+/* supplier-task-summary: extracted from supplier-documents.module.css without changing selectors. */
+.supplierDocumentOcrRawText pre {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 8px 0 0;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.supplierDocumentUploadButton {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.supplierDocumentUploadButton input {
+  display: none;
+}
+
+.supplierDocumentUploadHint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.customsUploadCard {
+  grid-column: 1 / -1;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.customsUploadCard > strong {
+  color: #0f172a;
+}
+
+.documentFileTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.documentFileTable {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.documentFileTable th,
+.documentFileTable td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.documentFileTable th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+}
+
+.documentFileTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.documentFileTable td:first-child {
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.documentFileTable th:nth-child(1),
+.documentFileTable td:nth-child(1) {
+  width: 24%;
+}
+
+.documentFileTable th:nth-child(4),
+.documentFileTable td:nth-child(4) {
+  width: 16%;
+}
+
+.recognitionStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.customsFilePickerDialog {
+  width: min(560px, calc(100vw - 32px));
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.customsFilePickerList {
+  display: grid;
+  gap: 10px;
+}
+
+.customsFilePickerItem {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.customsFilePickerItem:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.customsFilePickerItem span {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customsFilePickerItem small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.fileListItem {
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.fileListItem div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fileListItem span {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.fileListItem small,
+.mutedText {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fileListItem div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fileListItemActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

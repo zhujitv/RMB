@@ -1,0 +1,277 @@
+/* control-tower-filters-map: extracted from shipsgo-control-tower.module.css without changing selectors. */
+.controlTowerAlertWarning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.controlTowerAlertMuted {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.controlTowerRowActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.controlTowerRowActions button,
+.controlTowerRowActions a {
+  min-height: 30px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.shipsgoTrackingList {
+  display: grid;
+  gap: 12px;
+}
+
+.shipsgoTrackingCard {
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.shipsgoTrackingSummary {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+  border: 1px solid #dbeafe;
+  padding: 10px 12px;
+}
+
+.shipsgoTrackingSummary strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.shipsgoTrackingSummary span:last-child {
+  color: #64748b;
+  font-size: 12px;
+  text-align: right;
+}
+
+.shipsgoStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  border-radius: 999px;
+  background: #1677ff;
+  color: #ffffff !important;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.shipsgoTrackingInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shipsgoInfoColumn {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shipsgoInfoItem {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.shipsgoInfoItem span,
+.shipsgoContainerBlock > span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shipsgoInfoItem strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shipsgoContainerBlock {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.shipsgoContainerTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shipsgoContainerTags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.shipsgoSyncMessage {
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shipsgoTrackingActions {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shipsgoTimelinePanel {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.shipsgoTimelinePanel > strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.shipsgoTimelineState,
+.shipsgoTimelineError {
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.shipsgoTimelineState {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.shipsgoTimelineError {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.shipsgoTimelineList {
+  display: grid;
+  gap: 0;
+}
+
+.shipsgoTimelineItem {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.shipsgoTimelineItem:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  bottom: -2px;
+  width: 1px;
+  background: #bfdbfe;
+}
+
+.shipsgoTimelineDot {
+  position: relative;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  border-radius: 999px;
+  border: 3px solid #dbeafe;
+  background: #1677ff;
+}
+
+.shipsgoTimelineContent {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.shipsgoTimelineHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.shipsgoTimelineHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.shipsgoTimelineHeader span,
+.shipsgoTimelineContent > span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shipsgoMapDrawer {
+  width: min(1180px, 94vw);
+}
+
+.shipsgoMapFrameWrap {
+  width: 100%;
+  min-height: 650px;
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.shipsgoMapFrame {
+  display: block;
+  width: 100%;
+  min-height: 650px;
+  border: 0;
+  background: #ffffff;
+}

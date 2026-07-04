@@ -1,0 +1,149 @@
+/* mobile-grid-layouts: extracted from responsive-main.module.css without changing selectors. */
+/* Main responsive rules for business views.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+@media (max-width: 920px) {
+  .detailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .documentGroupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fileUploadGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierDocumentsPage {
+    padding: 18px;
+  }
+
+  .supplierDocumentsHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .supplierDocumentsHeader button {
+    align-self: flex-start;
+  }
+
+  .supplierDocumentsStats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .supplierDocumentsListToolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .supplierDocumentTaskRow {
+    grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
+    min-height: 78px;
+    align-items: center;
+  }
+
+  .supplierDocumentTaskSupplier,
+  .supplierDocumentTaskRequirement {
+    grid-column: 1 / -1;
+  }
+
+  .supplierDocumentTaskRow .statusPill {
+    justify-self: end;
+  }
+
+  .supplierDocumentTaskDate {
+    justify-self: end;
+  }
+
+  .supplierDocumentTaskActions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .supplierDocumentTaskMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierDocumentUploadGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierLogisticsCostGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taxRefundDrawer {
+    width: min(100vw, 900px);
+  }
+
+  .sideDrawer {
+    width: min(100vw, 900px);
+  }
+
+  .taxRefundDrawerHeader,
+  .sideDrawerHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .taxRefundDrawerActions,
+  .sideDrawerActions {
+    justify-content: flex-start;
+  }
+
+  .subListItem {
+    grid-template-columns: 1fr;
+  }
+
+  .reportFilterGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .costFilterSearchRow,
+  .costFilterPrimaryRow,
+  .costFilterSecondaryRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .costFilterActions {
+    grid-column: span 2;
+  }
+
+  .installmentRow {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .installmentRow button {
+    justify-self: flex-start;
+  }
+
+  .metricGrid,
+  .overviewPanels,
+  .dashboardTwoColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewPanelWide {
+    grid-column: span 2;
+  }
+
+  .manualHero,
+  .manualToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .manualFlow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .manualLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .manualToc {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

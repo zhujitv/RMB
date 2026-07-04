@@ -1,0 +1,280 @@
+/* logistics-bill-summary: extracted from logistics-fees.module.css without changing selectors. */
+/* Logistics fee bills, drawer, invoice groups and settlement panels.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.logisticsBillDetail {
+  margin: 8px 10px;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.logisticsBillSummary {
+  display: flex;
+  gap: 10px 16px;
+  align-items: stretch;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 2px 8px;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.logisticsBillSummaryMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  flex: 1 1 auto;
+  gap: 6px 14px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.logisticsBillSummaryMeta > span {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 44px;
+  gap: 3px;
+  padding: 2px 0;
+  overflow: hidden;
+}
+
+.logisticsBillSummaryMeta strong {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.logisticsBillSummaryValue {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsContainerInfoCard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.logisticsContainerInfoCard span {
+  min-width: 0;
+  overflow: hidden;
+  padding: 7px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsContainerInfoCard strong {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.logisticsContainerInfoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logisticsContainerInfoHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsContainerInfoHeader span {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.logisticsContainerInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.logisticsContainerInfoGrid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.logisticsContainerInfoGrid strong {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsContainerInfoList {
+  display: grid;
+  gap: 3px;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.logisticsContainerInfoList span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .logisticsContainerInfoCard,
+  .logisticsContainerInfoGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.logisticsBillSummaryActions,
+.logisticsBillDetailFooter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.logisticsBillDetailFooter {
+  padding-top: 8px;
+}
+
+.billSaveButton,
+.billAddLineButton,
+.billPayButton,
+.billApproveButton,
+.billRejectButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--button-primary-bg);
+  border-radius: 6px;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.billAddLineButton {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+}
+
+.billApproveButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.billRejectButton {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.billSaveButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.billPayButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.billPayButton:disabled,
+.billPayButton:disabled:hover,
+.billPayButton:disabled:focus,
+.billPayButton:disabled:focus-visible,
+.billPayButton:disabled:active {
+  border-color: #d9d9d9;
+  background: #d9d9d9;
+  color: #6b7280;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.billAddLineButton:hover:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}
+
+.billApproveButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.billRejectButton:hover:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.billSaveButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.billAddLineButton:active:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}

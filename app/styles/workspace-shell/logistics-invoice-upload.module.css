@@ -1,0 +1,49 @@
+/* logistics-invoice-upload: extracted from logistics-fees.module.css without changing selectors. */
+.fileActionButton,
+.fileDangerButton {
+  height: 34px;
+  min-width: 64px;
+  border-radius: 10px;
+  border: 1px solid var(--button-primary-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.fileActionButton:hover:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.fileDangerButton {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.fileDangerButton:hover:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.fileActionButton:disabled,
+.fileDangerButton:disabled {
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}

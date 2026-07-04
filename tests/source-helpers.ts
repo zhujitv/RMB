@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, normalize } from "node:path";
 
 const SETTINGS_MODULE_FILES = [
   "app/modules/SettingsModule.tsx",
@@ -441,4 +441,25 @@ export function readWorkspaceStylesSource() {
     .map((file) => readFileSync(join(shardDir, file), "utf8"));
 
   return [readFileSync("app/WorkspaceShell.module.css", "utf8"), ...shards].join("\n");
+}
+
+export function readCssModuleGraphSource(filePath: string) {
+  const visited = new Set<string>();
+
+  const readRecursive = (entryPath: string): string => {
+    const normalized = normalize(entryPath);
+    if (visited.has(normalized)) return "";
+    visited.add(normalized);
+
+    const source = readFileSync(normalized, "utf8");
+    const imports = [...source.matchAll(/composes:\s*[\w-]+\s+from\s+"([^"]+)"/g)]
+      .map((match) => join(dirname(normalized), match[1]))
+      .filter((importPath) => importPath.endsWith(".module.css"));
+
+    return [source, ...imports.map((importPath) => readRecursive(importPath))]
+      .filter(Boolean)
+      .join("\n\n");
+  };
+
+  return readRecursive(filePath);
 }

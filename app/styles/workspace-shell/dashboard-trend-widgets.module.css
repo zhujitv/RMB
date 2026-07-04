@@ -1,0 +1,278 @@
+/* dashboard-trend-widgets: extracted from tables-dashboard.module.css without changing selectors. */
+.costColorGreen {
+  background: #10b981;
+  stroke: #10b981;
+}
+
+.costColorOrange {
+  background: #f97316;
+  stroke: #f97316;
+}
+
+.costColorPurple {
+  background: #7c3aed;
+  stroke: #7c3aed;
+}
+
+.costColorTeal {
+  background: #14b8a6;
+  stroke: #14b8a6;
+}
+
+.costColorRose {
+  background: #e11d48;
+  stroke: #e11d48;
+}
+
+.costColorAmber {
+  background: #f59e0b;
+  stroke: #f59e0b;
+}
+
+.costColorSlate {
+  background: #64748b;
+  stroke: #64748b;
+}
+
+.costLegendRow span {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.costLegendRow strong {
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.costLegendRow small {
+  color: #64748b;
+}
+
+.dashboardEmpty {
+  min-height: 118px;
+  border: 1px dashed #dbe1ea;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: grid;
+  place-content: center;
+  gap: 5px;
+  text-align: center;
+  padding: 18px;
+}
+
+.dashboardEmpty strong {
+  color: #0f172a;
+}
+
+.dashboardEmpty small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.notFoundPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: #f8fafc;
+}
+
+.notFoundPanel {
+  width: min(420px, 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.08);
+  padding: 34px;
+  text-align: center;
+}
+
+.notFoundPanel span {
+  display: inline-grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.notFoundPanel h1 {
+  margin: 18px 0 8px;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.notFoundPanel p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.emptyState {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+}
+
+.paginationBar {
+  margin-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
+  flex-wrap: wrap;
+}
+
+.paginationBar div {
+  display: flex;
+  gap: 8px;
+}
+
+.subList {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 8px;
+}
+
+.subListItem {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+}
+
+.subListItem strong {
+  color: #0f172a;
+}
+
+.taxDetailPanel {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 14px;
+}
+
+.documentGroupGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.documentGroupCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.documentGroupCard > strong {
+  color: #0f172a;
+}
+
+.taxBasicInfoCard,
+.taxTransportSummaryCard {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-color: #e8eef7;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.taxBasicInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.taxInfoItem {
+  min-width: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.taxInfoItemWide {
+  grid-column: span 2;
+}
+
+.taxInfoItem span,
+.taxTransportFields span,
+.taxTransportCardTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.taxInfoItem strong,
+.taxTransportFields strong,
+.taxTransportCardTitle strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.taxTransportSummaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.taxTransportSummaryHeader > strong {
+  color: #0f172a;
+}
+
+.taxTransportCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.taxTransportCard {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff, #ffffff);
+  border: 1px solid #dbeafe;
+  padding: 12px;
+}
+
+.taxTransportCardTitle {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.taxTransportCardTitle strong {
+  color: #1d4ed8;
+}
+
+.taxTransportFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}

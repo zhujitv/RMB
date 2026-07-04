@@ -1,0 +1,274 @@
+/* permission-tabs-actions: extracted from settings-permissions-transport.module.css without changing selectors. */
+.permissionGroup {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.permissionGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permissionGroupHeader strong {
+  font-size: 13px;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.permissionGroupHeader span {
+  font-size: 12px;
+  font-weight: 650;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.permissionOptionGrid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px !important;
+}
+
+.tableCheckbox {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+.tableCheckbox::after {
+  width: 9px;
+  height: 5px;
+}
+
+@media (max-width: 920px) {
+  .userEditPanel {
+    width: 100%;
+  }
+
+  .permissionOptionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .userEditPanel {
+    max-width: 100%;
+    padding: 0 12px;
+  }
+
+  .userEditTitle,
+  .userEditSection {
+    padding: 12px;
+  }
+
+  .userEditBasicGrid,
+  .permissionModeCards,
+  .dataScopeCardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .userEditSectionHeader,
+  .advancedPermissionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .permissionGroupHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .permissionTabs {
+    width: 100%;
+  }
+
+  .permissionTabs button {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+
+  .permissionOptionGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inlineInputGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.transportItemsPanel,
+.remarkCard {
+  margin: 14px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+}
+
+.transportItemsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.transportItemsHeader div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transportItemsGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.transportItemCard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.transportItemCard > strong {
+  grid-column: 1 / -1;
+}
+
+.transportItemCard label,
+.remarkCard {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  grid-template-rows: minmax(20px, auto) auto;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.transportItemCard input,
+.transportItemCard select,
+.remarkCard textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.transportItemCard input,
+.transportItemCard select {
+  height: 40px;
+  min-height: 40px;
+}
+
+.remarkCard textarea {
+  min-height: 126px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.transportItemCard input:focus,
+.transportItemCard select:focus,
+.remarkCard textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.transportItemCard button,
+.remarkCard button {
+  width: fit-content;
+}
+
+.supplierSettingsTableWrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.supplierSettingsTable {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.supplierSettingsTable th,
+.supplierSettingsTable td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  vertical-align: middle;
+}
+
+.supplierSettingsTable th:nth-child(1),
+.supplierSettingsTable td:nth-child(1) {
+  width: auto;
+  min-width: 280px;
+}
+
+.supplierSettingsTable th:nth-child(2),
+.supplierSettingsTable td:nth-child(2) {
+  width: 136px;
+}
+
+.supplierSettingsTable th:nth-child(3),
+.supplierSettingsTable td:nth-child(3) {
+  width: 76px;
+  text-align: center;
+}
+
+.supplierSettingsTable th:nth-child(4),
+.supplierSettingsTable td:nth-child(4) {
+  width: 112px;
+}
+
+.supplierSettingsTable th:nth-child(5),
+.supplierSettingsTable td:nth-child(5) {
+  width: 90px;
+  text-align: center;
+}
+
+.supplierSettingsTable th:nth-child(6),
+.supplierSettingsTable td:nth-child(6) {
+  width: 78px;
+  text-align: center;
+}
+
+.supplierSettingsName {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.supplierSettingsTable td:nth-child(6) button {
+  min-width: 52px;
+  width: auto;
+  padding-inline: 10px;
+}

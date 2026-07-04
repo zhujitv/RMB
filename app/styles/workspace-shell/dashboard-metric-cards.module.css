@@ -1,0 +1,280 @@
+/* dashboard-metric-cards: extracted from tables-dashboard.module.css without changing selectors. */
+.reminderRow div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reminderRow strong {
+  color: #0f172a;
+}
+
+.reminderRow span,
+.reminderRow small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.reminderRow b {
+  color: #b45309;
+  font-size: 13px;
+}
+
+.dashboardTrendPanel {
+  min-height: 330px;
+}
+
+.dashboardLegend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dashboardLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboardLegend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.legendBlue {
+  background: #2563eb;
+}
+
+.legendGreen {
+  background: #10b981;
+}
+
+.legendOrange {
+  background: #f97316;
+}
+
+.dashboardTrendGrid {
+  height: 270px;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+  border: 1px solid #f1f5f9;
+  border-radius: 14px;
+  background: linear-gradient(#f8fafc 1px, transparent 1px);
+  background-size: 100% 54px;
+  padding: 16px 14px 10px;
+}
+
+.dashboardTrendMonth {
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.dashboardTrendMonth span {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.trendBars {
+  height: 100%;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.trendBarSvg {
+  width: 8px;
+  display: block;
+  height: 100%;
+  overflow: visible;
+}
+
+.trendReceivable {
+  background: #2563eb;
+  fill: #2563eb;
+}
+
+.trendPaid {
+  background: #10b981;
+  fill: #10b981;
+}
+
+.trendUnpaid {
+  background: #f97316;
+  fill: #f97316;
+}
+
+.rankItem {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.rankIndex {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rankMain {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.rankMain strong,
+.rankMain small {
+  overflow-wrap: anywhere;
+}
+
+.rankMain strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.rankMain small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rankValue {
+  text-align: right;
+  display: grid;
+  gap: 3px;
+}
+
+.rankValue strong {
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.rankValue small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rankDanger .rankIndex {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.rankDanger .rankValue strong {
+  color: #b91c1c;
+}
+
+.rankWarning .rankIndex {
+  color: #b45309;
+  background: #ffedd5;
+}
+
+.rankWarning .rankValue strong {
+  color: #b45309;
+}
+
+.costStructureLayout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.donutRing {
+  width: 180px;
+  height: 180px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.donutSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donutTrack,
+.donutSegment {
+  fill: none;
+  stroke-width: 18;
+}
+
+.donutTrack {
+  stroke: #e2e8f0;
+}
+
+.donutSegment {
+  stroke-linecap: round;
+}
+
+.donutRing::after {
+  content: "";
+  position: absolute;
+  inset: 34px;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.donutRing span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.donutRing strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.costLegendList {
+  display: grid;
+  gap: 8px;
+}
+
+.costLegendRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.costLegendRow i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.costColorBlue {
+  background: #2563eb;
+  stroke: #2563eb;
+}

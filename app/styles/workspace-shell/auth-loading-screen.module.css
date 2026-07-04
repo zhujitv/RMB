@@ -1,0 +1,271 @@
+/* auth-loading-screen: extracted from auth-controls.module.css without changing selectors. */
+/* Loading, login, base buttons and form controls.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.loadingScreen {
+  min-height: 100vh;
+  background: #f5f6f8;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  color: #111827;
+}
+
+.loadingCard {
+  width: min(440px, 100%);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 24px;
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+  padding: 28px;
+}
+
+.loadingCard {
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+
+.loadingCard p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.loadingActions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.loadingDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #2563eb;
+  margin: 0 auto;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.loginScreen {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 0;
+  background: #fff;
+  color: #0f172a;
+}
+
+.loginAmbientGlow {
+  display: none;
+}
+
+.loginLayout {
+  position: relative;
+  z-index: 1;
+  width: min(430px, calc(100% - 48px));
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 26px;
+  padding: 56px 0;
+}
+
+.loginBrand {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  color: #1558d6;
+  text-align: center;
+}
+
+.loginBrand h1 {
+  position: relative;
+  margin: 0;
+  color: #1558d6;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+
+.loginBrandLogo {
+  max-width: 84px;
+  max-height: 42px;
+  object-fit: contain;
+}
+
+.loginFooter {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 18px;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.loginCard {
+  position: relative;
+  justify-self: center;
+  width: 100%;
+  min-width: 0;
+  padding: 44px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.1);
+}
+
+.loginScreen > .loginCard {
+  place-self: center;
+  z-index: 2;
+  width: min(430px, calc(100% - 48px));
+}
+
+.loginCard .loginBrand {
+  margin-bottom: 24px;
+  min-height: 0;
+  display: grid;
+  justify-content: stretch;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  text-align: left;
+  gap: 6px;
+}
+
+.loginCard .loginBrand h1 {
+  color: #0f172a;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.loginCard .loginBrand p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.loginCardHeader {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.loginCardHeader span,
+.loginModalHeader span {
+  color: #2563eb;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.loginCardHeader h2,
+.loginModalHeader h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.loginCardHeader p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.authForm {
+  display: grid;
+  gap: 12px;
+}
+
+.authForm label {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.authForm input {
+  height: 42px;
+  border: 1px solid #dbe1ea;
+  border-radius: 13px;
+  background: #f8fafc;
+  padding: 0 14px;
+  color: #0f172a;
+  font-size: 15px;
+  outline: none;
+}
+
+.authForm input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  background: #fff;
+}
+
+.loginAuthForm {
+  position: relative;
+  gap: 18px;
+}
+
+.loginAuthForm label {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.loginAuthForm input {
+  width: 100%;
+  height: 50px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0 15px;
+  font-size: 15px;
+  outline: none;
+}
+
+.loginAuthForm input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  background: #fff;
+}
+
+.loginAuthForm .formMessage {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.formMessage {
+  margin: 0;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+}

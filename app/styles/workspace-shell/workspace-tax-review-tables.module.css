@@ -1,0 +1,274 @@
+/* workspace-tax-review-tables: local WorkspaceShell rules extracted from the export index. */
+.settingsCenterNavHeader strong {
+  font-size: 14px;
+}
+
+.settingsCenterNavHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.settingsCenterNav nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settingsCenterNavButton {
+  justify-content: flex-start !important;
+  width: 100%;
+  height: 36px;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settingsCenterNavButton:hover {
+  border-color: #bfdbfe !important;
+  background: #eaf3ff !important;
+  color: #1d4ed8 !important;
+}
+
+.settingsCenterNavButtonActive,
+.settingsCenterNavButtonActive:hover {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+.settingsCenterMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settingsPageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 14px;
+  border: 1px solid #dbe4f0;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 18px 20px;
+}
+
+.settingsPageHeader h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.settingsPageHeader p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.settingsPageMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.settingsHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settingsHomeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.settingsHomeCard {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 92px;
+  border: 1px solid #dbe4f0 !important;
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #0f172a !important;
+  padding: 16px !important;
+  text-align: left;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+.settingsHomeCard:hover {
+  border-color: #93c5fd !important;
+  background: #fff !important;
+  transform: translateY(-1px);
+}
+
+.settingsHomeCard strong {
+  display: block;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.settingsHomeCard small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settingsHomeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 10px;
+  background: #e0efff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settingsHomeArrow {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settingsConfigForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settingsConfigCard {
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 18px;
+}
+
+.settingsCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.settingsCardHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.settingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settingsSectionHeader {
+  color: #334155;
+  font-size: 13px;
+}
+
+.settingsFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.settingsField {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.settingsFieldLabel {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settingsField input,
+.settingsField select,
+.settingsField textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+
+.settingsSecretField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSecretActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settingsSecretActions button {
+  height: 40px;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
+}
+
+.settingsStatusTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settingsStatusSuccess {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.settingsStatusWarning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.settingsStatusDanger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.settingsStatusMuted {
+  background: #e2e8f0;
+  color: #475569;
+}

@@ -1,0 +1,281 @@
+/* settings-user-drawer: extracted from settings-permissions-transport.module.css without changing selectors. */
+/* User editor, permission matrix, checkboxes and transport item forms.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.moduleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quickCreatePanel {
+  margin: 18px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.userEditPanel {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+}
+
+.userEditTitle,
+.userEditSection {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 20px;
+}
+
+.userEditTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.userEditTitle strong,
+.userEditSectionHeader strong,
+.advancedPermissionHeader strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.userEditTitle span,
+.userEditSectionHeader span,
+.advancedPermissionHeader span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.userEditSection {
+  display: grid;
+  gap: 14px;
+}
+
+.userEditSectionHeader,
+.advancedPermissionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.userEditSectionHeader div,
+.advancedPermissionHeader div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.userEditBasicGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.userEditBasicGrid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.userEditBasicGrid input,
+.userEditBasicGrid select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.userEditBasicGrid input:focus,
+.userEditBasicGrid select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.permissionModeCards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dataScopeCardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.permissionSchemeCard,
+.permissionOptionCard {
+  min-height: 48px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permissionSchemeCard .uiChoiceInput,
+.permissionOptionCard .uiChoiceInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.permissionSchemeCard .uiChoiceCheck,
+.permissionOptionCard .uiChoiceCheck {
+  position: static;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  order: 2;
+}
+
+.permissionSchemeCard .uiChoiceText,
+.permissionOptionCard .uiChoiceText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.permissionSchemeCard .uiChoiceText strong,
+.permissionOptionCard .uiChoiceText strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permissionSchemeCard .uiChoiceText small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.permissionTemplateNote {
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.permissionTabs {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #f1f5f9;
+}
+
+.permissionTabs button {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #475569;
+  height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.permissionTabs .permissionTabActive {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.userEditActions {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quickCreatePanelInDrawer {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 4px;
+}
+
+.inlineEditPanel {
+  margin: 0 0 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #eff6ff;
+  padding: 14px;
+}
+
+.quickCreateHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.quickCreateHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.quickCreateHeader strong {
+  color: #0f172a;
+  font-size: 16px;
+}

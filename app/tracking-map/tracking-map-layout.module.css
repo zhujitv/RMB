@@ -1,0 +1,269 @@
+/* tracking-map-layout: extracted from tracking-map.module.css without changing selectors. */
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 30%),
+    linear-gradient(180deg, #eef6ff 0%, #f8fafc 46%, #ffffff 100%);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  color: #0f172a;
+}
+
+.header,
+.summaryCard,
+.infoPanel,
+.timelinePanel,
+.mapPanel,
+.emptyPanel,
+.errorPanel {
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 54px rgba(15, 23, 42, 0.08);
+}
+
+.header {
+  border-radius: 20px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.header span,
+.mapHeader span,
+.emptyPanel span,
+.errorPanel span,
+.summaryCard span,
+.infoItem span,
+.containerBlock > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.header h1,
+.mapHeader h2,
+.infoPanel h2,
+.timelinePanel h2,
+.emptyPanel h1,
+.errorPanel h1 {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.header h1 {
+  margin-top: 4px;
+  font-size: clamp(24px, 3vw, 38px);
+}
+
+.backLink,
+.secondaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  border-radius: 16px;
+  min-height: 82px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.summaryCard strong {
+  color: #1d4ed8;
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  gap: 16px;
+}
+
+.infoPanel,
+.timelinePanel,
+.mapPanel {
+  border-radius: 20px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.infoPanel h2,
+.timelinePanel h2,
+.mapHeader h2 {
+  font-size: 18px;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.infoItem {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.infoItem strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.containerBlock {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.containerTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.containerTags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.timelineList {
+  display: grid;
+  gap: 0;
+}
+
+.timelineItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.timelineItem:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  bottom: -2px;
+  width: 1px;
+  background: #bfdbfe;
+}
+
+.timelineDot {
+  position: relative;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  border-radius: 999px;
+  border: 3px solid #dbeafe;
+  background: #2563eb;
+}
+
+.timelineItem div {
+  min-width: 0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.timelineItem strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.timelineItem span,
+.mutedText {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mapPanel {
+  min-height: 360px;
+}
+
+.mapHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mapLinkPanel,
+.mapFallback {
+  min-height: 420px;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.mapLinkPanel {
+  border: 1px solid #dbeafe;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px;
+  text-align: center;
+}
+
+.mapLinkPanel strong {
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.mapLinkPanel span {
+  color: #475569;
+  max-width: 620px;
+  line-height: 1.7;
+  font-size: 13px;
+}

@@ -1,0 +1,274 @@
+/* permission-card-controls: extracted from settings-permissions-transport.module.css without changing selectors. */
+.quickCreateHeader span,
+.quickCreateMeta {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.quickCreateMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -2px 0 14px;
+}
+
+.quickCreateMeta span {
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+}
+
+.drawerFormActions {
+  position: sticky;
+  bottom: -22px;
+  z-index: 3;
+  justify-content: flex-end;
+  margin: 18px -18px -22px;
+  padding: 12px 18px;
+  background: rgba(248, 250, 252, 0.96);
+  border-top: 1px solid #e2e8f0;
+  backdrop-filter: blur(12px);
+}
+
+.installmentPanel {
+  grid-column: 1 / -1;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.installmentRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.checkboxPanel {
+  margin: 12px 0 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.checkboxPanel strong {
+  color: #0f172a;
+}
+
+.checkboxPanel div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkboxPanel .factoryDocumentChoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkboxPanel label {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 11px 12px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.checkboxPanel label:hover {
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.checkboxPanel label:has(input:checked) {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(219, 234, 254, 0.68));
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
+  color: #0f172a;
+}
+
+.checkboxPanel label:has(input:disabled) {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.checkboxOptionRow {
+  min-height: 72px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 14px;
+  color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.checkboxOptionRow:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.checkboxOptionRowChecked {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.12);
+}
+
+.checkboxOptionInput {
+  appearance: none;
+  flex: 0 0 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkboxBox {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+  background: #fff;
+  color: transparent;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.checkboxOptionInput:checked + .checkboxBox {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+}
+
+.checkboxOptionInput:focus-visible + .checkboxBox {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 3px;
+}
+
+.checkboxContent {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  margin-left: 10px;
+  min-width: 0;
+}
+
+.checkboxTitle {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.checkboxDesc {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput),
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput),
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput),
+.tableCheckbox {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput)::after,
+.tableCheckbox::after {
+  content: "";
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  opacity: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):checked,
+.tableCheckbox:checked {
+  border-color: #2563eb;
+  background: #2563eb;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 6 9 17l-5-5' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 14px 14px;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):checked::after,
+.tableCheckbox:checked::after {
+  opacity: 1;
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):focus-visible,
+.tableCheckbox:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 3px;
+}
+
+.inlineCheckbox input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
+.checkboxPanel input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
+.permissionGroup input:not(.uiChoiceInput):not(.checkboxOptionInput):disabled,
+.tableCheckbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.permissionMatrix {
+  display: grid !important;
+  grid-template-columns: 1fr;
+  gap: 18px !important;
+}

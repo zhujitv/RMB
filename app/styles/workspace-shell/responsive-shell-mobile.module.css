@@ -1,0 +1,279 @@
+/* responsive-shell-mobile: extracted from responsive-typography.module.css without changing selectors. */
+/* Pulse animation, auth responsive rules and typography normalization.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+
+@media (max-width: 860px) {
+  .loginScreen {
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 24px 0;
+  }
+
+  .loginAmbientGlow {
+    width: 100%;
+    height: 100%;
+  }
+
+  .loginLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 22px;
+    width: min(430px, calc(100% - 40px));
+    min-height: auto;
+    padding: 24px 0;
+  }
+
+  .loginBrand {
+    min-height: 0;
+    justify-items: center;
+    text-align: center;
+    padding: 0;
+  }
+
+  .loginBrand h1 {
+    font-size: 36px;
+  }
+
+  .loginFooter {
+    position: static;
+    padding: 0 24px;
+  }
+
+  .loginCard {
+    justify-self: center;
+    align-self: center;
+    width: 100%;
+    max-width: 430px;
+    margin: 0;
+  }
+
+  .appShell {
+    grid-template-columns: 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.42);
+    z-index: 39;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(280px, 84vw);
+    height: 100vh;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    z-index: 40;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .navList {
+    grid-template-columns: 1fr;
+  }
+
+  .quickGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobileMenuButton {
+    display: inline-flex;
+  }
+
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .quickCreateHeader,
+  .moduleHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transportItemCard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .logisticsItemsHead {
+    display: none;
+  }
+
+  .logisticsItemsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customsFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .commissionDeductionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkboxPanel div,
+  .checkboxPanel .factoryDocumentChoiceGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .supplierDocumentsPage {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .supplierDocumentsHeader h1 {
+    font-size: 21px;
+  }
+
+  .supplierDocumentsStats {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierDocumentTaskRow {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierDocumentTaskRow .statusPill,
+  .supplierDocumentTaskDate {
+    justify-self: flex-start;
+  }
+
+  .supplierDocumentUploadCard {
+    padding: 12px;
+  }
+
+  .supplierDocumentUploadHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+  }
+
+  .supplierDocumentTemplateButton,
+  .supplierDocumentUploadButton {
+    width: 100%;
+  }
+
+  .supplierLogisticsCostGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .loadingScreen {
+    padding: 18px;
+  }
+
+  .loginScreen {
+    padding: 18px 0;
+  }
+
+  .loginAmbientGlow {
+    height: 100%;
+  }
+
+  .loginLayout {
+    width: calc(100% - 32px);
+    gap: 18px;
+    padding: 16px 0;
+  }
+
+  .loginBrand {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .loginBrand h1 {
+    font-size: 32px;
+  }
+
+  .loginCard {
+    width: 100%;
+    margin: 0;
+    padding: 24px;
+    border-radius: 20px;
+  }
+
+  .loginCardHeader h2,
+  .loginModalHeader h2 {
+    font-size: 24px;
+  }
+
+  .loginModalLayer {
+    padding: 14px;
+  }
+
+  .loginModalCard {
+    max-height: calc(100dvh - 28px);
+    padding: 22px;
+  }
+
+  .authForm label {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .primaryButton {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .inlineInputGroup,
+  .transportItemCard,
+  .logisticsItemsRow {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    height: auto;
+    align-items: center;
+    gap: 12px;
+    padding: 18px;
+    flex-direction: row;
+  }
+
+  .topbarTitleRow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .accountButton {
+    padding-right: 8px;
+  }
+
+  .accountButton > span:last-child {
+    display: none;
+  }
+
+  .content {
+    padding: 18px;
+  }
+}
+
+/* Typography normalization: keep module text weight/color consistent. */

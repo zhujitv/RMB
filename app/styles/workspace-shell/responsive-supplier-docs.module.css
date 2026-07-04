@@ -1,0 +1,245 @@
+/* responsive-supplier-docs: extracted from responsive-typography.module.css without changing selectors. */
+.logisticsTypographyScope .billRejectButton:active:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton:hover:not(:disabled),
+.logisticsTypographyScope .logisticsLineDeleteButton:focus:not(:disabled),
+.logisticsTypographyScope .logisticsLineDeleteButton:focus-visible:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.logisticsTypographyScope .logisticsLineDeleteButton:active:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.logisticsTypographyScope .listToolbar input,
+.logisticsTypographyScope .listToolbar select,
+.logisticsTypographyScope .reportFilterGrid input,
+.logisticsTypographyScope .reportFilterGrid select,
+.logisticsTypographyScope .reportFilterGrid textarea,
+.logisticsTypographyScope .statementActions input,
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select,
+.logisticsTypographyScope .transportItemCard input,
+.logisticsTypographyScope .transportItemCard select,
+.logisticsTypographyScope .remarkCard textarea,
+.logisticsTypographyScope .inlineInvoiceForm input,
+.logisticsTypographyScope .customsFormGrid input,
+.logisticsTypographyScope .dataTable input,
+.logisticsTypographyScope .dataTable select,
+.logisticsTypographyScope .dataTable textarea {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select,
+.logisticsTypographyScope .transportItemCard input,
+.logisticsTypographyScope .transportItemCard select,
+.logisticsTypographyScope .inlineInvoiceForm input,
+.logisticsTypographyScope .customsFormGrid input {
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.logisticsTypographyScope .transportItemCard select,
+.logisticsTypographyScope .logisticsItemsRow select {
+  padding-right: 34px;
+}
+
+.logisticsTypographyScope .transportItemCard label,
+.logisticsTypographyScope .customsFormGrid label {
+  align-content: start;
+  line-height: 20px;
+}
+
+.logisticsTypographyScope .reportFilterGrid label,
+.logisticsTypographyScope .transportItemCard label,
+.logisticsTypographyScope .remarkCard,
+.logisticsTypographyScope .customsFormGrid label,
+.logisticsTypographyScope .confirmDialogInput {
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .statementMetrics strong,
+.logisticsTypographyScope .logisticsItemsTotal {
+  color: var(--text-heading);
+  font-size: 16px;
+  font-weight: var(--font-weight-title);
+}
+
+.logisticsTypographyScope .paginationBar,
+.logisticsTypographyScope .paginationBar > span,
+.logisticsTypographyScope .paginationBar div {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
+
+.logisticsItemsTable {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  table-layout: fixed;
+}
+
+.logisticsItemsHead,
+.logisticsItemsRow {
+  grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;
+  min-width: 936px;
+  box-sizing: border-box;
+}
+
+.logisticsItemsInlineActions {
+  min-width: 936px;
+  box-sizing: border-box;
+}
+
+.logisticsItemsHead {
+  display: grid;
+  padding: 0 8px;
+}
+
+.logisticsItemsRow {
+  overflow: hidden;
+}
+
+.logisticsItemsRow > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.logisticsItemsRow input,
+.logisticsItemsRow select {
+  height: 32px;
+  min-height: 32px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.logisticsTypographyScope .logisticsItemsRow input,
+.logisticsTypographyScope .logisticsItemsRow select {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.logisticsItemsRow > :nth-child(2) {
+  width: 80px;
+  justify-self: center;
+}
+
+.logisticsItemsRow > :nth-child(3) {
+  width: 110px;
+  justify-self: end;
+}
+
+.logisticsItemsRow > select:nth-of-type(2) {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  padding-right: 22px;
+  font-size: 13px;
+  justify-self: center;
+  background-position: right 6px center;
+  background-size: 14px 14px;
+}
+
+.logisticsTypographyScope .logisticsItemsRow > select:nth-of-type(2) {
+  padding: 0 8px;
+  padding-right: 22px;
+}
+
+.logisticsItemsRow > :nth-child(5) {
+  width: 80px;
+  justify-self: center;
+}
+
+.logisticsItemsRow > strong:nth-child(6) {
+  width: 110px;
+  justify-self: end;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.logisticsItemsRow > :nth-child(8) {
+  width: 80px;
+  justify-self: center;
+}
+
+@media (max-width: 960px) {
+  .controlTowerStats,
+  .controlTowerBigScreen {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controlTowerNodeBoard {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerHeader,
+  .controlTowerHeaderActions {
+    align-items: stretch;
+  }
+
+  .moduleViewTabs {
+    width: 100%;
+  }
+
+  .moduleViewTab,
+  .moduleViewTabActive {
+    flex: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .controlTowerFilters {
+    grid-template-columns: 1fr;
+  }
+
+  .controlTowerFullscreen {
+    padding: 12px;
+  }
+
+  .controlTowerRouteLine {
+    grid-template-columns: 1fr;
+  }
+}

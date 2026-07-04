@@ -1,0 +1,280 @@
+/* workspace-tax-calculation-overrides: local WorkspaceShell rules extracted from the export index. */
+.taxCalculationEmptyPanel {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.taxCalculationBlockedPanel {
+  min-height: 64px;
+  display: grid;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.customsRecognitionResultCard {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.customsResultHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customsResultHeader > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.customsResultHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.customsResultHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sectionSubheading {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.customsRecognitionTable th:nth-child(1),
+.customsRecognitionTable td:nth-child(1) { width: 110px; }
+
+.customsRecognitionTable th:nth-child(2),
+.customsRecognitionTable td:nth-child(2) { width: 220px; }
+
+.customsRecognitionTable th:nth-child(3),
+.customsRecognitionTable td:nth-child(3) { width: 180px; }
+
+.customsRecognitionTable th:nth-child(4),
+.customsRecognitionTable td:nth-child(4) { width: 90px; text-align: right; }
+
+.customsRecognitionTable th:nth-child(5),
+.customsRecognitionTable td:nth-child(5) { width: 70px; }
+
+.customsRecognitionTable th:nth-child(6),
+.customsRecognitionTable td:nth-child(6) { width: 120px; text-align: right; }
+
+.customsRecognitionTable th:nth-child(7),
+.customsRecognitionTable td:nth-child(7) { width: 70px; }
+
+.customsRecognitionTable th:nth-child(8),
+.customsRecognitionTable td:nth-child(8) { width: 100px; }
+
+.customsRawResultSection {
+  display: grid;
+  gap: 10px;
+}
+
+.customsOcrFilePanel {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.customsOcrFileRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.customsOcrFileRow > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.customsOcrFileRow strong {
+  color: #0f172a;
+}
+
+.customsOcrHistoryList {
+  display: grid;
+  gap: 6px;
+}
+
+.customsOcrLogList {
+  display: grid;
+  gap: 6px;
+}
+
+.customsOcrLogRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+}
+
+.textSuccess {
+  color: #047857;
+  font-weight: 700;
+}
+
+.textDanger {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.customsOcrRawResult {
+  max-height: 260px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rowWarning td {
+  background: #fffbeb;
+}
+
+.taxCalculationTableContainer form {
+  width: 100%;
+  min-width: 100%;
+}
+
+.taxCalculationDataTable {
+  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.taxCalculationDataTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+.taxCalculationDataTable th,
+.taxCalculationDataTable td {
+  text-align: left;
+  height: 42px;
+  padding: 8px 10px;
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.taxCalculationDataTable input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.taxCalculationDataTable .numericCell,
+.taxCalculationDataTable .numericCell input {
+  text-align: right;
+}
+
+.taxInlineInputGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  gap: 4px;
+  align-items: center;
+}
+
+.taxMoneyInputGroup {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.taxCalculationEmptyCell {
+  height: 54px;
+  text-align: center;
+}
+
+.taxCalculationEmptyCell .emptyState {
+  min-height: 42px;
+  margin: 0;
+  padding: 10px;
+  justify-content: center;
+}
+
+.taxDeclarationReviewTable th:nth-child(1),
+.taxDeclarationReviewTable td:nth-child(1) { width: 14%; }
+
+.taxDeclarationReviewTable th:nth-child(2),
+.taxDeclarationReviewTable td:nth-child(2) { width: 110px; }
+
+.taxDeclarationReviewTable th:nth-child(3),
+.taxDeclarationReviewTable td:nth-child(3) { width: 21%; }
+
+.taxDeclarationReviewTable th:nth-child(4),
+.taxDeclarationReviewTable td:nth-child(4) { width: 130px; }
+
+.taxDeclarationReviewTable th:nth-child(5),
+.taxDeclarationReviewTable td:nth-child(5) { width: 86px; }
+
+.taxDeclarationReviewTable th:nth-child(6),
+.taxDeclarationReviewTable td:nth-child(6) { width: 140px; }
+
+.taxDeclarationReviewTable th:nth-child(7),
+.taxDeclarationReviewTable td:nth-child(7) { width: 100px; }
+
+.taxDeclarationReviewTable th:nth-child(8),
+.taxDeclarationReviewTable td:nth-child(8) { width: 120px; }
+
+.taxDeclarationReviewTable th:nth-child(9),
+.taxDeclarationReviewTable td:nth-child(9) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(1),
+.taxInvoiceReviewTable td:nth-child(1) { width: 12%; }
+
+.taxInvoiceReviewTable th:nth-child(2),
+.taxInvoiceReviewTable td:nth-child(2) { width: 110px; }
+
+.taxInvoiceReviewTable th:nth-child(3),
+.taxInvoiceReviewTable td:nth-child(3) { width: 18%; }

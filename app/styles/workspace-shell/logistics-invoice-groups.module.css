@@ -1,0 +1,278 @@
+/* logistics-invoice-groups: extracted from logistics-fees.module.css without changing selectors. */
+.logisticsDetailTable th {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsDetailTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.logisticsDetailTable th:nth-child(1),
+.logisticsDetailTable td:nth-child(1) {
+  width: 130px;
+}
+
+.logisticsDetailTable th:nth-child(2),
+.logisticsDetailTable td:nth-child(2) {
+  width: 84px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsDetailTable th:nth-child(3),
+.logisticsDetailTable td:nth-child(3) {
+  width: 86px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsDetailTable th:nth-child(4),
+.logisticsDetailTable td:nth-child(4) {
+  width: 140px;
+}
+
+.logisticsDetailTable th:nth-child(5),
+.logisticsDetailTable td:nth-child(5) {
+  width: 130px;
+}
+
+.logisticsDetailTable th:nth-child(6),
+.logisticsDetailTable td:nth-child(6) {
+  width: 160px;
+}
+
+.logisticsDetailTable th:nth-child(7),
+.logisticsDetailTable td:nth-child(7) {
+  width: 104px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsDetailTable th:nth-child(8),
+.logisticsDetailTable td:nth-child(8) {
+  width: 112px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.logisticsDetailTable th:nth-child(9),
+.logisticsDetailTable td:nth-child(9) {
+  width: 120px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.numericCell {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.indexCell {
+  text-align: center !important;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.remarkCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.costSyncCell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+
+.costSyncCell > span {
+  flex: 0 0 auto;
+  color: #334155;
+  font-size: 12.5px;
+}
+
+.compactDetailActions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.compactDetailActions:empty {
+  display: none;
+}
+
+.compactDetailActions button {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.inlineAmountEditor {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.inlineAmountEditor input,
+.inlineAmountEditor select,
+.inlineCostTypeSelect,
+.inlineQuantityInput,
+.inlineRemarkInput {
+  box-sizing: border-box;
+  min-height: 30px;
+  height: 30px;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.inlineCostTypeSelect {
+  width: 104px;
+  padding-right: 22px;
+}
+
+.inlineAmountEditor input {
+  width: 100px;
+  flex: 0 0 100px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineAmountEditor select {
+  width: 72px;
+  flex: 0 0 72px;
+  padding-right: 20px;
+}
+
+.inlineAmountEditor span {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.inlineAmountHint {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.inlineQuantityInput {
+  display: block;
+  width: 90px;
+  margin: 0 auto;
+  -moz-appearance: textfield;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineQuantityInput::-webkit-outer-spin-button,
+.inlineQuantityInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.inlineRemarkCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.inlineRemarkInput {
+  width: 140px;
+  max-width: 100%;
+}
+
+.inlineRemarkInput:disabled {
+  border-color: #e5e7eb;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.inlineEditHint {
+  max-width: 140px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saveStateBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.saveStateDirty {
+  color: #d97706;
+}
+
+.saveStateSaved {
+  color: #16a34a;
+}
+
+.logisticsLineDeleteButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff;
+  color: #b91c1c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.logisticsLineDeleteButton:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}

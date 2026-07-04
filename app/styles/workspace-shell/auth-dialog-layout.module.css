@@ -1,0 +1,254 @@
+/* auth-dialog-layout: extracted from auth-controls.module.css without changing selectors. */
+.uiSwitch:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.uiSwitchOn {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.uiSwitchText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.uiSwitchText strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.uiSwitchText small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.uiSwitchControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.uiSwitchState {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.uiSwitchOn .uiSwitchState {
+  color: #2563eb;
+}
+
+.uiSwitchTrack {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.34);
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.uiSwitchThumb {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+  transition: transform 0.18s ease;
+}
+
+.uiSwitchOn .uiSwitchTrack {
+  background: #3b82f6;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.4);
+}
+
+.uiSwitchOn .uiSwitchThumb {
+  transform: translateX(20px);
+}
+
+.uiFileUpload {
+  position: relative;
+  min-height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.uiFileUpload:hover {
+  border-color: #93c5fd;
+  background: #f8fafc;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.1);
+}
+
+.uiFileUploadInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.uiTabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #f1f5f9;
+}
+
+.uiTabs button {
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #475569;
+  padding: 0 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.uiTabs button:hover {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.uiTabs .uiTabActive {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.loginSubmitButton {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--button-primary-bg) !important;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  color: var(--button-primary-text) !important;
+  background: var(--button-primary-bg) !important;
+  background-image: none !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+
+.loginSubmitButton:hover:not(:disabled),
+.loginSubmitButton:focus:not(:disabled),
+.loginSubmitButton:focus-visible:not(:disabled) {
+  color: var(--button-primary-text) !important;
+  background: var(--button-primary-hover) !important;
+  border-color: var(--button-primary-hover) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.24);
+}
+
+.loginSubmitButton:active:not(:disabled) {
+  color: var(--button-primary-text) !important;
+  background: var(--button-primary-active) !important;
+  border-color: var(--button-primary-active) !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.loginSubmitButton:disabled {
+  color: var(--button-disabled-text) !important;
+  background: var(--button-disabled-bg) !important;
+  border-color: var(--button-disabled-border) !important;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.loginRegisterLine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 22px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.loginRegisterLine button {
+  border: 0;
+  background: transparent;
+  color: #1558d6;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.loginModalLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.loginModalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(8px);
+}
+
+.loginModalCard {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow-y: auto;
+  padding: 30px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+}
+
+.loginModalHeader {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.loginModalHeader button {
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 7px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.loginModalCard small {
+  color: #64748b;
+  line-height: 1.6;
+}

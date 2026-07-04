@@ -1,0 +1,274 @@
+/* manual-hero-layout: extracted from manual-table.module.css without changing selectors. */
+/* Operation manual, table core, mobile cards and status pills.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.manualPage {
+  display: grid;
+  gap: 18px;
+}
+
+.manualHero {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.05);
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+
+.manualHero h2 {
+  margin: 8px 0;
+  font-size: 34px;
+}
+
+.manualHero p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.manualMeta {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.manualMeta span,
+.manualFlowCard span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.manualHeroBadge {
+  min-width: 220px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+  color: #1d4ed8;
+  padding: 22px;
+  display: grid;
+  gap: 8px;
+}
+
+.manualHeroBadge strong {
+  color: #1d4ed8;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.manualHeroBadge span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.manualToolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.manualToolbar label {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.manualToolbar input {
+  height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.manualToolbar input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.manualToolbar div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manualFlow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manualFlowCard {
+  min-height: 112px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.manualFlowCard strong {
+  color: #0f172a;
+}
+
+.manualFlowCard small {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.manualRuleCard {
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  background: #fff7ed;
+  padding: 18px;
+}
+
+.manualRuleCard strong {
+  color: #9a3412;
+}
+
+.manualRuleCard ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #7c2d12;
+  line-height: 1.75;
+}
+
+.manualLayout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.manualToc {
+  position: sticky;
+  top: 96px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.manualToc button {
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #475569;
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.manualToc button:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.manualContent {
+  display: grid;
+  gap: 12px;
+}
+
+.manualSectionCard {
+  scroll-margin-top: 92px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.manualSectionCard > button {
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  background: #fff;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manualSectionCard > button:hover {
+  background: #f8fafc;
+}
+
+.manualSectionCard > button span {
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.manualSectionCard > button strong {
+  font-size: 16px;
+}
+
+.manualSectionCard > button i {
+  color: #64748b;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.manualSectionBody {
+  border-top: 1px solid #e2e8f0;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.manualSectionBody p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.manualSectionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manualSectionGrid div {
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.manualSectionGrid h4 {
+  margin: 0 0 8px;
+}
+
+.manualSectionGrid ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  line-height: 1.75;
+}

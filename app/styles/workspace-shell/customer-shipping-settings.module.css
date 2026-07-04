@@ -1,0 +1,276 @@
+/* customer-shipping-settings: extracted from forms-dialogs-tax.module.css without changing selectors. */
+.pdfPreviewLoading {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #cbd5e1;
+  font-size: 13px;
+  text-align: center;
+}
+
+.pdfPreviewFallback {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.pdfPreviewFallback strong {
+  font-size: 16px;
+}
+
+.pdfPreviewFallback span {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.taxRefundDrawer {
+  width: min(1040px, 90vw);
+  height: 100vh;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -18px 0 60px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.taxRefundDrawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+}
+
+.taxRefundDrawerTitle {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.taxRefundDrawerTitle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.taxRefundDrawerTitle strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.taxRefundDrawerTitle small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.taxRefundDrawerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.taxRefundDrawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 22px;
+}
+
+.taxMissingBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.taxMissingBadgeComplete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.missingChipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.missingChipList span,
+.missingChipButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.missingChipButton {
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.missingChipButton:hover {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+  transform: translateY(-1px);
+}
+
+.exportInvoiceRemarkText {
+  min-height: 72px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.exportInvoiceRemarkSection {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.exportInvoiceRemarkSection > strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlocks {
+  display: grid;
+  gap: 10px;
+}
+
+.exportInvoiceRemarkBlock {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+  padding: 10px 12px;
+}
+
+.exportInvoiceRemarkBlock > strong {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.exportInvoiceRemarkBlockGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.exportInvoiceRemarkBlockGrid span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.taxTargetHighlight {
+  position: relative;
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.14);
+  scroll-margin-top: 96px;
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.shippingDocsDialog {
+  width: min(860px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.confirmDialog,
+.shippingDocsDialog {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.confirmDialog {
+  position: relative;
+  z-index: 9999;
+  width: min(520px, 94vw);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.modalCard {
+  position: relative;
+  z-index: 9999;
+  width: min(720px, 94vw);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.confirmDialogWarning {
+  border-color: #fed7aa;
+}
+
+.confirmDialogDanger {
+  border-color: #fecaca;
+}

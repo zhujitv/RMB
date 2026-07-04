@@ -1,0 +1,277 @@
+/* workspace-customs-ocr-overrides: local WorkspaceShell rules extracted from the export index. */
+.taxInvoiceReviewTable th:nth-child(4),
+.taxInvoiceReviewTable td:nth-child(4) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(5),
+.taxInvoiceReviewTable td:nth-child(5) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(6),
+.taxInvoiceReviewTable td:nth-child(6) { width: 90px; }
+
+.taxInvoiceReviewTable th:nth-child(7),
+.taxInvoiceReviewTable td:nth-child(7) { width: 90px; }
+
+.taxInvoiceReviewTable th:nth-child(8),
+.taxInvoiceReviewTable td:nth-child(8) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(9),
+.taxInvoiceReviewTable td:nth-child(9) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(10),
+.taxInvoiceReviewTable td:nth-child(10) { width: 120px; }
+
+.taxInvoiceReviewTable th:nth-child(11),
+.taxInvoiceReviewTable td:nth-child(11) { width: 140px; }
+
+.taxInvoiceReviewTable th:nth-child(12),
+.taxInvoiceReviewTable td:nth-child(12) { width: 14%; }
+
+.taxRefundReviewTable th:nth-child(1),
+.taxRefundReviewTable td:nth-child(1) { width: 11%; }
+
+.taxRefundReviewTable th:nth-child(2),
+.taxRefundReviewTable td:nth-child(2) { width: 110px; }
+
+.taxRefundReviewTable th:nth-child(3),
+.taxRefundReviewTable td:nth-child(3),
+.taxRefundReviewTable th:nth-child(4),
+.taxRefundReviewTable td:nth-child(4) { width: 12%; }
+
+.taxRefundReviewTable th:nth-child(5),
+.taxRefundReviewTable td:nth-child(5),
+.taxRefundReviewTable th:nth-child(7),
+.taxRefundReviewTable td:nth-child(7),
+.taxRefundReviewTable th:nth-child(9),
+.taxRefundReviewTable td:nth-child(9),
+.taxRefundReviewTable th:nth-child(10),
+.taxRefundReviewTable td:nth-child(10),
+.taxRefundReviewTable th:nth-child(11),
+.taxRefundReviewTable td:nth-child(11),
+.taxRefundReviewTable th:nth-child(12),
+.taxRefundReviewTable td:nth-child(12),
+.taxRefundReviewTable th:nth-child(13),
+.taxRefundReviewTable td:nth-child(13) { width: 120px; }
+
+.taxRefundReviewTable th:nth-child(6),
+.taxRefundReviewTable td:nth-child(6),
+.taxRefundReviewTable th:nth-child(8),
+.taxRefundReviewTable td:nth-child(8) { width: 82px; }
+
+.taxRefundReviewTable th:nth-child(14),
+.taxRefundReviewTable td:nth-child(14) { width: 120px; }
+
+.taxRefundReviewTable th:nth-child(15),
+.taxRefundReviewTable td:nth-child(15) { width: 150px; }
+
+.taxRefundReviewTable .rowActionGroup {
+  display: grid;
+  grid-template-columns: 42px 42px minmax(54px, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.taxRefundReviewTable .rowActionGroup input {
+  width: 42px;
+  min-width: 0;
+}
+
+.taxRefundReviewTable .rowActionGroup button {
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.taxRefundResultFocusTable th:nth-child(1),
+.taxRefundResultFocusTable td:nth-child(1) { width: 13%; }
+
+.taxRefundResultFocusTable th:nth-child(2),
+.taxRefundResultFocusTable td:nth-child(2) { width: 110px; }
+
+.taxRefundResultFocusTable th:nth-child(3),
+.taxRefundResultFocusTable td:nth-child(3) { width: 18%; }
+
+.taxRefundResultFocusTable th:nth-child(4),
+.taxRefundResultFocusTable td:nth-child(4),
+.taxRefundResultFocusTable th:nth-child(5),
+.taxRefundResultFocusTable td:nth-child(5),
+.taxRefundResultFocusTable th:nth-child(7),
+.taxRefundResultFocusTable td:nth-child(7),
+.taxRefundResultFocusTable th:nth-child(8),
+.taxRefundResultFocusTable td:nth-child(8) { width: 130px; }
+
+.taxRefundResultFocusTable th:nth-child(6),
+.taxRefundResultFocusTable td:nth-child(6) { width: 86px; }
+
+.taxRefundResultFocusTable th:nth-child(9),
+.taxRefundResultFocusTable td:nth-child(9) { width: 120px; }
+
+.taxRefundResultFocusTable th:nth-child(10),
+.taxRefundResultFocusTable td:nth-child(10) { width: 150px; }
+
+.taxInvoiceFocusTable th:nth-child(1),
+.taxInvoiceFocusTable td:nth-child(1) { width: 110px; }
+
+.taxInvoiceFocusTable th:nth-child(2),
+.taxInvoiceFocusTable td:nth-child(2) { width: 20%; }
+
+.taxInvoiceFocusTable th:nth-child(3),
+.taxInvoiceFocusTable td:nth-child(3),
+.taxInvoiceFocusTable th:nth-child(4),
+.taxInvoiceFocusTable td:nth-child(4) { width: 120px; }
+
+.taxInvoiceFocusTable th:nth-child(5),
+.taxInvoiceFocusTable td:nth-child(5),
+.taxInvoiceFocusTable th:nth-child(6),
+.taxInvoiceFocusTable td:nth-child(6) { width: 15%; }
+
+.taxInvoiceFocusTable th:nth-child(7),
+.taxInvoiceFocusTable td:nth-child(7) { width: 140px; }
+
+.taxInvoiceFocusTable th:nth-child(8),
+.taxInvoiceFocusTable td:nth-child(8) { width: 120px; }
+
+.taxInvoiceFocusTable th:nth-child(9),
+.taxInvoiceFocusTable td:nth-child(9) { width: 18%; }
+
+.taxDeclarationFocusTable th:nth-child(1),
+.taxDeclarationFocusTable td:nth-child(1) { width: 15%; }
+
+.taxDeclarationFocusTable th:nth-child(2),
+.taxDeclarationFocusTable td:nth-child(2) { width: 110px; }
+
+.taxDeclarationFocusTable th:nth-child(3),
+.taxDeclarationFocusTable td:nth-child(3) { width: 24%; }
+
+.taxDeclarationFocusTable th:nth-child(4),
+.taxDeclarationFocusTable td:nth-child(4) { width: 150px; }
+
+.taxDeclarationFocusTable th:nth-child(5),
+.taxDeclarationFocusTable td:nth-child(5) { width: 145px; }
+
+.taxDeclarationFocusTable th:nth-child(6),
+.taxDeclarationFocusTable td:nth-child(6) { width: 145px; }
+
+.taxDeclarationFocusTable th:nth-child(7),
+.taxDeclarationFocusTable td:nth-child(7) { width: 90px; }
+
+.taxDeclarationFocusTable th:nth-child(8),
+.taxDeclarationFocusTable td:nth-child(8) { width: 120px; }
+
+.taxDeclarationFocusTable th:nth-child(9),
+.taxDeclarationFocusTable td:nth-child(9) { width: 110px; }
+
+@media (max-width: 1360px) {
+  .taxCalculationStatsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .taxCalculationKpiBar {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+.taxSupplierReturnNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+}
+
+.taxSupplierReturnNotice div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.taxSupplierReturnNotice strong {
+  color: #9a3412;
+  font-size: 13px;
+}
+
+.taxSupplierReturnNotice span {
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.taxDetailTab,
+.taxDetailTabActive {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.taxDetailTabActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.taxDetailTabSpinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  opacity: 0.75;
+}
+
+.tableSkeletonLine {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #e2e8f0, #f8fafc, #e2e8f0);
+  background-size: 220% 100%;
+  animation: tableSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tableSkeletonPulse {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
+
+.settingsCenterShell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  background: linear-gradient(135deg, #f7faff 0%, #eef4ff 100%);
+  border: 1px solid #dbe7f5;
+  box-shadow: none;
+}
+
+.settingsCenterNav {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 14px;
+  border: 1px solid #dbe4f0;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.settingsCenterNavHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px 8px;
+  color: #0f172a;
+}

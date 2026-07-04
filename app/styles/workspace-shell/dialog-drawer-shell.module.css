@@ -1,0 +1,272 @@
+/* dialog-drawer-shell: extracted from forms-dialogs-tax.module.css without changing selectors. */
+.confirmDialogHeader {
+  display: grid;
+  gap: 6px;
+}
+
+.confirmDialogHeader strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.confirmDialogHeader span {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirmDialogDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confirmDialogDetails span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.confirmDialogWarning .confirmDialogDetails span {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.confirmDialogDanger .confirmDialogDetails span {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.confirmDialogInput {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmDialogInput textarea,
+.confirmDialogInput input {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.confirmDialogInput textarea {
+  min-height: 92px;
+}
+
+.confirmDialogInput input {
+  height: 40px;
+}
+
+.confirmDialogInput textarea:focus,
+.confirmDialogInput input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.confirmDialogInput small {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.confirmDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modalHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.modalHeader strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.modalHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.paymentVoucherModal {
+  position: relative;
+  z-index: 9999;
+  width: min(900px, 94vw);
+  max-height: min(80vh, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid #dbe1ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.paymentVoucherModal .modalHeader,
+.paymentVoucherModal .modalFooter {
+  padding: 16px 18px;
+}
+
+.paymentVoucherMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 18px 14px;
+}
+
+.paymentVoucherMeta span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 9px 10px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.paymentVoucherMeta strong {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.paymentVoucherPreviewBody {
+  min-height: 320px;
+  max-height: calc(80vh - 190px);
+  overflow: auto;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.paymentVoucherImageFrame {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 18px;
+}
+
+.paymentVoucherImageFrame img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(80vh - 230px);
+  object-fit: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.paymentVoucherFrame {
+  display: block;
+  width: 100%;
+  height: min(560px, calc(80vh - 210px));
+  min-height: 360px;
+  border: 0;
+  background: #fff;
+}
+
+.paymentVoucherFallback {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #475569;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .paymentVoucherMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .paymentVoucherPreviewBody,
+  .paymentVoucherFallback {
+    min-height: 260px;
+  }
+
+  .paymentVoucherFrame,
+  .paymentVoucherImageFrame {
+    min-height: 280px;
+  }
+}
+
+.shippingDocsForm {
+  display: grid;
+  gap: 12px;
+}
+
+.shippingDocsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shippingDocReady,
+.shippingDocMissing {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shippingDocReady {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.shippingDocMissing {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.shippingDocsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shippingDocsFormGrid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}

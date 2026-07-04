@@ -1,0 +1,279 @@
+/* responsive-business-grids: extracted from responsive-typography.module.css without changing selectors. */
+.reportFilterGrid label,
+.shippingDocsFormGrid label,
+.customsFormGrid label,
+.confirmDialogInput,
+.transportItemCard label,
+.checkboxPanel label,
+.permissionGroup label,
+.detailField span,
+.sideDrawerTitle span,
+.taxRefundDrawerTitle span,
+.reportDownloadBar span {
+  color: var(--text-heading);
+  font-weight: var(--font-weight-subtitle);
+}
+
+/* Logistics modules keep a denser type scale than the default workspace card layout. */
+
+.logisticsTypographyScope {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.logisticsTypographyScope .moduleHeader h2 {
+  color: var(--text-heading);
+  font-size: 16px;
+  font-weight: var(--font-weight-title);
+}
+
+.logisticsTypographyScope .moduleHeader .kicker,
+.logisticsTypographyScope .statementMetrics span,
+.logisticsTypographyScope .statementHeader span,
+.logisticsTypographyScope .logisticsItemsHeader span,
+.logisticsTypographyScope .quickCreateHeader span,
+.logisticsTypographyScope .quickCreateMeta,
+.logisticsTypographyScope .quickCreateMeta span,
+.logisticsTypographyScope .mutedText,
+.logisticsTypographyScope .detailField span,
+.logisticsTypographyScope .fileListItem small,
+.logisticsTypographyScope .emptyState,
+.logisticsTypographyScope .filterHint {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.logisticsTypographyScope .quickCreateHeader strong,
+.logisticsTypographyScope .statementHeader strong,
+.logisticsTypographyScope .logisticsItemsHeader strong,
+.logisticsTypographyScope .transportItemsHeader strong,
+.logisticsTypographyScope .documentGroupCard > strong,
+.logisticsTypographyScope .customsFormHeader strong,
+.logisticsTypographyScope .subList > strong,
+.logisticsTypographyScope .transportItemCard > strong {
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .dataTable th {
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: var(--font-weight-subtitle);
+}
+
+.logisticsTypographyScope .dataTable td,
+.logisticsTypographyScope .dataTable td strong,
+.logisticsTypographyScope .statementRow,
+.logisticsTypographyScope .statementRow strong,
+.logisticsTypographyScope .statementRow span,
+.logisticsTypographyScope .logisticsItemsRow strong,
+.logisticsTypographyScope .subListItem,
+.logisticsTypographyScope .subListItem strong,
+.logisticsTypographyScope .detailField strong,
+.logisticsTypographyScope .statusPill {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-body);
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryRow span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.logisticsTypographyScope .logisticsCurrencySummaryTotal strong {
+  color: #1d4ed8;
+}
+
+.logisticsTypographyScope .primaryButton,
+.logisticsTypographyScope .primaryButtonCompact,
+.logisticsTypographyScope .secondaryButton,
+.logisticsTypographyScope .dangerButton,
+.logisticsTypographyScope .ghostButton,
+.logisticsTypographyScope .billApproveButton,
+.logisticsTypographyScope .billRejectButton,
+.logisticsTypographyScope .rowDetailButton,
+.logisticsTypographyScope .fileActionButton,
+.logisticsTypographyScope .fileDangerButton,
+.logisticsTypographyScope .logisticsActionBtn,
+.logisticsTypographyScope .tableSortButton {
+  font-size: 13px;
+  font-weight: var(--font-weight-button);
+}
+
+.logisticsTypographyScope .primaryButtonCompact {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.18);
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.logisticsTypographyScope .primaryButtonCompact:hover:not(:disabled),
+.logisticsTypographyScope .primaryButtonCompact:focus:not(:disabled),
+.logisticsTypographyScope .primaryButtonCompact:focus-visible:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+  box-shadow: 0 10px 22px rgba(22, 119, 255, 0.22);
+}
+
+.logisticsTypographyScope .primaryButtonCompact:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+  box-shadow: 0 6px 14px rgba(9, 88, 217, 0.2);
+}
+
+.logisticsTypographyScope .primaryButtonCompact:disabled,
+.logisticsTypographyScope .secondaryButton:disabled,
+.logisticsTypographyScope .billSaveButton:disabled,
+.logisticsTypographyScope .billAddLineButton:disabled,
+.logisticsTypographyScope .billPayButton:disabled,
+.logisticsTypographyScope .billApproveButton:disabled,
+.logisticsTypographyScope .billRejectButton:disabled,
+.logisticsTypographyScope .logisticsLineDeleteButton:disabled {
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.logisticsTypographyScope .secondaryButton {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.logisticsTypographyScope .secondaryButton:hover:not(:disabled),
+.logisticsTypographyScope .secondaryButton:focus:not(:disabled),
+.logisticsTypographyScope .secondaryButton:focus-visible:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}
+
+.logisticsTypographyScope .secondaryButton:active:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}
+
+.logisticsTypographyScope .billSaveButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billSaveButton:hover:not(:disabled),
+.logisticsTypographyScope .billSaveButton:focus:not(:disabled),
+.logisticsTypographyScope .billSaveButton:focus-visible:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billSaveButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:hover:not(:disabled),
+.logisticsTypographyScope .billPayButton:focus:not(:disabled),
+.logisticsTypographyScope .billPayButton:focus-visible:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billPayButton:disabled,
+.logisticsTypographyScope .billPayButton:disabled:hover,
+.logisticsTypographyScope .billPayButton:disabled:focus,
+.logisticsTypographyScope .billPayButton:disabled:focus-visible,
+.logisticsTypographyScope .billPayButton:disabled:active {
+  border-color: #d9d9d9;
+  background: #d9d9d9;
+  color: #6b7280;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.logisticsTypographyScope .billAddLineButton {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+}
+
+.logisticsTypographyScope .billAddLineButton:hover:not(:disabled),
+.logisticsTypographyScope .billAddLineButton:focus:not(:disabled),
+.logisticsTypographyScope .billAddLineButton:focus-visible:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}
+
+.logisticsTypographyScope .billAddLineButton:active:not(:disabled) {
+  border-color: var(--button-secondary-border);
+  background: var(--button-secondary-hover);
+  color: var(--button-secondary-text);
+}
+
+.logisticsTypographyScope .billApproveButton {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billApproveButton:hover:not(:disabled),
+.logisticsTypographyScope .billApproveButton:focus:not(:disabled),
+.logisticsTypographyScope .billApproveButton:focus-visible:not(:disabled) {
+  border-color: var(--button-primary-hover);
+  background: var(--button-primary-hover);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billApproveButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.logisticsTypographyScope .billRejectButton {
+  border-color: var(--button-danger-bg);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+}
+
+.logisticsTypographyScope .billRejectButton:hover:not(:disabled),
+.logisticsTypographyScope .billRejectButton:focus:not(:disabled),
+.logisticsTypographyScope .billRejectButton:focus-visible:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}

@@ -1,0 +1,274 @@
+/* shell-topbar-account: extracted from shell-account.module.css without changing selectors. */
+.accountAvatarActions input[type="file"] {
+  max-width: 100%;
+}
+
+.accountFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.accountFormGrid label,
+.accountSecurityGrid label {
+  display: grid;
+  gap: 7px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.accountFormGrid input,
+.accountFormGrid select,
+.accountSecurityGrid input,
+.accountSecurityGrid select {
+  height: 42px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.accountFormGrid input[readonly],
+.accountSecurityGrid input[readonly] {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.accountFormGrid input:focus,
+.accountFormGrid select:focus,
+.accountSecurityGrid input:focus,
+.accountSecurityGrid select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.accountNote {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.accountActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.accountSecurityGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.accountSecurityMeta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  color: #64748b;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.accountSecurityMeta small {
+  color: #64748b;
+}
+
+.passwordStrengthMuted,
+.passwordStrengthWeak,
+.passwordStrengthMedium,
+.passwordStrengthStrong {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.passwordStrengthMuted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.passwordStrengthWeak {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.passwordStrengthMedium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.passwordStrengthStrong {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.accountReadonlyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.accountReadonlyGrid > div {
+  min-height: 72px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px 14px;
+}
+
+.accountReadonlyGrid span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.accountReadonlyGrid strong {
+  color: #0f172a;
+}
+
+.accountSwitchRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.accountSwitchRow .uiSwitch {
+  min-height: 0;
+  width: 48px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  box-shadow: none;
+  transform: none;
+}
+
+.accountSwitchRow .uiSwitch span {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+  transition: transform 0.18s ease;
+}
+
+.accountSwitchRow .uiSwitchActive {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.accountSwitchRow .uiSwitchActive span {
+  transform: translateX(18px);
+}
+
+.accountSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.accountSectionHeader strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.accountTableWrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.accountTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 680px;
+}
+
+.accountTable th,
+.accountTable td {
+  height: 42px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.accountTable th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+}
+
+.accountTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusBadgeSuccess {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.statusBadgeDanger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+@media (max-width: 860px) {
+  .accountSettingsPage {
+    padding: 18px;
+  }
+
+  .accountSettingsLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .accountTabList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accountTabList button {
+    text-align: center;
+  }
+
+  .accountFormGrid,
+  .accountSecurityGrid,
+  .accountReadonlyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .accountAvatarRow {
+    align-items: flex-start;
+  }
+}

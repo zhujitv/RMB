@@ -1,0 +1,279 @@
+/* todo-topbar-nav: extracted from workbench.module.css without changing selectors. */
+.topbarRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.todoNavRoot {
+  position: relative;
+}
+
+.todoNavButton {
+  height: 40px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.todoDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 8px;
+}
+
+.todoDotRed {
+  background: #dc2626;
+}
+
+.todoDotOrange {
+  background: #f97316;
+}
+
+.todoDotBlue {
+  background: #2563eb;
+}
+
+.todoPanel {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(620px, 78vh);
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.16);
+  z-index: 30;
+}
+
+.todoPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.todoPanelHeader strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.todoPanelHeader button {
+  border: 0;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.todoPanelHeader button:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.todoPanelError {
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.todoPanelList {
+  display: grid;
+  gap: 8px;
+}
+
+.todoPanelItem {
+  width: 100%;
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+}
+
+.todoPanelItem:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.todoPanelItemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.todoPanelItemTop b {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.todoPanelItemTop em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.todoPanelItem span,
+.todoPanelItem small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.todoPanelEmpty {
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.workbenchPage {
+  display: grid;
+  gap: 18px;
+}
+
+.workbenchHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 420px);
+  gap: 18px;
+  align-items: end;
+  padding: 20px 22px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.workbenchHero h2 {
+  margin: 4px 0 6px;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.workbenchHero p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.workbenchStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.workbenchStatCard {
+  min-height: 98px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.workbenchStatCard span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workbenchStatCard strong {
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.workbenchStatBlue {
+  border-color: #bfdbfe;
+}
+
+.workbenchStatBlue strong {
+  color: #1d4ed8;
+}
+
+.workbenchStatOrange {
+  border-color: #fed7aa;
+}
+
+.workbenchStatOrange strong {
+  color: #ea580c;
+}
+
+.workbenchStatRed {
+  border-color: #fecaca;
+}
+
+.workbenchStatRed strong {
+  color: #dc2626;
+}
+
+.workbenchStatGreen {
+  border-color: #bbf7d0;
+}
+
+.workbenchStatGreen strong {
+  color: #15803d;
+}
+
+.workbenchPanel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.workbenchPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workbenchPanelHeader h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  letter-spacing: 0;
+}

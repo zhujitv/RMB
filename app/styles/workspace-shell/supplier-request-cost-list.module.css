@@ -1,0 +1,280 @@
+/* supplier-request-cost-list: extracted from supplier-documents.module.css without changing selectors. */
+.supplierDocumentTaskActions button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.supplierDocumentDeleteButton {
+  min-height: 32px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #b91c1c;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.supplierDocumentDeleteButton:hover:not(:disabled),
+.supplierDocumentDeleteButton:focus-visible:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.supplierDocumentDeleteButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.supplierDocumentTaskDetail {
+  border-top: 1px solid #e2e8f0;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.supplierDocumentTaskMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.supplierDocumentTaskMeta span {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.supplierDocumentTaskMeta small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.supplierDocumentTaskMeta b {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supplierDocumentTemplateButton,
+.supplierDocumentUploadButton {
+  justify-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 8px;
+  background: #2563eb !important;
+  color: #fff !important;
+  border: 1px solid #2563eb !important;
+  padding: 0 13px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.supplierDocumentTemplateButton:hover,
+.supplierDocumentUploadButton:hover {
+  background: #1d4ed8 !important;
+  color: #fff !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.supplierDocumentUploadGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.supplierDocumentUploadCard {
+  min-width: 0;
+  height: 100%;
+  min-height: 228px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.supplierDocumentUploadHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.supplierDocumentUploadHeader strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.supplierDocumentUploadHeader .statusPill {
+  flex: 0 0 auto;
+  min-height: 24px;
+  font-size: 12px;
+}
+
+.supplierDocumentUploadBody {
+  min-width: 0;
+  min-height: 86px;
+  flex: 1 1 auto;
+}
+
+.supplierDocumentUploadControls {
+  min-width: 0;
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.supplierDocumentOcrPanel {
+  margin-top: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.supplierDocumentOcrHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.supplierDocumentOcrHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.supplierDocumentOcrMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.supplierDocumentOcrFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.supplierDocumentOcrFields span {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 7px 8px;
+  display: grid;
+  gap: 3px;
+}
+
+.supplierDocumentOcrFields small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.supplierDocumentOcrFields b {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supplierDocumentOcrIssues {
+  display: grid;
+  gap: 5px;
+}
+
+.supplierDocumentOcrIssues strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.supplierDocumentOcrIssues span {
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.supplierDocumentOcrIssues span[data-level="success"] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.supplierDocumentOcrIssues span[data-level="warning"],
+.supplierDocumentOcrIssues span[data-level="manual"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.supplierDocumentOcrIssues span[data-level="error"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.supplierDocumentOcrActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.supplierDocumentOcrActions button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.supplierDocumentOcrRawText {
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.supplierDocumentOcrRawText summary {
+  cursor: pointer;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}

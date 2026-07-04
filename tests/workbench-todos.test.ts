@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   readDomesticLogisticsModuleSource,
+  readCssModuleGraphSource,
   readNotificationEngineSource,
   readSettingsModuleSource,
   readSharedConstantsSource,
@@ -32,7 +33,7 @@ const settingsHelpersSource = readSettingsModuleSource();
 const settingsCardsSource = readSettingsModuleSource();
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
-const styles = readFileSync("app/styles/workspace-shell/workbench.module.css", "utf8");
+const styles = readCssModuleGraphSource("app/styles/workspace-shell/workbench.module.css");
 
 test("workbench todo priority follows due date rules", () => {
   const now = new Date("2026-07-01T04:00:00.000Z");

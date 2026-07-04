@@ -1,0 +1,279 @@
+/* logistics-bill-actions: extracted from logistics-fees.module.css without changing selectors. */
+.billApproveButton:active:not(:disabled) {
+  border-color: var(--button-primary-active);
+  background: var(--button-primary-active);
+  color: var(--button-primary-text);
+}
+
+.billRejectButton:active:not(:disabled) {
+  border-color: var(--button-danger-hover);
+  background: var(--button-danger-hover);
+  color: var(--button-danger-text);
+}
+
+.billSaveButton:focus,
+.billSaveButton:focus-visible,
+.billPayButton:focus,
+.billPayButton:focus-visible,
+.billAddLineButton:focus,
+.billAddLineButton:focus-visible,
+.billApproveButton:focus,
+.billApproveButton:focus-visible,
+.billRejectButton:focus,
+.billRejectButton:focus-visible {
+  border-color: var(--button-primary-bg);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+}
+
+.billSaveButton:focus,
+.billSaveButton:focus-visible {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.billSaveButton:disabled,
+.billAddLineButton:disabled,
+.billApproveButton:disabled,
+.billRejectButton:disabled {
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.logisticsBillRejectNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.logisticsBillRejectNotice strong {
+  flex: 0 0 auto;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.logisticsBillInvoiceNoticeError {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.logisticsBillInvoiceNoticeError strong {
+  flex: 0 0 auto;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.logisticsExpenseDrawer {
+  width: min(1200px, 94vw);
+}
+
+.logisticsExpenseDrawer .sideDrawerHeader {
+  padding: 14px 18px;
+}
+
+.logisticsExpenseDrawer .sideDrawerBody {
+  padding: 14px 18px 18px;
+}
+
+.logisticsDrawerSection {
+  display: grid;
+  gap: 12px;
+}
+
+.logisticsDrawerSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.logisticsDrawerSectionHeader > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logisticsDrawerSectionHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsDrawerSectionHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceGroupsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logisticsInvoiceGroupsHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.logisticsInvoiceGroupsHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceGroupsHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.logisticsInvoiceGroupCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.logisticsInvoiceGroupTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logisticsInvoiceGroupTitle strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupMeta {
+  display: grid;
+  gap: 3px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.logisticsInvoiceGroupMeta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupError {
+  color: #b91c1c;
+}
+
+.logisticsInvoiceFileList {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceFileList strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceFileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+
+.logisticsInvoiceFileName {
+  max-width: 220px;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .logisticsInvoiceGroupsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.logisticsDetailTableWrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.logisticsDetailTable {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.logisticsDetailTable th,
+.logisticsDetailTable td {
+  height: 34px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+  vertical-align: middle;
+}

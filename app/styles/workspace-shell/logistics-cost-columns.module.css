@@ -1,0 +1,280 @@
+/* logistics-cost-columns: extracted from tables-dashboard.module.css without changing selectors. */
+.currencyTotalsList {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.currencyTotalsRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.currencyTotalsRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.costAmountStack {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.costAmountTotal {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.detailAmountCell {
+  justify-items: start;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.metricCard {
+  min-height: 130px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.metricCard span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metricCard strong {
+  color: #0f172a;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.metricValue {
+  color: #0f172a;
+}
+
+.metricCard .currencyTotalsRow {
+  font-size: 12px;
+}
+
+.metricCard .currencyTotalsRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.metricCard small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.filterHint {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.dashboardStack {
+  display: grid;
+  gap: 26px;
+}
+
+.dashboardSectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.dashboardSectionTitle span {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  color: #2563eb;
+  background: #eff6ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dashboardSectionTitle h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.metricBlue {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.metricGreen {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.metricRed {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.metricOrange {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.overviewPanels {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overviewPanel {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+  min-width: 0;
+}
+
+.overviewPanelWide {
+  grid-column: span 2;
+}
+
+.overviewPanel h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.overviewPanel p {
+  margin: 0;
+  color: #64748b;
+}
+
+.dashboardTwoColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.panelHead h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.panelHead span {
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overviewRankRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.overviewRankRow span {
+  color: #334155;
+  font-weight: 700;
+}
+
+.overviewRankRow strong {
+  color: #0f172a;
+}
+
+.overviewRankRow small {
+  color: #64748b;
+}
+
+.trendList {
+  display: grid;
+  gap: 10px;
+}
+
+.trendRow {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.trendRow span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.trendRow div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.trendRow i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+}
+
+.trendRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.reminderRow {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+}

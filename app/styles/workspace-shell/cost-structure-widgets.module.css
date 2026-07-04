@@ -1,0 +1,117 @@
+/* cost-structure-widgets: extracted from tables-dashboard.module.css without changing selectors. */
+.taxTransportFields > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.taxTransportFieldWide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .taxBasicInfoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .taxBasicInfoGrid,
+  .taxTransportFields {
+    grid-template-columns: 1fr;
+  }
+
+  .taxInfoItemWide,
+  .taxTransportFieldWide {
+    grid-column: auto;
+  }
+}
+
+.moduleViewTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  padding: 4px;
+  margin-bottom: 14px;
+}
+
+.moduleViewTab,
+.moduleViewTabActive {
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.moduleViewTab {
+  color: #1d4ed8 !important;
+  background: transparent !important;
+}
+
+.moduleViewTabActive {
+  color: #ffffff !important;
+  background: #1677ff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.inlineFilterGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inlineFilterGroup input {
+  min-width: min(420px, 100%);
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0 12px;
+}
+
+.rowActionGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rowActionGroup input {
+  width: 90px;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.successBanner,
+.errorBanner {
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.successBanner {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.errorBanner {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}

@@ -1,0 +1,276 @@
+/* shell-frame-layout: extracted from shell-account.module.css without changing selectors. */
+/* Application shell, welcome and account settings.
+ * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
+
+.appShell {
+  height: 100vh;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.sidebar {
+  background: #fff;
+  border-right: 1px solid #e2e8f0;
+  padding: 22px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100vh;
+  min-height: 0;
+  flex-shrink: 0;
+  color: #334155;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.brandBlock {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  padding: 2px 8px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.brandLogo {
+  max-width: 96px;
+  max-height: 44px;
+  object-fit: contain;
+  margin-bottom: 10px;
+}
+
+.brandBlock strong {
+  width: 100%;
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.brandBlock span {
+  width: 100%;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.brandPlatform {
+  color: #64748b;
+}
+
+.brandCompany {
+  color: #94a3b8;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding: 14px 8px 0;
+  border-top: 1px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.navList {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  gap: 6px;
+  margin: 18px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #334155;
+  text-align: left;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.navItem::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.navChildItem {
+  height: 40px;
+  min-height: 40px;
+  margin-left: 26px;
+  width: calc(100% - 26px);
+  padding-left: 12px;
+  font-size: 13px;
+}
+
+.navChildItem::before {
+  left: -14px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: #dbeafe;
+}
+
+.navIcon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: #64748b;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: color 0.16s ease;
+}
+
+.navItem:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.navItem:hover .navIcon {
+  color: #2563eb;
+}
+
+.navItemActive {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.navItemActive::before {
+  background: #1d4ed8;
+}
+
+.navItemActive .navIcon {
+  color: #fff;
+}
+
+.mainColumn {
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+.topbar {
+  height: 76px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.topbarTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.topbar h1 {
+  margin: 2px 0 0;
+  font-size: 20px;
+}
+
+.mobileMenuButton {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #dbe1ea;
+  background: #fff;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.mobileMenuButton span {
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: #334155;
+  display: block;
+}
+
+.mobileNavBackdrop {
+  display: none;
+}
+
+.kicker {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.accountArea {
+  position: relative;
+}
+
+.accountButton {
+  border: 1px solid #dbe1ea;
+  background: #fff;
+  border-radius: 999px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #123b7a;
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}

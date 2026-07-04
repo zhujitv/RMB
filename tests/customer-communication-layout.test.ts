@@ -1,19 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCustomerCommunicationModuleSource, readCustomerCommunicationServiceSource, readShippingDocumentsSource } from "./source-helpers.ts";
+import { readCssModuleGraphSource, readCustomerCommunicationModuleSource, readCustomerCommunicationServiceSource, readShippingDocumentsSource } from "./source-helpers.ts";
 
 function cssBlock(source: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\n\\}`));
+  const matches = [...source.matchAll(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([\\s\\S]*?)\\}`, "g"))];
+  const match = matches.find((candidate) => !/composes:/.test(candidate[1])) ?? matches[0];
   assert.ok(match, `Missing CSS block for ${selector}`);
   return match[1];
 }
 
 const globalsCss = readFileSync("app/globals.css", "utf8");
-const shellCss = readFileSync("app/styles/workspace-shell/shell-account.module.css", "utf8");
-const responsiveCss = readFileSync("app/styles/workspace-shell/responsive-typography.module.css", "utf8");
-const tableCss = readFileSync("app/styles/workspace-shell/manual-table.module.css", "utf8");
+const shellCss = readCssModuleGraphSource("app/styles/workspace-shell/shell-account.module.css");
+const responsiveCss = readCssModuleGraphSource("app/styles/workspace-shell/responsive-typography.module.css");
+const tableCss = readCssModuleGraphSource("app/styles/workspace-shell/manual-table.module.css");
 const customerCommunicationService = readCustomerCommunicationServiceSource();
 const shippingDocumentsService = readShippingDocumentsSource();
 const customerCommunicationModule = readCustomerCommunicationModuleSource();

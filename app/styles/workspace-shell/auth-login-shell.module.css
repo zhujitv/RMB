@@ -1,0 +1,274 @@
+/* auth-login-shell: extracted from auth-controls.module.css without changing selectors. */
+.primaryButton,
+.primaryButtonCompact,
+.secondaryButton,
+.dangerButton,
+.ghostButton {
+  min-height: 42px;
+  border-radius: 13px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton {
+  width: calc(100% - 98px);
+  margin-left: 98px;
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+}
+
+.primaryButtonCompact {
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  width: fit-content;
+}
+
+.secondaryButton {
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
+}
+
+.dangerButton {
+  color: var(--button-danger-text);
+  background: var(--button-danger-bg);
+  border-color: var(--button-danger-bg);
+}
+
+.ghostButton {
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled,
+.ghostButton:disabled {
+  border-color: var(--button-disabled-border);
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.primaryButton:hover:not(:disabled),
+.primaryButtonCompact:hover:not(:disabled) {
+  color: var(--button-primary-text);
+  background: var(--button-primary-hover);
+  border-color: var(--button-primary-hover);
+}
+
+.secondaryButton:hover:not(:disabled),
+.ghostButton:hover:not(:disabled) {
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-hover);
+  border-color: var(--button-secondary-border);
+}
+
+.dangerButton:hover:not(:disabled) {
+  color: var(--button-danger-text);
+  background: var(--button-danger-hover);
+  border-color: var(--button-danger-hover);
+}
+
+.uiInput,
+.uiSelect {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.uiInput:focus,
+.uiSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14);
+}
+
+.uiSelect {
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 8 4 4 4-4' fill='none' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+.uiDatePicker {
+  color-scheme: light;
+}
+
+.uiChoiceCard {
+  position: relative;
+  min-height: 72px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 14px 14px 14px 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.uiCompactChoice,
+.uiInlineChoice {
+  position: relative;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 11px 12px 11px 42px;
+  display: flex;
+  align-items: center;
+  color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.uiCompactChoice {
+  min-height: 48px;
+}
+
+.uiInlineChoice {
+  width: fit-content;
+  min-height: 42px;
+}
+
+.uiChoiceCard:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.uiCompactChoice:hover,
+.uiInlineChoice:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.uiChoiceCardChecked {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.12);
+}
+
+.uiChoiceInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.uiChoiceInput:focus-visible + .uiChoiceCheck {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 3px;
+}
+
+.uiChoiceCheck {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 999px;
+  background: #fff;
+  color: transparent;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.uiChoiceCardChecked .uiChoiceCheck {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+}
+
+.uiTableCheckboxLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.uiChoiceText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.uiChoiceText strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.uiChoiceText small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.uiSwitch {
+  min-height: 72px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  padding: 12px 12px 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.uiSwitch:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.uiSwitch:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 3px;
+}
