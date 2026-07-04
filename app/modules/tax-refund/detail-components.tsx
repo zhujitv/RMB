@@ -531,7 +531,8 @@ function SupplierDocumentReturnNotice({
 
 function LogisticsInvoiceRequirementStatus({ completeness }: { completeness: DocumentCompleteness }) {
   const requirements = completeness.logistics?.requirements || [];
-  if (!requirements.length) return null;
+  const notApplicableRequirements = completeness.logistics?.notApplicableRequirements || [];
+  if (!requirements.length && !notApplicableRequirements.length) return null;
 
   return (
     <div className={styles.detailGrid}>
@@ -542,6 +543,20 @@ function LogisticsInvoiceRequirementStatus({ completeness }: { completeness: Doc
           value={(
             <span className={`${styles.statusPill} ${requirement.completed ? styles.statusSuccess : styles.statusWarning}`}>
               {requirement.completed ? "已完成" : "缺失"}
+            </span>
+          )}
+        />
+      ))}
+      {notApplicableRequirements.map((requirement) => (
+        <DetailField
+          key={`not-applicable-${requirement.key || requirement.label || "logistics-invoice"}`}
+          label={requirement.label || "物流费用"}
+          value={(
+            <span
+              className={`${styles.statusPill} ${styles.statusSuccess}`}
+              title={requirement.reason || "不适用"}
+            >
+              不适用
             </span>
           )}
         />

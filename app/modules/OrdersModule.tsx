@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import {
   ConfirmationDialog,
@@ -56,7 +56,9 @@ export function OrdersModule({
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [returnDetailOrder, setReturnDetailOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
+  const editPanelRef = useRef<HTMLDivElement | null>(null);
   const {
     confirmation,
     requestConfirmation,
@@ -80,13 +82,16 @@ export function OrdersModule({
       if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
       const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
       const data = result.data || {};
-      setOrders(Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : []);
+      const nextRows = Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : [];
+      setOrders(nextRows);
       setSummary(data.summary || null);
       setTotal(Number(data.total ?? result.orders?.length ?? 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
+      return nextRows;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "读取应收订单失败");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -158,6 +163,52 @@ export function OrdersModule({
     void loadOrders(nextPage, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
   }
 
+  function scrollToEditPanel() {
+    window.requestAnimationFrame(() => {
+      editPanelRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
+
+  function openEditOrder(order: OrderRow | null, options: { returnToDetail?: boolean } = {}) {
+    if (!canWriteOrders) {
+      setError("权限不足，不能编辑");
+      return;
+    }
+    if (!order?.id) {
+      setError("数据加载失败，不能编辑");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setCreateOpen(false);
+    setEditOrder(order);
+    setReturnDetailOrder(options.returnToDetail ? order : null);
+    setDetailOrder(null);
+    scrollToEditPanel();
+  }
+
+  async function handleOrderSaved() {
+    const savedOrder = editOrder;
+    const detailToRestore = returnDetailOrder;
+    setNotice(savedOrder ? "订单已更新" : "订单已保存");
+    setCreateOpen(false);
+    setEditOrder(null);
+    setReturnDetailOrder(null);
+    setDetailOrder(null);
+    const nextRows = await loadOrders(savedOrder ? page : 1, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
+    if (savedOrder && detailToRestore) {
+      setDetailOrder(nextRows.find((order) => order.id === savedOrder.id) || detailToRestore);
+    }
+  }
+
+  function handleOrderEditCancel() {
+    const detailToRestore = returnDetailOrder;
+    setCreateOpen(false);
+    setEditOrder(null);
+    setReturnDetailOrder(null);
+    if (detailToRestore) setDetailOrder(detailToRestore);
+  }
+
   function applyOrderPatch(orderId: string, patch: Partial<OrderRow>) {
     setOrders((current) => current.map((order) => order.id === orderId ? { ...order, ...patch } : order));
     setDetailOrder((current) => current && current.id === orderId ? { ...current, ...patch } : current);
@@ -212,7 +263,12 @@ export function OrdersModule({
             onClick={() => {
               if (canWriteOrders) {
                 setEditOrder(null);
+                setReturnDetailOrder(null);
+                setDetailOrder(null);
                 setCreateOpen((current) => !current);
+                window.requestAnimationFrame(() => {
+                  if (!createOpen) scrollToEditPanel();
+                });
               }
             }}
             disabled={!canWriteOrders}
@@ -234,20 +290,13 @@ export function OrdersModule({
       </div>
 
       {canWriteOrders && (createOpen || editOrder) ? (
-        <QuickCreateOrderPanel
-          initialOrder={editOrder}
-          onCancel={() => {
-            setCreateOpen(false);
-            setEditOrder(null);
-          }}
-          onSaved={() => {
-            setNotice(editOrder ? "订单已更新" : "订单已保存");
-            setCreateOpen(false);
-            setEditOrder(null);
-            setDetailOrder(null);
-            void loadOrders(1, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
-          }}
-        />
+        <div ref={editPanelRef}>
+          <QuickCreateOrderPanel
+            initialOrder={editOrder}
+            onCancel={handleOrderEditCancel}
+            onSaved={() => void handleOrderSaved()}
+          />
+        </div>
       ) : null}
 
       <div className={styles.metricGrid} aria-label="应收汇总统计">
@@ -314,12 +363,7 @@ export function OrdersModule({
                 key={order.id}
                 order={order}
                 onViewDetail={() => setDetailOrder(order)}
-                onEdit={() => {
-                  if (!canWriteOrders) return;
-                  setCreateOpen(false);
-                  setEditOrder(order);
-                  setDetailOrder(order);
-                }}
+                onEdit={() => openEditOrder(order)}
                 onDelete={() => void deleteOrder(order)}
                 deleting={deletingId === order.id}
                 canWrite={canWriteOrders}
@@ -341,11 +385,7 @@ export function OrdersModule({
           canTransferBusinessEntity={currentUser.role === "管理员"}
           businessEntities={businessEntities}
           deleting={deletingId === detailOrder.id}
-          onEdit={() => {
-            if (!canWriteOrders) return;
-            setCreateOpen(false);
-            setEditOrder(detailOrder);
-          }}
+          onEdit={() => openEditOrder(detailOrder, { returnToDetail: true })}
           onDelete={() => void deleteOrder(detailOrder)}
           onBusinessEntityTransferred={(patch) => applyOrderPatch(detailOrder.id, patch)}
           onClose={() => setDetailOrder(null)}

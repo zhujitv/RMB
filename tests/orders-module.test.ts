@@ -71,6 +71,18 @@ test("orders create form submits system exchange rate metadata", () => {
   assert.match(ordersModule, /exchangeRateSource: "手动"/);
 });
 
+test("order detail edit switches from drawer to edit form without silent failure", () => {
+  assert.match(ordersModule, /const editPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
+  assert.match(ordersModule, /function openEditOrder\(order: OrderRow \| null, options: \{ returnToDetail\?: boolean \} = \{\}\)/);
+  assert.match(ordersModule, /setError\("权限不足，不能编辑"\)/);
+  assert.match(ordersModule, /setError\("数据加载失败，不能编辑"\)/);
+  assert.match(ordersModule, /setReturnDetailOrder\(options\.returnToDetail \? order : null\)/);
+  assert.match(ordersModule, /setDetailOrder\(null\);[\s\S]*scrollToEditPanel\(\)/);
+  assert.match(ordersModule, /onEdit=\{\(\) => openEditOrder\(detailOrder, \{ returnToDetail: true \}\)\}/);
+  assert.match(ordersModule, /if \(detailToRestore\) setDetailOrder\(detailToRestore\)/);
+  assert.match(ordersModule, /nextRows\.find\(\(order\) => order\.id === savedOrder\.id\) \|\| detailToRestore/);
+});
+
 test("orders create form supports actual shipment date", () => {
   assert.match(prismaSchema, /actualShipmentDate\s+DateTime\?\s+@map\("actual_shipment_date"\) @db\.Date/);
   assert.match(inputSchemas, /actualShipmentDate: \{ label: "发货时间", kind: "date" \}/);

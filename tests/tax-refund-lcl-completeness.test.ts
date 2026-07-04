@@ -22,28 +22,64 @@ const logisticsExpenseMutations = readFileSync("lib/platform/logistics-expense-w
 const taxRefundModule = readTaxRefundModuleSource();
 
 test("tax refund completeness uses trade term logistics invoice requirements", () => {
-  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260701"/);
+  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260704_LCL_PORT_NOT_APPLICABLE"/);
   assert.match(constants, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS = \["CUSTOMS", "TRUCKING", "PORT"\]/);
   assert.match(constants, /label: "拖车费发票"[\s\S]*"国内物流费"[\s\S]*"进港费"[\s\S]*"其他物流费用"/);
   assert.match(constants, /label: "港杂费发票"[\s\S]*missingCostLabel: "缺少港杂费发票"/);
   assert.match(constants, /label: "海运费发票"[\s\S]*missingCostLabel: "缺少海运费发票"/);
   assert.match(completeness, /export function normalizedTransportMode/);
-  assert.match(completeness, /\["LCL", "BULK_WAREHOUSE"[\s\S]*"拼箱"[\s\S]*"散货进舱"\]\.includes\(text\)\) return "LCL"/);
+  assert.match(completeness, /text\.includes\("LOOSE CARGO"\)/);
+  assert.match(completeness, /text\.includes\("拼箱"\)/);
+  assert.match(completeness, /text\.includes\("散货"\)/);
+  assert.match(completeness, /text\.includes\("非整柜"\)/);
   assert.match(completeness, /\["FCL", "FULL_CONTAINER"[\s\S]*"TRUCK"[\s\S]*"MULTIMODAL"[\s\S]*"整柜"/);
   assert.match(completeness, /function normalizedTaxRefundTradeTerm/);
   assert.match(completeness, /orderRecord\.declarationType/);
   assert.match(completeness, /orderRecord\.customsDeclarationType/);
   assert.match(completeness, /orderRecord\.tradeMode/);
   assert.match(completeness, /orderRecord\.modeOfTrade/);
-  assert.match(completeness, /function isFobLclOrder/);
-  assert.match(completeness, /normalizedTaxRefundTradeTerm\(order\) === "FOB" && orderTransportMode\(order\) === "LCL"/);
+  assert.match(completeness, /export function isNonFullContainerTaxRefundOrder/);
+  assert.match(completeness, /orderTransportMode\(order\) === "LCL"/);
   assert.match(completeness, /\["FOB", "CIF", "CFR"\]\.includes\(tradeTerm\)/);
   assert.match(completeness, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS\.forEach\(\(key\) => tradeTermRequiredKeys\.add\(key\)\)/);
+  assert.match(completeness, /tradeTermRequiredKeys\.delete\("PORT"\)/);
+  assert.match(completeness, /actualRequirementKeys\.delete\("PORT"\)/);
   assert.match(completeness, /if \(isSeaFreightRequiredByTradeTerm\(order\)\)/);
   assert.match(completeness, /tradeTerm !== "FOB" && actualRequirementKeys\.has\(requirement\.key\)/);
-  assert.match(completeness, /requirement\.key === "CUSTOMS" && fobLcl/);
-  assert.match(completeness, /isLclGeneralLogisticsRequirement\(requirement\) && fobLcl/);
+  assert.match(completeness, /!\s*isPortChargesRequirement\(requirement\)/);
   assert.doesNotMatch(completeness, /hasSeaFreightCost/);
+  assert.doesNotMatch(completeness, /nonFullContainer && \["CUSTOMS", "TRUCKING"\]\.includes/);
+});
+
+test("tax refund completeness does not require port charges for LCL bulk or loose cargo", () => {
+  assert.match(completeness, /text\.includes\("LCL"\)/);
+  assert.match(completeness, /text\.includes\("BULK"\)/);
+  assert.match(completeness, /text\.includes\("LOOSE CARGO"\)/);
+  assert.match(completeness, /text\.includes\("LESS THAN CONTAINER"\)/);
+  assert.match(completeness, /text\.includes\("拼箱"\)/);
+  assert.match(completeness, /text\.includes\("散货"\)/);
+  assert.match(completeness, /text\.includes\("非整柜"\)/);
+  assert.match(completeness, /const nonFullContainer = isNonFullContainerTaxRefundOrder\(order\)/);
+  assert.match(completeness, /if \(nonFullContainer\) \{[\s\S]*tradeTermRequiredKeys\.delete\("PORT"\);[\s\S]*actualRequirementKeys\.delete\("PORT"\);[\s\S]*\}/);
+  assert.match(completeness, /\(!nonFullContainer \|\| !isPortChargesRequirement\(requirement\)\)/);
+  assert.match(completeness, /function notApplicableLogisticsRequirementsForOrder/);
+  assert.match(completeness, /if \(!isNonFullContainerTaxRefundOrder\(order\)\) return \[\]/);
+  assert.match(completeness, /key: "PORT"[\s\S]*label: "港杂费"[\s\S]*拼箱散货\/非整柜出口不强制要求港杂费/);
+  assert.match(completeness, /notApplicableRequirements: notApplicableLogisticsRequirements/);
+  assert.match(completeness, /missingPortInvoices: logisticsMissing\.filter\(\(item\) => item\.missingBucket === "PORT"\)/);
+  assert.match(completeness, /transportMode: orderTransportMode\(order\)/);
+});
+
+test("FCL logistics completeness still requires port charges", () => {
+  assert.match(completeness, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS\.forEach\(\(key\) => tradeTermRequiredKeys\.add\(key\)\)/);
+  assert.match(completeness, /\(!nonFullContainer \|\| !isPortChargesRequirement\(requirement\)\)/);
+  assert.match(completeness, /\["FCL", "FULL_CONTAINER"[\s\S]*"FULL CONTAINER"[\s\S]*"TRUCK"[\s\S]*"MULTIMODAL"[\s\S]*"整柜"/);
+});
+
+test("old LCL completeness cache with port requirement is refreshed", () => {
+  assert.match(completeness, /const hasCachedPortRequirement = cachedLogisticsRequirements\.some\(\(item\) => item\?\.key === "PORT"\)/);
+  assert.match(completeness, /if \(isNonFullContainerTaxRefundOrder\(order\) && hasCachedPortRequirement\) return true/);
+  assert.match(completeness, /if \(isNonFullContainerTaxRefundOrder\(order\) && Array\.isArray\(logistics\.missingPortInvoices\) && logistics\.missingPortInvoices\.length\) return true/);
 });
 
 test("tax refund logistics completeness reports required invoice gaps with exact labels", () => {
@@ -84,6 +120,8 @@ test("tax refund detail displays grouped logistics invoices by included fee type
   assert.match(taxRefundDetailComponents, /function LogisticsInvoiceRequirementStatus/);
   assert.match(taxRefundDetailComponents, /completeness\.logistics\?\.requirements/);
   assert.match(taxRefundDetailComponents, /requirement\.completed \? "已完成" : "缺失"/);
+  assert.match(taxRefundDetailComponents, /completeness\.logistics\?\.notApplicableRequirements/);
+  assert.match(taxRefundDetailComponents, /不适用/);
   assert.match(taxRefundModule, /group\.documentId/);
   assert.match(taxRefundModule, /group\.includedFeeTypes/);
   assert.match(taxRefundModule, /group\.feeTypes/);

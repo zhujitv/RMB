@@ -22,6 +22,8 @@ test("manual explains tax refund logistics transport summary", () => {
   assert.match(manualModule, /一票多柜或同提单多订单时，运输信息摘要会按柜号分卡片展示/);
   assert.match(manualModule, /物流信息已归档时，退税详情仍会显示已保存的结构化运输明细/);
   assert.match(manualModule, /点击重新计算完整度，系统重新拉取物流明细、物流费用发票和产品供应商回传资料状态/);
+  assert.match(manualModule, /整柜 FOB 需要报关费、拖车费、港杂费发票/);
+  assert.match(manualModule, /拼箱、散货或非整柜出口不强制判断港杂费/);
 });
 
 test("manual explains customs declaration manual maintenance from logistics upload", () => {

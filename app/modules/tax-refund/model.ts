@@ -56,6 +56,12 @@ export type DocumentCompleteness = {
         costIds?: string[];
       }>;
     }>;
+    notApplicableRequirements?: Array<{
+      key?: string;
+      label?: string;
+      reason?: string;
+    }>;
+    transportMode?: string;
   };
 };
 
@@ -147,6 +153,8 @@ export type UploadScope = {
 
 export type DomesticLogisticsInfo = {
   archiveStatusLabel?: string;
+  transportType?: string;
+  transportTypeLabel?: string;
   remarkText?: string;
   exportInvoice?: { remark?: ExportInvoiceRemark | null };
   transportItems?: Array<{

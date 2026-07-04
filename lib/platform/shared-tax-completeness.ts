@@ -68,6 +68,7 @@ type LogisticsExpenseInvoiceLike = {
 };
 type DomesticLogisticsInfoLike = {
   transportType?: string | null;
+  transportTypeLabel?: string | null;
   destinationPlace?: string | null;
   cargoDescription?: string | null;
   remarkText?: string | null;
@@ -274,16 +275,39 @@ function numberValue(value: NumericLike | null | undefined) {
 
 export function normalizedTransportMode(value: unknown = "") {
   const text = String(value || "").trim().toUpperCase();
+  if (!text) return "";
+  if (
+    ["LCL", "BULK", "BULK_WAREHOUSE", "BULK WAREHOUSE", "WAREHOUSE", "LOOSE", "LOOSE_CARGO", "LOOSE CARGO"].includes(text)
+    || text.includes("LCL")
+    || text.includes("BULK")
+    || text.includes("LOOSE CARGO")
+    || text.includes("LESS THAN CONTAINER")
+    || text.includes("拼箱")
+    || text.includes("散货")
+    || text.includes("非整柜")
+  ) return "LCL";
   if (["FCL", "FULL_CONTAINER", "FULL CONTAINER", "CONTAINER", "TRUCK", "MULTIMODAL", "整柜", "车辆运输", "多式联运"].includes(text)) return "FCL";
-  if (["LCL", "BULK_WAREHOUSE", "BULK WAREHOUSE", "WAREHOUSE", "拼箱", "散货", "散货进舱"].includes(text)) return "LCL";
   if (["AIR", "AIR_FREIGHT", "AIR FREIGHT", "空运"].includes(text)) return "AIR";
   if (["EXPRESS", "COURIER", "快递", "快递运输"].includes(text)) return "EXPRESS";
   return text;
 }
 
 export function orderTransportMode(order: TaxOrderLike = {}) {
-  const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
-  return normalizedTransportMode(order.transportType || order.shipmentType || domesticLogisticsInfo?.transportType || "");
+  const domesticLogisticsInfos = [
+    ...(order.domesticLogisticsInfos || []),
+    ...(order.domesticLogisticsInfo ? [order.domesticLogisticsInfo] : []),
+  ];
+  const candidates = [
+    order.transportType,
+    order.shipmentType,
+    ...domesticLogisticsInfos.flatMap((info) => [
+      info?.transportType,
+      info?.transportTypeLabel,
+      info?.remarkText,
+    ]),
+  ];
+  const modes = candidates.map(normalizedTransportMode).filter(Boolean);
+  return modes.find((mode) => mode === "LCL") || modes[0] || "";
 }
 
 function positiveCostAmount(cost: CostLike = {}) {
@@ -296,12 +320,12 @@ function isActualApprovedLogisticsCost(cost: CostLike = {}) {
   return sourceType === "LOGISTICS_EXPENSE" || cost.costConfirmed === true || !sourceType;
 }
 
-function isFobLclOrder(order: TaxOrderLike = {}) {
-  return normalizedTaxRefundTradeTerm(order) === "FOB" && orderTransportMode(order) === "LCL";
+export function isNonFullContainerTaxRefundOrder(order: TaxOrderLike = {}) {
+  return orderTransportMode(order) === "LCL";
 }
 
-function isLclGeneralLogisticsRequirement(requirement: { key?: string } = {}) {
-  return requirement.key === "TRUCKING";
+function isPortChargesRequirement(requirement: { key?: string } = {}) {
+  return requirement.key === "PORT";
 }
 
 export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLike = {}, logisticsInvoiceCosts: CostLike[] = []) {
@@ -317,13 +341,27 @@ export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLik
   if (isSeaFreightRequiredByTradeTerm(order)) {
     tradeTermRequiredKeys.add(SEA_FREIGHT_REQUIREMENT_KEY);
   }
-  const fobLcl = isFobLclOrder(order);
+  const nonFullContainer = isNonFullContainerTaxRefundOrder(order);
+  if (nonFullContainer) {
+    tradeTermRequiredKeys.delete("PORT");
+    actualRequirementKeys.delete("PORT");
+  }
   return TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS.filter((requirement) => (
-    tradeTermRequiredKeys.has(requirement.key)
-    || (tradeTerm !== "FOB" && actualRequirementKeys.has(requirement.key))
-    || (requirement.key === "CUSTOMS" && fobLcl)
-    || (isLclGeneralLogisticsRequirement(requirement) && fobLcl)
+    (!nonFullContainer || !isPortChargesRequirement(requirement))
+    && (
+      tradeTermRequiredKeys.has(requirement.key)
+      || (tradeTerm !== "FOB" && actualRequirementKeys.has(requirement.key))
+    )
   ));
+}
+
+function notApplicableLogisticsRequirementsForOrder(order: TaxOrderLike = {}) {
+  if (!isNonFullContainerTaxRefundOrder(order)) return [];
+  return [{
+    key: "PORT",
+    label: "港杂费",
+    reason: "拼箱散货/非整柜出口不强制要求港杂费",
+  }];
 }
 
 export function logisticsInvoiceLabelForCost(cost: CostLike = {}) {
@@ -660,6 +698,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const supplierCompleted = supplierTotal - supplierMissing.length;
   const logisticsMissing: MissingEntry[] = [];
   const logisticsRequirements = taxRefundLogisticsInvoiceRequirementsForOrder(order, logisticsInvoiceCosts);
+  const notApplicableLogisticsRequirements = notApplicableLogisticsRequirementsForOrder(order);
   const logisticsRequirementRows = logisticsRequirements.map((requirement) => {
     const costs = logisticsInvoiceCosts.filter((cost) => requirement.costTypes.includes(normalizedCostType(String(cost.costType || ""))));
     const directCompleted = costs.some((cost) => successDocs.some((doc) => (
@@ -772,6 +811,8 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     missingCustomsInvoices: logisticsMissing.filter((item) => item.missingBucket === "CUSTOMS"),
     missingPortInvoices: logisticsMissing.filter((item) => item.missingBucket === "PORT"),
     missingSeaInvoices: logisticsMissing.filter((item) => item.missingBucket === "SEA"),
+    notApplicableRequirements: notApplicableLogisticsRequirements,
+    transportMode: orderTransportMode(order),
   };
   return {
     complete: missingLabels.length === 0,
@@ -869,6 +910,9 @@ export function emptyTaxRefundCompleteness(): TaxRefundCompletenessSummary {
       missingLogisticsInvoices: [],
       missingCustomsInvoices: [],
       missingPortInvoices: [],
+      missingSeaInvoices: [],
+      notApplicableRequirements: [],
+      transportMode: "",
     },
     text: "完整度缓存未生成",
   };
@@ -904,8 +948,11 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   if (!Object.keys(domesticLogistics).length || Number(domesticLogistics.total || 0) !== 1) return true;
   const cachedLogisticsRequirements = Array.isArray(logistics.requirements) ? logistics.requirements as Array<Record<string, unknown>> : [];
   const hasCachedSeaRequirement = cachedLogisticsRequirements.some((item) => item?.key === SEA_FREIGHT_REQUIREMENT_KEY);
+  const hasCachedPortRequirement = cachedLogisticsRequirements.some((item) => item?.key === "PORT");
   if (!isSeaFreightRequiredByTradeTerm(order) && hasCachedSeaRequirement) return true;
   if (isSeaFreightRequiredByTradeTerm(order) && !hasCachedSeaRequirement) return true;
+  if (isNonFullContainerTaxRefundOrder(order) && hasCachedPortRequirement) return true;
+  if (isNonFullContainerTaxRefundOrder(order) && Array.isArray(logistics.missingPortInvoices) && logistics.missingPortInvoices.length) return true;
   if (!Array.isArray(logistics.requirements)) return true;
   if (Array.isArray(cached.missingLabels) && cached.missingLabels.some((label) => (ORDER_DOCUMENT_TYPES as readonly string[]).includes(String(label)))) return true;
   return false;
