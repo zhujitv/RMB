@@ -99,6 +99,18 @@ export const LEGACY_EXCEL_TEMPLATE_MIME = "application/vnd.ms-excel";
 export const SUPPLIER_DOCUMENT_COST_CANDIDATE_LIMIT = 50;
 export const SUPPLIER_DOCUMENT_COST_CANDIDATE_SCAN_LIMIT = 200;
 export const SUPPLIER_INVOICE_SYNC_COST_LIMIT = 100;
+export const DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE = "DUPLICATE_SUPPLIER_DOCUMENT_REQUEST";
+export const DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE = "该工厂成本已存在资料回传任务，请在原任务中查看或替换资料。";
+
+type SupplierDocumentRequestOccupancyClient = Pick<Prisma.TransactionClient, "supplierDocumentRequest" | "orderDocument" | "fileAsset">;
+
+type SupplierDocumentRequestCostOccupancySource = "REQUEST" | "DOCUMENT" | "FILE_ASSET" | "LEGACY_REQUEST";
+
+export type SupplierDocumentRequestCostOccupancy = {
+  occupied: boolean;
+  source?: SupplierDocumentRequestCostOccupancySource;
+  sourceId?: string;
+};
 
 export function supplierDocumentRequestInclude() {
   return Prisma.validator<Prisma.SupplierDocumentRequestInclude>()({
@@ -234,7 +246,14 @@ export function supplierDocumentRequestPairKey(orderId: string, supplierId: stri
   return `${orderId}:${supplierId}`;
 }
 
-export async function activeSupplierDocumentRequestPairSet(costs: Array<{ orderId?: string | null; supplierId?: string | null }>) {
+export function duplicateSupplierDocumentRequestError() {
+  return codedError(DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE, 409, DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE);
+}
+
+export async function activeSupplierDocumentRequestPairSet(
+  costs: Array<{ orderId?: string | null; supplierId?: string | null }>,
+  options: { legacyWithoutCostOnly?: boolean } = {},
+) {
   const orderIds = [...new Set(costs.map((cost) => cost.orderId || "").filter(Boolean))];
   const supplierIds = [...new Set(costs.map((cost) => cost.supplierId || "").filter(Boolean))];
   if (!orderIds.length || !supplierIds.length) return new Set<string>();
@@ -244,11 +263,128 @@ export async function activeSupplierDocumentRequestPairSet(costs: Array<{ orderI
       supplierId: { in: supplierIds },
       deletedAt: null,
       NOT: { status: "DELETED" },
+      ...(options.legacyWithoutCostOnly ? { costId: null } : {}),
     },
     select: { orderId: true, supplierId: true },
     take: 500,
   });
   return new Set(requests.map((row) => supplierDocumentRequestPairKey(row.orderId, row.supplierId)));
+}
+
+function costIdsFrom(costs: Array<{ id?: string | null }>) {
+  return [...new Set(costs.map((cost) => cost.id || "").filter(Boolean))];
+}
+
+export async function supplierDocumentRequestOccupiedCostSet(
+  costs: Array<{ id?: string | null }>,
+  client: SupplierDocumentRequestOccupancyClient = prisma,
+) {
+  const costIds = costIdsFrom(costs);
+  if (!costIds.length) return new Set<string>();
+  const [requestRows, documentRows, assetRows] = await Promise.all([
+    client.supplierDocumentRequest.findMany({
+      where: {
+        costId: { in: costIds },
+        deletedAt: null,
+        NOT: { status: "DELETED" },
+      },
+      select: { costId: true },
+      distinct: ["costId"],
+    }),
+    client.orderDocument.findMany({
+      where: {
+        costId: { in: costIds },
+        relatedModule: "SUPPLIER",
+        documentType: { in: SUPPLIER_DOCUMENT_TYPES },
+        uploadStatus: "SUCCESS",
+        deletedAt: null,
+      },
+      select: { costId: true },
+      distinct: ["costId"],
+    }),
+    client.fileAsset.findMany({
+      where: {
+        costId: { in: costIds },
+        relatedModule: "SUPPLIER",
+        fileRole: { in: SUPPLIER_DOCUMENT_TYPES },
+        isDeleted: false,
+        deletedAt: null,
+      },
+      select: { costId: true },
+      distinct: ["costId"],
+    }),
+  ]);
+  return new Set([
+    ...requestRows.map((row) => row.costId || "").filter(Boolean),
+    ...documentRows.map((row) => row.costId || "").filter(Boolean),
+    ...assetRows.map((row) => row.costId || "").filter(Boolean),
+  ]);
+}
+
+export async function supplierDocumentRequestCostOccupancy(
+  cost: { id?: string | null; orderId?: string | null; supplierId?: string | null },
+  client: SupplierDocumentRequestOccupancyClient = prisma,
+): Promise<SupplierDocumentRequestCostOccupancy> {
+  const costId = nonEmpty(cost.id);
+  const orderId = nonEmpty(cost.orderId);
+  const supplierId = nonEmpty(cost.supplierId);
+  if (!costId) return { occupied: false };
+  const [requestRow, documentRow, assetRow, legacyRequestRow] = await Promise.all([
+    client.supplierDocumentRequest.findFirst({
+      where: {
+        costId,
+        deletedAt: null,
+        NOT: { status: "DELETED" },
+      },
+      select: { id: true },
+    }),
+    client.orderDocument.findFirst({
+      where: {
+        costId,
+        relatedModule: "SUPPLIER",
+        documentType: { in: SUPPLIER_DOCUMENT_TYPES },
+        uploadStatus: "SUCCESS",
+        deletedAt: null,
+      },
+      select: { id: true },
+    }),
+    client.fileAsset.findFirst({
+      where: {
+        costId,
+        relatedModule: "SUPPLIER",
+        fileRole: { in: SUPPLIER_DOCUMENT_TYPES },
+        isDeleted: false,
+        deletedAt: null,
+      },
+      select: { id: true },
+    }),
+    orderId && supplierId
+      ? client.supplierDocumentRequest.findFirst({
+          where: {
+            orderId,
+            supplierId,
+            costId: null,
+            deletedAt: null,
+            NOT: { status: "DELETED" },
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  if (requestRow?.id) return { occupied: true, source: "REQUEST", sourceId: requestRow.id };
+  if (documentRow?.id) return { occupied: true, source: "DOCUMENT", sourceId: documentRow.id };
+  if (assetRow?.id) return { occupied: true, source: "FILE_ASSET", sourceId: assetRow.id };
+  if (legacyRequestRow?.id) return { occupied: true, source: "LEGACY_REQUEST", sourceId: legacyRequestRow.id };
+  return { occupied: false };
+}
+
+export async function assertSupplierDocumentRequestCostAvailable(
+  cost: { id?: string | null; orderId?: string | null; supplierId?: string | null },
+  client: SupplierDocumentRequestOccupancyClient = prisma,
+) {
+  const occupancy = await supplierDocumentRequestCostOccupancy(cost, client);
+  if (occupancy.occupied) throw duplicateSupplierDocumentRequestError();
+  return occupancy;
 }
 
 export function actorId(actor: ActorLike) {

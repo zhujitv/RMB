@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { apiError, codedError, createSupplierDocumentRequest, listSupplierDocumentRequests, logServerError, ok } from "../../../lib/platform-db";
+import {
+  DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE,
+  DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE,
+} from "../../../lib/platform/supplier-document-request-types";
 
 import { requireApiActor } from "../../../lib/api-route-guard";
 
@@ -59,6 +63,15 @@ export async function POST(request: NextRequest) {
         : "已创建回传任务，但邮件发送失败，请检查邮箱配置后重试",
     }, { status: 201 });
   } catch (error: unknown) {
+    if ((error as { code?: string })?.code === DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE) {
+      return NextResponse.json(
+        {
+          error: DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE,
+          message: (error as { message?: string })?.message || DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE,
+        },
+        { status: 409 },
+      );
+    }
     return apiError(error, "创建供应商资料回传任务失败");
   }
 }

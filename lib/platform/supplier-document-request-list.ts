@@ -53,8 +53,8 @@ import {
   SUPPLIER_DOCUMENT_REQUEST_STATUSES,
   SUPPLIER_INVOICE_SYNC_COST_LIMIT,
   activeSupplierDocumentRequestPairSet,
-  activeSupplierDocumentRequestWhere,
   serializeSupplierDocumentCostCandidate,
+  supplierDocumentRequestOccupiedCostSet,
   supplierDocumentRequestFactoryCostInclude,
   supplierDocumentRequestFactoryCostWhere,
   supplierDocumentRequestInclude,
@@ -246,9 +246,13 @@ export async function listSupplierDocumentRequestCostCandidates(query: QueryLike
     orderBy: [{ createdAt: "desc" }],
     take: SUPPLIER_DOCUMENT_COST_CANDIDATE_SCAN_LIMIT,
   });
-  const existingPairs = await activeSupplierDocumentRequestPairSet(costs);
+  const [occupiedCostIds, legacyExistingPairs] = await Promise.all([
+    supplierDocumentRequestOccupiedCostSet(costs),
+    activeSupplierDocumentRequestPairSet(costs, { legacyWithoutCostOnly: true }),
+  ]);
   return costs
-    .filter((cost) => !existingPairs.has(supplierDocumentRequestPairKey(cost.orderId, cost.supplierId || "")))
+    .filter((cost) => !occupiedCostIds.has(cost.id))
+    .filter((cost) => !legacyExistingPairs.has(supplierDocumentRequestPairKey(cost.orderId, cost.supplierId || "")))
     .slice(0, SUPPLIER_DOCUMENT_COST_CANDIDATE_LIMIT)
     .map((cost) => serializeSupplierDocumentCostCandidate(cost));
 }

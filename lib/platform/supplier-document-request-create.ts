@@ -52,8 +52,9 @@ import {
   SUPPLIER_DOCUMENT_COST_CANDIDATE_SCAN_LIMIT,
   SUPPLIER_DOCUMENT_REQUEST_STATUSES,
   SUPPLIER_INVOICE_SYNC_COST_LIMIT,
+  assertSupplierDocumentRequestCostAvailable,
   activeSupplierDocumentRequestPairSet,
-  activeSupplierDocumentRequestWhere,
+  duplicateSupplierDocumentRequestError,
   serializeSupplierDocumentCostCandidate,
   supplierDocumentRequestFactoryCostInclude,
   supplierDocumentRequestFactoryCostWhere,
@@ -105,16 +106,10 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   const supplier = factoryCost.supplier;
   if (!order) throw codedError("请选择有效订单。", 404, "ORDER_NOT_FOUND");
   if (!supplier) throw codedError("请选择有效供应商。", 404, "SUPPLIER_NOT_FOUND");
-  const existingRequest = await prisma.supplierDocumentRequest.findFirst({
-    where: activeSupplierDocumentRequestWhere(order.id, supplier.id),
-    select: { id: true },
-  });
-  if (existingRequest) {
-    throw codedError("该订单与工厂供应商已有资料回传任务，请直接重新发送邮件或上传资料。", 409, "SUPPLIER_DOCUMENT_REQUEST_DUPLICATE");
-  }
   if (supplier.status !== "启用") throw codedError("供应商已停用，不能通知回传资料。", 400, "SUPPLIER_DISABLED");
   if (!isProductSupplierType(supplier.supplierType)) throw codedError("资料回传只允许通知产品供应商。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
   if (!supplier.allowFactoryDocumentUpload) throw codedError("该供应商未开启资料回传权限，请先到系统设置开启。", 400, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
+  await assertSupplierDocumentRequestCostAvailable(factoryCost);
 
   const recipients = supplierRecipientEmails({ ...supplier, operatorUsers: supplier.operatorUsers });
   if (!recipients.length) throw codedError("供应商未配置有效邮箱或绑定账号邮箱，不能发送回传通知。", 400, "SUPPLIER_EMAIL_REQUIRED");
@@ -155,6 +150,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   let created;
   try {
     created = await prisma.$transaction(async (tx) => {
+      await assertSupplierDocumentRequestCostAvailable(factoryCost, tx);
       const saved = await tx.supplierDocumentRequest.create({
         data: {
           orderId: order.id,
@@ -181,9 +177,16 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
       });
       await upsertFileAssetForSupplierRequestTemplate(tx, saved);
       return saved;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10000,
+      timeout: 15000,
     });
   } catch (error: unknown) {
     if (templateStorageKey) await deleteR2Object(templateStorageKey).catch(() => null);
+    if (["P2002", "P2034"].includes(String((error as { code?: string })?.code || ""))) {
+      throw duplicateSupplierDocumentRequestError();
+    }
     throw error;
   }
 

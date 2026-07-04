@@ -37,6 +37,9 @@ test("supplier document request schema links supplier uploads to tax refund docu
   assert.match(schema, /deletedById\s+String\?\s+@map\("deleted_by"\)/);
   assert.match(schema, /completedBy\s+User\?\s+@relation\("SupplierDocumentRequestCompletedBy"/);
   assert.match(schema, /deletedBy\s+User\?\s+@relation\("SupplierDocumentRequestDeletedBy"/);
+  const costUniqueMigration = readFileSync("prisma/migrations/20260705110000_supplier_document_request_cost_unique/migration.sql", "utf8");
+  assert.match(costUniqueMigration, /supplier_document_requests_active_cost_unique/);
+  assert.match(costUniqueMigration, /WHERE "cost_id" IS NOT NULL[\s\S]*"deleted_at" IS NULL[\s\S]*"status" <> 'DELETED'/);
 });
 
 test("supplier document workflow uses existing factory tax document types", () => {
@@ -151,6 +154,8 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierRequestListRoute, /content-length/);
   assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_FORM_PARSE_FAILED/);
   assert.match(supplierRequestListRoute, /回传表格读取失败，请确认文件小于 4MB/);
+  assert.match(supplierRequestListRoute, /DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE/);
+  assert.match(supplierRequestListRoute, /message: \(error as \{ message\?: string \}\)\?\.message \|\| DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE/);
   assert.match(service, /export async function listSupplierDocumentRequestCostCandidates/);
   assert.match(service, /supplierDocumentRequestFactoryCostWhere/);
   assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
@@ -161,9 +166,16 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(service, /请上传回传表格 Excel。/);
   assert.match(service, /safeSelectedProductSupplierPaymentVoucherAttachment/);
   assert.match(service, /付款凭证附件准备失败，已跳过水单附件/);
-  assert.match(service, /activeSupplierDocumentRequestWhere/);
-  assert.match(service, /SUPPLIER_DOCUMENT_REQUEST_DUPLICATE/);
+  assert.match(service, /supplierDocumentRequestOccupiedCostSet/);
+  assert.match(service, /legacyWithoutCostOnly: true/);
   assert.match(service, /activeSupplierDocumentRequestPairSet/);
+  assert.match(service, /DUPLICATE_SUPPLIER_DOCUMENT_REQUEST/);
+  assert.match(service, /该工厂成本已存在资料回传任务，请在原任务中查看或替换资料。/);
+  assert.match(service, /assertSupplierDocumentRequestCostAvailable\(factoryCost\)/);
+  assert.match(service, /assertSupplierDocumentRequestCostAvailable\(factoryCost, tx\)/);
+  assert.match(service, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(service, /P2002/);
+  assert.match(service, /P2034/);
   assert.match(service, /请先在成本管理登记该订单的工厂供应商成本，再创建资料回传任务。/);
   assert.match(supplierRequestTemplateRoute, /\\\.\(xls\|xlsx\)\$/);
   assert.match(service, /resendSupplierDocumentRequestNotice/);
