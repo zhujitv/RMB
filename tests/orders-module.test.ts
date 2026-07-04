@@ -7,6 +7,7 @@ const ordersModule = [
   "app/modules/OrdersModule.tsx",
   "app/modules/orders/model.ts",
   "app/modules/orders/quick-order-panel.tsx",
+  "app/modules/orders/quick-order-panel-controller.ts",
   "app/modules/orders/table.tsx",
   "app/modules/orders/detail-drawer.tsx",
   "app/modules/orders/utils.ts",

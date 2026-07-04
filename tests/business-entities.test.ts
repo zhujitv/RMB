@@ -11,7 +11,10 @@ const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
 const orderModel = readFileSync("app/modules/orders/model.ts", "utf8");
-const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
+const quickOrderPanel = [
+  "app/modules/orders/quick-order-panel.tsx",
+  "app/modules/orders/quick-order-panel-controller.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const reportService = readReportServiceSource();

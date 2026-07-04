@@ -87,7 +87,13 @@ export const logisticsFeesMain = readLogisticsFeesModuleSource();
 export const logisticsFeesBillActions = readFileSync(
   "app/modules/logistics-fees/use-logistics-fees-bill-actions.ts",
   "utf8",
-);
+)
+  + "\n"
+  + [
+    "app/modules/logistics-fees/use-logistics-fees-review-actions.ts",
+    "app/modules/logistics-fees/use-logistics-fees-save-details-action.ts",
+    "app/modules/logistics-fees/use-logistics-fees-workflow-actions.ts",
+  ].map((file) => readFileSync(file, "utf8")).join("\n");
 export const logisticsFeesDeleteAction = readFileSync(
   "app/modules/logistics-fees/delete-logistics-expense-action.ts",
   "utf8",
@@ -100,10 +106,12 @@ export const logisticsFeesDetails = [
   "app/modules/logistics-fees/details-drawer.tsx",
   "app/modules/logistics-fees/details-table.tsx",
   "app/modules/logistics-fees/details-actions.tsx",
+  "app/modules/logistics-fees/use-logistics-expense-drawer-state.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 export const logisticsFeesForm = [
   "app/modules/logistics-fees/expense-form.tsx",
   "app/modules/logistics-fees/expense-form-view.tsx",
+  "app/modules/logistics-fees/use-logistics-expense-form-controller.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 export const logisticsFeesInvoices = readFileSync(
   "app/modules/logistics-fees/invoice-groups-panel.tsx",

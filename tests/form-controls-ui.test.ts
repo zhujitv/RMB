@@ -207,17 +207,19 @@ test("user supplier binding follows the currently selected role", () => {
 });
 
 test("user list detail action opens the inline user editor directly", () => {
-  const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
+  const settingsTableIndex = settingsModule.indexOf("function SettingsTable(");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
   const detailDrawerCallSnippet = settingsTableSnippet.match(/<SettingsDetailDrawer[\s\S]*?\/>/)?.[0] || "";
+  const settingsTableContentIndex = settingsModuleMain.indexOf("function SettingsTableContent");
+  const settingsTableContentSnippet = settingsModuleMain.slice(settingsTableContentIndex, settingsTableContentIndex + 2600);
   const settingsRowsIndex = settingsModule.indexOf("function SettingsRows");
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
   const startEditUserSnippet = settingsModule.match(/function startEditUser\(user: UserRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const startCreateUserSnippet = settingsModule.match(/function startCreateUser\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const saveUserSnippet = settingsModuleMain;
   const userCancelSnippet = settingsModuleMain;
-  const userEditorRenderIndex = settingsModuleMain.indexOf("{userForm && activeTab === \"users\" ? (");
-  const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
+  const userEditorRenderIndex = settingsTableContentSnippet.indexOf("<SettingsEntityEditors");
+  const settingsTableRenderIndex = settingsTableContentSnippet.indexOf("<SettingsTable");
 
   assert.match(settingsModuleMain, /const \[selectedUserId, setSelectedUserId\] = useState\(""\)/);
   assert.match(settingsModuleMain, /const userEditPanelRef = useRef<HTMLDivElement \| null>\(null\)/);
@@ -244,7 +246,7 @@ test("user list detail action opens the inline user editor directly", () => {
 });
 
 test("supplier action opens unified supplier edit panel with editable supplier name", () => {
-  const settingsTableIndex = settingsModule.indexOf("function SettingsTable");
+  const settingsTableIndex = settingsModule.indexOf("function SettingsTable(");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
   const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
   const settingsTableRenderSnippet = settingsModuleMain.slice(settingsTableRenderIndex, settingsTableRenderIndex + 1800);

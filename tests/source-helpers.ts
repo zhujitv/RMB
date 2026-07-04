@@ -9,6 +9,10 @@ const SETTINGS_MODULE_FILES = [
   "app/modules/settings/use-settings-load-actions.ts",
   "app/modules/settings/use-settings-save-actions.ts",
   "app/modules/settings/use-settings-system-save-actions.ts",
+  "app/modules/settings/use-settings-state.ts",
+  "app/modules/settings/module-edit-panels.tsx",
+  "app/modules/settings/module-tab-content.tsx",
+  "app/modules/settings/module-toolbar.tsx",
   "app/modules/settings/module-view.tsx",
   "app/modules/settings/types.ts",
   "app/modules/settings/constants.ts",
@@ -53,6 +57,8 @@ const DOMESTIC_LOGISTICS_MODULE_FILES = [
 const TAX_REFUND_MODULE_FILES = [
   "app/modules/TaxRefundModule.tsx",
   "app/modules/tax-refund/use-tax-refund-controller.ts",
+  "app/modules/tax-refund/use-tax-refund-detail-actions.ts",
+  "app/modules/tax-refund/use-tax-refund-state.ts",
   "app/modules/tax-refund/list-panel.tsx",
   "app/modules/tax-refund/overlays.tsx",
   "app/modules/tax-refund/model.ts",
@@ -103,7 +109,12 @@ const LOGISTICS_FEES_MODULE_FILES = [
   "app/modules/logistics-fees/shared-row-reconcile.ts",
   "app/modules/logistics-fees/shared-status.ts",
   "app/modules/logistics-fees/use-logistics-fees-bill-actions.ts",
+  "app/modules/logistics-fees/use-logistics-fees-review-actions.ts",
+  "app/modules/logistics-fees/use-logistics-fees-save-details-action.ts",
+  "app/modules/logistics-fees/use-logistics-fees-workflow-actions.ts",
   "app/modules/logistics-fees/use-logistics-fees-statement.ts",
+  "app/modules/logistics-fees/use-logistics-expense-drawer-state.ts",
+  "app/modules/logistics-fees/use-logistics-expense-form-controller.ts",
 ];
 
 const WORKSPACE_SHELL_FILES = [
