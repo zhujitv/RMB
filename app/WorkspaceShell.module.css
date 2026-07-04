@@ -222,6 +222,10 @@
 .exportInvoiceRemarkSection { composes: exportInvoiceRemarkSection from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .exportInvoiceRemarkText { composes: exportInvoiceRemarkText from "./styles/workspace-shell/forms-dialogs-tax.module.css"; composes: exportInvoiceRemarkText from "./styles/workspace-shell/responsive-typography.module.css"; }
 .factoryDocumentChoiceGrid { composes: factoryDocumentChoiceGrid from "./styles/workspace-shell/responsive-typography.module.css"; composes: factoryDocumentChoiceGrid from "./styles/workspace-shell/settings-permissions-transport.module.css"; }
+.factoryDocumentSection { composes: factoryDocumentSection from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.factorySupplierCard { composes: factorySupplierCard from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.factorySupplierGrid { composes: factorySupplierGrid from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
+.factorySupplierHeader { composes: factorySupplierHeader from "./styles/workspace-shell/forms-dialogs-tax.module.css"; }
 .fileActionButton { composes: fileActionButton from "./styles/workspace-shell/logistics-fees.module.css"; composes: fileActionButton from "./styles/workspace-shell/responsive-typography.module.css"; }
 .fileDangerButton { composes: fileDangerButton from "./styles/workspace-shell/logistics-fees.module.css"; composes: fileDangerButton from "./styles/workspace-shell/responsive-typography.module.css"; }
 .fileListItem { composes: fileListItem from "./styles/workspace-shell/responsive-main.module.css"; composes: fileListItem from "./styles/workspace-shell/responsive-typography.module.css"; composes: fileListItem from "./styles/workspace-shell/supplier-documents.module.css"; }
@@ -660,49 +664,6 @@
   padding: 4px 0;
 }
 
-.taxRefundMoreActions {
-  position: relative;
-}
-
-.taxRefundMoreActions summary {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  list-style: none;
-}
-
-.taxRefundMoreActions summary::-webkit-details-marker {
-  display: none;
-}
-
-.taxRefundMoreActionMenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
-  display: grid;
-  gap: 6px;
-  min-width: 170px;
-  padding: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
-}
-
-.taxRefundMoreActionMenu button {
-  justify-content: flex-start;
-}
-
 .taxRefundActionGroup {
   display: inline-flex;
   align-items: center;
@@ -749,6 +710,18 @@
   top: 0;
   z-index: 3;
   background: #f8fafc;
+}
+
+.factorySupplierCard .fileActionButton,
+.factorySupplierCard .fileDangerButton,
+.factorySupplierCard .fileUploadButton {
+  flex: 0 0 auto;
+}
+
+.factorySupplierCard .fileActionButton,
+.factorySupplierCard .fileDangerButton {
+  height: 34px;
+  min-height: 34px;
 }
 
 .taxDetailTabBar {

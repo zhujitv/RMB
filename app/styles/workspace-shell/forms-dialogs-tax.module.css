@@ -972,6 +972,54 @@
   grid-column: 1 / -1;
 }
 
+.factoryDocumentSection {
+  grid-column: 1 / -1;
+  background: #ffffff;
+}
+
+.factorySupplierGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.factorySupplierCard {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.factorySupplierHeader {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.factorySupplierHeader strong,
+.factorySupplierHeader span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factorySupplierHeader strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.factorySupplierHeader span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .fileUploadGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1070,4 +1118,35 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.factorySupplierCard .fileUploadCard {
+  height: auto;
+  min-height: 0;
+}
+
+.factorySupplierCard .fileUploadActions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.factorySupplierCard .fileUploadActionLabel,
+.factorySupplierCard .fileUploadButton {
+  flex: 0 0 auto;
+}
+
+.factorySupplierCard .fileUploadButton {
+  width: auto;
+  min-width: 84px;
+  height: 34px;
+  min-height: 34px;
+  margin-top: 0;
+  padding: 0 12px;
+}
+
+@media (max-width: 900px) {
+  .factorySupplierGrid {
+    grid-template-columns: 1fr;
+  }
 }

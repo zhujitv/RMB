@@ -103,24 +103,19 @@ export function TaxRefundDetailDrawer({
                 {cancelingArchive ? "处理中..." : "取消归档"}
               </button>
             ) : (
-              <button className={styles.secondaryButton} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
+              <button className={styles.primaryButtonCompact} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
                 {submittingTax ? "提交中..." : "提交归档"}
               </button>
             )}
-            <details className={styles.taxRefundMoreActions}>
-              <summary>更多操作</summary>
-              <div className={styles.taxRefundMoreActionMenu}>
-              <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
-                {packageDownloading ? "下载中..." : "下载资料包"}
+            <button className={styles.secondaryButton} type="button" disabled={packageDownloading} onClick={onDownloadPackage}>
+              {packageDownloading ? "下载中..." : "下载资料包"}
+            </button>
+            {canRefreshCompleteness ? (
+              <button className={styles.secondaryButton} type="button" disabled={refreshingCompleteness || dismissLocked} onClick={onRefreshCompleteness}>
+                {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
               </button>
-              {canRefreshCompleteness ? (
-                <button className={styles.secondaryButton} type="button" disabled={refreshingCompleteness || dismissLocked} onClick={onRefreshCompleteness}>
-                  {refreshingCompleteness ? "计算中..." : "重新计算完整度"}
-                </button>
-              ) : null}
-              </div>
-            </details>
-            <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
+            ) : null}
+            <button className={styles.secondaryButton} type="button" onClick={requestClose}>关闭</button>
           </div>
         </header>
         <div className={styles.taxRefundDrawerBody}>
@@ -431,7 +426,7 @@ function TaxRefundDetailPanel({
         />
         ) : null}
         {activeTab === "factory-documents" ? (
-        <div className={styles.documentGroupCard} id={taxTargetDomId("factory-section")}>
+        <div className={`${styles.documentGroupCard} ${styles.factoryDocumentSection}`} id={taxTargetDomId("factory-section")}>
           <strong>工厂资料上传</strong>
           {supplierDocumentMissingItems.length ? (
             <SupplierDocumentReturnNotice
@@ -440,27 +435,31 @@ function TaxRefundDetailPanel({
               onOpenSupplierDocuments={onOpenSupplierDocuments}
             />
           ) : null}
-          {factoryCosts.length ? factoryCosts.map((cost) => {
-            const ordinal = factoryCostOrdinal(cost, factoryCosts);
-            return (
-              <FactoryCostUploadGroup
-                key={cost.id}
-                orderId={detail.id}
-                cost={cost}
-                documents={detail.documents || []}
-                sameSupplierFactoryCostCount={ordinal.total}
-                displayIndex={ordinal.index}
-                uploadingKey={uploadingKey}
-                uploadProgressByKey={uploadProgressByKey}
-                deletingDocumentId={deletingDocumentId}
-                currentUserRole={currentUserRole}
-                canWriteDocuments={canWriteDocuments}
-                readOnly={readOnly}
-                onUpload={onUpload}
-                onDelete={onDelete}
-              />
-            );
-          }) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
+          {factoryCosts.length ? (
+            <div className={styles.factorySupplierGrid}>
+              {factoryCosts.map((cost) => {
+                const ordinal = factoryCostOrdinal(cost, factoryCosts);
+                return (
+                  <FactoryCostUploadGroup
+                    key={cost.id}
+                    orderId={detail.id}
+                    cost={cost}
+                    documents={detail.documents || []}
+                    sameSupplierFactoryCostCount={ordinal.total}
+                    displayIndex={ordinal.index}
+                    uploadingKey={uploadingKey}
+                    uploadProgressByKey={uploadProgressByKey}
+                    deletingDocumentId={deletingDocumentId}
+                    currentUserRole={currentUserRole}
+                    canWriteDocuments={canWriteDocuments}
+                    readOnly={readOnly}
+                    onUpload={onUpload}
+                    onDelete={onDelete}
+                  />
+                );
+              })}
+            </div>
+          ) : <span className={styles.mutedText}>暂未录入产品供应商成本</span>}
         </div>
         ) : null}
         {activeTab === "logistics-documents" ? (

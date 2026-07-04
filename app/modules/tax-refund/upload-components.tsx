@@ -21,6 +21,7 @@ export function TaxUploadItem({
   scope,
   canUpload,
   canDelete,
+  inlineUploadActions = false,
   onUpload,
   onDelete,
 }: {
@@ -35,6 +36,7 @@ export function TaxUploadItem({
   scope?: UploadScope;
   canUpload: boolean;
   canDelete: boolean;
+  inlineUploadActions?: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
@@ -52,6 +54,7 @@ export function TaxUploadItem({
       canUpload={canUpload}
       canDelete={canDelete}
       canPreviewOrDownload
+      inlineUploadActions={inlineUploadActions}
       onUpload={onUpload}
       onDelete={onDelete}
     />
@@ -71,6 +74,7 @@ export function FileUploadCard({
   canUpload,
   canDelete,
   canPreviewOrDownload,
+  inlineUploadActions = false,
   onUpload,
   onDelete,
 }: {
@@ -87,11 +91,32 @@ export function FileUploadCard({
   canUpload: boolean;
   canDelete: boolean;
   canPreviewOrDownload: boolean;
+  inlineUploadActions?: boolean;
   onUpload: (orderId: string, documentType: string, file: File | null, scope?: UploadScope) => void;
   onDelete: (orderId: string, document: TaxDocument) => void;
 }) {
   const uploaded = Boolean(document);
   const deleting = Boolean(document?.id && deletingDocumentId === document.id);
+  const uploadControl = canUpload ? (
+    <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
+      {uploading ? "上传中..." : UPLOAD_REPLACE_TEXT}
+      <input
+        type="file"
+        accept={PDF_UPLOAD_ACCEPT}
+        disabled={uploading}
+        hidden
+        onChange={(event) => {
+          onUpload(orderId, type, event.target.files?.[0] || null, scope);
+          event.currentTarget.value = "";
+        }}
+      />
+    </label>
+  ) : (
+    <button className={`${styles.secondaryButton} ${styles.fileUploadButton}`} type="button" disabled title="无权限操作">
+      无权限操作
+    </button>
+  );
+  const progressControl = uploading ? <UploadProgressInline progress={uploadProgress} /> : null;
   return (
     <div className={styles.fileUploadCard} id={targetKey ? taxTargetDomId(targetKey) : undefined}>
       <div className={styles.fileUploadHeader}>
@@ -125,33 +150,14 @@ export function FileUploadCard({
                 {deleting ? "删除中..." : "删除"}
               </button>
             ) : null}
+            {inlineUploadActions ? uploadControl : null}
           </div>
         </div>
       ) : (
         <div className={styles.fileUploadEmpty}>暂未上传</div>
       )}
-      {canUpload ? (
-        <>
-          <label className={`${styles.secondaryButton} ${styles.fileUploadButton}`}>
-            {uploading ? "上传中..." : UPLOAD_REPLACE_TEXT}
-            <input
-              type="file"
-              accept={PDF_UPLOAD_ACCEPT}
-              disabled={uploading}
-              hidden
-              onChange={(event) => {
-                onUpload(orderId, type, event.target.files?.[0] || null, scope);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
-          {uploading ? <UploadProgressInline progress={uploadProgress} /> : null}
-        </>
-      ) : (
-        <button className={`${styles.secondaryButton} ${styles.fileUploadButton}`} type="button" disabled title="无权限操作">
-          无权限操作
-        </button>
-      )}
+      {inlineUploadActions && document ? null : uploadControl}
+      {progressControl}
     </div>
   );
 }
@@ -422,12 +428,14 @@ export function FactoryCostUploadGroup({
   const scope = { costId: cost.id, supplierId: cost.supplierId || "" };
   const amountText = formatFactoryCostAmount(cost);
   const costLabel = sameSupplierFactoryCostCount > 1 ? `工厂货款 ${displayIndex}` : (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本");
+  const supplierTitle = sameSupplierFactoryCostCount > 1 ? `${supplierName} / ${costLabel}` : supplierName;
+  const costSummary = [sameSupplierFactoryCostCount > 1 ? (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本") : costLabel, amountText].filter(Boolean).join(" · ");
   return (
-    <div className={styles.documentGroupCard}>
-      <strong>{sameSupplierFactoryCostCount > 1 ? `${supplierName} / ${costLabel}` : supplierName}</strong>
-      <span className={styles.mutedText}>
-        {[sameSupplierFactoryCostCount > 1 ? (logisticsCostTypeLabel(cost.costType || "") || cost.costType || "工厂成本") : costLabel, amountText].filter(Boolean).join(" · ")}
-      </span>
+    <div className={styles.factorySupplierCard}>
+      <div className={styles.factorySupplierHeader}>
+        <strong title={supplierTitle}>{supplierTitle}</strong>
+        <span title={costSummary}>{costSummary}</span>
+      </div>
       {TAX_FACTORY_UPLOAD_TYPES.map((documentType) => (
         <TaxUploadItem
           key={`${cost.id}-${documentType.value}`}
@@ -445,6 +453,7 @@ export function FactoryCostUploadGroup({
           scope={scope}
           canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
           canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
+          inlineUploadActions
           onUpload={onUpload}
           onDelete={onDelete}
         />

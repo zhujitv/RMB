@@ -73,6 +73,10 @@ test("tax refund detail does not render tax calculation review workspace", () =>
   assert.doesNotMatch(detail, /calculationFormId|TaxCalculationStatCard|taxCalculationSubTabs/);
   assert.doesNotMatch(detail, /退税结果|理论退税额|发票匹配|暂无退税计算数据/);
   assert.match(detail, /role="tablist"/);
-  assert.match(detail, /更多操作/);
+  assert.doesNotMatch(detail, /更多操作|taxRefundMoreActions|taxRefundMoreActionMenu/);
   assert.match(detail, /提交归档/);
+  assert.match(detail, /下载资料包/);
+  assert.match(detail, /重新计算完整度/);
+  assert.match(detail, /关闭/);
+  assert.match(detail, /提交归档[\s\S]*下载资料包[\s\S]*重新计算完整度[\s\S]*关闭/);
 });
