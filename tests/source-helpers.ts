@@ -271,6 +271,7 @@ const NOTIFICATION_ENGINE_FILES = [
 
 const WORKBENCH_TODOS_FILES = [
   "lib/platform/workbench-todos.ts",
+  "lib/platform/workbench-todo-policy.ts",
   "lib/platform/workbench-todos-core.ts",
   "lib/platform/workbench-todos-sources.ts",
   "lib/platform/workbench-todo-rules.ts",

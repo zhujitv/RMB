@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { canRead } from "./shared-access";
 import { orderAccessWhere } from "./order-access";
 import { isProductSupplierOperatorRole } from "./shared";
+import { isFinanceWorkbenchActor } from "./workbench-todo-policy";
 import { addDays, startOfChinaDay } from "./workbench-todo-rules";
 import {
   LOGISTICS_INVOICE_DONE_STATUSES,
@@ -33,10 +34,42 @@ import {
   type WorkbenchTodoContext,
 } from "./workbench-todos-core";
 
+function taxRefundArchivedTodosBatch(context: WorkbenchTodoContext, today: Date, tomorrow: Date) {
+  const actor = context.actor;
+  if (!(canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor)))) return null;
+  return prisma.receivableOrder.findMany({
+    where: {
+      deletedAt: null,
+      taxArchived: true,
+      taxRefundArchivedAt: { gte: today, lt: tomorrow },
+      AND: [orderAccessWhere(actor)],
+    },
+    include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
+    orderBy: [{ taxRefundArchivedAt: "desc" }],
+    take: TODO_LIMIT_PER_SOURCE,
+  }).then((rows) => rows.map((order) => todoForOrder({
+    type: "TAX_REFUND_ARCHIVED",
+    title: "退税资料已归档",
+    module: "退税资料",
+    order,
+    context,
+    dueAt: order.taxRefundArchivedAt || order.updatedAt,
+    href: orderHref("/tax-refund", order),
+    owner: taxRefundArchiveOwner(context, order),
+    status: "DONE",
+    updatedAt: order.updatedAt,
+  })));
+}
+
 export async function completedTodayTodos(context: WorkbenchTodoContext, now = new Date()) {
   const actor = context.actor;
   const today = startOfChinaDay(now);
   const tomorrow = addDays(today, 1);
+  const taxRefundArchivedBatch = taxRefundArchivedTodosBatch(context, today, tomorrow);
+  if (isFinanceWorkbenchActor(actor)) {
+    const values = await Promise.all(taxRefundArchivedBatch ? [taxRefundArchivedBatch] : []);
+    return uniqueTodos(values.flat()).sort(sortWorkbenchTodos);
+  }
   const batches: Promise<WorkbenchTodo[]>[] = [];
   const productCostWhere = productSupplierPaymentCostWhere();
   if (canRead(actor, "payments") && isFinanceOperator(actor)) {
@@ -201,30 +234,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
       status: "DONE",
     }))));
   }
-  if (canRead(actor, "taxRefund") && (isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) {
-    batches.push(prisma.receivableOrder.findMany({
-      where: {
-        deletedAt: null,
-        taxArchived: true,
-        taxRefundArchivedAt: { gte: today, lt: tomorrow },
-        AND: [orderAccessWhere(actor)],
-      },
-      include: { customer: true, salesperson: { select: { id: true, name: true, email: true, role: true } } },
-      orderBy: [{ taxRefundArchivedAt: "desc" }],
-      take: TODO_LIMIT_PER_SOURCE,
-    }).then((rows) => rows.map((order) => todoForOrder({
-      type: "TAX_REFUND_ARCHIVED",
-      title: "退税资料已归档",
-      module: "退税资料",
-      order,
-      context,
-      dueAt: order.taxRefundArchivedAt || order.updatedAt,
-      href: orderHref("/tax-refund", order),
-      owner: taxRefundArchiveOwner(context, order),
-      status: "DONE",
-      updatedAt: order.updatedAt,
-    }))));
-  }
+  if (taxRefundArchivedBatch) batches.push(taxRefundArchivedBatch);
   if (canRead(actor, "commissions") && isFinanceOperator(actor)) {
     batches.push(prisma.receivableOrder.findMany({
       where: {

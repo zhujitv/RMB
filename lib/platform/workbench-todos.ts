@@ -2,6 +2,7 @@ import { canActivateTodo, summarizeWorkbenchTodos } from "./workbench-todo-rules
 import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 import { SUPPLIER_DOCUMENT_TYPES } from "./shared";
 import { completedTodayTodos } from "./workbench-todos-completed";
+import { isFinanceWorkbenchActor, scopeWorkbenchTodosForActor } from "./workbench-todo-policy";
 import { createWorkbenchTodoContext, sortWorkbenchTodos, uniqueTodos, type ActorLike } from "./workbench-todos-core";
 import { WORKBENCH_TODOS_CACHE_MS, invalidateWorkbenchTodosCache, workbenchTodosCache, workbenchTodosCacheKey } from "./workbench-todos-cache";
 import {
@@ -30,8 +31,38 @@ type WorkbenchTodosResult = {
 
 export { invalidateWorkbenchTodosCache };
 
+const ALL_WORKBENCH_SOURCE_TYPES = [
+  "orders",
+  "domesticLogistics",
+  "logisticsFees",
+  "supplierDocuments",
+  "payments",
+  "factoryPayments",
+  "taxRefund",
+  "profit",
+  "oceanTracking",
+];
+
 async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResult> {
   const context = await createWorkbenchTodoContext(actor);
+  if (isFinanceWorkbenchActor(actor)) {
+    const [taxRefundTodos, completedTodos] = await Promise.all([
+      listTaxRefundTodos(context),
+      completedTodayTodos(context),
+    ]);
+    const generatedTodos = uniqueTodos([...taxRefundTodos]);
+    const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo))
+      .sort(sortWorkbenchTodos);
+    const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos);
+    return {
+      todos,
+      completedTodos: visibleCompletedTodos,
+      summary: summarizeWorkbenchTodos(todos, visibleCompletedTodos.length),
+      generatedAt: new Date().toISOString(),
+      sourceTypes: ["taxRefund"],
+      supportedDocumentTypes: SUPPLIER_DOCUMENT_TYPES,
+    };
+  }
   const [
     orderTodos,
     domesticLogisticsTodos,
@@ -66,25 +97,15 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
     ...profitTodos,
     ...oceanTrackingTodos,
   ]);
-  const todos = generatedTodos
-    .filter(canActivateTodo)
+  const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo))
     .sort(sortWorkbenchTodos);
+  const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos);
   return {
     todos,
-    completedTodos,
-    summary: summarizeWorkbenchTodos(todos, completedTodos.length),
+    completedTodos: visibleCompletedTodos,
+    summary: summarizeWorkbenchTodos(todos, visibleCompletedTodos.length),
     generatedAt: new Date().toISOString(),
-    sourceTypes: [
-      "orders",
-      "domesticLogistics",
-      "logisticsFees",
-      "supplierDocuments",
-      "payments",
-      "factoryPayments",
-      "taxRefund",
-      "profit",
-      "oceanTracking",
-    ],
+    sourceTypes: ALL_WORKBENCH_SOURCE_TYPES,
     supportedDocumentTypes: SUPPLIER_DOCUMENT_TYPES,
   };
 }

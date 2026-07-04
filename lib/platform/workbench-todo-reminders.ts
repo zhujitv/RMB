@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { startOfChinaDay } from "./workbench-todo-rules";
+import { planWorkbenchTodoReminderTargets } from "./workbench-todo-policy";
 import { listWorkbenchTodos, type WorkbenchTodo } from "./workbench-todos";
 import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { nonEmpty } from "./shared";
@@ -14,6 +15,8 @@ type ActorLike = {
 export type WorkbenchTodoReminderResult = {
   scanned: number;
   eligible: number;
+  policySkipped: number;
+  adminFallback: number;
   sent: number;
   skipped: number;
   failed: number;
@@ -81,6 +84,15 @@ function uniqueIds(values: Array<string | null | undefined>) {
   return values.map((value) => nonEmpty(value)).filter((value, index, arr) => value && arr.indexOf(value) === index);
 }
 
+function uniqueReminderOwners<T extends { id: string }>(owners: T[]) {
+  const seen = new Set<string>();
+  return owners.filter((owner) => {
+    if (seen.has(owner.id)) return false;
+    seen.add(owner.id);
+    return true;
+  });
+}
+
 function reminderOwnerUserIds(todo: WorkbenchTodo) {
   if (MULTI_OWNER_REMINDER_TODO_TYPES.has(todo.type)) {
     return uniqueIds([...(todo.ownerUserIds || []), todo.ownerUserId]);
@@ -92,34 +104,93 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
   const today = startOfChinaDay(now);
   const reminderDate = today;
   const { todos } = await listWorkbenchTodos(actor);
-  const eligibleTodoOwners = todos
+  const overdueTodoOwners = todos
     .filter((todo) => todo.status === "ACTIVE")
     .map((todo) => ({ todo, overdueDays: overdueDaysForTodo(todo, today) }))
     .filter(({ overdueDays }) => overdueDays > OVERDUE_REMINDER_DAYS)
     .flatMap(({ todo, overdueDays }) => reminderOwnerUserIds(todo).map((ownerUserId) => ({ todo, overdueDays, ownerUserId })));
-  const ownerIds = uniqueIds(eligibleTodoOwners.map(({ ownerUserId }) => ownerUserId));
-  const owners = await prisma.user.findMany({
-    where: {
-      id: { in: ownerIds },
-      isActive: true,
-      approvalStatus: "APPROVED",
-    },
-    select: { id: true, email: true },
-    take: ownerIds.length,
-  });
-  const ownerEmailById = new Map(owners.map((owner) => [owner.id, owner.email]));
+  const ownerIds = uniqueIds(overdueTodoOwners.map(({ ownerUserId }) => ownerUserId));
+  const [ownerUsers, adminUsers] = await Promise.all([
+    ownerIds.length
+      ? prisma.user.findMany({
+          where: {
+            id: { in: ownerIds },
+            isActive: true,
+            approvalStatus: "APPROVED",
+          },
+          select: { id: true, email: true, role: true },
+          take: ownerIds.length,
+        })
+      : Promise.resolve([]),
+    prisma.user.findMany({
+      where: {
+        role: "管理员",
+        isActive: true,
+        approvalStatus: "APPROVED",
+      },
+      select: { id: true, email: true, role: true },
+      orderBy: { createdAt: "asc" },
+      take: 50,
+    }),
+  ]);
+  const owners = uniqueReminderOwners([...ownerUsers, ...adminUsers]);
+  const {
+    ownerById,
+    eligibleTodoOwners,
+    policySkippedTodoOwners,
+    adminFallbackTodoOwners,
+  } = planWorkbenchTodoReminderTargets(overdueTodoOwners, owners);
   const result: WorkbenchTodoReminderResult = {
     scanned: todos.length,
     eligible: eligibleTodoOwners.length,
+    policySkipped: policySkippedTodoOwners.length,
+    adminFallback: adminFallbackTodoOwners.length,
     sent: 0,
     skipped: 0,
     failed: 0,
     logs: [],
   };
+  const adminFallbackTodoIds = new Set(adminFallbackTodoOwners.map(({ todo }) => todo.id));
+  const policySkippedMessage = (todo: WorkbenchTodo) => adminFallbackTodoIds.has(todo.id)
+    ? "财务只接收退税归档逾期提醒，已转交管理员处理"
+    : "财务只接收退税归档逾期提醒，未找到可接收的管理员账号";
+  for (const { todo, overdueDays, ownerUserId: rawOwnerUserId } of policySkippedTodoOwners) {
+    const ownerUserId = nonEmpty(rawOwnerUserId);
+    if (!ownerUserId) continue;
+    const owner = ownerById.get(ownerUserId);
+    const ownerEmail = nonEmpty(owner?.email);
+    const errorMessage = policySkippedMessage(todo);
+    if (!await alreadyRemindedToday(todo, ownerUserId, reminderDate)) {
+      await prisma.todoReminderLog.create({
+        data: {
+          todoId: todo.id,
+          todoType: todo.type,
+          relatedOrderId: todo.orderId || null,
+          ownerUserId,
+          ownerEmail,
+          remindedAt: now,
+          reminderDate,
+          overdueDays,
+          emailStatus: "SKIPPED",
+          errorMessage,
+        },
+      });
+    }
+    result.logs.push({
+      todoId: todo.id,
+      todoType: todo.type,
+      ownerUserId,
+      ownerEmail,
+      overdueDays,
+      emailStatus: "SKIPPED",
+      errorMessage,
+    });
+  }
   for (const { todo, overdueDays, ownerUserId: rawOwnerUserId } of eligibleTodoOwners) {
     const ownerUserId = nonEmpty(rawOwnerUserId);
     if (!ownerUserId) continue;
-    const ownerEmail = nonEmpty(ownerEmailById.get(ownerUserId));
+    const owner = ownerById.get(ownerUserId);
+    const ownerEmail = nonEmpty(owner?.email);
     if (!ownerEmail) {
       if (!await alreadyRemindedToday(todo, ownerUserId, reminderDate)) {
         await prisma.todoReminderLog.create({
