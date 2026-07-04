@@ -20,7 +20,6 @@ import {
 import {
   LOGISTICS_EXPENSE_CURRENCIES,
   logisticsCostTypeDefaultCurrency,
-  logisticsCostTypeRequiresDeclarationScope,
 } from "./logistics-cost-types";
 import {
   includeLogisticsExpenseRelations,
@@ -76,11 +75,6 @@ export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, act
         include: { transportItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
         orderBy: [{ updatedAt: "desc" }],
         take: 1,
-      },
-      customsDeclarations: {
-        where: { deletedAt: null },
-        select: { id: true },
-        take: 200,
       },
     },
   });
@@ -160,16 +154,9 @@ export async function buildLogisticsExpenseData(
   const billingQuantity = normalizeLogisticsExpenseBillingQuantity(input, billingMethod, before);
   const appliedContainerCount = normalizeAppliedContainerCount(input, order, before, billingQuantity);
   const containerType = normalizeLogisticsExpenseContainerType(input, order, before);
-  const customsDeclarationId = await resolveLogisticsExpenseCustomsDeclaration(order.id, input, before);
-  const allocationMethod = normalizeLogisticsExpenseAllocationMethod(input, before);
-  const allocatedAmount = normalizeLogisticsExpenseAllocatedAmount(input, before, amount);
-  const ownership = normalizeLogisticsExpenseOwnership(costType, customsDeclarationId, allocationMethod, allocatedAmount, order);
   return {
     orderId: order.id,
     supplierId: supplier.id,
-    customsDeclarationId,
-    allocationMethod: ownership.allocationMethod,
-    allocatedAmount: ownership.allocatedAmount,
     supplierNameSnapshot: nonEmpty(supplier.supplierName),
     costType,
     currency: exchange.currency,
@@ -299,85 +286,6 @@ function normalizeAppliedContainerCount(input: UnknownRecord = {}, order: Logist
   return Math.max(1, Math.ceil(count));
 }
 
-const LOGISTICS_EXPENSE_ALLOCATION_METHODS = ["按报关金额", "按供应商开票金额", "按柜数", "手工金额"];
-
-async function resolveLogisticsExpenseCustomsDeclaration(orderId: string, input: UnknownRecord = {}, before: LogisticsExpenseLike | null = null) {
-  const explicitInput = Object.prototype.hasOwnProperty.call(input, "customsDeclarationId")
-    || Object.prototype.hasOwnProperty.call(input, "customsDeclaration_id")
-    || Object.prototype.hasOwnProperty.call(input, "declarationId");
-  const customsDeclarationId = explicitInput
-    ? nonEmpty(input.customsDeclarationId || input.customsDeclaration_id || input.declarationId)
-    : nonEmpty(before?.customsDeclarationId);
-  if (!customsDeclarationId) return null;
-  const declaration = await prisma.customsDeclaration.findFirst({
-    where: { id: customsDeclarationId, orderId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!declaration) throw codedError("请选择有效报关批次。", 400, "LOGISTICS_EXPENSE_CUSTOMS_DECLARATION_NOT_FOUND");
-  return declaration.id;
-}
-
-function normalizeLogisticsExpenseAllocationMethod(input: UnknownRecord = {}, before: LogisticsExpenseLike | null = null) {
-  const hasInput = Object.prototype.hasOwnProperty.call(input, "allocationMethod")
-    || Object.prototype.hasOwnProperty.call(input, "allocation_method");
-  const value = nonEmpty(hasInput ? (input.allocationMethod || input.allocation_method) : before?.allocationMethod);
-  if (!value) return null;
-  if (!LOGISTICS_EXPENSE_ALLOCATION_METHODS.includes(value)) {
-    throw codedError("请选择有效物流费用分摊方式。", 400, "LOGISTICS_EXPENSE_ALLOCATION_METHOD_INVALID");
-  }
-  return value;
-}
-
-function normalizeLogisticsExpenseAllocatedAmount(input: UnknownRecord = {}, before: LogisticsExpenseLike | null = null, totalAmount = 0) {
-  const hasInput = Object.prototype.hasOwnProperty.call(input, "allocatedAmount")
-    || Object.prototype.hasOwnProperty.call(input, "allocated_amount");
-  const clearsCustomsDeclaration = (
-    Object.prototype.hasOwnProperty.call(input, "customsDeclarationId")
-    || Object.prototype.hasOwnProperty.call(input, "customsDeclaration_id")
-    || Object.prototype.hasOwnProperty.call(input, "declarationId")
-  ) && !nonEmpty(input.customsDeclarationId || input.customsDeclaration_id || input.declarationId);
-  if (!hasInput && clearsCustomsDeclaration) return null;
-  const raw = hasInput ? (input.allocatedAmount ?? input.allocated_amount) : before?.allocatedAmount;
-  if (raw == null || raw === "") return null;
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw codedError("分摊金额必须是非负数字。", 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_INVALID");
-  }
-  if (totalAmount > 0 && amount - totalAmount > 0.01) {
-    throw codedError("分摊金额不能大于物流费用金额。", 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_TOO_LARGE");
-  }
-  return Number(amount.toFixed(2));
-}
-
-function normalizeLogisticsExpenseOwnership(
-  costType: string,
-  customsDeclarationId: string | null,
-  allocationMethod: string | null,
-  allocatedAmount: number | null,
-  order: LogisticsExpenseOrderForAccess,
-) {
-  const declarationCount = Array.isArray(order.customsDeclarations) ? order.customsDeclarations.length : 0;
-  if (!customsDeclarationId) {
-    if (declarationCount > 1 && logisticsCostTypeRequiresDeclarationScope(costType)) {
-      throw codedError(`${costType}属于单次报关费用，一票提单多次报关时必须选择具体报关批次。`, 400, "LOGISTICS_EXPENSE_DECLARATION_SCOPE_REQUIRED");
-    }
-    if (declarationCount > 1 && !allocationMethod) {
-      throw codedError("一票提单多次报关时，整票物流费用必须选择分摊方式。", 400, "LOGISTICS_EXPENSE_ALLOCATION_METHOD_REQUIRED");
-    }
-    if (allocationMethod === "手工金额" || allocatedAmount != null) {
-      throw codedError("手工分摊金额必须绑定具体报关批次。", 400, "LOGISTICS_EXPENSE_MANUAL_ALLOCATION_REQUIRES_DECLARATION");
-    }
-    return { allocationMethod, allocatedAmount: null };
-  }
-  if (allocatedAmount != null) {
-    return { allocationMethod: "手工金额", allocatedAmount };
-  }
-  if (allocationMethod === "手工金额") {
-    throw codedError("请选择手工分摊金额。", 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_REQUIRED");
-  }
-  return { allocationMethod: null, allocatedAmount: null };
-}
-
 export async function loadLogisticsExpenseForAction(id: string, actor: LogisticsActor) {
   const expense = await prisma.logisticsExpense.findFirst({
     where: {
@@ -394,34 +302,17 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
 export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient | typeof prisma, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
   const costType = String(normalizedCostType(nonEmpty(expense.costType)));
   const currentActorId = logisticsExpenseActorId(actor);
-  const customsDeclarationId = nonEmpty(expense.customsDeclarationId);
-  const duplicateWhere: Prisma.OrderCostWhereInput = {
-    orderId: expense.orderId,
-    costType,
-    deletedAt: null,
-    NOT: { sourceId: expense.id },
-    ...(customsDeclarationId ? {
-      generatedLogisticsExpense: { is: { customsDeclarationId } },
-    } : {
-      OR: [
-        { generatedLogisticsExpense: { is: null } },
-        { generatedLogisticsExpense: { is: { customsDeclarationId: null } } },
-      ],
-    }),
-  };
   const duplicate = await tx.orderCost.findFirst({
-    where: duplicateWhere,
+    where: {
+      orderId: expense.orderId,
+      costType,
+      deletedAt: null,
+      NOT: { sourceId: expense.id },
+    },
   });
   if (duplicate) {
-    throw codedError(
-      customsDeclarationId
-        ? "同一报关批次同一物流费用类型已存在正式成本，不能重复进入成本。"
-        : "同一订单同一物流费用类型已存在正式成本，不能重复进入成本。",
-      409,
-      "LOGISTICS_EXPENSE_DUPLICATE_COST",
-    );
+    throw codedError("同一订单同一物流费用类型已存在正式成本，不能重复进入成本。", 409, "LOGISTICS_EXPENSE_DUPLICATE_COST");
   }
-  const effectiveAmount = expense.allocatedAmount == null ? Number(expense.amount ?? 0) : Number(expense.allocatedAmount || 0);
   const costData = {
     orderId: expense.orderId,
     supplierId: expense.supplierId,
@@ -433,8 +324,8 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     exchangeRateDate: dateFromInput(expense.exchangeRateDate),
     exchangeRateSource: expense.exchangeRateSource,
     exchangeRateType: expense.exchangeRateType,
-    amount: effectiveAmount,
-    amountCny: amountCny(effectiveAmount, Number(expense.exchangeRate ?? 1)),
+    amount: expense.amount ?? 0,
+    amountCny: expense.amountCny ?? 0,
     paymentStatus: "待支付",
     costConfirmed: true,
     costConfirmedAt: new Date(),

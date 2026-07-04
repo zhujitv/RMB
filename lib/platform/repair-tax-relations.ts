@@ -1,15 +1,7 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import { FACTORY_SUPPLIER_COST_TYPES, SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
-import {
-  refreshTaxRefundCompleteness,
-  refreshTaxRefundCompletenessForCustomsDeclaration,
-  syncCostInvoiceStatus,
-} from "./shared-tax-sync";
-import {
-  upsertCustomsDeclarationDocumentLink,
-  upsertCustomsDeclarationSupplierLink,
-} from "./customs-declaration-ownership";
+import { refreshTaxRefundCompleteness, syncCostInvoiceStatus } from "./shared-tax-sync";
 
 const DEFAULT_REPAIR_LIMIT = 500;
 const STARTUP_REPAIR_LIMIT = 200;
@@ -25,8 +17,6 @@ const repairDocumentInclude = {
       orderId: true,
       supplierId: true,
       costId: true,
-      customsDeclarationId: true,
-      requiredInvoiceAmount: true,
       status: true,
       deletedAt: true,
       order: { select: { id: true, orderNo: true } },
@@ -44,19 +34,6 @@ type RepairCost = Prisma.OrderCostGetPayload<{
     supplierNameSnapshot: true;
     vendorName: true;
     costType: true;
-    amount: true;
-  };
-}>;
-type RepairCustomsDeclaration = Prisma.CustomsDeclarationGetPayload<{
-  select: {
-    id: true;
-    orderId: true;
-    purchaseOrderId: true;
-    supplierId: true;
-    suppliers: {
-      where: { deletedAt: null };
-      select: { supplierId: true; purchaseOrderId: true };
-    };
   };
 }>;
 
@@ -161,50 +138,6 @@ function resolveRepairCost(
   return { cost: null, reason: supplierId || supplierName ? "factory cost missing" : "supplierId missing" };
 }
 
-function declarationMatchesCost(declaration: RepairCustomsDeclaration, cost: RepairCost) {
-  if (declaration.purchaseOrderId && declaration.purchaseOrderId === cost.id) return true;
-  if (declaration.supplierId && declaration.supplierId === cost.supplierId) return true;
-  return declaration.suppliers.some((supplier) => {
-    const purchaseOrderMatches = supplier.purchaseOrderId
-      ? supplier.purchaseOrderId === cost.id
-      : true;
-    const supplierMatches = supplier.supplierId
-      ? supplier.supplierId === cost.supplierId
-      : true;
-    return purchaseOrderMatches && supplierMatches;
-  });
-}
-
-function resolveRepairCustomsDeclaration(
-  document: RepairDocument,
-  cost: RepairCost,
-  declarationsByOrder: Map<string, RepairCustomsDeclaration[]>,
-) {
-  const declarations = declarationsByOrder.get(cost.orderId) || [];
-  if (!declarations.length) return { declaration: null, reason: "customs declaration missing" };
-  const requestDeclarationId = document.factoryDocumentRequest?.customsDeclarationId || "";
-  if (requestDeclarationId) {
-    const declaration = declarations.find((row) => row.id === requestDeclarationId) || null;
-    if (!declaration) return { declaration: null, reason: "uploadTask customsDeclarationId missing" };
-    if (!declarationMatchesCost(declaration, cost)) return { declaration: null, reason: "uploadTask customsDeclarationId cost mismatch" };
-    return { declaration, reason: "" };
-  }
-  const purchaseOrderMatches = declarations.filter((row) => (
-    row.purchaseOrderId === cost.id
-    || row.suppliers.some((supplier) => supplier.purchaseOrderId === cost.id)
-  ));
-  if (purchaseOrderMatches.length === 1) return { declaration: purchaseOrderMatches[0], reason: "" };
-  if (purchaseOrderMatches.length > 1) return { declaration: null, reason: "multiple customs declarations for purchaseOrderId" };
-  const supplierMatches = declarations.filter((row) => (
-    row.supplierId === cost.supplierId
-    || row.suppliers.some((supplier) => supplier.supplierId === cost.supplierId)
-  ));
-  if (supplierMatches.length === 1) return { declaration: supplierMatches[0], reason: "" };
-  if (supplierMatches.length > 1) return { declaration: null, reason: "multiple customs declarations for supplier" };
-  if (declarations.length === 1) return { declaration: declarations[0], reason: "" };
-  return { declaration: null, reason: "customsDeclarationId missing or ambiguous" };
-}
-
 function issueFor(document: RepairDocument, reason: string): TaxRelationRepairIssue {
   return {
     documentId: document.id,
@@ -249,7 +182,6 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
         supplierNameSnapshot: true,
         vendorName: true,
         costType: true,
-        amount: true,
       },
       take: Math.max(limit, 500),
     })
@@ -261,33 +193,10 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
     pushCost(costsByOrderSupplier, cost.supplierId ? costKey(cost.orderId, cost.supplierId) : "", cost);
     pushCost(costsByOrderSupplierName, costNameKey(cost.orderId, cost.supplierNameSnapshot || cost.vendorName), cost);
   }
-  const declarations = candidateOrderIds.length
-    ? await prisma.customsDeclaration.findMany({
-      where: { orderId: { in: candidateOrderIds }, deletedAt: null },
-      select: {
-        id: true,
-        orderId: true,
-        purchaseOrderId: true,
-        supplierId: true,
-        suppliers: {
-          where: { deletedAt: null },
-          select: { supplierId: true, purchaseOrderId: true },
-        },
-      },
-      orderBy: [{ declarationDate: "asc" }, { createdAt: "asc" }],
-      take: Math.max(limit, 500),
-    })
-    : [];
-  const declarationsByOrder = new Map<string, RepairCustomsDeclaration[]>();
-  for (const declaration of declarations) {
-    if (!declarationsByOrder.has(declaration.orderId)) declarationsByOrder.set(declaration.orderId, []);
-    declarationsByOrder.get(declaration.orderId)!.push(declaration);
-  }
 
   const issues: TaxRelationRepairIssue[] = [];
   const affectedOrderIds = new Set<string>();
   const affectedCostIds = new Set<string>();
-  const affectedCustomsDeclarationIds = new Set<string>();
   let repaired = 0;
 
   for (const document of documents) {
@@ -302,12 +211,6 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
 
     const resolved = resolveRepairCost(document, costsById, costsByOrderSupplier, costsByOrderSupplierName);
     if (!resolved.cost) reasons.push(resolved.reason);
-    const targetCost = resolved.cost || null;
-    if (targetCost && !targetCost.supplierId) reasons.push("cost supplierId missing");
-    const resolvedDeclaration = targetCost
-      ? resolveRepairCustomsDeclaration(document, targetCost, declarationsByOrder)
-      : { declaration: null, reason: "" };
-    if (targetCost && !resolvedDeclaration.declaration) reasons.push(resolvedDeclaration.reason);
 
     if (reasons.length) {
       const reason = [...new Set(reasons.filter(Boolean))].join("; ");
@@ -316,14 +219,14 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
       continue;
     }
 
-    const targetDeclaration = resolvedDeclaration.declaration!;
+    const targetCost = resolved.cost!;
     const data: Prisma.OrderDocumentUpdateInput = {};
-    if (document.orderId !== targetCost!.orderId) data.order = { connect: { id: targetCost!.orderId } };
-    if ((document.supplierId || "") !== (targetCost!.supplierId || "")) {
-      if (targetCost!.supplierId) data.supplier = { connect: { id: targetCost!.supplierId } };
+    if (document.orderId !== targetCost.orderId) data.order = { connect: { id: targetCost.orderId } };
+    if ((document.supplierId || "") !== (targetCost.supplierId || "")) {
+      if (targetCost.supplierId) data.supplier = { connect: { id: targetCost.supplierId } };
       else data.supplier = { disconnect: true };
     }
-    if (document.costId !== targetCost!.id) data.cost = { connect: { id: targetCost!.id } };
+    if (document.costId !== targetCost.id) data.cost = { connect: { id: targetCost.id } };
     if (document.relatedModule !== "SUPPLIER") data.relatedModule = "SUPPLIER";
     if (document.uploadStatus !== "SUCCESS" && documentIsUploaded(document)) {
       data.uploadStatus = "SUCCESS";
@@ -332,60 +235,38 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
 
     const requestData: Prisma.SupplierDocumentRequestUpdateInput = {};
     const task = document.factoryDocumentRequest;
-    if (task && task.costId !== targetCost!.id) requestData.cost = { connect: { id: targetCost!.id } };
-    if (task && task.orderId !== targetCost!.orderId) requestData.order = { connect: { id: targetCost!.orderId } };
-    if (task && targetCost!.supplierId && task.supplierId !== targetCost!.supplierId) {
-      requestData.supplier = { connect: { id: targetCost!.supplierId } };
-    }
-    if (task && task.customsDeclarationId !== targetDeclaration.id) {
-      requestData.customsDeclaration = { connect: { id: targetDeclaration.id } };
+    if (task && task.costId !== targetCost.id) requestData.cost = { connect: { id: targetCost.id } };
+    if (task && task.orderId !== targetCost.orderId) requestData.order = { connect: { id: targetCost.orderId } };
+    if (task && targetCost.supplierId && task.supplierId !== targetCost.supplierId) {
+      requestData.supplier = { connect: { id: targetCost.supplierId } };
     }
 
-    if (Object.keys(data).length || Object.keys(requestData).length || targetDeclaration.id) {
+    if (Object.keys(data).length || Object.keys(requestData).length) {
       if (!options.dryRun) {
-        await prisma.$transaction(async (tx) => {
-          const updatedDocument = Object.keys(data).length
-            ? await tx.orderDocument.update({ where: { id: document.id }, data })
-            : document;
-          if (task && Object.keys(requestData).length) {
-            await tx.supplierDocumentRequest.update({ where: { id: task.id }, data: requestData });
-          }
-          await upsertCustomsDeclarationDocumentLink(tx, {
-            customsDeclarationId: targetDeclaration.id,
-            documentId: document.id,
-            documentType: document.documentType,
-            uploadedByUserId: updatedDocument.uploadedById || null,
-            uploadedAt: updatedDocument.uploadedAt || null,
-          });
-          if (targetCost!.supplierId) {
-            await upsertCustomsDeclarationSupplierLink(tx, {
-              customsDeclarationId: targetDeclaration.id,
-              supplierId: targetCost!.supplierId,
-              purchaseOrderId: targetCost!.id,
-              requiredInvoiceAmount: task?.requiredInvoiceAmount || targetCost!.amount,
-              documentType: document.documentType,
-              documentId: document.id,
-            });
-          }
-        });
+        await prisma.$transaction([
+          ...(Object.keys(data).length
+            ? [prisma.orderDocument.update({ where: { id: document.id }, data })]
+            : []),
+          ...(task && Object.keys(requestData).length
+            ? [prisma.supplierDocumentRequest.update({ where: { id: task.id }, data: requestData })]
+            : []),
+        ]);
       }
       repaired += 1;
       console.info("tax-relation-repaired", {
         documentId: document.id,
-        orderId: targetCost!.orderId,
+        orderId: targetCost.orderId,
         orderNo: resolvedOrderNo(document),
-        supplierId: targetCost!.supplierId || "",
+        supplierId: targetCost.supplierId || "",
         supplierName: resolvedSupplierName(document),
-        costId: targetCost!.id,
-        customsDeclarationId: targetDeclaration.id,
+        costId: targetCost.id,
         documentType: document.documentType,
         source: options.source || "manual",
         dryRun: Boolean(options.dryRun),
       });
     }
-    affectedOrderIds.add(targetCost!.orderId);
-    affectedCustomsDeclarationIds.add(targetDeclaration.id);
-    if (document.documentType === "SUPPLIER_INVOICE") affectedCostIds.add(targetCost!.id);
+    affectedOrderIds.add(targetCost.orderId);
+    if (document.documentType === "SUPPLIER_INVOICE") affectedCostIds.add(targetCost.id);
   }
 
   let refreshedOrders = 0;
@@ -393,9 +274,6 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
     for (const orderId of affectedOrderIds) {
       await refreshTaxRefundCompleteness(orderId);
       refreshedOrders += 1;
-    }
-    for (const customsDeclarationId of affectedCustomsDeclarationIds) {
-      await refreshTaxRefundCompletenessForCustomsDeclaration(customsDeclarationId);
     }
   }
   let syncedCosts = 0;

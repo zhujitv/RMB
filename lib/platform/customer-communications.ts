@@ -146,17 +146,12 @@ function communicationKeywordWhere(keyword: string): Prisma.ReceivableOrderWhere
 
 function latestDocumentByType(order: CommunicationOrder, documentType: string) {
   if (!documentType) return null;
-  return successfulDocumentsByType(order, documentType)[0] || null;
-}
-
-function successfulDocumentsByType(order: CommunicationOrder, documentType: string) {
-  if (!documentType) return [];
-  return (order.documents || []).filter((document) => (
+  return (order.documents || []).find((document) => (
     document.documentType === documentType
     && document.uploadStatus === "SUCCESS"
     && !document.deletedAt
     && String(document.mimeType || "").toLowerCase() === "application/pdf"
-  ));
+  )) || null;
 }
 
 function clearanceMissingLabels(order: CommunicationOrder) {
@@ -206,15 +201,13 @@ function shippingRecipientEmails(customer: CommunicationOrder["customer"] | null
 }
 
 function serializeAvailableFile(order: CommunicationOrder, item: (typeof COMMUNICATION_FILE_TYPES)[number]) {
-  const documents = successfulDocumentsByType(order, item.documentType);
-  const document = documents[0] || null;
+  const document = latestDocumentByType(order, item.documentType);
   return {
     key: item.key,
     label: item.label,
     documentType: item.documentType,
     requiredForClearance: item.requiredForClearance,
-    exists: documents.length > 0,
-    fileCount: documents.length,
+    exists: Boolean(document),
     documentId: document?.id || "",
     fileName: document?.originalFilename || document?.originalName || document?.fileName || "",
     uploadedBy: document?.uploadedBy?.name || "",

@@ -3,7 +3,6 @@ import { customerDisplayName } from "../../utils";
 import {
   COST_TYPES,
   LOGISTICS_FEE_SUPPLIER_TYPES,
-  type CustomsDeclarationOption,
   type ExpenseItemForm,
   type ExpenseOrderOption,
   type LogisticsExpense,
@@ -42,9 +41,6 @@ export function normalizeExpenseOrder(
     logisticsSuppliers: filterLogisticsFeeSuppliers(
       order.logisticsSuppliers || [],
     ),
-    customsDeclarations: Array.isArray(order.customsDeclarations)
-      ? order.customsDeclarations.filter((item) => item.id)
-      : [],
   };
 }
 
@@ -76,18 +72,6 @@ export function orderLabel(order: ExpenseOrderOption) {
   const customer = customerDisplayName(order);
   const blNo = order.blNo || order.billOfLadingNo;
   return `${order.orderNo || "未编号"} / ${customer}${blNo ? ` / ${blNo}` : ""}`;
-}
-
-export function customsDeclarationLabel(declaration?: CustomsDeclarationOption | null) {
-  if (!declaration) return "";
-  const parts = [
-    declaration.batchNo || "",
-    declaration.declarationNo ? `报关单 ${declaration.declarationNo}` : "",
-    declaration.declarationDate ? String(declaration.declarationDate).slice(0, 10) : "",
-    declaration.declarationAmount ? `金额 ${Number(declaration.declarationAmount).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "",
-    declaration.containerCount ? `${declaration.containerCount} 柜` : "",
-  ].filter(Boolean);
-  return parts.join(" / ") || "未编号报关批次";
 }
 
 export function supplierLabel(supplier: SupplierOption) {

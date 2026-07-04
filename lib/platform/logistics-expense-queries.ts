@@ -265,37 +265,12 @@ export async function listLogisticsExpenseOrders(query: QueryLike, actor: Logist
         orderBy: [{ updatedAt: "desc" }],
         take: 1,
       },
-      customsDeclarations: {
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          batchNo: true,
-          declarationNo: true,
-          declarationDate: true,
-          declarationAmount: true,
-          containerCount: true,
-          billOfLadingNo: true,
-          status: true,
-        },
-        orderBy: [{ declarationDate: "asc" }, { createdAt: "asc" }],
-        take: 80,
-      },
     },
     orderBy: [{ updatedAt: "desc" }],
     take: 50,
   });
   return rows.map((order) => ({
     ...logisticsExpenseOrderSummary(order),
-    customsDeclarations: (order.customsDeclarations || []).map((declaration) => ({
-      id: declaration.id,
-      batchNo: declaration.batchNo || "",
-      declarationNo: declaration.declarationNo || "",
-      declarationDate: declaration.declarationDate,
-      declarationAmount: declaration.declarationAmount == null ? null : Number(declaration.declarationAmount || 0),
-      containerCount: declaration.containerCount == null ? null : Number(declaration.containerCount || 0),
-      billOfLadingNo: declaration.billOfLadingNo || "",
-      status: declaration.status || "",
-    })),
     logisticsSupplierIds: (order.logisticsSuppliers || []).map((row) => row.supplierId),
     logisticsSuppliers: (order.logisticsSuppliers || []).map((row) => serializeSupplier(row.supplier)).filter((item) => item.id),
   }));

@@ -60,26 +60,21 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(tableHead, /客户简称/);
   assert.match(tableHead, /业务主体/);
   assert.ok(tableHead.indexOf("订单号") < tableHead.indexOf("提单号"));
-  assert.ok(tableHead.indexOf("提单号") < tableHead.indexOf("报关单号"));
-  assert.ok(tableHead.indexOf("报关单号") < tableHead.indexOf("客户简称"));
+  assert.ok(tableHead.indexOf("提单号") < tableHead.indexOf("客户简称"));
   assert.ok(tableHead.indexOf("客户简称") < tableHead.indexOf("业务主体"));
   assert.match(taxModuleSource, /<col className=\{styles\.taxRefundBlNoColumn\} \/>/);
-  assert.match(taxModuleSource, /<col className=\{styles\.taxRefundDeclarationNoColumn\} \/>/);
-  assert.match(taxModuleSource, /<td colSpan=\{10\}>/);
+  assert.match(taxModuleSource, /<td colSpan=\{8\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
-  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nconst taxRefundRecordDeclarationSelect/)?.[0] || "";
-  assert.match(listFunction, /select: taxRefundCustomsDeclarationListSelect/);
-  assert.match(listFunction, /prisma\.customsDeclaration/);
+  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
+  assert.match(listFunction, /select: taxRefundLightListSelect/);
   assert.doesNotMatch(listFunction, /logisticsBills:\s*\{|documents:\s*\{|costs:\s*\{/);
   assert.match(taxRefundService, /billOfLadingNumbers/);
   assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
-  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1420px;[\s\S]*table-layout: fixed;/);
+  assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1160px;[\s\S]*table-layout: fixed;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundOrderNoColumn,[\s\S]*width: 150px;[\s\S]*min-width: 150px;/);
-  assert.match(css, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 210px;[\s\S]*min-width: 190px;/);
-  assert.match(css, /\.taxRefundTable col\.taxRefundDeclarationNoColumn,[\s\S]*width: 170px;[\s\S]*min-width: 160px;/);
+  assert.match(css, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 280px;[\s\S]*min-width: 240px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCustomerColumn,[\s\S]*width: 130px;[\s\S]*min-width: 120px;/);
-  assert.match(css, /\.taxRefundTable col\.taxRefundSupplierColumn,[\s\S]*width: 160px;[\s\S]*min-width: 150px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundBusinessEntityColumn,[\s\S]*width: 140px;[\s\S]*min-width: 120px;[\s\S]*max-width: 150px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundDateColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
   assert.match(css, /\.taxRefundTable col\.taxRefundCompletenessColumn,[\s\S]*width: 120px;[\s\S]*min-width: 120px;/);
@@ -101,10 +96,10 @@ test("domestic logistics detail keeps per-order fee entry and customs uploads", 
 
 test("customs document upload cards share one action order", () => {
   const customsPanelSource = moduleSource.match(/function CustomsDocumentPanel[\s\S]*?\n}\n\nfunction UploadProgressInline/)?.[0] || "";
-  assert.match(customsPanelSource, /customsDeclarations\.length/);
   assert.match(customsPanelSource, /CUSTOMS_DOCUMENT_TYPES\.map/);
+  assert.match(customsPanelSource, /const currentDocument = latestUploadedDocument\(matchedDocuments\)/);
   assert.doesNotMatch(customsPanelSource, /if \(documentType\.value === "CUSTOMS_ENTRY_FORM"\)/);
-  assert.ok(customsPanelSource.indexOf("报关批次") < customsPanelSource.indexOf("新增报关批次"));
+  assert.ok(customsPanelSource.indexOf("UPLOAD_REPLACE_TEXT") < customsPanelSource.indexOf("<PdfPreviewButton"));
   assert.ok(customsPanelSource.indexOf("<PdfPreviewButton") < customsPanelSource.indexOf(">下载</a>"));
   assert.ok(customsPanelSource.indexOf(">下载</a>") < customsPanelSource.indexOf("onClick={() => onDelete(currentDocument)}"));
   assert.match(customsPanelSource, /<PdfPreviewButton documentId=\{currentDocument\.id\} fileName=\{currentDocument\.fileName \|\| ""\} \/>/);
@@ -132,9 +127,6 @@ test("export invoice remark is structured and hidden from logistics views", () =
   assert.match(taxModuleSource, /去维护物流信息/);
   assert.doesNotMatch(reportService.match(/receivables:\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
   assert.match(reportService.match(/"tax-refunds":\s*\[[\s\S]*?\n  \]/)?.[0] || "", /exportInvoiceRemark|出口发票备注/);
-  assert.match(reportService, /prisma\.customsDeclaration\.findMany/);
-  assert.match(reportService, /taxRefundDeclarationToReport/);
-  assert.match(reportService, /orderAccessWhere\(actor\)/);
   assert.doesNotMatch(manualModule, /出口发票备注/);
   for (const cssClass of ["taxBasicInfoGrid", "taxTransportSummaryCard", "taxTransportCard", "taxTransportFields"]) {
     assert.match(css, new RegExp(`\\.${cssClass}`));
@@ -152,17 +144,8 @@ test("tax refund detail hydrates archived logistics transport items by bill of l
   assert.match(taxRefundService, /transportItems = infos\.flatMap/);
   assert.match(taxRefundService, /tax-refund-logistics-archived-without-transport-items/);
   assert.match(taxRefundService, /const orderWithLogistics = await hydrateTaxRefundOrderLogisticsInfo\(order\);/);
-  assert.match(taxRefundService, /scopeTaxRefundOrderForDeclaration\(orderWithLogistics as unknown as Record<string, unknown>, context\.declaration\)/);
-  assert.match(taxRefundService, /cachedTaxRefundCompletenessForDeclaration\(order, context\.declaration\)/);
-  assert.match(taxRefundService, /taxDocumentCompleteness\(scopedBefore\)/);
-  assert.match(taxRefundService, /documentType === "CUSTOMS_ENTRY_FORM"/);
-  assert.match(taxRefundService, /function packageDocumentMatchesDeclaration/);
-  assert.match(taxRefundService, /packageDocumentMatchesDeclaration\(document, context\.declaration, order as unknown as Record<string, unknown>\)/);
-  assert.match(taxRefundService, /taxPackageName\(order, context\.declaration\)/);
-  const declarationCompletenessSource = taxRefundService.match(/function declarationCompletenessInput[\s\S]*?\n}\n\nexport function serializeTaxRefundListCustomsDeclarationLight/)?.[0] || "";
-  assert.doesNotMatch(declarationCompletenessSource, /row\.order\.taxRefundCompleteness|row\.order\.taxRefundOverallCompleteness|row\.order\.taxRefundCompletenessIssuesSummary/);
-  const declarationReportSource = reportService.match(/function taxRefundDeclarationToReport[\s\S]*?\n}\n\nfunction paymentToRow/)?.[0] || "";
-  assert.doesNotMatch(declarationReportSource, /order\.documentCompleteness/);
+  assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(orderWithLogistics\)/);
+  assert.match(taxRefundService, /\.\.\.orderWithLogistics,\s*taxRefundCompleteness/);
 });
 
 test("domestic logistics list exposes logistics fee entry status from backend", () => {

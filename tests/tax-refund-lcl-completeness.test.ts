@@ -105,8 +105,7 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
   assert.match(taxSync, /TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3/);
   const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
-  assert.match(listFunction, /select: taxRefundCustomsDeclarationListSelect/);
-  assert.match(listFunction, /prisma\.customsDeclaration/);
+  assert.match(listFunction, /select: taxRefundLightListSelect/);
   assert.doesNotMatch(listFunction, /scheduleTaxRefundCompletenessRefreshBatch|needsTaxRefundCompletenessRefresh|refreshTaxRefundCompletenessForOrder/);
   assert.match(taxSync, /taxRefundOverallCompleteness/);
   assert.match(taxSync, /taxRefundCompletenessIssuesSummary/);
@@ -137,15 +136,4 @@ test("factory tax refund documents are calculated per cost slot", () => {
   assert.match(completeness, /costId: entry\.costId/);
   assert.match(completeness, /tax-refund-factory-document-match/);
   assert.doesNotMatch(completeness, /doc\.supplierId === entry\.supplierId \|\| entry\.costIds\.includes/);
-});
-
-test("tax refund declaration detail keeps legacy supplier documents visible without over-completing multi batches", () => {
-  assert.match(taxRefundService, /function taxRefundCanUseLegacyFactoryFallback/);
-  assert.match(taxRefundService, /return declarationCount <= 1/);
-  assert.match(taxRefundService, /if \(useLegacyFactoryFallback\) return true/);
-  assert.match(taxRefundService, /showPendingBatchOwnership/);
-  assert.match(taxRefundService, /PENDING_ASSIGNMENT/);
-  assert.match(taxSync, /function canUseLegacyFactoryFallback/);
-  assert.match(taxSync, /return customsDeclarationCount\(row\) <= 1/);
-  assert.match(taxSync, /if \(useLegacyFactoryFallback\) return true/);
 });

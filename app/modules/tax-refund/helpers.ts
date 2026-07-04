@@ -333,10 +333,6 @@ export function taxRefundRowPatchFromDetail(detail: Partial<TaxRefundDetail>) {
   if (detail.customsDeclarationNo !== undefined) patch.customsDeclarationNo = detail.customsDeclarationNo;
   if (detail.customsDeclarationDate !== undefined) patch.customsDeclarationDate = detail.customsDeclarationDate;
   if (detail.declarationDate !== undefined) patch.declarationDate = detail.declarationDate;
-  if (detail.customsDeclarationAmount !== undefined) patch.customsDeclarationAmount = detail.customsDeclarationAmount;
-  if (detail.declarationAmount !== undefined) patch.declarationAmount = detail.declarationAmount;
-  if (detail.customsDeclarationContainerCount !== undefined) patch.customsDeclarationContainerCount = detail.customsDeclarationContainerCount;
-  if (detail.containerCount !== undefined) patch.containerCount = detail.containerCount;
   if (detail.taxRefundStatus !== undefined) patch.taxRefundStatus = detail.taxRefundStatus;
   if (detail.taxRefundStatusLabel !== undefined) patch.taxRefundStatusLabel = detail.taxRefundStatusLabel;
   if (detail.taxArchived !== undefined) patch.taxArchived = detail.taxArchived;
@@ -394,7 +390,7 @@ export function canRecognizeTaxCustoms(role: string, canWriteDocuments: boolean,
 }
 
 export function uploadScopeKey(orderId: string, documentType: string, scope: UploadScope = {}) {
-  return [orderId, documentType, scope.costId || "", scope.supplierId || "", scope.customsDeclarationId || ""].join(":");
+  return [orderId, documentType, scope.costId || "", scope.supplierId || ""].join(":");
 }
 
 export function zipFileNameFromResponse(response: Response, row: TaxRefundRow) {

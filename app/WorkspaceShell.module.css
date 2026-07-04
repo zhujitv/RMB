@@ -573,7 +573,6 @@
 .supplierDocumentTaskDetail { composes: supplierDocumentTaskDetail from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskMeta { composes: supplierDocumentTaskMeta from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskMeta from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskOrder { composes: supplierDocumentTaskOrder from "./styles/workspace-shell/supplier-documents.module.css"; }
-.supplierDocumentTaskBatch { composes: supplierDocumentTaskBatch from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskRequirement { composes: supplierDocumentTaskRequirement from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskRequirement from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskRow { composes: supplierDocumentTaskRow from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskRow from "./styles/workspace-shell/responsive-typography.module.css"; composes: supplierDocumentTaskRow from "./styles/workspace-shell/supplier-documents.module.css"; }
 .supplierDocumentTaskSupplier { composes: supplierDocumentTaskSupplier from "./styles/workspace-shell/responsive-main.module.css"; composes: supplierDocumentTaskSupplier from "./styles/workspace-shell/supplier-documents.module.css"; }
@@ -610,8 +609,6 @@
 .taxRefundBlNoList { composes: taxRefundBlNoList from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
-.taxRefundDeclarationNoColumn { composes: taxRefundDeclarationNoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
-.taxRefundSupplierColumn { composes: taxRefundSupplierColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundDateColumn { composes: taxRefundDateColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }

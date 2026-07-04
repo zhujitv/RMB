@@ -25,7 +25,6 @@ type ReportColumn = {
 type ReportRow = Record<string, unknown> & {
   id?: string;
   orderId?: string;
-  customsDeclarationId?: string;
   customerFullName?: string;
   customerName?: string;
   customerShortName?: string;
@@ -343,11 +342,7 @@ export function ReportsModule({
   }
 
   function openRecord(row: ReportRow) {
-    const keyword = String(
-      reportType === "tax-refunds"
-        ? row.customsDeclarationId || row.id || row.orderNo
-        : row.orderNo || row.customerShortName || row.customerName || row.id || "",
-    ).trim();
+    const keyword = String(row.orderNo || row.customerShortName || row.customerName || row.id || "").trim();
     if (!keyword || !onOpenRecord) return;
     if (reportType === "payments") {
       onOpenRecord("payments", keyword);

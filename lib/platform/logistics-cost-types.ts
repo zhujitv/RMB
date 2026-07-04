@@ -23,12 +23,6 @@ export const LOGISTICS_COST_TYPE_LABELS: Record<string, string> = Object.fromEnt
   LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
 );
 
-export const LOGISTICS_DECLARATION_SCOPED_COST_TYPES = ["报关费", "打单费", "查验费"];
-
-export function logisticsCostTypeRequiresDeclarationScope(costType = "") {
-  return LOGISTICS_DECLARATION_SCOPED_COST_TYPES.includes(costType);
-}
-
 export const LOGISTICS_CNY_COST_TYPES = [
   "拖车费",
   "报关费",

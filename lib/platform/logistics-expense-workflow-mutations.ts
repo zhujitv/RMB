@@ -1,11 +1,13 @@
 import { prisma } from "../prisma";
 import {
+  amountCny,
   codedError,
   nonEmpty,
+  normalizedCostType,
+  optional,
   permissionError,
   runNonCriticalTask,
   scheduleTaxRefundCompletenessRefresh,
-  scheduleTaxRefundCompletenessRefreshForCustomsDeclaration,
   writeAudit,
 } from "./shared";
 import {
@@ -14,7 +16,6 @@ import {
   assertLogisticsExpenseSupplier,
   aggregateLogisticsExpenseStatus,
   buildLogisticsExpenseData,
-  createOrUpdateCostFromLogisticsExpense,
   ensureLogisticsExpenseBill,
   includeLogisticsExpenseRelations,
   loadLogisticsExpenseForAction,
@@ -23,7 +24,7 @@ import {
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
-import { logisticsCostTypeDefaultCurrency } from "./logistics-cost-types";
+import { LOGISTICS_COST_TYPES, logisticsCostTypeDefaultCurrency } from "./logistics-cost-types";
 import { canSubmitLogisticsBill, canWithdrawLogisticsBill } from "./logistics-bill-state-machine";
 import {
   actorId,
@@ -40,7 +41,6 @@ import {
   logisticsExpenseDeleteBlock,
   resolveLogisticsExpenseBatchExchange,
   logisticsExpenseUpdateBlockReason,
-  LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS,
   normalizeBatchBillingMethod,
   normalizeBatchBillingQuantity,
   refreshLogisticsBillWorkflowStatus,
@@ -57,17 +57,6 @@ import {
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
 import { reviewLogisticsExpenseBills } from "./logistics-expense-workflow-review";
-
-function scheduleLogisticsExpenseTaxCompletenessRefresh(
-  rows: Array<Pick<LogisticsExpenseRow, "orderId" | "customsDeclarationId"> | LogisticsExpenseCreateData>,
-) {
-  const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))];
-  const declarationIds = [...new Set(rows.map((row) => nonEmpty(row.customsDeclarationId)).filter(Boolean))];
-  for (const orderId of orderIds) scheduleTaxRefundCompletenessRefresh(orderId);
-  for (const declarationId of declarationIds) {
-    scheduleTaxRefundCompletenessRefreshForCustomsDeclaration(declarationId);
-  }
-}
 
 export async function saveLogisticsExpenses(request: AuditRequestLike, actor: ActorContext, input: UnknownRecord = {}) {
   assertCanWriteLogisticsExpense(actor);
@@ -90,7 +79,6 @@ export async function saveLogisticsExpenses(request: AuditRequestLike, actor: Ac
     expenses.push(expense);
     await runNonCriticalTask("物流费用提交日志写入", () => writeAudit(request, actor, rowAuditStatus(expense) === "草稿" ? "保存物流费用草稿" : "提交物流费用审核", "logistics_expenses", expense.id, null, expense));
   }
-  scheduleLogisticsExpenseTaxCompletenessRefresh(expenses);
   return {
     rows: expenses.map(serializeLogisticsExpense),
     totalAmountCny: expenses.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
@@ -109,25 +97,8 @@ export async function updateLogisticsExpense(request: AuditRequestLike, actor: A
   const order = await assertLogisticsExpenseOrder({ orderId: before.orderId }, actor);
   const supplier = await assertLogisticsExpenseSupplier(actor, order, { supplierId: before.supplierId });
   const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, supplierId: before.supplierId }, before);
-  let saved: LogisticsExpenseRow | null = null;
-  if (before.costId || rowAuditStatus(before) === "审核通过") {
-    await prisma.$transaction(async (tx) => {
-      const updated = await tx.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
-      const cost = await createOrUpdateCostFromLogisticsExpense(tx, updated, actor);
-      saved = updated.costId === cost.id
-        ? updated
-        : await tx.logisticsExpense.update({
-          where: { id },
-          data: { costId: cost.id },
-          include: includeLogisticsExpenseRelations(),
-        });
-    }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
-  } else {
-    saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
-  }
-  if (!saved) throw codedError("物流费用保存失败，请重试。", 500, "LOGISTICS_EXPENSE_UPDATE_FAILED");
+  const saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
   await runNonCriticalTask("物流费用修改日志写入", () => writeAudit(request, actor, "修改物流费用", "logistics_expenses", id, before, saved));
-  scheduleLogisticsExpenseTaxCompletenessRefresh([before, saved]);
   return serializeLogisticsExpense(saved);
 }
 
@@ -266,15 +237,37 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
     }
     const before = await loadLogisticsExpenseForAction(id, actor);
     const costType = before.costType || "物流费用";
+    const unitAmount = Number(item.amount);
+    const billingMethod = normalizeBatchBillingMethod(item, before);
+    const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
+    const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
+	    if (!Number.isFinite(unitAmount) || unitAmount < 0) {
+	      throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于或等于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID");
+	    }
 	    const billBlockReason = await logisticsExpenseBillEditBlockReason(before, actor);
 	    if (billBlockReason) {
 	      throw codedError(`第 ${index + 1} 行${costType}保存失败：${billBlockReason}`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
 	    }
-    const data = await logisticsExpenseBatchUpdateData(item, before, actor, index);
+	    const blockReason = logisticsExpenseUpdateBlockReason(before);
+	    if (blockReason) {
+	      throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_STATUS_BLOCKED");
+	    }
+	    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+	    const hasContainerType = Object.prototype.hasOwnProperty.call(item, "containerType")
+	      || Object.prototype.hasOwnProperty.call(item, "container_type");
 	    prepared.push({
       index,
       before,
-      data,
+      data: {
+        amount,
+        amountCny: amountCny(amount, before.exchangeRate || 1),
+	        ...(hasContainerType ? { containerType: optional(item.containerType ?? item.container_type) } : {}),
+	        appliedContainerCount,
+	        billingMethod,
+	        billingQuantity,
+	        remark: optional(item.remark),
+        updatedById: actorId(actor),
+      },
     });
   }
   const savedRows: LogisticsExpenseRow[] = [];
@@ -287,10 +280,9 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
     savedRows.push(saved);
     await runNonCriticalTask("物流费用批量修改日志写入", () => writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
   }
-  scheduleLogisticsExpenseTaxCompletenessRefresh([
-    ...prepared.map((item) => item.before),
-    ...savedRows,
-  ]);
+  for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
+    scheduleTaxRefundCompletenessRefresh(orderId);
+  }
   return savedRows.map(serializeLogisticsExpense);
 }
 
@@ -369,11 +361,6 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
 	      currency,
 	      index,
 	    );
-    const itemCustomsDeclarationId = nonEmpty(item.customsDeclarationId || item.customsDeclaration_id || item.declarationId || baseExpense.customsDeclarationId);
-    const baseAllocationMethod = baseExpense.allocationMethod === "手工金额" ? "" : baseExpense.allocationMethod;
-    const itemAllocationMethod = nonEmpty(item.allocationMethod || item.allocation_method || baseAllocationMethod);
-    const hasAllocatedAmount = Object.prototype.hasOwnProperty.call(item, "allocatedAmount")
-      || Object.prototype.hasOwnProperty.call(item, "allocated_amount");
 	    const data = await buildLogisticsExpenseData(order, supplier, actor, {
 	      costType,
 	      amount,
@@ -386,9 +373,6 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
       exchangeRateSource: exchange.exchangeRateSource,
       exchangeRateType: exchange.exchangeRateType,
       remark: item.remark,
-      ...(itemCustomsDeclarationId ? { customsDeclarationId: itemCustomsDeclarationId } : {}),
-      ...(itemAllocationMethod ? { allocationMethod: itemAllocationMethod } : {}),
-      ...(hasAllocatedAmount ? { allocatedAmount: item.allocatedAmount ?? item.allocated_amount } : {}),
       auditStatus: ["草稿", "已驳回"].includes(rowAuditStatus(baseExpense)) ? rowAuditStatus(baseExpense) : "草稿",
       supplierId: baseExpense.supplierId,
       billId: bill.id,
@@ -425,7 +409,13 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   }
   const serializedItems = savedBillRows.map(serializeLogisticsExpense);
   const serializedBill = savedBillRows.length ? serializeLogisticsExpenseBill(savedBillRows) : null;
-  scheduleLogisticsExpenseTaxCompletenessRefresh([...savedBillRows, ...preparedDeletes]);
+  const affectedOrderIds = [
+    ...savedBillRows.map((row) => row.orderId),
+    ...preparedDeletes.map((row) => row.orderId),
+  ].filter(Boolean);
+  for (const orderId of [...new Set(affectedOrderIds)]) {
+    scheduleTaxRefundCompletenessRefresh(orderId);
+  }
   void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", billId, {
     bill: serializeLogisticsExpenseBill(billRows),
     deletedIds,
@@ -469,7 +459,7 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
     include: includeLogisticsExpenseRelations(),
   });
   await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, before, saved));
-  scheduleLogisticsExpenseTaxCompletenessRefresh([before, saved]);
+  scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   if (!billRows.length && before.billId) {
     await prisma.logisticsBill.update({

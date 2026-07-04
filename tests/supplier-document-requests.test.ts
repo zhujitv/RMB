@@ -209,7 +209,7 @@ test("admin can soft delete supplier document requests from the foreground list"
   assert.match(service, /export async function deleteSupplierDocumentRequest/);
   assert.match(service, /actor\?\.role !== "管理员"/);
   assert.match(service, /只有管理员可以删除资料回传任务/);
-  assert.match(service, /supplierDocumentRequestOrderLocked\(row\.order, row\.customsDeclaration\)/);
+  assert.match(service, /supplierDocumentRequestOrderLocked\(row\.order\)/);
   assert.match(service, /已提交退税或已归档/);
   assert.match(service, /tx\.orderDocument\.updateMany/);
   assert.match(service, /tx\.supplierDocumentRequest\.update/);
@@ -279,8 +279,8 @@ test("supplier return repair script backfills business document associations", (
   assert.match(repairTaxRelationService, /export async function repairTaxRelations/);
   assert.match(repairTaxRelationService, /documentType: \{ in: SUPPLIER_DOCUMENT_TYPES \}/);
   assert.match(repairTaxRelationService, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
-  assert.match(repairTaxRelationService, /data\.cost = \{ connect: \{ id: targetCost!\.id \} \}/);
-  assert.match(repairTaxRelationService, /requestData\.cost = \{ connect: \{ id: targetCost!\.id \} \}/);
+  assert.match(repairTaxRelationService, /data\.cost = \{ connect: \{ id: targetCost\.id \} \}/);
+  assert.match(repairTaxRelationService, /requestData\.cost = \{ connect: \{ id: targetCost\.id \} \}/);
   assert.match(repairTaxRelationService, /supplierId missing/);
   assert.match(repairTaxRelationService, /purchaseOrderId mismatch/);
   assert.match(repairTaxRelationService, /uploadTaskId missing/);

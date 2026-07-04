@@ -261,16 +261,14 @@ export function DomesticLogisticsModule({
     }
   }
 
-  async function uploadDocument(orderId: string, documentType: string, file: File | null, customsDeclarationId = "") {
+  async function uploadDocument(orderId: string, documentType: string, file: File | null) {
     if (!file) return;
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
-    const uploadKey = (customsDeclarationId || isCustomsDeclaration)
-      ? `${orderId}:${documentType}:${customsDeclarationId || "new"}`
-      : `${orderId}:${documentType}`;
+    const uploadKey = `${orderId}:${documentType}`;
     setUploadingKey(uploadKey);
     setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setError("");
-    setNotice(isCustomsDeclaration ? "正在读取报关单 PDF 文本..." : "");
+    setNotice(isCustomsDeclaration ? "正在识别报关单信息..." : "");
     try {
       const validationError = validatePdfUploadFile(file);
       if (validationError) throw new Error(validationError);
@@ -278,7 +276,6 @@ export function DomesticLogisticsModule({
       formData.append("orderId", orderId);
       formData.append("documentType", documentType);
       formData.append("uploadSource", "REACT_DOMESTIC_LOGISTICS");
-      if (customsDeclarationId) formData.append("customsDeclarationId", customsDeclarationId);
       formData.append("file", file);
       await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
         setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));

@@ -18,14 +18,6 @@ type FactoryCostCandidate = {
   currency?: string;
   amount?: number;
   amountCny?: number;
-  customsDeclarations?: Array<{
-    id: string;
-    batchNo?: string;
-    declarationNo?: string;
-    declarationDate?: string;
-    billOfLadingNo?: string;
-    requiredInvoiceAmount?: number | null;
-  }>;
   createdAt?: string;
 };
 
@@ -63,8 +55,6 @@ export function CreateSupplierDocumentRequestDialog({
   onCreated: (result: CreateSupplierDocumentRequestResult) => void | Promise<void>;
 }) {
   const [selectedCost, setSelectedCost] = useState<FactoryCostCandidate | null>(null);
-  const [selectedDeclarationId, setSelectedDeclarationId] = useState("");
-  const [requiredInvoiceAmount, setRequiredInvoiceAmount] = useState("");
   const [requiredTypes, setRequiredTypes] = useState<string[]>(DEFAULT_DOCUMENT_TYPES);
   const [dueDate, setDueDate] = useState("");
   const [message, setMessage] = useState("");
@@ -92,15 +82,6 @@ export function CreateSupplierDocumentRequestDialog({
       setError("请至少选择一种需要回传的资料。");
       return;
     }
-    if (!selectedDeclarationId) {
-      setError("请选择对应报关批次。");
-      return;
-    }
-    const invoiceAmount = Number(requiredInvoiceAmount);
-    if (!Number.isFinite(invoiceAmount) || invoiceAmount <= 0) {
-      setError("请填写该报关批次要求开票金额。");
-      return;
-    }
     const fileError = validateTemplateFile(templateFile);
     if (fileError) {
       setError(fileError);
@@ -110,8 +91,6 @@ export function CreateSupplierDocumentRequestDialog({
     formData.append("costId", selectedCost.id);
     formData.append("orderId", selectedCost.orderId);
     formData.append("supplierId", selectedCost.supplierId);
-    formData.append("customsDeclarationId", selectedDeclarationId);
-    formData.append("requiredInvoiceAmount", invoiceAmount.toFixed(2));
     formData.append("requiredDocumentTypes", requiredTypes.join(","));
     formData.append("dueDate", dueDate);
     formData.append("message", message);
@@ -174,46 +153,7 @@ export function CreateSupplierDocumentRequestDialog({
               getLabel={costCandidateLabel}
               getDescription={costCandidateDescription}
               search={searchFactoryCosts}
-              onSelect={(cost) => {
-                setSelectedCost(cost);
-                const declarations = cost?.customsDeclarations || [];
-                const nextDeclarationId = declarations.length === 1 ? declarations[0]?.id || "" : "";
-                setSelectedDeclarationId(nextDeclarationId);
-                setRequiredInvoiceAmount(defaultRequiredInvoiceAmount(cost, nextDeclarationId));
-              }}
-            />
-          </label>
-          <label>
-            报关批次
-            <select
-              value={selectedDeclarationId}
-              onChange={(event) => {
-                const declarationId = event.target.value;
-                setSelectedDeclarationId(declarationId);
-                setRequiredInvoiceAmount(defaultRequiredInvoiceAmount(selectedCost, declarationId));
-              }}
-              disabled={!selectedCost?.customsDeclarations?.length || saving}
-              required
-            >
-              <option value="">请选择报关批次</option>
-              {(selectedCost?.customsDeclarations || []).map((declaration, index) => (
-                <option key={declaration.id} value={declaration.id}>
-                  {customsDeclarationOptionLabel(declaration, index)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            要求开票金额
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              value={requiredInvoiceAmount}
-              onChange={(event) => setRequiredInvoiceAmount(event.target.value)}
-              placeholder="填写当前报关批次应开票金额"
-              required
+              onSelect={setSelectedCost}
             />
           </label>
           <label>
@@ -274,7 +214,7 @@ export function CreateSupplierDocumentRequestDialog({
         </div>
 
         <div className={styles.quickCreateMeta}>
-          <span>只能基于成本管理中已登记的工厂供应商成本和已创建的报关批次创建。</span>
+          <span>只能基于成本管理中已登记的工厂供应商成本创建。</span>
           <span>回传表格支持 .xls / .xlsx，单个文件最大 4MB；供应商回传资料仍只支持 PDF。</span>
         </div>
 
@@ -311,37 +251,10 @@ function costCandidateLabel(cost: FactoryCostCandidate) {
 function costCandidateDescription(cost: FactoryCostCandidate) {
   const parts = [
     cost.billOfLadingNo ? `提单号 ${cost.billOfLadingNo}` : "",
-    cost.customsDeclarations?.length ? `可选报关批次 ${cost.customsDeclarations.length} 个` : "无可用报关批次",
     cost.supplierType || "",
     `折人民币 ${moneyLabel("CNY", cost.amountCny)}`,
   ].filter(Boolean);
   return parts.join(" / ");
-}
-
-function selectedDeclarationRequiredAmount(cost: FactoryCostCandidate | null, declarationId: string) {
-  const declaration = (cost?.customsDeclarations || []).find((item) => item.id === declarationId);
-  const amount = Number(declaration?.requiredInvoiceAmount || 0);
-  return Number.isFinite(amount) && amount > 0 ? amount : 0;
-}
-
-function defaultRequiredInvoiceAmount(cost: FactoryCostCandidate | null, declarationId: string) {
-  if (!declarationId) return "";
-  const amount = selectedDeclarationRequiredAmount(cost, declarationId) || Number(cost?.amount || 0);
-  return Number.isFinite(amount) && amount > 0 ? amount.toFixed(2) : "";
-}
-
-function customsDeclarationOptionLabel(
-  declaration: NonNullable<FactoryCostCandidate["customsDeclarations"]>[number],
-  index: number,
-) {
-  const requiredAmount = Number(declaration.requiredInvoiceAmount || 0);
-  return [
-    declaration.batchNo || `报关批次 ${index + 1}`,
-    declaration.declarationNo || "未填报关单号",
-    declaration.declarationDate || "",
-    declaration.billOfLadingNo ? `提单 ${declaration.billOfLadingNo}` : "",
-    Number.isFinite(requiredAmount) && requiredAmount > 0 ? `要求开票 ${moneyLabel("CNY", requiredAmount)}` : "",
-  ].filter(Boolean).join(" / ");
 }
 
 function moneyLabel(currency = "CNY", amount: number | undefined) {

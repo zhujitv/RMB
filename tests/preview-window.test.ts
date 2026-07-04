@@ -251,7 +251,7 @@ test("tax refund detail keeps upload and delete updates local", () => {
   );
   assert.match(
     taxRefundModule,
-    /patchUploadedDocument\(recordId, uploadedDocument\)/,
+    /patchUploadedDocument\(orderId, uploadedDocument\)/,
   );
   assert.doesNotMatch(taxRefundModule, /patchCustomsRecognition|CustomsRecognitionResult/);
   assert.match(
@@ -352,18 +352,16 @@ test("detail drawers and cards now own file management layout", () => {
   assert.match(styles, /\.detailCard \* \{/);
 });
 
-test("domestic logistics customs declarations allow multiple uploads", () => {
+test("domestic logistics customs declaration keeps one current upload", () => {
   assert.match(domesticLogisticsModule, /UPLOAD_REPLACE_TEXT/);
-  assert.match(domesticLogisticsModule, /报关批次/);
-  assert.match(domesticLogisticsModule, /customsDeclarations/);
-  assert.match(orderDocumentsService, /isCustomsDeclarationDocumentType\(documentType\)/);
-  assert.match(orderDocumentsService, /tx\.customsDeclaration\.create/);
-  assert.match(orderDocumentsService, /tx\.customsDeclaration\.update/);
-  assert.doesNotMatch(orderDocumentsService, /id: \{ not: created\.id \}/);
-  assert.doesNotMatch(
-    orderDocumentsService,
-    /tx\.orderDocument\.updateMany\(\{[\s\S]{0,240}where: \{[\s\S]{0,160}orderId: order\.id[\s\S]{0,160}documentType: "CUSTOMS_ENTRY_FORM"[\s\S]{0,240}data: \{ deletedAt: replacedAt \}/,
+  assert.match(
+    domesticLogisticsModule,
+    /latestUploadedDocument\(matchedDocuments\)/,
   );
+  assert.match(orderDocumentsService, /documentType: "CUSTOMS_ENTRY_FORM"/);
+  assert.match(orderDocumentsService, /id: \{ not: created\.id \}/);
+  assert.match(orderDocumentsService, /data: \{ deletedAt: replacedAt \}/);
+  assert.match(orderDocumentsService, /softDeleteFileAssetBySource\(/);
 });
 
 test("tax refund customs documents use manual declaration fields without OCR", () => {
@@ -440,16 +438,4 @@ test("deleting customs declaration clears recognized declaration fields", () => 
   assert.match(orderDocumentsService, /customsDeclarationNo: null/);
   assert.match(orderDocumentsService, /customsDeclarationDate: null/);
   assert.match(orderDocumentsService, /customsParseStatus: null/);
-});
-
-test("reuploading one customs declaration preserves binding and retires only its old pdf", () => {
-  assert.match(orderDocumentsService, /purchaseOrderId: input\.purchaseOrderId \|\| previousDeclaration\?\.purchaseOrderId \|\| null/);
-  assert.match(orderDocumentsService, /supplierId: input\.supplierId \|\| previousDeclaration\?\.supplierId \|\| null/);
-  assert.match(orderDocumentsService, /taxRefundStatus: previousDeclaration\?\.taxRefundStatus \|\| "NOT_READY"/);
-  assert.doesNotMatch(orderDocumentsService, /previousDeclaration\?\.taxRefundCompleteness \?\? before\.taxRefundCompleteness/);
-  assert.match(orderDocumentsService, /taxArchived: previousDeclaration \? Boolean\(previousDeclaration\.taxArchived\) : false/);
-  assert.match(orderDocumentsService, /previousDeclarationPdfDocumentId && previousDeclarationPdfDocumentId !== input\.documentId/);
-  assert.match(orderDocumentsService, /persistCustomsDeclarationPdfBindingAfterParseFailure/);
-  assert.match(orderDocumentsService, /PDF_UPLOAD_PARSE_FAILED/);
-  assert.doesNotMatch(orderDocumentsService, /orderId: order\.id,[\s\S]*documentType: "CUSTOMS_ENTRY_FORM",[\s\S]*id: \{ not: created\.id \}/);
 });

@@ -104,12 +104,6 @@ export type LogisticsExpense = {
   supplierNames?: string[];
   supplierEmail?: string;
   costId?: string;
-  customsDeclarationId?: string;
-  customsDeclarationNo?: string;
-  customsDeclarationBatchNo?: string;
-  customsDeclarationDate?: string | null;
-  allocationMethod?: string;
-  allocatedAmount?: number | null;
   costType?: string;
   currency?: string;
   exchangeRate?: number;
@@ -220,18 +214,6 @@ export type ExpenseOrderOption = {
     cargoName?: string;
   }>;
   logisticsSuppliers?: SupplierOption[];
-  customsDeclarations?: CustomsDeclarationOption[];
-};
-
-export type CustomsDeclarationOption = {
-  id: string;
-  batchNo?: string;
-  declarationNo?: string;
-  declarationDate?: string | null;
-  declarationAmount?: number | null;
-  containerCount?: number | null;
-  billOfLadingNo?: string;
-  status?: string;
 };
 
 export type SupplierOption = {
@@ -250,10 +232,6 @@ export type ExpenseForm = {
 };
 
 export type ExpenseItemForm = {
-  ownershipScope: "SHIPMENT" | "DECLARATION";
-  customsDeclarationId: string;
-  allocationMethod: string;
-  allocatedAmount: string;
   costType: string;
   billingMethod: string;
   amount: string;
@@ -274,13 +252,6 @@ export type LogisticsExpenseDraft = {
   remark: string;
 };
 
-export const LOGISTICS_EXPENSE_ALLOCATION_METHODS = [
-  "按报关金额",
-  "按供应商开票金额",
-  "按柜数",
-  "手工金额",
-] as const;
-
 export type LogisticsExpenseCurrencyTotal = {
   currency: string;
   amount: number;
@@ -294,9 +265,6 @@ export type LogisticsExpenseCurrencySummary = {
 
 export type LogisticsExpenseBatchUpdateItem = {
   id: string;
-  customsDeclarationId?: string;
-  allocationMethod?: string;
-  allocatedAmount?: number | null;
   costType?: string;
   amount: number;
   billingMethod: string;
@@ -309,9 +277,6 @@ export type LogisticsExpenseBatchUpdateItem = {
 
 export type LogisticsExpenseBatchCreateItem = {
   expenseType: string;
-  customsDeclarationId?: string;
-  allocationMethod?: string;
-  allocatedAmount?: number | null;
   amount: number;
   billingMethod: string;
   billingQuantity: number;
@@ -377,10 +342,6 @@ export type LogisticsExpenseContainerSummary = {
 };
 
 export const emptyExpenseItem = (): ExpenseItemForm => ({
-  ownershipScope: "SHIPMENT",
-  customsDeclarationId: "",
-  allocationMethod: "",
-  allocatedAmount: "",
   costType: "拖车费",
   billingMethod: "按柜",
   amount: "",

@@ -21,18 +21,11 @@ type DocumentOrderLike = {
 type DocumentCostLike = {
   createdById?: string | null;
 };
-type DocumentDeclarationLike = {
-  taxArchived?: boolean | null;
-  taxSubmittedAt?: Date | string | null;
-  taxRefundArchivedAt?: Date | string | null;
-  taxRefundStatus?: string | null;
-};
 type OrderDocumentLike = {
   documentType?: string | null;
   relatedModule?: string | null;
   order?: DocumentOrderLike | null;
   cost?: DocumentCostLike | null;
-  customsDeclarationDocuments?: Array<{ customsDeclaration?: DocumentDeclarationLike | null }> | null;
 };
 
 function actorRole(actor: ActorLike) {
@@ -43,23 +36,9 @@ function isProtectedCustomsDocumentType(documentType: unknown = "") {
   return DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(normalizeOrderDocumentType(String(documentType || "")) as OrderDocumentType);
 }
 
-function declarationLocked(declaration: DocumentDeclarationLike | null | undefined) {
-  return Boolean(
-    declaration?.taxArchived
-    || declaration?.taxSubmittedAt
-    || declaration?.taxRefundArchivedAt
-    || declaration?.taxRefundStatus === "SUBMITTED",
-  );
-}
-
 export function canDeleteOrderDocumentFile(actor: ActorLike, document: OrderDocumentLike) {
   if (!canWrite(actor, "documents")) return false;
-  const declarationLinks = document.customsDeclarationDocuments || [];
-  if (declarationLinks.length) {
-    if (declarationLinks.some((link) => declarationLocked(link.customsDeclaration))) return false;
-  } else if (["SUBMITTED", "COMPLETED", "ARCHIVED"].includes(String(document.order?.taxRefundStatus || ""))) {
-    return false;
-  }
+  if (["SUBMITTED", "COMPLETED", "ARCHIVED"].includes(String(document.order?.taxRefundStatus || ""))) return false;
   if (actorRole(actor) === "业务员" && isProtectedCustomsDocumentType(document.documentType)) return false;
   if (actorRole(actor) === LOGISTICS_OPERATOR_ROLE && DOMESTIC_LOGISTICS_DOCUMENT_TYPES.includes(document.documentType as OrderDocumentType)) return false;
   const scope = effectivePermissions(actor).dataScope;

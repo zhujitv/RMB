@@ -3,11 +3,6 @@ import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
 import {
-  refreshCustomsDeclarationAfterOwnershipChange,
-  upsertCustomsDeclarationDocumentLink,
-  upsertCustomsDeclarationSupplierLink,
-} from "./customs-declaration-ownership";
-import {
   createSupplierDocumentOcrTaskForUpload,
   reconcileStaleSupplierDocumentOcrTasks,
   refreshSupplierDocumentRequestQualification,
@@ -103,7 +98,6 @@ const EXCEL_TEMPLATE_MIME = "application/vnd.openxmlformats-officedocument.sprea
 const LEGACY_EXCEL_TEMPLATE_MIME = "application/vnd.ms-excel";
 const SUPPLIER_DOCUMENT_COST_CANDIDATE_LIMIT = 50;
 const SUPPLIER_DOCUMENT_COST_CANDIDATE_SCAN_LIMIT = 200;
-const SUPPLIER_DOCUMENT_ACTIVE_REQUEST_SCAN_LIMIT = SUPPLIER_DOCUMENT_COST_CANDIDATE_SCAN_LIMIT * 20;
 const SUPPLIER_INVOICE_SYNC_COST_LIMIT = 100;
 
 function supplierDocumentRequestInclude() {
@@ -112,7 +106,6 @@ function supplierDocumentRequestInclude() {
       select: {
         id: true,
         orderNo: true,
-        blNo: true,
         taxRefundStatus: true,
         taxArchived: true,
         isArchived: true,
@@ -123,19 +116,6 @@ function supplierDocumentRequestInclude() {
           include: { supplier: true },
           orderBy: [{ createdAt: "asc" }],
         },
-      },
-    },
-    customsDeclaration: {
-      select: {
-        id: true,
-        batchNo: true,
-        declarationNo: true,
-        declarationDate: true,
-        billOfLadingNo: true,
-        taxArchived: true,
-        taxRefundStatus: true,
-        taxSubmittedAt: true,
-        taxRefundArchivedAt: true,
       },
     },
     supplier: {
@@ -168,35 +148,6 @@ function supplierDocumentRequestFactoryCostInclude() {
         orderNo: true,
         blNo: true,
         deletedAt: true,
-        taxRefundStatus: true,
-        taxArchived: true,
-        isArchived: true,
-        taxSubmittedAt: true,
-        taxRefundArchivedAt: true,
-        customsDeclarations: {
-          where: { deletedAt: null },
-          select: {
-            id: true,
-            batchNo: true,
-            declarationNo: true,
-            declarationDate: true,
-            billOfLadingNo: true,
-            purchaseOrderId: true,
-            supplierId: true,
-            suppliers: {
-              where: { deletedAt: null },
-              select: {
-                supplierId: true,
-                purchaseOrderId: true,
-                requiredInvoiceAmount: true,
-                splitAmount: true,
-              },
-              take: 200,
-            },
-          },
-          orderBy: [{ declarationDate: "desc" }, { createdAt: "desc" }],
-          take: 20,
-        },
       },
     },
     supplier: {
@@ -253,71 +204,7 @@ function supplierDocumentRequestFactoryCostWhere({
   };
 }
 
-function customsDeclarationMatchesFactoryCost(
-  declaration: {
-    purchaseOrderId?: string | null;
-    supplierId?: string | null;
-    suppliers?: Array<{ purchaseOrderId?: string | null; supplierId?: string | null }> | null;
-  },
-  cost: { id?: string | null; supplierId?: string | null },
-) {
-  const linkedSuppliers = declaration.suppliers || [];
-  if (linkedSuppliers.length) {
-    return linkedSuppliers.some((supplier) => {
-      const purchaseOrderMatches = !supplier.purchaseOrderId || supplier.purchaseOrderId === cost.id;
-      const supplierMatches = !supplier.supplierId || supplier.supplierId === cost.supplierId;
-      return purchaseOrderMatches && supplierMatches;
-    });
-  }
-  const purchaseOrderMatches = !declaration.purchaseOrderId || declaration.purchaseOrderId === cost.id;
-  const supplierMatches = !declaration.supplierId || declaration.supplierId === cost.supplierId;
-  return purchaseOrderMatches && supplierMatches;
-}
-
-function numberFromDecimalLike(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) && amount > 0 ? amount : 0;
-}
-
-function declarationSupplierRequiredInvoiceAmount(
-  declaration: {
-    suppliers?: Array<{
-      purchaseOrderId?: string | null;
-      supplierId?: string | null;
-      requiredInvoiceAmount?: unknown;
-      splitAmount?: unknown;
-    }> | null;
-  },
-  cost: { id?: string | null; supplierId?: string | null },
-) {
-  const linkedSupplier = (declaration.suppliers || []).find((supplier) => {
-    const purchaseOrderMatches = !supplier.purchaseOrderId || supplier.purchaseOrderId === cost.id;
-    const supplierMatches = !supplier.supplierId || supplier.supplierId === cost.supplierId;
-    return purchaseOrderMatches && supplierMatches;
-  });
-  return numberFromDecimalLike(linkedSupplier?.requiredInvoiceAmount)
-    || numberFromDecimalLike(linkedSupplier?.splitAmount);
-}
-
-function serializeSupplierDocumentCostCandidate(cost: FactorySupplierReturnCost, existingPairs = new Set<string>()) {
-  const declarations = (cost.order?.customsDeclarations || [])
-    .filter((declaration) => (
-      customsDeclarationMatchesFactoryCost(declaration, cost)
-      && !existingPairs.has(supplierDocumentRequestPairKey(
-        cost.orderId,
-        cost.supplierId || "",
-        cost.id,
-        declaration.id,
-      ))
-    ))
-    .map((declaration) => ({
-      id: declaration.id,
-      batchNo: declaration.batchNo || "",
-      declarationNo: declaration.declarationNo || "",
-      declarationDate: dateToInput(declaration.declarationDate),
-      billOfLadingNo: declaration.billOfLadingNo || cost.order?.blNo || "",
-      requiredInvoiceAmount: declarationSupplierRequiredInvoiceAmount(declaration, cost) || null,
-    }));
+function serializeSupplierDocumentCostCandidate(cost: FactorySupplierReturnCost) {
   return {
     id: cost.id,
     orderId: cost.orderId,
@@ -330,33 +217,24 @@ function serializeSupplierDocumentCostCandidate(cost: FactorySupplierReturnCost,
     currency: cost.currency || "CNY",
     amount: Number(cost.amount || 0),
     amountCny: Number(cost.amountCny || 0),
-    customsDeclarations: declarations,
     createdAt: cost.createdAt,
   };
 }
 
-function activeSupplierDocumentRequestWhere(orderId: string, supplierId: string, costId = "", customsDeclarationId = ""): Prisma.SupplierDocumentRequestWhereInput {
+function activeSupplierDocumentRequestWhere(orderId: string, supplierId: string): Prisma.SupplierDocumentRequestWhereInput {
   return {
     orderId,
     supplierId,
-    ...(costId ? { costId } : {}),
-    ...(customsDeclarationId ? { customsDeclarationId } : {}),
     deletedAt: null,
     NOT: { status: "DELETED" },
   };
 }
 
-function supplierDocumentRequestPairKey(orderId: string, supplierId: string, costId = "", customsDeclarationId = "") {
-  return `${orderId}:${supplierId}:${costId}:${customsDeclarationId}`;
+function supplierDocumentRequestPairKey(orderId: string, supplierId: string) {
+  return `${orderId}:${supplierId}`;
 }
 
-function isSupplierDocumentRequestDuplicateError(error: unknown) {
-  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
-  const text = error instanceof Error ? error.message : String(error || "");
-  return record.code === "P2002" || /supplier_document_requests_active_batch_unique|unique constraint/i.test(text);
-}
-
-async function activeSupplierDocumentRequestPairSet(costs: Array<{ id?: string | null; orderId?: string | null; supplierId?: string | null; order?: { customsDeclarations?: Array<{ id?: string | null; purchaseOrderId?: string | null; supplierId?: string | null }> | null } | null }>) {
+async function activeSupplierDocumentRequestPairSet(costs: Array<{ orderId?: string | null; supplierId?: string | null }>) {
   const orderIds = [...new Set(costs.map((cost) => cost.orderId || "").filter(Boolean))];
   const supplierIds = [...new Set(costs.map((cost) => cost.supplierId || "").filter(Boolean))];
   if (!orderIds.length || !supplierIds.length) return new Set<string>();
@@ -367,10 +245,10 @@ async function activeSupplierDocumentRequestPairSet(costs: Array<{ id?: string |
       deletedAt: null,
       NOT: { status: "DELETED" },
     },
-    select: { orderId: true, supplierId: true, costId: true, customsDeclarationId: true },
-    take: SUPPLIER_DOCUMENT_ACTIVE_REQUEST_SCAN_LIMIT,
+    select: { orderId: true, supplierId: true },
+    take: 500,
   });
-  return new Set(requests.map((row) => supplierDocumentRequestPairKey(row.orderId, row.supplierId, row.costId || "", row.customsDeclarationId || "")));
+  return new Set(requests.map((row) => supplierDocumentRequestPairKey(row.orderId, row.supplierId)));
 }
 
 function actorId(actor: ActorLike) {
@@ -478,62 +356,6 @@ async function loadFactorySupplierReturnCostForRequest(input: SupplierDocumentRe
     throw codedError("请先在成本管理登记该订单的工厂供应商成本，再创建资料回传任务。", 400, "FACTORY_COST_REQUIRED");
   }
   return cost;
-}
-
-function selectedCustomsDeclarationId(input: SupplierDocumentRequestInput) {
-  return nonEmpty(input.customsDeclarationId || input.declarationId || input.customsDeclaration_id);
-}
-
-async function loadCustomsDeclarationForSupplierRequest(input: SupplierDocumentRequestInput, cost: FactorySupplierReturnCost) {
-  const customsDeclarationId = selectedCustomsDeclarationId(input);
-  if (!customsDeclarationId) {
-    throw codedError("请选择对应报关批次。", 400, "CUSTOMS_DECLARATION_REQUIRED");
-  }
-  const declaration = await prisma.customsDeclaration.findFirst({
-    where: {
-      id: customsDeclarationId,
-      orderId: cost.orderId,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      orderId: true,
-      batchNo: true,
-      declarationNo: true,
-      declarationDate: true,
-      billOfLadingNo: true,
-      purchaseOrderId: true,
-      supplierId: true,
-      suppliers: {
-        where: { deletedAt: null },
-        select: {
-          supplierId: true,
-          purchaseOrderId: true,
-          requiredInvoiceAmount: true,
-          splitAmount: true,
-        },
-        take: 200,
-      },
-      taxArchived: true,
-      taxRefundStatus: true,
-      taxSubmittedAt: true,
-      taxRefundArchivedAt: true,
-    },
-  });
-  if (!declaration) throw codedError("请选择有效报关批次。", 400, "CUSTOMS_DECLARATION_NOT_FOUND");
-  if (supplierDocumentRequestOrderLocked(cost.order, declaration)) {
-    throw codedError("该报关批次已提交退税或已归档，不能创建资料回传任务。", 400, "SUPPLIER_DOCUMENT_REQUEST_TAX_ARCHIVED");
-  }
-  if (!customsDeclarationMatchesFactoryCost(declaration, cost)) {
-    throw codedError("所选报关批次与供应商采购资料不匹配。", 400, "CUSTOMS_DECLARATION_SUPPLIER_COST_MISMATCH");
-  }
-  if (declaration.purchaseOrderId && declaration.purchaseOrderId !== cost.id) {
-    throw codedError("所选报关批次与采购订单不匹配。", 400, "CUSTOMS_DECLARATION_COST_MISMATCH");
-  }
-  if (declaration.supplierId && declaration.supplierId !== cost.supplierId) {
-    throw codedError("所选报关批次与供应商不匹配。", 400, "CUSTOMS_DECLARATION_SUPPLIER_MISMATCH");
-  }
-  return declaration;
 }
 
 function dateFromInput(value: unknown) {
@@ -686,18 +508,12 @@ function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOption
     .filter((document) => requiredTypes.includes(normalizeSupplierReturnDocumentType(document.documentType) as OrderDocumentType))
     .map((document) => serializeSupplierDocument(document));
   const factoryCostSlots = factoryCostSlotsForSupplierRequest(row);
-  const canDelete = actor?.role === "管理员" && !supplierDocumentRequestOrderLocked(row.order, row.customsDeclaration);
+  const canDelete = actor?.role === "管理员" && !supplierDocumentRequestOrderLocked(row.order);
   const taxRefundDocumentCount = documents.filter((document) => document.uploadStatus === "SUCCESS").length;
   return {
     id: row.id,
     orderId: row.orderId,
     orderNo: row.order?.orderNo || "",
-    billOfLadingNo: row.customsDeclaration?.billOfLadingNo || row.order?.blNo || "",
-    customsDeclarationId: row.customsDeclarationId || "",
-    customsDeclarationBatchNo: row.customsDeclaration?.batchNo || "",
-    customsDeclarationNo: row.customsDeclaration?.declarationNo || "",
-    customsDeclarationDate: dateToInput(row.customsDeclaration?.declarationDate),
-    requiredInvoiceAmount: row.requiredInvoiceAmount == null ? null : Number(row.requiredInvoiceAmount || 0),
     supplierId: row.supplierId,
     supplierName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.supplier?.supplierName || ""),
     requiredDocumentTypes: requiredTypes,
@@ -813,27 +629,7 @@ async function refreshSupplierDocumentRequestStatus(tx: Prisma.TransactionClient
   });
 }
 
-type SupplierDocumentRequestLockRecord = {
-  taxArchived?: boolean | null;
-  isArchived?: boolean | null;
-  taxSubmittedAt?: Date | string | null;
-  taxRefundArchivedAt?: Date | string | null;
-  taxRefundStatus?: string | null;
-} | null | undefined;
-
-function supplierDocumentRequestOrderLocked(
-  order: SupplierDocumentRequestLockRecord,
-  declaration: SupplierDocumentRequestLockRecord = null,
-) {
-  if (declaration) {
-    return Boolean(
-      order?.isArchived
-      || declaration.taxArchived
-      || declaration.taxSubmittedAt
-      || declaration.taxRefundArchivedAt
-      || declaration.taxRefundStatus === "SUBMITTED",
-    );
-  }
+function supplierDocumentRequestOrderLocked(order: SupplierDocumentRequestRow["order"] | null | undefined) {
   return Boolean(
     order?.taxArchived
     || order?.isArchived
@@ -934,7 +730,7 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
   if (!row) {
     throw codedError("资料回传任务不存在或已删除。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
   }
-  if (supplierDocumentRequestOrderLocked(row.order, row.customsDeclaration)) {
+  if (supplierDocumentRequestOrderLocked(row.order)) {
     throw codedError("该任务对应订单已提交退税或已归档，不能删除资料回传任务。", 400, "SUPPLIER_DOCUMENT_REQUEST_TAX_ARCHIVED");
   }
 
@@ -954,34 +750,6 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
       await tx.orderDocument.updateMany({
         where: { id: { in: activeDocumentIds }, deletedAt: null },
         data: { deletedAt: now },
-      });
-      await tx.customsDeclarationDocument.updateMany({
-        where: { fileId: { in: activeDocumentIds }, deletedAt: null },
-        data: { deletedAt: now },
-      });
-      await tx.customsDeclarationSupplier.updateMany({
-        where: { contractFileId: { in: activeDocumentIds }, deletedAt: null },
-        data: {
-          contractFileId: null,
-          contractAmount: null,
-          validationStatus: "PENDING",
-          validationMessage: "缺少供应商采购合同",
-          manualApprovedByUserId: null,
-          manualApprovedAt: null,
-          manualApprovalReason: null,
-        },
-      });
-      await tx.customsDeclarationSupplier.updateMany({
-        where: { vatInvoiceFileId: { in: activeDocumentIds }, deletedAt: null },
-        data: {
-          vatInvoiceFileId: null,
-          vatInvoiceAmount: null,
-          validationStatus: "PENDING",
-          validationMessage: "缺少供应商增值税发票",
-          manualApprovedByUserId: null,
-          manualApprovedAt: null,
-          manualApprovalReason: null,
-        },
       });
     }
     await tx.supplierDocumentRequest.update({
@@ -1015,7 +783,6 @@ export async function deleteSupplierDocumentRequest(request: AuditRequestLike, a
   });
 
   scheduleTaxRefundCompletenessRefresh(row.orderId, "资料回传任务删除后退税完整度刷新");
-  await refreshCustomsDeclarationAfterOwnershipChange(row.customsDeclarationId, "资料回传任务删除后报关批次完整度刷新");
   if (deletedSupplierInvoice) {
     await runNonCriticalTask("资料回传任务删除后成本发票状态同步", async () => {
       const costs = await prisma.orderCost.findMany({
@@ -1058,17 +825,9 @@ export async function listSupplierDocumentRequestCostCandidates(query: QueryLike
   });
   const existingPairs = await activeSupplierDocumentRequestPairSet(costs);
   return costs
-    .filter((cost) => {
-      const declarations = (cost.order?.customsDeclarations || []).filter((declaration) => customsDeclarationMatchesFactoryCost(declaration, cost));
-      return declarations.some((declaration) => !existingPairs.has(supplierDocumentRequestPairKey(
-        cost.orderId,
-        cost.supplierId || "",
-        cost.id,
-        declaration.id,
-      )));
-    })
+    .filter((cost) => !existingPairs.has(supplierDocumentRequestPairKey(cost.orderId, cost.supplierId || "")))
     .slice(0, SUPPLIER_DOCUMENT_COST_CANDIDATE_LIMIT)
-    .map((cost) => serializeSupplierDocumentCostCandidate(cost, existingPairs));
+    .map((cost) => serializeSupplierDocumentCostCandidate(cost));
 }
 
 export async function createSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, input: SupplierDocumentRequestInput, templateFile: unknown) {
@@ -1085,22 +844,14 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   if (!template) throw codedError("请上传回传表格 Excel。", 400, "TEMPLATE_FILE_REQUIRED");
   const order = factoryCost.order;
   const supplier = factoryCost.supplier;
-  const customsDeclaration = await loadCustomsDeclarationForSupplierRequest(input, factoryCost);
-  const inputRequiredInvoiceAmount = Number(input.requiredInvoiceAmount || 0);
-  const requiredInvoiceAmount = (Number.isFinite(inputRequiredInvoiceAmount) && inputRequiredInvoiceAmount > 0 ? inputRequiredInvoiceAmount : 0)
-    || declarationSupplierRequiredInvoiceAmount(customsDeclaration, factoryCost)
-    || Number(factoryCost.amount || 0);
-  if (!Number.isFinite(requiredInvoiceAmount) || requiredInvoiceAmount <= 0) {
-    throw codedError("请填写该报关批次要求开票金额。", 400, "SUPPLIER_DOCUMENT_REQUIRED_INVOICE_AMOUNT_REQUIRED");
-  }
   if (!order) throw codedError("请选择有效订单。", 404, "ORDER_NOT_FOUND");
   if (!supplier) throw codedError("请选择有效供应商。", 404, "SUPPLIER_NOT_FOUND");
   const existingRequest = await prisma.supplierDocumentRequest.findFirst({
-    where: activeSupplierDocumentRequestWhere(order.id, supplier.id, factoryCost.id, customsDeclaration.id),
+    where: activeSupplierDocumentRequestWhere(order.id, supplier.id),
     select: { id: true },
   });
   if (existingRequest) {
-    throw codedError("该订单、供应商、采购订单与报关批次已有资料回传任务，请直接重新发送邮件或上传资料。", 409, "SUPPLIER_DOCUMENT_REQUEST_DUPLICATE");
+    throw codedError("该订单与工厂供应商已有资料回传任务，请直接重新发送邮件或上传资料。", 409, "SUPPLIER_DOCUMENT_REQUEST_DUPLICATE");
   }
   if (supplier.status !== "启用") throw codedError("供应商已停用，不能通知回传资料。", 400, "SUPPLIER_DISABLED");
   if (!isProductSupplierType(supplier.supplierType)) throw codedError("资料回传只允许通知产品供应商。", 400, "SUPPLIER_TYPE_NOT_ALLOWED");
@@ -1150,8 +901,6 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
           orderId: order.id,
           supplierId: supplier.id,
           costId: factoryCost.id,
-          customsDeclarationId: customsDeclaration.id,
-          requiredInvoiceAmount,
           requestedById,
           requiredDocumentTypes: requiredTypes,
           status: "待上传",
@@ -1172,19 +921,10 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
         include: supplierDocumentRequestInclude(),
       });
       await upsertFileAssetForSupplierRequestTemplate(tx, saved);
-      await upsertCustomsDeclarationSupplierLink(tx, {
-        customsDeclarationId: customsDeclaration.id,
-        supplierId: supplier.id,
-        purchaseOrderId: factoryCost.id,
-        requiredInvoiceAmount,
-      });
       return saved;
     });
   } catch (error: unknown) {
     if (templateStorageKey) await deleteR2Object(templateStorageKey).catch(() => null);
-    if (isSupplierDocumentRequestDuplicateError(error)) {
-      throw codedError("该订单、供应商、采购订单与报关批次已有资料回传任务，请直接重新发送邮件或上传资料。", 409, "SUPPLIER_DOCUMENT_REQUEST_DUPLICATE");
-    }
     throw error;
   }
 
@@ -1227,8 +967,6 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
 
   await runNonCriticalTask("供应商资料回传通知日志写入", () => writeAudit(request, actor, "通知供应商回传资料", "supplier_document_requests", created.id, null, {
     orderNo: order.orderNo,
-    customsDeclarationId: customsDeclaration.id,
-    declarationNo: customsDeclaration.declarationNo || "",
     costId: factoryCost.id,
     supplierId: supplier.id,
     requiredDocumentTypes: requiredTypes,
@@ -1251,7 +989,7 @@ export async function resendSupplierDocumentRequestNotice(request: AuditRequestL
     include: supplierDocumentRequestInclude(),
   });
   if (!row) throw codedError("资料回传任务不存在或已删除。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
-  if (supplierDocumentRequestOrderLocked(row.order, row.customsDeclaration)) {
+  if (supplierDocumentRequestOrderLocked(row.order)) {
     throw codedError("该任务对应订单已提交退税或已归档，不能重新发送催办邮件。", 400, "SUPPLIER_DOCUMENT_REQUEST_TAX_ARCHIVED");
   }
   const recipientEmails = jsonStringArray(row.recipientEmails);
@@ -1322,9 +1060,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   assertWrite(actor, "supplierDocuments");
   const uploadedById = actorId(actor);
   const row = await loadSupplierDocumentRequest(requestId, actor);
-  if (supplierDocumentRequestOrderLocked(row.order, row.customsDeclaration)) {
-    throw codedError("该任务对应报关批次已提交退税或已归档，不能继续上传资料。", 400, "SUPPLIER_DOCUMENT_REQUEST_TAX_ARCHIVED");
-  }
   const documentType = normalizeSupplierReturnDocumentType(nonEmpty(input.documentType)) as OrderDocumentType;
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   if (!requiredTypes.includes(documentType)) {
@@ -1333,7 +1068,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
   const { originalFileName, mimeType, fileSize } = uploadedFile;
   const standardFilename = `${row.order.orderNo || row.orderId}_${SUPPLIER_DOCUMENT_LABELS[documentType] || documentType}.pdf`;
-  const uniqueFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(input.costId) || row.costId || "");
+  const uniqueFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(input.costId));
   const storageFileName = safeFileName(`${row.order.orderNo || row.orderId}_${documentType}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
   const storageKey = buildOrderDocumentKey({
     orderId: row.orderId,
@@ -1346,36 +1081,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   let document;
   try {
     document = await prisma.$transaction(async (tx) => {
-      const replacedAt = new Date();
-      const previousDocuments = await tx.orderDocument.findMany({
-        where: {
-          factoryDocumentRequestId: row.id,
-          documentType,
-          deletedAt: null,
-        },
-        select: { id: true },
-        take: 20,
-      });
-      const previousDocumentIds = previousDocuments.map((item) => item.id);
-      if (previousDocumentIds.length) {
-        await tx.orderDocument.updateMany({
-          where: { id: { in: previousDocumentIds }, deletedAt: null },
-          data: { deletedAt: replacedAt },
-        });
-        await tx.customsDeclarationDocument.updateMany({
-          where: { fileId: { in: previousDocumentIds }, deletedAt: null },
-          data: { deletedAt: replacedAt },
-        });
-        for (const previousDocumentId of previousDocumentIds) {
-          await softDeleteFileAssetBySource(
-            tx,
-            FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
-            previousDocumentId,
-            documentType,
-            replacedAt,
-          );
-        }
-      }
       const created = await tx.orderDocument.create({
         data: {
           orderId: row.orderId,
@@ -1401,23 +1106,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
         include: { uploadedBy: true, supplier: true },
       });
       await upsertFileAssetForOrderDocument(tx, created);
-      if (row.customsDeclarationId) {
-        await upsertCustomsDeclarationDocumentLink(tx, {
-          customsDeclarationId: row.customsDeclarationId,
-          documentId: created.id,
-          documentType,
-          uploadedByUserId: uploadedById,
-          uploadedAt: created.uploadedAt,
-        });
-        await upsertCustomsDeclarationSupplierLink(tx, {
-          customsDeclarationId: row.customsDeclarationId,
-          supplierId: row.supplierId,
-          purchaseOrderId: uniqueFactoryCost?.id || row.costId || null,
-          requiredInvoiceAmount: row.requiredInvoiceAmount || null,
-          documentType,
-          documentId: created.id,
-        });
-      }
       await refreshSupplierDocumentRequestStatus(tx, row.id);
       return created;
     });
@@ -1426,7 +1114,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
-  await refreshCustomsDeclarationAfterOwnershipChange(row.customsDeclarationId);
   let ocrWarning = "";
   try {
     const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);

@@ -3,7 +3,6 @@ import { Prisma } from "../generated/prisma/client.js";
 import { attachBusinessDocumentsToCost } from "./business-documents";
 import { businessEntityFieldsFromOrder } from "./business-entities";
 import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
-import { orderTaxArchiveWhereForScope } from "./tax-archive-scope";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
   COST_IDEMPOTENCY_WINDOW_MS,
@@ -94,7 +93,9 @@ export function archiveScope(query: CostQuery | null | undefined) {
 }
 
 export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
-  return orderTaxArchiveWhereForScope(scope);
+  if (scope === "archive") return { OR: [{ taxArchived: true }, { taxRefundStatus: "SUBMITTED" }] };
+  if (scope === "all") return {};
+  return { taxArchived: false };
 }
 
 export function costSummaryCategory(costType = ""): CostBreakdownKey {

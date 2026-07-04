@@ -61,20 +61,13 @@ export type DocumentCompleteness = {
 
 export type TaxRefundRow = {
   id: string;
-  orderId?: string;
-  customsDeclarationId?: string;
   orderNo?: string;
   blNo?: string;
   billOfLadingNo?: string;
   billOfLadingNumbers?: string[];
-  declarationNo?: string;
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
-  supplierId?: string;
-  supplierName?: string;
-  supplierOwnershipStatus?: string;
-  purchaseOrderId?: string;
   businessEntityId?: string;
   businessEntityName?: string;
   businessEntityShortName?: string;
@@ -84,10 +77,6 @@ export type TaxRefundRow = {
   customsDeclarationNo?: string;
   customsDeclarationDate?: string | null;
   declarationDate?: string | null;
-  customsDeclarationAmount?: number | null;
-  declarationAmount?: number | null;
-  customsDeclarationContainerCount?: number | null;
-  containerCount?: number | null;
   taxRefundStatus?: string;
   taxRefundStatusLabel?: string;
   taxArchived?: boolean;
@@ -148,15 +137,12 @@ export type TaxCost = {
   amount?: number;
   amountCny?: number;
   currency?: string;
-  batchOwnershipStatus?: string;
-  batchOwnershipNote?: string;
   documents?: TaxDocument[];
 };
 
 export type UploadScope = {
   costId?: string;
   supplierId?: string;
-  customsDeclarationId?: string;
 };
 
 export type DomesticLogisticsInfo = {
@@ -252,26 +238,7 @@ export const TAX_FACTORY_UPLOAD_TYPES = [
   { value: "SUPPLIER_PURCHASE_CONTRACT", label: "工厂采购合同" },
   { value: "SUPPLIER_INVOICE", label: "工厂增值税发票" },
 ];
-export const TAX_LOGISTICS_INVOICE_COST_TYPES = [
-  "报关费",
-  "拖车费",
-  "国内物流费",
-  "国内拖车费",
-  "打单费",
-  "进港费",
-  "提箱费",
-  "落箱费",
-  "预提费",
-  "查验费",
-  "超重费",
-  "其他本地费用",
-  "其他物流费用",
-  "港杂费",
-  "文件费",
-  "订舱费",
-  "海运费",
-  "其他国际费用",
-];
+export const TAX_LOGISTICS_INVOICE_COST_TYPES = ["报关费", "拖车费", "国内物流费", "国内拖车费", "港杂费", "海运费"];
 export const TAX_REFUND_STATUS_OPTIONS = [
   { value: "", label: "全部退税状态" },
   { value: "NOT_READY", label: "资料不完整" },

@@ -101,6 +101,5 @@ export const ORDER_DOCUMENT_UPLOAD_INPUT_SCHEMA: InputSchema = {
   documentType: { label: "单证类型", kind: "text", required: true },
   costId: { label: "成本记录", kind: "text" },
   supplierId: { label: "供应商", kind: "text" },
-  customsDeclarationId: { label: "报关单子项", kind: "text" },
   uploadSource: { label: "上传来源", kind: "text" },
 };

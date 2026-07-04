@@ -1113,14 +1113,12 @@
 .logisticsItemsTable {
   display: grid;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
 }
 
 .logisticsItemsHead,
 .logisticsItemsRow {
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) 112px minmax(190px, 1.35fr) 124px 104px minmax(90px, 0.75fr) minmax(96px, 0.8fr) 74px 84px minmax(112px, 0.9fr) minmax(140px, 1.1fr) auto;
+  grid-template-columns: minmax(112px, 1fr) minmax(116px, 0.9fr) minmax(96px, 0.8fr) 74px 84px minmax(112px, 0.9fr) minmax(140px, 1.1fr) auto;
   gap: 8px;
   align-items: center;
 }

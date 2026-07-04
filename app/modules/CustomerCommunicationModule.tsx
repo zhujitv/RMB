@@ -28,7 +28,6 @@ type AvailableFile = {
   label: string;
   requiredForClearance?: boolean;
   exists?: boolean;
-  fileCount?: number;
   fileName?: string;
   uploadedBy?: string;
   uploadedAt?: string | null;
@@ -41,7 +40,6 @@ type DraftDocument = {
   label?: string;
   emailLabel?: string;
   fileName?: string;
-  fileCount?: number;
   exists?: boolean;
 };
 
@@ -419,9 +417,7 @@ function CustomerCommunicationDrawer({
                   <div className={styles.shippingDocsList}>
                     {files.map((file) => (
                       <span key={file.key} className={file.exists ? styles.shippingDocReady : styles.shippingDocMissing}>
-                        {file.exists ? "✓" : "!"} {file.label}
-                        {file.exists && Number(file.fileCount || 0) > 1 ? ` · 共 ${file.fileCount} 份` : ""}
-                        {file.requiredForClearance ? " · 必需" : ""}
+                        {file.exists ? "✓" : "!"} {file.label}{file.requiredForClearance ? " · 必需" : ""}
                       </span>
                     ))}
                   </div>
@@ -463,7 +459,6 @@ function CustomerCommunicationDrawer({
                             <label key={item.typeKey || item.label} className={item.exists ? styles.shippingDocReady : styles.shippingDocMissing}>
                               <input type="checkbox" checked={Boolean(item.exists)} disabled readOnly />
                               {item.label || item.emailLabel || "-"}
-                              {item.exists && Number(item.fileCount || 0) > 1 ? ` · 共 ${item.fileCount} 份` : ""}
                             </label>
                           ))}
                         </div>

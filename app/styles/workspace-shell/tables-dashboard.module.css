@@ -172,7 +172,7 @@
 }
 
 .taxRefundTable.dataTable {
-  min-width: 1420px;
+  min-width: 1160px;
   table-layout: fixed;
 }
 
@@ -186,15 +186,8 @@
 .taxRefundTable col.taxRefundBlNoColumn,
 .taxRefundTable th.taxRefundBlNoColumn,
 .taxRefundTable td.taxRefundBlNoColumn {
-  width: 210px;
-  min-width: 190px;
-}
-
-.taxRefundTable col.taxRefundDeclarationNoColumn,
-.taxRefundTable th.taxRefundDeclarationNoColumn,
-.taxRefundTable td.taxRefundDeclarationNoColumn {
-  width: 170px;
-  min-width: 160px;
+  width: 280px;
+  min-width: 240px;
 }
 
 .taxRefundTable col.taxRefundCustomerColumn,
@@ -202,17 +195,6 @@
 .taxRefundTable td.taxRefundCustomerColumn {
   width: 130px;
   min-width: 120px;
-}
-
-.taxRefundTable col.taxRefundSupplierColumn,
-.taxRefundTable th.taxRefundSupplierColumn,
-.taxRefundTable td.taxRefundSupplierColumn {
-  width: 160px;
-  min-width: 150px;
-  max-width: 170px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .taxRefundTable col.taxRefundBusinessEntityColumn,

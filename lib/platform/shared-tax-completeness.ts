@@ -79,7 +79,6 @@ type TaxOrderLike = {
   billOfLadingNo?: string | null;
   documents?: OrderDocumentLike[] | null;
   costs?: CostLike[] | null;
-  customsDeclarationSupplierIssues?: MissingEntry[] | null;
   domesticLogisticsInfos?: DomesticLogisticsInfoLike[] | null;
   domesticLogisticsInfo?: DomesticLogisticsInfoLike | null;
   taxRefundCompleteness?: unknown;
@@ -607,9 +606,6 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         missingFactoryCost: true,
       }];
   const supplierMissing: MissingEntry[] = [];
-  const customsDeclarationSupplierIssues = Array.isArray(order.customsDeclarationSupplierIssues)
-    ? order.customsDeclarationSupplierIssues.filter((item) => item?.label)
-    : [];
   supplierRequirementEntries.forEach((entry) => {
     const costCreatedAt = entry.earliestCostCreatedAt ? new Date(entry.earliestCostCreatedAt) : null;
     const daysSinceCostCreated = costCreatedAt ? Math.floor((Date.now() - costCreatedAt.getTime()) / 86400000) : 0;
@@ -659,26 +655,8 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
       }
     });
   });
-  const existingSupplierMissingKeys = new Set(supplierMissing.map((item) => [
-    item.supplierId || "",
-    item.costId || "",
-    item.documentType || "",
-  ].join(":")));
-  const addedCustomsDeclarationSupplierIssues: MissingEntry[] = [];
-  for (const issue of customsDeclarationSupplierIssues) {
-    const key = [
-      issue.supplierId || "",
-      issue.costId || "",
-      issue.documentType || "",
-    ].join(":");
-    if (existingSupplierMissingKeys.has(key)) continue;
-    existingSupplierMissingKeys.add(key);
-    addedCustomsDeclarationSupplierIssues.push(issue);
-    supplierMissing.push(issue);
-  }
   const exportCompleted = TAX_EXPORT_DOCUMENT_TYPES.length - exportMissing.length;
-  const supplierTotal = Math.max(SUPPLIER_DOCUMENT_TYPES.length, supplierRequirementEntries.length * SUPPLIER_DOCUMENT_TYPES.length)
-    + addedCustomsDeclarationSupplierIssues.length;
+  const supplierTotal = Math.max(SUPPLIER_DOCUMENT_TYPES.length, supplierRequirementEntries.length * SUPPLIER_DOCUMENT_TYPES.length);
   const supplierCompleted = supplierTotal - supplierMissing.length;
   const logisticsMissing: MissingEntry[] = [];
   const logisticsRequirements = taxRefundLogisticsInvoiceRequirementsForOrder(order, logisticsInvoiceCosts);

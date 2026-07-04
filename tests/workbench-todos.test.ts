@@ -68,7 +68,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /orderAccessWhere\(actor\)/);
   assert.match(workbenchSource, /supplierId: actorSupplierId\(actor\) \|\| "__no_supplier_bound__"/);
   assert.match(workbenchSource, /status: \{ notIn: PRODUCT_SUPPLIER_DOCUMENT_STATUSES_DONE \}/);
-  assert.match(workbenchSource, /refreshTaxRefundCompletenessForCustomsDeclaration/);
+  assert.match(workbenchSource, /refreshTaxRefundCompletenessBatch/);
   assert.match(workbenchSource, /listCustomerPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listFactoryPaymentTodos\(context\)/);
   assert.match(workbenchSource, /listProfitTodos\(context\)/);
@@ -111,7 +111,7 @@ test("workbench todos distinguish ownership from visibility", () => {
   assert.match(workbenchSource, /taxRefundArchiveConfiguredOwnerUsers/);
   assert.match(workbenchSource, /taxRefundArchiveCompanyOwnerEntriesFromSetting/);
   assert.match(workbenchSource, /systemCompanyKeysFromProfile\(companyProfileSetting\?\.value\)/);
-  assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, order\)/);
+  assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, orderWithCompleteness\)/);
   assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, order\)/);
   assert.match(workbenchSource, /type: "TAX_REFUND_READY_NOT_ARCHIVED"[\s\S]*title: "已满足退税条件但未归档"[\s\S]*module: "退税资料"/);
   assert.match(workbenchSource, /dueAt: order\.taxRefundCompletenessUpdatedAt \|\| order\.updatedAt/);
@@ -153,7 +153,7 @@ test("workbench home and topbar consume unified todo DTO without opening new win
   assert.match(taxRefundModule, /initialAction = ""/);
   assert.match(taxRefundModule, /initialAction === "submitTaxArchive" \? "READY" : statusFilter/);
   assert.match(taxRefundModule, /if \(initialAction === "submitTaxArchive"\) setStatusFilter\("READY"\)/);
-  assert.match(taxRefundModule, /const matched = nextRows\.find\(\(row\) => \([\s\S]*row\.customsDeclarationId === value[\s\S]*row\.orderNo === value[\s\S]*\)\) \|\| nextRows\[0\]/);
+  assert.match(taxRefundModule, /const matched = nextRows\.find\(\(row\) => row\.orderNo === value\) \|\| nextRows\[0\]/);
   assert.match(profitModule, /initialKeyword = ""/);
   assert.match(profitModule, /setDetailRow\(matched\)/);
   assert.match(controlTower, /initialKeyword = ""/);

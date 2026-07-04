@@ -269,17 +269,13 @@ function TaxRefundDetailPanel({
   const logisticsArchiveStatus = taxLogisticsStatusLabel(detail.domesticLogisticsInfo?.archiveStatusLabel || "", Boolean(detail.domesticLogisticsInfo));
   const transportCards = taxTransportSummaryItems(detail);
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail, fallback);
-  const uploadOrderId = detail.orderId || detail.id;
   const factoryCosts = factorySupplierCosts(detail.costs || []);
-  const hasCustomsDeclarationScope = Boolean(detail.customsDeclarationId);
-  const showTaxArchiveRecord = hasCustomsDeclarationScope
-    ? Boolean(detail.taxRefundStatus === "SUBMITTED" || detail.taxArchived)
-    : Boolean(
-      detail.taxRefundStatus === "SUBMITTED"
-      || fallback.taxRefundStatus === "SUBMITTED"
-      || detail.taxArchived
-      || fallback.taxArchived,
-    );
+  const showTaxArchiveRecord = Boolean(
+    detail.taxRefundStatus === "SUBMITTED"
+    || fallback.taxRefundStatus === "SUBMITTED"
+    || detail.taxArchived
+    || fallback.taxArchived,
+  );
   const tabs: Array<{ key: TaxRefundDetailTab; label: string }> = [
     { key: "basic", label: "基础信息" },
     { key: "export-documents", label: "出口资料" },
@@ -401,14 +397,14 @@ function TaxRefundDetailPanel({
               <FileUploadCard
                 key={documentType.value}
                 targetKey={taxDocumentTargetKey(documentType.value)}
-                orderId={uploadOrderId}
+                orderId={detail.id}
                 type={documentType.value}
                 label={documentType.label}
                 document={latestTaxDocument((detail.documents || []).filter((document) => (
                   document.documentType === documentType.value && document.uploadStatus === "SUCCESS"
                 )))[0] || null}
-                uploading={uploadingKey === uploadScopeKey(uploadOrderId, documentType.value)}
-                uploadProgress={uploadProgressByKey[uploadScopeKey(uploadOrderId, documentType.value)] || 0}
+                uploading={uploadingKey === uploadScopeKey(detail.id, documentType.value)}
+                uploadProgress={uploadProgressByKey[uploadScopeKey(detail.id, documentType.value)] || 0}
                 deletingDocumentId={deletingDocumentId}
                 canUpload={canUploadTaxDocument(currentUserRole, canWriteDocuments, documentType.value, readOnly)}
                 canDelete={canDeleteTaxDocument(canWriteDocuments, readOnly)}
@@ -449,7 +445,7 @@ function TaxRefundDetailPanel({
             return (
               <FactoryCostUploadGroup
                 key={cost.id}
-                orderId={uploadOrderId}
+                orderId={detail.id}
                 cost={cost}
                 documents={detail.documents || []}
                 sameSupplierFactoryCostCount={ordinal.total}
@@ -474,7 +470,7 @@ function TaxRefundDetailPanel({
           {logisticsInvoiceCosts(detail.costs || []).length ? logisticsInvoiceCosts(detail.costs || []).map((cost) => (
             <LogisticsInvoiceUploadItem
               key={cost.id}
-              orderId={uploadOrderId}
+              orderId={detail.id}
               cost={cost}
               documents={detail.documents || []}
               completeness={detail.documentCompleteness || {}}
@@ -494,7 +490,7 @@ function TaxRefundDetailPanel({
           <div className={styles.documentGroupCard} key={groupName}>
             <strong>{groupName}</strong>
             <DocumentFileTable
-              orderId={uploadOrderId}
+              orderId={detail.id}
               documents={documents}
               deletingDocumentId={deletingDocumentId}
               canPreviewOrDownload

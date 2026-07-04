@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, confirmSupplierDocumentOcr, parseJsonBody } from "../../../../../../../../lib/platform-db";
+import { apiError, confirmSupplierDocumentOcr } from "../../../../../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../../../../../lib/api-route-guard";
 
@@ -10,8 +10,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const actor = await requireApiActor(request);
     const { id, documentId } = await params;
-    const body = await parseJsonBody(request, { allowEmpty: true });
-    const ocrTask = await confirmSupplierDocumentOcr(request, actor, id, documentId, body);
+    const ocrTask = await confirmSupplierDocumentOcr(request, actor, id, documentId);
     return NextResponse.json({
       success: true,
       ocrTask,

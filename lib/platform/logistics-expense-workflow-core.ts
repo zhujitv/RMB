@@ -51,7 +51,6 @@ import {
   LOGISTICS_EXPENSE_CURRENCIES,
   LOGISTICS_COST_TYPES,
   logisticsCostTypeDefaultCurrency,
-  logisticsCostTypeRequiresDeclarationScope,
 } from "./logistics-cost-types";
 import {
   canMarkLogisticsBillPaid,
@@ -264,7 +263,6 @@ export async function logisticsExpenseBatchUpdateData(item: UnknownRecord, befor
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
     throw codedError(`第 ${index + 1} 行汇率必须大于 0。`, 400, "EXCHANGE_RATE_REQUIRED");
   }
-  const ownershipData = await logisticsExpenseBatchOwnershipUpdateData(item, before, amount, index, costType);
   return {
     costType,
     currency: exchange.currency,
@@ -279,97 +277,8 @@ export async function logisticsExpenseBatchUpdateData(item: UnknownRecord, befor
 	    billingMethod,
 	    billingQuantity,
 	    remark: optional(item.remark),
-    ...ownershipData,
     updatedById: actorId(actor),
   };
-}
-
-async function logisticsExpenseBatchOwnershipUpdateData(
-  item: UnknownRecord,
-  before: LogisticsExpenseRow,
-  amount: number,
-  index: number,
-  costType: string,
-): Promise<Pick<LogisticsExpenseUpdateData, "customsDeclarationId" | "allocationMethod" | "allocatedAmount">> {
-  const hasCustomsDeclarationInput = Object.prototype.hasOwnProperty.call(item, "customsDeclarationId")
-    || Object.prototype.hasOwnProperty.call(item, "customsDeclaration_id")
-    || Object.prototype.hasOwnProperty.call(item, "declarationId");
-  const hasAllocationInput = Object.prototype.hasOwnProperty.call(item, "allocationMethod")
-    || Object.prototype.hasOwnProperty.call(item, "allocation_method");
-  const hasAllocatedAmountInput = Object.prototype.hasOwnProperty.call(item, "allocatedAmount")
-    || Object.prototype.hasOwnProperty.call(item, "allocated_amount");
-  const data: Pick<LogisticsExpenseUpdateData, "customsDeclarationId" | "allocationMethod" | "allocatedAmount"> = {};
-  if (hasCustomsDeclarationInput) {
-    const customsDeclarationId = nonEmpty(item.customsDeclarationId || item.customsDeclaration_id || item.declarationId);
-    if (customsDeclarationId) {
-      const declaration = await prisma.customsDeclaration.findFirst({
-        where: { id: customsDeclarationId, orderId: before.orderId, deletedAt: null },
-        select: { id: true },
-      });
-      if (!declaration) {
-        throw codedError(`第 ${index + 1} 行请选择有效报关批次。`, 400, "LOGISTICS_EXPENSE_CUSTOMS_DECLARATION_NOT_FOUND");
-      }
-      data.customsDeclarationId = declaration.id;
-    } else {
-      data.customsDeclarationId = null;
-      if (!hasAllocatedAmountInput) data.allocatedAmount = null;
-      if (!hasAllocationInput && before.allocationMethod === "手工金额") data.allocationMethod = null;
-    }
-  }
-  if (hasAllocationInput) {
-    const allocationMethod = nonEmpty(item.allocationMethod || item.allocation_method);
-    if (allocationMethod && !["按报关金额", "按供应商开票金额", "按柜数", "手工金额"].includes(allocationMethod)) {
-      throw codedError(`第 ${index + 1} 行请选择有效物流费用分摊方式。`, 400, "LOGISTICS_EXPENSE_ALLOCATION_METHOD_INVALID");
-    }
-    data.allocationMethod = allocationMethod || null;
-  }
-  if (hasAllocatedAmountInput) {
-    const raw = item.allocatedAmount ?? item.allocated_amount;
-    if (raw == null || raw === "") {
-      data.allocatedAmount = null;
-    } else {
-      const allocatedAmount = Number(raw);
-      if (!Number.isFinite(allocatedAmount) || allocatedAmount < 0) {
-        throw codedError(`第 ${index + 1} 行分摊金额必须是非负数字。`, 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_INVALID");
-      }
-      if (amount > 0 && allocatedAmount - amount > 0.01) {
-        throw codedError(`第 ${index + 1} 行分摊金额不能大于物流费用金额。`, 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_TOO_LARGE");
-      }
-      data.allocatedAmount = Number(allocatedAmount.toFixed(2));
-    }
-  } else if (before.allocatedAmount != null && Math.abs(Number(before.amount || 0) - amount) > 0.01) {
-    data.allocatedAmount = null;
-    if (!hasAllocationInput && before.allocationMethod === "手工金额") data.allocationMethod = null;
-  }
-  const nextCustomsDeclarationId = Object.prototype.hasOwnProperty.call(data, "customsDeclarationId")
-    ? nonEmpty(data.customsDeclarationId)
-    : nonEmpty(before.customsDeclarationId);
-  const nextAllocationMethod = Object.prototype.hasOwnProperty.call(data, "allocationMethod")
-    ? nonEmpty(data.allocationMethod)
-    : nonEmpty(before.allocationMethod);
-  const nextAllocatedAmount = Object.prototype.hasOwnProperty.call(data, "allocatedAmount")
-    ? (data.allocatedAmount == null ? null : Number(data.allocatedAmount))
-    : (before.allocatedAmount == null ? null : Number(before.allocatedAmount));
-  const declarationCount = Array.isArray(before.order?.customsDeclarations)
-    ? before.order.customsDeclarations.length
-    : 0;
-  if (!nextCustomsDeclarationId && declarationCount > 1 && logisticsCostTypeRequiresDeclarationScope(costType)) {
-    throw codedError(`第 ${index + 1} 行${costType}属于单次报关费用，一票提单多次报关时必须选择具体报关批次。`, 400, "LOGISTICS_EXPENSE_DECLARATION_SCOPE_REQUIRED");
-  }
-  if (!nextCustomsDeclarationId && declarationCount > 1 && !nextAllocationMethod) {
-    throw codedError(`第 ${index + 1} 行一票提单多次报关时，整票物流费用必须选择分摊方式。`, 400, "LOGISTICS_EXPENSE_ALLOCATION_METHOD_REQUIRED");
-  }
-  if (!nextCustomsDeclarationId && (nextAllocationMethod === "手工金额" || nextAllocatedAmount != null)) {
-    throw codedError(`第 ${index + 1} 行手工分摊金额必须绑定具体报关批次。`, 400, "LOGISTICS_EXPENSE_MANUAL_ALLOCATION_REQUIRES_DECLARATION");
-  }
-  if (nextCustomsDeclarationId && nextAllocatedAmount != null) {
-    data.allocationMethod = "手工金额";
-  } else if (nextCustomsDeclarationId && nextAllocationMethod === "手工金额") {
-    throw codedError(`第 ${index + 1} 行请选择手工分摊金额。`, 400, "LOGISTICS_EXPENSE_ALLOCATED_AMOUNT_REQUIRED");
-  } else if (nextCustomsDeclarationId && nextAllocationMethod) {
-    data.allocationMethod = null;
-  }
-  return data;
 }
 
 export async function resolveLogisticsExpenseBatchExchange(costType: string, item: UnknownRecord, before: LogisticsExpenseRow, actor: ActorContext, currency: string, index: number): Promise<BatchExchangeSnapshot> {

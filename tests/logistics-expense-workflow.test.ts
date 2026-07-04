@@ -543,7 +543,7 @@ test("logistics expense entry grid keeps compact fixed columns", () => {
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsHead,\n\.logisticsItemsRow \{[\s\S]*grid-template-columns: 140px 110px 220px 120px 110px 90px 120px 80px 90px 120px 160px 80px;/,
+    /\.logisticsItemsHead,\n\.logisticsItemsRow \{[\s\S]*grid-template-columns: 140px 90px 120px 80px 90px 120px 160px 80px;/,
   );
   assert.match(
     workspaceStyles,
@@ -551,27 +551,27 @@ test("logistics expense entry grid keeps compact fixed columns", () => {
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > :nth-child\(8\) \{[\s\S]*width: 72px;[\s\S]*min-width: 72px;[\s\S]*max-width: 72px;[\s\S]*padding-right: 22px;/,
+    /\.logisticsItemsRow > select:nth-of-type\(2\) \{[\s\S]*width: 72px;[\s\S]*min-width: 72px;[\s\S]*max-width: 72px;[\s\S]*padding-right: 22px;/,
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > :nth-child\(6\) \{[\s\S]*width: 80px;/,
+    /\.logisticsItemsRow > :nth-child\(2\) \{[\s\S]*width: 80px;/,
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > :nth-child\(7\) \{[\s\S]*width: 110px;/,
+    /\.logisticsItemsRow > :nth-child\(3\) \{[\s\S]*width: 110px;/,
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > :nth-child\(9\) \{[\s\S]*width: 80px;/,
+    /\.logisticsItemsRow > :nth-child\(5\) \{[\s\S]*width: 80px;/,
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > strong:nth-child\(10\) \{[\s\S]*width: 110px;[\s\S]*text-overflow: ellipsis;/,
+    /\.logisticsItemsRow > strong:nth-child\(6\) \{[\s\S]*width: 110px;[\s\S]*text-overflow: ellipsis;/,
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsRow > :nth-child\(12\) \{[\s\S]*width: 80px;/,
+    /\.logisticsItemsRow > :nth-child\(8\) \{[\s\S]*width: 80px;/,
   );
 });
 
@@ -599,7 +599,7 @@ test("logistics expense entry add buttons sit below the expense input rows", () 
   );
   assert.match(
     workspaceStyles,
-    /\.logisticsItemsInlineActions \{[\s\S]*min-width: 1560px;/,
+    /\.logisticsItemsInlineActions \{[\s\S]*min-width: 936px;/,
   );
 });
 

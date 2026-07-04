@@ -75,7 +75,6 @@ type ShippingOrderLike = {
   customerId?: string | null;
   customer?: ShippingCustomerLike | null;
   documents?: ShippingDocumentLike[] | null;
-  customsDeclarations?: Array<{ id?: string | null } | null> | null;
   shippingDocumentNotifications?: ShippingNotificationLike[] | null;
   country?: string | null;
   blNo?: string | null;
@@ -92,7 +91,6 @@ type ShippingBundleItem = {
   emailLabel: string;
   documentType: string;
   document: ShippingDocumentLike | null;
-  documents: ShippingDocumentLike[];
 };
 type ShippingBundle = {
   documentTypes: string[];
@@ -128,8 +126,16 @@ type NotificationRecordOptions = {
   emailSubject?: string;
   emailBody?: string;
 };
+type ShippingBundleItemWithDocument = ShippingBundleItem & {
+  document: ShippingDocumentLike & { storageKey: string };
+};
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "";
+}
+
+function hasShippingDocument(item: ShippingBundleItem): item is ShippingBundleItemWithDocument {
+  return Boolean(item.document?.storageKey);
 }
 
 function selectedShippingDocumentTypes(customer: ShippingCustomerLike = {}) {
@@ -141,7 +147,7 @@ function shippingRecipientEmails(customer: ShippingCustomerLike = {}) {
   return configured.length ? configured : parseEmailList(customer.contactEmail || "");
 }
 
-function successfulDocumentsByType(order: ShippingOrderLike = {}, documentType = "") {
+function latestSuccessfulDocumentByType(order: ShippingOrderLike = {}, documentType = "") {
   return (order.documents || [])
     .filter((document) => (
       document.documentType === documentType
@@ -149,48 +155,28 @@ function successfulDocumentsByType(order: ShippingOrderLike = {}, documentType =
       && !document.deletedAt
       && String(document.mimeType || "").toLowerCase() === "application/pdf"
     ))
-    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime());
+    .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime())[0] || null;
 }
 
 function shippingDocumentBundle(order: ShippingOrderLike = {}, options: { documentTypes?: unknown } = {}): ShippingBundle {
   const customer = order.customer || {};
   const documentTypes = normalizeShippingDocumentTypes(options.documentTypes || selectedShippingDocumentTypes(customer));
-  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingBundleItem, "typeKey" | "document" | "documents">>;
+  const configMap = SHIPPING_DOCUMENT_TYPE_CONFIG as Record<string, Omit<ShippingBundleItem, "typeKey" | "document">>;
   const items = documentTypes.filter((typeKey) => Boolean(configMap[typeKey])).map((typeKey) => {
     const config = configMap[typeKey];
-    const documents = successfulDocumentsByType(order, config.documentType);
-    return { typeKey, ...config, document: documents[0] || null, documents };
+    const document = latestSuccessfulDocumentByType(order, config.documentType);
+    return { typeKey, ...config, document };
   });
   return {
     documentTypes,
     items,
-    documents: items.flatMap((item) => item.documents || []),
-    missing: items.filter((item) => !(item.documents || []).length),
+    documents: items.map((item) => item.document).filter((document): document is ShippingDocumentLike => Boolean(document)),
+    missing: items.filter((item) => !item.document),
   };
 }
 
 function shippingDocumentManualBundle(order: ShippingOrderLike = {}) {
   return shippingDocumentBundle(order, { documentTypes: DEFAULT_SHIPPING_DOCUMENT_TYPES });
-}
-
-function shippingBundleItemEmailLabel(item: ShippingBundleItem) {
-  const count = (item.documents || []).length;
-  return count > 1 ? `${item.emailLabel} x${count}` : item.emailLabel;
-}
-
-function shippingBundleItemsWithDocuments(bundle: ShippingBundle) {
-  return (bundle.items || []).filter((item) => (item.documents || []).length);
-}
-
-function shippingBundleAttachmentDocuments(bundle: ShippingBundle) {
-  return shippingBundleItemsWithDocuments(bundle).flatMap((item) => (
-    (item.documents || []).map((document) => ({ item, document }))
-  ));
-}
-
-function shippingAttachmentFilename(document: ShippingDocumentLike, order: ShippingOrderLike, index: number, total: number) {
-  const fileName = standardFilenameForDocument(document, order);
-  return total > 1 ? `${String(index + 1).padStart(2, "0")}_${fileName}` : fileName;
 }
 
 function latestShippingNotification(order: ShippingOrderLike = {}) {
@@ -201,10 +187,6 @@ function latestShippingNotification(order: ShippingOrderLike = {}) {
 
 function hasSentAutoShippingNotification(order: ShippingOrderLike = {}) {
   return (order.shippingDocumentNotifications || []).some((item) => item.sendMode === "auto" && item.sendStatus === "sent");
-}
-
-function hasMultipleCustomsDeclarations(order: ShippingOrderLike = {}) {
-  return (order.customsDeclarations || []).filter((item) => item?.id).length > 1;
 }
 
 function customsDocumentsConfirmed(order: ShippingOrderLike = {}) {
@@ -273,7 +255,7 @@ function shippingDocumentEmailTemplate(order: ShippingOrderLike = {}, bundle: Sh
   const normalizedLanguage = normalizeClearanceEmailLanguage(language, order.customer?.country || order.country || "");
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
-  const labels = shippingBundleItemsWithDocuments(bundle).map(shippingBundleItemEmailLabel);
+  const labels = (bundle.items || []).filter((item) => item.document).map((item) => item.emailLabel);
   if (normalizedLanguage === "ZH") {
     return {
       language: "ZH",
@@ -341,8 +323,8 @@ function shippingDocumentTemplateVariables(order: ShippingOrderLike = {}, bundle
   const billOfLadingNo = order.blNo || order.billOfLadingNo || "-";
   const customsDeclarationDate = dateToInput(order.customsDeclarationDate) || "-";
   const labels = (bundle.items || [])
-    .filter((item) => (item.documents || []).length)
-    .map(shippingBundleItemEmailLabel);
+    .filter((item) => item.document)
+    .map((item) => item.emailLabel);
   const fallbackLabels = ["Commercial Invoice", "Packing List", "Customs Declaration"];
   return {
     language: normalizedLanguage,
@@ -392,7 +374,6 @@ async function shippingDocumentDraft(order: ShippingOrderLike = {}) {
       documentId: item.document?.id || "",
       fileName: item.document ? standardFilenameForDocument(item.document, order) : "",
       originalFilename: item.document?.originalFilename || item.document?.originalName || item.document?.fileName || "",
-      fileCount: item.documents.length,
       exists: Boolean(item.document),
     })),
     missingLabels: bundle.missing.map((item) => item.label),
@@ -497,7 +478,6 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
   if (!manual) {
     if (!customer.enableAutoShippingDocsNotification) return serializeOrder(order);
     if (!customsDocumentsConfirmed(order)) return serializeOrder(order);
-    if (hasMultipleCustomsDeclarations(order)) return serializeOrder(order);
     if (hasSentAutoShippingNotification(order)) return serializeOrder(order);
   }
   const bundle = shippingDocumentBundle(order);
@@ -528,13 +508,12 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
     ? await prisma.shippingDocumentNotification.create({ data: baseData })
     : await upsertAutoShippingNotification(order, baseData);
   try {
-    const attachmentDocs = shippingBundleAttachmentDocuments(bundle);
-    const attachments = await Promise.all(attachmentDocs.map(async ({ document }, index) => {
-      if (!document.storageKey) throw codedError("清关资料附件不存在或未上传成功。", 400, "SHIPPING_ATTACHMENT_MISSING");
+    const attachments = await Promise.all(bundle.items.map(async (item) => {
+      if (!hasShippingDocument(item)) throw codedError("清关资料附件不存在或未上传成功。", 400, "SHIPPING_ATTACHMENT_MISSING");
       return {
-        filename: shippingAttachmentFilename(document, order, index, attachmentDocs.length),
-        content: await readR2Object(document.storageKey),
-        contentType: document.mimeType || "application/pdf",
+        filename: standardFilenameForDocument(item.document, order),
+        content: await readR2Object(item.document.storageKey),
+        contentType: item.document.mimeType || "application/pdf",
       };
     }));
     const template = await renderShippingDocumentEmail(order, bundle, customer.clearanceEmailLanguage || "EN");
@@ -624,20 +603,16 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
       emailLanguage: emailInput.language,
       emailSubject: emailInput.subject,
       emailBody: emailInput.body,
-      documentTypes: shippingBundleItemsWithDocuments(bundle).map((item) => item.typeKey),
+      documentTypes: bundle.items.filter((item) => item.document).map((item) => item.typeKey),
     },
   );
   const row = await prisma.shippingDocumentNotification.create({ data: baseData });
   try {
-    const attachmentDocs = shippingBundleAttachmentDocuments(bundle);
-    const attachments = await Promise.all(attachmentDocs.map(async ({ document }, index) => {
-      if (!document.storageKey) throw codedError("清关资料附件不存在或未上传成功。", 400, "SHIPPING_ATTACHMENT_MISSING");
-      return {
-        filename: shippingAttachmentFilename(document, order, index, attachmentDocs.length),
-        content: await readR2Object(document.storageKey),
-        contentType: document.mimeType || "application/pdf",
-      };
-    }));
+    const attachments = await Promise.all(bundle.items.filter(hasShippingDocument).map(async (item) => ({
+      filename: standardFilenameForDocument(item.document, order),
+      content: await readR2Object(item.document.storageKey),
+      contentType: item.document.mimeType || "application/pdf",
+    })));
     const delivery = await sendNotificationEmail({
       type: emailInput.type,
       recipientEmails: emailInput.recipientEmails,

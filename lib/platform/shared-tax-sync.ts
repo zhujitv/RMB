@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { Prisma } from "../generated/prisma/client.js";
+import type { Prisma } from "../generated/prisma/client.js";
 import { includeOrderRelations } from "./shared-order-relations";
 import {
   sanitizeTaxRefundCompletenessText,
@@ -7,36 +7,13 @@ import {
   taxRefundStatusFromCompleteness,
 } from "./shared-tax-completeness";
 import { hasCostBusinessDocument } from "./business-documents";
-import {
-  DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
-  FACTORY_SUPPLIER_COST_TYPES,
-  SUPPLIER_DOCUMENT_TYPES,
-  TAX_EXPORT_DOCUMENT_TYPES,
-  runNonCriticalTask,
-} from "./shared-constants";
-import { customsDeclarationSupplierCompletenessIssues } from "./customs-declaration-supplier-validation";
-import {
-  allocateLogisticsCostForCustomsDeclaration,
-  logisticsCostMatchesCustomsDeclaration,
-} from "./logistics-cost-allocation";
+import { runNonCriticalTask } from "./shared-constants";
 
 type TaxRefundCompletenessOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 type TaxRefundCompletenessResult = ReturnType<typeof taxDocumentCompleteness>;
 
 const TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3;
 const pendingTaxRefundCompletenessRefreshes = new Map<string, Promise<TaxRefundCompletenessResult | null>>();
-const pendingCustomsDeclarationCompletenessRefreshes = new Map<string, Promise<TaxRefundCompletenessResult | null>>();
-const TAX_REFUND_BATCH_OWNED_DOCUMENT_TYPES = new Set([
-  ...DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
-  "COMMERCIAL_INVOICE",
-  "PACKING_LIST",
-  "SALES_CONTRACT",
-  ...SUPPLIER_DOCUMENT_TYPES,
-]);
-
-function isTaxRefundBatchOwnedDocumentType(documentType: unknown) {
-  return TAX_REFUND_BATCH_OWNED_DOCUMENT_TYPES.has(String(documentType || ""));
-}
 
 function normalizedOrderId(orderId: string | null | undefined) {
   return String(orderId || "").trim();
@@ -106,243 +83,6 @@ async function computeAndPersistTaxRefundCompleteness(order: TaxRefundCompletene
   return completeness;
 }
 
-const customsDeclarationCompletenessInclude = Prisma.validator<Prisma.CustomsDeclarationInclude>()({
-  order: { include: includeOrderRelations() },
-  purchaseOrder: true,
-  supplier: true,
-  pdfDocument: {
-    include: {
-      uploadedBy: true,
-      cost: { include: { supplier: true } },
-      supplier: true,
-      logisticsExpenseInvoices: {
-        where: { deletedAt: null },
-        include: { bill: true, cost: true, supplier: true },
-      },
-    },
-  },
-  documents: {
-    where: { deletedAt: null },
-    include: {
-      file: {
-        include: {
-          uploadedBy: true,
-          cost: { include: { supplier: true } },
-          supplier: true,
-          logisticsExpenseInvoices: {
-            where: { deletedAt: null },
-            include: { bill: true, cost: true, supplier: true },
-          },
-        },
-      },
-    },
-    orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
-  },
-  suppliers: {
-    where: { deletedAt: null },
-    include: {
-      supplier: true,
-      purchaseOrder: { include: { supplier: true } },
-      contractFile: {
-        include: {
-          uploadedBy: true,
-          cost: { include: { supplier: true } },
-          supplier: true,
-          logisticsExpenseInvoices: {
-            where: { deletedAt: null },
-            include: { bill: true, cost: true, supplier: true },
-          },
-        },
-      },
-      vatInvoiceFile: {
-        include: {
-          uploadedBy: true,
-          cost: { include: { supplier: true } },
-          supplier: true,
-          logisticsExpenseInvoices: {
-            where: { deletedAt: null },
-            include: { bill: true, cost: true, supplier: true },
-          },
-        },
-      },
-    },
-    orderBy: [{ createdAt: "asc" }],
-  },
-});
-type CustomsDeclarationCompletenessRow = Prisma.CustomsDeclarationGetPayload<{ include: typeof customsDeclarationCompletenessInclude }>;
-
-function uniqueById<T extends { id?: string | null }>(rows: T[] = []) {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const id = String(row?.id || "");
-    if (!id) return false;
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
-
-function declarationSupplierIds(declaration: unknown) {
-  const row = declaration && typeof declaration === "object" ? declaration as {
-    supplierId?: string | null;
-    suppliers?: Array<{ supplierId?: string | null }> | null;
-  } : {};
-  return new Set([
-    row.supplierId || "",
-    ...(row.suppliers || []).map((supplier) => supplier.supplierId || ""),
-  ].filter(Boolean));
-}
-
-function uniqueSupplierFallbackIds(row: CustomsDeclarationCompletenessRow, supplierIds: Set<string>) {
-  if (!supplierIds.size) return new Set<string>();
-  const declarations = Array.isArray(row.order?.customsDeclarations)
-    ? row.order.customsDeclarations.filter((declaration) => declaration?.id)
-    : [];
-  if (declarations.length <= 1) return new Set(supplierIds);
-  const currentSupplierIds = declarationSupplierIds(row);
-  const supplierDeclarationCount = new Map<string, number>();
-  for (const declaration of declarations) {
-    for (const supplierId of declarationSupplierIds(declaration)) {
-      supplierDeclarationCount.set(supplierId, (supplierDeclarationCount.get(supplierId) || 0) + 1);
-    }
-  }
-  return new Set([...supplierIds].filter((supplierId) => (
-    currentSupplierIds.has(supplierId)
-    && supplierDeclarationCount.get(supplierId) === 1
-  )));
-}
-
-function orderHasMultipleCustomsDeclarations(row: CustomsDeclarationCompletenessRow) {
-  const declarations = Array.isArray(row.order?.customsDeclarations)
-    ? row.order.customsDeclarations.filter((declaration) => declaration?.id)
-    : [];
-  return declarations.length > 1;
-}
-
-function customsDeclarationCount(row: CustomsDeclarationCompletenessRow) {
-  return Array.isArray(row.order?.customsDeclarations)
-    ? row.order.customsDeclarations.filter((declaration) => declaration?.id).length
-    : 0;
-}
-
-function canUseLegacyFactoryFallback(row: CustomsDeclarationCompletenessRow) {
-  return customsDeclarationCount(row) <= 1;
-}
-
-function scopedDeclarationDocuments(row: CustomsDeclarationCompletenessRow) {
-  const linkedDocuments = (row.documents || [])
-    .map((item) => item.file)
-    .filter((document): document is NonNullable<typeof document> => Boolean(document && !document.deletedAt && document.uploadStatus === "SUCCESS"));
-  const supplierDocuments = (row.suppliers || [])
-    .flatMap((supplier) => [supplier.contractFile, supplier.vatInvoiceFile])
-    .filter((document): document is NonNullable<typeof document> => Boolean(document && !document.deletedAt && document.uploadStatus === "SUCCESS"));
-  const explicitDocuments = uniqueById([
-    ...(row.pdfDocument && !row.pdfDocument.deletedAt ? [row.pdfDocument] : []),
-    ...linkedDocuments,
-    ...supplierDocuments,
-  ]);
-  const explicitDocumentIds = new Set(explicitDocuments.map((document) => document.id));
-  const declarationOwnsScopedDocuments = Boolean(
-    row.pdfDocumentId
-    || row.documents?.length
-    || row.suppliers?.length
-    || orderHasMultipleCustomsDeclarations(row)
-  );
-  const useLegacyFactoryFallback = canUseLegacyFactoryFallback(row);
-  const purchaseOrderIds = new Set([
-    row.purchaseOrderId || "",
-    ...(row.suppliers || []).map((supplier) => supplier.purchaseOrderId || ""),
-  ].filter(Boolean));
-  const supplierIds = new Set([
-    row.supplierId || "",
-    ...(row.suppliers || []).map((supplier) => supplier.supplierId || ""),
-  ].filter(Boolean));
-  const fallbackSupplierIds = uniqueSupplierFallbackIds(row, supplierIds);
-  const fallbackDocuments = (row.order.documents || []).filter((document) => {
-    if (!document || document.deletedAt || document.uploadStatus !== "SUCCESS") return false;
-    if (explicitDocumentIds.has(document.id)) return false;
-    if (document.documentType === "CUSTOMS_ENTRY_FORM") return Boolean(row.pdfDocumentId && document.id === row.pdfDocumentId);
-    if (isTaxRefundBatchOwnedDocumentType(document.documentType) && declarationOwnsScopedDocuments && !useLegacyFactoryFallback) return false;
-    if ([...DOMESTIC_LOGISTICS_DOCUMENT_TYPES, ...TAX_EXPORT_DOCUMENT_TYPES].includes(document.documentType)) return true;
-    if (!SUPPLIER_DOCUMENT_TYPES.includes(document.documentType)) return false;
-    if (useLegacyFactoryFallback) return true;
-    if (document.costId && purchaseOrderIds.has(document.costId)) return true;
-    if (document.supplierId && fallbackSupplierIds.has(document.supplierId)) return true;
-    return false;
-  });
-  return uniqueById([...explicitDocuments, ...fallbackDocuments]);
-}
-
-function scopedDeclarationCosts(row: CustomsDeclarationCompletenessRow) {
-  const purchaseOrderIds = new Set([
-    row.purchaseOrderId || "",
-    ...(row.suppliers || []).map((supplier) => supplier.purchaseOrderId || ""),
-  ].filter(Boolean));
-  const supplierIds = new Set([
-    row.supplierId || "",
-    ...(row.suppliers || []).map((supplier) => supplier.supplierId || ""),
-  ].filter(Boolean));
-  const fallbackSupplierIds = uniqueSupplierFallbackIds(row, supplierIds);
-  const useLegacyFactoryFallback = canUseLegacyFactoryFallback(row);
-  return (row.order.costs || []).filter((cost) => {
-    if (!cost || cost.deletedAt) return false;
-    const isFactory = FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType);
-    if (!isFactory) {
-      return logisticsCostMatchesCustomsDeclaration(cost, row, row.order);
-    }
-    if (useLegacyFactoryFallback) return true;
-    if (cost.id && purchaseOrderIds.has(cost.id)) return true;
-    if (fallbackSupplierIds.size) return Boolean(cost.supplierId && fallbackSupplierIds.has(cost.supplierId));
-    return false;
-  }).map((cost) => {
-    if (FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType)) return cost;
-    const allocatedCost = allocateLogisticsCostForCustomsDeclaration(cost, row, row.order);
-    const invoiceDocument = allocatedCost.generatedLogisticsExpense?.invoiceDocument;
-    if (!invoiceDocument) return allocatedCost;
-    return {
-      ...allocatedCost,
-      documents: uniqueById([...(allocatedCost.documents || []), invoiceDocument]),
-    };
-  });
-}
-
-async function loadCustomsDeclarationCompletenessRow(customsDeclarationId: string) {
-  return prisma.customsDeclaration.findFirst({
-    where: { id: customsDeclarationId, deletedAt: null, order: { is: { deletedAt: null } } },
-    include: customsDeclarationCompletenessInclude,
-  });
-}
-
-async function computeAndPersistCustomsDeclarationCompleteness(row: CustomsDeclarationCompletenessRow) {
-  const scopedOrder = {
-    ...row.order,
-    id: row.orderId,
-    blNo: row.billOfLadingNo || row.order.blNo,
-    customsDeclarationNo: row.declarationNo || row.order.customsDeclarationNo,
-    customsDeclarationDate: row.declarationDate || row.order.customsDeclarationDate,
-    taxRefundStatus: row.taxRefundStatus,
-    taxRefundCompleteness: row.taxRefundCompleteness,
-    customsDeclarationSupplierIssues: customsDeclarationSupplierCompletenessIssues(row.suppliers || []),
-    documents: scopedDeclarationDocuments(row),
-    costs: scopedDeclarationCosts(row),
-  };
-  const completeness = JSON.parse(JSON.stringify(taxDocumentCompleteness(scopedOrder))) as TaxRefundCompletenessResult;
-  const status = taxRefundStatusFromCompleteness(row.taxRefundStatus, completeness);
-  const overallCompleteness = taxRefundOverallCompletenessValue(completeness);
-  const issuesSummary = taxRefundCompletenessIssuesSummary(completeness);
-  await prisma.customsDeclaration.update({
-    where: { id: row.id },
-    data: {
-      taxRefundCompleteness: completeness as Prisma.InputJsonValue,
-      taxRefundCompletenessUpdatedAt: new Date(),
-      taxRefundOverallCompleteness: overallCompleteness,
-      taxRefundCompletenessIssuesSummary: issuesSummary,
-      ...(status !== row.taxRefundStatus ? { taxRefundStatus: status } : {}),
-    },
-  });
-  return completeness;
-}
-
 function runDedupedTaxRefundCompletenessRefresh(
   orderId: string,
   task: () => Promise<TaxRefundCompletenessResult | null>,
@@ -356,35 +96,10 @@ function runDedupedTaxRefundCompletenessRefresh(
   return promise;
 }
 
-async function refreshCustomsDeclarationCompletenessForOrder(orderId: string) {
-  const declarations = await prisma.customsDeclaration.findMany({
-    where: { orderId, deletedAt: null },
-    select: { id: true },
-    orderBy: [{ createdAt: "asc" }],
-    take: 200,
-  });
-  if (!declarations.length) return;
-  const results = await Promise.allSettled(
-    declarations.map((declaration) => refreshTaxRefundCompletenessForCustomsDeclaration(declaration.id)),
-  );
-  const failedCount = results.filter((result) => result.status === "rejected").length;
-  if (failedCount) {
-    console.warn("[tax-refund.completeness.batch-refresh-failed]", {
-      orderId,
-      declarationCount: declarations.length,
-      failedCount,
-    });
-  }
-}
-
 export async function refreshTaxRefundCompletenessForOrder(order: TaxRefundCompletenessOrder | null | undefined) {
   const orderId = normalizedOrderId(order?.id);
   if (!orderId || !order) return null;
-  return runDedupedTaxRefundCompletenessRefresh(orderId, async () => {
-    const completeness = await computeAndPersistTaxRefundCompleteness(order);
-    await refreshCustomsDeclarationCompletenessForOrder(orderId);
-    return completeness;
-  });
+  return runDedupedTaxRefundCompletenessRefresh(orderId, () => computeAndPersistTaxRefundCompleteness(order));
 }
 
 export async function refreshTaxRefundCompleteness(orderId: string | null | undefined) {
@@ -393,26 +108,8 @@ export async function refreshTaxRefundCompleteness(orderId: string | null | unde
   return runDedupedTaxRefundCompletenessRefresh(id, async () => {
     const order = await loadTaxRefundCompletenessOrder(id);
     if (!order) return null;
-    const completeness = await computeAndPersistTaxRefundCompleteness(order);
-    await refreshCustomsDeclarationCompletenessForOrder(id);
-    return completeness;
+    return computeAndPersistTaxRefundCompleteness(order);
   });
-}
-
-export async function refreshTaxRefundCompletenessForCustomsDeclaration(customsDeclarationId: string | null | undefined) {
-  const id = normalizedOrderId(customsDeclarationId);
-  if (!id) return null;
-  const pending = pendingCustomsDeclarationCompletenessRefreshes.get(id);
-  if (pending) return pending;
-  const promise = (async () => {
-    const row = await loadCustomsDeclarationCompletenessRow(id);
-    if (!row) return null;
-    return computeAndPersistCustomsDeclarationCompleteness(row);
-  })().finally(() => {
-    pendingCustomsDeclarationCompletenessRefreshes.delete(id);
-  });
-  pendingCustomsDeclarationCompletenessRefreshes.set(id, promise);
-  return promise;
 }
 
 export async function refreshTaxRefundCompletenessBatch(
@@ -442,14 +139,6 @@ export function scheduleTaxRefundCompletenessRefresh(orderId: string | null | un
   const id = normalizedOrderId(orderId);
   if (!id) return;
   void runNonCriticalTask(label, () => refreshTaxRefundCompleteness(id), { context: { orderId: id } });
-}
-
-export function scheduleTaxRefundCompletenessRefreshForCustomsDeclaration(customsDeclarationId: string | null | undefined, label = "报关批次退税完整度刷新") {
-  const id = normalizedOrderId(customsDeclarationId);
-  if (!id) return;
-  void runNonCriticalTask(label, () => refreshTaxRefundCompletenessForCustomsDeclaration(id), {
-    context: { customsDeclarationId: id },
-  });
 }
 
 export function scheduleTaxRefundCompletenessRefreshBatch(

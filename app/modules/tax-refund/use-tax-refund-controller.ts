@@ -169,11 +169,7 @@ export function useTaxRefundController({
       if (initialAction === "submitTaxArchive") setStatusFilter("READY");
       const nextRows = await loadRows(1, value, mode, declarationStartMonth, declarationEndMonth, nextStatus, businessEntityId);
       if (initialAction !== "submitTaxArchive") return;
-      const matched = nextRows.find((row) => (
-        row.id === value
-        || row.customsDeclarationId === value
-        || row.orderNo === value
-      )) || nextRows[0];
+      const matched = nextRows.find((row) => row.orderNo === value) || nextRows[0];
       if (matched) await loadDetail(matched);
     })();
   }, [initialAction, initialKeyword, initialOpenToken]);
@@ -416,21 +412,48 @@ export function useTaxRefundController({
     const total = Number(completeness.total || 0);
     const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
     const missingLabels = normalizedMissingLabels(completeness);
-    const submitPayload: Record<string, unknown> = { status: "SUBMITTED" };
+    let submitPayload: Record<string, unknown> = { status: "SUBMITTED" };
 
     if (total <= 0 || percent < 100) {
-      const result = await requestConfirmation({
-        title: "资料尚未完整，无法提交退税",
-        message: `当前完整度：${completed}/${total || 0}（${percent}%）。请先补齐缺失资料后再提交。`,
-        details: missingLabels,
-        confirmLabel: "查看缺失资料",
-        cancelLabel: "关闭",
+      let allowForceSubmit = false;
+      if (currentUser.role === "管理员") {
+        const settingsResult = await apiJson<{ settings?: { allowAdminIncompleteTaxSubmit?: boolean } }>("/api/exchange-rates/settings").catch(() => null);
+        allowForceSubmit = settingsResult?.settings?.allowAdminIncompleteTaxSubmit === true;
+      }
+      if (!allowForceSubmit) {
+        const result = await requestConfirmation({
+          title: "资料尚未完整，无法提交退税",
+          message: `当前完整度：${completed}/${total || 0}（${percent}%）。请先补齐缺失资料后再提交。`,
+          details: missingLabels,
+          confirmLabel: "查看缺失资料",
+          cancelLabel: "关闭",
+          variant: "warning",
+        });
+        if (result.confirmed) {
+          await openMissingTarget(row, taxTargetKeyFromMissingLabel(missingLabels[0] || ""));
+        }
+        return;
+      }
+      const forceResult = await requestConfirmation({
+        title: "确认强制提交退税并归档？",
+        message: `当前完整度：${completed}/${total || 0}（${percent}%）。归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`,
+        details: [
+          `订单：${row.orderNo || "-"}`,
+          `提单号：${row.blNo || "-"}`,
+          ...(missingLabels.length ? [`缺失资料：${missingLabels.join(" / ")}`] : []),
+        ],
+        requireInput: true,
+        inputLabel: "强制提交原因",
+        inputPlaceholder: "例如：税务局要求先申报，发票后补",
+        inputRequiredMessage: "强制提交退税必须填写原因。",
+        confirmLabel: "确认强制提交并归档",
+        cancelLabel: "取消",
         variant: "warning",
       });
-      if (result.confirmed) {
-        await openMissingTarget(row, taxTargetKeyFromMissingLabel(missingLabels[0] || ""));
+      if (!forceResult.confirmed) {
+        return;
       }
-      return;
+      submitPayload = { status: "SUBMITTED", forceSubmit: true, forceReason: forceResult.inputValue?.trim() };
     } else {
       const submitResult = await requestConfirmation({
         title: "确认提交退税并归档？",
@@ -548,14 +571,8 @@ export function useTaxRefundController({
 
   async function uploadDocument(orderId: string, documentType: string, file: File | null, scope: UploadScope = {}) {
     if (!file) return;
+    const uploadKey = uploadScopeKey(orderId, documentType, scope);
     const isCustomsDeclaration = documentType === "CUSTOMS_ENTRY_FORM";
-    const effectiveCustomsDeclarationId = scope.customsDeclarationId || (detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : "");
-    const recordId = effectiveCustomsDeclarationId || (detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : orderId);
-    const effectiveScope = {
-      ...scope,
-      ...(effectiveCustomsDeclarationId ? { customsDeclarationId: effectiveCustomsDeclarationId } : {}),
-    };
-    const uploadKey = uploadScopeKey(orderId, documentType, effectiveScope);
     setUploadingKey(uploadKey);
     setUploadProgressByKey((current) => ({ ...current, [uploadKey]: 0 }));
     setDetailError("");
@@ -570,17 +587,16 @@ export function useTaxRefundController({
       formData.append("uploadSource", "REACT_TAX_REFUND");
       if (scope.costId) formData.append("costId", scope.costId);
       if (scope.supplierId) formData.append("supplierId", scope.supplierId);
-      if (effectiveCustomsDeclarationId) formData.append("customsDeclarationId", effectiveCustomsDeclarationId);
       formData.append("file", file);
       const data = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
         setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
       const uploadedDocument = data.document || data.data;
       if (uploadedDocument?.id) {
-        patchUploadedDocument(recordId, uploadedDocument);
+        patchUploadedDocument(orderId, uploadedDocument);
       }
       setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
-      if (detailOrderId === recordId) await fetchDetail(recordId);
+      if (detailOrderId === orderId) await fetchDetail(orderId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -619,10 +635,8 @@ export function useTaxRefundController({
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
-      const recordId = detail?.orderId === orderId && detail?.customsDeclarationId ? detail.customsDeclarationId : orderId;
-      const deletesCurrentCustomsDeclaration = document.documentType === "CUSTOMS_ENTRY_FORM" && Boolean(detail?.customsDeclarationId);
       setDetail((current) => {
-        if (!current || current.id !== recordId) return current;
+        if (!current || current.id !== orderId) return current;
         const nextDetail: TaxRefundDetail = {
           ...current,
           documents: (current.documents || []).filter((item) => item.id !== document.id),
@@ -635,20 +649,13 @@ export function useTaxRefundController({
         return nextDetail;
       });
       if (document.documentType === "CUSTOMS_ENTRY_FORM") {
-        patchRowsForOrder(recordId, {
+        patchRowsForOrder(orderId, {
           customsDeclarationNo: "",
           customsDeclarationDate: "",
           declarationDate: "",
         });
       }
-      if (deletesCurrentCustomsDeclaration && detailOrderId === recordId) {
-        setDetailOrderId("");
-        setDetailRow(null);
-        setDetail(null);
-        await loadRows(page, submittedKeyword, mode, declarationStartMonth, declarationEndMonth, statusFilter, businessEntityId);
-      } else if (detailOrderId === recordId) {
-        await fetchDetail(recordId);
-      }
+      if (detailOrderId === orderId) await fetchDetail(orderId);
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");
