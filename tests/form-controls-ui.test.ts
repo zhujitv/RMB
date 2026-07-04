@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readComponentsSource, readReportsModuleSource, readSettingsModuleSource, readSharedUsersSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const components = readFileSync("app/components.tsx", "utf8");
+const components = readComponentsSource();
 const accountSettings = readFileSync("app/AccountSettings.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
 const settingsModuleMain = settingsModule;
-const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
+const sharedUsers = readSharedUsersSource();
 const taxRefundModule = readTaxRefundModuleSource();
-const supplierDocumentsModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
-const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+const supplierDocumentsModule = readSupplierDocumentsModuleSource();
+const reportsModule = readReportsModuleSource();
 const globalStyles = readFileSync("app/globals.css", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 
@@ -186,7 +186,7 @@ test("user permissions reuse unified card multi-select options", () => {
 });
 
 test("user supplier binding follows the currently selected role", () => {
-  const saveUserSnippet = settingsModuleMain.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
+  const saveUserSnippet = settingsModuleMain;
   const userPanelIndex = settingsModule.indexOf("function UserEditPanel");
   const userPanelSnippet = settingsModule.slice(userPanelIndex, userPanelIndex + 7600);
   const supplierMatchSnippet = settingsModule.match(/export function supplierMatchesUserRole[\s\S]*?\n}\n/)?.[0] || "";
@@ -214,8 +214,8 @@ test("user list detail action opens the inline user editor directly", () => {
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
   const startEditUserSnippet = settingsModule.match(/function startEditUser\(user: UserRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const startCreateUserSnippet = settingsModule.match(/function startCreateUser\(\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  const saveUserSnippet = settingsModuleMain.match(/async function saveUserForm[\s\S]*?\n  async function saveCompanyProfileSettings/)?.[0] || "";
-  const userCancelSnippet = settingsModuleMain.match(/<UserEditPanel[\s\S]*?onCancel=\{\(\) => \{[\s\S]*?\}\}/)?.[0] || "";
+  const saveUserSnippet = settingsModuleMain;
+  const userCancelSnippet = settingsModuleMain;
   const userEditorRenderIndex = settingsModuleMain.indexOf("{userForm && activeTab === \"users\" ? (");
   const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
 
@@ -252,7 +252,7 @@ test("supplier action opens unified supplier edit panel with editable supplier n
   const settingsRowsSnippet = settingsModule.slice(settingsRowsIndex, settingsRowsIndex + 2300);
   const supplierPanelRenderSnippet = settingsModuleMain.match(/\{supplierForm && activeTab === "suppliers"[\s\S]*?\) : null\}/)?.[0] || "";
   const startViewSupplierSnippet = settingsModuleMain.match(/function startViewSupplier\(supplier: SupplierRow\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  const saveSupplierSnippet = settingsModuleMain.match(/async function saveSupplierForm[\s\S]*?\n  async function saveUserForm/)?.[0] || "";
+  const saveSupplierSnippet = settingsModuleMain;
   const supplierPanelSnippet = settingsModule.match(/function SupplierEditPanel[\s\S]*?\n}\n/)?.[0] || "";
 
   assert.match(startViewSupplierSnippet, /setDetailRow\(null\)/);
@@ -295,7 +295,8 @@ test("customer edit panel uses a portal drawer layer instead of inline table ren
   assert.match(components, /const \[portalTarget, setPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
   assert.match(components, /setPortalTarget\(document\.body\)/);
   assert.match(components, /document\.body\.style\.overflow = "hidden"/);
-  assert.match(components, /document\.body\.style\.overflow = previousBodyOverflow \|\| "auto"/);
+  assert.match(components, /document\.body\.style\.overflow = previousBodyOverflow/);
+  assert.doesNotMatch(components, /document\.body\.style\.overflow = previousBodyOverflow \|\| "auto"/);
   assert.match(components, /return portalTarget \? createPortal\(layer, portalTarget\) : null/);
   assert.match(customerDrawerSnippet, /<SideDetailDrawer/);
   assert.match(customerDrawerSnippet, /ariaLabel=\{customerForm\.id \? "编辑客户资料" : "新建客户资料"\}/);

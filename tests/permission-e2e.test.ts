@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
+import {
+  readDomesticLogisticsApiSource,
+  readLogisticsExpenseAccessSource,
+  readOrdersServiceSource,
+  readSharedAuthSource,
+  readSharedUsersSource,
+  readShipsgoTrackingSource,
+  readSupplierDocumentRequestsSource,
+  readSupplierDocumentsModuleSource,
+  readTaxRefundsSource,
+  readWorkspaceShellSource,
+} from "./source-helpers.ts";
 
 function source(path: string) {
   return readFileSync(path, "utf8");
@@ -14,31 +26,20 @@ function assertApiRouteUsesUnifiedAuth(path: string) {
 }
 
 const orderAccess = source("lib/platform/order-access.ts");
-const ordersService = source("lib/platform/orders-module.ts");
+const ordersService = readOrdersServiceSource();
 const paymentsService = source("lib/platform/payments-module.ts");
-const taxRefundService = source("lib/platform/tax-refunds.ts");
-const domesticLogisticsService = source("lib/platform/domestic-logistics-api.ts");
+const taxRefundService = readTaxRefundsSource();
+const domesticLogisticsService = readDomesticLogisticsApiSource();
 const mastersAccess = source("lib/platform/masters-access.ts");
 const logisticsExpenseQueries = source("lib/platform/logistics-expense-queries.ts");
-const logisticsExpenseAccess = [
-  "lib/platform/logistics-expense-access.ts",
-  "lib/platform/logistics-expense-access-model.ts",
-  "lib/platform/logistics-expense-access-serialization.ts",
-  "lib/platform/logistics-expense-access-permissions.ts",
-  "lib/platform/logistics-expense-access-mutations.ts",
-].map(source).join("\n");
-const shipsgoTracking = [
-  "lib/platform/shipsgo-tracking.ts",
-  "lib/platform/shipsgo-tracking-utils.ts",
-  "lib/platform/shipsgo-tracking-mapping.ts",
-  "lib/platform/shipsgo-control-tower.ts",
-  "lib/platform/shipsgo-tracking-service.ts",
-].map(source).join("\n");
-const supplierDocumentService = source("lib/platform/supplier-document-requests.ts");
-const supplierDocumentModule = source("app/modules/SupplierDocumentsModule.tsx");
+const logisticsExpenseAccess = readLogisticsExpenseAccessSource();
+const shipsgoTracking = readShipsgoTrackingSource();
+const supplierDocumentService = readSupplierDocumentRequestsSource();
+const supplierDocumentModule = readSupplierDocumentsModuleSource();
 const loginRoute = source("app/api/auth/login/route.ts");
-const sharedAuth = source("lib/platform/shared-auth.ts");
-const workspaceShell = source("app/WorkspaceShell.tsx");
+const sharedAuth = readSharedAuthSource();
+const sharedUsers = readSharedUsersSource();
+const workspaceShell = readWorkspaceShellSource();
 
 test("E2E permission: salesperson data stays scoped to own customers across orders payments costs reports and tax refund", () => {
   const salesperson = rolePermissionSnapshot("业务员");
@@ -154,7 +155,7 @@ test("E2E permission: finance can read financial modules but cannot mutate order
   }
 
   assert.match(ordersService, /export async function saveOrder[\s\S]*assertWrite\(actor, "orders"\)/);
-  assert.match(source("lib/platform/shared-users.ts"), /assertWrite\(actor, "users"\)/);
+  assert.match(sharedUsers, /assertWrite\(actor, "users"\)/);
   assert.match(source("lib/platform/supplier-masters.ts"), /assertWrite\(actor, "suppliers"\)/);
   assert.match(paymentsService, /assertRead\(actor, "payments"\)/);
 });

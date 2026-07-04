@@ -12,6 +12,7 @@ const ordersModule = [
   "app/modules/orders/utils.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
 const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
@@ -56,6 +57,14 @@ test("orders api sorts receivable orders by shipment date", () => {
   assert.match(ordersService, /skip: \(page - 1\) \* pageSize/);
   assert.match(ordersService, /take: pageSize/);
   assert.doesNotMatch(ordersService, /sortedRows\.slice\(start, start \+ pageSize\)/);
+});
+
+test("orders module keeps legacy order service exports after split", () => {
+  assert.match(ordersService, /export \{ searchReceivableOrders \} from "\.\/order-receivable-search"/);
+  assert.match(ordersService, /export \{ repairMissingOrderSalespeople \} from "\.\/order-salesperson-repair"/);
+  assert.match(ordersPaymentsService, /export \* from "\.\/orders-module"/);
+  assert.doesNotMatch(ordersPaymentsService, /export \* from "\.\/order-receivable-search"/);
+  assert.doesNotMatch(ordersPaymentsService, /export \* from "\.\/order-salesperson-repair"/);
 });
 
 test("orders create form submits system exchange rate metadata", () => {

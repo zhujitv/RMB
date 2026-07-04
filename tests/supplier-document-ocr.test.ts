@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isSuspiciousInvoiceParty, parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
+import { readSupplierDocumentOcrSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource } from "./source-helpers.ts";
 import {
   contractOrderNoMatches,
   normalizeContractOrderNoSet,
@@ -9,10 +10,10 @@ import {
 } from "../lib/platform/supplier-contract-order-match.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
-const service = readFileSync("lib/platform/supplier-document-ocr.ts", "utf8");
+const service = readSupplierDocumentOcrSource();
 const vatParser = readFileSync("lib/platform/supplier-vat-invoice-parser.ts", "utf8");
-const supplierRequests = readFileSync("lib/platform/supplier-document-requests.ts", "utf8");
-const supplierModule = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
+const supplierRequests = readSupplierDocumentRequestsSource();
+const supplierModule = readSupplierDocumentsModuleSource();
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
 const rejectRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/reject/route.ts", "utf8");

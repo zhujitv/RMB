@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readCostRecordsQueriesSource, readCostsModuleSource, readDomesticLogisticsApiSource, readDomesticLogisticsModuleSource, readPaymentsModuleSource, readTaxRefundModuleSource, readTaxRefundsSource } from "./source-helpers.ts";
 
 const modules = {
   orders: readFileSync("app/modules/OrdersModule.tsx", "utf8"),
-  payments: readFileSync("app/modules/PaymentsModule.tsx", "utf8"),
+  payments: readPaymentsModuleSource(),
   costs: readCostsModuleSource(),
   logistics: readDomesticLogisticsModuleSource(),
   taxRefund: readTaxRefundModuleSource(),
@@ -16,16 +16,18 @@ const modules = {
 const services = {
   orders: readFileSync("lib/platform/orders-module.ts", "utf8"),
   payments: readFileSync("lib/platform/payments-module.ts", "utf8"),
-  costs: readFileSync("lib/platform/cost-records-queries.ts", "utf8"),
-  logistics: readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"),
-  taxRefund: readFileSync("lib/platform/tax-refunds.ts", "utf8"),
+  costs: readCostRecordsQueriesSource(),
+  logistics: readDomesticLogisticsApiSource(),
+  taxRefund: readTaxRefundsSource(),
   profit: readFileSync("lib/platform/profit-overview.ts", "utf8"),
 };
 
 test("business list pages use keyword for fuzzy search requests", () => {
   for (const [name, source] of Object.entries(modules)) {
     assert.match(source, /params\.set\("keyword",/, `${name} should send keyword query param`);
-    const enterSubmitPattern = name === "taxRefund"
+    const enterSubmitPattern = name === "costs"
+      ? /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) onSubmit\(\);/
+      : name === "taxRefund"
       ? /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) onSubmitSearch\(\);/
       : /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) submitSearch\(\);/;
     assert.match(source, enterSubmitPattern, `${name} should submit on Enter`);

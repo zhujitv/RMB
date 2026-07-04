@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { DetailField, SideDetailDrawer, UiTabs } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
-import { preventEnterFormSubmit } from "../../formGuards";
+import { LogisticsExpenseBillActions } from "./details-actions";
+import { LogisticsExpenseDetailsTable } from "./details-table";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
 import {
@@ -9,9 +10,6 @@ import {
   logisticsCostTypeLabel,
 } from "../../../lib/platform/logistics-cost-types";
 import {
-  CURRENCIES,
-  COST_TYPE_OPTIONS,
-  PAY_BUTTON_DISABLED_TOOLTIP,
   type LogisticsExpense,
   type LogisticsExpenseBatchSavePayload,
   type LogisticsExpenseBatchSaveResult,
@@ -20,12 +18,8 @@ import {
 } from "./model";
 import { LogisticsInvoiceGroupsPanel } from "./invoice-groups-panel";
 import {
-  compactStatusLabel,
   createTemporaryLogisticsExpenseRow,
   defaultLogisticsExpenseDetailTab,
-  editableQuantityText,
-  expenseBillingQuantity,
-  expenseCostSyncText,
   formatOriginalCurrencyAccounting,
   logisticsCurrencySummaryPlainText,
   LogisticsCurrencyAmountList,
@@ -41,7 +35,6 @@ import {
   logisticsExpenseCurrencySummaryFromItems,
   logisticsExpenseDeleteBlockReason,
   logisticsExpenseDetailInvoiceStatus,
-  logisticsExpenseDisplayCurrency,
   logisticsExpenseDraftChanged,
   logisticsExpenseDraftCreatePayload,
   logisticsExpenseDraftFromItem,
@@ -49,11 +42,7 @@ import {
   logisticsExpenseDraftSignature,
   logisticsExpenseDraftsFromItems,
   logisticsExpenseDraftValidationMessage,
-  logisticsExpenseEditBlockReason,
   logisticsExpenseContainerSummary,
-  logisticsExpenseLineContainerType,
-  logisticsExpenseOriginalAmount,
-  logisticsExpensePayButtonState,
   logisticsInvoiceGroupsForBill,
   StatusPill,
   validLogisticsExpenseDraft,
@@ -300,167 +289,17 @@ export function LogisticsExpenseRows({
     }
   }
 
-  function renderBillSaveControls() {
-    if (!canEditBillDetails) return null;
-    return (
-      <>
-        <span
-          className={`${styles.saveStateBadge} ${hasPendingChanges ? styles.saveStateDirty : billSaved ? styles.saveStateSaved : ""}`}
-        >
-          {hasPendingChanges ? "● 有未保存修改" : billSaved ? "✓ 已保存" : ""}
-        </span>
-        <button
-          className={styles.billAddLineButton}
-          type="button"
-          disabled={saving}
-          onKeyDown={preventEnterFormSubmit}
-          onClick={(event) => {
-            event.stopPropagation();
-            addExpenseDetailRow();
-          }}
-        >
-          + 新增费用明细
-        </button>
-        <button
-          className={styles.billSaveButton}
-          type="button"
-          disabled={!hasPendingChanges || saving}
-          onKeyDown={preventEnterFormSubmit}
-          onClick={(event) => {
-            event.stopPropagation();
-            void handleSaveBillDetails();
-          }}
-        >
-          {saving ? "保存中..." : "保存本账单明细"}
-        </button>
-      </>
-    );
-  }
 
-  function renderBillReviewControls() {
-    if (!canReviewBill) return null;
-    const busy = busyId === expense.id;
-    return (
-      <>
-        <button
-          className={styles.billApproveButton}
-          type="button"
-          disabled={busy || saving}
-          title="审核当前提单账单并通知供应商开票"
-          onClick={(event) => {
-            event.stopPropagation();
-            onApprove(expense);
-          }}
-        >
-          {busy ? "处理中..." : "审核通过并通知开票"}
-        </button>
-        <button
-          className={styles.billRejectButton}
-          type="button"
-          disabled={busy || saving}
-          title="驳回当前提单账单并要求供应商修改"
-          onClick={(event) => {
-            event.stopPropagation();
-            onReject(expense);
-          }}
-        >
-          {busy ? "处理中..." : "驳回"}
-        </button>
-      </>
-    );
-  }
 
-  function renderBillWithdrawControls() {
-    if (!canWithdraw || billAuditStatus !== "待审核") return null;
-    const busy = busyId === expense.id;
-    return (
-      <button
-        className={styles.billAddLineButton}
-        type="button"
-        disabled={busy || saving}
-        title="撤回当前账单，账单下所有费用明细同步回草稿"
-        onClick={(event) => {
-          event.stopPropagation();
-          onWithdraw(expense);
-        }}
-      >
-        {busy ? "撤回中..." : "撤回账单"}
-      </button>
-    );
-  }
 
-  function renderInvoiceNoticeControls() {
-    if (!canReview || !hasInvoiceNoticeFailure) return null;
-    const busy = busyId === expense.id;
-    return (
-      <button
-        className={styles.billAddLineButton}
-        type="button"
-        disabled={busy || saving}
-        title="仅重新发送当前账单开票通知，不重新审核"
-        onClick={(event) => {
-          event.stopPropagation();
-          onResendInvoiceNotice(expense);
-        }}
-      >
-        {busy ? "发送中..." : "重新发送开票通知"}
-      </button>
-    );
-  }
 
-  function renderBillPaymentControls() {
-    if (!canMarkPaid) return null;
-    const payState = logisticsExpensePayButtonState(expense);
-    const busy = busyId === expense.id;
-    const disabled = busy || saving || !payState.canMarkPaid;
-    return (
-      <button
-        className={styles.billPayButton}
-        type="button"
-        disabled={disabled}
-        title={
-          payState.canMarkPaid
-            ? "将当前账单标记为已付款"
-            : PAY_BUTTON_DISABLED_TOOLTIP
-        }
-        onClick={(event) => {
-          event.stopPropagation();
-          if (!payState.canMarkPaid) return;
-          onMarkPaid(expense);
-        }}
-      >
-        {busy ? "更新中..." : payState.alreadyPaid ? "已付款" : "标记已付款"}
-      </button>
-    );
-  }
 
-  function renderBillSubmitControls() {
-    if (!shouldShowSubmitBill) return null;
-    const disabled =
-      !canSubmitThisBill ||
-      hasPendingChanges ||
-      busyId === expense.id ||
-      saving;
-    const title = hasPendingChanges
-      ? "请先保存本账单明细，再提交审核"
-      : canSubmitThisBill
-        ? "将当前账单提交给管理员审核"
-        : "只有草稿或已驳回的账单可以提交审核";
-    return (
-      <button
-        className={styles.primaryButtonCompact}
-        type="button"
-        disabled={disabled}
-        title={title}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSubmitDraft(expense);
-        }}
-      >
-        {busyId === expense.id ? "提交中..." : "提交审核"}
-      </button>
-    );
-  }
+
+
+
+
+
+
 
   const drawerSubtitle = [
     `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
@@ -477,14 +316,30 @@ export function LogisticsExpenseRows({
       onClose={onClose}
       surfaceClassName={styles.logisticsExpenseDrawer}
       actions={
-        <>
-          {renderBillSubmitControls()}
-          {renderBillWithdrawControls()}
-          {renderBillReviewControls()}
-          {renderInvoiceNoticeControls()}
-          {renderBillPaymentControls()}
-          {renderBillSaveControls()}
-        </>
+        <LogisticsExpenseBillActions
+          expense={expense}
+          busyId={busyId}
+          saving={saving}
+          billAuditStatus={billAuditStatus}
+          billSaved={billSaved}
+          canEditBillDetails={canEditBillDetails}
+          canMarkPaid={canMarkPaid}
+          canReview={canReview}
+          canReviewBill={canReviewBill}
+          canSubmitThisBill={canSubmitThisBill}
+          canWithdraw={canWithdraw}
+          hasInvoiceNoticeFailure={hasInvoiceNoticeFailure}
+          hasPendingChanges={hasPendingChanges}
+          shouldShowSubmitBill={shouldShowSubmitBill}
+          onAddLine={addExpenseDetailRow}
+          onApprove={onApprove}
+          onMarkPaid={onMarkPaid}
+          onReject={onReject}
+          onResendInvoiceNotice={onResendInvoiceNotice}
+          onSave={handleSaveBillDetails}
+          onSubmitDraft={onSubmitDraft}
+          onWithdraw={onWithdraw}
+        />
       }
     >
       {hasInvoiceNoticeFailure ? (
@@ -627,257 +482,5 @@ export function LogisticsExpenseRows({
         </div>
       ) : null}
     </SideDetailDrawer>
-  );
-}
-
-function LogisticsExpenseDetailsTable({
-  items,
-  drafts,
-  busyId,
-  deletingId,
-  billAuditStatus,
-  canEditAmount,
-  canDeleteExpense,
-  onDraftChange,
-  onStageDelete,
-}: {
-  items: LogisticsExpense[];
-  drafts: Record<string, LogisticsExpenseDraft>;
-  busyId: string;
-  deletingId: string;
-  billAuditStatus: string;
-  canEditAmount: boolean;
-  canDeleteExpense: boolean;
-  onDraftChange: (
-    id: string,
-    field: keyof LogisticsExpenseDraft,
-    value: string,
-  ) => void;
-  onStageDelete: (expense: LogisticsExpense) => void;
-}) {
-  return (
-    <div
-      className={styles.logisticsDetailTableWrap}
-      onKeyDown={preventEnterFormSubmit}
-    >
-      <table className={styles.logisticsDetailTable}>
-        <thead>
-          <tr>
-            <th>费用类型</th>
-            <th>柜型</th>
-            <th>数量</th>
-            <th className={styles.numericCell}>金额</th>
-            <th>备注</th>
-            <th>发票状态</th>
-            <th>成本同步</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((expense, index) => (
-            <LogisticsExpenseDetailLine
-              key={expense.id || `${expense.orderId || "expense"}-${index}`}
-              expense={expense}
-              draft={
-                drafts[expense.id] || logisticsExpenseDraftFromItem(expense)
-              }
-              busy={busyId === expense.id}
-              deleting={deletingId === expense.id}
-              billAuditStatus={billAuditStatus}
-              canEditAmount={canEditAmount}
-              canDeleteExpense={canDeleteExpense}
-              onDraftChange={onDraftChange}
-              onStageDelete={onStageDelete}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function LogisticsExpenseDetailLine({
-  expense,
-  draft,
-  busy,
-  deleting,
-  billAuditStatus,
-  canEditAmount,
-  canDeleteExpense,
-  onDraftChange,
-  onStageDelete,
-}: {
-  expense: LogisticsExpense;
-  draft: LogisticsExpenseDraft;
-  busy: boolean;
-  deleting: boolean;
-  billAuditStatus: string;
-  canEditAmount: boolean;
-  canDeleteExpense: boolean;
-  onDraftChange: (
-    id: string,
-    field: keyof LogisticsExpenseDraft,
-    value: string,
-  ) => void;
-  onStageDelete: (expense: LogisticsExpense) => void;
-}) {
-  const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
-  const billEditable = logisticsExpenseBillIsEditable(billAuditStatus);
-  const editBlockReason = billEditable
-    ? logisticsExpenseEditBlockReason(expense)
-    : `账单${billAuditStatus}，不能修改`;
-  const canEditThisAmount = canEditAmount && billEditable && !editBlockReason;
-  const shouldRenderRemarkInput = canEditThisAmount;
-  const originalAmount = logisticsExpenseOriginalAmount(expense);
-  const originalCurrency = logisticsExpenseDisplayCurrency(expense, draft);
-  const recommendedCurrency = logisticsCostTypeDefaultCurrency(draft.costType);
-  const shouldShowCurrencySuggestion =
-    Boolean(draft.currencyTouched) && originalCurrency !== recommendedCurrency;
-  const deleteBlockReason = billEditable
-    ? logisticsExpenseDeleteBlockReason(expense)
-    : `账单${billAuditStatus}，不能删除明细`;
-  return (
-    <tr>
-      <td>
-        {expense.isTemporary ? (
-          <select
-            className={styles.inlineCostTypeSelect}
-            value={draft.costType}
-            onChange={(event) =>
-              onDraftChange(expense.id, "costType", event.target.value)
-            }
-            aria-label="费用类型"
-          >
-            {COST_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          logisticsCostTypeLabel(expense.costType || "") || "-"
-        )}
-      </td>
-      <td>{logisticsExpenseLineContainerType(expense)}</td>
-      <td>
-        {canEditThisAmount ? (
-          <input
-            className={styles.inlineQuantityInput}
-            type="number"
-            min="1"
-            step="1"
-            value={draft.appliedContainerCount}
-            onChange={(event) =>
-              onDraftChange(
-                expense.id,
-                "appliedContainerCount",
-                event.target.value,
-              )
-            }
-            aria-label="适用数量"
-          />
-        ) : (
-          editableQuantityText(expenseBillingQuantity(expense))
-        )}
-      </td>
-      <td className={styles.numericCell}>
-        <div className={styles.inlineAmountEditor}>
-          {canEditThisAmount ? (
-            <>
-              <input
-                value={draft.unitAmount}
-                onChange={(event) =>
-                  onDraftChange(expense.id, "unitAmount", event.target.value)
-                }
-                inputMode="decimal"
-                aria-label="物流费用单价"
-              />
-              <select
-                value={originalCurrency}
-                onChange={(event) =>
-                  onDraftChange(expense.id, "currency", event.target.value)
-                }
-                aria-label="物流费用币种"
-              >
-                {CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency}>
-                    {currency}
-                  </option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <strong>
-              {formatOriginalCurrencyAccounting(
-                originalCurrency,
-                originalAmount,
-              )}
-            </strong>
-          )}
-          {canEditThisAmount && shouldShowCurrencySuggestion ? (
-            <span className={styles.inlineEditHint}>
-              建议币种为 {recommendedCurrency}
-            </span>
-          ) : null}
-        </div>
-      </td>
-      <td
-        className={styles.remarkCell}
-        title={draft.remark || expense.remark || ""}
-      >
-        {shouldRenderRemarkInput ? (
-          <div className={styles.inlineRemarkCell}>
-            <input
-              className={styles.inlineRemarkInput}
-              value={draft.remark}
-              onChange={(event) =>
-                onDraftChange(expense.id, "remark", event.target.value)
-              }
-              disabled={!canEditThisAmount}
-              placeholder="-"
-              aria-label="物流费用备注"
-            />
-            {!canEditThisAmount && editBlockReason ? (
-              <span className={styles.inlineEditHint}>{editBlockReason}</span>
-            ) : null}
-          </div>
-        ) : (
-          expense.remark || "-"
-        )}
-      </td>
-      <td>
-        <StatusPill value={compactStatusLabel(invoiceStatus, "invoice")} />
-      </td>
-      <td>
-        <div className={styles.costSyncCell}>
-          <span>{expenseCostSyncText(expense)}</span>
-        </div>
-      </td>
-      <td>
-        <div className={styles.compactDetailActions}>
-          <button
-            className={styles.logisticsLineDeleteButton}
-            type="button"
-            disabled={
-              !canDeleteExpense ||
-              busy ||
-              deleting ||
-              (!expense.isTemporary && Boolean(deleteBlockReason))
-            }
-            title={
-              !canDeleteExpense
-                ? "无权限删除该费用明细"
-                : deleteBlockReason || "删除这条费用明细"
-            }
-            onClick={(event) => {
-              event.stopPropagation();
-              onStageDelete(expense);
-            }}
-          >
-            {deleting ? "删除中..." : expense.isTemporary ? "移除" : "删除"}
-          </button>
-        </div>
-      </td>
-    </tr>
   );
 }

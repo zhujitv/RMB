@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { readCostsModuleSource } from "./source-helpers.ts";
 import test from "node:test";
-import { readWorkspaceStylesSource } from "./source-helpers.ts";
+import {
+  readComponentsSource,
+  readCostsModuleSource,
+  readLogisticsFeesModuleSource,
+  readPaymentsModuleSource,
+  readWorkspaceStylesSource,
+} from "./source-helpers.ts";
 
-const components = readFileSync("app/components.tsx", "utf8");
+const components = readComponentsSource();
 const workspaceStyles = readWorkspaceStylesSource();
 const ordersModule = [
   "app/modules/OrdersModule.tsx",
@@ -14,15 +19,10 @@ const ordersModule = [
   "app/modules/orders/detail-drawer.tsx",
   "app/modules/orders/utils.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
-const paymentsModule = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
+const paymentsModule = readPaymentsModuleSource();
 const costsModule = readCostsModuleSource();
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
-const logisticsFeesModule = [
-  "app/modules/LogisticsFeesModule.tsx",
-  "app/modules/logistics-fees/details-drawer.tsx",
-]
-  .map((file) => readFileSync(file, "utf8"))
-  .join("\n");
+const logisticsFeesModule = readLogisticsFeesModuleSource();
 
 test("money amount component renders foreign currency on two lines and CNY on one line", () => {
   assert.match(components, /export function MoneyAmount/);

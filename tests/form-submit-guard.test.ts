@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { preventEnterFormSubmit } from "../app/formGuards.ts";
-import { readCostsModuleSource, readDomesticLogisticsModuleSource } from "./source-helpers.ts";
+import { readCostsModuleSource, readCustomerCommunicationModuleSource, readDomesticLogisticsModuleSource, readLogisticsFeesModuleSource, readSharedSerializationSource } from "./source-helpers.ts";
 
 function keyboardEvent(key: string, tagName: string) {
   let defaultPrevented = false;
@@ -25,21 +25,11 @@ function keyboardEvent(key: string, tagName: string) {
   };
 }
 
-const logisticsFeesModule = [
-  "app/modules/LogisticsFeesModule.tsx",
-  "app/modules/logistics-fees/details-drawer.tsx",
-  "app/modules/logistics-fees/expense-form.tsx",
-  "app/modules/logistics-fees/invoice-groups-panel.tsx",
-]
-  .map((file) => readFileSync(file, "utf8"))
-  .join("\n");
+const logisticsFeesModule = readLogisticsFeesModuleSource();
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 const costsModule = readCostsModuleSource();
-const customerCommunicationModule = readFileSync("app/modules/CustomerCommunicationModule.tsx", "utf8");
-const sharedSerialization = readFileSync(
-  "lib/platform/shared-serialization.ts",
-  "utf8",
-);
+const customerCommunicationModule = readCustomerCommunicationModuleSource();
+const sharedSerialization = readSharedSerializationSource();
 
 test("form guard blocks Enter from submitting single-line controls", () => {
   const event = keyboardEvent("Enter", "INPUT");

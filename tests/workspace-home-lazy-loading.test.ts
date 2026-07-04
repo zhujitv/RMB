@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readWorkspaceShellSource } from "./source-helpers.ts";
 
-const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const workspaceShell = readWorkspaceShellSource();
 const apiClient = readFileSync("app/api.ts", "utf8");
 
 test("workspace home keeps business modules lazy-loaded behind menu selection", () => {

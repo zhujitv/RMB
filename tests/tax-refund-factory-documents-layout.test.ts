@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const detailComponents = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
-const uploadComponents = readFileSync("app/modules/tax-refund/upload-components.tsx", "utf8");
+const detailComponents = readTaxRefundModuleSource();
+const uploadComponents = readTaxRefundModuleSource();
 const workspaceStyles = readWorkspaceStylesSource();
 
 test("tax refund factory documents use a full-width responsive supplier grid", () => {

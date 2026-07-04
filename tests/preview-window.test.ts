@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostsModuleSource, readDomesticLogisticsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import {
+  readComponentsSource,
+  readCostsModuleSource,
+  readDomesticLogisticsModuleSource,
+  readLogisticsFeesModuleSource,
+  readOrderDocumentsSource,
+  readSharedConstantsSource,
+  readSharedSerializationSource,
+  readTaxRefundModuleSource,
+  readWorkspaceStylesSource,
+} from "./source-helpers.ts";
 
 const previewRoute = readFileSync(
   "app/api/order-documents/[id]/preview/route.ts",
@@ -35,30 +45,16 @@ const documentPreviewClient = readFileSync(
   "app/documents/preview/[id]/preview-client.tsx",
   "utf8",
 );
-const sharedComponents = readFileSync("app/components.tsx", "utf8");
+const sharedComponents = readComponentsSource();
 const taxRefundModule = readTaxRefundModuleSource();
 const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 const costsModule = readCostsModuleSource();
-const logisticsModule = [
-  "app/modules/LogisticsFeesModule.tsx",
-  "app/modules/logistics-fees/invoice-groups-panel.tsx",
-]
-  .map((file) => readFileSync(file, "utf8"))
-  .join("\n");
+const logisticsModule = readLogisticsFeesModuleSource();
 const uploadTexts = readFileSync("app/uploadTexts.ts", "utf8");
-const orderDocumentsService = readFileSync(
-  "lib/platform/order-documents.ts",
-  "utf8",
-);
+const orderDocumentsService = readOrderDocumentsSource();
 const customsRecognitionService = readFileSync("lib/platform/customs-recognition.ts", "utf8");
-const sharedConstants = readFileSync(
-  "lib/platform/shared-constants.ts",
-  "utf8",
-);
-const sharedSerialization = readFileSync(
-  "lib/platform/shared-serialization.ts",
-  "utf8",
-);
+const sharedConstants = readSharedConstantsSource();
+const sharedSerialization = readSharedSerializationSource();
 const fileCenter = readFileSync(
   "lib/platform/file-center.ts",
   "utf8",

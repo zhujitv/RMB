@@ -2,135 +2,35 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../api";
-import { DetailField, PaginationBar, UiCheckbox } from "../components";
-import { canReadPermission, customerDisplayName, customerLegalName, downloadBlob } from "../utils";
+import { PaginationBar, UiCheckbox } from "../components";
+import { canReadPermission, downloadBlob } from "../utils";
 import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import {
-  LOGISTICS_COST_TYPE_OPTIONS,
-  LOGISTICS_COST_TYPES,
-} from "../../lib/platform/logistics-cost-types";
-
-type ReportType = {
-  key: string;
-  label: string;
-  area: string;
-};
-
-type ReportColumn = {
-  key: string;
-  label: string;
-};
-
-type ReportRow = Record<string, unknown> & {
-  id?: string;
-  orderId?: string;
-  customerFullName?: string;
-  customerName?: string;
-  customerShortName?: string;
-  businessEntityDisplayName?: string;
-  businessEntityShortName?: string;
-  businessEntityName?: string;
-  businessEntityNameSnapshot?: string;
-  orderNo?: string;
-  taxRefundStatus?: string;
-};
-
-type ReportResponse = {
-  reportType: string;
-  label: string;
-  columns: ReportColumn[];
-  rows: ReportRow[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-type BusinessEntityOption = {
-  id: string;
-  name: string;
-  shortName?: string;
-  displayName?: string;
-  isDefault?: boolean;
-};
-
-type BusinessEntitiesResponse = {
-  entities?: BusinessEntityOption[];
-};
-
-type ExportScope = "currentPage" | "selected" | "allFiltered";
-type ExportFormat = "xlsx" | "csv";
-type SortDirection = "asc" | "desc";
-type OpenMenuTarget = "orders" | "payments" | "costs" | "profit" | "taxRefund";
-
-const PAGE_SIZE = 20;
-const DEFAULT_REPORT_FILTERS = {
-  dateFrom: "",
-  dateTo: "",
-  customerName: "",
-  orderNo: "",
-  blNo: "",
-  currency: "",
-  salespersonName: "",
-  supplierName: "",
-  businessEntityId: "",
-  orderStatus: "",
-  paymentStatus: "",
-  costType: "",
-  taxRefundStatus: "",
-  declarationMonth: "",
-  archiveScope: "current",
-  keyword: "",
-};
-
-type ReportFilters = typeof DEFAULT_REPORT_FILTERS;
-
-const REPORT_TYPES: ReportType[] = [
-  { key: "receivables", label: "应收订单明细", area: "orders" },
-  { key: "payments", label: "收款明细", area: "payments" },
-  { key: "costs", label: "成本明细", area: "costs" },
-  { key: "profits", label: "利润分析", area: "commissions" },
-  { key: "commissions", label: "业务员提成", area: "commissions" },
-  { key: "overdue", label: "逾期催款", area: "orders" },
-  { key: "tax-refunds", label: "退税资料", area: "taxRefund" },
-];
-
-const REPORT_READ_ROLES: Record<string, string[]> = {
-  orders: ["管理员", "业务员", "财务"],
-  payments: ["管理员", "业务员", "财务"],
-  costs: ["管理员", "业务员", "财务"],
-  commissions: ["管理员", "财务"],
-  taxRefund: ["管理员", "业务员", "财务"],
-};
-
-const ORDER_STATUSES = ["", "草稿", "已确认", "部分收款", "已收齐", "多收款", "已逾期", "已关闭", "已取消"];
-const PAYMENT_STATUSES = ["", "待确认", "已到账", "已退回", "已取消"];
-const COST_TYPES = ["", "工厂货款", "原材料货款", "采购货款", "产品货款", ...LOGISTICS_COST_TYPES, "银行手续费", "国外佣金", "样品费", "其他费用"];
-const COST_TYPE_LABELS: Record<string, string> = Object.fromEntries([
-  ["", "全部"],
-  ...LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
-]);
-const TAX_REFUND_STATUSES = ["", "NOT_READY", "READY", "PROBLEM", "SUBMITTED", "REFUND_RECEIVED"];
-const TAX_REFUND_STATUS_LABELS: Record<string, string> = {
-  NOT_READY: "资料不完整",
-  READY: "资料完整待提交",
-  PROBLEM: "资料异常",
-  SUBMITTED: "已提交退税",
-  REFUND_RECEIVED: "已收到退税款",
-};
-
-const HIDDEN_DETAIL_KEYS = new Set(["id", "orderId", "customerId", "supplierId", "userId", "paymentId", "costId", "documentId"]);
-const EXPORT_ACTIONS: { scope: ExportScope; format: ExportFormat; label: string }[] = [
-  { scope: "currentPage", format: "xlsx", label: "当前页 Excel" },
-  { scope: "currentPage", format: "csv", label: "当前页 CSV" },
-  { scope: "selected", format: "xlsx", label: "已勾选 Excel" },
-  { scope: "selected", format: "csv", label: "已勾选 CSV" },
-  { scope: "allFiltered", format: "xlsx", label: "查询结果 Excel" },
-  { scope: "allFiltered", format: "csv", label: "查询结果 CSV" },
-];
+  COST_TYPE_LABELS,
+  COST_TYPES,
+  DEFAULT_REPORT_FILTERS,
+  EXPORT_ACTIONS,
+  ORDER_STATUSES,
+  PAGE_SIZE,
+  PAYMENT_STATUSES,
+  REPORT_READ_ROLES,
+  REPORT_TYPES,
+  TAX_REFUND_STATUSES,
+  TAX_REFUND_STATUS_LABELS,
+  reportFileName,
+  type BusinessEntitiesResponse,
+  type BusinessEntityOption,
+  type ExportFormat,
+  type ExportScope,
+  type OpenMenuTarget,
+  type ReportColumn,
+  type ReportFilters,
+  type ReportResponse,
+  type ReportRow,
+  type SortDirection,
+} from "./reports/model";
+import { ReportRows } from "./reports/report-rows";
 
 export function ReportsModule({
   currentUser,
@@ -524,97 +424,4 @@ export function ReportsModule({
       ) : null}
     </section>
   );
-}
-
-function ReportRows({
-  row,
-  columns,
-  visibleColumns,
-  selected,
-  expanded,
-  onToggle,
-  onSelect,
-  onOpenRecord,
-}: {
-  row: ReportRow;
-  columns: ReportColumn[];
-  visibleColumns: ReportColumn[];
-  selected: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-  onSelect: () => void;
-  onOpenRecord: () => void;
-}) {
-  const colSpan = visibleColumns.length + 2;
-  return (
-    <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
-        <td>
-          <span onClick={(event) => event.stopPropagation()}>
-            <UiCheckbox
-              label="选择此行"
-              variant="table"
-              checked={selected}
-              onChange={onSelect}
-            />
-          </span>
-        </td>
-        {visibleColumns.map((column) => (
-          <td
-            key={column.key}
-            className={column.key === "businessEntityName" ? styles.businessEntityColumn : undefined}
-            title={column.key === "businessEntityName" ? businessEntityFullName(row) : undefined}
-          >
-            {displayValue(row, column)}
-          </td>
-        ))}
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
-      </tr>
-      {expanded ? (
-        <tr className={styles.detailRow}>
-          <td colSpan={colSpan}>
-            <div className={styles.detailCard}>
-              <div className={styles.detailActions}>
-                <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenRecord(); }}>
-                  查看详情
-                </button>
-              </div>
-              <div className={styles.detailGrid}>
-                {columns
-                  .filter((column) => !HIDDEN_DETAIL_KEYS.has(column.key))
-                  .map((column) => (
-                    <DetailField
-                      key={column.key}
-                      label={column.label === "客户简称" ? "客户全称" : column.label}
-                      value={column.label === "客户简称"
-                        ? customerLegalName(row)
-                        : String(row[column.key] ?? "-")}
-                      wide={String(row[column.key] ?? "").length > 36}
-                    />
-                  ))}
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
-  );
-}
-
-function displayValue(row: ReportRow, column: ReportColumn) {
-  const value = column.key === "businessEntityName"
-    ? (row.businessEntityDisplayName || row.businessEntityShortName || businessEntityFullName(row))
-    : column.label === "客户简称"
-    ? customerDisplayName(row)
-    : row[column.key];
-  return String(value ?? "-");
-}
-
-function businessEntityFullName(row: ReportRow) {
-  return String(row.businessEntityName || row.businessEntityNameSnapshot || "");
-}
-
-function reportFileName(type: string, format: string) {
-  const label = REPORT_TYPES.find((item) => item.key === type)?.label || "报表";
-  return `${label}.${format === "xlsx" ? "xlsx" : "csv"}`;
 }

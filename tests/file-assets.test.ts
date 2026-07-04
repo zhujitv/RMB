@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readCostRecordsMutationsSource, readOrderDocumentsSource, readSupplierDocumentRequestsSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync(
@@ -8,12 +9,9 @@ const migration = readFileSync(
   "utf8",
 );
 const fileAssets = readFileSync("lib/platform/file-assets.ts", "utf8");
-const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
-const costs = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
-const supplierDocuments = readFileSync(
-  "lib/platform/supplier-document-requests.ts",
-  "utf8",
-);
+const orderDocuments = readOrderDocumentsSource();
+const costs = readCostRecordsMutationsSource();
+const supplierDocuments = readSupplierDocumentRequestsSource();
 const logisticsInvoice = readFileSync(
   "lib/platform/logistics-expense-invoice.ts",
   "utf8",

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readCostRecordsMutationsSource,
+  readLogisticsExpenseWorkflowSource,
+  readOrderDocumentsSource,
+  readSharedAuthSource,
+  readSharedUsersSource,
+  readShipsgoTrackingSource,
+  readSupplierDocumentRequestsSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
 function source(path: string) {
   return readFileSync(path, "utf8");
@@ -17,31 +27,19 @@ function assertAudit(sourceText: string, action: string, entityType: string) {
 }
 
 const sharedAudit = source("lib/platform/shared-audit.ts");
-const sharedAuth = source("lib/platform/shared-auth.ts");
+const sharedAuth = readSharedAuthSource();
 const loginRoute = source("app/api/auth/login/route.ts");
 const verifyEmailRoute = source("app/api/auth/verify-email/route.ts");
-const sharedUsers = source("lib/platform/shared-users.ts");
+const sharedUsers = readSharedUsersSource();
 const orders = source("lib/platform/orders-module.ts");
 const payments = source("lib/platform/payments-module.ts");
-const costs = source("lib/platform/cost-records-mutations.ts");
-const orderDocuments = source("lib/platform/order-documents.ts");
-const taxRefunds = source("lib/platform/tax-refunds.ts");
+const costs = readCostRecordsMutationsSource();
+const orderDocuments = readOrderDocumentsSource();
+const taxRefunds = readTaxRefundsSource();
 const domesticLogistics = source("lib/platform/domestic-logistics-api.ts");
-const logisticsWorkflow = [
-  "lib/platform/logistics-expense-workflow.ts",
-  "lib/platform/logistics-expense-workflow-core.ts",
-  "lib/platform/logistics-expense-workflow-review.ts",
-  "lib/platform/logistics-expense-workflow-mutations.ts",
-  "lib/platform/logistics-expense-workflow-invoice.ts",
-].map(source).join("\n");
-const supplierDocuments = source("lib/platform/supplier-document-requests.ts");
-const shipsgoTracking = [
-  "lib/platform/shipsgo-tracking.ts",
-  "lib/platform/shipsgo-tracking-utils.ts",
-  "lib/platform/shipsgo-tracking-mapping.ts",
-  "lib/platform/shipsgo-control-tower.ts",
-  "lib/platform/shipsgo-tracking-service.ts",
-].map(source).join("\n");
+const logisticsWorkflow = readLogisticsExpenseWorkflowSource();
+const supplierDocuments = readSupplierDocumentRequestsSource();
+const shipsgoTracking = readShipsgoTrackingSource();
 const companyProfile = source("lib/platform/company-profile.ts");
 const commissionFormula = source("lib/platform/commission-formula.ts");
 const notificationTemplates = source("lib/platform/notification-templates.ts");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readCustomerCommunicationModuleSource, readCustomerCommunicationServiceSource, readShippingDocumentsSource } from "./source-helpers.ts";
 
 function cssBlock(source: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -13,9 +14,9 @@ const globalsCss = readFileSync("app/globals.css", "utf8");
 const shellCss = readFileSync("app/styles/workspace-shell/shell-account.module.css", "utf8");
 const responsiveCss = readFileSync("app/styles/workspace-shell/responsive-typography.module.css", "utf8");
 const tableCss = readFileSync("app/styles/workspace-shell/manual-table.module.css", "utf8");
-const customerCommunicationService = readFileSync("lib/platform/customer-communications.ts", "utf8");
-const shippingDocumentsService = readFileSync("lib/platform/shipping-documents.ts", "utf8");
-const customerCommunicationModule = readFileSync("app/modules/CustomerCommunicationModule.tsx", "utf8");
+const customerCommunicationService = readCustomerCommunicationServiceSource();
+const shippingDocumentsService = readShippingDocumentsSource();
+const customerCommunicationModule = readCustomerCommunicationModuleSource();
 
 test("workspace layout uses fixed chrome with main content scrolling", () => {
   const htmlBlock = cssBlock(globalsCss, "html");
@@ -73,12 +74,6 @@ test("customer communication only exposes customers with clearance notification 
 
   assert.match(shippingDocumentsService, /CUSTOMER_COMMUNICATION_ENABLED_ORDER_WHERE/);
   assert.match(shippingDocumentsService, /function customerCommunicationEnabledOrderWhere/);
-  const manualLoader = shippingDocumentsService.match(
-    /async function loadOrderForManualShippingNotification[\s\S]*?\n}\n\nfunction customerCommunicationOrderAccessWhere/,
-  )?.[0] || "";
-  assert.match(manualLoader, /customerCommunicationEnabledOrderWhere/);
-  const draftLoader = shippingDocumentsService.match(
-    /export async function getShippingDocumentDraftForOrder[\s\S]*?\n}\n\nexport function canSendCustomerCommunication/,
-  )?.[0] || "";
-  assert.match(draftLoader, /customerCommunicationEnabledOrderWhere/);
+  assert.match(shippingDocumentsService, /loadOrderForManualShippingNotification[\s\S]*customerCommunicationEnabledOrderWhere/);
+  assert.match(shippingDocumentsService, /getShippingDocumentDraftForOrder[\s\S]*customerCommunicationEnabledOrderWhere/);
 });

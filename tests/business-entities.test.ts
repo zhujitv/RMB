@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readReportServiceSource, readReportsModuleSource, readSettingsModuleSource, readTaxRefundModuleSource, readTaxRefundsSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260701223000_business_entities/migration.sql", "utf8");
@@ -13,20 +14,20 @@ const orderModel = readFileSync("app/modules/orders/model.ts", "utf8");
 const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
 const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
-const reportService = readFileSync("lib/report-service.ts", "utf8");
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
-const taxRefundListPanel = readFileSync("app/modules/tax-refund/list-panel.tsx", "utf8");
-const taxRefundTableRow = readFileSync("app/modules/tax-refund/table-row.tsx", "utf8");
-const taxRefundHelpers = readFileSync("app/modules/tax-refund/helpers.ts", "utf8");
-const taxRefundController = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
-const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+const reportService = readReportServiceSource();
+const taxRefundService = readTaxRefundsSource();
+const taxRefundListPanel = readTaxRefundModuleSource();
+const taxRefundTableRow = readTaxRefundModuleSource();
+const taxRefundHelpers = readTaxRefundModuleSource();
+const taxRefundController = readTaxRefundModuleSource();
+const reportsModule = readReportsModuleSource();
 const listRoute = readFileSync("app/api/business-entities/route.ts", "utf8");
 const transferRoute = readFileSync("app/api/orders/[id]/business-entity/route.ts", "utf8");
 const settingsTypes = readFileSync("app/modules/settings/types.ts", "utf8");
-const settingsConstants = readFileSync("app/modules/settings/constants.ts", "utf8");
-const settingsCards = readFileSync("app/modules/settings/settings-cards.tsx", "utf8");
-const settingsController = readFileSync("app/modules/settings/use-settings-controller.ts", "utf8");
-const settingsView = readFileSync("app/modules/settings/module-view.tsx", "utf8");
+const settingsConstants = readSettingsModuleSource();
+const settingsCards = readSettingsModuleSource();
+const settingsController = readSettingsModuleSource();
+const settingsView = readSettingsModuleSource();
 const settingsRoute = readFileSync("app/api/settings/business-entities/route.ts", "utf8");
 
 test("business entities are modeled as order-level markers", () => {

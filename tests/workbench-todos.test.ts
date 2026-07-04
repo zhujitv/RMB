@@ -1,30 +1,33 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readTaxRefundModuleSource } from "./source-helpers.ts";
+import {
+  readDomesticLogisticsModuleSource,
+  readNotificationEngineSource,
+  readSettingsModuleSource,
+  readSharedConstantsSource,
+  readTaxRefundModuleSource,
+  readWorkbenchTodosSource,
+  readWorkspaceShellSource,
+} from "./source-helpers.ts";
 
 const workbenchRules = await import("../lib/platform/workbench-todo-rules.ts");
-const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const workspaceShell = readWorkspaceShellSource();
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const welcomePanel = readFileSync("app/WelcomePanel.tsx", "utf8");
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const taxRefundModule = readTaxRefundModuleSource();
-const controlTower = readFileSync("app/modules/domestic-logistics/control-tower.tsx", "utf8");
+const controlTower = readDomesticLogisticsModuleSource();
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
 const overdueRoute = readFileSync("app/api/cron/workbench-overdue-todos/route.ts", "utf8");
-const workbenchSource = [
-  "lib/platform/workbench-todos.ts",
-  "lib/platform/workbench-todos-core.ts",
-  "lib/platform/workbench-todos-sources.ts",
-  "lib/platform/workbench-todos-completed.ts",
-].map((path) => readFileSync(path, "utf8")).join("\n");
+const workbenchSource = readWorkbenchTodosSource();
 const missingTaxRefundTodosSource = workbenchSource.match(/function missingTaxRefundTodos[\s\S]*?function normalizedMissingLabels/)?.[0] || "";
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
-const notificationEngineSource = readFileSync("lib/platform/notification-engine.ts", "utf8");
-const sharedConstantsSource = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const notificationEngineSource = readNotificationEngineSource();
+const sharedConstantsSource = readSharedConstantsSource();
 const sharedExchangeSource = readFileSync("lib/platform/shared-exchange.ts", "utf8");
-const settingsHelpersSource = readFileSync("app/modules/settings/helpers.ts", "utf8");
-const settingsCardsSource = readFileSync("app/modules/settings/settings-cards.tsx", "utf8");
+const settingsHelpersSource = readSettingsModuleSource();
+const settingsCardsSource = readSettingsModuleSource();
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
 const styles = readFileSync("app/styles/workspace-shell/workbench.module.css", "utf8");

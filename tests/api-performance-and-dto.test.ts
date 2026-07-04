@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { readCostRecordsQueriesSource, readLogisticsExpenseAccessSource, readSettingsModuleSource, readSharedConstantsSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync(
@@ -12,27 +13,18 @@ const backgroundTaskMetrics = readFileSync(
   "lib/platform/background-task-metrics.ts",
   "utf8",
 );
-const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const sharedConstants = readSharedConstantsSource();
 const apiRouteGuard = readFileSync("lib/api-route-guard.ts", "utf8");
 const appApi = readFileSync("app/api.ts", "utf8");
 const apiPerformanceRoute = readFileSync(
   "app/api/settings/api-performance/route.ts",
   "utf8",
 );
-const settingsConstants = readFileSync(
-  "app/modules/settings/constants.ts",
-  "utf8",
-);
-const settingsHelpers = readFileSync("app/modules/settings/helpers.ts", "utf8");
-const settingsController = readFileSync(
-  "app/modules/settings/use-settings-controller.ts",
-  "utf8",
-);
-const costQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
-const logisticsSerialization = readFileSync(
-  "lib/platform/logistics-expense-access-serialization.ts",
-  "utf8",
-);
+const settingsConstants = readSettingsModuleSource();
+const settingsHelpers = readSettingsModuleSource();
+const settingsController = readSettingsModuleSource();
+const costQueries = readCostRecordsQueriesSource();
+const logisticsSerialization = readLogisticsExpenseAccessSource();
 const logisticsQueries = readFileSync(
   "lib/platform/logistics-expense-queries.ts",
   "utf8",

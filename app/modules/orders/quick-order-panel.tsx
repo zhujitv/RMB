@@ -18,15 +18,18 @@ import {
   type SettingsResponse,
   type SuppliersResponse,
   type OrderRow,
-  type PaymentInstallment,
   type SalespersonOption,
   type SupplierOption,
 } from "./model";
 import {
+  LogisticsSupplierField,
+  OrderAssignmentFields,
+  PaymentInstallmentsEditor,
+} from "./quick-order-fields";
+import {
   derivedDueDate,
   installmentTotal,
   orderFormFromRow,
-  supplierName,
 } from "./utils";
 
 type BusinessEntitiesResponse = {
@@ -251,31 +254,6 @@ export function QuickCreateOrderPanel({
     }
   }
 
-  function setInstallment(index: number, key: keyof PaymentInstallment, value: string) {
-    setForm((current) => ({
-      ...current,
-      paymentInstallments: current.paymentInstallments.map((row, rowIndex) => (
-        rowIndex === index ? { ...row, [key]: value } : row
-      )),
-    }));
-  }
-
-  function addInstallment() {
-    setForm((current) => ({
-      ...current,
-      paymentInstallments: [...current.paymentInstallments, { ratio: "", condition: "" }],
-    }));
-  }
-
-  function removeInstallment(index: number) {
-    setForm((current) => ({
-      ...current,
-      paymentInstallments: current.paymentInstallments.filter((_, rowIndex) => rowIndex !== index).length
-        ? current.paymentInstallments.filter((_, rowIndex) => rowIndex !== index)
-        : [{ ratio: "100", condition: "按约定付款" }],
-    }));
-  }
-
   function selectedLogisticsSupplierIds() {
     if (!allowMultipleLogisticsSuppliers) return defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : [];
     return form.logisticsSupplierIds;
@@ -400,36 +378,16 @@ export function QuickCreateOrderPanel({
           </select>
         </label>
         {canManageOrderAssignments ? (
-          <>
-            <label>
-              业务员
-              <select
-                value={form.salespersonUserId}
-                onChange={(event) => {
-                  const nextSalespersonUserId = event.target.value;
-                  setForm((current) => ({
-                    ...current,
-                    salespersonUserId: nextSalespersonUserId,
-                    salespersonCommissionRate: nextSalespersonUserId ? current.salespersonCommissionRate : "0",
-                  }));
-                }}
-              >
-                <option value="">未分配</option>
-                {salespeople.map((user) => (
-                  <option key={user.id} value={user.id}>{user.name}{user.role ? ` · ${user.role}` : ""}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              提成比例 %
-              <input
-                value={form.salespersonCommissionRate}
-                onChange={(event) => setFormValue("salespersonCommissionRate", event.target.value)}
-                inputMode="decimal"
-                placeholder="例如 2.5"
-              />
-            </label>
-          </>
+          <OrderAssignmentFields
+            form={form}
+            salespeople={salespeople}
+            setFormValue={setFormValue}
+            onSalespersonChange={(nextSalespersonUserId) => setForm((current) => ({
+              ...current,
+              salespersonUserId: nextSalespersonUserId,
+              salespersonCommissionRate: nextSalespersonUserId ? current.salespersonCommissionRate : "0",
+            }))}
+          />
         ) : null}
         <label>
           币种
@@ -496,46 +454,19 @@ export function QuickCreateOrderPanel({
           提醒天数
           <input value={form.reminderDays} onChange={(event) => setFormValue("reminderDays", event.target.value)} inputMode="numeric" />
         </label>
-        <label className={styles.autocompleteField}>
-          物流供应商
-          <select
-            multiple={allowMultipleLogisticsSuppliers}
-            size={allowMultipleLogisticsSuppliers ? 4 : 1}
-            value={allowMultipleLogisticsSuppliers ? form.logisticsSupplierIds : (selectedLogisticsSupplierIds()[0] || "")}
-            disabled={!allowMultipleLogisticsSuppliers}
-            onChange={(event) => setFormValue("logisticsSupplierIds", Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
-          >
-            {logisticsSuppliers.length ? logisticsSuppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplierName(supplier)} · {supplier.supplierType || "-"}{supplier.isDefaultLogisticsSupplier ? " · 默认" : ""}
-              </option>
-            )) : <option value="">请先设置默认物流供应商</option>}
-          </select>
-          <small className={styles.mutedText}>
-            {allowMultipleLogisticsSuppliers ? "可多选物流、报关、海运或港杂费用供应商。" : defaultLogisticsSupplier ? "当前使用默认物流供应商，暂不允许手动切换。" : "请先在系统设置中设置默认物流供应商。"}
-          </small>
-        </label>
+        <LogisticsSupplierField
+          allowMultipleLogisticsSuppliers={allowMultipleLogisticsSuppliers}
+          defaultLogisticsSupplier={defaultLogisticsSupplier}
+          form={form}
+          logisticsSuppliers={logisticsSuppliers}
+          selectedIds={selectedLogisticsSupplierIds()}
+          setFormValue={setFormValue}
+        />
         {form.paymentTermType === "INSTALLMENT" ? (
-          <div className={`${styles.installmentPanel} ${styles.autocompleteField}`}>
-            <div className={styles.panelHead}>
-              <h3>分批付款节点</h3>
-              <button className={styles.secondaryButton} type="button" onClick={addInstallment}>添加节点</button>
-            </div>
-            {form.paymentInstallments.map((row, index) => (
-              <div key={`${index}-${row.condition}`} className={styles.installmentRow}>
-                <label>
-                  比例%
-                  <input value={row.ratio} onChange={(event) => setInstallment(index, "ratio", event.target.value)} inputMode="decimal" />
-                </label>
-                <label>
-                  付款条件
-                  <input value={row.condition} onChange={(event) => setInstallment(index, "condition", event.target.value)} placeholder="例如 发货前 / 见提单" />
-                </label>
-                <button className={styles.secondaryButton} type="button" onClick={() => removeInstallment(index)}>删除</button>
-              </div>
-            ))}
-            <small className={styles.mutedText}>当前合计：{installmentTotal(form.paymentInstallments)}%</small>
-          </div>
+          <PaymentInstallmentsEditor
+            rows={form.paymentInstallments}
+            onChange={(paymentInstallments) => setFormValue("paymentInstallments", paymentInstallments)}
+          />
         ) : null}
         <label className={styles.autocompleteField}>
           备注

@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readOrdersServiceSource,
+  readPaymentsModuleSource,
+  readSharedConstantsSource,
+  readSharedSerializationSource,
+} from "./source-helpers.ts";
 
-const paymentsModule = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
+const paymentsModule = readPaymentsModuleSource();
 const paymentsService = readFileSync("lib/platform/payments-module.ts", "utf8");
-const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const ordersService = readOrdersServiceSource();
 const orderAccess = readFileSync("lib/platform/order-access.ts", "utf8");
-const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
-const sharedSerialization = readFileSync("lib/platform/shared-serialization.ts", "utf8");
+const sharedConstants = readSharedConstantsSource();
+const sharedSerialization = readSharedSerializationSource();
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 
 test("payments page keeps summary cards and avoids duplicate recent payment list", () => {

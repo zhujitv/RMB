@@ -1,16 +1,22 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource } from "./source-helpers.ts";
+import {
+  readCustomsDeclarationParserSource,
+  readOcrIntegrationSource,
+  readOrderDocumentsSource,
+  readSettingsModuleSource,
+  readSharedConstantsSource,
+} from "./source-helpers.ts";
 
-const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
-const service = readFileSync("lib/platform/ocr-integration.ts", "utf8");
+const constants = readSharedConstantsSource();
+const service = readOcrIntegrationSource();
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
-const customsParser = readFileSync("lib/customs-declaration-parser.ts", "utf8");
+const customsParser = readCustomsDeclarationParserSource();
 const settingsRoute = readFileSync("app/api/settings/ocr/route.ts", "utf8");
 const customsTestRoute = readFileSync("app/api/settings/ocr/test-customs/route.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
-const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
+const orderDocuments = readOrderDocumentsSource();
 const r2 = readFileSync("lib/r2.ts", "utf8");
 const nextConfig = readFileSync("next.config.mjs", "utf8");
 const packageJson = readFileSync("package.json", "utf8");

@@ -1,16 +1,21 @@
 # NEXTWOOD 供应链协同平台
 
-NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业务协同平台，用于统一管理外贸订单应收、收款、成本、物流费用、出口单证、供应商资料、退税资料、利润分析和权限控制。
+NEXTWOOD 供应链协同平台用于统一管理外贸订单应收、收款、成本、物流费用、出口单证、供应商资料、退税资料、利润分析和权限控制。
 
 系统核心对象是“应收订单”。收款、成本、物流费用、出口单证、销售合同、供应商采购合同和工厂增值税发票都必须关联到真实订单，避免只靠手工订单号造成数据断裂。
 
 ## 技术栈
 
 - Vercel
-- Next.js
+- Next.js 16
+- React 19
+- TypeScript 6
 - PostgreSQL
-- Prisma
+- Prisma 7
 - Cloudflare R2
+- Resend 邮件服务
+- 阿里云 OCR / 文档智能
+- 大掌柜 / ShipsGo 海运跟踪接口
 - 正式主入口：React + TypeScript（`/`）
 - 旧版原生 HTML/CSS/JavaScript 业务入口已退役
 
@@ -32,6 +37,9 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 - 报表中心
 - 系统设置
 - 操作手册
+- 客户沟通
+- 资料回传
+- 工作台待办
 
 迁移原则：
 
@@ -70,6 +78,20 @@ NEXTWOOD 供应链协同平台是浙江莱诺建材有限公司的供应链业�
 - 客户未收款排行
 - 业务员回款排行
 - 成本结构统计
+
+### 工作台待办
+
+工作台首页只加载权限和待办摘要，不在首页预加载所有业务数据。
+
+待办来源包括：
+- 逾期应收和即将到期收款
+- 待完善物流信息
+- 物流费用审核、开票和付款节点
+- 供应商资料回传任务
+- 退税资料缺失、异常和待提交
+- 大掌柜 / ShipsGo 跟踪异常或待同步
+
+待办提醒会按业务负责人和权限范围生成。逾期待办可通过通知中心发送邮件提醒，并记录每日提醒日志，避免重复发送。
 
 ### 应收订单
 
@@ -210,6 +232,25 @@ React 工作台中的物流信息已迁移：
 - 支持多集装箱 / 多车运输明细
 - 支持报关资料上传、预览、下载和权限控制
 - 支持单票订单内直接录入物流费用
+
+### 海运跟踪
+
+物流信息支持大掌柜 / ShipsGo 海运跟踪。
+
+支持：
+- 按提单号、Booking No. 和柜号创建海运跟踪
+- 保存船公司、船名航次、起运港、目的港、ETD、ETA 和状态
+- 同步集装箱轨迹、事件时间线和原始响应
+- 按权限查看对应订单的跟踪记录
+- 管理员可删除、恢复和补同步跟踪记录
+
+系统设置中的 `物流接口` 可维护：
+- API Base URL
+- API Key
+- 海运跟踪开关
+- 手动同步 / 每日自动同步
+- Webhook Secret
+- Live Map 和 Credit 预警开关
 
 ### 出口单证与退税资料
 
@@ -379,6 +420,26 @@ ZIP 文件名：
 
 Commercial Invoice、Packing List、报关单缺失时禁止发送，并显示明确缺失项。
 
+发送记录会写入 `shipping_document_notifications`，包含收件人、抄送人、邮件语言、发送状态、错误信息和发送人。邮件附件从 R2 读取，发送失败不会改变订单、单证或退税资料主数据。
+
+### 通知中心
+
+系统通知统一由通知模板驱动，并通过 Resend 发送邮件。
+
+通知类型包括：
+- 账号邮箱验证
+- 清关资料通知（英文 / 中文 / 俄语）
+- 物流费用开票通知
+- 产品供应商资料回传通知
+- 工作台逾期待办提醒
+
+通知中心会保存：
+- `notification_templates`：模板、变量、收件人配置和启停状态
+- `notification_outbox`：待发送、发送中、已发送和失败记录
+- `notification_delivery_logs`：投递结果、失败原因和关联业务对象
+
+安全敏感模板不可随意关闭；普通业务模板可在系统设置的 `通知模板` 中维护标题、正文、抄送、收件邮箱读取顺序和测试发送。
+
 ### 退税提交与归档
 
 退税状态保留：
@@ -489,11 +550,33 @@ React 工作台中的系统设置已完成旧版显性差异补齐，并已通�
 - 客户 / 供应商 / 用户详情补回 `删除 / 停用` 操作
 
 管理员可维护：
+- 公司资料
+- 业务主体
 - 用户和权限
 - 客户资料
 - 供应商资料
+- OCR 识别
+- 物流接口
+- 通知模板
 - 汇率设置
+- 提成公式
 - 操作日志
+- 后台任务和慢接口
+
+### OCR 识别设置
+
+系统设置中的 `OCR识别` 统一维护识别服务。
+
+支持：
+- 阿里云 OCR / 文档智能配置
+- 报关单识别模式：自动、严格结构化、手工
+- 产品供应商资料回传 OCR 开关
+- 发票结构化识别开关
+- PDF 文本兜底开关
+- 超时时间配置
+- 独立报关单 PDF 测试识别
+
+退税资料模块内的专用 OCR 和退税计算接口已停用。报关单信息以手工维护和资料完整度流程为准；产品供应商资料回传 OCR 仍可在资料回传任务中执行。
 
 ## 权限体系
 
@@ -562,6 +645,20 @@ React 工作台中的系统设置已完成旧版显性差异补齐，并已通�
 - `exchange_rates`
 - `system_settings`
 - `audit_logs`
+- `file_assets`
+- `factory_document_requests`
+- `ocr_tasks`
+- `ocr_raw_results`
+- `ocr_results`
+- `shipping_document_notifications`
+- `shipsgo_trackings`
+- `shipsgo_tracking_containers`
+- `logistics_expense_bills`
+- `logistics_invoice_groups`
+- `todo_reminder_logs`
+- `notification_templates`
+- `notification_outbox`
+- `notification_delivery_logs`
 
 所有业务数据保存在 PostgreSQL。浏览器本地缓存只用于表单草稿，不作为正式业务数据源。
 
@@ -594,6 +691,16 @@ R2_ACCESS_KEY_ID="your-r2-access-key-id"
 R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
 R2_BUCKET="your-r2-bucket"
 R2_ENDPOINT=""
+
+RESEND_API_KEY=""
+RESEND_FROM=""
+RESEND_EMAIL_ENDPOINT=""
+
+UPSTASH_REDIS_REST_URL=""
+UPSTASH_REDIS_REST_TOKEN=""
+RATE_LIMIT_REDIS_REST_URL=""
+RATE_LIMIT_REDIS_REST_TOKEN=""
+RATE_LIMIT_NAMESPACE="nextwood"
 ```
 
 生产环境 CSP 默认不允许浏览器连接或加载任意外部 `https:` 资源。如确实需要外链资源，例如外部 Logo CDN 或独立 PDF 查看域名，请显式配置白名单：
@@ -609,9 +716,9 @@ CSP_MEDIA_SRC=https://media.example.com
 
 ```text
 API_RATE_LIMIT_WINDOW_MS=60000
-API_RATE_LIMIT_READ_LIMIT=240
-API_RATE_LIMIT_WRITE_LIMIT=80
-API_RATE_LIMIT_UPLOAD_LIMIT=30
+API_RATE_LIMIT_READ_LIMIT=1000
+API_RATE_LIMIT_WRITE_LIMIT=300
+API_RATE_LIMIT_UPLOAD_LIMIT=60
 ```
 
 也兼容以下 R2 变量名：
@@ -622,6 +729,31 @@ CLOUDFLARE_R2_ACCESS_KEY_ID
 CLOUDFLARE_R2_SECRET_ACCESS_KEY
 CLOUDFLARE_R2_BUCKET
 R2_ENDPOINT
+```
+
+邮件通知使用 Resend：
+
+```text
+RESEND_API_KEY=Resend API Key
+RESEND_FROM=发件邮箱
+RESEND_EMAIL_ENDPOINT=https://api.resend.com/emails
+```
+
+`RESEND_EMAIL_ENDPOINT` 可留空，默认使用 Resend 官方接口。若未配置 `RESEND_API_KEY` 或发件邮箱，系统会阻止邮件发送并保存明确失败原因。
+
+统一 API 限流默认使用进程内存。多实例生产环境建议配置 Upstash Redis：
+
+```text
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+也可使用别名：
+
+```text
+RATE_LIMIT_REDIS_REST_URL=
+RATE_LIMIT_REDIS_REST_TOKEN=
+RATE_LIMIT_NAMESPACE=nextwood
 ```
 
 ### 文件服务器配置
@@ -797,13 +929,13 @@ npm run verify:release
 npm run verify:ci
 ```
 
-最新退税归档迁移：
+当前最新迁移：
 
 ```text
-20260608103000_tax_refund_submitted_archive_fields
+20260704133000_revert_customs_declaration_batches
 ```
 
-该迁移会新增退税提交和归档字段，并把历史 `SUBMITTED / COMPLETED / ARCHIVED` 订单标记为已归档。
+该迁移回滚多报关单批次归属试点表和关联字段，保留原订单、单证、供应商资料回传、成本和物流数据。通知中心表由 `20260701170000_notification_center` 引入，退税提交和归档字段由 `20260608103000_tax_refund_submitted_archive_fields` 引入。
 
 ### 操作手册与 GitHub 发布说明
 
@@ -833,6 +965,8 @@ git push origin main
 - 不要将 `.env` 提交到 GitHub。
 - 不要公开 R2 Access Key 和 Secret Key。
 - 上传文件只保存 R2 Key，下载时后端生成短期签名 URL。
+- 文件资产统一写入 `file_assets`，用于跨模块预览、下载、软删除和后续文件治理。
+- 发送邮件前必须确认收件人配置有效；失败会写入通知日志，不应阻断主业务数据保存。
 - 所有新增、编辑、删除、上传、下载和退税状态修改都会记录操作日志。
 - 删除订单不直接删除 R2 原始文件，避免退税资料丢失。
 - 依赖升级或锁文件变更后，至少执行一次 `npm run audit` 和 `npm run verify`。

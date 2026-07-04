@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { formatIpGeolocation, resolveIpGeolocation } from "../lib/platform/ip-geolocation.ts";
+import { readSharedAuthSource, readSharedUsersSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
-const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
-const sharedUsers = readFileSync("lib/platform/shared-users.ts", "utf8");
+const sharedAuth = readSharedAuthSource();
+const sharedUsers = readSharedUsersSource();
 const migration = readFileSync("prisma/migrations/20260628193000_login_attempt_ip_geolocation/migration.sql", "utf8");
 const localDb = readFileSync("data/ip-geolocation-ranges.json", "utf8");
 

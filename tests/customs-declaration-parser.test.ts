@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { readCustomsDeclarationParserSource } from "./source-helpers.ts";
 import {
   normalizeCustomsDate,
   parseCustomsDeclarationDetailText,
@@ -206,7 +207,7 @@ test("filters non-product customs text out of declaration items", () => {
 });
 
 test("parser source does not reference bundled fixture documents", async () => {
-  const source = await fs.readFile(new URL("../lib/customs-declaration-parser.ts", import.meta.url), "utf8");
+  const source = readCustomsDeclarationParserSource();
   const packageJson = await fs.readFile(new URL("../package.json", import.meta.url), "utf8");
   const forbidden = [
     "05-versions" + "-space",

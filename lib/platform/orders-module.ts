@@ -12,17 +12,12 @@ import {
   assertJsonObject,
   assertRead,
   assertWrite,
-  canWrite,
   businessEntityWhereFromQuery,
   codedError,
   confirmedPayment,
-  customerBusinessName,
-  customerFullName,
-  customerShortName,
   dateFromInput,
   dateToInput,
   depositRatioForPaymentTerm,
-  effectivePermissions,
   getExchangeRateSettings,
   includeOrderRelations,
   inputHasOwn,
@@ -69,7 +64,6 @@ type ActorLike = ({
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
 type QueryLike = URLSearchParams;
 type OrderInput = Record<string, unknown>;
-type OrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 
 function actorId(actor: ActorLike) {
   return requireText(actor?.id, "当前用户");
@@ -250,110 +244,6 @@ export async function getOrder(id: string, actor: ActorLike) {
   return serializeOrder(scopeOrderForActor(order, actor));
 }
 
-function serializeReceivableSearchOrder(order: OrderWithRelations) {
-  const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
-  const shortCustomerName = customerShortName(order.customer);
-  const summary = summarizeOrder(order);
-  return {
-    id: order.id,
-    orderNo: order.orderNo,
-    blNo: order.blNo || "",
-    billOfLadingNo: order.blNo || "",
-    customerId: order.customerId || "",
-    customerName: shortCustomerName || fullCustomerName,
-    customerFullName: fullCustomerName,
-    customerShortName: shortCustomerName,
-    customerNameSnapshot: fullCustomerName,
-    salespersonId: order.salespersonUserId || "",
-    salespersonUserId: order.salespersonUserId || "",
-    salespersonName: order.salesperson?.name || "",
-    country: order.customer?.country || order.country || "",
-    currency: order.currency,
-    exchangeRate: Number(order.exchangeRate),
-    exchangeRateDate: dateToInput(order.exchangeRateDate),
-    exchangeRateSource: order.exchangeRateSource || "",
-    exchangeRateType: order.exchangeRateType || "",
-    receivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
-    receivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
-    finalReceivableAmount: Number(order.finalReceivableAmount ?? order.receivableAmount),
-    finalReceivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny),
-    receivedAmount: Number(summary.confirmedPaymentsAmount || 0),
-    receivedAmountCny: Number(summary.confirmedPaymentsCny || 0),
-    outstandingAmount: Number(summary.outstandingAmount || 0),
-    outstandingCny: Number(summary.outstandingCny || 0),
-    status: order.status,
-    dueDate: dateToInput(order.dueDate),
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    summary: {
-      receivableAmount: Number(summary.receivableAmount || 0),
-      receivableCny: Number(summary.receivableCny || 0),
-      confirmedPaymentsAmount: Number(summary.confirmedPaymentsAmount || 0),
-      confirmedPaymentsCny: Number(summary.confirmedPaymentsCny || 0),
-      outstandingAmount: Number(summary.outstandingAmount || 0),
-      outstandingCny: Number(summary.outstandingCny || 0),
-    },
-  };
-}
-
-function receivableOrderCanAcceptPayment(order: OrderWithRelations) {
-  return !["已关闭", "已取消"].includes(order.status);
-}
-
-export async function searchReceivableOrders(query: QueryLike, actor: ActorLike) {
-  assertRead(actor, "orders");
-  const q = nonEmpty(query.get("q"));
-  const purpose = nonEmpty(query.get("purpose") || query.get("mode"));
-  const isPaymentSearch = purpose === "payment" || purpose === "payments";
-  const scope = effectivePermissions(actor).dataScope;
-  const isCostEntrySearch = canWrite(actor, "costs") && scope === "OWN_COST";
-  if (isCostEntrySearch && !q) return [];
-  const accessWhere: Prisma.ReceivableOrderWhereInput = isCostEntrySearch ? {} : orderAccessWhere(actor);
-  const filters: Prisma.ReceivableOrderWhereInput[] = [accessWhere];
-  if (q) {
-    filters.push({
-      OR: [
-        { orderNo: { contains: q, mode: "insensitive" } },
-        { blNo: { contains: q, mode: "insensitive" } },
-        { customerNameSnapshot: { contains: q, mode: "insensitive" } },
-        { customer: { is: { name: { contains: q, mode: "insensitive" } } } },
-        { customer: { is: { shortName: { contains: q, mode: "insensitive" } } } },
-        { salesperson: { is: { name: { contains: q, mode: "insensitive" } } } },
-      ],
-    });
-  }
-  const where: Prisma.ReceivableOrderWhereInput = {
-    deletedAt: null,
-    ...(isPaymentSearch ? { status: { notIn: ["已关闭", "已取消"] } } : {}),
-    ...(filters.length ? { AND: filters } : {}),
-  };
-  const orders = await prisma.receivableOrder.findMany({
-    where,
-    include: includeOrderRelations(),
-    orderBy: [{ createdAt: "desc" }],
-    take: isPaymentSearch ? 50 : 20,
-  });
-  const resultOrders = isPaymentSearch ? orders.filter(receivableOrderCanAcceptPayment).slice(0, 20) : orders;
-  if (isCostEntrySearch) {
-    return resultOrders.map((order) => ({
-      id: order.id,
-      orderNo: order.orderNo,
-      blNo: order.blNo || "",
-      billOfLadingNo: order.blNo || "",
-      customerName: customerBusinessName(order.customer, order.customerNameSnapshot),
-      customerFullName: customerFullName(order.customer, order.customerNameSnapshot),
-      customerShortName: customerShortName(order.customer),
-      status: order.status,
-      dueDate: dateToInput(order.dueDate),
-    }));
-  }
-  return resultOrders.map((order) => (
-    isPaymentSearch
-      ? serializeReceivableSearchOrder(scopeOrderForActor(order, actor))
-      : serializeOrder(scopeOrderForActor(order, actor))
-  ));
-}
-
 export async function saveOrder(request: AuditRequestLike, actor: ActorLike, input: unknown, id: string | null = null) {
   assertWrite(actor, "orders");
   const currentActorId = actorId(actor);
@@ -522,62 +412,6 @@ export async function deleteOrder(request: AuditRequestLike, actor: ActorLike, i
   await runNonCriticalTask("订单删除操作日志写入", () => writeAudit(request, actor, "删除应收订单", "receivable_orders", id, before, row));
 }
 
-export async function repairMissingOrderSalespeople(request: AuditRequestLike, actor: ActorLike) {
-  assertWrite(actor, "orders");
-  if (actorRole(actor) !== "管理员") throw permissionError("只有管理员可以修正订单业务员归属", 403);
-  const rows = await prisma.receivableOrder.findMany({
-    where: {
-      deletedAt: null,
-      salespersonUserId: null,
-    },
-    include: {
-      customer: true,
-      createdBy: true,
-    },
-    orderBy: [{ createdAt: "asc" }],
-    take: 1000,
-  });
-  const repaired: Array<{ orderId: string; orderNo: string; salespersonUserId: string; source: string }> = [];
-  const unresolved: Array<{ orderId: string; orderNo: string; reason: string }> = [];
-  for (const row of rows) {
-    const customerSalespersonId = nonEmpty(row.customer?.salespersonUserId);
-    const createdBySalespersonId = row.createdBy?.role === "业务员" ? nonEmpty(row.createdById) : "";
-    const nextSalespersonId = customerSalespersonId || createdBySalespersonId;
-    if (!nextSalespersonId) {
-      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "缺少客户负责业务员，创建人也不是业务员" });
-      continue;
-    }
-    const patch: Prisma.ReceivableOrderUpdateInput = {
-      salesperson: { connect: { id: nextSalespersonId } },
-      updatedBy: { connect: { id: actorId(actor) } },
-    };
-    if (!Number(row.salespersonCommissionRate || 0) && customerSalespersonId) {
-      patch.salespersonCommissionRate = Math.max(0, Number(row.customer?.commissionStatus === "停用" ? 0 : row.customer?.commissionRate || 0));
-    }
-    const updated = await prisma.receivableOrder.update({
-      where: { id: row.id },
-      data: patch,
-      include: includeOrderRelations(),
-    });
-    repaired.push({
-      orderId: row.id,
-      orderNo: row.orderNo,
-      salespersonUserId: nextSalespersonId,
-      source: customerSalespersonId ? "customer.salespersonUserId" : "createdById",
-    });
-    await runNonCriticalTask("订单业务员历史修正日志写入", () => (
-      writeAudit(request, actor, "修正订单业务员归属", "receivable_orders", row.id, row, updated)
-    ), { context: { orderId: row.id, source: customerSalespersonId ? "customer" : "createdBy" } });
-  }
-  return {
-    scanned: rows.length,
-    repaired: repaired.length,
-    unresolved: unresolved.length,
-    repairedRows: repaired,
-    unresolvedRows: unresolved,
-  };
-}
-
 export async function syncOrderStatus(orderId: string) {
   const order = await prisma.receivableOrder.findUnique({
     where: { id: orderId },
@@ -601,3 +435,6 @@ export async function syncOrderStatus(orderId: string) {
   }
   return order;
 }
+
+export { searchReceivableOrders } from "./order-receivable-search";
+export { repairMissingOrderSalespeople } from "./order-salesperson-repair";

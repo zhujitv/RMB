@@ -2,164 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import dynamic from "next/dynamic";
-import { ApiRequestError, apiJson } from "./api";
-import { AccountSettings } from "./AccountSettings";
+import { apiJson } from "./api";
 import { availableMenus } from "./menu";
 import { LoadingPanel } from "./LoadingPanel";
 import { LoginPanel } from "./LoginPanel";
 import { PasswordChangePanel } from "./PasswordChangePanel";
-import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
 import type { AuthPayload, AuthState, CompanyProfileSettings, LoginResponse, PermissionSnapshot, WorkbenchTodo, WorkbenchTodosState } from "./types";
-import { canWritePermission, normalizeEmail } from "./utils";
-import { WelcomePanel } from "./WelcomePanel";
+import { normalizeEmail } from "./utils";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import { WorkspaceModuleContent } from "./WorkspaceModuleContent";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
-
-const ALWAYS_ALLOWED_MENUS = ["welcome", "account"];
-const AUTH_BOOT_TIMEOUT_MS = 15000;
-const PERMISSIONS_BOOT_TIMEOUT_MS = 8000;
-const PUBLIC_PROFILE_TIMEOUT_MS = 8000;
-const WORKBENCH_TODOS_TIMEOUT_MS = 12000;
-
-const EMPTY_WORKBENCH_TODOS: WorkbenchTodosState = {
-  todos: [],
-  completedTodos: [],
-  summary: {
-    pending: 0,
-    todayDue: 0,
-    overdue: 0,
-    completed: 0,
-    total: 0,
-    urgent: 0,
-  },
-  loading: false,
-  error: "",
-};
-
-function normalizeWorkspaceMenuKey(menuKey: string) {
-  return menuKey === "logisticsReview" ? "logisticsFees" : menuKey;
-}
-
-const OrdersModule = dynamic(() => import("./modules/OrdersModule").then((module) => module.OrdersModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const DashboardModule = dynamic(() => import("./modules/DashboardModule").then((module) => module.DashboardModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const PaymentsModule = dynamic(() => import("./modules/PaymentsModule").then((module) => module.PaymentsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const CostsModule = dynamic(() => import("./modules/CostsModule").then((module) => module.CostsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogisticsModule").then((module) => module.DomesticLogisticsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const CustomerCommunicationModule = dynamic(() => import("./modules/CustomerCommunicationModule").then((module) => module.CustomerCommunicationModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const SupplierDocumentsModule = dynamic(() => import("./modules/SupplierDocumentsModule").then((module) => module.SupplierDocumentsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const ProfitModule = dynamic(() => import("./modules/ProfitModule").then((module) => module.ProfitModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const TaxRefundModule = dynamic(() => import("./modules/TaxRefundModule").then((module) => module.TaxRefundModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const ReportsModule = dynamic(() => import("./modules/ReportsModule").then((module) => module.ReportsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const SettingsModule = dynamic(() => import("./modules/SettingsModule").then((module) => module.SettingsModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-const ManualModule = dynamic(() => import("./modules/ManualModule").then((module) => module.ManualModule), {
-  ssr: false,
-  loading: () => <BusinessModuleLoading />,
-});
-
-function BusinessModuleLoading() {
-  return (
-    <section className={styles.moduleCard}>
-      <div className={styles.emptyState}>正在加载模块...</div>
-    </section>
-  );
-}
-
-function clearClientAuthState() {
-  if (typeof window === "undefined") return;
-  ["token", "session", "currentUser", "user", "authToken", "fta_user_id", "fta_session"].forEach((key) => {
-    window.localStorage.removeItem(key);
-    window.sessionStorage.removeItem(key);
-  });
-}
-
-function withErrorCode(message: string, code?: string | null) {
-  const normalizedCode = code || "";
-  if (!normalizedCode) return message;
-  const suffix = `（错误代码：${normalizedCode}）`;
-  return message.includes(suffix) ? message : `${message}${suffix}`;
-}
-
-function validateAuthPayload(payload: AuthPayload) {
-  if (!payload?.user?.id) throw new Error("账户信息缺少用户ID。");
-  if (!payload.user.name) throw new Error("账户信息缺少姓名。");
-  if (!payload.user.email) throw new Error("账户信息缺少邮箱。");
-  if (!payload.user.role) throw new Error("账户信息缺少角色。");
-}
-
-function authLoadErrorState(error: unknown): AuthState {
-  const errorCode = error instanceof ApiRequestError ? error.code : "";
-  const detail = error instanceof Error ? withErrorCode(error.message, errorCode) : withErrorCode("用户信息加载失败", errorCode);
-  if (error instanceof ApiRequestError && [401, 403].includes(error.status)) {
-    clearClientAuthState();
-    const accountStateCodes = ["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"];
-    const guestMessage = error.code === "PASSWORD_CHANGE_REQUIRED" || accountStateCodes.includes(error.code || "")
-      ? error.message
-      : "登录已过期，请重新登录。";
-    return {
-      status: "guest",
-      message: withErrorCode(guestMessage, errorCode),
-    };
-  }
-
-  if (error instanceof ApiRequestError && error.status === 408) {
-    return {
-      status: "error",
-      message: "无法读取当前用户信息",
-      detail,
-    };
-  }
-  if (error instanceof ApiRequestError && error.status >= 500) {
-    return {
-      status: "error",
-      message: "无法读取当前用户信息",
-      detail,
-    };
-  }
-  return {
-    status: "error",
-    message: "无法读取当前用户信息",
-    detail,
-  };
-}
+import {
+  ALWAYS_ALLOWED_MENUS,
+  AUTH_BOOT_TIMEOUT_MS,
+  EMPTY_WORKBENCH_TODOS,
+  PERMISSIONS_BOOT_TIMEOUT_MS,
+  PUBLIC_PROFILE_TIMEOUT_MS,
+  WORKBENCH_TODOS_TIMEOUT_MS,
+  authLoadErrorState,
+  normalizeWorkspaceMenuKey,
+  validateAuthPayload,
+} from "./workspace-auth-helpers";
 
 export function WorkspaceShell() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading", message: "正在加载工作台..." });
@@ -563,156 +427,40 @@ export function WorkspaceShell() {
       onRefreshTodos={loadWorkbenchTodos}
       onOpenTodo={openWorkbenchTodo}
     >
-      {activeMenu === "welcome" ? (
-        <WelcomePanel
-          payload={payload}
-          menus={menus}
-          todosState={workbenchTodos}
-          bootWarnings={bootWarnings}
-          onSelectMenu={selectWorkspaceMenu}
-          onRefreshTodos={loadWorkbenchTodos}
-          onOpenTodo={openWorkbenchTodo}
-        />
-      ) : activeMenu === "account" ? (
-        <AccountSettings
-          user={payload.user}
-          companyProfile={payload.companyProfile}
-          onProfileSaved={updateCurrentUser}
-          onPasswordChanged={(message) => setAuth({ status: "guest", message })}
-        />
-      ) : !allowedMenuKeys.has(activeMenu) ? (
-        <StatusPanel
-          title="无权限访问"
-          message="当前账号没有该功能模块权限，请从左侧选择可用菜单。"
-          actionLabel="返回工作台首页"
-          onAction={() => setActiveMenu("welcome")}
-        />
-      ) : activeMenu === "orders" ? (
-        <OrdersModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={ordersFocus.keyword}
-          initialOpenToken={ordersFocus.token}
-        />
-      ) : activeMenu === "dashboard" ? (
-        <DashboardModule />
-      ) : activeMenu === "payments" ? (
-        <PaymentsModule
-          currentUser={payload.user}
-          initialKeyword={paymentsFocus.keyword}
-          initialOpenToken={paymentsFocus.token}
-        />
-      ) : activeMenu === "costs" ? (
-        <CostsModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={costsFocus.keyword}
-          initialOpenToken={costsFocus.token}
-        />
-      ) : activeMenu === "domesticLogistics" ? (
-        <DomesticLogisticsModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={domesticLogisticsFocus.keyword}
-          initialOpenToken={domesticLogisticsFocus.token}
-          onOpenLogisticsFees={(focus) => {
-            setLogisticsFeesFocus({
-              keyword: focus.keyword?.trim() || "",
-              billId: focus.billId?.trim() || "",
-              token: Date.now(),
-            });
-            setActiveMenu("logisticsFees");
-          }}
-        />
-      ) : activeMenu === "logisticsFees" ? (
-        <LogisticsFeesModule
-          title="物流费用"
-          focusBillId={logisticsFeesFocus.billId}
-          focusKeyword={logisticsFeesFocus.keyword}
-          focusToken={logisticsFeesFocus.token}
-          currentUserRole={payload.user.role}
-          currentUserSupplierId={payload.user.supplierId || ""}
-          canCreateExpense={canWritePermission(payload.user, payload.permissions, "logistics", ["管理员", "物流供应商"])}
-        />
-      ) : activeMenu === "customerCommunication" ? (
-        <CustomerCommunicationModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={customerCommunicationFocus.keyword}
-          initialOrderId={customerCommunicationFocus.orderId}
-          initialOpenToken={customerCommunicationFocus.token}
-        />
-      ) : activeMenu === "oceanControlTower" ? (
-        <DomesticLogisticsModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={oceanControlTowerFocus.keyword}
-          initialOpenToken={oceanControlTowerFocus.token}
-          initialView="controlTower"
-          initialControlTowerFullscreen
-        />
-      ) : activeMenu === "supplierDocuments" ? (
-        <SupplierDocumentsModule
-          currentUser={payload.user}
-          initialKeyword={supplierDocumentsFocus.keyword}
-          initialRequestId={supplierDocumentsFocus.requestId}
-          initialOpenToken={supplierDocumentsFocus.token}
-          onRefreshTodos={loadWorkbenchTodos}
-        />
-      ) : activeMenu === "profit" ? (
-        <ProfitModule
-          currentUser={payload.user}
-          initialKeyword={profitFocus.keyword}
-          initialOpenToken={profitFocus.token}
-        />
-      ) : activeMenu === "taxRefund" ? (
-        <TaxRefundModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          initialKeyword={taxRefundFocus.keyword}
-          initialAction={taxRefundFocus.action}
-          initialOpenToken={taxRefundFocus.token}
-          onOpenDomesticLogistics={(keyword) => {
-            setDomesticLogisticsFocus({ keyword, token: Date.now() });
-            setActiveMenu("domesticLogistics");
-          }}
-          onOpenSupplierDocuments={(keyword) => {
-            setSupplierDocumentsFocus({ keyword: keyword.trim(), requestId: "", token: Date.now() });
-            setActiveMenu("supplierDocuments");
-          }}
-        />
-      ) : activeMenu === "reports" ? (
-        <ReportsModule
-          currentUser={payload.user}
-          permissions={payload.permissions}
-          onOpenRecord={(targetMenu, keyword) => {
-            const value = keyword.trim();
-            if (targetMenu === "orders") {
-              setOrdersFocus({ keyword: value, token: Date.now() });
-            } else if (targetMenu === "payments") {
-              setPaymentsFocus({ keyword: value, token: Date.now() });
-            } else if (targetMenu === "costs") {
-              setCostsFocus({ keyword: value, token: Date.now() });
-            } else if (targetMenu === "profit") {
-              setProfitFocus({ keyword: value, token: Date.now() });
-            } else if (targetMenu === "taxRefund") {
-              setTaxRefundFocus({ keyword: value, action: "", token: Date.now() });
-            }
-            setActiveMenu(targetMenu);
-          }}
-        />
-      ) : activeMenu === "settings" ? (
-        <SettingsModule onCompanyProfileSaved={updateCompanyProfile} />
-      ) : activeMenu === "manual" ? (
-        <ManualModule />
-      ) : (
-        <StatusPanel
-          title="功能暂不可用"
-          message="该功能入口暂未开放，请从左侧选择可用的业务模块。"
-          actionLabel="返回工作台首页"
-          onAction={() => setActiveMenu("welcome")}
-        />
-      )}
+      <WorkspaceModuleContent
+        payload={payload}
+        menus={menus}
+        activeMenu={activeMenu}
+        allowedMenuKeys={allowedMenuKeys}
+        workbenchTodos={workbenchTodos}
+        bootWarnings={bootWarnings}
+        ordersFocus={ordersFocus}
+        paymentsFocus={paymentsFocus}
+        costsFocus={costsFocus}
+        profitFocus={profitFocus}
+        taxRefundFocus={taxRefundFocus}
+        domesticLogisticsFocus={domesticLogisticsFocus}
+        customerCommunicationFocus={customerCommunicationFocus}
+        oceanControlTowerFocus={oceanControlTowerFocus}
+        logisticsFeesFocus={logisticsFeesFocus}
+        supplierDocumentsFocus={supplierDocumentsFocus}
+        setAuth={setAuth}
+        setActiveMenu={setActiveMenu}
+        setOrdersFocus={setOrdersFocus}
+        setPaymentsFocus={setPaymentsFocus}
+        setCostsFocus={setCostsFocus}
+        setProfitFocus={setProfitFocus}
+        setTaxRefundFocus={setTaxRefundFocus}
+        setDomesticLogisticsFocus={setDomesticLogisticsFocus}
+        setCustomerCommunicationFocus={setCustomerCommunicationFocus}
+        setLogisticsFeesFocus={setLogisticsFeesFocus}
+        setSupplierDocumentsFocus={setSupplierDocumentsFocus}
+        selectWorkspaceMenu={selectWorkspaceMenu}
+        loadWorkbenchTodos={loadWorkbenchTodos}
+        openWorkbenchTodo={openWorkbenchTodo}
+        updateCurrentUser={updateCurrentUser}
+        updateCompanyProfile={updateCompanyProfile}
+      />
     </WorkspaceLayout>
   );
 }

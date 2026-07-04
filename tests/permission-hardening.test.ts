@@ -2,26 +2,34 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
-import { readTaxRefundModuleSource } from "./source-helpers.ts";
+import {
+  readOrderDocumentsSource,
+  readReportServiceSource,
+  readReportsModuleSource,
+  readSharedAuthSource,
+  readSharedConstantsSource,
+  readTaxRefundModuleSource,
+  readWorkspaceShellSource,
+} from "./source-helpers.ts";
 
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 const backend = [
-  readFileSync("lib/platform/shared-constants.ts", "utf8"),
+  readSharedConstantsSource(),
   readFileSync("lib/platform/shared-permission-data.ts", "utf8"),
   readFileSync("lib/platform/shared-access.ts", "utf8"),
   readFileSync("lib/platform/profit-overview.ts", "utf8"),
 ].join("\n");
-const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const workspaceShell = readWorkspaceShellSource();
 const authMeRoute = readFileSync("app/api/auth/me/route.ts", "utf8");
 const menuFile = readFileSync("app/menu.ts", "utf8");
 const ledgerRoute = readFileSync("app/api/ledger/route.ts", "utf8");
 const overviewRoute = readFileSync("app/api/overview/route.ts", "utf8");
-const sharedAuth = readFileSync("lib/platform/shared-auth.ts", "utf8");
-const reportService = readFileSync("lib/report-service.ts", "utf8");
-const reportsModule = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+const sharedAuth = readSharedAuthSource();
+const reportService = readReportServiceSource();
+const reportsModule = readReportsModuleSource();
 const taxRefundModule = readTaxRefundModuleSource();
-const orderDocumentsService = readFileSync("lib/platform/order-documents.ts", "utf8");
+const orderDocumentsService = readOrderDocumentsSource();
 const fileDeletePolicy = readFileSync("lib/platform/file-delete-policy.ts", "utf8");
 
 const SECURITY_ROLE_MATRIX = [

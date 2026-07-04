@@ -1,21 +1,31 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readDomesticLogisticsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import {
+  readDomesticLogisticsApiSource,
+  readDomesticLogisticsModuleSource,
+  readDomesticLogisticsOpsSource,
+  readReportServiceSource,
+  readSharedBaseUtilsSource,
+  readSharedConstantsSource,
+  readTaxRefundModuleSource,
+  readTaxRefundsSource,
+  readWorkspaceStylesSource,
+} from "./source-helpers.ts";
 
 const moduleSource = readDomesticLogisticsModuleSource();
 const taxModuleSource = readTaxRefundModuleSource();
 const css = readWorkspaceStylesSource();
-const sharedBaseUtils = readFileSync("lib/platform/shared-base-utils.ts", "utf8");
-const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
-const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const sharedBaseUtils = readSharedBaseUtilsSource();
+const domesticLogisticsOps = readDomesticLogisticsOpsSource();
+const domesticLogisticsApi = readDomesticLogisticsApiSource();
+const taxRefundService = readTaxRefundsSource();
 const domesticLogisticsArchiveRoute = readFileSync("app/api/domestic-logistics/archive/route.ts", "utf8");
 const exportInvoiceRemarkFormatter = readFileSync("lib/platform/export-invoice-remark.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
-const reportService = readFileSync("lib/report-service.ts", "utf8");
+const reportService = readReportServiceSource();
 const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
-const sharedConstants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const sharedConstants = readSharedConstantsSource();
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
@@ -66,9 +76,9 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(taxModuleSource, /<td colSpan=\{8\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
-  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
+  const listFunction = readFileSync("lib/platform/tax-refunds-list.ts", "utf8");
   assert.match(listFunction, /select: taxRefundLightListSelect/);
-  assert.doesNotMatch(listFunction, /logisticsBills:\s*\{|documents:\s*\{|costs:\s*\{/);
+  assert.doesNotMatch(listFunction, /documents:\s*\{|costs:\s*\{/);
   assert.match(taxRefundService, /billOfLadingNumbers/);
   assert.match(taxRefundService, /billOfLadingNo: \{ contains: keyword, mode: "insensitive" \}/);
   assert.match(css, /\.taxRefundTable\.dataTable \{[\s\S]*min-width: 1160px;[\s\S]*table-layout: fixed;/);

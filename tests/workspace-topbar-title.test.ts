@@ -1,22 +1,30 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readCostsModuleSource,
+  readDomesticLogisticsModuleSource,
+  readLogisticsFeesModuleSource,
+  readPaymentsModuleSource,
+  readReportsModuleSource,
+  readSettingsModuleSource,
+  readTaxRefundModuleSource,
+  readWorkspaceShellSource,
+} from "./source-helpers.ts";
 
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const businessModuleSources = [
   "app/modules/OrdersModule.tsx",
-  "app/modules/PaymentsModule.tsx",
-  "app/modules/CostsModule.tsx",
+  readPaymentsModuleSource(),
+  readCostsModuleSource(),
   "app/modules/ProfitModule.tsx",
-  "app/modules/DomesticLogisticsModule.tsx",
-  "app/modules/TaxRefundModule.tsx",
-  "app/modules/tax-refund/list-panel.tsx",
-  "app/modules/ReportsModule.tsx",
-  "app/modules/SettingsModule.tsx",
-  "app/modules/settings/module-view.tsx",
+  readDomesticLogisticsModuleSource(),
+  readTaxRefundModuleSource(),
+  readReportsModuleSource(),
+  readSettingsModuleSource(),
   "app/modules/DashboardModule.tsx",
-  "app/modules/LogisticsFeesModule.tsx",
-].map((file) => readFileSync(file, "utf8")).join("\n");
+  readLogisticsFeesModuleSource(),
+].map((source) => source.endsWith(".tsx") ? readFileSync(source, "utf8") : source).join("\n");
 
 test("workspace topbar title is derived from the active menu", () => {
   assert.match(workspaceLayout, /const topbarTitle = activeMenu === "welcome"[\s\S]*active\?\.label \|\| "功能模块"/);
@@ -36,5 +44,5 @@ test("business module headers only show the real module name once", () => {
     assert.match(businessModuleSources, new RegExp(`<h2>${title}</h2>`));
   }
   assert.match(businessModuleSources, /系统设置中心/);
-  assert.match(readFileSync("app/WorkspaceShell.tsx", "utf8"), /title="物流费用"/);
+  assert.match(readWorkspaceShellSource(), /title="物流费用"/);
 });

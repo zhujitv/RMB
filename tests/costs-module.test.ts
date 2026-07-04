@@ -1,26 +1,23 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { readCostsModuleSource } from "./source-helpers.ts";
+import { readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostsModuleSource, readLogisticsFeesModuleSource } from "./source-helpers.ts";
 import test from "node:test";
 import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const costsModule = readCostsModuleSource();
-const costsMutation = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
+const costsMutation = readCostRecordsMutationsSource();
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
 const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "utf8");
 const costPaymentVoucherRoute = readFileSync("app/api/costs/[id]/payment-voucher/route.ts", "utf8");
 const costPaymentVoucherDownloadRoute = readFileSync("app/api/costs/[id]/payment-voucher/download/route.ts", "utf8");
-const costsQueries = readFileSync("lib/platform/cost-records-queries.ts", "utf8");
+const costsQueries = readCostRecordsQueriesSource();
 const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
 const businessDocuments = readFileSync("lib/platform/business-documents.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const paymentVoucherMigration = readFileSync("prisma/migrations/20260630093000_product_supplier_cost_payment_voucher/migration.sql", "utf8");
 const uploadValidation = readFileSync("lib/platform/upload-validation.ts", "utf8");
 const appUtils = readFileSync("app/utils.ts", "utf8");
-const logisticsFeesModule = [
-  "app/modules/LogisticsFeesModule.tsx",
-  "app/modules/logistics-fees/invoice-groups-panel.tsx",
-].map((file) => readFileSync(file, "utf8")).join("\n");
+const logisticsFeesModule = readLogisticsFeesModuleSource();
 const workspaceStyles = readWorkspaceStylesSource();
 const costsModuleWithoutDisableGuard = costsModule.replace(/const DISABLE_COMPONENT_RENDER = \[[\s\S]*?\] as const;\nvoid DISABLE_COMPONENT_RENDER;\n/, "");
 
@@ -84,7 +81,7 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
 
 test("cost management groups logistics invoices by shipment before display", () => {
   assert.match(costsModule, /type CostInvoiceGroupRow = \{/);
-  assert.match(costsModule, /changeCostView\("invoiceGroups"\)/);
+  assert.match(costsModule, /onChangeView\("invoiceGroups"\)/);
   assert.match(costsModule, /CostInvoiceGroupTableHead/);
   assert.match(costsModule, /CostInvoiceGroupRows/);
   assert.match(costsModule, /CostInvoiceGroupDrawer/);
@@ -122,7 +119,7 @@ test("cost invoice group main list hides long invoice and cost type columns", ()
 });
 
 test("cost management exposes paginated invoice exception groups", () => {
-  assert.match(costsModule, /changeCostView\("invoiceExceptions"\)/);
+  assert.match(costsModule, /onChangeView\("invoiceExceptions"\)/);
   assert.match(costsModule, /nextView === "invoiceExceptions"[\s\S]*invoiceStatus: "未收到"/);
   assert.match(costsModule, /value=\{costView === "invoiceExceptions" \? "未收到" : filters\.invoiceStatus\}/);
   assert.match(costsModule, /view: nextView/);

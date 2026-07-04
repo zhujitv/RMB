@@ -8,17 +8,18 @@ import {
   formatShipsgoTrackingMethodForLocale,
   normalizeShipsgoDisplayLocale,
 } from "../lib/shipsgo-display.ts";
-import { readDomesticLogisticsModuleSource, readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import {
+  readDomesticLogisticsModuleSource,
+  readDomesticLogisticsOpsSource,
+  readSettingsModuleSource,
+  readSharedConstantsSource,
+  readShipsgoTrackingSource,
+  readWorkspaceStylesSource,
+} from "./source-helpers.ts";
 
-const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const constants = readSharedConstantsSource();
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
-const trackingService = [
-  "lib/platform/shipsgo-tracking.ts",
-  "lib/platform/shipsgo-tracking-utils.ts",
-  "lib/platform/shipsgo-tracking-mapping.ts",
-  "lib/platform/shipsgo-control-tower.ts",
-  "lib/platform/shipsgo-tracking-service.ts",
-].map((path) => readFileSync(path, "utf8")).join("\n");
+const trackingService = readShipsgoTrackingSource();
 const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
@@ -34,7 +35,7 @@ const oceanTrackingControlTowerRoute = readFileSync("app/api/shipsgo/ocean-track
 const webhookRoute = readFileSync("app/api/shipsgo/webhook/route.ts", "utf8");
 const shipsgoCronRoute = readFileSync("app/api/cron/shipsgo-sync/route.ts", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");
-const domesticLogisticsOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
+const domesticLogisticsOps = readDomesticLogisticsOpsSource();
 const settingsModule = readSettingsModuleSource();
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const logisticsModule = readDomesticLogisticsModuleSource();

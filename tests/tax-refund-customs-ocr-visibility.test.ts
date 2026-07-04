@@ -1,13 +1,24 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readOcrIntegrationSource,
+  readTaxRefundModuleSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
-const detail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
+const detail = [
+  "app/modules/tax-refund/detail-components.tsx",
+  "app/modules/tax-refund/detail-panel.tsx",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const overlays = readFileSync("app/modules/tax-refund/overlays.tsx", "utf8");
-const uploadComponents = readFileSync("app/modules/tax-refund/upload-components.tsx", "utf8");
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const uploadComponents = [
+  "app/modules/tax-refund/upload-components.tsx",
+  "app/modules/tax-refund/upload-card.tsx",
+].map((file) => readFileSync(file, "utf8")).join("\n");
+const taxRefundService = readTaxRefundsSource();
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const taxProfitBarrel = readFileSync("lib/platform/tax-profit.ts", "utf8");
 const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
@@ -15,7 +26,7 @@ const customsOcrRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-cus
 const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260703102000_remove_tax_refund_ocr_calculation/migration.sql", "utf8");
-const ocrIntegration = readFileSync("lib/platform/ocr-integration.ts", "utf8");
+const ocrIntegration = readOcrIntegrationSource();
 
 test("tax refund module no longer renders OCR and tax calculation panels", () => {
   assert.doesNotMatch(detail, /function CustomsRecognitionResultPanel/);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readDomesticLogisticsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readDomesticLogisticsApiSource, readDomesticLogisticsModuleSource, readDomesticLogisticsOpsSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 const taxRoute = readFileSync("app/api/tax-refunds/route.ts", "utf8");
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
@@ -9,7 +9,7 @@ const profitRoute = readFileSync("app/api/profit/route.ts", "utf8");
 const taxModule = readTaxRefundModuleSource();
 const logisticsModule = readDomesticLogisticsModuleSource();
 const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
-const domesticOps = readFileSync("lib/platform/domestic-logistics-ops.ts", "utf8");
+const domesticOps = readDomesticLogisticsOpsSource();
 const sharedOrderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260627003000_structured_export_invoice_remark/migration.sql", "utf8");
 
@@ -36,8 +36,8 @@ test("domestic logistics reads use explicit safe selects so missing optional mig
   assert.doesNotMatch(domesticOps.match(/export function domesticLogisticsSelectWithRelations[\s\S]*?\n}\n/)?.[0] || "", /exportInvoice|customs_export_invoice/);
   assert.match(domesticOps, /domesticLogisticsOrderInclude\(options: \{ shipsgoTrackings\?: boolean \} = \{\}\)/);
   assert.match(domesticOps, /if \(includeShipsgoTrackings\) \{/);
-  assert.match(readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"), /findDomesticLogisticsOrdersForList/);
-  assert.match(readFileSync("lib/platform/domestic-logistics-api.ts", "utf8"), /domesticLogisticsOrderInclude\(\{ shipsgoTrackings: false \}\)/);
+  assert.match(readDomesticLogisticsApiSource(), /findDomesticLogisticsOrdersForList/);
+  assert.match(readDomesticLogisticsApiSource(), /domesticLogisticsOrderInclude\(\{ shipsgoTrackings: false \}\)/);
   assert.match(sharedOrderRelations, /function domesticLogisticsInfoSafeSelect/);
   assert.match(sharedOrderRelations, /domesticLogisticsInfos: \{\s*where: \{ deletedAt: null \},\s*select: domesticLogisticsInfoSafeSelect\(\)/);
   assert.match(sharedOrderRelations, /exportInvoice: true/);

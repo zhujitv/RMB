@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSettingsModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readSettingsModuleSource, readSharedConstantsSource, readWorkspaceShellSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
-const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
+const constants = readSharedConstantsSource();
 const service = readFileSync("lib/platform/company-profile.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const route = readFileSync("app/api/settings/company-profile/route.ts", "utf8");
@@ -11,7 +11,7 @@ const publicRoute = readFileSync("app/api/company-profile/route.ts", "utf8");
 const authMeRoute = readFileSync("app/api/auth/me/route.ts", "utf8");
 const loginPanel = readFileSync("app/LoginPanel.tsx", "utf8");
 const settingsModule = readSettingsModuleSource();
-const workspaceShell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+const workspaceShell = readWorkspaceShellSource();
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const welcomePanel = readFileSync("app/WelcomePanel.tsx", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();

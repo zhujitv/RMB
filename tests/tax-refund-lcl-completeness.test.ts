@@ -1,24 +1,35 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readTaxRefundModuleSource } from "./source-helpers.ts";
+import {
+  readCostRecordsMutationsSource,
+  readDomesticLogisticsApiSource,
+  readLogisticsExpenseWorkflowSource,
+  readOrderDocumentsSource,
+  readReportServiceSource,
+  readSharedConstantsSource,
+  readSharedTaxCompletenessSource,
+  readTaxRefundModuleSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
-const completeness = readFileSync("lib/platform/shared-tax-completeness.ts", "utf8");
-const constants = readFileSync("lib/platform/shared-constants.ts", "utf8");
-const reportService = readFileSync("lib/report-service.ts", "utf8");
+const completeness = readSharedTaxCompletenessSource();
+const constants = readSharedConstantsSource();
+const reportService = readReportServiceSource();
 const packageJson = readFileSync("package.json", "utf8");
 const refreshScript = readFileSync("scripts/refresh-tax-refund-completeness.mjs", "utf8");
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const taxSync = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");
-const taxRefundService = readFileSync("lib/platform/tax-refunds.ts", "utf8");
+const taxRefundService = readTaxRefundsSource();
+const taxRefundListService = readFileSync("lib/platform/tax-refunds-list.ts", "utf8");
 const taxRefundRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
-const taxRefundController = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
-const taxRefundDetailComponents = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
-const taxRefundHelpers = readFileSync("app/modules/tax-refund/helpers.ts", "utf8");
-const orderDocuments = readFileSync("lib/platform/order-documents.ts", "utf8");
-const costMutations = readFileSync("lib/platform/cost-records-mutations.ts", "utf8");
-const domesticLogisticsApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
-const logisticsExpenseMutations = readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8");
+const taxRefundController = readTaxRefundModuleSource();
+const taxRefundDetailComponents = readTaxRefundModuleSource();
+const taxRefundHelpers = readTaxRefundModuleSource();
+const orderDocuments = readOrderDocumentsSource();
+const costMutations = readCostRecordsMutationsSource();
+const domesticLogisticsApi = readDomesticLogisticsApiSource();
+const logisticsExpenseMutations = readLogisticsExpenseWorkflowSource();
 const taxRefundModule = readTaxRefundModuleSource();
 
 test("tax refund completeness uses trade term logistics invoice requirements", () => {
@@ -142,7 +153,7 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(taxSync, /export async function refreshTaxRefundCompletenessBatch/);
   assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
   assert.match(taxSync, /TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3/);
-  const listFunction = taxRefundService.match(/export async function listTaxRefundOrders[\s\S]*?\n}\n\nexport async function getTaxRefundOrderDetail/)?.[0] || "";
+  const listFunction = taxRefundListService.match(/export async function listTaxRefundOrders[\s\S]*?mode: filters\.mode,[\s\S]*?\n  \};\n}/)?.[0] || "";
   assert.match(listFunction, /select: taxRefundLightListSelect/);
   assert.doesNotMatch(listFunction, /scheduleTaxRefundCompletenessRefreshBatch|needsTaxRefundCompletenessRefresh|refreshTaxRefundCompletenessForOrder/);
   assert.match(taxSync, /taxRefundOverallCompleteness/);
