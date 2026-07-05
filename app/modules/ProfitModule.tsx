@@ -202,7 +202,7 @@ export function ProfitModule({
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <ResponsiveDataView
-        mobile={(
+        renderMobile={() => (
           <div>
             {loading ? (
               <div className={styles.emptyState}>数据加载中...</div>
@@ -213,7 +213,7 @@ export function ProfitModule({
             )}
           </div>
         )}
-        desktop={(
+        renderDesktop={() => (
           <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
             <table className={styles.dataTable}>
               <thead>

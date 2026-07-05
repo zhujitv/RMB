@@ -21,10 +21,14 @@ const businessListModules = [
 test("responsive data view only mounts one breakpoint branch", () => {
   assert.match(responsiveDataView, /const DESKTOP_QUERY = "\(min-width: 768px\)";/);
   assert.match(responsiveDataView, /window\.matchMedia\(DESKTOP_QUERY\)/);
-  assert.match(responsiveDataView, /if \(!isDesktop && mobile\)/);
-  assert.match(responsiveDataView, /return <>\{desktop\}<\/>;/);
+  assert.match(responsiveDataView, /renderMobile\?: \(\) => ReactNode/);
+  assert.match(responsiveDataView, /renderDesktop: \(\) => ReactNode/);
+  assert.match(responsiveDataView, /if \(!isDesktop && renderMobile\)/);
+  assert.match(responsiveDataView, /return <>\{renderDesktop\(\)\}<\/>;/);
+  assert.doesNotMatch(responsiveDataView, /mobile\?: ReactNode|desktop: ReactNode/);
   assert.match(responsiveDataView, /桌面端只显示表格，移动端只显示卡片/);
   assert.match(responsiveDataView, /禁止同一数据源在同一断点同时渲染 Card 和 Table/);
+  assert.match(responsiveDataView, /避免父组件先构造两套列表元素/);
 });
 
 test("profit analysis uses responsive data view instead of css-hidden duplicate lists", () => {
@@ -32,8 +36,10 @@ test("profit analysis uses responsive data view instead of css-hidden duplicate 
 
   assert.match(profitModule, /import \{ ResponsiveDataView \} from "\.\.\/ResponsiveDataView"/);
   assert.match(profitModule, /<ResponsiveDataView/);
-  assert.match(profitModule, /mobile=\{\(/);
-  assert.match(profitModule, /desktop=\{\(/);
+  assert.match(profitModule, /renderMobile=\{\(\) => \(/);
+  assert.match(profitModule, /renderDesktop=\{\(\) => \(/);
+  assert.doesNotMatch(profitModule, /mobile=\{\(/);
+  assert.doesNotMatch(profitModule, /desktop=\{\(/);
   assert.match(profitModule, /<ProfitMobileCard/);
   assert.match(profitModule, /<ProfitRows/);
   assert.doesNotMatch(profitModule, /styles\.mobileOnly/);

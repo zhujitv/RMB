@@ -5,11 +5,11 @@ import { useEffect, useState, type ReactNode } from "react";
 const DESKTOP_QUERY = "(min-width: 768px)";
 
 type ResponsiveDataViewProps = {
-  mobile?: ReactNode;
-  desktop: ReactNode;
+  renderMobile?: () => ReactNode;
+  renderDesktop: () => ReactNode;
 };
 
-export function ResponsiveDataView({ mobile, desktop }: ResponsiveDataViewProps) {
+export function ResponsiveDataView({ renderMobile, renderDesktop }: ResponsiveDataViewProps) {
   const [isDesktop, setIsDesktop] = useState(true);
 
   useEffect(() => {
@@ -23,9 +23,10 @@ export function ResponsiveDataView({ mobile, desktop }: ResponsiveDataViewProps)
 
   // 重要：桌面端只显示表格，移动端只显示卡片。
   // 禁止同一数据源在同一断点同时渲染 Card 和 Table，避免重复数据。
-  if (!isDesktop && mobile) {
-    return <>{mobile}</>;
+  // 使用 render 函数而不是 ReactNode props，避免父组件先构造两套列表元素。
+  if (!isDesktop && renderMobile) {
+    return <>{renderMobile()}</>;
   }
 
-  return <>{desktop}</>;
+  return <>{renderDesktop()}</>;
 }
