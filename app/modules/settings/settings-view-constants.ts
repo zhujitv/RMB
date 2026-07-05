@@ -22,7 +22,7 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
   customers: "维护客户资料、自动通知和负责业务员。",
   suppliers: "维护产品供应商、物流供应商和业务权限。",
   users: "维护用户账号、角色权限和供应商绑定。",
-  ocrIntegration: "维护 OCR 服务配置、密钥和识别能力。",
+  ocrIntegration: "维护 OCR 服务配置、密钥和启用范围。",
   shipsgoIntegration: "维护大掌柜海运跟踪接口和同步能力。",
   notificationTemplates: "维护系统邮件模板和发送规则。",
   exchangeRates: "维护汇率来源、手动刷新和基础业务开关。",

@@ -173,30 +173,10 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   accessKeySecretConfigured: false,
   appCode: "",
   appCodeConfigured: false,
-  customsDeclarationMode: "AUTO",
-  customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
   supplierDocumentReturnEnabled: false,
-  fallbackToPdfText: true,
   timeoutMs: "15000",
 };
-export const CUSTOMS_DECLARATION_MODE_OPTIONS = [
-  {
-    value: "AUTO",
-    label: "自动模式",
-    description: "结构化优先；失败后只识别基础字段，不保存商品明细。",
-  },
-  {
-    value: "STRICT",
-    label: "严格结构化模式",
-    description: "只允许阿里云出口/进口报关单结构化识别，失败就报错。",
-  },
-  {
-    value: "MANUAL",
-    label: "手工模式",
-    description: "关闭报关单 OCR，人工维护报关信息和商品明细。",
-  },
-] as const;
 export const OCR_FEATURE_OPTIONS = [
   {
     key: "invoiceTextEnabled",
@@ -208,15 +188,10 @@ export const OCR_FEATURE_OPTIONS = [
     label: "产品供应商资料回传 OCR",
     description: "供应商上传采购合同和增值税发票后自动识别并校验内容。",
   },
-  {
-    key: "fallbackToPdfText",
-    label: "PDF 文本兜底",
-    description: "自动模式下仅可用于基础字段兜底，不允许生成报关商品明细。",
-  },
 ] satisfies Array<{
   key: keyof Pick<
     OcrIntegrationForm,
-    "invoiceTextEnabled" | "supplierDocumentReturnEnabled" | "fallbackToPdfText"
+    "invoiceTextEnabled" | "supplierDocumentReturnEnabled"
   >;
   label: string;
   description: string;

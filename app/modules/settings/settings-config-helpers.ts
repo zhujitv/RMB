@@ -100,9 +100,6 @@ export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationS
 }
 
 export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings | null): OcrIntegrationForm {
-  const customsDeclarationMode = settings?.customsDeclarationMode === "STRICT" || settings?.customsDeclarationMode === "MANUAL"
-    ? settings.customsDeclarationMode
-    : settings?.customsDeclarationEnabled === false ? "MANUAL" : "AUTO";
   return {
     enabled: settings?.enabled === true,
     provider: stringSetting(settings, "provider", DEFAULT_OCR_INTEGRATION_FORM.provider),
@@ -113,11 +110,8 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     accessKeySecretConfigured: settings?.accessKeySecretConfigured === true,
     appCode: "",
     appCodeConfigured: settings?.appCodeConfigured === true,
-    customsDeclarationMode,
-    customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && settings?.customsDeclarationEnabled !== false,
     invoiceTextEnabled: settings?.invoiceTextEnabled === true,
     supplierDocumentReturnEnabled: settings?.supplierDocumentReturnEnabled === true,
-    fallbackToPdfText: settings?.fallbackToPdfText !== false,
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };
 }

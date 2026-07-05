@@ -10,7 +10,6 @@ import {
   EXCHANGE_RATE_SOURCES,
   EXCHANGE_RATE_TYPES,
   NOTIFICATION_RECIPIENT_EMAIL_OPTIONS,
-  CUSTOMS_DECLARATION_MODE_OPTIONS,
   OCR_FEATURE_OPTIONS,
   SHIPSGO_FEATURE_OPTIONS,
 } from "./constants";
@@ -32,7 +31,6 @@ import {
   SettingsCard,
   SettingsField,
   SettingsPage,
-  SettingsSection,
   SettingsStatusTag,
   SettingsSwitch,
 } from "./settings-layout";
@@ -88,17 +86,13 @@ export function OcrIntegrationSettingsCard({
   }
 
   function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
-    if (key === "fallbackToPdfText" && currentForm.customsDeclarationMode === "STRICT") {
-      setField("fallbackToPdfText", false);
-      return;
-    }
     setField(key, !currentForm[key]);
   }
 
   return (
     <SettingsPage
       title="OCR识别"
-      description="统一管理 OCR 服务配置、密钥和识别能力。"
+      description="统一管理 OCR 服务配置、密钥和启用范围。"
       status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
       onSubmit={onSubmit}
       actions={(
@@ -172,48 +166,21 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
-      <SettingsCard title="识别能力" icon="能">
-        <SettingsSection title="报关单识别模式">
-          <div className={styles.settingsFieldGrid}>
-            <SettingsField label="报关单识别模式">
-              <select
-                value={currentForm.customsDeclarationMode}
-                onChange={(event) => {
-                  const mode = event.target.value as OcrIntegrationForm["customsDeclarationMode"];
-                  onChange({
-                    ...currentForm,
-                    customsDeclarationMode: mode,
-                    customsDeclarationEnabled: mode !== "MANUAL",
-                    fallbackToPdfText: mode === "STRICT" ? false : currentForm.fallbackToPdfText,
-                  });
-                }}
-              >
-                {CUSTOMS_DECLARATION_MODE_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
-            </SettingsField>
-          </div>
-          <div className={styles.emptyState}>
-            {CUSTOMS_DECLARATION_MODE_OPTIONS.find((item) => item.value === currentForm.customsDeclarationMode)?.description}
-          </div>
-        </SettingsSection>
-        <SettingsSection title="启用范围">
-          <div className={styles.commissionDeductionGrid}>
-            {OCR_FEATURE_OPTIONS.map((item) => (
-              <PermissionSelectItem
-                key={item.key}
-                label={item.label}
-                description={item.description}
-                checked={Boolean(currentForm[item.key])}
-                onChange={() => toggleFeature(item.key)}
-              />
-            ))}
-          </div>
-        </SettingsSection>
+      <SettingsCard title="启用范围" icon="能">
+        <div className={styles.commissionDeductionGrid}>
+          {OCR_FEATURE_OPTIONS.map((item) => (
+            <PermissionSelectItem
+              key={item.key}
+              label={item.label}
+              description={item.description}
+              checked={Boolean(currentForm[item.key])}
+              onChange={() => toggleFeature(item.key)}
+            />
+          ))}
+        </div>
       </SettingsCard>
 
-      <div className={styles.emptyState}>增值税发票和采购合同结构化识别需要 AccessKey ID / Secret；仅配置 AppCode 时会走 PDF 文本兜底。</div>
+      <div className={styles.emptyState}>增值税发票及采购合同结构化识别需要 AccessKey ID / AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。</div>
     </SettingsPage>
   );
 }
