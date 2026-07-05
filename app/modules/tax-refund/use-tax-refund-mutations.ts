@@ -292,6 +292,9 @@ async function uploadDocument(orderId: string, documentType: string, file: File 
       if (uploadedDocument?.id) {
         patchUploadedDocument(orderId, uploadedDocument);
       }
+      if (isCustomsDeclaration) {
+        patchCustomsPdfTextParse(orderId, uploadedDocument?.customsPdfTextParse);
+      }
       setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
       if (detailOrderId === orderId) void fetchDetail(orderId);
     } catch (uploadError) {
@@ -311,6 +314,17 @@ function customsUploadNotice(parseResult: TaxDocument["customsPdfTextParse"] | u
     const declarationNoMessage = parseResult.customsDeclarationNo ? "已读取：报关单号" : "未读取到报关单号，请手动填写";
     const declarationDateMessage = parseResult.customsDeclarationDate ? "已读取：申报日期" : "未读取到申报日期，请手动填写";
     return `报关单已上传，${declarationNoMessage}；${declarationDateMessage}`;
+  }
+
+function patchCustomsPdfTextParse(orderId: string, parseResult: TaxDocument["customsPdfTextParse"] | undefined) {
+    if (!parseResult) return;
+    const patch: Partial<TaxRefundDetail> = {};
+    if (parseResult.customsDeclarationNo) patch.customsDeclarationNo = parseResult.customsDeclarationNo;
+    if (parseResult.customsDeclarationDate) {
+      patch.customsDeclarationDate = parseResult.customsDeclarationDate;
+      patch.declarationDate = parseResult.customsDeclarationDate;
+    }
+    if (Object.keys(patch).length) patchDetailForOrder(orderId, patch);
   }
 
 async function deleteDocument(orderId: string, document: TaxDocument) {

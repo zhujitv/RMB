@@ -60,13 +60,14 @@ test("tax refund DTO excludes OCR raw results and tax calculation payloads", () 
   }
 });
 
-test("tax refund OCR and calculation APIs are explicitly disabled", () => {
+test("tax refund OCR and calculation APIs are disabled while PDF text reread remains available", () => {
   assert.match(taxRefundDetailRoute, /TAX_REFUND_OCR_CALC_DISABLED/);
   assert.match(taxRefundDetailRoute, /previewCustomsRecognition/);
   assert.match(taxRefundDetailRoute, /recalculateTaxRefund/);
-  assert.match(customsOcrRoute, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.match(customsOcrRoute, /reparseTaxRefundCustomsDeclarationPdf/);
   assert.match(taxRefundCalculationRoute, /TAX_REFUND_CALCULATION_DISABLED/);
-  assert.match(customsRecognition, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.match(customsRecognition, /parseCustomsDeclarationPdf/);
+  assert.doesNotMatch(customsRecognition, /saveOcrRawResult|persistCustomsRecognitionArtifacts/);
   assert.equal(existsSync("lib/platform/export-tax-refund-calculations.ts"), false);
   assert.doesNotMatch(taxProfitBarrel, /export-tax-refund-calculations/);
 });

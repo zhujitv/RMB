@@ -372,7 +372,9 @@ test("tax refund customs documents use manual declaration fields without OCR", (
     `${taxRefundModule}\n${domesticLogisticsModule}`,
     /"上传新版PDF"/,
   );
-  assert.doesNotMatch(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(order\.id\)\}\/recognize-customs-declaration/);
+  assert.match(taxRefundModule, /\/api\/tax-refund\/\$\{encodeURIComponent\(detail\.id\)\}\/recognize-customs-declaration/);
+  assert.match(customsRecognitionFormSource, /hasUploadedCustomsDeclarationPdf/);
+  assert.match(customsRecognitionFormSource, /hasUploadedCustomsDeclarationPdf \? \(/);
   assert.match(customsRecognitionService, /function customsUpdateData/);
   assert.match(customsRecognitionService, /customsDeclarationNo: fields\.customsDeclarationNo/);
   assert.match(customsRecognitionService, /customsDeclarationDate: fields\.customsDeclarationDate/);
@@ -395,12 +397,14 @@ test("tax refund customs documents use manual declaration fields without OCR", (
   );
 });
 
-test("tax refund re-recognition endpoints are disabled", () => {
+test("tax refund legacy OCR endpoints are disabled while PDF text reread is available", () => {
   const taxRefundRecognizeRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
-  assert.match(taxRefundRecognizeRoute, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.match(taxRefundRecognizeRoute, /reparseTaxRefundCustomsDeclarationPdf/);
+  assert.match(taxRefundModule, /重新读取报关单信息/);
   assert.match(taxRefundModule, /setDetailError\(message\)/);
+  assert.match(customsRecognitionService, /scheduleTaxRefundCompletenessRefresh\(before\.id, "报关单PDF文本重新读取后完整度刷新"\)/);
   assert.doesNotMatch(taxRefundModule, /\/api\/tax-refunds\/customs\/reparse/);
-  assert.match(customsRecognitionService, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+  assert.doesNotMatch(customsRecognitionService, /saveOcrRawResult|persistCustomsRecognitionArtifacts/);
 });
 
 test("admin can delete uploaded customs documents with confirmation", () => {

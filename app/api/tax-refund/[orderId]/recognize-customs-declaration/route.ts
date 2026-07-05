@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { apiError, codedError } from "../../../../../lib/platform-db";
+import { apiError, ok, reparseTaxRefundCustomsDeclarationPdf } from "../../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
@@ -13,10 +13,16 @@ type RouteContext = {
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
-    await requireApiActor(request);
-    await params;
-    throw codedError("退税资料报关单 OCR 已停用，请手工维护报关单信息。", 410, "TAX_REFUND_CUSTOMS_OCR_DISABLED");
+    const actor = await requireApiActor(request);
+    const { orderId } = await params;
+    const result = await reparseTaxRefundCustomsDeclarationPdf(request, actor, orderId);
+    return ok({
+      success: true,
+      order: result.order,
+      customsPdfTextParse: result.parse,
+      message: "报关单信息已重新读取",
+    });
   } catch (error: unknown) {
-    return apiError(error, "退税资料报关单 OCR 已停用");
+    return apiError(error, "重新读取报关单信息失败");
   }
 }

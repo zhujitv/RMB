@@ -420,8 +420,8 @@ test("customs table parser filters party and transport rows while trimming item 
   ]);
 });
 
-test("OCR center diagnostics remain controlled by OCR settings while tax refund customs OCR is disabled", () => {
-  assert.match(customsRecognition, /TAX_REFUND_CUSTOMS_OCR_DISABLED/);
+test("OCR center diagnostics remain controlled by OCR settings while tax refund customs uses PDF text parsing", () => {
+  assert.match(customsRecognition, /parseCustomsDeclarationPdf/);
   assert.doesNotMatch(customsRecognition, /recognizePdfTextWithOcr\(buffer, "customsDeclaration"/);
   assert.doesNotMatch(customsRecognition, /saveOcrRawResult/);
   assert.match(customsParser, /export async function extractPdfTextFromPdfBuffer/);

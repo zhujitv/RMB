@@ -21,9 +21,13 @@ export function CustomsRecognitionForm({
   const [customsDeclarationNo, setCustomsDeclarationNo] = useState(detail.customsDeclarationNo || "");
   const [customsDeclarationDate, setCustomsDeclarationDate] = useState(detail.customsDeclarationDate || "");
   const [saving, setSaving] = useState(false);
+  const [rereading, setRereading] = useState(false);
   const [message, setMessage] = useState("");
   const declarationNoRead = Boolean(detail.customsDeclarationNo);
   const declarationDateRead = Boolean(detail.customsDeclarationDate);
+  const hasUploadedCustomsDeclarationPdf = (detail.documents || []).some((document) => (
+    document.documentType === "CUSTOMS_ENTRY_FORM" && document.uploadStatus === "SUCCESS"
+  ));
 
   useEffect(() => {
     setCustomsDeclarationNo(detail.customsDeclarationNo || "");
@@ -50,6 +54,35 @@ export function CustomsRecognitionForm({
       setMessage(saveError instanceof Error ? saveError.message : "报关单信息保存失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function rereadCustomsDeclarationPdf() {
+    setRereading(true);
+    setMessage("");
+    try {
+      const result = await apiJson<{
+        success?: boolean;
+        message?: string;
+        order?: TaxRefundDetail;
+        customsPdfTextParse?: TaxDocument["customsPdfTextParse"];
+      }>(`/api/tax-refund/${encodeURIComponent(detail.id)}/recognize-customs-declaration`, {
+        method: "POST",
+      });
+      if (result.success !== true) throw new Error(result.message || "重新读取报关单信息失败");
+      if (result.order) {
+        setCustomsDeclarationNo(result.order.customsDeclarationNo || "");
+        setCustomsDeclarationDate(result.order.customsDeclarationDate || "");
+      }
+      await onSaved(detail.id, result.order || null);
+      const textResult = result.customsPdfTextParse;
+      const declarationNoMessage = textResult?.customsDeclarationNo ? "已读取：报关单号" : "未读取到报关单号，请手动填写";
+      const declarationDateMessage = textResult?.customsDeclarationDate ? "已读取：申报日期" : "未读取到申报日期，请手动填写";
+      setMessage(`${declarationNoMessage}；${declarationDateMessage}`);
+    } catch (rereadError) {
+      setMessage(rereadError instanceof Error ? rereadError.message : "重新读取报关单信息失败");
+    } finally {
+      setRereading(false);
     }
   }
 
@@ -92,6 +125,11 @@ export function CustomsRecognitionForm({
             <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
               {saving ? "保存中..." : "保存报关单信息"}
             </button>
+            {hasUploadedCustomsDeclarationPdf ? (
+              <button className={styles.secondaryButton} type="button" disabled={saving || rereading} onClick={rereadCustomsDeclarationPdf}>
+                {rereading ? "读取中..." : "重新读取报关单信息"}
+              </button>
+            ) : null}
           </div>
         )}
       </div>

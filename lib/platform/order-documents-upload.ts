@@ -201,12 +201,12 @@ async function parseAndApplyUploadedCustomsDeclarationPdf(
     });
     const parsed = await parseCustomsDeclarationPdf(input.pdfBody);
     const data: Prisma.ReceivableOrderUpdateInput = {
-      customsDeclarationNo: parsed.customsDeclarationNo || null,
-      customsDeclarationDate: parsed.customsDeclarationDate ? dateFromInput(parsed.customsDeclarationDate) : null,
       customsParsedAt: new Date(),
       customsParseStatus: parsed.customsDeclarationParseStatus,
       customsParseMessage: parsed.customsDeclarationParseMessage,
       customsDeclarationParseSource: parsed.customsDeclarationParseSource,
+      ...(parsed.customsDeclarationNo ? { customsDeclarationNo: parsed.customsDeclarationNo } : {}),
+      ...(parsed.customsDeclarationDate ? { customsDeclarationDate: dateFromInput(parsed.customsDeclarationDate) } : {}),
     };
     const updated = await prisma.receivableOrder.update({
       where: { id: input.orderId },
