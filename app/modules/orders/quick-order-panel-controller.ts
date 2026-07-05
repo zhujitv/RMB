@@ -180,9 +180,6 @@ export function useQuickOrderPanelController({
       paymentTermType: customerOption.defaultPaymentTermType || current.paymentTermType,
       tradeTerm: customerOption.defaultTradeTerm || current.tradeTerm,
       salespersonUserId: canManageOrderAssignments && !initialOrder?.id ? (customerOption.salespersonUserId || current.salespersonUserId) : current.salespersonUserId,
-      salespersonCommissionRate: canManageOrderAssignments && !initialOrder?.id && customerOption.commissionRate != null
-        ? String(customerOption.commissionStatus === "停用" ? 0 : customerOption.commissionRate)
-        : current.salespersonCommissionRate,
     }));
     if (customerOption.defaultCurrency) await resolveExchangeRate(customerOption.defaultCurrency);
   }
@@ -243,7 +240,7 @@ export function useQuickOrderPanelController({
         reminderDays: Number(form.reminderDays || 7),
         status: form.status,
         businessEntityId: form.businessEntityId || undefined,
-        ...(canManageOrderAssignments ? { salespersonUserId: form.salespersonUserId, salespersonCommissionRate: form.salespersonCommissionRate === "" ? undefined : Number(form.salespersonCommissionRate) } : {}),
+        ...(canManageOrderAssignments ? { salespersonUserId: form.salespersonUserId } : {}),
         logisticsSupplierIds: selectedLogisticsSupplierIds(),
         remark: form.remark.trim(),
       };

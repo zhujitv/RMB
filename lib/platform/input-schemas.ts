@@ -30,8 +30,6 @@ export const RECEIVABLE_ORDER_INPUT_SCHEMA: InputSchema = {
   currency: { label: "币种", kind: "enum", enumValues: CURRENCIES, required: true },
   salespersonUserId: { label: "业务员", kind: "text" },
   salespersonId: { label: "业务员", kind: "text" },
-  salespersonCommissionRate: { label: "提成比例", kind: "nonNegativeNumber" },
-  commissionRate: { label: "提成比例", kind: "nonNegativeNumber" },
   expectedArrivalDate: { label: "预计到港日期", kind: "date" },
   expectedPaymentDate: { label: "预计付款日期", kind: "date" },
   blDate: { label: "提单日期", kind: "date" },

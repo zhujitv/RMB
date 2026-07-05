@@ -86,11 +86,9 @@ export function QuickCreateOrderPanel({
           <OrderAssignmentFields
             form={controller.form}
             salespeople={controller.salespeople}
-            setFormValue={controller.setFormValue}
             onSalespersonChange={(nextSalespersonUserId) => controller.setForm((current) => ({
               ...current,
               salespersonUserId: nextSalespersonUserId,
-              salespersonCommissionRate: nextSalespersonUserId ? current.salespersonCommissionRate : "0",
             }))}
           />
         ) : null}

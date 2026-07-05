@@ -8,6 +8,9 @@ import { costPageParams } from "./cost-records-shared";
 import {
   COST_INVOICE_GROUP_DETAIL_LIMIT,
   COST_INVOICE_GROUP_SCAN_LIMIT,
+  COST_WORKFLOW_SORT_WEIGHTS,
+  costPaymentInvoiceSortGroupWhere,
+  costWorkflowSortCompare,
   costListFiltersFromQuery,
   includeCostInvoiceGroupRelations,
   pagedCostWhere,
@@ -15,6 +18,8 @@ import {
   type CostInvoiceGroupCostDto,
   type CostQuery,
   type CostWithInvoiceGroupRelations,
+  type CostWorkflowSortWeight,
+  type SupplierInvoicePair,
 } from "./cost-records-query-shared";
 
 function logisticsBillIdForCost(cost: CostWithInvoiceGroupRelations | null | undefined) {
@@ -52,6 +57,7 @@ function groupInvoiceStatus(costs: CostDto[] = []) {
 }
 
 const MISSING_INVOICE_OVERDUE_DAYS = 30;
+const INVOICE_GROUP_CANDIDATE_BATCH_SIZE = 120;
 
 function costTimestamp(value: unknown) {
   const time = new Date(String(value || "")).getTime();
@@ -122,6 +128,10 @@ function serializeCostInvoiceGroup(key: string, costs: CostDto[], rawRows: CostW
   const sourceTypes = uniqueTextList(groupCosts.map((cost) => cost.sourceType));
   const groupType = sourceTypes.includes("LOGISTICS_EXPENSE") ? "LOGISTICS_BILL" : "COST";
   const costTypeLabels = uniqueTextList(groupCosts.map((cost) => cost.costType));
+  const latestCreatedAt = groupCosts
+    .map((cost) => new Date(cost.createdAt || cost.updatedAt || 0).getTime())
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0] || 0;
   const latestUpdatedAt = groupCosts
     .map((cost) => new Date(cost.updatedAt || cost.createdAt || 0).getTime())
     .filter((value) => Number.isFinite(value))
@@ -153,8 +163,70 @@ function serializeCostInvoiceGroup(key: string, costs: CostDto[], rawRows: CostW
     costCount: groupCosts.length,
     costs: groupCosts,
     documents: invoiceFiles,
+    createdAt: latestCreatedAt ? new Date(latestCreatedAt).toISOString() : first.createdAt || first.updatedAt || "",
     updatedAt: latestUpdatedAt ? new Date(latestUpdatedAt).toISOString() : first.updatedAt || first.createdAt || "",
     sourceType: groupType,
+  };
+}
+
+function invoiceGroupSortedWhere(
+  where: Prisma.OrderCostWhereInput,
+  weight: CostWorkflowSortWeight,
+  supplierInvoicePairs: SupplierInvoicePair[] = [],
+): Prisma.OrderCostWhereInput {
+  return {
+    AND: [
+      where,
+      costPaymentInvoiceSortGroupWhere(weight, supplierInvoicePairs),
+    ],
+  };
+}
+
+async function findInvoiceGroupCandidateRows(
+  where: Prisma.OrderCostWhereInput,
+  supplierInvoicePairs: SupplierInvoicePair[] = [],
+  requiredGroupCount: number,
+  maxRows: number,
+) {
+  const rows: CostWithInvoiceGroupRelations[] = [];
+  const seenCostIds = new Set<string>();
+  const seenGroupKeys = new Set<string>();
+  let stoppedEarly = false;
+
+  outer:
+  for (const weight of COST_WORKFLOW_SORT_WEIGHTS) {
+    let skip = 0;
+    while (rows.length < maxRows && seenGroupKeys.size < requiredGroupCount) {
+      const remainingTake = maxRows - rows.length;
+      const take = Math.min(INVOICE_GROUP_CANDIDATE_BATCH_SIZE, remainingTake);
+      if (take <= 0) {
+        stoppedEarly = true;
+        break outer;
+      }
+      const groupRows = await prisma.orderCost.findMany({
+        where: invoiceGroupSortedWhere(where, weight, supplierInvoicePairs),
+        include: includeCostInvoiceGroupRelations(),
+        orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
+        skip,
+        take,
+      });
+      skip += groupRows.length;
+      for (const row of groupRows) {
+        if (seenCostIds.has(row.id)) continue;
+        seenCostIds.add(row.id);
+        rows.push(row);
+        seenGroupKeys.add(costInvoiceGroupKey(row));
+      }
+      if (groupRows.length < take) break;
+    }
+    if (seenGroupKeys.size >= requiredGroupCount || rows.length >= maxRows) {
+      stoppedEarly = true;
+      break;
+    }
+  }
+  return {
+    rows,
+    scannedAllCandidates: !stoppedEarly,
   };
 }
 
@@ -162,21 +234,20 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
   assertRead(actor, "costs");
   const { page, pageSize } = costPageParams(query);
   const filters = costListFiltersFromQuery(query);
-  const invoicePairs = filters.invoiceStatus ? await successfulSupplierInvoicePairs() : [];
+  const invoicePairs = await successfulSupplierInvoicePairs();
   const where = pagedCostWhere(filters, actor, invoicePairs);
+  const start = (page - 1) * pageSize;
+  const requiredGroupCount = start + pageSize + 1;
   const candidateTake = Math.min(
     COST_INVOICE_GROUP_SCAN_LIMIT,
-    Math.max(page * pageSize * 4, pageSize * 8),
+    Math.max(requiredGroupCount * 4, pageSize * 8),
   );
-  const [matchingCostCount, matchingRows] = await Promise.all([
-    prisma.orderCost.count({ where }),
-    prisma.orderCost.findMany({
-      where,
-      include: includeCostInvoiceGroupRelations(),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: candidateTake,
-    }),
-  ]);
+  const { rows: matchingRows, scannedAllCandidates } = await findInvoiceGroupCandidateRows(
+    where,
+    invoicePairs,
+    requiredGroupCount,
+    candidateTake,
+  );
   const matchingRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(matchingRows);
   const groupMap = new Map<string, CostWithInvoiceGroupRelations[]>();
   matchingRowsWithBusinessDocuments.forEach((cost) => {
@@ -207,7 +278,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
         OR: fullWhere,
       },
       include: includeCostInvoiceGroupRelations(),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
       take: COST_INVOICE_GROUP_DETAIL_LIMIT,
     })
     : [];
@@ -225,9 +296,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
       return serializeCostInvoiceGroup(key, costs, rawRows);
     })
     .filter((group) => !options.exceptionsOnly || (group.invoiceStatus === "未收到" && Boolean(group.invoiceExceptionType)))
-    .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-  const start = (page - 1) * pageSize;
-  const scannedAllCandidates = matchingRows.length < candidateTake || matchingRows.length >= matchingCostCount;
+    .sort(costWorkflowSortCompare);
   const totalGroups = scannedAllCandidates
     ? groups.length
     : Math.max(groups.length, start + pageSize + 1);

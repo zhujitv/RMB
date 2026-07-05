@@ -105,6 +105,7 @@ export type CostInvoiceGroupRow = {
   costCount?: number;
   costs?: CostRow[];
   documents?: CostDocument[];
+  createdAt?: string;
   updatedAt?: string;
   sourceType?: string;
 };

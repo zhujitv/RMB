@@ -46,6 +46,8 @@ const SUCCESS_SUPPLIER_INVOICE_FILTER: Prisma.OrderDocumentWhereInput = {
 export const COST_UNPAGINATED_SCAN_LIMIT = 5000;
 export const COST_INVOICE_GROUP_SCAN_LIMIT = 1000;
 export const COST_INVOICE_GROUP_DETAIL_LIMIT = 3000;
+export const COST_WORKFLOW_SORT_WEIGHTS = [0, 1, 2, 3, 4] as const;
+export type CostWorkflowSortWeight = typeof COST_WORKFLOW_SORT_WEIGHTS[number];
 
 export function includeCostInvoiceGroupRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
@@ -160,6 +162,56 @@ function costEffectiveInvoiceMissingWhere(supplierInvoicePairs: SupplierInvoiceP
       },
     ],
   };
+}
+
+export function costPaymentInvoiceSortGroupWhere(
+  weight: CostWorkflowSortWeight,
+  supplierInvoicePairs: SupplierInvoicePair[] = [],
+): Prisma.OrderCostWhereInput {
+  if (weight === 4) return { paymentStatus: "已取消" };
+  const paid = weight >= 2;
+  const invoiceReceived = weight === 1 || weight === 3;
+  return {
+    AND: [
+      paid
+        ? { paymentStatus: "已支付" }
+        : { paymentStatus: { notIn: ["已支付", "已取消"] } },
+      invoiceReceived
+        ? costEffectiveInvoiceReceivedWhere(supplierInvoicePairs)
+        : costEffectiveInvoiceMissingWhere(supplierInvoicePairs),
+    ],
+  };
+}
+
+export function costWorkflowSortWeight(paymentStatus = "", invoiceStatus = ""): CostWorkflowSortWeight {
+  if (paymentStatus === "已取消") return 4;
+  const paid = paymentStatus === "已支付";
+  const received = invoiceStatus === "已收到";
+  if (!paid && !received) return 0;
+  if (!paid && received) return 1;
+  if (paid && !received) return 2;
+  return 3;
+}
+
+function costSortTimestamp(value: unknown) {
+  const time = new Date(String(value || "")).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+export function costWorkflowSortCompare<
+  T extends {
+    paymentStatus?: string;
+    invoiceStatus?: string;
+    createdAt?: string | Date | null;
+    updatedAt?: string | Date | null;
+  },
+>(a: T, b: T) {
+  const weightDiff = costWorkflowSortWeight(a.paymentStatus, a.invoiceStatus)
+    - costWorkflowSortWeight(b.paymentStatus, b.invoiceStatus);
+  if (weightDiff) return weightDiff;
+  const aTime = costSortTimestamp(a.createdAt || a.updatedAt);
+  const bTime = costSortTimestamp(b.createdAt || b.updatedAt);
+  return bTime - aTime;
 }
 
 function costFilterClauses(filters: CostListFilters, supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput[] {

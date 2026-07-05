@@ -125,6 +125,33 @@ test("cost management groups logistics invoices by shipment before display", () 
   assert.match(costsQueries, /summarizeCurrencyTotals\(groupCosts\)/);
 });
 
+test("cost management lists are backend sorted by payment and invoice workflow priority", () => {
+  const listCostsPageSnippet = costsQueries.slice(
+    costsQueries.indexOf("export async function listCostsPage"),
+    costsQueries.indexOf("export async function getCost"),
+  );
+  assert.match(costsQueries, /COST_WORKFLOW_SORT_WEIGHTS = \[0, 1, 2, 3, 4\] as const/);
+  assert.match(costsQueries, /export function costPaymentInvoiceSortGroupWhere/);
+  assert.match(costsQueries, /if \(weight === 4\) return \{ paymentStatus: "已取消" \}/);
+  assert.match(costsQueries, /const paid = weight >= 2/);
+  assert.match(costsQueries, /const invoiceReceived = weight === 1 \|\| weight === 3/);
+  assert.match(costsQueries, /paymentStatus: \{ notIn: \["已支付", "已取消"\] \}/);
+  assert.match(costsQueries, /if \(paymentStatus === "已取消"\) return 4/);
+  assert.match(costsQueries, /if \(!paid && !received\) return 0/);
+  assert.match(costsQueries, /if \(!paid && received\) return 1/);
+  assert.match(costsQueries, /if \(paid && !received\) return 2/);
+  assert.match(costsQueries, /export function costWorkflowSortCompare/);
+  assert.match(costsQueries, /async function findSortedCostRows/);
+  assert.match(costsQueries, /listCostsPage[\s\S]*findSortedCostRows\(where, invoicePairs, \(page - 1\) \* pageSize, pageSize\)/);
+  assert.match(costsQueries, /async function findInvoiceGroupCandidateRows/);
+  assert.match(costsQueries, /buildCostInvoiceGroups[\s\S]*findInvoiceGroupCandidateRows\(\s*where,\s*invoicePairs,\s*requiredGroupCount,\s*candidateTake,\s*\)/);
+  assert.match(costsQueries, /seenGroupKeys\.size < requiredGroupCount/);
+  assert.match(costsQueries, /async function findSortedCostOrderIds/);
+  assert.match(costsQueries, /listCostOrderSummaries[\s\S]*findSortedCostOrderIds\(costWhere, where, invoicePairs, skip, pageSize\)/);
+  assert.match(costsQueries, /\.sort\(costWorkflowSortCompare\)/);
+  assert.doesNotMatch(listCostsPageSnippet, /orderBy: \[\{ updatedAt: "desc" \}, \{ createdAt: "desc" \}\]/);
+});
+
 test("cost invoice group main list hides long invoice and cost type columns", () => {
   const headStart = costsModule.indexOf("function CostInvoiceGroupTableHead");
   const rowStart = costsModule.indexOf("function CostInvoiceGroupRows");

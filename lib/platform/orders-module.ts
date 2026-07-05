@@ -114,19 +114,9 @@ function normalizeOrderLogisticsSupplierIds(inputData: OrderInput) {
 }
 
 function resolveSalespersonCommissionRate(
-  inputData: OrderInput,
-  actor: ActorLike,
   customer: { commissionStatus?: string | null; commissionRate?: unknown } | null | undefined,
-  before: { salespersonCommissionRate?: unknown } | null,
 ) {
-  const fallback = before
-    ? Number(before.salespersonCommissionRate || 0)
-    : Math.max(0, Number(customer?.commissionStatus === "停用" ? 0 : customer?.commissionRate || 0));
-  if (actorRole(actor) !== "管理员") return fallback;
-  const hasInput = inputHasOwn(inputData, "salespersonCommissionRate") || inputHasOwn(inputData, "commissionRate");
-  if (!hasInput) return fallback;
-  const rawValue = inputData.salespersonCommissionRate ?? inputData.commissionRate;
-  return Math.max(0, Math.round(Number(rawValue || 0) * 100) / 100);
+  return Math.max(0, Math.round(Number(customer?.commissionStatus === "停用" ? 0 : customer?.commissionRate || 0) * 100) / 100);
 }
 
 type PageResult<T> = {
@@ -334,7 +324,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
   });
   const exchangeRate = exchange.exchangeRate;
   const salespersonUserId = await resolveSalespersonUserId(inputData, actor, customer, before);
-  const salespersonCommissionRate = resolveSalespersonCommissionRate(inputData, actor, customer, before);
+  const salespersonCommissionRate = resolveSalespersonCommissionRate(customer);
   const createdAt = before?.createdAt || new Date();
   const businessEntity = await resolveBusinessEntityForOrderInput(inputData, before);
   if (before && before.businessEntityId && businessEntity.id !== before.businessEntityId) {

@@ -172,7 +172,6 @@ export type QuickOrderForm = {
   status: string;
   businessEntityId: string;
   salespersonUserId: string;
-  salespersonCommissionRate: string;
   logisticsSupplierIds: string[];
   paymentInstallments: PaymentInstallment[];
   remark: string;
@@ -204,7 +203,6 @@ export const emptyQuickOrderForm: QuickOrderForm = {
   status: "草稿",
   businessEntityId: "",
   salespersonUserId: "",
-  salespersonCommissionRate: "",
   logisticsSupplierIds: [],
   paymentInstallments: [{ ratio: "100", condition: "按约定付款" }],
   remark: "",

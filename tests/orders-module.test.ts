@@ -18,6 +18,9 @@ const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "u
 const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
+const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
+const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 
 test("orders page renders only the table list and not duplicate order cards", () => {
   assert.doesNotMatch(ordersModule, /OrderMobileCard/);
@@ -114,6 +117,15 @@ test("orders save path normalizes complex input fields", () => {
   assert.match(ordersService, /normalizeReminderDaysInput\(inputData\.reminderDays \?\? 7\)/);
   assert.match(ordersService, /optionalLimitedText\(inputData\.remark, "备注", MAX_ORDER_REMARK_LENGTH\)/);
   assert.match(ordersService, /normalizeOrderLogisticsSupplierIds\(inputData\)/);
+});
+
+test("receivable order UI does not expose commission rate editing or display", () => {
+  assert.doesNotMatch(quickOrderFields, /提成比例|salespersonCommissionRate|commissionRate/);
+  assert.doesNotMatch(orderDetailDrawer, /提成比例|salespersonCommissionRate|commissionRate/);
+  assert.doesNotMatch(quickOrderController, /salespersonCommissionRate: form\.salespersonCommissionRate|commissionRate: form\.commissionRate|customerOption\.commissionRate/);
+  assert.doesNotMatch(inputSchemas, /salespersonCommissionRate: \{ label: "提成比例"|commissionRate: \{ label: "提成比例"/);
+  assert.match(ordersService, /function resolveSalespersonCommissionRate\(\s*customer: \{ commissionStatus\?: string \| null; commissionRate\?: unknown \} \| null \| undefined,\s*\) \{\s*return Math\.max\(0, Math\.round\(Number\(customer\?\.commissionStatus === "停用" \? 0 : customer\?\.commissionRate \|\| 0\) \* 100\) \/ 100\);\s*\}/);
+  assert.doesNotMatch(ordersService, /inputHasOwn\(inputData, "salespersonCommissionRate"\)|inputData\.salespersonCommissionRate|inputData\.commissionRate/);
 });
 
 test("orders module keeps legacy order service exports after split", () => {

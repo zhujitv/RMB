@@ -15,35 +15,22 @@ type QuickOrderValueSetter = <K extends keyof QuickOrderForm>(key: K, value: Qui
 export function OrderAssignmentFields({
   form,
   salespeople,
-  setFormValue,
   onSalespersonChange,
 }: {
   form: QuickOrderForm;
   salespeople: SalespersonOption[];
-  setFormValue: QuickOrderValueSetter;
   onSalespersonChange: (salespersonUserId: string) => void;
 }) {
   return (
-    <>
-      <label>
-        业务员
-        <select value={form.salespersonUserId} onChange={(event) => onSalespersonChange(event.target.value)}>
-          <option value="">未分配</option>
-          {salespeople.map((user) => (
-            <option key={user.id} value={user.id}>{user.name}{user.role ? ` · ${user.role}` : ""}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        提成比例 %
-        <input
-          value={form.salespersonCommissionRate}
-          onChange={(event) => setFormValue("salespersonCommissionRate", event.target.value)}
-          inputMode="decimal"
-          placeholder="例如 2.5"
-        />
-      </label>
-    </>
+    <label>
+      业务员
+      <select value={form.salespersonUserId} onChange={(event) => onSalespersonChange(event.target.value)}>
+        <option value="">未分配</option>
+        {salespeople.map((user) => (
+          <option key={user.id} value={user.id}>{user.name}{user.role ? ` · ${user.role}` : ""}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 
