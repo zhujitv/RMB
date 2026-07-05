@@ -11,6 +11,9 @@ export function paymentFormFromRow(payment?: PaymentRow | null): QuickPaymentFor
     amount: payment.amount == null ? "" : String(payment.amount),
     currency: payment.currency || "",
     exchangeRate: payment.exchangeRate == null ? "" : String(payment.exchangeRate),
+    exchangeRateDate: payment.exchangeRateDate || "",
+    exchangeRateSource: payment.exchangeRateSource || "",
+    exchangeRateType: payment.exchangeRateType || "",
     status: payment.status || "待确认",
     bankReference: payment.bankReference || "",
     remark: payment.remark || "",
@@ -32,7 +35,8 @@ export function paymentStatusOptions(canConfirmArrived: boolean) {
 export function rateMeta(payment: PaymentRow) {
   const source = payment.exchangeRateSource || "待获取";
   const type = payment.exchangeRateType || "-";
-  return `来源：${source} / 类型：${type}`;
+  const date = payment.exchangeRateDate || "-";
+  return `来源：${source} / 类型：${type} / 日期：${date}`;
 }
 
 export function orderLabel(order: PaymentOrderOption) {

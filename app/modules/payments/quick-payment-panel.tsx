@@ -45,16 +45,41 @@ export function QuickCreatePaymentPanel({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function setExchangeSnapshot({
+    exchangeRate,
+    exchangeRateDate,
+    exchangeRateSource,
+    exchangeRateType,
+  }: Pick<QuickPaymentForm, "exchangeRate" | "exchangeRateDate" | "exchangeRateSource" | "exchangeRateType">) {
+    setForm((current) => ({
+      ...current,
+      exchangeRate,
+      exchangeRateDate,
+      exchangeRateSource,
+      exchangeRateType,
+    }));
+  }
+
   async function resolveExchangeRate(currency: string, paymentDate = form.paymentDate) {
     const normalized = currency.trim().toUpperCase();
     if (!normalized) {
       setExchangeMeta("");
-      setFormValue("exchangeRate", "");
+      setExchangeSnapshot({
+        exchangeRate: "",
+        exchangeRateDate: "",
+        exchangeRateSource: "",
+        exchangeRateType: "",
+      });
       return;
     }
     if (normalized === "CNY") {
       setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      setFormValue("exchangeRate", "1");
+      setExchangeSnapshot({
+        exchangeRate: "1",
+        exchangeRateDate: paymentDate || new Date().toISOString().slice(0, 10),
+        exchangeRateSource: "系统",
+        exchangeRateType: "人民币",
+      });
       return;
     }
     setExchangeMeta("正在获取汇率...");
@@ -64,12 +89,29 @@ export function QuickCreatePaymentPanel({
       const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?${params}`);
       const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
       if (rate > 0) {
-        setFormValue("exchangeRate", String(rate));
+        setExchangeSnapshot({
+          exchangeRate: String(rate),
+          exchangeRateDate: result.rate?.rateDate || paymentDate || "",
+          exchangeRateSource: result.rate?.source || "系统",
+          exchangeRateType: result.rate?.rateType || "现汇买入价",
+        });
         setExchangeMeta(`来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`);
       } else {
+        setExchangeSnapshot({
+          exchangeRate: "",
+          exchangeRateDate: "",
+          exchangeRateSource: "",
+          exchangeRateType: "",
+        });
         setExchangeMeta("汇率来源：待获取，请手工填写");
       }
     } catch (rateError) {
+      setExchangeSnapshot({
+        exchangeRate: "",
+        exchangeRateDate: "",
+        exchangeRateSource: "",
+        exchangeRateType: "",
+      });
       setExchangeMeta(rateError instanceof Error ? rateError.message : "汇率获取失败，请手工填写");
     }
   }
@@ -81,6 +123,9 @@ export function QuickCreatePaymentPanel({
       orderId: order.id,
       currency: order?.currency || "",
       exchangeRate: "",
+      exchangeRateDate: "",
+      exchangeRateSource: "",
+      exchangeRateType: "",
     }));
     await resolveExchangeRate(order?.currency || "");
   }
@@ -92,7 +137,14 @@ export function QuickCreatePaymentPanel({
       return;
     }
     const normalized = currency.toUpperCase();
-    setForm((current) => ({ ...current, currency: normalized, exchangeRate: "" }));
+    setForm((current) => ({
+      ...current,
+      currency: normalized,
+      exchangeRate: "",
+      exchangeRateDate: "",
+      exchangeRateSource: "",
+      exchangeRateType: "",
+    }));
     await resolveExchangeRate(normalized);
   }
 
@@ -140,6 +192,9 @@ export function QuickCreatePaymentPanel({
             amount: Number(form.amount),
             currency: form.currency,
             exchangeRate: Number(form.exchangeRate),
+            exchangeRateDate: form.exchangeRateDate || undefined,
+            exchangeRateSource: form.exchangeRateSource || undefined,
+            exchangeRateType: form.exchangeRateType || undefined,
             status: form.status,
             bankReference: form.bankReference.trim(),
             remark: form.remark.trim(),
@@ -250,7 +305,16 @@ export function QuickCreatePaymentPanel({
           汇率
           <input
             value={form.exchangeRate}
-            onChange={(event) => setFormValue("exchangeRate", event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({
+                ...current,
+                exchangeRate: value,
+                exchangeRateDate: current.currency === "CNY" ? current.exchangeRateDate : "",
+                exchangeRateSource: current.currency === "CNY" ? current.exchangeRateSource : "",
+                exchangeRateType: current.currency === "CNY" ? current.exchangeRateType : "",
+              }));
+            }}
             readOnly={form.currency === "CNY"}
             inputMode="decimal"
             required

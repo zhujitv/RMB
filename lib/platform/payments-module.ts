@@ -10,8 +10,10 @@ import {
   assertWrite,
   codedError,
   dateFromInput,
+  dateToInput,
   effectivePermissions,
   includeOrderRelations,
+  inputHasOwn,
   nonEmpty,
   optional,
   pageParams,
@@ -22,6 +24,7 @@ import {
   resolveExchangeRateSnapshot,
   runNonCriticalTask,
   serializePayment,
+  summarizeOrder,
   type PaymentDto,
   todayInputInChina,
   writeAudit,
@@ -32,7 +35,6 @@ import {
   canAccessOrder,
   orderAccessWhere,
 } from "./order-access";
-import { syncOrderStatus } from "./orders-module";
 import { summarizeCurrencyTotals } from "./currency-totals";
 
 type ActorLike = ({
@@ -58,6 +60,30 @@ function actorId(actor: ActorLike) {
 
 function actorRole(actor: ActorLike) {
   return String(actor?.role || "");
+}
+
+async function syncOrderStatusInPaymentTransaction(tx: Prisma.TransactionClient, orderId: string) {
+  const order = await tx.receivableOrder.findUnique({
+    where: { id: orderId },
+    include: includeOrderRelations(),
+  });
+  if (!order || ["草稿", "已关闭", "已取消"].includes(order.status)) return order;
+  const summary = summarizeOrder(order);
+  let status = order.status;
+  if (Number(summary.overpaidCny || 0) > 0) status = "多收款";
+  else if (Number(summary.outstandingCny || 0) <= 0) status = "已收齐";
+  else if (Number(summary.confirmedPaymentsCny || 0) > 0) status = "部分收款";
+  else if (["部分收款", "已收齐", "多收款"].includes(order.status)) {
+    status = order.actualShipmentAmount == null ? "已确认" : "已发货";
+  }
+  if (status !== order.status) {
+    return tx.receivableOrder.update({
+      where: { id: orderId },
+      data: { status },
+      include: includeOrderRelations(),
+    });
+  }
+  return order;
 }
 
 type PageResult<T> = {
@@ -208,8 +234,21 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
   const currentActorId = actorId(actor);
   const currentActor = { ...(actor || {}), id: currentActorId, role: actorRole(actor) };
   const inputData = assertInputSchema(assertJsonObject(input), PAYMENT_INPUT_SCHEMA) as PaymentInput;
-  const before = id ? await prisma.payment.findFirst({ where: { id, deletedAt: null } }) : null;
+  const before = id ? await prisma.payment.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      order: {
+        include: {
+          customer: true,
+          costs: { where: { deletedAt: null }, select: { createdById: true, deletedAt: true } },
+        },
+      },
+    },
+  }) : null;
   if (id && !before) throw codedError("收款记录不存在或已删除", 404, "PAYMENT_NOT_FOUND");
+  if (before && !canAccessOrder(actor, before.order)) {
+    throw permissionError("无权限更新该收款记录");
+  }
   const order = await assertOrderOpen(requireText(inputData.orderId, "关联订单"), actor);
   if (!id || before?.orderId !== order.id) {
     const { assertOrderCanReceivePayment } = await import("./order-access");
@@ -222,7 +261,19 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
   if (requestedCurrency !== orderCurrency) {
     throw codedError("收款币种必须与订单币种一致。", 400, "PAYMENT_CURRENCY_MISMATCH");
   }
-  const exchange = await resolveExchangeRateSnapshot({ ...inputData, currency: orderCurrency }, currentActor, {
+  const exchangeInput: PaymentInput = { ...inputData, currency: orderCurrency };
+  if (before) {
+    if (!inputHasOwn(exchangeInput, "exchangeRateDate") && !inputHasOwn(exchangeInput, "rateDate") && before.exchangeRateDate) {
+      exchangeInput.exchangeRateDate = dateToInput(before.exchangeRateDate);
+    }
+    if (!inputHasOwn(exchangeInput, "exchangeRateSource") && before.exchangeRateSource) {
+      exchangeInput.exchangeRateSource = before.exchangeRateSource;
+    }
+    if (!inputHasOwn(exchangeInput, "exchangeRateType") && before.exchangeRateType) {
+      exchangeInput.exchangeRateType = before.exchangeRateType;
+    }
+  }
+  const exchange = await resolveExchangeRateSnapshot(exchangeInput, currentActor, {
     currency: orderCurrency,
     defaultDate: paymentDate,
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
@@ -246,11 +297,16 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
     updatedById: currentActorId,
     ...(id ? {} : { createdById: currentActorId }),
   };
-  const payment = id
-    ? await prisma.payment.update({ where: { id }, data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } })
-    : await prisma.payment.create({ data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } });
-  await syncOrderStatus(order.id);
-  if (before?.orderId && before.orderId !== order.id) await syncOrderStatus(before.orderId);
+  const payment = await prisma.$transaction(async (tx) => {
+    const saved = id
+      ? await tx.payment.update({ where: { id }, data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } })
+      : await tx.payment.create({ data, include: { order: { include: { customer: true, businessEntity: true, salesperson: true } }, createdBy: true, updatedBy: true } });
+    await syncOrderStatusInPaymentTransaction(tx, order.id);
+    if (before?.orderId && before.orderId !== order.id) {
+      await syncOrderStatusInPaymentTransaction(tx, before.orderId);
+    }
+    return saved;
+  });
   const auditAction = id && before?.status !== requestedStatus ? `修改收款状态：${before?.status || ""}→${requestedStatus}` : (id ? "更新收款" : "新增收款");
   await runNonCriticalTask("收款操作日志写入", () => writeAudit(request, actor, auditAction, "payments", payment.id, before, payment));
   return serializePayment(payment);
@@ -262,10 +318,13 @@ export async function deletePayment(request: AuditRequestLike, actor: ActorLike,
   const before = await prisma.payment.findUnique({ where: { id }, include: { order: { include: { customer: true } } } });
   if (!before || before.deletedAt) throw permissionError("收款记录不存在或已删除", 404);
   if (!canAccessOrder(actor, before.order)) throw permissionError("无权限删除该收款记录");
-  const payment = await prisma.payment.update({
-    where: { id },
-    data: { deletedAt: new Date(), updatedById: currentActorId },
+  const payment = await prisma.$transaction(async (tx) => {
+    const saved = await tx.payment.update({
+      where: { id },
+      data: { deletedAt: new Date(), updatedById: currentActorId },
+    });
+    await syncOrderStatusInPaymentTransaction(tx, saved.orderId);
+    return saved;
   });
-  await syncOrderStatus(payment.orderId);
   await runNonCriticalTask("收款删除操作日志写入", () => writeAudit(request, actor, "删除收款", "payments", id, before, payment));
 }

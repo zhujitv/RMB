@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, listPayments, ok, parseJsonBody, savePayment } from "../../../lib/platform-db";
+import { listPayments, ok, parseJsonBody, savePayment } from "../../../lib/platform-db";
 
-import { requireApiActor } from "../../../lib/api-route-guard";
+import { withApiRead, withApiWrite } from "../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,7 @@ const listPaymentsTyped = listPayments as (
   options?: { paginated?: boolean },
 ) => Promise<unknown[] | { rows: unknown[] }>;
 
-export async function GET(request: NextRequest) {
-  try {
-    const actor = await requireApiActor(request);
+export const GET = withApiRead("payments", async (request, actor) => {
     const query = new URL(request.url).searchParams;
     const paginated = query.get("workspace") === "1" || query.has("page") || query.has("pageSize");
     const result = await listPaymentsTyped(query, actor, { paginated });
@@ -28,18 +26,10 @@ export async function GET(request: NextRequest) {
     return paginated
       ? ok({ success: true, data: result, payments: page.rows || [] })
       : ok({ payments: result });
-  } catch (error: unknown) {
-    return apiError(error, "读取收款失败");
-  }
-}
+}, { errorMessage: "读取收款失败" });
 
-export async function POST(request: NextRequest) {
-  try {
-    const actor = await requireApiActor(request);
+export const POST = withApiWrite("payments", async (request, actor) => {
     const body = await parseJsonBody(request);
     const payment = await savePaymentTyped(request, actor, body);
     return NextResponse.json({ success: true, payment, message: "收款已保存" }, { status: 201 });
-  } catch (error: unknown) {
-    return apiError(error, "保存收款失败");
-  }
-}
+}, { errorMessage: "保存收款失败" });

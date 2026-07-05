@@ -44,6 +44,12 @@ test("payment registration keeps receipt currency aligned with the receivable or
   assert.match(paymentsService, /requestedCurrency !== orderCurrency/);
 });
 
+test("payment updates verify access to the original payment order before mutation", () => {
+  assert.match(paymentsService, /const before = id \? await prisma\.payment\.findFirst\(\{\s*where: \{ id, deletedAt: null \},\s*include: \{\s*order: \{/);
+  assert.match(paymentsService, /if \(before && !canAccessOrder\(actor, before\.order\)\) \{\s*throw permissionError\("无权限更新该收款记录"\)/);
+  assert.match(paymentsService, /const order = await assertOrderOpen\(requireText\(inputData\.orderId, "关联订单"\), actor\)/);
+});
+
 test("payment order search supports receivable summaries without runtime permission reference errors", () => {
   assert.match(ordersService, /canWrite,/);
   assert.match(ordersService, /serializeReceivableSearchOrder/);

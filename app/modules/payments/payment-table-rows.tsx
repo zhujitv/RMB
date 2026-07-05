@@ -9,21 +9,9 @@ import { paymentStatusClass } from "./helpers";
 export function PaymentTableRows({
   payment,
   onViewDetail,
-  deleting,
-  onEdit,
-  onDelete,
-  onConfirmArrived,
-  canManage,
-  confirming,
 }: {
   payment: PaymentRow;
   onViewDetail: () => void;
-  deleting: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  onConfirmArrived: () => void;
-  canManage: boolean;
-  confirming: boolean;
 }) {
   return (
     <>

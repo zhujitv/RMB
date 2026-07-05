@@ -18,6 +18,7 @@ export type PaymentRow = {
   paymentDate?: string;
   currency?: string;
   exchangeRate?: number;
+  exchangeRateDate?: string;
   exchangeRateSource?: string;
   exchangeRateType?: string;
   amount?: number;
@@ -106,6 +107,9 @@ export type QuickPaymentForm = {
   amount: string;
   currency: string;
   exchangeRate: string;
+  exchangeRateDate: string;
+  exchangeRateSource: string;
+  exchangeRateType: string;
   status: string;
   bankReference: string;
   remark: string;
@@ -128,6 +132,9 @@ export const emptyQuickPaymentForm: QuickPaymentForm = {
   amount: "",
   currency: "",
   exchangeRate: "",
+  exchangeRateDate: "",
+  exchangeRateSource: "",
+  exchangeRateType: "",
   status: "待确认",
   bankReference: "",
   remark: "",

@@ -284,16 +284,6 @@ export function PaymentsModule({
                 key={payment.id}
                 payment={payment}
                 onViewDetail={() => setDetailPayment(payment)}
-                deleting={deletingId === payment.id}
-                onEdit={() => {
-                  setCreateOpen(false);
-                  setEditPayment(payment);
-                  setDetailPayment(payment);
-                }}
-                onDelete={() => void deletePayment(payment)}
-                onConfirmArrived={() => void confirmPaymentArrived(payment)}
-                canManage={canManagePayments}
-                confirming={confirmingId === payment.id}
               />
             )) : (
               <tr>
@@ -389,6 +379,9 @@ export function PaymentsModule({
           amount: Number(payment.amount || 0),
           currency: payment.currency,
           exchangeRate: Number(payment.exchangeRate || 0),
+          exchangeRateDate: payment.exchangeRateDate || undefined,
+          exchangeRateSource: payment.exchangeRateSource || undefined,
+          exchangeRateType: payment.exchangeRateType || undefined,
           status: "已到账",
           bankReference: payment.bankReference || "",
           remark: payment.remark || "",
