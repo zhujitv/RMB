@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "setup": "node scripts/setup-wizard.mjs",
     "dev": "next dev",
     "build:app": "node scripts/run-with-env.mjs prisma generate && next build",
     "build:release": "node scripts/run-with-env.mjs prisma migrate deploy && npm run build:app",
