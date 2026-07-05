@@ -409,10 +409,6 @@ export function OrdersModule({
                 key={order.id}
                 order={order}
                 onViewDetail={() => setDetailOrder(order)}
-                onEdit={() => openEditOrder(order)}
-                onDelete={() => void deleteOrder(order)}
-                deleting={deletingId === order.id}
-                canWrite={canWriteOrders}
               />
             )) : (
               <tr>

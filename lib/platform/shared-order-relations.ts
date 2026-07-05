@@ -91,3 +91,23 @@ export function includeOrderRelations() {
     },
   });
 }
+
+export function includeOrderListRelations() {
+  return Prisma.validator<Prisma.ReceivableOrderInclude>()({
+    customer: true,
+    businessEntity: true,
+    salesperson: true,
+    commissionSettledBy: true,
+    createdBy: true,
+    updatedBy: true,
+    payments: {
+      where: { deletedAt: null },
+      include: { createdBy: true, updatedBy: true },
+      orderBy: [{ paymentDate: "desc" as const }, { createdAt: "desc" as const }],
+    },
+    logisticsSuppliers: {
+      include: { supplier: true, assignedBy: true },
+      orderBy: [{ assignedAt: "desc" as const }],
+    },
+  });
+}

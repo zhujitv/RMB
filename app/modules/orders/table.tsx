@@ -8,17 +8,9 @@ import { orderCurrencyAmount } from "./utils";
 export function OrderTableRows({
   order,
   onViewDetail,
-  onEdit,
-  onDelete,
-  deleting,
-  canWrite,
 }: {
   order: OrderRow;
   onViewDetail: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  deleting: boolean;
-  canWrite: boolean;
 }) {
   const receivedCny = Number(order.summary?.arrivedPaymentsCny ?? order.summary?.confirmedPaymentsCny ?? 0);
   const receivedAmount = Number(order.summary?.arrivedPaymentsAmount ?? order.summary?.confirmedPaymentsAmount ?? orderCurrencyAmount(order, receivedCny));

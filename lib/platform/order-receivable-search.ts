@@ -3,14 +3,13 @@ import { prisma } from "../prisma";
 import {
   assertRead,
   canWrite,
-  customerBusinessName,
   customerFullName,
   customerShortName,
   dateToInput,
   effectivePermissions,
-  includeOrderRelations,
+  includeOrderListRelations,
   nonEmpty,
-  serializeOrder,
+  serializeOrderListRow,
   summarizeOrder,
 } from "./shared";
 import {
@@ -25,9 +24,9 @@ type ActorLike = ({
   customPermissions?: unknown;
 } & Record<string, unknown>) | null | undefined;
 type QueryLike = URLSearchParams;
-type OrderWithRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
+type OrderSearchRelations = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderListRelations> }>;
 
-function serializeReceivableSearchOrder(order: OrderWithRelations) {
+function serializeReceivableSearchOrder(order: OrderSearchRelations) {
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
   const shortCustomerName = customerShortName(order.customer);
   const summary = summarizeOrder(order);
@@ -73,7 +72,7 @@ function serializeReceivableSearchOrder(order: OrderWithRelations) {
   };
 }
 
-function receivableOrderCanAcceptPayment(order: OrderWithRelations) {
+function receivableOrderCanAcceptPayment(order: OrderSearchRelations) {
   return !["已关闭", "已取消"].includes(order.status);
 }
 
@@ -89,14 +88,19 @@ export async function searchReceivableOrders(query: QueryLike, actor: ActorLike)
   const filters: Prisma.ReceivableOrderWhereInput[] = [accessWhere];
   if (q) {
     filters.push({
-      OR: [
-        { orderNo: { contains: q, mode: "insensitive" } },
-        { blNo: { contains: q, mode: "insensitive" } },
-        { customerNameSnapshot: { contains: q, mode: "insensitive" } },
-        { customer: { is: { name: { contains: q, mode: "insensitive" } } } },
-        { customer: { is: { shortName: { contains: q, mode: "insensitive" } } } },
-        { salesperson: { is: { name: { contains: q, mode: "insensitive" } } } },
-      ],
+      OR: isCostEntrySearch
+        ? [
+            { orderNo: { contains: q, mode: "insensitive" } },
+            { blNo: { contains: q, mode: "insensitive" } },
+          ]
+        : [
+            { orderNo: { contains: q, mode: "insensitive" } },
+            { blNo: { contains: q, mode: "insensitive" } },
+            { customerNameSnapshot: { contains: q, mode: "insensitive" } },
+            { customer: { is: { name: { contains: q, mode: "insensitive" } } } },
+            { customer: { is: { shortName: { contains: q, mode: "insensitive" } } } },
+            { salesperson: { is: { name: { contains: q, mode: "insensitive" } } } },
+          ],
     });
   }
   const where: Prisma.ReceivableOrderWhereInput = {
@@ -106,7 +110,7 @@ export async function searchReceivableOrders(query: QueryLike, actor: ActorLike)
   };
   const orders = await prisma.receivableOrder.findMany({
     where,
-    include: includeOrderRelations(),
+    include: includeOrderListRelations(),
     orderBy: [{ createdAt: "desc" }],
     take: isPaymentSearch ? 50 : 20,
   });
@@ -117,9 +121,9 @@ export async function searchReceivableOrders(query: QueryLike, actor: ActorLike)
       orderNo: order.orderNo,
       blNo: order.blNo || "",
       billOfLadingNo: order.blNo || "",
-      customerName: customerBusinessName(order.customer, order.customerNameSnapshot),
-      customerFullName: customerFullName(order.customer, order.customerNameSnapshot),
-      customerShortName: customerShortName(order.customer),
+      customerName: "",
+      customerFullName: "",
+      customerShortName: "",
       status: order.status,
       dueDate: dateToInput(order.dueDate),
     }));
@@ -127,6 +131,6 @@ export async function searchReceivableOrders(query: QueryLike, actor: ActorLike)
   return resultOrders.map((order) => (
     isPaymentSearch
       ? serializeReceivableSearchOrder(scopeOrderForActor(order, actor))
-      : serializeOrder(scopeOrderForActor(order, actor))
+      : serializeOrderListRow(scopeOrderForActor(order, actor))
   ));
 }

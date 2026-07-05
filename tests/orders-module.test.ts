@@ -13,6 +13,7 @@ const ordersModule = [
   "app/modules/orders/utils.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const orderSearchService = readFileSync("lib/platform/order-receivable-search.ts", "utf8");
 const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
 const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
@@ -55,9 +56,64 @@ test("orders api sorts receivable orders by shipment date", () => {
   assert.deepEqual(sorted.map((row) => row.orderNo), ["PV263", "MG40", "PV252", "PV260", "DM22 23"]);
   assert.match(ordersService, /sortReceivableRowsByShipmentDate/);
   assert.match(ordersService, /pageParams\(query, 20, 20\)/);
+  assert.match(ordersService, /include: includeOrderListRelations\(\)/);
+  assert.match(ordersService, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
   assert.match(ordersService, /skip: \(page - 1\) \* pageSize/);
   assert.match(ordersService, /take: pageSize/);
   assert.doesNotMatch(ordersService, /sortedRows\.slice\(start, start \+ pageSize\)/);
+});
+
+test("paginated orders use a DTO that does not expose unloaded detail relations", () => {
+  assert.match(orderSerialization, /export function serializeOrderListRow/);
+  assert.match(orderSerialization, /export type SerializedOrderListRowDto = ReturnType<typeof serializeOrderListRow>/);
+
+  const listSerializerStart = orderSerialization.indexOf("export function serializeOrderListRow");
+  const listSerializerEnd = orderSerialization.indexOf("export function serializeOrder(orderInput", listSerializerStart);
+  const listSerializer = orderSerialization.slice(listSerializerStart, listSerializerEnd);
+  assert.match(listSerializer, /summary: serializeOrderListSummary\(summary\)/);
+  assert.doesNotMatch(listSerializer, /documentCompleteness/);
+  assert.doesNotMatch(listSerializer, /taxRefundStatus/);
+  assert.doesNotMatch(listSerializer, /domesticLogisticsInfo/);
+  assert.doesNotMatch(listSerializer, /shippingDocumentNotification/);
+  assert.doesNotMatch(listSerializer, /shippingDocumentManualDraft/);
+  assert.doesNotMatch(listSerializer, /documents,/);
+  assert.doesNotMatch(listSerializer, /costs,/);
+
+  const listSummaryStart = orderSerialization.indexOf("function serializeOrderListSummary");
+  const listSummaryEnd = orderSerialization.indexOf("export function serializeOrderListRow", listSummaryStart);
+  const listSummary = orderSerialization.slice(listSummaryStart, listSummaryEnd);
+  assert.doesNotMatch(listSummary, /totalCostCny|expectedGrossProfit|commissionFormula|taxLogistics/);
+});
+
+test("cost-entry receivable search does not expose customer identity", () => {
+  assert.match(orderSearchService, /const isCostEntrySearch = canWrite\(actor, "costs"\) && scope === "OWN_COST"/);
+  assert.match(orderSearchService, /OR: isCostEntrySearch[\s\S]*\{ orderNo: \{ contains: q, mode: "insensitive" \} \}[\s\S]*\{ blNo: \{ contains: q, mode: "insensitive" \} \}/);
+  assert.match(orderSearchService, /customerName: ""/);
+  assert.match(orderSearchService, /customerFullName: ""/);
+  assert.match(orderSearchService, /customerShortName: ""/);
+  const costSearchStart = orderSearchService.indexOf("OR: isCostEntrySearch");
+  const costSearchBranch = orderSearchService.slice(
+    costSearchStart,
+    orderSearchService.indexOf("        : [", costSearchStart),
+  );
+  assert.doesNotMatch(costSearchBranch, /customerNameSnapshot|customer: \{ is: \{ name|shortName/);
+});
+
+test("ordinary receivable search uses the lightweight order list DTO", () => {
+  assert.match(orderSearchService, /include: includeOrderListRelations\(\)/);
+  assert.match(orderSearchService, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
+  assert.match(orderSearchService, /\? serializeReceivableSearchOrder\(scopeOrderForActor\(order, actor\)\)[\s\S]*: serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
+  assert.doesNotMatch(orderSearchService, /serializeOrder\(scopeOrderForActor\(order, actor\)\)/);
+  assert.doesNotMatch(orderSearchService, /\bserializeOrder,/);
+});
+
+test("orders save path normalizes complex input fields", () => {
+  assert.match(ordersService, /requireLimitedText\(inputData\.orderNo, "订单号", MAX_ORDER_NO_LENGTH\)/);
+  assert.match(ordersService, /optionalLimitedText\(inputData\.blNo \|\| inputData\.billOfLadingNo, "提单号", MAX_BL_NO_LENGTH\)/);
+  assert.match(ordersService, /normalizeInstallments\(inputData\.paymentInstallments, finalReceivableAmount, exchangeRate\)/);
+  assert.match(ordersService, /normalizeReminderDaysInput\(inputData\.reminderDays \?\? 7\)/);
+  assert.match(ordersService, /optionalLimitedText\(inputData\.remark, "备注", MAX_ORDER_REMARK_LENGTH\)/);
+  assert.match(ordersService, /normalizeOrderLogisticsSupplierIds\(inputData\)/);
 });
 
 test("orders module keeps legacy order service exports after split", () => {

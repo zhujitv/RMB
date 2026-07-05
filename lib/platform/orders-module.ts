@@ -19,10 +19,13 @@ import {
   dateToInput,
   depositRatioForPaymentTerm,
   getExchangeRateSettings,
+  includeOrderListRelations,
   includeOrderRelations,
   inputHasOwn,
   logServerError,
   nonEmpty,
+  normalizeInstallments,
+  normalizedStringArray,
   optional,
   pageParams,
   pageResult,
@@ -35,7 +38,9 @@ import {
   resolvePaymentTerm,
   runNonCriticalTask,
   serializeOrder,
+  serializeOrderListRow,
   summarizeOrder,
+  type SerializedOrderListRowDto,
   type SerializedOrderDto,
   todayInputInChina,
   writeAudit,
@@ -71,6 +76,41 @@ function actorId(actor: ActorLike) {
 
 function actorRole(actor: ActorLike) {
   return String(actor?.role || "");
+}
+
+function requireLimitedText(value: unknown, label: string, maxLength: number) {
+  const text = requireText(value, label);
+  if (text.length > maxLength) {
+    throw codedError(`${label}不能超过 ${maxLength} 个字符`, 400, "VALIDATION_TEXT_TOO_LONG");
+  }
+  return text;
+}
+
+function optionalLimitedText(value: unknown, label: string, maxLength: number) {
+  const text = optional(value);
+  if (text && text.length > maxLength) {
+    throw codedError(`${label}不能超过 ${maxLength} 个字符`, 400, "VALIDATION_TEXT_TOO_LONG");
+  }
+  return text;
+}
+
+function normalizeReminderDaysInput(value: unknown) {
+  const number = Math.round(Number(value ?? 7));
+  if (!Number.isFinite(number) || number < 0 || number > MAX_ORDER_REMINDER_DAYS) {
+    throw codedError(`提醒天数必须在 0-${MAX_ORDER_REMINDER_DAYS} 之间`, 400, "REMINDER_DAYS_INVALID");
+  }
+  return number;
+}
+
+function normalizeOrderLogisticsSupplierIds(inputData: OrderInput) {
+  const raw = inputHasOwn(inputData, "logisticsSupplierIds")
+    ? inputData.logisticsSupplierIds
+    : inputData.logisticsSuppliers;
+  const ids = normalizedStringArray(raw).filter((item, index, arr) => arr.indexOf(item) === index);
+  if (ids.length > MAX_ORDER_LOGISTICS_SUPPLIERS) {
+    throw codedError(`订单物流供应商最多选择 ${MAX_ORDER_LOGISTICS_SUPPLIERS} 个`, 400, "LOGISTICS_SUPPLIER_LIMIT_EXCEEDED");
+  }
+  return ids;
 }
 
 function resolveSalespersonCommissionRate(
@@ -109,9 +149,15 @@ type OrderListFilters = {
 };
 
 export type OrderListRow = SerializedOrderDto;
+export type OrderPageRow = SerializedOrderListRowDto;
 const ORDER_UNPAGINATED_SCAN_LIMIT = 1000;
+const MAX_ORDER_NO_LENGTH = 80;
+const MAX_BL_NO_LENGTH = 80;
+const MAX_ORDER_REMARK_LENGTH = 2000;
+const MAX_ORDER_LOGISTICS_SUPPLIERS = 20;
+const MAX_ORDER_REMINDER_DAYS = 365;
 
-type PaginatedOrderList = PageResult<OrderListRow> & {
+type PaginatedOrderList = PageResult<OrderPageRow> & {
   summary: ReturnType<typeof summarizeCurrencyTotals>;
 };
 
@@ -127,7 +173,7 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
       prisma.receivableOrder.count({ where }),
       prisma.receivableOrder.findMany({
         where,
-        include: includeOrderRelations(),
+        include: includeOrderListRelations(),
         orderBy: [{ actualShipmentDate: "desc" }, { blDate: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -141,7 +187,7 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
         },
       }),
     ]);
-    const rows = sortReceivableRowsByShipmentDate(orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))));
+    const rows = sortReceivableRowsByShipmentDate(orders.map((order) => serializeOrderListRow(scopeOrderForActor(order, actor))));
     return {
       ...pageResult(rows, total, page, pageSize),
       summary: summarizeCurrencyTotals(summaryGroups.map((group) => ({
@@ -255,8 +301,8 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
   if (id && !before) throw codedError("应收订单不存在或已删除", 404, "ORDER_NOT_FOUND");
   if (before && !canAccessOrder(actor, before)) throw codedError("无权限修改该应收订单", 403, "ORDER_PERMISSION_DENIED");
   const customer = await assertCustomerScope(actor, requireText(inputData.customerId, "客户"));
-  const orderNo = requireText(inputData.orderNo, "订单号");
-  const blNo = optional(inputData.blNo || inputData.billOfLadingNo);
+  const orderNo = requireLimitedText(inputData.orderNo, "订单号", MAX_ORDER_NO_LENGTH);
+  const blNo = optionalLimitedText(inputData.blNo || inputData.billOfLadingNo, "提单号", MAX_BL_NO_LENGTH);
   const duplicate = await validateDuplicateOrder(orderNo, id);
   if (duplicate) throw codedError("订单号已存在，不能重复提交", 409, "ORDER_DUPLICATE");
   if (id) {
@@ -321,7 +367,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
       ? (dateFromInput(inputData.expectedPaymentDate) || actualShipmentDate)
       : (!paymentTermType && before ? before.expectedPaymentDate : null);
   const paymentInstallments = paymentTermType === "INSTALLMENT"
-    ? inputData.paymentInstallments
+    ? normalizeInstallments(inputData.paymentInstallments, finalReceivableAmount, exchangeRate)
     : (!paymentTermType && before ? before.paymentInstallments : null);
   if (dueDate && createdAt && dueDate < new Date(createdAt.toISOString().slice(0, 10))) {
     throw codedError("到期日不能早于订单创建日期", 400, "DUE_DATE_BEFORE_ORDER_DATE");
@@ -361,9 +407,9 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     paymentInstallments: paymentInstallments == null ? Prisma.DbNull : paymentInstallments,
     creditDays,
     dueDate,
-    reminderDays: Math.max(0, Math.round(Number(inputData.reminderDays ?? 7))),
+    reminderDays: normalizeReminderDaysInput(inputData.reminderDays ?? 7),
     status: ORDER_STATUSES.includes(String(inputData.status || "")) ? String(inputData.status) : "已确认",
-    remark: optional(inputData.remark),
+    remark: optionalLimitedText(inputData.remark, "备注", MAX_ORDER_REMARK_LENGTH),
     updatedById: currentActorId,
     ...(id ? {} : { createdById: currentActorId }),
   };
@@ -371,6 +417,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     throw codedError("已关闭订单不能修改", 400, "ORDER_CLOSED");
   }
   const hasLogisticsSupplierInput = inputHasOwn(inputData, "logisticsSupplierIds") || inputHasOwn(inputData, "logisticsSuppliers");
+  const logisticsSupplierIds = normalizeOrderLogisticsSupplierIds(inputData);
   const logisticsSettings = await getExchangeRateSettings();
   if (!logisticsSettings.allowMultipleOrderLogisticsSuppliers && !(await defaultOrderLogisticsSupplier())) {
     throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
@@ -380,7 +427,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     : await prisma.receivableOrder.create({ data, include: includeOrderRelations() });
   let orderWithSuppliers: typeof order = order;
   if (hasLogisticsSupplierInput || !logisticsSettings.allowMultipleOrderLogisticsSuppliers) {
-    await syncOrderLogisticsSuppliers(order.id, Array.isArray(inputData.logisticsSupplierIds) ? inputData.logisticsSupplierIds : Array.isArray(inputData.logisticsSuppliers) ? inputData.logisticsSuppliers : [], actor);
+    await syncOrderLogisticsSuppliers(order.id, logisticsSupplierIds, actor);
     orderWithSuppliers = await prisma.receivableOrder.findUnique({ where: { id: order.id }, include: includeOrderRelations() }) || order;
   }
   writeAudit(request, actor, id ? "更新应收订单" : "新增应收订单", "receivable_orders", order.id, before, order)
