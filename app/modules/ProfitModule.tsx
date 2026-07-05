@@ -2,76 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, DetailField, MoneyAmount, PaginationBar, SideDetailDrawer, useConfirmationDialog } from "../components";
-import { formatCny, formatPercent } from "../formatters";
+import { ConfirmationDialog, PaginationBar, useConfirmationDialog } from "../components";
+import { formatCny } from "../formatters";
 import { ResponsiveDataView } from "../ResponsiveDataView";
 import type { User } from "../types";
-import { customerDisplayName, customerLegalName } from "../utils";
 import styles from "../WorkspaceShell.module.css";
-
-type ProfitSummary = {
-  receivableCny?: number;
-  arrivedPaymentsCny?: number;
-  confirmedTotalCostCny?: number;
-  totalCostCny?: number;
-  logisticsCostCny?: number;
-  commissionBaseCny?: number;
-  commissionFormulaLabel?: string;
-  commissionFormulaDescription?: string;
-  taxLogisticsCostsComplete?: boolean;
-  taxLogisticsMissingLabels?: string[];
-  expectedGrossProfit?: number;
-  expectedGrossMargin?: number | null;
-  realizedGrossProfit?: number | null;
-  realizedGrossMargin?: number | null;
-  netCashFlowCny?: number;
-  commissionAmountCny?: number;
-  estimatedCommissionCny?: number;
-  commissionRate?: number;
-  commissionCanSettle?: boolean;
-  commissionStatus?: string;
-  costGroups?: Record<string, number>;
-};
-
-type ProfitRow = {
-  id: string;
-  orderNo?: string;
-  blNo?: string;
-  customerName?: string;
-  customerFullName?: string;
-  customerShortName?: string;
-  salespersonName?: string;
-  commissionStatus?: string;
-  commissionSettledByName?: string;
-  commissionSettledAt?: string | null;
-  summary?: ProfitSummary;
-};
-
-type ProfitResponse = {
-  data?: {
-    rows?: ProfitRow[];
-    total?: number;
-    page?: number;
-    pageSize?: number;
-    totalPages?: number;
-  };
-  error?: string;
-};
-
-const PAGE_SIZE = 20;
-const REALIZED_GROSS_PROFIT_TOOLTIP = "客户款项未收齐时，不计算已实现毛利；负数现金流请查看净现金流。";
-
-function formatCnyOrDash(value: unknown) {
-  return value == null || value === "" ? "--" : formatCny(value);
-}
-
-function realizedGrossProfitLabel() {
-  return (
-    <span title={REALIZED_GROSS_PROFIT_TOOLTIP} style={{ cursor: "help" }}>
-      已实现毛利 <span aria-label={REALIZED_GROSS_PROFIT_TOOLTIP}>?</span>
-    </span>
-  );
-}
+import { ProfitDetailDrawer, ProfitMobileCard, ProfitRows } from "./profit/profit-panels";
+import { PAGE_SIZE, type ProfitResponse, type ProfitRow } from "./profit/shared";
 
 export function ProfitModule({
   currentUser,
@@ -190,12 +127,12 @@ export function ProfitModule({
       title: "确认结算该订单业务员提成？",
       message: "结算后将写入提成结算记录，并刷新利润分析列表。",
       details: [
-      `订单号：${row.orderNo || "-"}`,
-      `已到账：${formatCny(summary.arrivedPaymentsCny)}`,
-      `物流成本：${formatCny(summary.logisticsCostCny)}`,
-      `提成基数：${formatCny(summary.commissionBaseCny)}`,
-      `提成比例：${Number(summary.commissionRate || 0).toFixed(2)}%`,
-      `应结算提成：${formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)}`,
+        `订单号：${row.orderNo || "-"}`,
+        `已到账：${formatCny(summary.arrivedPaymentsCny)}`,
+        `物流成本：${formatCny(summary.logisticsCostCny)}`,
+        `提成基数：${formatCny(summary.commissionBaseCny)}`,
+        `提成比例：${Number(summary.commissionRate || 0).toFixed(2)}%`,
+        `应结算提成：${formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)}`,
       ],
       confirmLabel: "确认结算",
       cancelLabel: "取消",
@@ -261,18 +198,12 @@ export function ProfitModule({
 
       <ResponsiveDataView
         mobile={(
-          <div className={styles.mobileCardList}>
+          <div>
             {loading ? (
               <div className={styles.emptyState}>数据加载中...</div>
-            ) : rows.length ? (
-              rows.map((row) => (
-                <ProfitMobileCard
-                  key={row.id}
-                  row={row}
-                  onViewDetail={() => setDetailRow(row)}
-                />
-              ))
-            ) : (
+            ) : rows.length ? rows.map((row) => (
+              <ProfitMobileCard key={row.id} row={row} onViewDetail={() => setDetailRow(row)} />
+            )) : (
               <div className={styles.emptyState}>未找到匹配的利润分析订单</div>
             )}
           </div>
@@ -297,14 +228,7 @@ export function ProfitModule({
                     <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
                   </tr>
                 ) : rows.length ? rows.map((row) => (
-                  <ProfitRows
-                    key={row.id}
-                    row={row}
-                    onViewDetail={() => setDetailRow(row)}
-                    settling={settlingId === row.id}
-                    canSettleCommission={canSettleCommission}
-                    onSettle={() => void settleCommission(row)}
-                  />
+                  <ProfitRows key={row.id} row={row} onViewDetail={() => setDetailRow(row)} />
                 )) : (
                   <tr>
                     <td colSpan={7}><div className={styles.emptyState}>未找到匹配的利润分析订单</div></td>
@@ -336,141 +260,4 @@ export function ProfitModule({
       ) : null}
     </section>
   );
-}
-
-function ProfitRows({
-  row,
-  settling,
-  canSettleCommission,
-  onViewDetail,
-  onSettle,
-}: {
-  row: ProfitRow;
-  settling: boolean;
-  canSettleCommission: boolean;
-  onViewDetail: () => void;
-  onSettle: () => void;
-}) {
-  const summary = row.summary || {};
-  const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
-  return (
-    <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
-        <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
-        <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
-        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.receivableCny} /></td>
-        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.confirmedTotalCostCny ?? summary.totalCostCny} /></td>
-        <td className={styles.amountColumn}><MoneyAmount amountCny={summary.expectedGrossProfit} /></td>
-        <td>{formatPercent(summary.expectedGrossMargin)}</td>
-        <td><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onViewDetail(); }}>详情</button></td>
-      </tr>
-    </>
-  );
-}
-
-function ProfitMobileCard({
-  row,
-  onViewDetail,
-}: {
-  row: ProfitRow;
-  onViewDetail: () => void;
-}) {
-  const summary = row.summary || {};
-  return (
-    <article className={styles.mobileDataCard}>
-      <div className={styles.mobileDataHeader}>
-        <div className={styles.mobileDataMeta}>
-          <strong>{row.orderNo || "-"}</strong>
-          <span title={customerLegalName(row)}>{customerDisplayName(row)}</span>
-          <span>业务员：{row.salespersonName || "-"}</span>
-        </div>
-        <span className={`${styles.statusPill} ${summary.commissionCanSettle ? styles.statusSuccess : styles.statusMuted}`}>
-          {summary.commissionStatus || row.commissionStatus || "-"}
-        </span>
-      </div>
-      <div className={styles.mobileMetricGrid}>
-        <div className={styles.mobileMetricItem}>
-          <span>最终应收</span>
-          <strong>{formatCny(summary.receivableCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>总成本</span>
-          <strong>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>预计毛利</span>
-          <strong>{formatCny(summary.expectedGrossProfit)}</strong>
-        </div>
-        <div className={styles.mobileMetricItem}>
-          <span>预计毛利率</span>
-          <strong>{formatPercent(summary.expectedGrossMargin)}</strong>
-        </div>
-      </div>
-      <div className={styles.mobileDataActions}>
-        <button className={styles.rowDetailButton} type="button" onClick={onViewDetail}>详情</button>
-      </div>
-    </article>
-  );
-}
-
-function ProfitDetailDrawer({
-  row,
-  settling,
-  canSettleCommission,
-  onSettle,
-  onClose,
-}: {
-  row: ProfitRow;
-  settling: boolean;
-  canSettleCommission: boolean;
-  onSettle: () => void;
-  onClose: () => void;
-}) {
-  const summary = row.summary || {};
-  const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
-  return (
-    <SideDetailDrawer
-      ariaLabel="利润分析详情"
-      kicker="利润分析"
-      title={`${row.orderNo || "-"} · ${customerLegalName(row)}`}
-      subtitle={`提单号：${row.blNo || "-"} · 业务员：${row.salespersonName || "-"}`}
-      onClose={onClose}
-      actions={commissionCanSettle ? (
-        <button className={styles.primaryButtonCompact} type="button" disabled={settling} onClick={onSettle}>
-          {settling ? "结算中..." : "结算提成"}
-        </button>
-      ) : undefined}
-    >
-      <div className={styles.detailGrid}>
-        <DetailField label="客户全称" value={customerLegalName(row)} wide />
-        <DetailField label="订单号" value={row.orderNo || "-"} />
-        <DetailField label="提单号" value={row.blNo || "-"} />
-        <DetailField label="业务员" value={row.salespersonName || "-"} />
-        <DetailField label="最终应收" value={formatCny(summary.receivableCny)} />
-        <DetailField label="已到账金额" value={formatCny(summary.arrivedPaymentsCny)} />
-        <DetailField label="总成本" value={formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)} />
-        <DetailField label="物流成本" value={formatCny(summary.logisticsCostCny)} />
-        <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
-        <DetailField label="预计毛利率" value={formatPercent(summary.expectedGrossMargin)} />
-        <DetailField label={realizedGrossProfitLabel()} value={formatCnyOrDash(summary.realizedGrossProfit)} />
-        <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
-        <DetailField label="净现金流" value={formatCny(summary.netCashFlowCny)} />
-        <DetailField label="提成公式" value={summary.commissionFormulaLabel || summary.commissionFormulaDescription || "-"} />
-        <DetailField label="提成前置缺失" value={(summary.taxLogisticsMissingLabels || []).join("、") || "-"} wide />
-        <DetailField label="提成基数" value={formatCny(summary.commissionBaseCny)} />
-        <DetailField label="业务员提成" value={formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
-        <DetailField label="提成比例" value={`${Number(summary.commissionRate || 0).toFixed(2)}%`} />
-        <DetailField label="提成状态" value={summary.commissionStatus || row.commissionStatus || "-"} />
-        <DetailField label="结算人" value={row.commissionSettledByName || "-"} />
-        <DetailField label="结算时间" value={row.commissionSettledAt ? new Date(row.commissionSettledAt).toLocaleString("zh-CN") : "-"} />
-        <DetailField label="成本结构" value={costGroupText(summary.costGroups)} wide />
-      </div>
-    </SideDetailDrawer>
-  );
-}
-
-function costGroupText(groups?: Record<string, number>) {
-  const entries = Object.entries(groups || {}).filter(([, value]) => Number(value || 0) !== 0);
-  if (!entries.length) return "-";
-  return entries.map(([label, value]) => `${label} ${formatCny(value)}`).join(" / ");
 }
