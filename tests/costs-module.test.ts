@@ -49,6 +49,8 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(paymentVoucherMigration, /"source_type" <> 'LOGISTICS_EXPENSE'/);
   assert.match(costsMutation, /function assertCanManageProductSupplierPayment/);
   assert.match(costsMutation, /actor\.role === "管理员" \|\| actor\.role === "财务"/);
+  assert.match(costsMutation, /export async function updateProductSupplierCostPayment[\s\S]*assertWrite\(actor, "costs"\)/);
+  assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher[\s\S]*assertWrite\(actor, "costs"\)/);
   assert.match(costsMutation, /function isProductSupplierPaymentCost/);
   assert.match(costsMutation, /cost\.sourceType === "LOGISTICS_EXPENSE" \|\| isLogisticsCostType/);
   assert.match(costsMutation, /export async function updateProductSupplierCostPayment/);
@@ -77,6 +79,30 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(costsModule, /disabled=\{paymentLocked\}/);
   assert.match(costsModule, /validatePaymentVoucherUploadFile/);
   assert.doesNotMatch(logisticsFeesModule, /付款凭证|汇款水单|已付款开关|单次付款时间/);
+});
+
+test("cost registration preserves exchange snapshots and does not silently merge batch lines", () => {
+  assert.match(costsModule, /exchangeRateDate\?: string;/);
+  assert.match(costsModule, /exchangeRateSource\?: string;/);
+  assert.match(costsModule, /exchangeRateType\?: string;/);
+  assert.match(costsModule, /exchangeRateDate: result\.rate\?\.rateDate \|\| paymentDate \|\| ""/);
+  assert.match(costsModule, /exchangeRateSource: result\.rate\?\.source \|\| ""/);
+  assert.match(costsModule, /exchangeRateType: result\.rate\?\.rateType \|\| ""/);
+  assert.match(costsModule, /exchangeRateDate: item\.exchangeRateDate \|\| undefined/);
+  assert.match(costsModule, /exchangeRateSource: item\.exchangeRateSource \|\| undefined/);
+  assert.match(costsModule, /exchangeRateType: item\.exchangeRateType \|\| undefined/);
+  assert.match(costsShared, /currency: duplicateText\(data\.currency, "CNY"\) \|\| "CNY"/);
+  assert.match(costsShared, /exchangeRate: data\.exchangeRate/);
+  assert.match(costsShared, /paymentDate: duplicateDate\(data\.paymentDate\)/);
+  assert.match(costsShared, /sourceType: duplicateText\(data\.sourceType, "MANUAL"\) \|\| "MANUAL"/);
+  assert.match(costsShared, /remark: data\.remark \|\| null/);
+  assert.match(costsMutation, /prisma\.\$transaction\(\(tx\) => Promise\.all/);
+  assert.match(costsMutation, /const idempotencyCutoff = new Date\(\)/);
+  assert.match(costsMutation, /rows\.map\(\(data\) => createCostIdempotently\(data, tx, \{/);
+  assert.match(costsMutation, /attachDocuments: false/);
+  assert.match(costsMutation, /createdBefore: idempotencyCutoff/);
+  assert.match(costsMutation, /const createdCosts = results\.filter\(\(result\) => !result\.reused\)/);
+  assert.doesNotMatch(costsMutation, /uniqueRows|seen\.has|duplicateCostFingerprint\(data\)/);
 });
 
 test("cost management groups logistics invoices by shipment before display", () => {

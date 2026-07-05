@@ -126,6 +126,10 @@ export function QuickCreateCostPanel({
     setItems((current) => current.map((item) => item.localId === localId ? { ...item, [key]: value } : item));
   }
 
+  function patchItemValue(localId: string, patch: Partial<CostItemForm>) {
+    setItems((current) => current.map((item) => item.localId === localId ? { ...item, ...patch } : item));
+  }
+
   function mergeSupplier(supplier: SupplierOption) {
     setSuppliers((current) => current.some((item) => item.id === supplier.id) ? current : [supplier, ...current]);
   }
@@ -144,7 +148,12 @@ export function QuickCreateCostPanel({
     const normalized = currency.trim().toUpperCase();
     if (normalized === "CNY") {
       setExchangeMetaByItem((current) => ({ ...current, [localId]: "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" }));
-      setItemValue(localId, "exchangeRate", "1");
+      patchItemValue(localId, {
+        exchangeRate: "1",
+        exchangeRateDate: paymentDate || "",
+        exchangeRateSource: "系统",
+        exchangeRateType: "人民币",
+      });
       return;
     }
     setExchangeMetaByItem((current) => ({ ...current, [localId]: "正在获取汇率..." }));
@@ -154,15 +163,30 @@ export function QuickCreateCostPanel({
       const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?${params}`);
       const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
       if (rate > 0) {
-        setItemValue(localId, "exchangeRate", String(rate));
+        patchItemValue(localId, {
+          exchangeRate: String(rate),
+          exchangeRateDate: result.rate?.rateDate || paymentDate || "",
+          exchangeRateSource: result.rate?.source || "",
+          exchangeRateType: result.rate?.rateType || "",
+        });
         setExchangeMetaByItem((current) => ({
           ...current,
           [localId]: `来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`,
         }));
       } else {
+        patchItemValue(localId, {
+          exchangeRateSource: "",
+          exchangeRateDate: "",
+          exchangeRateType: "",
+        });
         setExchangeMetaByItem((current) => ({ ...current, [localId]: "汇率来源：待获取，请手工填写" }));
       }
     } catch (rateError) {
+      patchItemValue(localId, {
+        exchangeRateSource: "",
+        exchangeRateDate: "",
+        exchangeRateType: "",
+      });
       setExchangeMetaByItem((current) => ({ ...current, [localId]: rateError instanceof Error ? rateError.message : "汇率获取失败，请手工填写" }));
     }
   }
@@ -176,6 +200,9 @@ export function QuickCreateCostPanel({
       costType,
       currency,
       exchangeRate: currency === "CNY" ? "1" : "",
+      exchangeRateDate: currency === "CNY" ? "" : "",
+      exchangeRateSource: currency === "CNY" ? "系统" : "",
+      exchangeRateType: currency === "CNY" ? "人民币" : "",
       supplierId: FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && !PRODUCT_SUPPLIER_TYPES.includes(selectedSupplier.supplierType) ? "" : row.supplierId,
     } : row));
     if (FACTORY_COST_TYPES.includes(costType) && selectedSupplier?.supplierType && !PRODUCT_SUPPLIER_TYPES.includes(selectedSupplier.supplierType)) {
@@ -186,8 +213,22 @@ export function QuickCreateCostPanel({
 
   async function handleCurrencyChange(localId: string, currency: string) {
     const normalized = currency.toUpperCase();
-    setItems((current) => current.map((item) => item.localId === localId ? { ...item, currency: normalized, exchangeRate: normalized === "CNY" ? "1" : "" } : item));
+    setItems((current) => current.map((item) => item.localId === localId ? {
+      ...item,
+      currency: normalized,
+      exchangeRate: normalized === "CNY" ? "1" : "",
+      exchangeRateDate: normalized === "CNY" ? "" : "",
+      exchangeRateSource: normalized === "CNY" ? "系统" : "",
+      exchangeRateType: normalized === "CNY" ? "人民币" : "",
+    } : item));
     await resolveExchangeRate(localId, normalized);
+  }
+
+  async function handlePaymentDateChange(localId: string, paymentDate: string) {
+    const item = items.find((row) => row.localId === localId);
+    patchItemValue(localId, { paymentDate });
+    if (!item) return;
+    await resolveExchangeRate(localId, item.currency, paymentDate);
   }
 
   function addCostItem(copyPrevious = false) {
@@ -250,6 +291,9 @@ export function QuickCreateCostPanel({
         amount: Number(item.amount),
         currency: item.currency,
         exchangeRate: Number(item.exchangeRate),
+        exchangeRateDate: item.exchangeRateDate || undefined,
+        exchangeRateSource: item.exchangeRateSource || undefined,
+        exchangeRateType: item.exchangeRateType || undefined,
         paymentStatus: item.paymentStatus,
         paymentDate: item.paymentDate || undefined,
         costConfirmed: item.costConfirmed === "true",
@@ -392,7 +436,7 @@ export function QuickCreateCostPanel({
                     付款日期
                     <input
                       value={item.paymentDate}
-                      onChange={(event) => setItemValue(item.localId, "paymentDate", event.target.value)}
+                      onChange={(event) => void handlePaymentDateChange(item.localId, event.target.value)}
                       type="date"
                       disabled={paymentLocked}
                       required
@@ -431,4 +475,3 @@ export function QuickCreateCostPanel({
     </form>
   );
 }
-

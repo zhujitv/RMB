@@ -21,7 +21,6 @@ import { assertCostWritableOrder, canAccessOrder } from "./order-access";
 import { attachBusinessDocumentsToCost, attachBusinessDocumentsToCosts } from "./business-documents";
 import {
   createCostIdempotently,
-  duplicateCostFingerprint,
   includeCostRelations,
 } from "./cost-records-shared";
 import {
@@ -85,18 +84,13 @@ export async function saveCosts(request: AuditRequestLike, actor: CostActorInput
     invoiceStatus: item.invoiceStatus || body.invoiceStatus,
     remark: item.remark ?? body.remark,
   })));
-  const uniqueRows: Awaited<ReturnType<typeof buildCostData>>[] = [];
-  const seen = new Set<string>();
-  rows.forEach((data) => {
-    const key = duplicateCostFingerprint(data);
-    if (seen.has(key)) return;
-    seen.add(key);
-    uniqueRows.push(data);
-  });
-  const results: Awaited<ReturnType<typeof createCostIdempotently>>[] = [];
-  for (const data of uniqueRows) {
-    results.push(await createCostIdempotently(data));
-  }
+  const idempotencyCutoff = new Date();
+  const results = await prisma.$transaction((tx) => Promise.all(
+    rows.map((data) => createCostIdempotently(data, tx, {
+      attachDocuments: false,
+      createdBefore: idempotencyCutoff,
+    })),
+  ));
   const costs = results.map((result) => result.cost);
   const createdCosts = results.filter((result) => !result.reused).map((result) => result.cost);
   await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost))));

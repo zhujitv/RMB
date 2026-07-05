@@ -49,6 +49,9 @@ export type CostRow = {
   costType?: string;
   currency?: string;
   exchangeRate?: number;
+  exchangeRateDate?: string;
+  exchangeRateSource?: string;
+  exchangeRateType?: string;
   amount?: number;
   amountCny?: number;
   paymentStatus?: string;
@@ -250,6 +253,9 @@ export type CostItemForm = {
   amount: string;
   currency: string;
   exchangeRate: string;
+  exchangeRateDate: string;
+  exchangeRateSource: string;
+  exchangeRateType: string;
   paymentStatus: string;
   paymentDate: string;
   costConfirmed: string;
@@ -276,6 +282,9 @@ export function emptyCostItemForm(): CostItemForm {
     amount: "",
     currency: "CNY",
     exchangeRate: "1",
+    exchangeRateDate: "",
+    exchangeRateSource: "系统",
+    exchangeRateType: "人民币",
     paymentStatus: "待支付",
     paymentDate: "",
     costConfirmed: "false",
@@ -292,4 +301,3 @@ export const emptyCostFilters: CostFilters = {
   dateFrom: "",
   dateTo: "",
 };
-

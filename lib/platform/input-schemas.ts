@@ -77,6 +77,9 @@ export const COST_INPUT_SCHEMA: InputSchema = {
   amount: { label: "成本金额", kind: "positiveNumber", required: true },
   currency: { label: "币种", kind: "enum", enumValues: CURRENCIES },
   exchangeRate: { label: "汇率", kind: "positiveNumber" },
+  exchangeRateDate: { label: "汇率日期", kind: "date" },
+  exchangeRateSource: { label: "汇率来源", kind: "text" },
+  exchangeRateType: { label: "汇率类型", kind: "text" },
   paymentDate: { label: "付款日期", kind: "date" },
   paymentStatus: { label: "付款状态", kind: "enum", enumValues: COST_PAYMENT_STATUSES },
 };

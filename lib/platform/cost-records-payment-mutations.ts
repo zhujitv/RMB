@@ -7,6 +7,7 @@ import {
   FILE_ASSET_ROLES,
   FILE_ASSET_SOURCE_TABLES,
   assertRead,
+  assertWrite,
   codedError,
   deleteManagedStoredFile,
   findActiveFileAssetBySource,
@@ -33,7 +34,7 @@ import {
 } from "./cost-records-mutation-shared";
 
 export async function updateProductSupplierCostPayment(request: AuditRequestLike, actor: CostActorInput, id: string, input: CostInput) {
-  assertRead(actor, "costs");
+  assertWrite(actor, "costs");
   const currentActor = requireCostActor(actor);
   assertCanManageProductSupplierPayment(currentActor);
   const before = await loadCostForPayment(currentActor, id);
@@ -56,7 +57,7 @@ export async function updateProductSupplierCostPayment(request: AuditRequestLike
 }
 
 export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequestLike, actor: CostActorInput, id: string, file: unknown) {
-  assertRead(actor, "costs");
+  assertWrite(actor, "costs");
   const currentActor = requireCostActor(actor);
   assertCanManageProductSupplierPayment(currentActor);
   const before = await loadCostForPayment(currentActor, id);
