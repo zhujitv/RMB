@@ -157,8 +157,12 @@ test("order detail edit switches from drawer to edit form without silent failure
   assert.match(ordersModule, /setReturnDetailOrder\(options\.returnToDetail \? order : null\)/);
   assert.match(ordersModule, /setDetailOrder\(null\);[\s\S]*scrollToEditPanel\(\)/);
   assert.match(ordersModule, /onEdit=\{\(\) => openEditOrder\(detailOrder, \{ returnToDetail: true \}\)\}/);
-  assert.match(ordersModule, /if \(detailToRestore\) setDetailOrder\(detailToRestore\)/);
-  assert.match(ordersModule, /nextRows\.find\(\(order\) => order\.id === savedOrder\.id\) \|\| detailToRestore/);
+  assert.match(ordersModule, /function orderMatchesSubmittedFilters\(order: OrderRow\)/);
+  assert.match(ordersModule, /order\.salespersonName/);
+  assert.match(ordersModule, /function mergeOrderRow\(order: OrderRow, options: \{ shouldShow\?: boolean \} = \{\}\)/);
+  assert.match(ordersModule, /const shouldShow = orderMatchesSubmittedFilters\(order\)/);
+  assert.match(ordersModule, /setDetailOrder\(order\?\.id \? \{ \.\.\.detailToRestore, \.\.\.order \} : detailToRestore\)/);
+  assert.doesNotMatch(ordersModule, /nextRows\.find\(\(order\) => order\.id === savedOrder\.id\) \|\| detailToRestore/);
 });
 
 test("orders create form supports actual shipment date", () => {

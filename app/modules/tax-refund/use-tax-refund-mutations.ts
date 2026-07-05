@@ -172,17 +172,17 @@ async function submitTaxRefund(row: TaxRefundRow) {
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         body: JSON.stringify(submitPayload),
       });
       if (result.success !== true) throw new Error(result.message || "提交退税失败");
+      if (result.order) patchRowsForOrder(row.id, result.order);
       if (detailOrderId === row.id) {
         setDetailOrderId("");
         setDetailRow(null);
         setDetail(null);
       }
-      await loadRows(page, submittedKeyword, mode);
       setNotice(result.message || "退税资料已提交并归档");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "提交退税失败");
@@ -199,17 +199,15 @@ async function updateTaxRefundStatus(row: TaxRefundRow, status: string) {
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       if (result.success !== true) throw new Error(result.message || "退税状态更新失败");
-      await loadRows(page, submittedKeyword, mode);
-      if (detailOrderId === row.id) await fetchDetail(row.id);
+      if (result.order) patchDetailForOrder(row.id, result.order);
       setNotice(result.message || "退税状态已更新");
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : "退税状态更新失败");
-      await loadRows(page, submittedKeyword, mode);
     }
   }
 
@@ -249,17 +247,17 @@ async function cancelTaxRefundArchive(row: TaxRefundRow) {
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string; order?: TaxRefundDetail }>(`/api/tax-refunds/${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         body: JSON.stringify({ cancelArchive: true, status: "NOT_READY" }),
       });
       if (result.success !== true) throw new Error(result.message || "取消归档失败");
+      if (result.order) patchRowsForOrder(row.id, result.order);
       if (detailOrderId === row.id) {
         setDetailOrderId("");
         setDetailRow(null);
         setDetail(null);
       }
-      await loadRows(page, submittedKeyword, mode);
       setNotice(result.message || "退税资料已取消归档");
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : "取消归档失败");
@@ -295,7 +293,7 @@ async function uploadDocument(orderId: string, documentType: string, file: File 
         patchUploadedDocument(orderId, uploadedDocument);
       }
       setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
-      if (detailOrderId === orderId) await fetchDetail(orderId);
+      if (detailOrderId === orderId) void fetchDetail(orderId);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -354,7 +352,7 @@ async function deleteDocument(orderId: string, document: TaxDocument) {
           declarationDate: "",
         });
       }
-      if (detailOrderId === orderId) await fetchDetail(orderId);
+      if (detailOrderId === orderId) void fetchDetail(orderId);
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");

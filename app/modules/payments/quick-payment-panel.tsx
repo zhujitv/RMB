@@ -19,7 +19,7 @@ export function QuickCreatePaymentPanel({
   initialPayment?: PaymentRow | null;
   canConfirmArrived: boolean;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (payment?: PaymentRow | null) => void;
 }) {
   const [form, setForm] = useState<QuickPaymentForm>(() => paymentFormFromRow(initialPayment));
   const [orders, setOrders] = useState<PaymentOrderOption[]>([]);
@@ -181,7 +181,7 @@ export function QuickCreatePaymentPanel({
     setMessage("");
     try {
       const isEdit = Boolean(initialPayment?.id);
-      const result = await apiJson<{ success?: boolean; message?: string }>(
+      const result = await apiJson<{ success?: boolean; message?: string; payment?: PaymentRow; data?: { payment?: PaymentRow } }>(
         isEdit ? `/api/payments/${encodeURIComponent(initialPayment?.id || "")}` : "/api/payments",
         {
           method: isEdit ? "PATCH" : "POST",
@@ -204,7 +204,7 @@ export function QuickCreatePaymentPanel({
       if (result.success !== true) throw new Error(result.message || "收款保存失败");
       setForm(paymentFormFromRow(null));
       setExchangeMeta("");
-      onSaved();
+      onSaved(result.payment || result.data?.payment || null);
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "收款保存失败");
     } finally {

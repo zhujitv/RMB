@@ -74,7 +74,7 @@ export function createLogisticsFeesWorkflowActions({
       });
       if (result.success !== true) throw new Error(result.message || "撤回物流费用账单失败");
       applyLogisticsExpenseMutationResult(result);
-      await loadStatement(statementMonth);
+      void loadStatement(statementMonth);
       void onRefreshTodos?.();
       setNotice(result.message || "物流费用账单已撤回为草稿");
     } catch (withdrawError) {
@@ -213,7 +213,7 @@ export function createLogisticsFeesWorkflowActions({
       });
       if (result.success !== true) throw new Error(result.message || "标记已付款失败");
       applyLogisticsExpenseMutationResult(result);
-      await loadStatement(statementMonth);
+      void loadStatement(statementMonth);
       void onRefreshTodos?.();
       setNotice(result.message || "物流费用已标记为已付款");
     } catch (paymentError) {

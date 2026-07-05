@@ -6,7 +6,7 @@ import { customerDisplayName, customerLegalName } from "../../utils";
 import { CustomsDocumentPanel } from "./customs-documents-panel";
 import { DomesticLogisticsEditPanel } from "./edit-panel";
 import { firstItemValue, showContainerManagementFields } from "./helpers";
-import { ARCHIVE_BUTTON_DISABLED_TOOLTIP, type DomesticLogisticsDocument, type DomesticLogisticsRow, type ShipsgoFeatureFlags, type ShipsgoTrackingRow } from "./model";
+import { ARCHIVE_BUTTON_DISABLED_TOOLTIP, type DomesticLogisticsDocument, type DomesticLogisticsInfo, type DomesticLogisticsRow, type ShipsgoFeatureFlags, type ShipsgoTrackingRow } from "./model";
 import { ShipsgoOrderTrackingPanel } from "./order-tracking-panel";
 
 export function DomesticLogisticsRows({
@@ -65,7 +65,7 @@ export function DomesticLogisticsRows({
   onSyncShipsgoTracking: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecoverShipsgoTracking: () => Promise<void>;
   onDeleteShipsgoTracking: (tracking: ShipsgoTrackingRow) => void;
-  onSaved: () => void;
+  onSaved: (info?: DomesticLogisticsInfo | null) => void;
   onCancelEdit: () => void;
   canDeleteDomesticLogistics: boolean;
   onDeleteDomesticLogistics: () => void;

@@ -12,6 +12,7 @@ import {
   domesticLogisticsCanArchive,
   sanitizeDomesticLogisticsRowsForRender,
   type DomesticLogisticsResponse,
+  type DomesticLogisticsInfo,
   type DomesticLogisticsRow,
   type ShipsgoFeatureFlags,
 } from "./domestic-logistics/model";
@@ -211,6 +212,20 @@ export function DomesticLogisticsModule({
     });
   }
 
+  function mergeDomesticLogisticsInfo(row: DomesticLogisticsRow, info?: DomesticLogisticsInfo | null) {
+    if (!info) return;
+    setRows((current) => current.map((item) => (
+      item.id === row.id || item.orderId === row.id
+        ? {
+          ...item,
+          domesticLogisticsInfo: { ...(item.domesticLogisticsInfo || {}), ...info },
+          logisticsStatus: "已提交",
+          submittedAt: info.submittedAt || item.submittedAt,
+        }
+        : item
+    )));
+  }
+
   const {
     archiveSelectedOrders,
     uploadDocument,
@@ -305,6 +320,7 @@ export function DomesticLogisticsModule({
       deleteShipsgoTracking={deleteShipsgoTracking}
       openControlTowerOrder={openControlTowerOrder}
       deleteDomesticLogistics={deleteDomesticLogistics}
+      onSaveDomesticLogisticsInfo={mergeDomesticLogisticsInfo}
       uploadDocument={uploadDocument}
       deleteDocument={deleteDocument}
       onOpenLogisticsFees={onOpenLogisticsFees}

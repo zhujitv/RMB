@@ -31,10 +31,29 @@ export function createTaxRefundDetailActions(state: TaxRefundState) {
     return tab;
   }
 
+  function isArchivedTaxRefundRow(row: Partial<TaxRefundRow>) {
+    const status = row.refundStatus || row.taxRefundStatus || "";
+    return row.taxArchived === true || status === "SUBMITTED" || status === "REFUND_RECEIVED";
+  }
+
+  function matchesCurrentMode(row: Partial<TaxRefundRow>) {
+    const archived = isArchivedTaxRefundRow(row);
+    return state.mode === "archive" ? archived : !archived;
+  }
+
   function patchRowsForOrder(orderId: string, patch: Partial<TaxRefundDetail>) {
     const rowPatch = taxRefundRowPatchFromDetail(patch);
     if (!Object.keys(rowPatch).length) return;
-    state.setRows((current) => current.map((row) => (row.id === orderId ? { ...row, ...rowPatch } : row)));
+    const existingRow = state.rows.find((row) => row.id === orderId);
+    const nextExistingRow = existingRow ? { ...existingRow, ...rowPatch } : null;
+    if (existingRow && nextExistingRow && !matchesCurrentMode(nextExistingRow)) {
+      state.setTotal((current) => Math.max(0, current - 1));
+    }
+    state.setRows((current) => current.flatMap((row) => {
+      if (row.id !== orderId) return [row];
+      const nextRow = { ...row, ...rowPatch };
+      return matchesCurrentMode(nextRow) ? [nextRow] : [];
+    }));
     state.setDetailRow((current) => (current?.id === orderId ? { ...current, ...rowPatch } : current));
   }
 
@@ -71,7 +90,6 @@ export function createTaxRefundDetailActions(state: TaxRefundState) {
       const nextDetail = result.order || null;
       if (!nextDetail) return;
       options.replace ? state.setDetail(nextDetail) : patchDetailForOrder(orderId, nextDetail);
-      patchRowsForOrder(orderId, nextDetail);
       state.setDetailLoadedSections((current) => ({ ...current, [section]: true }));
     } catch (loadError) {
       if (state.detailRequestTokenRef.current === requestToken) {

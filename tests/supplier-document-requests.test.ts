@@ -240,7 +240,8 @@ test("admin can soft delete supplier document requests from the foreground list"
   assert.match(supplierModule, /资料回传任务已删除/);
   assert.match(supplierModule, /method: "DELETE"/);
   assert.match(supplierModule, /const nextTotal = Math\.max\(0, total - 1\)/);
-  assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
+  assert.match(supplierModule, /setRows\(\(current\) => current\.filter\(\(row\) => row\.id !== task\.id\)\)/);
+  assert.match(supplierModule, /void loadRows\(nextPage, pageSize, submittedKeyword, \{ silent: true \}\)/);
   assert.match(supplierModule, /void onRefreshTodos\?\.\(\)/);
 });
 
@@ -258,7 +259,19 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(supplierModule, /new URLSearchParams\(\{ page: String\(nextPage\), pageSize: String\(nextPageSize\) \}\)/);
   assert.match(supplierModule, /<strong>\{total\}<\/strong>/);
   assert.match(supplierModule, /total=\{total\}/);
-  assert.match(supplierModule, /await loadRows\(nextPage, pageSize\)/);
+  assert.match(supplierModule, /async function loadRows\(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: \{ silent\?: boolean \} = \{\}\)/);
+  assert.match(supplierModule, /if \(!options\.silent\) \{[\s\S]*setLoading\(true\);[\s\S]*setError\(""\);[\s\S]*setLoadError\(""\);[\s\S]*\}/);
+  assert.match(supplierModule, /const \[submittedKeyword, setSubmittedKeyword\] = useState\(""\)/);
+  assert.match(supplierModule, /setSubmittedKeyword\(nextKeyword\)/);
+  assert.match(supplierModule, /function requestMatchesSubmittedKeyword\(request: SupplierDocumentTask\)/);
+  const requestMatcherSnippet = supplierModule.slice(
+    supplierModule.indexOf("function requestMatchesSubmittedKeyword"),
+    supplierModule.indexOf("function mergeRequestRow"),
+  );
+  assert.match(requestMatcherSnippet, /request\.orderNo/);
+  assert.match(requestMatcherSnippet, /currentUser\.role === "产品供应商" \? "" : request\.supplierName/);
+  assert.doesNotMatch(requestMatcherSnippet, /factoryCostText|requiredDocumentLabels|requiredDocumentTypes|templateFileName|request\.status|request\.message/);
+  assert.match(supplierModule, /const shouldShowCreatedRequest = result\.request\?\.id \? mergeRequestRow\(result\.request\) : false/);
   assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);
 });
 

@@ -43,7 +43,7 @@ type CostActionsParams = {
   submittedFilters: Record<string, string>;
   archiveScope: string;
   canManageFactoryPayments: boolean;
-  loadCosts: (nextPage?: number, nextFilters?: any, nextArchiveScope?: string, nextView?: CostView) => Promise<void>;
+  loadCosts: (nextPage?: number, nextFilters?: any, nextArchiveScope?: string, nextView?: CostView, options?: { silent?: boolean }) => Promise<void>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
 };
 
@@ -160,7 +160,7 @@ export function useCostDocumentActions({
         setUploadProgressByKey((current) => ({ ...current, [key]: progress }));
       });
       await refreshDocumentCost(cost.id);
-      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
       setNotice("上传成功");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
@@ -207,7 +207,7 @@ export function useCostDocumentActions({
       const nextCost = result.cost || result.data?.cost;
       if (!nextCost) throw new Error(result.message || "更新付款信息失败");
       await refreshDocumentCost(nextCost.id);
-      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
       setNotice(paid ? "已标记付款" : "已取消付款状态");
     } catch (paymentError) {
       setDocumentError(paymentError instanceof Error ? paymentError.message : "更新付款信息失败");
@@ -244,7 +244,7 @@ export function useCostDocumentActions({
       const nextCost = result.cost || result.data?.cost;
       if (!nextCost) throw new Error(result.message || "付款凭证上传失败");
       await refreshDocumentCost(nextCost.id);
-      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
       setNotice("付款凭证已上传");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "付款凭证上传失败");
@@ -276,7 +276,7 @@ export function useCostDocumentActions({
       });
       if (result.success === false) throw new Error(result.message || "删除资料失败");
       await refreshDocumentCost(cost.id);
-      if (costView === "invoiceGroups" || costView === "invoiceExceptions") await loadCosts(page, submittedFilters, archiveScope, costView);
+      if (costView === "invoiceGroups" || costView === "invoiceExceptions") void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
       setNotice("资料已删除");
     } catch (deleteError) {
       setDocumentError(deleteError instanceof Error ? deleteError.message : "删除资料失败");

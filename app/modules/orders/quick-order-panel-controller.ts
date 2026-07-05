@@ -27,7 +27,7 @@ type SalespeopleResponse = {
 export type UseQuickOrderPanelControllerParams = {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
-  onSaved: () => void;
+  onSaved: (order?: OrderRow | null) => void;
 };
 
 export function useQuickOrderPanelController({
@@ -245,14 +245,14 @@ export function useQuickOrderPanelController({
         remark: form.remark.trim(),
       };
       const isEdit = Boolean(initialOrder?.id);
-      const result = await apiJson<{ success?: boolean; message?: string }>(
+      const result = await apiJson<{ success?: boolean; message?: string; order?: OrderRow; data?: OrderRow }>(
         isEdit ? `/api/orders/${encodeURIComponent(initialOrder?.id || "")}` : "/api/orders",
         { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(payload) },
       );
       if (result.success !== true) throw new Error(result.message || "订单保存失败");
       setForm({ ...emptyQuickOrderForm });
       setExchangeMeta("");
-      onSaved();
+      onSaved(result.order || result.data || null);
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "订单保存失败");
     } finally {

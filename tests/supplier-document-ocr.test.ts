@@ -275,7 +275,7 @@ test("supplier document UI only shows manual OCR confirmation for abnormal resul
   assert.match(supplierModule, /function supplierOcrRequiresManualReview/);
   assert.match(supplierModule, /const requiresManualReview = supplierOcrRequiresManualReview\(ocrTask\)/);
   assert.match(supplierModule, /requiresManualReview \? \(/);
-  assert.match(supplierModule, /void loadRows\(page, pageSize\)/);
+  assert.match(supplierModule, /void loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
 });
 
 test("supplier OCR routes expose re-recognize, confirm, and reject operations", () => {

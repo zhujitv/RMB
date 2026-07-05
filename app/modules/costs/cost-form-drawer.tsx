@@ -19,7 +19,7 @@ export function CostFormDrawer({
   drawer: CostFormDrawerState;
   canManageFactoryPayments: boolean;
   onCancel: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (saved?: CostRow | CostRow[] | null) => void | Promise<void>;
 }) {
   const cost = drawer.cost;
   const editMode = drawer.mode === "edit";
@@ -61,7 +61,7 @@ export function QuickCreateCostPanel({
   canManageFactoryPayments?: boolean;
   drawerMode?: boolean;
   onCancel: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (saved?: CostRow | CostRow[] | null) => void | Promise<void>;
 }) {
   const [form, setForm] = useState<QuickCostForm>(() => costFormFromRow(initialCost));
   const [items, setItems] = useState<CostItemForm[]>(() => [costItemFromRow(initialCost)]);
@@ -299,7 +299,7 @@ export function QuickCreateCostPanel({
         costConfirmed: item.costConfirmed === "true",
         remark: item.remark.trim(),
       }));
-      const result = await apiJson<{ success?: boolean; message?: string }>(
+      const result = await apiJson<{ success?: boolean; message?: string; cost?: CostRow; costs?: CostRow[]; data?: { cost?: CostRow; costs?: CostRow[] } }>(
         isEdit ? `/api/costs/${encodeURIComponent(initialCost?.id || "")}` : "/api/costs",
         {
           method: isEdit ? "PATCH" : "POST",
@@ -313,7 +313,7 @@ export function QuickCreateCostPanel({
       const freshItem = emptyCostItemForm();
       setItems([freshItem]);
       setExchangeMetaByItem({ [freshItem.localId]: "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000" });
-      await onSaved();
+      await onSaved(result.cost || result.data?.cost || result.costs || result.data?.costs || null);
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "成本保存失败");
     } finally {

@@ -24,7 +24,7 @@ export function QuickCreateOrderPanel({
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (order?: OrderRow | null) => void;
 }) {
   const controller = useQuickOrderPanelController({
     initialOrder,

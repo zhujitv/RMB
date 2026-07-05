@@ -171,6 +171,45 @@ export function PaymentsModule({
     void loadPayments(nextPage, submittedFilters);
   }
 
+  function normalizedSearchText(value: unknown) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function paymentMatchesSubmittedFilters(payment: PaymentRow) {
+    const keywordValue = normalizedSearchText(submittedFilters.keyword);
+    if (keywordValue) {
+      const haystack = [
+        payment.orderNo,
+        payment.customerName,
+        payment.customerFullName,
+        payment.customerShortName,
+        payment.bankReference,
+        payment.remark,
+      ].map(normalizedSearchText).join(" ");
+      if (!haystack.includes(keywordValue)) return false;
+    }
+    if (submittedFilters.month && !String(payment.paymentDate || "").startsWith(submittedFilters.month)) return false;
+    if (submittedFilters.currency && payment.currency !== submittedFilters.currency) return false;
+    if (submittedFilters.paymentType && payment.paymentType !== submittedFilters.paymentType) return false;
+    if (submittedFilters.paymentStatus && payment.status !== submittedFilters.paymentStatus) return false;
+    return true;
+  }
+
+  function mergePaymentRow(payment: PaymentRow, options: { shouldShow?: boolean } = {}) {
+    const shouldShow = options.shouldShow ?? paymentMatchesSubmittedFilters(payment);
+    setPayments((current) => {
+      const exists = current.some((item) => item.id === payment.id);
+      if (exists) {
+        return shouldShow
+          ? current.map((item) => item.id === payment.id ? { ...item, ...payment } : item)
+          : current.filter((item) => item.id !== payment.id);
+      }
+      return page === 1 && shouldShow ? [payment, ...current].slice(0, PAGE_SIZE) : current;
+    });
+    setDetailPayment((current) => current?.id === payment.id ? { ...current, ...payment } : current);
+    setEditPayment((current) => current?.id === payment.id ? { ...current, ...payment } : current);
+  }
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -212,12 +251,17 @@ export function PaymentsModule({
             setCreateOpen(false);
             setEditPayment(null);
           }}
-          onSaved={() => {
+          onSaved={(payment) => {
+            if (payment?.id) {
+              const existedInRows = payments.some((item) => item.id === payment.id);
+              const shouldShow = paymentMatchesSubmittedFilters(payment);
+              mergePaymentRow(payment, { shouldShow });
+              if (!editPayment && shouldShow) setTotal((current) => current + 1);
+              if (editPayment && existedInRows && !shouldShow) setTotal((current) => Math.max(0, current - 1));
+            }
             setCreateOpen(false);
             setEditPayment(null);
-            setDetailPayment(null);
             setNotice(editPayment ? "收款已更新" : "收款已保存");
-            void loadPayments(1, submittedFilters);
           }}
         />
       ) : null}
@@ -370,7 +414,7 @@ export function PaymentsModule({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/payments/${encodeURIComponent(payment.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string; payment?: PaymentRow; data?: { payment?: PaymentRow } }>(`/api/payments/${encodeURIComponent(payment.id)}`, {
         method: "PATCH",
         body: JSON.stringify({
           orderId: payment.orderId,
@@ -388,8 +432,11 @@ export function PaymentsModule({
         }),
       });
       if (result.success !== true) throw new Error(result.message || "确认到账失败");
-      setDetailPayment(null);
-      await loadPayments(page, submittedFilters);
+      const nextPayment = result.payment || result.data?.payment || { ...payment, status: "已到账" };
+      const existedInRows = payments.some((item) => item.id === nextPayment.id);
+      const shouldShow = paymentMatchesSubmittedFilters(nextPayment);
+      mergePaymentRow(nextPayment, { shouldShow });
+      if (existedInRows && !shouldShow) setTotal((current) => Math.max(0, current - 1));
       setNotice(result.message || "收款已确认到账");
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "确认到账失败");

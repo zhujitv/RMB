@@ -5,6 +5,7 @@ import { useState } from "react";
 import { apiJson } from "../../api";
 import { SearchAutocomplete } from "../../SearchAutocomplete";
 import styles from "../../WorkspaceShell.module.css";
+import type { SupplierDocumentTask } from "./types";
 
 type FactoryCostCandidate = {
   id: string;
@@ -26,10 +27,7 @@ type CostCandidatesResponse = {
 };
 
 export type CreateSupplierDocumentRequestResult = {
-  request?: {
-    id?: string;
-    sendStatus?: string;
-  };
+  request?: SupplierDocumentTask;
   message?: string;
 };
 

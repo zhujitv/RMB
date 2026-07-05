@@ -67,7 +67,7 @@ export function createLogisticsFeesReviewActions({
       });
       const failureMessage = logisticsExpenseReviewFailureMessage(result);
       if (result.success !== true) throw new Error(failureMessage || result.message || "审核物流费用失败");
-      await loadExpenses(page, submittedKeyword, status, costType);
+      applyLogisticsExpenseMutationResultToRows(setRows, result);
       setSelectedBillIds((current) => current.filter((id) => !ids.includes(id)));
       if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
       void loadStatement(statementMonth);

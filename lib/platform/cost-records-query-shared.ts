@@ -227,6 +227,7 @@ function costFilterClauses(filters: CostListFilters, supplierInvoicePairs: Suppl
         { supplierNameSnapshot: keyword },
         { remark: keyword },
         { order: { is: { orderNo: keyword } } },
+        { order: { is: { blNo: keyword } } },
         { order: { is: { customerNameSnapshot: keyword } } },
         { order: { is: { customer: { is: { name: keyword } } } } },
         { order: { is: { customer: { is: { shortName: keyword } } } } },

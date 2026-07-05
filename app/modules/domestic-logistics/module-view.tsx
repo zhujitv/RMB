@@ -9,6 +9,7 @@ import {
   ARCHIVE_SCOPE_OPTIONS,
   domesticLogisticsCanArchive,
   type DomesticLogisticsDocument,
+  type DomesticLogisticsInfo,
   type DomesticLogisticsRow,
   type ShipsgoControlTowerRow,
   type ShipsgoFeatureFlags,
@@ -73,6 +74,7 @@ type DomesticLogisticsModuleViewProps = {
   deleteShipsgoTracking: (row: DomesticLogisticsRow, tracking: ShipsgoTrackingRow) => Promise<void>;
   openControlTowerOrder: (row: ShipsgoControlTowerRow) => Promise<void>;
   deleteDomesticLogistics: (row: DomesticLogisticsRow) => Promise<void>;
+  onSaveDomesticLogisticsInfo: (row: DomesticLogisticsRow, info?: DomesticLogisticsInfo | null) => void;
   uploadDocument: (orderId: string, documentType: string, file: File | null) => Promise<void>;
   deleteDocument: (document: DomesticLogisticsDocument) => Promise<void>;
   onOpenLogisticsFees?: (focus: { keyword?: string; billId?: string }) => void;
@@ -139,6 +141,7 @@ export function DomesticLogisticsModuleView({
   deleteShipsgoTracking,
   openControlTowerOrder,
   deleteDomesticLogistics,
+  onSaveDomesticLogisticsInfo,
   uploadDocument,
   deleteDocument,
   onOpenLogisticsFees,
@@ -311,10 +314,10 @@ return (
                 onSyncShipsgoTracking={(trackingId) => syncShipsgoTracking(row, trackingId)}
                 onRecoverShipsgoTracking={() => recoverShipsgoTracking(row)}
                 onDeleteShipsgoTracking={(tracking) => deleteShipsgoTracking(row, tracking)}
-                onSaved={() => {
+                onSaved={(info) => {
+                  onSaveDomesticLogisticsInfo(row, info);
                   setNotice("物流信息已保存");
                   setEditingOrderId("");
-                  void loadRows(submittedKeyword, businessScope);
                 }}
                 onCancelEdit={() => setEditingOrderId("")}
                 canDeleteDomesticLogistics={canDeleteDomesticLogistics}

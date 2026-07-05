@@ -118,11 +118,22 @@ export function useDomesticLogisticsActions({
       formData.append("documentType", documentType);
       formData.append("uploadSource", "REACT_DOMESTIC_LOGISTICS");
       formData.append("file", file);
-      await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
+      const result = await uploadFormDataWithProgress<UploadDocumentResponse>("/api/order-documents", formData, (progress) => {
         setUploadProgressByKey((current) => ({ ...current, [uploadKey]: progress }));
       });
+      const document = result.document || result.data;
+      if (document?.id) {
+        setRows((currentRows) => currentRows.map((row) => {
+          if (row.id !== orderId && row.orderId !== orderId) return row;
+          const existingDocuments = row.documents || [];
+          const nextDocuments = [
+            document,
+            ...existingDocuments.filter((item) => item.id !== document.id && item.documentType !== document.documentType),
+          ];
+          return { ...row, documents: nextDocuments };
+        }));
+      }
       setNotice("上传成功");
-      await loadRows(submittedKeyword, businessScope);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -153,7 +164,10 @@ export function useDomesticLogisticsActions({
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除失败，请重试");
-      await loadRows(submittedKeyword, businessScope);
+      setRows((currentRows) => currentRows.map((row) => ({
+        ...row,
+        documents: (row.documents || []).filter((item) => item.id !== document.id),
+      })));
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");

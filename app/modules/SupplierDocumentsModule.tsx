@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, PaginationBar, useConfirmationDialog } from "../components";
 import { CreateSupplierDocumentRequestDialog, type CreateSupplierDocumentRequestResult } from "./supplier-documents/create-request-dialog";
@@ -43,10 +43,13 @@ export function SupplierDocumentsModule({
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [pendingCount, setPendingCount] = useState(0);
+  const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
   const [ocrBusyKey, setOcrBusyKey] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const loadRowsDataRequestRef = useRef(0);
+  const loadRowsVisibleRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -59,14 +62,22 @@ export function SupplierDocumentsModule({
     void loadRows(1, pageSize);
   }, []);
 
-  async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "") {
-    setLoading(true);
-    setError("");
-    setLoadError("");
+  async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: { silent?: boolean } = {}) {
+    const dataRequestId = ++loadRowsDataRequestRef.current;
+    const visibleRequestId = options.silent
+      ? loadRowsVisibleRequestRef.current
+      : ++loadRowsVisibleRequestRef.current;
+    if (!options.silent) {
+      setLoading(true);
+      setError("");
+      setLoadError("");
+      setSubmittedKeyword(nextKeyword);
+    }
     try {
       const params = new URLSearchParams({ page: String(nextPage), pageSize: String(nextPageSize) });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const data = await apiJson<SupplierDocumentsResponse>(`/api/supplier-document-requests?${params.toString()}`);
+      if (dataRequestId !== loadRowsDataRequestRef.current) return [];
       const nextRows = data.requests || [];
       setRows(nextRows);
       const pagination = data.pagination || {};
@@ -78,12 +89,39 @@ export function SupplierDocumentsModule({
       return nextRows;
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "读取资料回传任务失败";
-      setError(message);
-      setLoadError(message);
+      if (!options.silent && visibleRequestId === loadRowsVisibleRequestRef.current) {
+        setError(message);
+        setLoadError(message);
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (!options.silent && visibleRequestId === loadRowsVisibleRequestRef.current) setLoading(false);
     }
+  }
+
+  function normalizedSearchText(value: unknown) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function requestMatchesSubmittedKeyword(request: SupplierDocumentTask) {
+    const keyword = normalizedSearchText(submittedKeyword);
+    if (!keyword) return true;
+    const haystack = [
+      request.orderNo,
+      currentUser.role === "产品供应商" ? "" : request.supplierName,
+    ].map(normalizedSearchText).join(" ");
+    return haystack.includes(keyword);
+  }
+
+  function mergeRequestRow(request: SupplierDocumentTask | null | undefined) {
+    if (!request?.id) return false;
+    const shouldShow = requestMatchesSubmittedKeyword(request);
+    setRows((current) => {
+      const exists = current.some((row) => row.id === request.id);
+      if (exists) return shouldShow ? current.map((row) => row.id === request.id ? request : row) : current.filter((row) => row.id !== request.id);
+      return shouldShow && page === 1 ? [request, ...current].slice(0, pageSize) : current;
+    });
+    return shouldShow;
   }
 
   async function uploadDocument(task: SupplierDocumentTask, documentType: string, file: File | null, costId = "") {
@@ -146,11 +184,14 @@ export function SupplierDocumentsModule({
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}`,
         { method: "DELETE" },
       );
+      setRows((current) => current.filter((row) => row.id !== task.id));
       setExpandedTaskId((current) => (current === task.id ? "" : current));
+      setTotal((current) => Math.max(0, current - 1));
+      if (task.status !== "已完成") setPendingCount((current) => Math.max(0, current - 1));
       setNotice("资料回传任务已删除");
       const nextTotal = Math.max(0, total - 1);
       const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1))));
-      await loadRows(nextPage, pageSize);
+      void loadRows(nextPage, pageSize, submittedKeyword, { silent: true });
       void onRefreshTodos?.();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
@@ -191,7 +232,12 @@ export function SupplierDocumentsModule({
     setCreateDialogOpen(false);
     setNotice(result.message || "已发起资料回传通知");
     setError("");
-    await loadRows(1, pageSize);
+    const shouldShowCreatedRequest = result.request?.id ? mergeRequestRow(result.request) : false;
+    if (shouldShowCreatedRequest) {
+      setTotal((current) => current + 1);
+      if (page !== 1) setPage(1);
+    }
+    void loadRows(1, pageSize, submittedKeyword, { silent: true });
     if (createdId) setExpandedTaskId(createdId);
     void onRefreshTodos?.();
   }
@@ -225,7 +271,7 @@ export function SupplierDocumentsModule({
         setError(data.ocrTask?.errorMessage || data.message || "OCR识别失败，需人工核对");
       } else {
         setNotice(data.message || "已重新识别");
-        void loadRows(page, pageSize);
+        void loadRows(page, pageSize, submittedKeyword, { silent: true });
       }
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "重新识别失败"));
@@ -246,7 +292,7 @@ export function SupplierDocumentsModule({
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
       setNotice(data.message || "已人工确认通过");
-      void loadRows(page, pageSize);
+      void loadRows(page, pageSize, submittedKeyword, { silent: true });
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "人工确认失败"));
     } finally {
@@ -281,7 +327,7 @@ export function SupplierDocumentsModule({
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
       setNotice(data.message || "已驳回重传");
-      void loadRows(page, pageSize);
+      void loadRows(page, pageSize, submittedKeyword, { silent: true });
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "驳回失败"));
     } finally {
@@ -293,7 +339,7 @@ export function SupplierDocumentsModule({
   const safePage = Math.min(page, totalPages);
 
   useEffect(() => {
-    if (page > totalPages) void loadRows(totalPages, pageSize);
+    if (page > totalPages) void loadRows(totalPages, pageSize, submittedKeyword);
   }, [page, totalPages]);
 
   useEffect(() => {
@@ -319,7 +365,7 @@ export function SupplierDocumentsModule({
               发起资料回传通知
             </button>
           ) : null}
-          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
+          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize, submittedKeyword)} disabled={loading}>
             {loading ? "刷新中..." : "刷新任务"}
           </button>
         </div>
@@ -347,7 +393,7 @@ export function SupplierDocumentsModule({
         <div className={styles.inlineError}>
           <strong>读取失败：</strong>
           <span>{loadError}</span>
-          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize)} disabled={loading}>
+          <button className={styles.secondaryButton} type="button" onClick={() => loadRows(page, pageSize, submittedKeyword)} disabled={loading}>
             {loading ? "重试中..." : "重试"}
           </button>
         </div>
@@ -370,7 +416,7 @@ export function SupplierDocumentsModule({
                   const nextPageSize = Number(event.target.value);
                   setPageSize(nextPageSize);
                   setExpandedTaskId("");
-                  void loadRows(1, nextPageSize);
+                  void loadRows(1, nextPageSize, submittedKeyword);
                 }}
               >
                 {SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS.map((size) => (
@@ -410,7 +456,7 @@ export function SupplierDocumentsModule({
             loading={loading}
             onPage={(nextPage) => {
               setExpandedTaskId("");
-              void loadRows(nextPage, pageSize);
+              void loadRows(nextPage, pageSize, submittedKeyword);
             }}
           />
         </>

@@ -4,10 +4,10 @@ import { apiJson } from "../../api";
 import { preventEnterFormSubmit } from "../../formGuards";
 import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
-import { CONTAINER_TYPE_OPTIONS, TRANSPORT_TYPES, emptyTransportItem, type DomesticLogisticsForm, type DomesticLogisticsRow, type TransportItem } from "./model";
+import { CONTAINER_TYPE_OPTIONS, TRANSPORT_TYPES, emptyTransportItem, type DomesticLogisticsForm, type DomesticLogisticsInfo, type DomesticLogisticsRow, type TransportItem } from "./model";
 import { addTransportItemText, formFromRow, generateRemark, normalizeFormTransportItems, showContainerManagementFields, transportFieldLabels, transportItemsTitle, validateDomesticLogisticsForm } from "./helpers";
 
-export function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticLogisticsRow; onSaved: () => void; onCancel: () => void }) {
+export function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticLogisticsRow; onSaved: (info?: DomesticLogisticsInfo | null) => void; onCancel: () => void }) {
   const [form, setForm] = useState<DomesticLogisticsForm>(() => formFromRow(row));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -76,7 +76,7 @@ export function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: Do
       const transportItems = isExpressPayload ? [] : normalizeFormTransportItems(form.transportItems);
       const firstItem = transportItems[0] || {};
       const remarkText = generateRemark({ ...form, transportItems });
-      const result = await apiJson<{ success?: boolean; message?: string }>(path, {
+      const result = await apiJson<{ success?: boolean; message?: string; info?: DomesticLogisticsInfo }>(path, {
         method: infoId ? "PATCH" : "POST",
         body: JSON.stringify({
           orderId: row.id,
@@ -94,7 +94,7 @@ export function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: Do
         }),
       });
       if (result.success !== true) throw new Error(result.message || "物流信息保存失败");
-      onSaved();
+      onSaved(result.info || null);
     } catch (saveError) {
       setMessage(saveError instanceof Error ? saveError.message : "物流信息保存失败");
     } finally {

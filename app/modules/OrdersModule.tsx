@@ -189,17 +189,63 @@ export function OrdersModule({
     scrollToEditPanel();
   }
 
-  async function handleOrderSaved() {
+  function normalizedSearchText(value: unknown) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function orderMatchesSubmittedFilters(order: OrderRow) {
+    const keywordValue = normalizedSearchText(submittedKeyword);
+    if (keywordValue) {
+      const haystack = [
+        order.orderNo,
+        order.blNo,
+        order.billOfLadingNo,
+        order.customerName,
+        order.customerFullName,
+        order.customerShortName,
+        order.salespersonName,
+        order.remark,
+      ].map(normalizedSearchText).join(" ");
+      if (!haystack.includes(keywordValue)) return false;
+    }
+    if (submittedOrderStatus && order.status !== submittedOrderStatus) return false;
+    if (submittedBusinessEntityId && order.businessEntityId !== submittedBusinessEntityId) return false;
+    return true;
+  }
+
+  function mergeOrderRow(order: OrderRow, options: { shouldShow?: boolean } = {}) {
+    const shouldShow = options.shouldShow ?? orderMatchesSubmittedFilters(order);
+    setOrders((current) => {
+      const exists = current.some((item) => item.id === order.id);
+      if (exists) {
+        return shouldShow
+          ? current.map((item) => item.id === order.id ? { ...item, ...order } : item)
+          : current.filter((item) => item.id !== order.id);
+      }
+      return page === 1 && shouldShow ? [order, ...current].slice(0, PAGE_SIZE) : current;
+    });
+    setDetailOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
+    setEditOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
+  }
+
+  async function handleOrderSaved(order?: OrderRow | null) {
     const savedOrder = editOrder;
     const detailToRestore = returnDetailOrder;
     setNotice(savedOrder ? "订单已更新" : "订单已保存");
     setCreateOpen(false);
     setEditOrder(null);
     setReturnDetailOrder(null);
-    setDetailOrder(null);
-    const nextRows = await loadOrders(savedOrder ? page : 1, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
+    if (order?.id) {
+      const existedInRows = orders.some((item) => item.id === order.id);
+      const shouldShow = orderMatchesSubmittedFilters(order);
+      mergeOrderRow(order, { shouldShow });
+      if (!savedOrder && shouldShow) setTotal((current) => current + 1);
+      if (savedOrder && existedInRows && !shouldShow) setTotal((current) => Math.max(0, current - 1));
+    }
     if (savedOrder && detailToRestore) {
-      setDetailOrder(nextRows.find((order) => order.id === savedOrder.id) || detailToRestore);
+      setDetailOrder(order?.id ? { ...detailToRestore, ...order } : detailToRestore);
+    } else {
+      setDetailOrder(null);
     }
   }
 
@@ -340,7 +386,7 @@ export function OrdersModule({
             initialOrder={editOrder}
             canManageOrderAssignments={canManageOrderAssignments}
             onCancel={handleOrderEditCancel}
-            onSaved={() => void handleOrderSaved()}
+            onSaved={(order) => void handleOrderSaved(order)}
           />
         </div>
       ) : null}
