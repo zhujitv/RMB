@@ -72,28 +72,40 @@ export function OcrIntegrationSettingsCard({
   onReset: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  type CustomsOcrTestResult = {
-    fileName?: string;
-    source?: string;
-    provider?: string;
-    apiName?: string;
-    parser?: string;
-    confidence?: number | null;
-    textLength?: number;
-    docMindAttempted?: boolean;
-    docMindSucceeded?: boolean;
-    docMindErrorCode?: string;
-    docMindErrorMessage?: string;
-    fallbackUsed?: boolean;
-    fields?: Record<string, unknown>;
-    itemsCount?: number;
-    itemsPreview?: unknown[];
-    rawJsonPreview?: string;
+  type CustomsPdfFullTextTestItem = {
+    itemNo?: string | null;
+    hsCode?: string | null;
+    productName?: string | null;
+    specification?: string | null;
+    quantity?: number | null;
+    unit?: string | null;
+    unitPrice?: number | null;
+    totalPrice?: number | null;
+    currency?: string | null;
   };
 
-  type CustomsOcrTestResponse = {
+  type CustomsPdfFullTextTestResult = {
     success?: boolean;
-    result?: CustomsOcrTestResult;
+    method?: string;
+    fileName?: string;
+    textLength?: number;
+    header?: {
+      customsDeclarationNo?: string | null;
+      declarationDate?: string | null;
+      exportDate?: string | null;
+      domesticShipper?: string | null;
+      overseasConsignee?: string | null;
+      tradeMode?: string | null;
+      transactionMode?: string | null;
+      currency?: string | null;
+      totalAmount?: number | null;
+    };
+    items?: CustomsPdfFullTextTestItem[];
+    rawTextPreview?: string;
+  };
+
+  type CustomsPdfFullTextTestResponse = CustomsPdfFullTextTestResult & {
+    success?: boolean;
     message?: string;
   };
 
@@ -102,7 +114,7 @@ export function OcrIntegrationSettingsCard({
   const [customsTestProgress, setCustomsTestProgress] = useState(0);
   const [customsTestMessage, setCustomsTestMessage] = useState("");
   const [customsTestError, setCustomsTestError] = useState("");
-  const [customsTestResult, setCustomsTestResult] = useState<CustomsOcrTestResult | null>(null);
+  const [customsTestResult, setCustomsTestResult] = useState<CustomsPdfFullTextTestResult | null>(null);
 
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
   if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
@@ -133,11 +145,11 @@ export function OcrIntegrationSettingsCard({
   }
 
   function displayValue(value: unknown) {
-    if (value == null || value === "") return "-";
+    if (value == null || value === "") return "未识别";
     return String(value);
   }
 
-  async function runCustomsOcrTest(file: File | null) {
+  async function runCustomsPdfFullTextTest(file: File | null) {
     setCustomsTestMessage("");
     setCustomsTestError("");
     setCustomsTestResult(null);
@@ -152,15 +164,15 @@ export function OcrIntegrationSettingsCard({
     setCustomsTestBusy(true);
     setCustomsTestProgress(1);
     try {
-      const response = await uploadFormDataWithProgress<CustomsOcrTestResponse>(
-        "/api/settings/ocr/test-customs",
+      const response = await uploadFormDataWithProgress<CustomsPdfFullTextTestResponse>(
+        "/api/settings/ocr/customs-pdf-full-text-test",
         formData,
         setCustomsTestProgress,
       );
-      setCustomsTestResult(response.result || null);
-      setCustomsTestMessage(response.message || "报关单识别测试完成");
+      setCustomsTestResult(response || null);
+      setCustomsTestMessage(response.message || "PDF报关单整单文本解析测试完成");
     } catch (error) {
-      setCustomsTestError(error instanceof Error ? error.message : "测试报关单识别失败");
+      setCustomsTestError(error instanceof Error ? error.message : "PDF报关单整单文本解析测试失败");
     } finally {
       setCustomsTestBusy(false);
       resetCustomsTestInput();
@@ -285,7 +297,7 @@ export function OcrIntegrationSettingsCard({
         </SettingsSection>
       </SettingsCard>
 
-      <SettingsCard title="报关单识别测试" icon="测">
+      <SettingsCard title="PDF报关单整单文本解析测试" icon="测">
         <SettingsSection title="上传 PDF 测试">
           <div className={styles.settingsFieldGrid}>
             <SettingsField label="测试文件">
@@ -295,7 +307,7 @@ export function OcrIntegrationSettingsCard({
                   type="file"
                   accept=".pdf"
                   style={{ display: "none" }}
-                  onChange={(event) => void runCustomsOcrTest(event.target.files?.[0] || null)}
+                  onChange={(event) => void runCustomsPdfFullTextTest(event.target.files?.[0] || null)}
                 />
                 <button
                   className={styles.primaryButtonCompact}
@@ -303,10 +315,10 @@ export function OcrIntegrationSettingsCard({
                   disabled={customsTestBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {customsTestBusy ? "识别中..." : "选择报关单 PDF 测试识别"}
+                  {customsTestBusy ? "解析中..." : "选择报关单 PDF 测试整单解析"}
                 </button>
                 <span className={styles.emptyState} style={{ margin: 0, padding: 0 }}>
-                  仅测试识别，不保存订单数据，不影响资料回传 OCR。
+                  仅测试 PDF 文本解析，不调用 OCR，不保存业务数据。
                 </span>
               </div>
             </SettingsField>
@@ -323,7 +335,7 @@ export function OcrIntegrationSettingsCard({
                   }}
                 />
               </div>
-              <span className={styles.emptyState} style={{ margin: 0, padding: 0 }}>识别中 {customsTestProgress}%</span>
+              <span className={styles.emptyState} style={{ margin: 0, padding: 0 }}>解析中 {customsTestProgress}%</span>
             </div>
           ) : null}
           {customsTestError ? <div className={styles.inlineError}>{customsTestError}</div> : null}
@@ -331,43 +343,68 @@ export function OcrIntegrationSettingsCard({
           {customsTestResult ? (
             <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
               <div className={styles.settingsFieldGrid}>
-                <SettingsField label="识别接口">{displayValue(customsTestResult.apiName)}</SettingsField>
-                <SettingsField label="数据来源">{displayValue(customsTestResult.source)}</SettingsField>
-                <SettingsField label="解析器">{displayValue(customsTestResult.parser)}</SettingsField>
-                <SettingsField label="商品明细数">{displayValue(customsTestResult.itemsCount)}</SettingsField>
-                <SettingsField label="结构化接口">{customsTestResult.docMindAttempted ? (customsTestResult.docMindSucceeded ? "已调用成功" : "已尝试但失败") : "未调用"}</SettingsField>
-                <SettingsField label="是否回退">{customsTestResult.fallbackUsed ? "已回退到通用 OCR" : "未回退"}</SettingsField>
-                <SettingsField label="报关单号">{displayValue(customsTestResult.fields?.customsDeclarationNo)}</SettingsField>
-                <SettingsField label="申报日期">{displayValue(customsTestResult.fields?.customsDeclarationDate)}</SettingsField>
+                <SettingsField label="解析方式">{customsTestResult.method === "PDF_TEXT_FULL_PARSE" ? "PDF文本解析" : displayValue(customsTestResult.method)}</SettingsField>
+                <SettingsField label="是否调用OCR">否</SettingsField>
+                <SettingsField label="是否保存业务数据">否</SettingsField>
+                <SettingsField label="文本长度">{displayValue(customsTestResult.textLength)}</SettingsField>
               </div>
-              {customsTestResult.docMindAttempted && !customsTestResult.docMindSucceeded ? (
-                <div className={styles.inlineError}>
-                  阿里云报关单结构化接口未成功：{displayValue(customsTestResult.docMindErrorCode)}
-                  {customsTestResult.docMindErrorMessage ? `，${customsTestResult.docMindErrorMessage}` : ""}
-                </div>
-              ) : null}
-              {customsTestResult.itemsPreview?.length ? (
+              <div className={styles.tableWrap}>
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr>
+                      <th>字段</th>
+                      <th>识别结果</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["报关单号", customsTestResult.header?.customsDeclarationNo],
+                      ["申报日期", customsTestResult.header?.declarationDate],
+                      ["出口日期", customsTestResult.header?.exportDate],
+                      ["境内发货人", customsTestResult.header?.domesticShipper],
+                      ["境外收货人", customsTestResult.header?.overseasConsignee],
+                      ["贸易方式", customsTestResult.header?.tradeMode],
+                      ["成交方式", customsTestResult.header?.transactionMode],
+                      ["币制", customsTestResult.header?.currency],
+                      ["总金额", customsTestResult.header?.totalAmount],
+                    ].map(([label, value]) => (
+                      <tr key={`customs-header-${label}`}>
+                        <td>{label}</td>
+                        <td>{displayValue(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {customsTestResult.items?.length ? (
                 <div className={styles.tableWrap}>
                   <table className={styles.dataTable}>
                     <thead>
                       <tr>
+                        <th>项号</th>
+                        <th>商品编号 / HS编码</th>
                         <th>商品名称</th>
+                        <th>规格型号</th>
                         <th>数量</th>
                         <th>单位</th>
+                        <th>单价</th>
+                        <th>总价</th>
                         <th>币种</th>
-                        <th>总金额</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {customsTestResult.itemsPreview.map((item, index) => {
-                        const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+                      {customsTestResult.items.map((row, index) => {
                         return (
                           <tr key={`customs-test-item-${index}`}>
+                            <td>{displayValue(row.itemNo)}</td>
+                            <td>{displayValue(row.hsCode)}</td>
                             <td>{displayValue(row.productName)}</td>
+                            <td>{displayValue(row.specification)}</td>
                             <td>{displayValue(row.quantity)}</td>
                             <td>{displayValue(row.unit)}</td>
+                            <td>{displayValue(row.unitPrice)}</td>
+                            <td>{displayValue(row.totalPrice)}</td>
                             <td>{displayValue(row.currency)}</td>
-                            <td>{displayValue(row.totalAmount)}</td>
                           </tr>
                         );
                       })}
@@ -375,9 +412,10 @@ export function OcrIntegrationSettingsCard({
                   </table>
                 </div>
               ) : (
-                <div className={styles.inlineError}>未解析到商品明细；请检查识别接口是否返回结构化商品表。</div>
+                <div className={styles.inlineError}>未解析到商品明细，请检查PDF文本结构。</div>
               )}
-              <SettingsField label="原始返回摘要">
+              <details>
+                <summary>原始文本预览</summary>
                 <pre
                   style={{
                     maxHeight: 280,
@@ -391,9 +429,9 @@ export function OcrIntegrationSettingsCard({
                     whiteSpace: "pre-wrap",
                   }}
                 >
-                  {customsTestResult.rawJsonPreview || "-"}
+                  {customsTestResult.rawTextPreview || "未识别"}
                 </pre>
-              </SettingsField>
+              </details>
             </div>
           ) : null}
         </SettingsSection>

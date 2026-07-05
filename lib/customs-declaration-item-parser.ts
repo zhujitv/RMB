@@ -36,12 +36,13 @@ export function normalizeCustomsDeclarationItemForTaxRefund(
   if (!isValidTaxRefundProductName(productName) || quantity <= 0 || !unit || totalAmount <= 0) return null;
   const currency = normalizeCurrency(String(input.currency || defaults.currency || ""));
   return {
-    hsCode: "",
+    itemNo: normalizeCustomsItemNo(input.itemNo),
+    hsCode: normalizeHsCode(input.hsCode),
     productName,
-    specification: "",
+    specification: cleanCustomsItemSpecification(input.specification),
     quantity,
     unit,
-    unitPrice: 0,
+    unitPrice: numericAmount(String(input.unitPrice ?? "")),
     totalAmount,
     tradeTerm: normalizeTradeTerm(String(input.tradeTerm || defaults.tradeTerm || "")),
     currency,
@@ -51,6 +52,24 @@ export function normalizeCustomsDeclarationItemForTaxRefund(
     originCountry: "",
     destinationCountry: "",
   };
+}
+
+function normalizeCustomsItemNo(value: unknown) {
+  const text = String(value || "").trim();
+  return /^\d{1,3}$/.test(text) ? text : "";
+}
+
+function normalizeHsCode(value: unknown) {
+  const text = String(value || "").replace(/\D/g, "");
+  return /^\d{8,13}$/.test(text) ? text : "";
+}
+
+function cleanCustomsItemSpecification(value: unknown) {
+  return toHalfWidth(String(value || ""))
+    .replace(/规格型号/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
 }
 
 function normalizeTradeTerm(value = "") {
@@ -143,22 +162,24 @@ function hasProductNameSignal(value = "") {
 export function parseCustomsDeclarationItems(text = ""): CustomsDeclarationItemFields[] {
   const lines = normalizePdfText(text).split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const items: CustomsDeclarationItemFields[] = [];
-  const itemPattern = new RegExp(`(?:^|\\s)(?:\\d{1,3}\\s+)?([0-9]{8,13})\\s+(.+?)\\s+([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)\\s*${CUSTOMS_ITEM_UNIT_PATTERN}\\s+(?:(FOB|CIF|CFR|EXW)\\s+)?(?:(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\\s+)?([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)(?:\\s|$)`, "i");
+  const itemPattern = new RegExp(`(?:^|\\s)(?:(\\d{1,3})\\s+)?([0-9]{8,13})\\s+(.+?)\\s+([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)\\s*${CUSTOMS_ITEM_UNIT_PATTERN}\\s+(?:(FOB|CIF|CFR|EXW)\\s+)?(?:(USD|CNY|RMB|EUR|JPY|HKD|美元|人民币|欧元|日元|港币)\\s+)?(?:(?:单价|UNIT\\s*PRICE)?\\s*([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]{1,6})?|[0-9]+(?:\\.[0-9]{1,6})?)\\s+)?([0-9]+(?:[,，][0-9]{3})*(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)(?:\\s|$)`, "i");
   for (const line of lines) {
     const match = line.match(itemPattern);
     if (!match) continue;
-    const productName = String(match[2] || "")
+    const productName = String(match[3] || "")
       .replace(/\s+(FOB|CIF|CFR|EXW)\b.*$/i, "")
       .replace(/\s{2,}/g, " ")
       .trim();
     const item = normalizeCustomsDeclarationItemForTaxRefund({
-      hsCode: String(match[1] || "").trim(),
+      itemNo: String(match[1] || "").trim(),
+      hsCode: String(match[2] || "").trim(),
       productName,
-      quantity: numericAmount(match[3] || ""),
-      unit: String(match[4] || "").trim(),
-      totalAmount: numericAmount(match[7] || ""),
-      tradeTerm: String(match[5] || "").trim().toUpperCase(),
-      currency: normalizeCurrency(match[6] || ""),
+      quantity: numericAmount(match[4] || ""),
+      unit: String(match[5] || "").trim(),
+      unitPrice: numericAmount(match[8] || ""),
+      totalAmount: numericAmount(match[9] || ""),
+      tradeTerm: String(match[6] || "").trim().toUpperCase(),
+      currency: normalizeCurrency(match[7] || ""),
     });
     if (item) items.push(item);
   }
@@ -179,11 +200,14 @@ function parseMultilineCustomsDeclarationItems(lines: string[] = []): CustomsDec
     const currency = findCurrency(windowText);
     const tradeTerm = findTradeTerm(windowText);
     const totalAmount = findTotalAmountInItemWindow(windowText, quantityUnit.quantity);
+    const unitPrice = quantityUnit.quantity > 0 && totalAmount > 0 ? totalAmount / quantityUnit.quantity : 0;
     const item = normalizeCustomsDeclarationItemForTaxRefund({
+      itemNo: findItemNoNearHsCode(lines, row.index),
       hsCode: row.hsCode,
       productName,
       quantity: quantityUnit.quantity,
       unit: quantityUnit.unit,
+      unitPrice,
       totalAmount,
       tradeTerm,
       currency,
@@ -191,6 +215,13 @@ function parseMultilineCustomsDeclarationItems(lines: string[] = []): CustomsDec
     if (item) items.push(item);
   }
   return items;
+}
+
+function findItemNoNearHsCode(lines: string[] = [], index = 0) {
+  const currentPrefix = toHalfWidth(lines[index] || "").match(/^\s*(\d{1,3})\s+[0-9]{8,13}\b/);
+  if (currentPrefix) return currentPrefix[1] || "";
+  const previous = toHalfWidth(lines[index - 1] || "").trim();
+  return /^\d{1,3}$/.test(previous) ? previous : "";
 }
 
 function findHsCodeInLine(line = "") {

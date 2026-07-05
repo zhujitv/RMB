@@ -8,6 +8,7 @@ const DECLARATION_NO_LABELS = ["报关单号", "海关编号", "预录入编号"
 const DECLARATION_DATE_LABELS = ["申报日期", "出口申报日期", "申报时间", "Declaration Date"];
 export const EXPORT_DATE_LABELS = ["出口日期", "出口时间", "离境日期"];
 const DOMESTIC_CONSIGNOR_LABELS = ["境内发货人", "境内收发货人", "发货人"];
+const OVERSEAS_CONSIGNEE_LABELS = ["境外收货人", "境外收发货人", "收货人", "Consignee"];
 const DECLARATION_UNIT_LABELS = ["申报单位", "报关单位", "代理报关企业"];
 const TRANSPORT_MODE_LABELS = ["运输方式", "运输模式"];
 const BILL_OF_LADING_LABELS = ["提运单号", "提单号", "运单号", "B/L No", "BL No"];
@@ -93,6 +94,7 @@ function cleanLabeledTextValue(value = "") {
     ...DECLARATION_DATE_LABELS,
     ...EXPORT_DATE_LABELS,
     ...DOMESTIC_CONSIGNOR_LABELS,
+    ...OVERSEAS_CONSIGNEE_LABELS,
     "消费使用单位",
     "生产销售单位",
     "运输方式",
@@ -100,6 +102,8 @@ function cleanLabeledTextValue(value = "") {
     "成交方式",
     "贸易方式",
     "监管方式",
+    "征免性质",
+    "合同协议号",
     "申报单位",
     "贸易国别",
     "目的国",
@@ -131,6 +135,18 @@ export function findTradeTerm(text = "") {
   const compact = compactForNearbySearch(text).toUpperCase();
   const labeled = compact.match(/(?:成交方式|贸易方式|价格条款)[:：]?\s*(FOB|CIF|CFR|EXW)/i)?.[1];
   return (labeled || compact.match(/\b(FOB|CIF|CFR|EXW)\b/i)?.[1] || "").toUpperCase();
+}
+
+export function findDomesticShipper(text = "") {
+  return findBestLabeledText(text, DOMESTIC_CONSIGNOR_LABELS);
+}
+
+export function findOverseasConsignee(text = "") {
+  return findBestLabeledText(text, OVERSEAS_CONSIGNEE_LABELS);
+}
+
+export function findTradeMode(text = "") {
+  return findBestLabeledText(text, SUPERVISION_MODE_LABELS);
 }
 
 export function findCurrency(text = "") {

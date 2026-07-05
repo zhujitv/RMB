@@ -15,6 +15,8 @@ const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const customsParser = readCustomsDeclarationParserSource();
 const settingsRoute = readFileSync("app/api/settings/ocr/route.ts", "utf8");
 const customsTestRoute = readFileSync("app/api/settings/ocr/test-customs/route.ts", "utf8");
+const customsPdfFullTextTestRoute = readFileSync("app/api/settings/ocr/customs-pdf-full-text-test/route.ts", "utf8");
+const customsPdfFullTextService = readFileSync("lib/platform/ocr-integration-customs-pdf-text-test.ts", "utf8");
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const orderDocuments = readOrderDocumentsSource();
 const r2 = readFileSync("lib/r2.ts", "utf8");
@@ -51,29 +53,29 @@ test("OCR settings API supports authenticated read and admin write", () => {
   assert.match(settingsRoute, /OCR设置已保存/);
 });
 
-test("OCR settings can run isolated customs declaration recognition diagnostics", () => {
-  assert.match(customsTestRoute, /export const runtime = "nodejs"/);
-  assert.match(customsTestRoute, /export const maxDuration = 60/);
-  assert.match(customsTestRoute, /readValidatedPdfUploadFile\(formData\.get\("file"\), "customs-declaration-test\.pdf"\)/);
-  assert.match(customsTestRoute, /testCustomsDeclarationOcr\(actor, file\)/);
-  assert.match(service, /export async function testCustomsDeclarationOcr/);
-  assert.match(service, /assertWrite\(actor, "settings"\)/);
-  assert.match(service, /uploadToR2/);
-  assert.match(service, /signedObjectReadUrl\(tempKey, 900\)/);
-  assert.match(service, /recognizePdfTextWithOcr\(fileBuffer, "customsDeclaration"/);
-  assert.match(service, /deleteR2Object\(tempKey\)/);
-  assert.match(service, /itemsCount: items\.length/);
-  assert.match(service, /docMindAttempted/);
-  assert.match(service, /docMindSucceeded/);
-  assert.match(service, /docMindErrorMessage/);
-  assert.match(service, /fallbackUsed/);
-  assert.match(settingsModule, /\/api\/settings\/ocr\/test-customs/);
-  assert.match(settingsModule, /报关单识别测试/);
-  assert.match(settingsModule, /选择报关单 PDF 测试识别/);
-  assert.match(settingsModule, /仅测试识别，不保存订单数据，不影响资料回传 OCR。/);
-  assert.match(settingsModule, /结构化接口/);
-  assert.match(settingsModule, /是否回退/);
-  assert.match(settingsModule, /阿里云报关单结构化接口未成功/);
+test("OCR settings can run isolated customs declaration PDF text diagnostics without OCR", () => {
+  assert.match(customsPdfFullTextTestRoute, /export const runtime = "nodejs"/);
+  assert.match(customsPdfFullTextTestRoute, /export const maxDuration = 60/);
+  assert.match(customsPdfFullTextTestRoute, /readValidatedPdfUploadFile\(formData\.get\("file"\), "customs-declaration-full-text-test\.pdf"\)/);
+  assert.match(customsPdfFullTextTestRoute, /testCustomsDeclarationPdfFullTextParse\(actor, file\)/);
+  assert.match(customsTestRoute, /testCustomsDeclarationPdfFullTextParse\(actor, file\)/);
+  assert.doesNotMatch(customsTestRoute, /testCustomsDeclarationOcr\(actor, file\)/);
+  assert.match(customsPdfFullTextService, /export async function testCustomsDeclarationPdfFullTextParse/);
+  assert.match(customsPdfFullTextService, /assertWrite\(actor, "settings"\)/);
+  assert.match(customsPdfFullTextService, /extractPdfTextFromPdfBuffer\(fileBuffer, \{ requireText: false \}\)/);
+  assert.match(customsPdfFullTextService, /parseCustomsDeclarationDetailText\(rawText\)/);
+  assert.match(customsPdfFullTextService, /method: "PDF_TEXT_FULL_PARSE"/);
+  assert.match(customsPdfFullTextService, /rawTextPreview: rawText\.slice\(0, 8000\)/);
+  assert.doesNotMatch(customsPdfFullTextService, /uploadToR2\(|signedObjectReadUrl\(tempKey, 900\)|recognizePdfTextWithOcr\(fileBuffer, "customsDeclaration"|deleteR2Object\(tempKey\)/);
+  assert.match(settingsModule, /\/api\/settings\/ocr\/customs-pdf-full-text-test/);
+  assert.doesNotMatch(settingsModule, /\/api\/settings\/ocr\/test-customs/);
+  assert.match(settingsModule, /PDF报关单整单文本解析测试/);
+  assert.match(settingsModule, /选择报关单 PDF 测试整单解析/);
+  assert.match(settingsModule, /仅测试 PDF 文本解析，不调用 OCR，不保存业务数据。/);
+  assert.match(settingsModule, /解析方式/);
+  assert.match(settingsModule, /是否调用OCR/);
+  assert.match(settingsModule, /是否保存业务数据/);
+  assert.match(settingsModule, /原始文本预览/);
 });
 
 test("settings module exposes OCR configuration without leaking secrets", () => {

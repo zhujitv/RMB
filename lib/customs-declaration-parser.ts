@@ -15,6 +15,9 @@ import {
   findBestLabeledDate,
   findCurrency,
   findDeclarationTotalAmount,
+  findDomesticShipper,
+  findOverseasConsignee,
+  findTradeMode,
   findTradeTerm,
   EXPORT_DATE_LABELS,
 } from "./customs-declaration-field-parser.ts";
@@ -68,6 +71,9 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
   const normalized = normalizePdfText(text);
   const base = parseCustomsDeclarationText(normalized);
   const exportDate = findBestLabeledDate(normalized, EXPORT_DATE_LABELS);
+  const domesticShipper = findDomesticShipper(normalized);
+  const overseasConsignee = findOverseasConsignee(normalized);
+  const tradeMode = findTradeMode(normalized);
   const tradeTerm = findTradeTerm(normalized);
   const currency = findCurrency(normalized);
   const items = parseCustomsDeclarationItems(normalized)
@@ -77,6 +83,9 @@ export function parseCustomsDeclarationDetailText(text = ""): CustomsDeclaration
   return {
     ...base,
     exportDate,
+    domesticShipper,
+    overseasConsignee,
+    tradeMode,
     tradeTerm,
     currency,
     totalAmount,

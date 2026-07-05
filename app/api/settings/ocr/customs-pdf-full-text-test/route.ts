@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const actor = await requireApiActor(request);
     const formData = await request.formData();
-    const file = await readValidatedPdfUploadFile(formData.get("file"), "customs-declaration-test.pdf");
+    const file = await readValidatedPdfUploadFile(formData.get("file"), "customs-declaration-full-text-test.pdf");
     const result = await testCustomsDeclarationPdfFullTextParse(actor, file);
     return ok({
       ...result,

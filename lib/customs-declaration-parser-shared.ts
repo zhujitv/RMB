@@ -10,6 +10,7 @@ export type CustomsFields = {
 };
 
 export type CustomsDeclarationItemFields = {
+  itemNo?: string;
   hsCode: string;
   productName: string;
   specification?: string;
@@ -34,6 +35,9 @@ export type CustomsParseResult = CustomsFields & {
 
 export type CustomsDeclarationDetailParseResult = CustomsParseResult & {
   exportDate: string;
+  domesticShipper: string;
+  overseasConsignee: string;
+  tradeMode: string;
   tradeTerm: string;
   currency: string;
   totalAmount: number;
