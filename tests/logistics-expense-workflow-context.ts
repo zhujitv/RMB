@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsExpenseAccessSource, readLogisticsExpenseWorkflowSource, readLogisticsFeesModuleSource, readNotificationEngineSource, readReportsModuleSource, readSettingsModuleSource, readSharedConstantsSource, readSharedSerializationSource, readSharedTaxCompletenessSource, readSharedUsersSource, readTaxRefundsSource, readWorkspaceShellSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsExpenseAccessSource, readLogisticsExpenseWorkflowSource, readLogisticsFeesModuleSource, readNotificationEngineSource, readProfitModuleSource, readReportsModuleSource, readSettingsModuleSource, readSharedConstantsSource, readSharedSerializationSource, readSharedTaxCompletenessSource, readSharedUsersSource, readTaxRefundsSource, readWorkspaceShellSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 export const backend = [
   readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
@@ -27,10 +27,15 @@ export const backend = [
   readFileSync("lib/platform/logistics-expense-access-permissions.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access-mutations.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-invoice-documents.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-core.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-basic-mutations.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-detail-mutations.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-workflow-review-helpers.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-invoice.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-invoice-notifications.ts", "utf8"),
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readNotificationEngineSource(),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
@@ -129,6 +134,7 @@ export const logisticsFeesShared = [
   "app/modules/logistics-fees/shared-monthly-summary.tsx",
   "app/modules/logistics-fees/shared-order-helpers.ts",
   "app/modules/logistics-fees/shared-row-reconcile.ts",
+  "app/modules/logistics-fees/shared-status-bill.ts",
   "app/modules/logistics-fees/shared-status.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 export const logisticsFeesBillTable = readFileSync(
@@ -154,7 +160,7 @@ export const saveBillDetailsSource =
   )?.[0] || "";
 export const frontendAggregateStatusSource =
   logisticsFeesShared.match(
-    /export function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsInvoiceGroupsForBill/,
+    /export function aggregateClientLogisticsExpenseStatus[\s\S]*?\n}\n(?=\nexport function|\nexport \*)/,
   )?.[0] || "";
 export const logisticsExpenseDetailLineSource = readFileSync(
   "app/modules/logistics-fees/details-table.tsx",
@@ -182,13 +188,17 @@ export const backendAggregateStatusSource =
     /export function aggregateLogisticsExpenseStatus[\s\S]*?\n}\n\nexport function logisticsExpenseBillAuditStatus/,
   )?.[0] || "";
 export const submitLogisticsExpenseBillSource =
-  backend.match(
-    /export async function submitLogisticsExpenseBill[\s\S]*?\n}\n\nexport async function batchUpdateLogisticsExpenses/,
+  readFileSync("lib/platform/logistics-expense-workflow-basic-mutations.ts", "utf8").match(
+    /export async function submitLogisticsExpenseBill[\s\S]*?\n}\n(?=\nexport async function|\s*$)/,
   )?.[0] || "";
 export const reviewLogisticsExpenseBillsSource = readFileSync(
   "lib/platform/logistics-expense-workflow-review.ts",
   "utf8",
-);
+) + "\n" + readFileSync("lib/platform/logistics-expense-workflow-review-helpers.ts", "utf8");
+export const reviewLogisticsExpenseBillsFunctionSource =
+  readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8").match(
+    /export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n(?=\n\nexport async function|\s*$)/,
+  )?.[0] || "";
 export const approveLogisticsExpenseBillRowsSource =
   backend.match(
     /export async function approveLogisticsExpenseBillRowsInTransaction[\s\S]*?\n}\n\nexport async function updateLogisticsExpenseCostIds/,
@@ -225,7 +235,7 @@ export const logisticsExpenseBatchSaveRoute = readFileSync(
   "app/api/logistics-expenses/batch-save/route.ts",
   "utf8",
 );
-export const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
+export const profitModule = readProfitModuleSource();
 export const domesticLogisticsModule = readDomesticLogisticsModuleSource();
 export const settingsModule = readSettingsModuleSource();
 export const settingsModuleMain = settingsModule;

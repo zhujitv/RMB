@@ -2,20 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sortReceivableRowsByShipmentDate } from "../lib/platform/order-receivable-sort.ts";
+import {
+  readOrdersModuleSource,
+  readOrdersServiceSource,
+  readSharedOrderSerializationSource,
+} from "./source-helpers.ts";
 
-const ordersModule = [
-  "app/modules/OrdersModule.tsx",
-  "app/modules/orders/model.ts",
-  "app/modules/orders/quick-order-panel.tsx",
-  "app/modules/orders/quick-order-panel-controller.ts",
-  "app/modules/orders/table.tsx",
-  "app/modules/orders/detail-drawer.tsx",
-  "app/modules/orders/utils.ts",
-].map((file) => readFileSync(file, "utf8")).join("\n");
-const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const ordersModule = readOrdersModuleSource();
+const ordersService = readOrdersServiceSource();
 const orderSearchService = readFileSync("lib/platform/order-receivable-search.ts", "utf8");
 const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
-const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
+const orderSerialization = readSharedOrderSerializationSource();
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
 const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
@@ -44,7 +41,7 @@ test("orders page renders only the table list and not duplicate order cards", ()
   assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{receivedAmount\} amountCny=\{receivedCny\}/);
   assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{displayedBalanceAmount\} amountCny=\{displayedBalanceCny\}/);
   assert.doesNotMatch(ordersModule, /function moneyCell/);
-  assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{gotoPage\} \/>/);
+  assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{(?:gotoPage|actions\.onPage)\} \/>/);
 });
 
 test("orders api sorts receivable orders by shipment date", () => {
@@ -156,7 +153,7 @@ test("order detail edit switches from drawer to edit form without silent failure
   assert.match(ordersModule, /setError\("数据加载失败，不能编辑"\)/);
   assert.match(ordersModule, /setReturnDetailOrder\(options\.returnToDetail \? order : null\)/);
   assert.match(ordersModule, /setDetailOrder\(null\);[\s\S]*scrollToEditPanel\(\)/);
-  assert.match(ordersModule, /onEdit=\{\(\) => openEditOrder\(detailOrder, \{ returnToDetail: true \}\)\}/);
+  assert.match(ordersModule, /onEdit=\{\(\) => (?:openEditOrder|actions\.onEditOrder)\(detailOrder, \{ returnToDetail: true \}\)\}/);
   assert.match(ordersModule, /function orderMatchesSubmittedFilters\(order: OrderRow\)/);
   assert.match(ordersModule, /order\.salespersonName/);
   assert.match(ordersModule, /function mergeOrderRow\(order: OrderRow, options: \{ shouldShow\?: boolean \} = \{\}\)/);

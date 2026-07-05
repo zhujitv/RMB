@@ -5,6 +5,7 @@ import {
   readCostsModuleSource,
   readDomesticLogisticsModuleSource,
   readLogisticsFeesModuleSource,
+  readOrdersModuleSource,
   readPaymentsModuleSource,
   readReportsModuleSource,
   readSettingsModuleSource,
@@ -14,7 +15,7 @@ import {
 
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const businessModuleSources = [
-  "app/modules/OrdersModule.tsx",
+  readOrdersModuleSource(),
   readPaymentsModuleSource(),
   readCostsModuleSource(),
   "app/modules/ProfitModule.tsx",

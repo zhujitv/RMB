@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isSuspiciousInvoiceParty, parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
-import { readSupplierDocumentOcrSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource } from "./source-helpers.ts";
+import {
+  readSupplierDocumentOcrSource,
+  readSupplierDocumentRequestListSource,
+  readSupplierDocumentRequestsSource,
+  readSupplierDocumentsModuleSource,
+} from "./source-helpers.ts";
 import {
   contractOrderNoMatches,
   normalizeContractOrderNoSet,
@@ -13,6 +18,7 @@ const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readSupplierDocumentOcrSource();
 const vatParser = readFileSync("lib/platform/supplier-vat-invoice-parser.ts", "utf8");
 const supplierRequests = readSupplierDocumentRequestsSource();
+const supplierRequestList = readSupplierDocumentRequestListSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
@@ -33,7 +39,7 @@ test("supplier document upload creates OCR task without changing tax refund modu
   assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
   assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
   assert.match(supplierRequests, /已跳过OCR附加信息/);
-  assert.doesNotMatch(supplierRequests, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
+  assert.doesNotMatch(supplierRequestList, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
 });
 

@@ -4,12 +4,13 @@ import test from "node:test";
 import {
   readOrdersServiceSource,
   readPaymentsModuleSource,
+  readPaymentsServiceSource,
   readSharedConstantsSource,
   readSharedSerializationSource,
 } from "./source-helpers.ts";
 
 const paymentsModule = readPaymentsModuleSource();
-const paymentsService = readFileSync("lib/platform/payments-module.ts", "utf8");
+const paymentsService = readPaymentsServiceSource();
 const ordersService = readOrdersServiceSource();
 const orderAccess = readFileSync("lib/platform/order-access.ts", "utf8");
 const sharedConstants = readSharedConstantsSource();
@@ -65,7 +66,7 @@ test("payment order search supports receivable summaries without runtime permiss
 test("payments list uses backend keyword fuzzy search and keeps detail-only expanded information", () => {
   assert.match(paymentsModule, /type PaymentFilters = \{\s*keyword: string;/);
   assert.match(paymentsModule, /value=\{filters\.keyword\}/);
-  assert.match(paymentsModule, /setFilter\("keyword"/);
+  assert.match(paymentsModule, /(?:setFilter|onFilterChange)\("keyword"/);
   assert.match(paymentsModule, /placeholder="搜索订单号 \/ 客户简称 \/ 客户全称 \/ 备注"/);
   assert.match(paymentsModule, /window\.setTimeout\(\(\) => \{/);
   assert.match(paymentsModule, /}, 300\)/);
@@ -100,7 +101,7 @@ test("payments list exposes payment type filter and row display", () => {
   assert.match(paymentsModule, /paymentType: string;/);
   assert.match(paymentsModule, /params\.set\(key, text\)/);
   assert.match(paymentsModule, /全部收款类型/);
-  assert.match(paymentsModule, /setFilter\("paymentType"/);
+  assert.match(paymentsModule, /(?:setFilter|onFilterChange)\("paymentType"/);
   assert.match(paymentsModule, /<th>收款类型<\/th>/);
   assert.match(paymentsModule, /<td>\{payment\.paymentType \|\| "-"\}<\/td>/);
   assert.match(paymentsService, /paymentType: nonEmpty\(query\?\.get\("paymentType"\)\)/);

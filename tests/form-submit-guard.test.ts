@@ -96,10 +96,10 @@ test("risky business forms use the shared Enter submit guard", () => {
   );
   assert.match(
     costsModule,
-    /<form className=\{`\$\{styles\.quickCreatePanel\}/,
+    /<form[\s\S]*?className=\{`\$\{styles\.quickCreatePanel\}/,
   );
   assert.match(
     costsModule,
-    /onKeyDown=\{preventEnterFormSubmit\} onSubmit=\{submitQuickCost\}/,
+    /onKeyDown=\{preventEnterFormSubmit\}[\s\S]*?onSubmit=\{(?:submitQuickCost|controller\.submitQuickCost)\}/,
   );
 });

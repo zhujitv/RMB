@@ -5,7 +5,7 @@ import {
   PARTY_NAME_MARKERS,
   PARTY_TAX_MARKERS,
   type KeyValueEntry,
-} from "./aliyun-invoice-ocr-fields";
+} from "./aliyun-invoice-ocr-fields.ts";
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

@@ -303,7 +303,7 @@ test("auth me initialization returns classified diagnostics instead of one gener
 
 test("workspace boot order enters loading before permission checks", () => {
   assert.match(workspaceShell, /const \[auth, setAuth\] = useState<AuthState>\(\{ status: "loading", message: "正在加载工作台\.\.\." \}\)/);
-  assert.match(workspaceShell, /if \(auth\.status === "loading"\) \{\s*return <LoadingPanel message=\{auth\.message\} \/>\s*;\s*\}/);
+  assert.match(workspaceShell, /if \(auth\.status === "loading"\)(?:\s*\{\s*)?\s*return <LoadingPanel message=\{auth\.message\} \/>\s*;?(?:\s*\})?/);
   assert.match(workspaceShell, /if \(auth\.status !== "ready"\) return;/);
   assert.match(workspaceShell, /if \(!allowedMenuKeys\.has\(activeMenu\)\) setActiveMenu\("welcome"\);/);
 });

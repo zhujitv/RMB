@@ -1,21 +1,34 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostRecordsQueriesSource, readCostsModuleSource, readDomesticLogisticsApiSource, readDomesticLogisticsModuleSource, readPaymentsModuleSource, readTaxRefundModuleSource, readTaxRefundsSource } from "./source-helpers.ts";
+import {
+  readCostRecordsQueriesSource,
+  readCostsModuleSource,
+  readDashboardModuleSource,
+  readDomesticLogisticsApiSource,
+  readDomesticLogisticsModuleSource,
+  readOrdersModuleSource,
+  readOrdersServiceSource,
+  readPaymentsModuleSource,
+  readPaymentsServiceSource,
+  readProfitModuleSource,
+  readTaxRefundModuleSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
 const modules = {
-  orders: readFileSync("app/modules/OrdersModule.tsx", "utf8"),
+  orders: readOrdersModuleSource(),
   payments: readPaymentsModuleSource(),
   costs: readCostsModuleSource(),
   logistics: readDomesticLogisticsModuleSource(),
   taxRefund: readTaxRefundModuleSource(),
-  profit: readFileSync("app/modules/ProfitModule.tsx", "utf8"),
-  overview: readFileSync("app/modules/DashboardModule.tsx", "utf8"),
+  profit: readProfitModuleSource(),
+  overview: readDashboardModuleSource(),
 };
 
 const services = {
-  orders: readFileSync("lib/platform/orders-module.ts", "utf8"),
-  payments: readFileSync("lib/platform/payments-module.ts", "utf8"),
+  orders: readOrdersServiceSource(),
+  payments: readPaymentsServiceSource(),
   costs: readCostRecordsQueriesSource(),
   logistics: readDomesticLogisticsApiSource(),
   taxRefund: readTaxRefundsSource(),
@@ -29,7 +42,7 @@ test("business list pages use keyword for fuzzy search requests", () => {
       ? /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) onSubmit\(\);/
       : name === "taxRefund"
       ? /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) onSubmitSearch\(\);/
-      : /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) submitSearch\(\);/;
+      : /onKeyDown=\{\(event\) => \{[\s\S]*?if \(event\.key === "Enter"\) (?:submitSearch|actions\.onSubmitSearch|props\.onSubmitSearch|onSubmit)\(\);/;
     assert.match(source, enterSubmitPattern, `${name} should submit on Enter`);
     assert.match(source, /window\.setTimeout\(\(\) => \{[\s\S]*}, 300\)/, `${name} should debounce keyword search by 300ms`);
   }

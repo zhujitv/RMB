@@ -5,6 +5,7 @@ import {
   readDomesticLogisticsModuleSource,
   readCssModuleGraphSource,
   readNotificationEngineSource,
+  readProfitModuleSource,
   readSettingsModuleSource,
   readSharedConstantsSource,
   readTaxRefundModuleSource,
@@ -17,7 +18,7 @@ const workbenchTodoPolicy = await import("../lib/platform/workbench-todo-policy.
 const workspaceShell = readWorkspaceShellSource();
 const workspaceLayout = readFileSync("app/WorkspaceLayout.tsx", "utf8");
 const welcomePanel = readFileSync("app/WelcomePanel.tsx", "utf8");
-const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
+const profitModule = readProfitModuleSource();
 const taxRefundModule = readTaxRefundModuleSource();
 const controlTower = readDomesticLogisticsModuleSource();
 const route = readFileSync("app/api/workbench/todos/route.ts", "utf8");
@@ -28,8 +29,8 @@ const missingTaxRefundTodosSource = workbenchSource.match(/function missingTaxRe
 const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
 const notificationEngineSource = readNotificationEngineSource();
 const sharedConstantsSource = readSharedConstantsSource();
-const sharedExchangeSource = readFileSync("lib/platform/shared-exchange.ts", "utf8");
-const settingsHelpersSource = readSettingsModuleSource();
+const sharedExchangeSource = readFileSync("lib/platform/shared-exchange-settings.ts", "utf8");
+const settingsHelpersSource = `${readSettingsModuleSource()}\n${readFileSync("lib/platform/shared-exchange-settings.ts", "utf8")}`;
 const settingsCardsSource = readSettingsModuleSource();
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const vercelConfig = readFileSync("vercel.json", "utf8");

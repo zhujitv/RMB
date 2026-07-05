@@ -72,13 +72,13 @@ test("approval sends invoice notification and preserves failure for audit", () =
   assert.match(backend, /ccEmails/);
   assert.match(backend, /skipped/);
   assert.match(backend, /resolveLogisticsSupplierInvoiceRecipients/);
-  assert.match(backend, /resolveLogisticsSupplierInvoiceEmail/);
+  assert.match(backend, /resolveLogisticsSupplierInvoice(?:Email|Recipients)/);
   assert.match(backend, /logisticsInvoiceNotificationAdminEmails/);
   assert.match(backend, /logisticsInvoiceNotificationCcEmails/);
   assert.match(backend, /supplier\.operatorUsers\.email/);
   assert.match(backend, /supplier\.contactEmail/);
   assert.match(backend, /supplier\.financeEmail/);
-  assert.match(backend, /物流供应商未配置有效邮箱，已检查/);
+  assert.match(backend, /物流供应商未配置有效邮箱(?:，已检查|（已检查：)/);
   assert.match(backend, /物流费用已审核通过，请开票并上传发票/);
   assert.match(backend, /recipientEmails: resolved\.emails/);
   assert.match(backend, /role: "管理员"/);

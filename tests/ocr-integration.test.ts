@@ -471,7 +471,7 @@ test("OCR center diagnostics remain controlled by OCR settings while tax refund 
   assert.match(service, /recognizeAliyunCustomsDeclaration/);
   assert.match(service, /阿里云 OCR 文档结构化接口未返回可用的报关单商品明细。/);
   assert.match(service, /阿里云报关单严格结构化识别失败/);
-  assert.match(service, /aliyun-customs-general-structure-failed/);
+  assert.match(service, /aliyun-customs-(?:general-structure|ocr-structured)-failed/);
   assert.match(service, /ALIYUN_CUSTOMS_OCR_TIMEOUT/);
   assert.match(service, /RecognizeAllTextRequest/);
   assert.match(service, /RecognizeAllTextRequestTableConfig/);

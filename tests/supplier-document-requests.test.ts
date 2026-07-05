@@ -269,7 +269,7 @@ test("supplier document request list uses server-side pagination", () => {
     supplierModule.indexOf("function mergeRequestRow"),
   );
   assert.match(requestMatcherSnippet, /request\.orderNo/);
-  assert.match(requestMatcherSnippet, /currentUser\.role === "产品供应商" \? "" : request\.supplierName/);
+  assert.match(requestMatcherSnippet, /currentUser(?:\.role|Role) === "产品供应商" \? "" : request\.supplierName/);
   assert.doesNotMatch(requestMatcherSnippet, /factoryCostText|requiredDocumentLabels|requiredDocumentTypes|templateFileName|request\.status|request\.message/);
   assert.match(supplierModule, /const shouldShowCreatedRequest = result\.request\?\.id \? mergeRequestRow\(result\.request\) : false/);
   assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);

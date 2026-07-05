@@ -38,7 +38,7 @@ test("costs page renders only the table list and not duplicate cost cards", () =
   assert.match(costsModule, /<th className=\{styles\.amountColumn\}>USD 合计<\/th>/);
   assert.match(costsModule, /function CostOrderItemsTable/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
-  assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{gotoPage\} \/>/);
+  assert.match(costsModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} loading=\{loading\} onPage=\{(?:gotoPage|props\.onPage)\} \/>/);
 });
 
 test("product supplier cost payment vouchers are scoped away from logistics fees", () => {
@@ -86,8 +86,8 @@ test("cost registration preserves exchange snapshots and does not silently merge
   assert.match(costsModule, /exchangeRateSource\?: string;/);
   assert.match(costsModule, /exchangeRateType\?: string;/);
   assert.match(costsModule, /exchangeRateDate: result\.rate\?\.rateDate \|\| paymentDate \|\| ""/);
-  assert.match(costsModule, /exchangeRateSource: result\.rate\?\.source \|\| ""/);
-  assert.match(costsModule, /exchangeRateType: result\.rate\?\.rateType \|\| ""/);
+  assert.match(costsModule, /exchangeRateSource: result\.rate\?\.source \|\| "(?:系统)?"/);
+  assert.match(costsModule, /exchangeRateType: result\.rate\?\.rateType \|\| "(?:即期)?"/);
   assert.match(costsModule, /exchangeRateDate: item\.exchangeRateDate \|\| undefined/);
   assert.match(costsModule, /exchangeRateSource: item\.exchangeRateSource \|\| undefined/);
   assert.match(costsModule, /exchangeRateType: item\.exchangeRateType \|\| undefined/);
@@ -114,7 +114,7 @@ test("cost management groups logistics invoices by shipment before display", () 
   assert.match(costsModule, /group\.costTypeSummary/);
   assert.match(costsModule, /currencyTotalAmount\(group\.currencyTotals, "CNY"\)/);
   assert.match(costsModule, /currencyTotalAmount\(group\.currencyTotals, "USD"\)/);
-  assert.match(costsModule, /onOpenDocuments=\{\(\) => openInvoiceGroupDocuments\(group\)\}/);
+  assert.match(costsModule, /onOpenDocuments=\{\(\) => (?:void )?(?:openInvoiceGroupDocuments|props\.onOpenInvoiceGroupDocuments)\(group\)\}/);
   assert.match(costsQueries, /export async function listCostInvoiceGroups/);
   assert.match(costsQueries, /function costInvoiceGroupKey/);
   assert.match(costsQueries, /`logistics-bill:\$\{billId\}`/);
@@ -347,8 +347,8 @@ test("cost create and edit interactions use right side drawers instead of inline
   assert.match(costsModule, /function CostFormDrawer\(/);
   assert.match(costsModule, /<SideDetailDrawer[\s\S]*ariaLabel=\{editMode \? "编辑成本" : "登记成本"\}/);
   assert.match(costsModule, /<QuickCreateCostPanel[\s\S]*drawerMode/);
-  assert.match(costsModule, /onClick=\{openCreateCostDrawer\}/);
-  assert.match(costsModule, /onEdit=\{\(\) => openEditCostDrawer\(detailCost, \{ returnToDetail: true \}\)\}/);
+  assert.match(costsModule, /onClick=\{(?:openCreateCostDrawer|props\.onCreateCost)\}/);
+  assert.match(costsModule, /onEdit=\{\(\) => (?:openEditCostDrawer|props\.onEditCost)\(detailCost, \{ returnToDetail: true \}\)\}/);
   assert.doesNotMatch(costsModule, /createOpen/);
   assert.doesNotMatch(costsModule, /editCost/);
   assert.doesNotMatch(costsModule, /收起登记/);
@@ -368,9 +368,9 @@ test("cost detail drawer is tabbed and edit refreshes the current row", () => {
   assert.match(costsModule, /const dates = \[cost\.createdAt, cost\.updatedAt, cost\.paymentDate\]/);
   assert.match(costsModule, /function equivalentSubmittedCostTypes\(costType = ""\)/);
   assert.match(costsModule, /if \(costType === "拖车费"\) return \["拖车费", "国内物流费", "国内拖车费"\]/);
-  assert.match(costsModule, /if \(effectiveFilters\.costType && !equivalentSubmittedCostTypes\(effectiveFilters\.costType\)\.includes\(cost\.costType \|\| ""\)\) return false/);
+  assert.match(costsModule, /if \((?:effectiveFilters|filters)\.costType && !equivalentSubmittedCostTypes\((?:effectiveFilters|filters)\.costType\)\.includes\(cost\.costType \|\| ""\)\) return false/);
   assert.match(costsModule, /cost\.supplierType/);
-  assert.match(costsModule, /if \(!costDateMatchesSubmittedRange\(cost, effectiveFilters\)\) return false/);
+  assert.match(costsModule, /(?:if \(!costDateMatchesSubmittedRange\(cost, (?:effectiveFilters|filters)\)\) return false|return costDateMatchesSubmittedRange\(cost, filters\))/);
   assert.match(costsModule, /function refreshCostAggregatesInBackground\(\)/);
   assert.match(costsModule, /void loadCosts\(page, submittedFilters, archiveScope, costView, \{ silent: true \}\)/);
   assert.doesNotMatch(costsModule, /await fetchCostDetail\(savedDrawer\.cost\.id\)/);

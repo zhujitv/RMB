@@ -37,6 +37,7 @@ import {
   backendAggregateStatusSource,
   submitLogisticsExpenseBillSource,
   reviewLogisticsExpenseBillsSource,
+  reviewLogisticsExpenseBillsFunctionSource,
   approveLogisticsExpenseBillRowsSource,
   updateLogisticsExpensePaymentStatusSource,
   logisticsCostRoute,
@@ -197,7 +198,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
     /const savedRows = await loadLogisticsExpenseBillRowsForAction\(bill\.billId, actor\)/,
   );
   assert.doesNotMatch(
-    reviewLogisticsExpenseBillsSource,
+    reviewLogisticsExpenseBillsFunctionSource,
     /notifyLogisticsSupplierInvoiceBills[\s\S]*prisma\.\$transaction/,
   );
   assert.doesNotMatch(
@@ -223,7 +224,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
   );
   assert.match(
     frontendAggregateStatusSource,
-    /if \(field === "auditStatus"\)[\s\S]*?return logisticsExpenseBillAuditStatus\(items\)/,
+    /if \(field === "auditStatus"\)[\s\S]*?(?:return logisticsExpenseBillAuditStatus\(items\)|aggregateClientStatusValues\(rows\.map\(logisticsExpenseBillAuditStatusFromRow\), field\))/,
   );
   assert.doesNotMatch(
     frontendAggregateStatusSource,

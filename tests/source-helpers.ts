@@ -1,5 +1,36 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
+
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
+
+function isSourceFile(path: string) {
+  return [...SOURCE_EXTENSIONS].some((extension) => path.endsWith(extension));
+}
+
+function readSourceTree(root: string) {
+  if (!existsSync(root)) return [];
+
+  const files: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const nextPath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...readSourceTree(nextPath));
+    } else if (entry.isFile() && isSourceFile(nextPath)) {
+      files.push(nextPath);
+    }
+  }
+  return files.sort();
+}
+
+function readSourcePrefix(dir: string, prefixes: string[]) {
+  if (!existsSync(dir)) return [];
+
+  return readdirSync(dir)
+    .filter((file) => prefixes.some((prefix) => file === `${prefix}.ts` || file === `${prefix}.tsx` || file.startsWith(`${prefix}-`)))
+    .filter(isSourceFile)
+    .map((file) => join(dir, file))
+    .sort();
+}
 
 const SETTINGS_MODULE_FILES = [
   "app/modules/SettingsModule.tsx",
@@ -389,60 +420,78 @@ const DOMESTIC_LOGISTICS_API_FILES = [
 ];
 
 function readSources(files: string[]) {
-  return files.map((file) => readFileSync(file, "utf8")).join("\n");
+  return [...new Set(files)].map((file) => readFileSync(file, "utf8")).join("\n");
 }
 
 export function readSettingsModuleSource() {
-  return readSources(SETTINGS_MODULE_FILES);
+  return readSources([...SETTINGS_MODULE_FILES, ...readSourceTree("app/modules/settings")]);
 }
 
 export function readCostsModuleSource() {
-  return readSources(COSTS_MODULE_FILES);
+  return readSources([...COSTS_MODULE_FILES, ...readSourceTree("app/modules/costs")]);
 }
 
 export function readLogisticsFeesModuleSource() {
-  return readSources(LOGISTICS_FEES_MODULE_FILES);
+  return readSources([...LOGISTICS_FEES_MODULE_FILES, ...readSourceTree("app/modules/logistics-fees")]);
 }
 
 export function readDomesticLogisticsModuleSource() {
-  return readSources(DOMESTIC_LOGISTICS_MODULE_FILES);
+  return readSources([...DOMESTIC_LOGISTICS_MODULE_FILES, ...readSourceTree("app/modules/domestic-logistics")]);
 }
 
 export function readTaxRefundModuleSource() {
-  return readSources(TAX_REFUND_MODULE_FILES);
+  return readSources([...TAX_REFUND_MODULE_FILES, ...readSourceTree("app/modules/tax-refund")]);
 }
 
-export const readWorkspaceShellSource = () => readSources(WORKSPACE_SHELL_FILES);
+export const readWorkspaceShellSource = () => readSources([...WORKSPACE_SHELL_FILES, ...readSourceTree("app/workspace")]);
 export const readComponentsSource = () => readSources(COMPONENT_FILES);
-export const readReportsModuleSource = () => readSources(REPORTS_MODULE_FILES);
+export const readReportsModuleSource = () => readSources([...REPORTS_MODULE_FILES, ...readSourceTree("app/modules/reports")]);
 export const readCustomerCommunicationModuleSource = () => readSources(CUSTOMER_COMMUNICATION_MODULE_FILES);
 export const readCustomerCommunicationServiceSource = () => readSources(CUSTOMER_COMMUNICATION_SERVICE_FILES);
 export const readShippingDocumentsSource = () => readSources(SHIPPING_DOCUMENTS_FILES);
-export const readSupplierDocumentsModuleSource = () => readSources(SUPPLIER_DOCUMENTS_MODULE_FILES);
+export const readSupplierDocumentsModuleSource = () => readSources([...SUPPLIER_DOCUMENTS_MODULE_FILES, ...readSourceTree("app/modules/supplier-documents")]);
+export const readSupplierDocumentRequestListSource = () => readSources([
+  "lib/platform/supplier-document-request-list.ts",
+  "lib/platform/supplier-document-request-serialization.ts",
+  "lib/platform/supplier-document-request-types.ts",
+]);
 export const readSharedConstantsSource = () => readSources(SHARED_CONSTANTS_FILES);
 export const readSharedUsersSource = () => readSources(SHARED_USERS_FILES);
 export const readSharedAuthSource = () => readSources(SHARED_AUTH_FILES);
 export const readSharedBaseUtilsSource = () => readSources(SHARED_BASE_UTILS_FILES);
 export const readSharedSerializationSource = () => readSources(SHARED_SERIALIZATION_FILES);
-export const readCostRecordsQueriesSource = () => readSources(COST_RECORDS_QUERY_FILES);
-export const readCostRecordsMutationsSource = () => readSources(COST_RECORDS_MUTATION_FILES);
-export const readOrderDocumentsSource = () => readSources(ORDER_DOCUMENTS_FILES);
-export const readTaxRefundsSource = () => readSources(TAX_REFUNDS_FILES);
-export const readOcrIntegrationSource = () => readSources(OCR_INTEGRATION_FILES);
-export const readCustomsDeclarationParserSource = () => readSources(CUSTOMS_DECLARATION_PARSER_FILES);
-export const readSupplierDocumentRequestsSource = () => readSources(SUPPLIER_DOCUMENT_REQUEST_FILES);
+export const readCostRecordsQueriesSource = () => readSources([...COST_RECORDS_QUERY_FILES, ...readSourcePrefix("lib/platform", ["cost-records-query", "cost-records-invoice-groups", "cost-records-order-summaries"])]);
+export const readCostRecordsMutationsSource = () => readSources([...COST_RECORDS_MUTATION_FILES, ...readSourcePrefix("lib/platform", ["cost-records-mutation", "cost-records-supplier-mutations", "cost-records-payment-mutations", "cost-records-logistics-mutations"])]);
+export const readOrderDocumentsSource = () => readSources([...ORDER_DOCUMENTS_FILES, ...readSourcePrefix("lib/platform", ["order-documents"])]);
+export const readTaxRefundsSource = () => readSources([...TAX_REFUNDS_FILES, ...readSourcePrefix("lib/platform", ["tax-refunds"])]);
+export const readOcrIntegrationSource = () => readSources([...OCR_INTEGRATION_FILES, ...readSourcePrefix("lib/platform", ["ocr-integration"])]);
+export const readCustomsDeclarationParserSource = () => readSources([...CUSTOMS_DECLARATION_PARSER_FILES, ...readSourcePrefix("lib", ["customs-declaration", "customs-pdf"])]);
+export const readSupplierDocumentRequestsSource = () => readSources([...SUPPLIER_DOCUMENT_REQUEST_FILES, ...readSourcePrefix("lib/platform", ["supplier-document-request"])]);
 export const readNotificationEngineSource = () => readSources(NOTIFICATION_ENGINE_FILES);
-export const readWorkbenchTodosSource = () => readSources(WORKBENCH_TODOS_FILES);
-export const readLogisticsExpenseWorkflowSource = () => readSources(LOGISTICS_EXPENSE_WORKFLOW_FILES);
-export const readLogisticsExpenseAccessSource = () => readSources(LOGISTICS_EXPENSE_ACCESS_FILES);
-export const readSharedTaxCompletenessSource = () => readSources(SHARED_TAX_COMPLETENESS_FILES);
-export const readSupplierDocumentOcrSource = () => readSources(SUPPLIER_DOCUMENT_OCR_FILES);
-export const readShipsgoTrackingSource = () => readSources(SHIPSGO_TRACKING_FILES);
+export const readWorkbenchTodosSource = () => readSources([...WORKBENCH_TODOS_FILES, ...readSourcePrefix("lib/platform", ["workbench"])]);
+export const readLogisticsExpenseWorkflowSource = () => readSources([...LOGISTICS_EXPENSE_WORKFLOW_FILES, ...readSourcePrefix("lib/platform", ["logistics-expense-workflow", "logistics-expense-invoice-notifications"])]);
+export const readLogisticsExpenseAccessSource = () => readSources([...LOGISTICS_EXPENSE_ACCESS_FILES, ...readSourcePrefix("lib/platform", ["logistics-expense-access"])]);
+export const readLogisticsExpenseInvoiceSource = () => readSources(["lib/platform/logistics-expense-invoice.ts", ...readSourcePrefix("lib/platform", ["logistics-expense-invoice"])]);
+export const readSharedTaxCompletenessSource = () => readSources([...SHARED_TAX_COMPLETENESS_FILES, ...readSourcePrefix("lib/platform", ["shared-tax-completeness", "shared-tax-logistics-invoices", "shared-tax-supplier-documents"])]);
+export const readSupplierDocumentOcrSource = () => readSources([...SUPPLIER_DOCUMENT_OCR_FILES, ...readSourcePrefix("lib/platform", ["supplier-document-ocr", "supplier-vat-invoice", "supplier-purchase-contract"])]);
+export const readShipsgoTrackingSource = () => readSources([...SHIPSGO_TRACKING_FILES, ...readSourcePrefix("lib/platform", ["shipsgo"])]);
 export const readReportServiceSource = () => readSources(REPORT_SERVICE_FILES);
 export const readDomesticLogisticsOpsSource = () => readSources(DOMESTIC_LOGISTICS_OPS_FILES);
 export const readDomesticLogisticsApiSource = () => readSources(DOMESTIC_LOGISTICS_API_FILES);
-export const readPaymentsModuleSource = () => readSources(PAYMENTS_MODULE_FILES);
-export const readOrdersServiceSource = () => readSources(ORDERS_SERVICE_FILES);
+export const readPaymentsModuleSource = () => readSources([...PAYMENTS_MODULE_FILES, ...readSourceTree("app/modules/payments")]);
+export const readOrdersServiceSource = () => readSources([...ORDERS_SERVICE_FILES, ...readSourcePrefix("lib/platform", ["orders-module", "order-receivable", "order-salesperson", "orders-payments"])]);
+export const readPaymentsServiceSource = () => readSources(["lib/platform/payments-module.ts"]);
+export const readOrdersModuleSource = () => readSources(["app/modules/OrdersModule.tsx", ...readSourceTree("app/modules/orders")]);
+export const readProfitModuleSource = () => readSources(["app/modules/ProfitModule.tsx", ...readSourceTree("app/modules/profit")]);
+export const readDashboardModuleSource = () => readSources(["app/modules/DashboardModule.tsx", ...readSourceTree("app/modules/dashboard")]);
+export const readAccountSettingsSource = () => readSources(["app/AccountSettings.tsx", ...readSourceTree("app/account-settings")]);
+export const readSharedOrderSerializationSource = () => readSources([
+  "lib/platform/shared-order-serialization-types.ts",
+  "lib/platform/shared-order-list-serialization.ts",
+  "lib/platform/shared-order-detail-serialization.ts",
+  "lib/platform/shared-order-shipping-documents.ts",
+  "lib/platform/shared-order-serialization-impl.ts",
+]);
 
 export function readWorkspaceStylesSource() {
   const shardDir = "app/styles/workspace-shell";

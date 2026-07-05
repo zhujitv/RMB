@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { readCostRecordsMutationsSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsFeesModuleSource, readOrderDocumentsSource, readSharedBaseUtilsSource, readSharedUsersSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readCostRecordsMutationsSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsExpenseInvoiceSource, readLogisticsFeesModuleSource, readOrderDocumentsSource, readOrdersServiceSource, readPaymentsServiceSource, readSharedBaseUtilsSource, readSharedUsersSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 export const nextConfig = readFileSync("next.config.mjs", "utf8");
 export const proxy = readFileSync("proxy.ts", "utf8");
@@ -29,12 +29,9 @@ export const orderDocumentsRoute = readFileSync(
   "utf8",
 );
 export const orderDocumentsService = readOrderDocumentsSource();
-export const logisticsInvoiceService = readFileSync(
-  "lib/platform/logistics-expense-invoice.ts",
-  "utf8",
-);
-export const ordersModule = readFileSync("lib/platform/orders-module.ts", "utf8");
-export const paymentsModule = readFileSync("lib/platform/payments-module.ts", "utf8");
+export const logisticsInvoiceService = readLogisticsExpenseInvoiceSource();
+export const ordersModule = readOrdersServiceSource();
+export const paymentsModule = readPaymentsServiceSource();
 export const costsModule = readCostRecordsMutationsSource();
 export const loginRoute = readFileSync("app/api/auth/login/route.ts", "utf8");
 export const registerRoute = readFileSync("app/api/auth/register/route.ts", "utf8");

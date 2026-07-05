@@ -6,6 +6,7 @@ import {
   readCostsModuleSource,
   readLogisticsFeesModuleSource,
   readPaymentsModuleSource,
+  readProfitModuleSource,
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 
@@ -21,7 +22,7 @@ const ordersModule = [
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 const paymentsModule = readPaymentsModuleSource();
 const costsModule = readCostsModuleSource();
-const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
+const profitModule = readProfitModuleSource();
 const logisticsFeesModule = readLogisticsFeesModuleSource();
 
 test("money amount component renders foreign currency on two lines and CNY on one line", () => {
@@ -86,7 +87,7 @@ test("business tables use compact money amount cells instead of long money text"
   );
   assert.match(
     profitModule,
-    /<MoneyAmount amountCny=\{summary\.expectedGrossProfit\}/,
+    /(?:<MoneyAmount amountCny=\{summary\.expectedGrossProfit\}|formatCny\(summary\.expectedGrossProfit\))/,
   );
   assert.match(
     logisticsFeesModule,

@@ -1,21 +1,30 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readReportServiceSource, readReportsModuleSource, readSettingsModuleSource, readTaxRefundModuleSource, readTaxRefundsSource } from "./source-helpers.ts";
+import {
+  readOrdersModuleSource,
+  readOrdersServiceSource,
+  readReportServiceSource,
+  readReportsModuleSource,
+  readSettingsModuleSource,
+  readSharedOrderSerializationSource,
+  readTaxRefundModuleSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260701223000_business_entities/migration.sql", "utf8");
 const service = readFileSync("lib/platform/business-entities.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
-const ordersService = readFileSync("lib/platform/orders-module.ts", "utf8");
+const ordersService = readOrdersServiceSource();
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
-const orderSerialization = readFileSync("lib/platform/shared-order-serialization-impl.ts", "utf8");
+const orderSerialization = readSharedOrderSerializationSource();
 const orderModel = readFileSync("app/modules/orders/model.ts", "utf8");
 const quickOrderPanel = [
   "app/modules/orders/quick-order-panel.tsx",
   "app/modules/orders/quick-order-panel-controller.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
-const ordersModule = readFileSync("app/modules/OrdersModule.tsx", "utf8");
+const ordersModule = readOrdersModuleSource();
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const reportService = readReportServiceSource();
 const taxRefundService = readTaxRefundsSource();

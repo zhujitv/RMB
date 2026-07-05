@@ -90,7 +90,7 @@ test("logistics expense bill details can add create and delete rows through one 
   assert.match(logisticsExpenseBatchSaveRoute, /message: "✓ 已保存"/);
   assert.match(backend, /export async function batchSaveLogisticsExpenses/);
   assert.match(backend, /item\.currency \|\| logisticsCostTypeDefaultCurrency\(costType\)/);
-  assert.match(backend, /resolveLogisticsExpenseBatchExchange\(\s*costType,\s*item,\s*baseExpense,\s*actor,\s*currency,\s*index,\s*\)/);
+  assert.match(backend, /resolveLogisticsExpenseBatchExchange\(\s*costType,\s*item,\s*baseExpense,\s*actor,\s*currency,\s*index,?\s*\)/);
   assert.match(backend, /LOGISTICS_EXPENSE_CURRENCIES\.includes\(currency\)/);
   assert.doesNotMatch(backend, /logisticsCostTypeDefaultCurrency\(costType\) === "USD"[\s\S]*\? "USD"/);
   assert.match(backend, /const updates = Array\.isArray\(input\.updates\)/);

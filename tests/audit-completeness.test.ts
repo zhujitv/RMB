@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   readCostRecordsMutationsSource,
+  readDomesticLogisticsApiSource,
   readLogisticsExpenseWorkflowSource,
   readOrderDocumentsSource,
+  readOrdersServiceSource,
+  readPaymentsServiceSource,
   readSharedAuthSource,
   readSharedUsersSource,
   readShipsgoTrackingSource,
@@ -31,12 +34,12 @@ const sharedAuth = readSharedAuthSource();
 const loginRoute = source("app/api/auth/login/route.ts");
 const verifyEmailRoute = source("app/api/auth/verify-email/route.ts");
 const sharedUsers = readSharedUsersSource();
-const orders = source("lib/platform/orders-module.ts");
-const payments = source("lib/platform/payments-module.ts");
+const orders = readOrdersServiceSource();
+const payments = readPaymentsServiceSource();
 const costs = readCostRecordsMutationsSource();
 const orderDocuments = readOrderDocumentsSource();
 const taxRefunds = readTaxRefundsSource();
-const domesticLogistics = source("lib/platform/domestic-logistics-api.ts");
+const domesticLogistics = readDomesticLogisticsApiSource();
 const logisticsWorkflow = readLogisticsExpenseWorkflowSource();
 const supplierDocuments = readSupplierDocumentRequestsSource();
 const shipsgoTracking = readShipsgoTrackingSource();

@@ -1,4 +1,4 @@
-import { INVOICE_FIELD_ALIASES } from "./aliyun-invoice-ocr-fields";
+import { INVOICE_FIELD_ALIASES } from "./aliyun-invoice-ocr-fields.ts";
 import {
   collectText,
   detailRowsFromPayload,
@@ -12,7 +12,7 @@ import {
   responseField,
   valueByAliasesFromPairs,
   valueByAliasesFromRecord,
-} from "./aliyun-invoice-ocr-helpers";
+} from "./aliyun-invoice-ocr-helpers.ts";
 
 export function extractAliyunInvoiceRecognitionData(responseBody: unknown) {
   const data = parseJsonMaybe(responseField(responseBody, "data"));

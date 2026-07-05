@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostRecordsMutationsSource, readOrderDocumentsSource, readSupplierDocumentRequestsSource } from "./source-helpers.ts";
+import { readCostRecordsMutationsSource, readLogisticsExpenseInvoiceSource, readLogisticsExpenseWorkflowSource, readOrderDocumentsSource, readSupplierDocumentRequestsSource } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync(
@@ -12,17 +12,8 @@ const fileAssets = readFileSync("lib/platform/file-assets.ts", "utf8");
 const orderDocuments = readOrderDocumentsSource();
 const costs = readCostRecordsMutationsSource();
 const supplierDocuments = readSupplierDocumentRequestsSource();
-const logisticsInvoice = readFileSync(
-  "lib/platform/logistics-expense-invoice.ts",
-  "utf8",
-);
-const logisticsWorkflow = [
-  "lib/platform/logistics-expense-workflow.ts",
-  "lib/platform/logistics-expense-workflow-core.ts",
-  "lib/platform/logistics-expense-workflow-review.ts",
-  "lib/platform/logistics-expense-workflow-mutations.ts",
-  "lib/platform/logistics-expense-workflow-invoice.ts",
-].map((path) => readFileSync(path, "utf8")).join("\n");
+const logisticsInvoice = readLogisticsExpenseInvoiceSource();
+const logisticsWorkflow = readLogisticsExpenseWorkflowSource();
 
 test("file asset schema stores shared metadata and explicit business bindings", () => {
   assert.match(schema, /model FileAsset \{/);

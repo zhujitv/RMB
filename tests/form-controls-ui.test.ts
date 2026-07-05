@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readComponentsSource, readReportsModuleSource, readSettingsModuleSource, readSharedUsersSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
+import { readAccountSettingsSource, readComponentsSource, readReportsModuleSource, readSettingsModuleSource, readSharedUsersSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const components = readComponentsSource();
-const accountSettings = readFileSync("app/AccountSettings.tsx", "utf8");
+const accountSettings = readAccountSettingsSource();
 const settingsModule = readSettingsModuleSource();
 const settingsModuleMain = settingsModule;
 const sharedUsers = readSharedUsersSource();
