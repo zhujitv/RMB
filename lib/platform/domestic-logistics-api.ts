@@ -36,7 +36,7 @@ import {
   isExternalLogisticsSupplierAccount,
   isInternalLogisticsOperator,
 } from "./masters-access";
-import { orderAccessWhere } from "./order-access";
+import { canAccessOrder, orderAccessWhere } from "./order-access";
 
 type DomesticLogisticsInput = Record<string, unknown>;
 type DomesticLogisticsQuery = {
@@ -255,6 +255,15 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
     ? await prisma.domesticLogisticsInfo.findFirst({ where: { id, deletedAt: null }, select: domesticLogisticsSelectWithOrder() })
     : ((order.domesticLogisticsInfos || [])[0] || null);
   if (id && !before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
+  if (id && before) {
+    if (before.orderId !== order.id) {
+      throw codedError("物流信息与当前订单不匹配，禁止跨订单修改。", 409, "DOMESTIC_LOGISTICS_ORDER_MISMATCH");
+    }
+    const beforeOrder = "order" in before ? before.order : order;
+    if (!canAccessDomesticLogisticsOrder(currentActor, beforeOrder)) {
+      throw codedError("无权限修改该订单物流信息", 403, "PERMISSION_DENIED");
+    }
+  }
   const requestedTransportType = String(body.transportType || "");
   const transportType = DOMESTIC_LOGISTICS_TRANSPORT_TYPES.includes(requestedTransportType) ? requestedTransportType : "TRUCK";
   const transportItems = normalizeDomesticTransportItems(body, transportType);
@@ -345,6 +354,9 @@ export async function requestDomesticLogisticsCorrection(request: AuditRequestLi
   });
   if (!before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
   if (!assertCorrectionPermission(actor)) {
+    throw codedError("无权限申请更正该物流信息。", 403, "PERMISSION_DENIED");
+  }
+  if (!canAccessDomesticLogisticsOrder(actor, before.order) && !canAccessOrder(actor, before.order)) {
     throw codedError("无权限申请更正该物流信息。", 403, "PERMISSION_DENIED");
   }
   const row = await prisma.domesticLogisticsInfo.update({

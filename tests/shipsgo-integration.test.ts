@@ -266,6 +266,11 @@ test("ShipsGo ocean control tower is read-only and does not create tracking", ()
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /shipsgoShipmentId: \{ not: null \}/);
   const controlTowerService = shipsgoControlTowerService.match(/export async function listShipsgoControlTowerTrackings[\s\S]*$/)?.[0] || "";
+  assert.match(shipsgoControlTowerService, /function controlTowerOrderAccessWhere/);
+  assert.match(shipsgoControlTowerService, /orderSalespersonOwnershipWhere/);
+  assert.match(shipsgoControlTowerService, /logisticsSuppliers: \{ some: \{ supplierId: actor\.supplierId \} \}/);
+  assert.match(controlTowerService, /const orderAccessWhere = controlTowerOrderAccessWhere\(actor\);/);
+  assert.match(controlTowerService, /order: \{ is: orderAccessWhere \}/);
   assert.match(controlTowerService, /canAccessDomesticLogisticsOrder\(actor, row\.order\)/);
   assert.doesNotMatch(controlTowerService, /供应商账号不可查看运输监控/);
   assert.match(trackingService, /trackingSignalExists\(row\)/);

@@ -117,6 +117,7 @@ export function orderArchiveWhereForScope(scope = "current"): Prisma.ReceivableO
 
 export function orderLogisticsArchiveWhereForScope(scope = "current"): Prisma.ReceivableOrderWhereInput {
   if (scope === "archive") return { isArchived: true };
+  if (scope === "all") return {};
   return { isArchived: false };
 }
 

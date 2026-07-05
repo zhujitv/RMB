@@ -42,7 +42,6 @@ export function useDomesticLogisticsActions({
   selectedArchivableRows,
   selectedRows,
   selectedOrderIds,
-  submittedKeyword,
   businessScope,
   setRows,
   setSelectedOrderIds,
@@ -94,8 +93,14 @@ export function useDomesticLogisticsActions({
         body: JSON.stringify({ orderIds: selectedOrderIds }),
       });
       if (result.success !== true) throw new Error(result.message || "批量归档失败");
-      setSelectedOrderIds([]);
-      await loadRows(submittedKeyword, businessScope);
+      const archivedIds = new Set(result.archivedIds || selectedArchivableRows.map((row) => row.id));
+      setRows((currentRows) => {
+        if (businessScope === "current") return currentRows.filter((row) => !archivedIds.has(row.id));
+        return currentRows.map((row) => (
+          archivedIds.has(row.id) ? { ...row, isArchived: true } : row
+        ));
+      });
+      setSelectedOrderIds((currentIds) => currentIds.filter((id) => !archivedIds.has(id)));
       setNotice(result.message || `已归档 ${result.archivedCount || 0} 个订单`);
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : "批量归档失败");
@@ -197,7 +202,16 @@ export function useDomesticLogisticsActions({
       if (result.success !== true) throw new Error(result.message || "删除物流信息失败");
       setExpandedId("");
       setEditingOrderId("");
-      await loadRows(submittedKeyword, businessScope);
+      setRows((currentRows) => currentRows.map((currentRow) => {
+        if (currentRow.id !== row.id && currentRow.orderId !== row.orderId) return currentRow;
+        return {
+          ...currentRow,
+          domesticLogisticsInfo: null,
+          logisticsStatus: "未录入",
+          submittedAt: null,
+          archiveEligible: false,
+        };
+      }));
       setNotice(result.message || "物流信息已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除物流信息失败");

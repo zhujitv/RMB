@@ -182,8 +182,8 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.match(prismaSchema, /@@index\(\[isArchived\]\)/);
   assert.match(domesticLogisticsOps, /orderLogisticsArchiveWhereForScope/);
   assert.match(domesticLogisticsOps, /if \(scope === "archive"\) return \{ isArchived: true \};/);
+  assert.match(domesticLogisticsOps, /if \(scope === "all"\) return \{\};/);
   assert.match(domesticLogisticsOps, /return \{ isArchived: false \};/);
-  assert.doesNotMatch(domesticLogisticsOps.match(/function orderLogisticsArchiveWhereForScope[\s\S]*?\n}/)?.[0] || "", /return \{\};/);
   assert.doesNotMatch(moduleSource.match(/const ARCHIVE_SCOPE_OPTIONS = \[[\s\S]*?\];/)?.[0] || "", /全部业务|value: "all"/);
   assert.match(domesticLogisticsApi, /orderLogisticsArchiveWhereForScope\(filters\.businessScope\)/);
   assert.match(domesticLogisticsApi, /archiveDomesticLogisticsOrders/);
@@ -204,6 +204,21 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.match(moduleSource, /PAYLOAD_ARCHIVE_ENDPOINT/);
   assert.match(moduleSource, /selectedArchivableRows/);
   assert.match(moduleSource, /UiCheckbox/);
+});
+
+test("domestic logistics mutations enforce row-level order access", () => {
+  const saveFunction = domesticLogisticsApi.match(/export async function saveDomesticLogisticsInfo[\s\S]*?export async function deleteDomesticLogisticsInfo/)?.[0] || "";
+  assert.match(saveFunction, /before\.orderId !== order\.id/);
+  assert.match(saveFunction, /DOMESTIC_LOGISTICS_ORDER_MISMATCH/);
+  assert.match(saveFunction, /const beforeOrder = "order" in before \? before\.order : order;/);
+  assert.match(saveFunction, /canAccessDomesticLogisticsOrder\(currentActor, beforeOrder\)/);
+  assert.doesNotMatch(saveFunction, /orderId:\s*order\.id[\s\S]*where:\s*\{\s*id:\s*before\.id\s*\}[\s\S]*before\.orderId !== order\.id/);
+
+  const correctionFunction = domesticLogisticsApi.match(/export async function requestDomesticLogisticsCorrection[\s\S]*?function assertCorrectionPermission/)?.[0] || "";
+  assert.match(correctionFunction, /assertCorrectionPermission\(actor\)/);
+  assert.match(correctionFunction, /canAccessDomesticLogisticsOrder\(actor, before\.order\)/);
+  assert.match(correctionFunction, /canAccessOrder\(actor, before\.order\)/);
+  assert.match(correctionFunction, /PERMISSION_DENIED/);
 });
 
 test("domestic logistics list sorts by unified numeric progress score", () => {

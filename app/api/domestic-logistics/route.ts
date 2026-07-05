@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   apiError,
   listDomesticLogisticsOrders,
-  logServerError,
   ok,
   parseJsonBody,
   readShipsgoFeatureFlags,
@@ -28,8 +27,7 @@ export async function GET(request: NextRequest) {
     ]);
     return ok({ rows, shipsgo });
   } catch (error: unknown) {
-    logServerError("API failed: domestic-logistics list", error);
-    return ok({ rows: [], error: "读取资料失败" });
+    return apiError(error, "读取物流信息失败");
   }
 }
 

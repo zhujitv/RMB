@@ -1,7 +1,13 @@
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import { assertRead } from "./shared-auth";
 import { nonEmpty } from "./shared-base-utils";
-import { canAccessDomesticLogisticsOrder } from "./masters-access";
+import {
+  canAccessDomesticLogisticsOrder,
+  isExternalLogisticsSupplierAccount,
+  isInternalLogisticsOperator,
+} from "./masters-access";
+import { orderSalespersonOwnershipWhere } from "./order-access";
 import { serializeShipsgoTracking, type ShipsgoTrackingDto } from "./shipsgo-tracking-mapping";
 import { cleanInputText, OCEAN_MODE, SHIPSGO_PROVIDER, type ShipsgoActor, type ShipsgoQueryLike } from "./shipsgo-tracking-utils";
 
@@ -32,6 +38,18 @@ function startOfTodayMs(now = new Date()) {
   const date = new Date(now);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
+}
+
+function controlTowerOrderAccessWhere(actor: ShipsgoActor): Prisma.ReceivableOrderWhereInput {
+  const role = nonEmpty(actor?.role);
+  if (["管理员", "财务"].includes(role) || isInternalLogisticsOperator(actor)) return {};
+  if (isExternalLogisticsSupplierAccount(actor)) {
+    return actor.supplierId
+      ? { logisticsSuppliers: { some: { supplierId: actor.supplierId } } }
+      : { id: "__no_tracking_access__" };
+  }
+  if (role === "业务员") return orderSalespersonOwnershipWhere(nonEmpty(actor?.id));
+  return { id: "__no_tracking_access__" };
 }
 
 function isShipsgoCompletedStatus(value: unknown) {
@@ -180,12 +198,14 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
 export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, actor: ShipsgoActor) {
   assertRead(actor, "domesticLogistics");
   const includeCompleted = boolQueryValue(query, "includeCompleted") === true;
+  const orderAccessWhere = controlTowerOrderAccessWhere(actor);
   const rows = await prisma.shipsgoTracking.findMany({
     where: {
       provider: SHIPSGO_PROVIDER,
       mode: OCEAN_MODE,
       deletedAt: null,
       shipsgoShipmentId: { not: null },
+      order: { is: orderAccessWhere },
     },
     include: {
       containers: {

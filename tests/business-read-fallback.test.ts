@@ -13,14 +13,16 @@ const domesticOps = readDomesticLogisticsOpsSource();
 const sharedOrderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260627003000_structured_export_invoice_remark/migration.sql", "utf8");
 
-test("core business read APIs return empty list payloads when database list queries fail", () => {
-  for (const routeSource of [taxRoute, logisticsRoute, profitRoute]) {
+test("core business read APIs either fallback safely or surface structured list errors", () => {
+  for (const routeSource of [taxRoute, profitRoute]) {
     assert.match(routeSource, /logServerError\("API failed:/);
     assert.match(routeSource, /error: "读取资料失败"/);
     assert.match(routeSource, /return ok\(/);
   }
+  assert.doesNotMatch(logisticsRoute, /logServerError\("API failed: domestic-logistics list"/);
+  assert.match(logisticsRoute, /return apiError\(error, "读取物流信息失败"\)/);
   assert.match(taxRoute, /orders: \[\]/);
-  assert.match(logisticsRoute, /rows: \[\]/);
+  assert.doesNotMatch(logisticsRoute, /rows: \[\]/);
   assert.match(profitRoute, /data: \{ rows: \[\], total: 0/);
 });
 
