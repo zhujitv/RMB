@@ -163,6 +163,10 @@ export type ShipsgoFeatureFlags = {
 
 export type DomesticLogisticsResponse = {
   rows: DomesticLogisticsRow[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
   error?: string;
   shipsgo?: ShipsgoFeatureFlags;
 };

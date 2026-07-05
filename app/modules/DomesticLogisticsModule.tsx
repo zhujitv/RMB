@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { useConfirmationDialog } from "../components";
 import type { PermissionSnapshot, User } from "../types";
@@ -39,6 +39,8 @@ export function DomesticLogisticsModule({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [businessScope, setBusinessScope] = useState("current");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,6 +53,7 @@ export function DomesticLogisticsModule({
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [shipsgoBusyKey, setShipsgoBusyKey] = useState("");
+  const listRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -71,31 +74,42 @@ export function DomesticLogisticsModule({
   const canDeleteShipsgoTracking = currentUser.role === "管理员"
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
 
-  async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope) {
+  async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope, nextPage = page) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ businessScope: nextBusinessScope });
+      const params = new URLSearchParams({
+        businessScope: nextBusinessScope,
+        page: String(nextPage),
+        pageSize: String(PAGE_SIZE),
+      });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<DomesticLogisticsResponse>(`/api/domestic-logistics?${params}`);
+      if (requestId !== listRequestRef.current) return [];
       const nextRows = sanitizeDomesticLogisticsRowsForRender(Array.isArray(result.rows) ? result.rows : []);
       setRows(nextRows);
+      setTotal(Number(result.total || 0));
+      setPage(Number(result.page || nextPage));
+      setTotalPages(Math.max(1, Number(result.totalPages || 1)));
       setShipsgoFeatures(result.shipsgo || { enabled: false });
       setSelectedOrderIds((current) => current.filter((orderId) => nextRows.some((row) => row.id === orderId)));
       if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取物流信息失败");
+      if (requestId === listRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "读取物流信息失败");
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     const value = initialKeyword.trim();
     if (value) return;
-    void loadRows("");
+    void loadRows("", businessScope, 1);
   }, []);
 
   useEffect(() => {
@@ -111,7 +125,7 @@ export function DomesticLogisticsModule({
     setExpandedId("");
     setEditingOrderId("");
     setNotice("");
-    void loadRows(value, businessScope).then((nextRows) => {
+    void loadRows(value, businessScope, 1).then((nextRows) => {
       const matched = nextRows.find((row) => (
         row.orderNo === value
         || row.blNo === value
@@ -134,16 +148,12 @@ export function DomesticLogisticsModule({
       setExpandedId("");
       setEditingOrderId("");
       setNotice("");
-      void loadRows(value, businessScope);
+      void loadRows(value, businessScope, 1);
     }, 300);
     return () => window.clearTimeout(timer);
   }, [keyword, submittedKeyword, businessScope]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const pageRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return rows.slice(start, start + PAGE_SIZE);
-  }, [rows, page]);
+  const pageRows = rows;
   const selectedRows = useMemo(() => rows.filter((row) => selectedOrderIds.includes(row.id)), [rows, selectedOrderIds]);
   const selectedArchivableRows = useMemo(() => selectedRows.filter(domesticLogisticsCanArchive), [selectedRows]);
   const pageArchivableRows = useMemo(() => pageRows.filter(domesticLogisticsCanArchive), [pageRows]);
@@ -159,7 +169,7 @@ export function DomesticLogisticsModule({
     setEditingOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
-    void loadRows(value, businessScope);
+    void loadRows(value, businessScope, 1);
   }
 
   function resetSearch() {
@@ -171,7 +181,7 @@ export function DomesticLogisticsModule({
     setEditingOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
-    void loadRows("", "current");
+    void loadRows("", "current", 1);
   }
 
   function changeBusinessScope(nextBusinessScope: string) {
@@ -181,7 +191,15 @@ export function DomesticLogisticsModule({
     setEditingOrderId("");
     setSelectedOrderIds([]);
     setNotice("");
-    void loadRows(submittedKeyword, nextBusinessScope);
+    void loadRows(submittedKeyword, nextBusinessScope, 1);
+  }
+
+  function gotoPage(nextPage: number) {
+    setExpandedId("");
+    setEditingOrderId("");
+    setSelectedOrderIds([]);
+    setNotice("");
+    void loadRows(submittedKeyword, businessScope, nextPage);
   }
 
   function openLogisticsExpenseStatus(row: DomesticLogisticsRow) {
@@ -276,7 +294,7 @@ export function DomesticLogisticsModule({
       activeLogisticsView={activeLogisticsView}
       shipsgoFeatures={shipsgoFeatures}
       pageRows={pageRows}
-      rowsLength={rows.length}
+      rowsLength={total}
       selectedOrderIds={selectedOrderIds}
       selectedArchivableRows={selectedArchivableRows}
       pageArchivableRows={pageArchivableRows}
@@ -302,7 +320,7 @@ export function DomesticLogisticsModule({
       confirmation={confirmation}
       setNotice={setNotice}
       setKeyword={setKeyword}
-      setPage={setPage}
+      onPageChange={gotoPage}
       setExpandedId={setExpandedId}
       setEditingOrderId={setEditingOrderId}
       setActiveLogisticsView={setActiveLogisticsView}

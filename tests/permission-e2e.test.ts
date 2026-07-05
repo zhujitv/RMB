@@ -96,7 +96,11 @@ test("E2E permission: logistics supplier only sees assigned logistics work and i
 
   assert.match(mastersAccess, /export function isExternalLogisticsSupplierAccount/);
   assert.match(mastersAccess, /return \(order\?\.logisticsSuppliers \|\| \[\]\)\.some\(\(row\) => row\?\.supplierId === actor\.supplierId\)/);
-  assert.match(domesticLogisticsService, /isExternalLogisticsSupplierAccount\(actor\)[\s\S]*logisticsSuppliers:\s*\{\s*some:\s*\{\s*supplierId\s*\}/);
+  assert.match(domesticLogisticsService, /isExternalLogisticsSupplierAccount\(actor\)[\s\S]*order_logistics_suppliers ols_scope/);
+  assert.match(domesticLogisticsService, /ols_scope\.supplier_id = \$\{nonEmpty\(actor\.supplierId\)\}/);
+  assert.match(domesticLogisticsService, /function domesticLogisticsSupplierStatusSql\(actor[\s\S]*alias: "lb" \| "le"/);
+  assert.match(domesticLogisticsService, /lb\.supplier_id = \$\{supplierId\}/);
+  assert.match(domesticLogisticsService, /le\.supplier_id = \$\{supplierId\}/);
   assert.match(logisticsExpenseQueries, /OR: \[\{ supplierId \}, \{ expenses: \{ some: \{ supplierId, deletedAt: null \} \} \}\]/);
   assert.match(logisticsExpenseAccess, /if \(actor\.supplierId\) return \{ supplierId: actor\.supplierId \}/);
   assert.match(shipsgoTracking, /canAccessDomesticLogisticsOrder\(actor, order\)/);

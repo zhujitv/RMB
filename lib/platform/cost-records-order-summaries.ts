@@ -116,6 +116,7 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
           orderBy: [{ createdAt: "desc" }],
         },
       },
+      take: orderIds.length,
     })
     : [];
   const orderRank = new Map(orderIds.map((id, index) => [id, index]));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, PaginationBar, useConfirmationDialog } from "../components";
 import { formatCny } from "../formatters";
@@ -30,6 +30,7 @@ export function ProfitModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const listRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -40,6 +41,7 @@ export function ProfitModule({
   const canSettleCommission = ["管理员", "财务"].includes(currentUser.role);
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -49,6 +51,7 @@ export function ProfitModule({
       });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const result = await apiJson<ProfitResponse>(`/api/profit?${params}`);
+      if (requestId !== listRequestRef.current) return [];
       const data = result.data || {};
       const nextRows = Array.isArray(data.rows) ? data.rows : [];
       setRows(nextRows);
@@ -58,10 +61,12 @@ export function ProfitModule({
       if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取利润分析失败");
+      if (requestId === listRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "读取利润分析失败");
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
 

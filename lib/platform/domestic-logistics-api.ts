@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_TRANSPORT_TYPES,
   assertJsonObject,
@@ -10,6 +10,7 @@ import {
   logServerError,
   nonEmpty,
   optional,
+  pageParams,
   requireText,
   runNonCriticalTask,
   scheduleTaxRefundCompletenessRefresh,
@@ -25,9 +26,7 @@ import {
   domesticLogisticsSubmitterRole,
   type DomesticLogisticsOrderDto,
   normalizeDomesticTransportItems,
-  orderLogisticsArchiveWhereForScope,
   serializeDomesticLogisticsOrder,
-  sortDomesticLogisticsOrders,
 } from "./domestic-logistics-ops";
 import { buildExportInvoiceRemarkFromTransportItems, formatExportInvoiceRemark } from "./export-invoice-remark";
 import {
@@ -36,7 +35,7 @@ import {
   isExternalLogisticsSupplierAccount,
   isInternalLogisticsOperator,
 } from "./masters-access";
-import { canAccessOrder, orderAccessWhere } from "./order-access";
+import { canAccessOrder } from "./order-access";
 
 type DomesticLogisticsInput = Record<string, unknown>;
 type DomesticLogisticsQuery = {
@@ -59,6 +58,7 @@ type DomesticLogisticsActor = {
   supplierId?: string | null;
 };
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
+const DOMESTIC_LOGISTICS_LIST_PAGE_SIZE_MAX = 20;
 
 function actorRole(actor: DomesticLogisticsActorInput) {
   return String(actor?.role || "");
@@ -80,69 +80,217 @@ function domesticLogisticsListFiltersFromQuery(query: DomesticLogisticsQuery): D
   return { keyword, businessScope };
 }
 
-function domesticLogisticsKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInput {
-  return keyword
-    ? {
-      OR: [
-        { orderNo: { contains: keyword, mode: "insensitive" } },
-        { blNo: { contains: keyword, mode: "insensitive" } },
-        { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
-        { customer: { is: { name: { contains: keyword, mode: "insensitive" } } } },
-        { customer: { is: { shortName: { contains: keyword, mode: "insensitive" } } } },
-        { logisticsSuppliers: { some: { supplier: { is: { supplierName: { contains: keyword, mode: "insensitive" } } } } } },
-        { logisticsSuppliers: { some: { supplier: { is: { supplierType: { contains: keyword, mode: "insensitive" } } } } } },
-        { domesticLogisticsInfos: { some: {
-          deletedAt: null,
-          OR: [
-            { remarkText: { contains: keyword, mode: "insensitive" } },
-	            { transportItems: { some: {
-	              OR: [
-	                { containerNo: { contains: keyword, mode: "insensitive" } },
-	                { containerType: { contains: keyword, mode: "insensitive" } },
-	                { sealNo: { contains: keyword, mode: "insensitive" } },
-	              ],
-	            } } },
-          ],
-        } } },
-      ],
-    }
-    : {};
-}
-
-function domesticLogisticsListWhere(filters: DomesticLogisticsListFilters, actor: DomesticLogisticsActorInput): Prisma.ReceivableOrderWhereInput {
-  const andConditions: Prisma.ReceivableOrderWhereInput[] = [];
-  const keywordWhere = domesticLogisticsKeywordWhere(filters.keyword);
-  if (Object.keys(keywordWhere).length) andConditions.push(keywordWhere);
-  if (actorRole(actor) === "业务员") andConditions.push(orderAccessWhere(actor));
-  if (isExternalLogisticsSupplierAccount(actor)) {
-    const supplierId = nonEmpty(actor?.supplierId);
-    andConditions.push({ logisticsSuppliers: { some: { supplierId } } });
-  } else if (actorRole(actor) === "物流供应商") {
-    andConditions.push({ id: "__no_supplier_bound__" });
-  }
-  if (filters.businessScope === "current") {
-    andConditions.push({ status: { notIn: ["已关闭", "已取消"] } });
-  }
-  return {
-    deletedAt: null,
-    ...orderLogisticsArchiveWhereForScope(filters.businessScope),
-    ...(andConditions.length ? { AND: andConditions } : {}),
-  };
-}
-
 function isShipsgoTrackingSchemaError(error: unknown) {
   const message = String((error as { message?: unknown } | null | undefined)?.message || error || "");
   return /shipsgo_trackings|ShipsgoTracking|shipsgoTrackings/i.test(message)
     && /(does not exist|not exist|relation|table|column|Unknown field|Unknown argument)/i.test(message);
 }
 
-async function findDomesticLogisticsOrdersForList(where: Prisma.ReceivableOrderWhereInput) {
+function domesticLogisticsListSqlWhere(filters: DomesticLogisticsListFilters, actor: DomesticLogisticsActorInput) {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`ro.deleted_at IS NULL`,
+  ];
+  if (filters.businessScope === "archive") {
+    conditions.push(Prisma.sql`ro.is_archived = true`);
+  } else if (filters.businessScope === "current") {
+    conditions.push(Prisma.sql`ro.is_archived = false`);
+    conditions.push(Prisma.sql`ro.status NOT IN ('已关闭', '已取消')`);
+  }
+  if (actorRole(actor) === "业务员") {
+    const currentActorId = nonEmpty(actor?.id);
+    conditions.push(currentActorId
+      ? Prisma.sql`(ro.salesperson_user_id = ${currentActorId} OR (ro.salesperson_user_id IS NULL AND c.salesperson_user_id = ${currentActorId}))`
+      : Prisma.sql`1 = 0`);
+  }
+  if (isExternalLogisticsSupplierAccount(actor)) {
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1
+      FROM order_logistics_suppliers ols_scope
+      WHERE ols_scope.order_id = ro.id
+        AND ols_scope.supplier_id = ${nonEmpty(actor.supplierId)}
+    )`);
+  } else if (actorRole(actor) === "物流供应商") {
+    conditions.push(Prisma.sql`1 = 0`);
+  }
+  if (filters.keyword) {
+    const keyword = `%${filters.keyword}%`;
+    conditions.push(Prisma.sql`(
+      ro.order_no ILIKE ${keyword}
+      OR ro.bl_no ILIKE ${keyword}
+      OR ro.customer_name_snapshot ILIKE ${keyword}
+      OR c.name ILIKE ${keyword}
+      OR c.short_name ILIKE ${keyword}
+      OR EXISTS (
+        SELECT 1
+        FROM order_logistics_suppliers ols_keyword
+        JOIN suppliers s_keyword ON s_keyword.id = ols_keyword.supplier_id
+        WHERE ols_keyword.order_id = ro.id
+          AND (
+            s_keyword.supplier_name ILIKE ${keyword}
+            OR s_keyword.supplier_type ILIKE ${keyword}
+          )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM domestic_logistics_infos dli_keyword
+        LEFT JOIN domestic_logistics_transport_items dti_keyword
+          ON dti_keyword.logistics_info_id = dli_keyword.id
+        WHERE dli_keyword.order_id = ro.id
+          AND dli_keyword.deleted_at IS NULL
+          AND (
+            dli_keyword.remark_text ILIKE ${keyword}
+            OR dti_keyword.container_no ILIKE ${keyword}
+            OR dti_keyword.container_type ILIKE ${keyword}
+            OR dti_keyword.seal_no ILIKE ${keyword}
+          )
+      )
+    )`);
+  }
+  return Prisma.sql`${Prisma.join(conditions, " AND ")}`;
+}
+
+function domesticLogisticsSupplierStatusSql(actor: DomesticLogisticsActorInput, alias: "lb" | "le") {
+  if (!isExternalLogisticsSupplierAccount(actor)) return Prisma.empty;
+  const supplierId = nonEmpty(actor.supplierId);
+  return alias === "lb"
+    ? Prisma.sql`AND lb.supplier_id = ${supplierId}`
+    : Prisma.sql`AND le.supplier_id = ${supplierId}`;
+}
+
+async function findDomesticLogisticsPageOrderIds(
+  filters: DomesticLogisticsListFilters,
+  actor: DomesticLogisticsActorInput,
+  page: number,
+  pageSize: number,
+) {
+  const whereSql = domesticLogisticsListSqlWhere(filters, actor);
+  const offset = (page - 1) * pageSize;
+  const billSupplierSql = domesticLogisticsSupplierStatusSql(actor, "lb");
+  const expenseSupplierSql = domesticLogisticsSupplierStatusSql(actor, "le");
+  const totalRows = await prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+    SELECT COUNT(*)::int AS total
+    FROM receivable_orders ro
+    JOIN customers c ON c.id = ro.customer_id
+    WHERE ${whereSql}
+  `);
+  const total = Number(totalRows[0]?.total || 0);
+  if (!total) return { orderIds: [], total };
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT ro.id
+    FROM receivable_orders ro
+    JOIN customers c ON c.id = ro.customer_id
+    LEFT JOIN LATERAL (
+      SELECT dli.remark_text
+      FROM domestic_logistics_infos dli
+      WHERE dli.order_id = ro.id
+        AND dli.deleted_at IS NULL
+      ORDER BY dli.updated_at DESC
+      LIMIT 1
+    ) latest_logistics ON true
+    LEFT JOIN LATERAL (
+      SELECT ranked_bill.status
+      FROM (
+        SELECT
+          CASE
+            WHEN lb.audit_status IN ('未通知', '已通知开票', '通知失败', '待开票 / 通知失败', '部分未通知', '部分已通知', '部分上传发票', '部分上传', '部分已上传', '部分已确认') THEN '待开票'
+            WHEN lb.audit_status IN ('已上传', '已上传发票') THEN '已上传发票'
+            WHEN lb.audit_status = '部分已付款' THEN '部分付款'
+            WHEN lb.audit_status = '部分待付款' THEN '待付款'
+            ELSE lb.audit_status
+          END AS status,
+          COALESCE(lb.updated_at, lb.created_at) AS status_updated_at,
+          CASE
+            WHEN lb.audit_status = '已驳回' THEN 10
+            WHEN lb.audit_status = '草稿' THEN 20
+            WHEN lb.audit_status = '待审核' THEN 30
+            WHEN lb.audit_status IN ('待开票', '未通知', '已通知开票', '通知失败', '待开票 / 通知失败', '部分未通知', '部分已通知', '部分上传发票', '部分上传', '部分已上传', '部分已确认') THEN 40
+            WHEN lb.audit_status IN ('已上传', '已上传发票') THEN 50
+            WHEN lb.audit_status IN ('待付款', '部分待付款') THEN 60
+            WHEN lb.audit_status IN ('部分付款', '部分已付款') THEN 70
+            WHEN lb.audit_status = '已付款' THEN 80
+            WHEN lb.audit_status = '审核通过' THEN 90
+            ELSE 999
+          END AS status_rank
+        FROM logistics_bills lb
+        WHERE lb.order_id = ro.id
+          AND lb.deleted_at IS NULL
+          ${billSupplierSql}
+      ) ranked_bill
+      ORDER BY ranked_bill.status_rank ASC, ranked_bill.status_updated_at DESC
+      LIMIT 1
+    ) bill_status ON true
+    LEFT JOIN LATERAL (
+      SELECT ranked_expense.status
+      FROM (
+        SELECT
+          CASE
+            WHEN le.audit_status IN ('未通知', '已通知开票', '通知失败', '待开票 / 通知失败', '部分未通知', '部分已通知', '部分上传发票', '部分上传', '部分已上传', '部分已确认') THEN '待开票'
+            WHEN le.audit_status IN ('已上传', '已上传发票') THEN '已上传发票'
+            WHEN le.audit_status = '部分已付款' THEN '部分付款'
+            WHEN le.audit_status = '部分待付款' THEN '待付款'
+            ELSE le.audit_status
+          END AS status,
+          COALESCE(le.updated_at, le.created_at) AS status_updated_at,
+          CASE
+            WHEN le.audit_status = '已驳回' THEN 10
+            WHEN le.audit_status = '草稿' THEN 20
+            WHEN le.audit_status = '待审核' THEN 30
+            WHEN le.audit_status IN ('待开票', '未通知', '已通知开票', '通知失败', '待开票 / 通知失败', '部分未通知', '部分已通知', '部分上传发票', '部分上传', '部分已上传', '部分已确认') THEN 40
+            WHEN le.audit_status IN ('已上传', '已上传发票') THEN 50
+            WHEN le.audit_status IN ('待付款', '部分待付款') THEN 60
+            WHEN le.audit_status IN ('部分付款', '部分已付款') THEN 70
+            WHEN le.audit_status = '已付款' THEN 80
+            WHEN le.audit_status = '审核通过' THEN 90
+            ELSE 999
+          END AS status_rank
+        FROM logistics_expenses le
+        WHERE le.order_id = ro.id
+          AND le.deleted_at IS NULL
+          ${expenseSupplierSql}
+      ) ranked_expense
+      ORDER BY ranked_expense.status_rank ASC, ranked_expense.status_updated_at DESC
+      LIMIT 1
+    ) expense_status ON true
+    WHERE ${whereSql}
+    ORDER BY
+      GREATEST(
+        CASE
+          WHEN latest_logistics.remark_text IS NULL OR latest_logistics.remark_text = '' THEN 1
+          ELSE 4
+        END,
+        CASE COALESCE(bill_status.status, expense_status.status, '未录入')
+          WHEN '已驳回' THEN 1
+          WHEN '草稿' THEN 1
+          WHEN '待审核' THEN 3
+          WHEN '审核通过' THEN 5
+          WHEN '待开票' THEN 5
+          WHEN '已上传发票' THEN 5
+          WHEN '待付款' THEN 5
+          WHEN '部分付款' THEN 5
+          WHEN '已付款' THEN 5
+          WHEN '未录入' THEN 2
+          ELSE 0
+        END
+      ) ASC,
+      ro.updated_at DESC,
+      ro.created_at DESC
+    LIMIT ${pageSize}
+    OFFSET ${offset}
+  `);
+  return { orderIds: rows.map((row) => row.id), total };
+}
+
+async function findDomesticLogisticsOrdersForList(orderIds: string[]) {
+  if (!orderIds.length) return [];
+  const where: Prisma.ReceivableOrderWhereInput = {
+    id: { in: orderIds },
+    deletedAt: null,
+  };
   try {
     return await prisma.receivableOrder.findMany({
       where,
       include: domesticLogisticsOrderInclude(),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 100,
+      take: orderIds.length,
     });
   } catch (error: unknown) {
     if (!isShipsgoTrackingSchemaError(error)) throw error;
@@ -150,20 +298,36 @@ async function findDomesticLogisticsOrdersForList(where: Prisma.ReceivableOrderW
     return prisma.receivableOrder.findMany({
       where,
       include: domesticLogisticsOrderInclude({ shipsgoTrackings: false }),
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 100,
+      take: orderIds.length,
     });
   }
 }
 
-export async function listDomesticLogisticsOrders(query: DomesticLogisticsQuery, actor: DomesticLogisticsActorInput): Promise<DomesticLogisticsOrderDto[]> {
+export async function listDomesticLogisticsOrders(query: DomesticLogisticsQuery, actor: DomesticLogisticsActorInput): Promise<{
+  rows: DomesticLogisticsOrderDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
   assertRead(actor, "domesticLogistics");
   const filters = domesticLogisticsListFiltersFromQuery(query);
-  const where = domesticLogisticsListWhere(filters, actor);
-  const orders = await findDomesticLogisticsOrdersForList(where);
-  return orders.filter((order) => canAccessDomesticLogisticsOrder(actor, order))
-    .sort(sortDomesticLogisticsOrders)
+  const { page, pageSize } = pageParams(query, 20, DOMESTIC_LOGISTICS_LIST_PAGE_SIZE_MAX);
+  const { orderIds: pageOrderIds, total } = await findDomesticLogisticsPageOrderIds(filters, actor, page, pageSize);
+  const pageOrders = await findDomesticLogisticsOrdersForList(pageOrderIds);
+  const pageOrderById = new Map(pageOrders.map((order) => [order.id, order]));
+  const rows = pageOrderIds
+    .map((orderId) => pageOrderById.get(orderId))
+    .filter((order): order is NonNullable<typeof order> => Boolean(order))
+    .filter((order) => canAccessDomesticLogisticsOrder(actor, order))
     .map((order) => serializeDomesticLogisticsOrder(order, actor));
+  return {
+    rows,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 
 export async function archiveDomesticLogisticsOrders(request: AuditRequestLike, actor: DomesticLogisticsActorInput, input: unknown = {}) {

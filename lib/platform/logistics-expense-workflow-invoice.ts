@@ -113,6 +113,7 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
         where: { id: { in: targetIds }, deletedAt: null },
         include: includeLogisticsExpenseRelations(),
         orderBy: [{ createdAt: "asc" }],
+        take: targetIds.length,
       });
       if (rows.length !== targetIds.length) {
         throw codedError("发票分组费用状态已变化，请刷新后重试。", 409, "LOGISTICS_INVOICE_GROUP_CHANGED");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { apiJson } from "../../api";
 import {
   PAGE_SIZE,
@@ -48,6 +48,7 @@ export function useLogisticsFeesListController({
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
+  const listRequestRef = useRef(0);
 
   async function loadExpenses(
     nextPage = page,
@@ -55,6 +56,7 @@ export function useLogisticsFeesListController({
     nextStatus = status,
     nextCostType = costType,
   ) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -69,6 +71,7 @@ export function useLogisticsFeesListController({
       const result = await apiJson<LogisticsExpensesResponse>(
         `/api/logistics-costs?${params}`,
       );
+      if (requestId !== listRequestRef.current) return [];
       const nextRows = sortLogisticsExpenseBillsForDisplay(
         Array.isArray(result.rows) ? result.rows : [],
       );
@@ -84,12 +87,14 @@ export function useLogisticsFeesListController({
       setPage(Number(result.page || nextPage));
       return nextRows;
     } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : "读取物流费用失败",
-      );
+      if (requestId === listRequestRef.current) {
+        setError(
+          loadError instanceof Error ? loadError.message : "读取物流费用失败",
+        );
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
 

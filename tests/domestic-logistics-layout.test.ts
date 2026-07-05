@@ -57,7 +57,7 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(css, /\.logisticsCompactTable col\.detailActionColumn,[\s\S]*width: 70px;[\s\S]*min-width: 70px;[\s\S]*text-align: center;/);
   assert.match(css, /\.logisticsCompactTable td\.destinationColumn,[\s\S]*\.logisticsCompactTable td\.cargoColumn,[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
   assert.match(css, /\.logisticsCompactTableWrap \{[\s\S]*max-width: 100%;[\s\S]*overflow-x: auto;/);
-  assert.match(domesticLogisticsApi, /\{ blNo: \{ contains: keyword, mode: "insensitive" \} \}/);
+  assert.match(domesticLogisticsApi, /ro\.bl_no ILIKE \$\{keyword\}/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);
   assert.doesNotMatch(moduleSource, /<LogisticsFeesModule/);
@@ -185,7 +185,9 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.match(domesticLogisticsOps, /if \(scope === "all"\) return \{\};/);
   assert.match(domesticLogisticsOps, /return \{ isArchived: false \};/);
   assert.doesNotMatch(moduleSource.match(/const ARCHIVE_SCOPE_OPTIONS = \[[\s\S]*?\];/)?.[0] || "", /全部业务|value: "all"/);
-  assert.match(domesticLogisticsApi, /orderLogisticsArchiveWhereForScope\(filters\.businessScope\)/);
+  assert.match(domesticLogisticsApi, /filters\.businessScope === "archive"[\s\S]*ro\.is_archived = true/);
+  assert.match(domesticLogisticsApi, /filters\.businessScope === "current"[\s\S]*ro\.is_archived = false/);
+  assert.match(domesticLogisticsApi, /ro\.status NOT IN \('已关闭', '已取消'\)/);
   assert.match(domesticLogisticsApi, /archiveDomesticLogisticsOrders/);
   assert.match(domesticLogisticsApi, /domesticLogisticsCanArchiveOrder\(order, currentActor\)/);
   assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus\(bill\) === "审核通过"/);

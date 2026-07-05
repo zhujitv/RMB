@@ -56,11 +56,11 @@ type DomesticLogisticsModuleViewProps = {
   confirmation: ConfirmationDialogState | null;
   setNotice: Dispatch<SetStateAction<string>>;
   setKeyword: Dispatch<SetStateAction<string>>;
-  setPage: Dispatch<SetStateAction<number>>;
+  onPageChange: (page: number) => void;
   setExpandedId: Dispatch<SetStateAction<string>>;
   setEditingOrderId: Dispatch<SetStateAction<string>>;
   setActiveLogisticsView: Dispatch<SetStateAction<"list" | "controlTower">>;
-  loadRows: (nextKeyword?: string, nextBusinessScope?: string) => Promise<DomesticLogisticsRow[]>;
+  loadRows: (nextKeyword?: string, nextBusinessScope?: string, nextPage?: number) => Promise<DomesticLogisticsRow[]>;
   submitSearch: () => void;
   resetSearch: () => void;
   changeBusinessScope: (scope: string) => void;
@@ -123,7 +123,7 @@ export function DomesticLogisticsModuleView({
   confirmation,
   setNotice,
   setKeyword,
-  setPage,
+  onPageChange,
   setExpandedId,
   setEditingOrderId,
   setActiveLogisticsView,
@@ -342,7 +342,7 @@ return (
         </table>
       </div>
 
-      <PaginationBar total={rowsLength} page={page} totalPages={totalPages} onPage={setPage} />
+      <PaginationBar total={rowsLength} page={page} totalPages={totalPages} onPage={onPageChange} />
       </>
       )}
     </section>

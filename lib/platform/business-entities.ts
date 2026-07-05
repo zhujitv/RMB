@@ -11,6 +11,7 @@ import { writeAudit } from "./shared-audit";
 
 export const DEFAULT_BUSINESS_ENTITY_ID = "default-business-entity";
 export const DEFAULT_BUSINESS_ENTITY_NAME = "浙江莱诺建材有限公司";
+const BUSINESS_ENTITY_LIST_LIMIT = 1000;
 
 type ActorLike = {
   id?: string | null;
@@ -143,6 +144,7 @@ export async function listBusinessEntities(actor: ActorLike, options: { includeI
   const rows = await prisma.businessEntity.findMany({
     where: includeInactive ? { deletedAt: null } : activeBusinessEntityWhere(),
     orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+    take: BUSINESS_ENTITY_LIST_LIMIT,
   });
   return rows.map(serializeBusinessEntity);
 }
@@ -152,6 +154,7 @@ export async function listBusinessEntitySettings(actor: ActorLike) {
   const rows = await prisma.businessEntity.findMany({
     where: { deletedAt: null },
     orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+    take: BUSINESS_ENTITY_LIST_LIMIT,
   });
   return rows.map(serializeBusinessEntity);
 }

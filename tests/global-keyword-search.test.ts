@@ -57,9 +57,11 @@ test("business list APIs read keyword and use contains fuzzy matching", () => {
   assert.match(services.profit, /const keyword = nonEmpty\(query\.get\("keyword"\)\)/);
 
   for (const [name, source] of Object.entries(services)) {
+    if (name === "logistics") continue;
     assert.match(source, /contains:/, `${name} should use Prisma contains keyword search`);
     assert.match(source, /mode: "insensitive"/, `${name} should use case-insensitive search`);
   }
+  assert.match(services.logistics, /ILIKE \$\{keyword\}/, "logistics should use SQL ILIKE keyword search");
 });
 
 test("keyword search covers the required business fields", () => {
@@ -75,10 +77,16 @@ test("keyword search covers the required business fields", () => {
   assert.match(services.costs, /remark: keyword/);
   assert.match(services.costs, /supplierNameSnapshot: keyword/);
 
-	  assert.match(services.logistics, /containerNo: \{ contains: keyword/);
-	  assert.match(services.logistics, /containerType: \{ contains: keyword/);
-	  assert.match(services.logistics, /sealNo: \{ contains: keyword/);
-	  assert.match(services.logistics, /logisticsSuppliers: \{ some: \{ supplier: \{ is: \{ supplierName: \{ contains: keyword/);
+  assert.match(services.logistics, /ro\.order_no ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /ro\.bl_no ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /c\.name ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /c\.short_name ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /s_keyword\.supplier_name ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /s_keyword\.supplier_type ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /dli_keyword\.remark_text ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /dti_keyword\.container_no ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /dti_keyword\.container_type ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /dti_keyword\.seal_no ILIKE \$\{keyword\}/);
 
   assert.match(services.taxRefund, /customsDeclarationNo: \{ contains: keyword/);
   assert.match(services.taxRefund, /blNo: \{ contains: keyword/);

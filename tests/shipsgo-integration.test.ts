@@ -82,8 +82,8 @@ test("settings module exposes third-party API configuration without leaking secr
 
 test("domestic logistics only receives safe ShipsGo feature flags", () => {
   assert.match(logisticsRoute, /readShipsgoFeatureFlags/);
-  assert.match(logisticsRoute, /const \[rows, shipsgo\] = await Promise\.all/);
-  assert.match(logisticsRoute, /return ok\(\{ rows, shipsgo \}\)/);
+  assert.match(logisticsRoute, /const \[listResult, shipsgo\] = await Promise\.all/);
+  assert.match(logisticsRoute, /return ok\(\{ \.\.\.listResult, shipsgo \}\)/);
   assert.match(logisticsModule, /type ShipsgoFeatureFlags/);
   assert.match(logisticsModule, /shipsgoFeatures\.enabled && shipsgoFeatures\.oceanTrackingEnabled/);
   assert.doesNotMatch(logisticsModule, /liveMapEmbedUrl\?: string/);

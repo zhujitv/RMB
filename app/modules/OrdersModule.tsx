@@ -53,6 +53,7 @@ export function OrdersModule({
   const [deletingId, setDeletingId] = useState("");
   const [repairingSalespeople, setRepairingSalespeople] = useState(false);
   const editPanelRef = useRef<HTMLDivElement | null>(null);
+  const listRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -64,6 +65,7 @@ export function OrdersModule({
   const canManageOrderAssignments = currentUser.role === "管理员";
 
   async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus, nextBusinessEntityId = submittedBusinessEntityId) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -76,6 +78,7 @@ export function OrdersModule({
       if (nextOrderStatus) params.set("orderStatus", nextOrderStatus);
       if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
       const result = await apiJson<OrdersResponse>(`/api/orders?${params}`);
+      if (requestId !== listRequestRef.current) return [];
       const data = result.data || {};
       const nextRows = Array.isArray(data.rows) ? data.rows : Array.isArray(result.orders) ? result.orders : [];
       setOrders(nextRows);
@@ -85,10 +88,12 @@ export function OrdersModule({
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取应收订单失败");
+      if (requestId === listRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "读取应收订单失败");
+      }
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
 

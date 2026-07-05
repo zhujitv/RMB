@@ -34,7 +34,7 @@ type DomesticLogisticsActionsParams = {
   setKeyword: Dispatch<SetStateAction<string>>;
   setSubmittedKeyword: Dispatch<SetStateAction<string>>;
   setPage: Dispatch<SetStateAction<number>>;
-  loadRows: (nextKeyword?: string, nextBusinessScope?: string) => Promise<DomesticLogisticsRow[]>;
+  loadRows: (nextKeyword?: string, nextBusinessScope?: string, nextPage?: number) => Promise<DomesticLogisticsRow[]>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
 };
 
@@ -347,7 +347,7 @@ export function useDomesticLogisticsActions({
     setSubmittedKeyword(value);
     setPage(1);
     setNotice("");
-    const nextRows = await loadRows(value, row.orderIsArchived ? "archive" : "current");
+    const nextRows = await loadRows(value, row.orderIsArchived ? "archive" : "current", 1);
     const matched = nextRows.find((item) => (
       item.orderId === row.orderId
       || item.id === row.orderId

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { apiJson } from "../../api";
 import { useTaxRefundMutations } from "./use-tax-refund-mutations";
 import styles from "../../WorkspaceShell.module.css";
@@ -32,6 +32,7 @@ export function useTaxRefundController({
   onOpenDomesticLogistics,
 }: TaxRefundModuleProps) {
   const state = useTaxRefundState();
+  const listRequestRef = useRef(0);
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务"]);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
   const canCancelArchive = currentUser.role === "管理员";
@@ -57,6 +58,7 @@ export function useTaxRefundController({
     nextStatus = state.statusFilter,
     nextBusinessEntityId = state.businessEntityId,
   ) {
+    const requestId = ++listRequestRef.current;
     const setError = state.setError;
     state.setLoading(true);
     setError("");
@@ -68,6 +70,7 @@ export function useTaxRefundController({
       if (nextStatus) params.set("status", nextStatus);
       if (nextBusinessEntityId) params.set("businessEntityId", nextBusinessEntityId);
       const result = await apiJson<TaxRefundResponse>(`/api/tax-refund/list?${params}`);
+      if (requestId !== listRequestRef.current) return [];
       const nextRows = Array.isArray(result.orders) ? result.orders : [];
       const pagination = result.pagination || {};
       state.setRows(nextRows);
@@ -77,10 +80,12 @@ export function useTaxRefundController({
       if (result.error) setError(result.error || "读取资料失败");
       return nextRows;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取退税资料失败");
+      if (requestId === listRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "读取退税资料失败");
+      }
       return [];
     } finally {
-      state.setLoading(false);
+      if (requestId === listRequestRef.current) state.setLoading(false);
     }
   }
 

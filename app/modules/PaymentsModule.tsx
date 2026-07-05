@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { ConfirmationDialog, useConfirmationDialog } from "../components";
 import styles from "../WorkspaceShell.module.css";
@@ -37,6 +37,7 @@ export function PaymentsModule({
   const [editPayment, setEditPayment] = useState<PaymentRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
   const [confirmingId, setConfirmingId] = useState("");
+  const listRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -46,6 +47,7 @@ export function PaymentsModule({
   } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
   async function loadPayments(nextPage = page, nextFilters = submittedFilters) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
@@ -61,6 +63,7 @@ export function PaymentsModule({
         if (text) params.set(key, text);
       });
       const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
+      if (requestId !== listRequestRef.current) return;
       const data = result.data || {};
       setPayments(Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : []);
       setSummary(data.summary || result.summary || {});
@@ -68,9 +71,11 @@ export function PaymentsModule({
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "读取收款明细失败");
+      if (requestId === listRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : "读取收款明细失败");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
   useEffect(() => {

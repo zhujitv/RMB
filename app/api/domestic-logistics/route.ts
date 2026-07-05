@@ -21,11 +21,11 @@ export async function GET(request: NextRequest) {
   }
   const query = new URL(request.url).searchParams;
   try {
-    const [rows, shipsgo] = await Promise.all([
+    const [listResult, shipsgo] = await Promise.all([
       listDomesticLogisticsOrders(query, actor),
       readShipsgoFeatureFlags(),
     ]);
-    return ok({ rows, shipsgo });
+    return ok({ ...listResult, shipsgo });
   } catch (error: unknown) {
     return apiError(error, "读取物流信息失败");
   }

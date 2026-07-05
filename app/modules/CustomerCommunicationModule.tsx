@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiRequestError, apiJson } from "../api";
 import { PaginationBar } from "../components";
@@ -44,6 +44,7 @@ export function CustomerCommunicationModule({
   const [detailError, setDetailError] = useState("");
   const [mailForm, setMailForm] = useState<MailForm | null>(null);
   const [sending, setSending] = useState(false);
+  const listRequestRef = useRef(0);
 
   const canSendByPermission = canWritePermission(currentUser, permissions, "customerCommunication", ["管理员", "业务员"]);
   const activeMissingLabels = detail?.missingLabels || detail?.draft?.missingLabels || [];
@@ -65,12 +66,14 @@ export function CustomerCommunicationModule({
   }, [initialOpenToken, initialKeyword, initialOrderId]);
 
   async function loadRows(nextPage = page, nextKeyword = keyword) {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams({ page: String(nextPage), pageSize: "20" });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const data = await apiJson<CommunicationListResponse>(`/api/customer-communications?${params.toString()}`);
+      if (requestId !== listRequestRef.current) return [];
       const nextRows = data.rows || [];
       setRows(nextRows);
       setPage(Number(data.page || nextPage));
@@ -79,10 +82,10 @@ export function CustomerCommunicationModule({
       return nextRows;
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "读取客户沟通列表失败";
-      setError(message);
+      if (requestId === listRequestRef.current) setError(message);
       return [];
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }
 
