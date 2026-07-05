@@ -97,7 +97,7 @@ test("E2E permission: logistics supplier only sees assigned logistics work and i
   assert.match(mastersAccess, /export function isExternalLogisticsSupplierAccount/);
   assert.match(mastersAccess, /return \(order\?\.logisticsSuppliers \|\| \[\]\)\.some\(\(row\) => row\?\.supplierId === actor\.supplierId\)/);
   assert.match(domesticLogisticsService, /isExternalLogisticsSupplierAccount\(actor\)[\s\S]*logisticsSuppliers:\s*\{\s*some:\s*\{\s*supplierId\s*\}/);
-  assert.match(logisticsExpenseQueries, /if \(\[LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE\]\.includes\(role\)\) return supplierId \? \{ supplierId \} : \{ id: "__no_supplier_bound__" \}/);
+  assert.match(logisticsExpenseQueries, /OR: \[\{ supplierId \}, \{ expenses: \{ some: \{ supplierId, deletedAt: null \} \} \}\]/);
   assert.match(logisticsExpenseAccess, /if \(actor\.supplierId\) return \{ supplierId: actor\.supplierId \}/);
   assert.match(shipsgoTracking, /canAccessDomesticLogisticsOrder\(actor, order\)/);
 });

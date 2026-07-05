@@ -64,6 +64,8 @@ import {
 test("logistics expense list reads avoid transactions for count and pagination", () => {
   assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.count/);
   assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.findMany/);
+  assert.match(listLogisticsExpensesSource, /take: Math\.max\(total, pageSize\)/);
+  assert.doesNotMatch(listLogisticsExpensesSource, /LOGISTICS_EXPENSE_BILL_SORT_SCAN_LIMIT/);
   assert.doesNotMatch(listLogisticsExpensesSource, /prisma\.\$transaction/);
 });
 
@@ -77,7 +79,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /export async function reviewLogisticsExpenseBills/);
   assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
   assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
-  assert.match(backend, /notifyLogisticsSupplierInvoiceBills\(approvedRows\)/);
+  assert.match(backend, /notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)/);
   assert.match(
     backend,
     /applyLogisticsExpenseInvoiceNotificationResults\(approvedRows, emailResults, actor, now\)/,
@@ -126,6 +128,13 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /billPaymentStatus === "待开票"/);
   assert.match(backend, /\? \{ paymentStatus: "待付款" \}/);
   assert.match(backend, /export async function uploadLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
+  assert.match(backend, /const expenseUpdate = await tx\.logisticsExpense\.updateMany/);
+  assert.match(backend, /expenseUpdate\.count !== targetIds\.length/);
+  assert.match(backend, /LOGISTICS_INVOICE_GROUP_CHANGED/);
+  assert.match(backend, /const costUpdate = await tx\.orderCost\.updateMany/);
+  assert.match(backend, /costUpdate\.count !== costIds\.length/);
+  assert.match(backend, /LOGISTICS_INVOICE_COST_CHANGED/);
+  assert.match(backend, /rows\.length !== targetIds\.length/);
   assert.match(backend, /export async function confirmLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
   assert.match(backend, /reviewedById: actor\.id/);
   assert.match(backend, /reviewedAt: now/);

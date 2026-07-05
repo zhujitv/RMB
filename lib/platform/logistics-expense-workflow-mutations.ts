@@ -98,6 +98,14 @@ export async function updateLogisticsExpense(request: AuditRequestLike, actor: A
   }
   const order = await assertLogisticsExpenseOrder({ orderId: before.orderId }, actor);
   const supplier = await assertLogisticsExpenseSupplier(actor, order, { supplierId: before.supplierId });
+  const billBlockReason = await logisticsExpenseBillEditBlockReason(before, actor);
+  if (billBlockReason) {
+    throw codedError(billBlockReason, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
+  }
+  const blockReason = logisticsExpenseUpdateBlockReason(before);
+  if (blockReason) {
+    throw codedError(blockReason, 400, "LOGISTICS_EXPENSE_STATUS_BLOCKED");
+  }
   const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, supplierId: before.supplierId }, before);
   const saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
   invalidateWorkbenchTodosCache();
@@ -336,6 +344,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     auditStatus: billStatus || rowAuditStatus(baseExpense),
     submittedAt: rowBillSubmittedAt(baseExpense),
   });
+  const targetBillId = bill.id || billId;
   const preparedCreates: PreparedCreate[] = [];
   for (let index = 0; index < creates.length; index += 1) {
     const item = creates[index] || {};
@@ -347,33 +356,33 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     const billingMethod = normalizeBatchBillingMethod(item);
     const billingQuantity = normalizeBatchBillingQuantity(item, billingMethod, costType, index);
     const appliedContainerCount = legacyAppliedContainerCount(billingQuantity);
-	    if (!nonEmpty(item.unitAmount ?? item.unit_amount ?? item.amount)) {
-	      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
-	    }
+    if (!nonEmpty(item.unitAmount ?? item.unit_amount ?? item.amount)) {
+      throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_REQUIRED");
+    }
     if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
       throw codedError(`第 ${index + 1} 行${costType}保存失败：金额必须大于 0。`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_AMOUNT_INVALID");
     }
-	    const blockReason = logisticsExpenseUpdateBlockReason(baseExpense);
+    const blockReason = logisticsExpenseUpdateBlockReason(baseExpense);
     if (blockReason) {
       throw codedError(`第 ${index + 1} 行${costType}保存失败：${blockReason}`, 400, "LOGISTICS_EXPENSE_BATCH_CREATE_STATUS_BLOCKED");
     }
-	    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
-	    const currency = nonEmpty(item.currency || logisticsCostTypeDefaultCurrency(costType)).toUpperCase();
-	    const exchange = await resolveLogisticsExpenseBatchExchange(
-	      costType,
-	      item,
-	      baseExpense,
-	      actor,
-	      currency,
-	      index,
-	    );
-	    const data = await buildLogisticsExpenseData(order, supplier, actor, {
-	      costType,
-	      amount,
-	      appliedContainerCount,
-	      billingMethod,
-	      billingQuantity,
-	      currency: exchange.currency,
+    const amount = billingAmountFromUnit(unitAmount, billingQuantity, billingMethod);
+    const currency = nonEmpty(item.currency || logisticsCostTypeDefaultCurrency(costType)).toUpperCase();
+    const exchange = await resolveLogisticsExpenseBatchExchange(
+      costType,
+      item,
+      baseExpense,
+      actor,
+      currency,
+      index,
+    );
+    const data = await buildLogisticsExpenseData(order, supplier, actor, {
+      costType,
+      amount,
+      appliedContainerCount,
+      billingMethod,
+      billingQuantity,
+      currency: exchange.currency,
       exchangeRate: exchange.exchangeRate,
       exchangeRateDate: exchange.exchangeRateDate,
       exchangeRateSource: exchange.exchangeRateSource,
@@ -381,15 +390,15 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
       remark: item.remark,
       auditStatus: ["草稿", "已驳回"].includes(rowAuditStatus(baseExpense)) ? rowAuditStatus(baseExpense) : "草稿",
       supplierId: baseExpense.supplierId,
-      billId: bill.id,
+      billId: targetBillId,
     });
-    preparedCreates.push({ data: { ...data, billId: bill.id } });
+    preparedCreates.push({ data: { ...data, billId: targetBillId } });
   }
   const deletedIds = preparedDeletes.map((row) => row.id);
   const transactionOperations = [
     ...preparedUpdates.map((item) => prisma.logisticsExpense.update({
       where: { id: item.before.id },
-      data: { ...item.data, billId: item.before.billId || bill.id },
+      data: { ...item.data, billId: targetBillId },
     })),
     ...(preparedCreates.length ? [prisma.logisticsExpense.createMany({
       data: preparedCreates.map((item) => item.data),
@@ -404,10 +413,10 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     })] : []),
   ];
   if (transactionOperations.length) await prisma.$transaction(transactionOperations);
-  const savedBillRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
-  if (!savedBillRows.length && bill.id) {
+  const savedBillRows = await loadLogisticsExpenseBillRowsForAction(targetBillId, actor);
+  if (!savedBillRows.length && targetBillId) {
     await prisma.logisticsBill.update({
-      where: { id: bill.id },
+      where: { id: targetBillId },
       data: { deletedAt: new Date(), updatedById: actorId(actor) || null },
     }).catch(() => null);
   } else {
@@ -422,7 +431,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   for (const orderId of [...new Set(affectedOrderIds)]) {
     scheduleTaxRefundCompletenessRefresh(orderId);
   }
-  void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", billId, {
+  void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", targetBillId, {
     bill: serializeLogisticsExpenseBill(billRows),
     deletedIds,
   }, {
@@ -433,7 +442,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
     durationMs: Date.now() - startedAt,
   }));
   console.info("[logistics-expense.batch-save]", {
-    billId,
+    billId: targetBillId,
     updateCount: preparedUpdates.length,
     createCount: preparedCreates.length,
     deleteCount: deletedIds.length,
@@ -441,7 +450,7 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   });
   invalidateWorkbenchTodosCache();
   return {
-    billId,
+    billId: targetBillId,
     bill: serializedBill,
     items: serializedItems,
     details: serializedItems,

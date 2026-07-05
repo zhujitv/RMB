@@ -3,6 +3,7 @@ import {
   FILE_ASSET_SOURCE_TABLES,
   codedError,
   dateFromInput,
+  deleteManagedStoredFile,
   nonEmpty,
   optional,
   permissionError,
@@ -80,22 +81,57 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     invoiceGroupLabel: invoiceGroup.label,
   });
   const uploadedAt = new Date();
-  const savedRows: LogisticsExpenseRow[] = [];
-  for (const row of targetRows) {
-    const saved = await prisma.logisticsExpense.update({
-      where: { id: row.id },
-      data: {
-        invoiceDocumentId: document.id,
-        invoiceStatus: "已上传",
-        invoiceNotificationError: null,
-        invoiceUploadedById: actorId(actor),
-        invoiceUploadedAt: uploadedAt,
-        updatedById: actorId(actor),
-      },
-      include: includeLogisticsExpenseRelations(),
+  const targetIds = targetRows.map((row) => row.id).filter(Boolean);
+  const costIds = [...new Set(targetRows.map((row) => nonEmpty(row.costId)).filter(Boolean))];
+  let savedRows: LogisticsExpenseRow[] = [];
+  try {
+    savedRows = await prisma.$transaction(async (tx) => {
+      const expenseUpdate = await tx.logisticsExpense.updateMany({
+        where: { id: { in: targetIds }, deletedAt: null },
+        data: {
+          invoiceDocumentId: document.id,
+          invoiceStatus: "已上传",
+          invoiceNotificationError: null,
+          invoiceUploadedById: actorId(actor),
+          invoiceUploadedAt: uploadedAt,
+          updatedById: actorId(actor),
+        },
+      });
+      if (expenseUpdate.count !== targetIds.length) {
+        throw codedError("发票分组费用状态已变化，请刷新后重试。", 409, "LOGISTICS_INVOICE_GROUP_CHANGED");
+      }
+      if (costIds.length) {
+        const costUpdate = await tx.orderCost.updateMany({
+          where: { id: { in: costIds }, deletedAt: null },
+          data: { invoiceStatus: "已收到" },
+        });
+        if (costUpdate.count !== costIds.length) {
+          throw codedError("发票分组成本状态已变化，请刷新后重试。", 409, "LOGISTICS_INVOICE_COST_CHANGED");
+        }
+      }
+      const rows = await tx.logisticsExpense.findMany({
+        where: { id: { in: targetIds }, deletedAt: null },
+        include: includeLogisticsExpenseRelations(),
+        orderBy: [{ createdAt: "asc" }],
+      });
+      if (rows.length !== targetIds.length) {
+        throw codedError("发票分组费用状态已变化，请刷新后重试。", 409, "LOGISTICS_INVOICE_GROUP_CHANGED");
+      }
+      return rows;
     });
-    savedRows.push(saved);
-    if (saved.costId) await prisma.orderCost.update({ where: { id: saved.costId }, data: { invoiceStatus: "已收到" } }).catch(() => null);
+  } catch (error: unknown) {
+    await prisma.$transaction(async (tx) => {
+      await tx.orderDocument.update({ where: { id: document.id }, data: { deletedAt: new Date() } }).catch(() => null);
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS,
+        document.id,
+        String(document.documentType || "SUPPLIER_INVOICE"),
+        new Date(),
+      ).catch(() => null);
+    }).catch(() => null);
+    if (document.storageKey) await deleteManagedStoredFile(document.storageKey).catch(() => null);
+    throw error;
   }
   await runNonCriticalTask("物流发票上传状态日志写入", () => writeAudit(request, actor, "提交物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,

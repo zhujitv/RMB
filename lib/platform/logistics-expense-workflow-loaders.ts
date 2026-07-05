@@ -75,7 +75,10 @@ export function rowMatchesLegacyBillKey(row: UnknownRecord = {}, legacyBillId: u
   const order = asRecord(row.order);
   const rowOrderId = nonEmpty(row.orderId || order.id);
   const rowBillKey = nonEmpty(order.blNo || order.orderNo || "no-bl").toLowerCase();
-  return rowOrderId === parsed.orderId && rowBillKey === nonEmpty(parsed.billKey || "no-bl").toLowerCase();
+  const rowSupplierBillKey = [rowBillKey, nonEmpty(row.supplierId)].filter(Boolean).join("::");
+  const requestedBillKey = nonEmpty(parsed.billKey || "no-bl").toLowerCase();
+  return rowOrderId === parsed.orderId
+    && (rowBillKey === requestedBillKey || rowSupplierBillKey === requestedBillKey);
 }
 
 export function normalizeLogisticsExpenseReviewIdentifiers(input: UnknownRecord = {}) {

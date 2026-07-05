@@ -15,6 +15,7 @@ import {
   logisticsBillMigration,
   logisticsInvoiceUsdGroupingMigration,
   logisticsBillConvergenceMigration,
+  logisticsBillSupplierKeyMigration,
   logisticsBillStateMachine,
   logisticsFeesMain,
   logisticsFeesModel,
@@ -158,10 +159,32 @@ test("manual logistics costs are blocked from ordinary cost entry", () => {
   );
 });
 
-test("duplicate official logistics cost generation is blocked by order and cost type", () => {
-  assert.match(backend, /LOGISTICS_EXPENSE_DUPLICATE_COST/);
-  assert.match(backend, /同一订单同一物流费用类型已存在正式成本/);
+test("official logistics cost generation is source scoped instead of cost-type scoped", () => {
+  assert.doesNotMatch(backend, /LOGISTICS_EXPENSE_DUPLICATE_COST/);
+  assert.doesNotMatch(backend, /同一订单同一物流费用类型已存在正式成本/);
+  assert.match(backend, /sourceType: "LOGISTICS_EXPENSE"/);
+  assert.match(backend, /sourceId: expense\.id/);
   assert.match(migration, /order_costs_source_unique/);
+});
+
+test("logistics bill supplier key does not reuse deleted or sampled legacy bills", () => {
+  assert.match(backend, /findFirst\(\{\s*where: \{ billKey: legacyBillKey, deletedAt: null \}/);
+  assert.match(backend, /distinct: \["supplierId"\]/);
+  assert.match(backend, /take: 2/);
+  assert.match(backend, /deletedAt: null,[\s\S]*updatedById: logisticsExpenseActorId\(actor\)/);
+  assert.match(logisticsBillSupplierKeyMigration, /"deleted_at"\s*=\s*NULL/);
+  assert.doesNotMatch(backend, /include: \{ expenses: \{ where: \{ deletedAt: null \}, select: \{ supplierId: true \}, take: 20 \} \}/);
+});
+
+test("logistics review side effects still notify bills that synced costs successfully", () => {
+  assert.match(backend, /const costFailedBillIds = new Set\(costSyncFailures\.map\(\(item\) => rowBillId\(item\.row\)\)\.filter\(Boolean\)\)/);
+  assert.match(backend, /const rowsWithCostFailedBills = approvedRows\.filter/);
+  assert.match(backend, /rowsReadyForNotification = approvedRows\.filter/);
+  assert.match(backend, /costFailedBillIds\.has\(billId\)/);
+  assert.match(backend, /emailResults\.push\(\.\.\.await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)\)/);
+  assert.match(backend, /emailResults\.push\(logisticsExpenseNotificationFailureResult\(rowsWithCostFailedBills, failureMessage\)\)/);
+  assert.doesNotMatch(backend, /costFailedExpenseIds/);
+  assert.doesNotMatch(backend, /if \(costSyncFailures\.length\) \{[\s\S]*\} else \{\s*try \{\s*emailResults = await notifyLogisticsSupplierInvoiceBills\(approvedRows\)/);
 });
 
 test("supplier role is renamed and scoped to assigned logistics work", () => {

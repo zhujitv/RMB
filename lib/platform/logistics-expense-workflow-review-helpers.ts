@@ -104,17 +104,37 @@ export function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestL
   if (!approvedRows.length) return;
   void runNonCriticalTask("物流费用批量审核后续处理", async () => {
     const costLinks: CostLink[] = [];
+    const costSyncFailures: { row: LogisticsExpenseRow; message: string }[] = [];
     for (const row of approvedRows) {
-      const cost = await createOrUpdateCostFromLogisticsExpense(prisma, row, actor);
-      costLinks.push({ expenseId: row.id, costId: cost.id });
+      try {
+        const cost = await createOrUpdateCostFromLogisticsExpense(prisma, row, actor);
+        costLinks.push({ expenseId: row.id, costId: cost.id });
+      } catch (error: unknown) {
+        costSyncFailures.push({ row, message: errorMessage(error, "成本同步失败") });
+      }
     }
     await updateLogisticsExpenseCostIds(prisma, costLinks);
     let emailResults: EmailResult[] = [];
     let finalRows = approvedRows;
-    try {
-      emailResults = await notifyLogisticsSupplierInvoiceBills(approvedRows);
-    } catch (error: unknown) {
-      emailResults = [logisticsExpenseNotificationFailureResult(approvedRows, errorMessage(error, "邮件发送失败"))];
+    const costFailedBillIds = new Set(costSyncFailures.map((item) => rowBillId(item.row)).filter(Boolean));
+    const rowsWithCostFailedBills = approvedRows.filter((row) => {
+      const billId = rowBillId(row);
+      return billId ? costFailedBillIds.has(billId) : false;
+    });
+    const rowsReadyForNotification = approvedRows.filter((row) => {
+      const billId = rowBillId(row);
+      return !billId || !costFailedBillIds.has(billId);
+    });
+    if (costSyncFailures.length) {
+      const failureMessage = `成本同步失败：${[...new Set(costSyncFailures.map((item) => item.message))].join("；")}`;
+      emailResults.push(logisticsExpenseNotificationFailureResult(rowsWithCostFailedBills, failureMessage));
+    }
+    if (rowsReadyForNotification.length) {
+      try {
+        emailResults.push(...await notifyLogisticsSupplierInvoiceBills(rowsReadyForNotification));
+      } catch (error: unknown) {
+        emailResults.push(logisticsExpenseNotificationFailureResult(rowsReadyForNotification, errorMessage(error, "邮件发送失败")));
+      }
     }
     try {
       finalRows = await applyLogisticsExpenseInvoiceNotificationResults(approvedRows, emailResults, actor, now);
@@ -304,9 +324,11 @@ export async function applyLogisticsExpenseInvoiceNotificationResults(rows: Logi
   }
   for (const billId of [...new Set(finalRows.map(rowBillId).filter(Boolean))]) {
     const billRows = finalRows.filter((row) => rowBillId(row) === billId);
+    const billExpenseIds = new Set(billRows.map((row) => row.id));
+    const billEmailResults = emailResults.filter((result) => (result.expenseIds || []).some((id) => billExpenseIds.has(id)));
     await refreshLogisticsBillWorkflowStatus(billRows, actor, {
-      invoiceNotifiedAt: emailResults.some((result) => result.sent) ? now : undefined,
-      invoiceNotificationError: emailResults.find((result) => !result.sent && !result.skipped)?.error || null,
+      invoiceNotifiedAt: billEmailResults.some((result) => result.sent) ? now : undefined,
+      invoiceNotificationError: billEmailResults.find((result) => !result.sent && !result.skipped)?.error || null,
     });
   }
   return finalRows;

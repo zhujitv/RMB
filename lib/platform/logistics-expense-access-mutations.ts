@@ -24,6 +24,7 @@ import {
 import {
   includeLogisticsExpenseRelations,
   logisticsExpenseBillAuditStatusValue,
+  logisticsExpenseLegacyBillKey,
   logisticsExpenseBillKey,
   logisticsExpenseBillOfLadingNo,
   logisticsExpenseOrderSummary,
@@ -166,12 +167,12 @@ export async function buildLogisticsExpenseData(
     exchangeRateSource: exchange.exchangeRateSource,
     exchangeRateType: exchange.exchangeRateType,
     amount,
-	    amountCny: amountCny(amount, exchange.exchangeRate),
-	    containerType,
-	    appliedContainerCount,
-	    billingMethod,
-	    billingQuantity,
-	    remark: optional(input.remark),
+    amountCny: amountCny(amount, exchange.exchangeRate),
+    containerType,
+    appliedContainerCount,
+    billingMethod,
+    billingQuantity,
+    remark: optional(input.remark),
     updatedById: currentActorId || null,
     ...(before ? {} : { createdById: currentActorId || null }),
   };
@@ -190,14 +191,62 @@ export async function ensureLogisticsExpenseBill(
   input: UnknownRecord = {}
 ) {
   const billOfLadingNo = logisticsExpenseBillOfLadingNo(order);
-  const billKey = logisticsExpenseBillKey(order.id, billOfLadingNo);
+  const supplierId = nonEmpty(supplier?.id || input.supplierId || input.supplier_id);
+  const billKey = logisticsExpenseBillKey(order.id, billOfLadingNo, supplierId);
+  const legacyBillKey = logisticsExpenseLegacyBillKey(order.id, billOfLadingNo);
   if (!billKey) throw codedError("物流费用账单编号无效。", 400, "LOGISTICS_EXPENSE_BILL_KEY_INVALID");
   const requestedStatus = nonEmpty(input.auditStatus || input.status || "草稿");
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "草稿";
   const now = new Date();
+  const existing = await prisma.logisticsBill.findUnique({ where: { billKey } });
+  if (!existing) {
+    const legacyBill = legacyBillKey
+      ? await prisma.logisticsBill.findFirst({
+        where: { billKey: legacyBillKey, deletedAt: null },
+        select: { id: true, supplierId: true },
+      })
+      : null;
+    const legacySuppliers = legacyBill
+      ? await prisma.logisticsExpense.findMany({
+        where: {
+          billId: legacyBill.id,
+          deletedAt: null,
+        },
+        distinct: ["supplierId"],
+        select: { supplierId: true },
+        take: 2,
+      })
+      : [];
+    const legacySupplierIds = legacySuppliers.map((row) => nonEmpty(row.supplierId)).filter(Boolean);
+    const legacyHasOnlyThisSupplier = legacyBill
+      && supplierId
+      && (!legacyBill.supplierId || legacyBill.supplierId === supplierId)
+      && (!legacySupplierIds.length || (legacySupplierIds.length === 1 && legacySupplierIds[0] === supplierId));
+    if (legacyHasOnlyThisSupplier) {
+      return prisma.logisticsBill.update({
+        where: { id: legacyBill.id },
+        data: {
+          billKey,
+          supplierId,
+          billOfLadingNo,
+          deletedAt: null,
+          updatedById: logisticsExpenseActorId(actor) || null,
+          ...(auditStatus === "待审核" ? {
+            auditStatus,
+            submittedAt: dateFromInput(input.submittedAt) || now,
+            submittedById: logisticsExpenseActorId(actor) || null,
+            rejectReason: null,
+            invoiceNotificationError: null,
+          } : {}),
+        },
+      });
+    }
+  }
   return prisma.logisticsBill.upsert({
     where: { billKey },
     update: {
+      ...(supplierId ? { supplierId } : {}),
+      deletedAt: null,
       updatedById: logisticsExpenseActorId(actor) || null,
       ...(auditStatus === "待审核" ? {
         auditStatus,
@@ -210,7 +259,7 @@ export async function ensureLogisticsExpenseBill(
     create: {
       billKey,
       orderId: order.id,
-      supplierId: supplier?.id || null,
+      supplierId: supplierId || null,
       billOfLadingNo,
       auditStatus,
       invoiceStatus: "未通知",
@@ -303,17 +352,6 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
 export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient | typeof prisma, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
   const costType = String(normalizedCostType(nonEmpty(expense.costType)));
   const currentActorId = logisticsExpenseActorId(actor);
-  const duplicate = await tx.orderCost.findFirst({
-    where: {
-      orderId: expense.orderId,
-      costType,
-      deletedAt: null,
-      NOT: { sourceId: expense.id },
-    },
-  });
-  if (duplicate) {
-    throw codedError("同一订单同一物流费用类型已存在正式成本，不能重复进入成本。", 409, "LOGISTICS_EXPENSE_DUPLICATE_COST");
-  }
   const costData = {
     orderId: expense.orderId,
     supplierId: expense.supplierId,

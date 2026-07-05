@@ -29,14 +29,21 @@ export function logisticsExpenseBillOfLadingNo(order: LogisticsOrderLike = {}) {
   return nonEmpty(order.blNo || order.orderNo || "no-bl");
 }
 
-export function logisticsExpenseBillKey(orderId: unknown, billOfLadingNo: unknown) {
+export function logisticsExpenseBillKey(orderId: unknown, billOfLadingNo: unknown, supplierId: unknown = "") {
+  const id = nonEmpty(orderId);
+  const blNo = nonEmpty(billOfLadingNo || "no-bl").toLowerCase();
+  const supplier = nonEmpty(supplierId || "no-supplier");
+  return id ? `${id}::${blNo}::${supplier}` : "";
+}
+
+export function logisticsExpenseLegacyBillKey(orderId: unknown, billOfLadingNo: unknown) {
   const id = nonEmpty(orderId);
   const blNo = nonEmpty(billOfLadingNo || "no-bl").toLowerCase();
   return id ? `${id}::${blNo}` : "";
 }
 
-export function logisticsExpenseBillKeyForOrder(order: LogisticsOrderLike = {}) {
-  return logisticsExpenseBillKey(order.id, logisticsExpenseBillOfLadingNo(order));
+export function logisticsExpenseBillKeyForOrder(order: LogisticsOrderLike = {}, supplierId: unknown = "") {
+  return logisticsExpenseBillKey(order.id, logisticsExpenseBillOfLadingNo(order), supplierId);
 }
 
 export function logisticsExpenseBillRecord(expense: LogisticsExpenseLike = {}): LogisticsBillLike {
@@ -429,14 +436,20 @@ export function logisticsExpenseBillId(expense: LogisticsExpenseLike = {}) {
   const directBillId = nonEmpty(expense.billId || logisticsExpenseBillRecord(expense).id);
   if (directBillId) return directBillId;
   const orderSummary = expense.order?.orderId ? expense.order : logisticsExpenseOrderSummary(expense.order || {});
-  return `bill:${expense.orderId || orderSummary.orderId || "order"}:${orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "no-bl"}`;
+  const supplierId = nonEmpty(expense.supplierId || logisticsExpenseBillRecord(expense).supplierId);
+  const legacyKey = [orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "no-bl", supplierId].filter(Boolean).join("::");
+  return `bill:${expense.orderId || orderSummary.orderId || "order"}:${legacyKey || "no-bl"}`;
 }
 
 export function groupLogisticsExpensesByBill(rows: LogisticsExpenseLike[] = []) {
   const groups = new Map<string, LogisticsExpenseLike[]>();
   for (const row of rows) {
     const orderSummary = logisticsExpenseOrderSummary(row.order || {});
-    const key = row.billId || logisticsExpenseBillRecord(row).id || [row.orderId || orderSummary.orderId || "", orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || ""].join("::");
+    const key = row.billId || logisticsExpenseBillRecord(row).id || [
+      row.orderId || orderSummary.orderId || "",
+      orderSummary.blNo || orderSummary.billOfLadingNo || orderSummary.orderNo || "",
+      row.supplierId || logisticsExpenseBillRecord(row).supplierId || "",
+    ].join("::");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(row);
   }

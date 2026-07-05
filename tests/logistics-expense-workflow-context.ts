@@ -79,6 +79,10 @@ export const logisticsBillConvergenceMigration = readFileSync(
   "prisma/migrations/20260627120000_converge_logistics_expense_status_to_bills/migration.sql",
   "utf8",
 );
+export const logisticsBillSupplierKeyMigration = readFileSync(
+  "prisma/migrations/20260705143000_logistics_bill_supplier_key/migration.sql",
+  "utf8",
+);
 export const logisticsBillStateMachine = readFileSync(
   "lib/platform/logistics-bill-state-machine.ts",
   "utf8",

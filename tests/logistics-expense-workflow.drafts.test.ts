@@ -133,8 +133,9 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.match(backend, /beforeAuditStatus/);
   assert.match(backend, /logisticsExpenseBillAuditStatusValue\(before\)/);
   assert.match(backend, /logisticsExpenseBillEditBlockReason/);
-  assert.match(backend, /待审核账单不能修改，请先撤回为草稿。/);
-  assert.match(backend, /待审核账单不能删除明细，请先撤回为草稿。/);
+  assert.match(backend, /账单\$\{billStatus \|\| "当前状态"\}，不能保存明细，请先撤回为草稿。/);
+  assert.match(backend, /不能修改明细，请先撤回为草稿。/);
+  assert.match(backend, /不能删除明细，请先撤回为草稿。/);
   assert.match(backend, /LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_APPROVED_LOCKED/);
   assert.match(logisticsModule, /canEditAmount=\{isLogisticsSupplier\}/);
@@ -258,7 +259,8 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.match(workspaceStyles, /overflow-x: auto/);
   assert.match(workspaceStyles, /color: var\(--button-primary-text\)/);
   assert.match(logisticsExpenseBatchRoute, /export async function PATCH/);
-  assert.match(logisticsExpenseBatchRoute, /batchUpdateLogisticsExpenses/);
+  assert.match(logisticsExpenseBatchRoute, /LOGISTICS_EXPENSE_BATCH_UPDATE_DEPRECATED/);
+  assert.doesNotMatch(logisticsExpenseBatchRoute, /batchUpdateLogisticsExpenses/);
   assert.match(backend, /export async function batchUpdateLogisticsExpenses/);
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_AMOUNT_INVALID/);
   assert.match(backend, /LOGISTICS_EXPENSE_BATCH_QUANTITY_INVALID/);
