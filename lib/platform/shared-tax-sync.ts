@@ -7,7 +7,7 @@ import {
   taxRefundStatusFromCompleteness,
 } from "./shared-tax-completeness";
 import { hasCostBusinessDocument } from "./business-documents";
-import { ORDER_COST_STATUS_VOID, runNonCriticalTask } from "./shared-constants";
+import { ORDER_COST_STATUS_VOID, isLogisticsGeneratedCostSourceType, runNonCriticalTask } from "./shared-constants";
 
 type TaxRefundCompletenessOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 type TaxRefundCompletenessResult = ReturnType<typeof taxDocumentCompleteness>;
@@ -168,7 +168,7 @@ export async function syncCostInvoiceStatus(costId: string | null | undefined) {
     },
   });
   const hasSupplierReturnInvoice = await hasCostBusinessDocument(cost, "SUPPLIER_INVOICE");
-  if (cost.sourceType === "LOGISTICS_EXPENSE") {
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType)) {
     const invoiceStatus = invoiceCount > 0 || hasSupplierReturnInvoice ? "已收到" : (cost.invoiceStatus || "未通知");
     return prisma.orderCost.update({
       where: { id: costId },

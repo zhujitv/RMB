@@ -2,7 +2,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { orderAccessWhere, orderSalespersonOwnershipWhere } from "./order-access";
 import { addDays, startOfChinaDay, todoActivationRuleForType, todoPriorityFromDueAt } from "./workbench-todo-rules";
 import type { WorkbenchTodoPriority, WorkbenchTodoStatus } from "./workbench-todo-rules";
-import { FACTORY_SUPPLIER_COST_TYPES, LEGACY_LOGISTICS_OPERATOR_ROLE, LOGISTICS_OPERATOR_ROLE, ORDER_COST_STATUS_VOID, PRODUCT_SUPPLIER_TYPES, isLogisticsCostType, isProductSupplierType, nonEmpty } from "./shared";
+import { FACTORY_SUPPLIER_COST_TYPES, LEGACY_LOGISTICS_OPERATOR_ROLE, LOGISTICS_GENERATED_COST_SOURCE_TYPES, LOGISTICS_OPERATOR_ROLE, ORDER_COST_STATUS_VOID, PRODUCT_SUPPLIER_TYPES, isLogisticsCostType, isLogisticsGeneratedCostSourceType, isProductSupplierType, nonEmpty } from "./shared";
 import type { ActorLike, TodoCost, TodoLogisticsBill, TodoOrder, TodoOwner, TodoPayment, WorkbenchTodo, WorkbenchTodoContext } from "./workbench-todos-types";
 import { actorId, actorRole, actorSupplierId, endOfChinaDay, iso, orderCustomerShortName, orderOwnerName, salespersonOwner, supplierOwner, uniqueIds, visibleUserIds } from "./workbench-todos-owners";
 
@@ -68,7 +68,7 @@ export function supplierNameForCost(cost: TodoCost) {
 export function productSupplierPaymentCostWhere(): Prisma.OrderCostWhereInput {
   return {
     status: { not: ORDER_COST_STATUS_VOID },
-    sourceType: { not: "LOGISTICS_EXPENSE" },
+	    sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
     OR: [
       { costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
       { supplier: { is: { supplierType: { in: PRODUCT_SUPPLIER_TYPES } } } },
@@ -81,7 +81,7 @@ export function isProductSupplierPaymentCost(cost: {
   sourceType?: string | null;
   supplier?: { supplierType?: string | null } | null;
 }) {
-  if (cost.sourceType === "LOGISTICS_EXPENSE" || isLogisticsCostType(cost.costType || "")) return false;
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType) || isLogisticsCostType(cost.costType || "")) return false;
   return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType || "") || isProductSupplierType(cost.supplier?.supplierType);
 }
 

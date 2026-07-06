@@ -98,12 +98,12 @@ export function logisticsExpenseReviewNotice(
   result: LogisticsExpenseMutationResult,
 ) {
   if (result.message) return result.message;
-  if (result.emailError)
-    return `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`;
-  const successCount = Number(result.successCount || 0);
-  if (successCount > 0)
-    return `已审核 ${successCount} 票物流费用，开票通知已按供应商合并发送`;
-  return "物流费用已审核，开票通知已按供应商合并发送";
+	if (result.emailError)
+	    return `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`;
+	const successCount = Number(result.successCount || 0);
+	if (successCount > 0)
+	    return `已审核 ${successCount} 票物流费用，已同步成本管理`;
+	return "物流费用已审核，已同步成本管理";
 }
 
 export function reconcileLogisticsExpenseMutationRows(

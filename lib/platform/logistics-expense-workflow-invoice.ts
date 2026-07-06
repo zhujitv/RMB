@@ -54,18 +54,20 @@ import {
 } from "./logistics-expense-workflow-core";
 
 function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseRow[]) {
-  const billInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(billRows);
-  const billPaymentStatus = aggregateLogisticsExpenseStatus(billRows, "paymentStatus");
-  return billPaymentStatus === "待开票"
-    && ["已上传发票", "已上传", "已确认", "已确认发票"].includes(billInvoiceStatus)
-    ? { paymentStatus: "待付款" }
+	const billAuditStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
+	const billInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(billRows);
+	const billPaymentStatus = aggregateLogisticsExpenseStatus(billRows, "paymentStatus");
+	return billAuditStatus === "审核通过"
+		&& billPaymentStatus === "待开票"
+		&& ["已上传发票", "已上传", "已确认", "已确认发票"].includes(billInvoiceStatus)
+		? { paymentStatus: "待付款" }
     : {};
 }
 
 export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, formData: FormDataLike) {
   const before = await loadLogisticsExpenseForAction(id, actor);
   if (!canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(before) })) {
-    throw codedError("只有审核通过的物流费用可以上传发票。", 400, "LOGISTICS_EXPENSE_NOT_APPROVED");
+    throw codedError("只有已提交待审核或审核通过的物流费用账单可以上传发票。", 400, "LOGISTICS_EXPENSE_NOT_READY_FOR_INVOICE");
   }
   if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限上传该物流费用发票", 403);
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
@@ -77,8 +79,8 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
   if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用，不能上传该分组发票。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
-  const blocked = targetRows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row) }) || !row.costId);
-  if (blocked) throw codedError("该发票分组包含尚未审核生成正式成本的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_COST_MISSING");
+  const blocked = targetRows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row) }));
+  if (blocked) throw codedError("该发票分组包含尚未提交审核的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_INVOICE_UPLOAD_STATUS_BLOCKED");
   const file = formData.get("file");
   if (!file || typeof file !== "object" || typeof (file as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
     throw codedError("请上传发票文件。", 400, "INVOICE_FILE_REQUIRED");

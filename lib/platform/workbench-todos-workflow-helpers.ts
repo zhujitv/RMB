@@ -6,6 +6,7 @@ import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
   ORDER_COST_STATUS_VOID,
+  isLogisticsGeneratedCostSourceType,
   getCommissionFormulaSettings,
   includeOrderRelations,
   isProductSupplierOperatorRole,
@@ -99,13 +100,13 @@ export function supplierDocumentFileMatchesCost(
 }
 
 export function activeFactorySupplierCosts(order: WorkbenchWorkflowOrder) {
-  return (order.costs || []).filter((cost) => (
-    !cost.deletedAt
-    && cost.status !== ORDER_COST_STATUS_VOID
-    && nonEmpty(cost.id)
-    && cost.sourceType !== "LOGISTICS_EXPENSE"
-    && FACTORY_SUPPLIER_COST_TYPES.includes(nonEmpty(cost.costType))
-  ));
+	return (order.costs || []).filter((cost) => (
+		!cost.deletedAt
+		&& cost.status !== ORDER_COST_STATUS_VOID
+		&& nonEmpty(cost.id)
+		&& !isLogisticsGeneratedCostSourceType(cost.sourceType)
+		&& FACTORY_SUPPLIER_COST_TYPES.includes(nonEmpty(cost.costType))
+	));
 }
 
 export function supplierDocumentRequestsForFactoryCosts(order: WorkbenchWorkflowOrder) {
@@ -146,9 +147,9 @@ export function supplierDocumentRequestMatchesCost(
 }
 
 export function isActiveFactorySupplierCostRef(cost: WorkbenchFactoryCostRef | null | undefined, supplierId = "") {
-  if (!cost || cost.deletedAt) return false;
-  if (cost.status === ORDER_COST_STATUS_VOID) return false;
-  if (cost.sourceType === "LOGISTICS_EXPENSE") return false;
+	if (!cost || cost.deletedAt) return false;
+	if (cost.status === ORDER_COST_STATUS_VOID) return false;
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType)) return false;
   if (!FACTORY_SUPPLIER_COST_TYPES.includes(nonEmpty(cost.costType))) return false;
   return supplierId ? cost.supplierId === supplierId : Boolean(cost.supplierId);
 }

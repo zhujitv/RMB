@@ -1,5 +1,5 @@
 import { dateToInput, logServerError } from "./shared-base-utils";
-import { ORDER_COST_STATUS_VOID, normalizedCostType } from "./shared-constants";
+import { ORDER_COST_STATUS_VOID, isLogisticsGeneratedCostSourceType, normalizedCostType } from "./shared-constants";
 import { serializeUser } from "./shared-users";
 import { businessEntityFieldsFromOrder } from "./business-entities";
 import { managedFileDownloadPath } from "./file-center";
@@ -100,7 +100,7 @@ function serializedCostDeleteBlockedReasons(cost: CostLike) {
   if (serializedCostSupplierRequestLinked(cost)) reasons.push("已关联资料回传任务");
   if (serializedCostProfitLinked(cost)) reasons.push("已关联利润或提成结算");
   if (cost.costConfirmed) reasons.push("成本已确认");
-  if (cost.sourceType === "LOGISTICS_EXPENSE" || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType) || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
   return [...new Set(reasons)];
 }
 
@@ -138,12 +138,12 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
-    invoiceStatus: cost.sourceType === "LOGISTICS_EXPENSE"
-      ? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
-      : invoiceStatusFromDocuments(cost.documents || []),
+		invoiceStatus: isLogisticsGeneratedCostSourceType(cost.sourceType)
+			? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
+			: invoiceStatusFromDocuments(cost.documents || []),
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
-    sourceLabel: cost.sourceType === "LOGISTICS_EXPENSE" ? "物流费用审核生成" : "人工录入",
+		sourceLabel: isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     documents: [],
     createdAt: cost.createdAt,
@@ -220,12 +220,12 @@ export function serializeCost(costInput: unknown) {
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
-    invoiceStatus: cost.sourceType === "LOGISTICS_EXPENSE"
-      ? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
-      : invoiceStatusFromDocuments(cost.documents || []),
+		invoiceStatus: isLogisticsGeneratedCostSourceType(cost.sourceType)
+			? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
+			: invoiceStatusFromDocuments(cost.documents || []),
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
-    sourceLabel: cost.sourceType === "LOGISTICS_EXPENSE" ? "物流费用审核生成" : "人工录入",
+		sourceLabel: isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     createdBy: serializeUser(cost.createdBy),
     updatedBy: serializeUser(cost.updatedBy),

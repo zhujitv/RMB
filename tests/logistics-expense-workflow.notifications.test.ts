@@ -61,7 +61,7 @@ import {
   logisticsSupplierStatementSource
 } from "./logistics-expense-workflow-context.ts";
 
-test("approval sends invoice notification and preserves failure for audit", () => {
+test("legacy logistics invoice notification remains available outside approval flow", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);
   assert.match(backend, /renderLogisticsInvoiceNotificationEmail/);
@@ -83,13 +83,14 @@ test("approval sends invoice notification and preserves failure for audit", () =
   assert.match(backend, /recipientEmails: resolved\.emails/);
   assert.match(backend, /role: "管理员"/);
   assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults/);
-  assert.match(backend, /物流费用开票通知失败/);
+  assert.match(backend, /重新发送物流费用开票通知/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
   assert.match(
     backend,
     /invoiceNotificationError: result\.sent \|\| result\.skipped \? null/,
   );
-  assert.match(backend, /通知失败/);
+  assert.match(logisticsReviewRoute, /历史开票通知发送失败/);
+  assert.doesNotMatch(logisticsReviewRoute, /开票通知已按供应商合并发送/);
 });
 
 test("settings include configurable logistics invoice notification template", () => {

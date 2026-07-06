@@ -1,4 +1,4 @@
-import { normalizedCostType, SEA_FREIGHT_REQUIREMENT_KEY } from "./shared-constants";
+import { LOGISTICS_FEE_COST_SOURCE_TYPE, normalizedCostType, SEA_FREIGHT_REQUIREMENT_KEY } from "./shared-constants";
 import { logisticsInvoiceGroupForExpense } from "./logistics-invoice-groups";
 import {
   type CostLike,
@@ -43,7 +43,7 @@ export function logisticsExpenseInvoiceCostLike(expense: LogisticsExpenseInvoice
     amount: expense.amount ?? matchedCost?.amount ?? expense.cost?.amount ?? 0,
     amountCny: expense.amountCny ?? matchedCost?.amountCny ?? expense.cost?.amountCny ?? 0,
     currency: expense.currency || matchedCost?.currency || expense.cost?.currency || "CNY",
-    sourceType: "LOGISTICS_EXPENSE",
+		sourceType: matchedCost?.sourceType || expense.cost?.sourceType || LOGISTICS_FEE_COST_SOURCE_TYPE,
     sourceId: expense.id || matchedCost?.sourceId || expense.cost?.sourceId || "",
     costConfirmed: matchedCost?.costConfirmed ?? true,
     createdAt: matchedCost?.createdAt || expense.cost?.createdAt || null,

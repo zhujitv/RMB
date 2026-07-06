@@ -5,6 +5,7 @@ import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
   ORDER_COST_STATUS_VOID,
   getCommissionFormulaSettings,
   includeOrderRelations,
@@ -225,7 +226,7 @@ export async function listProfitTodos(context: WorkbenchTodoContext) {
           order: {
             select: {
               costs: {
-                where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID }, sourceType: { not: "LOGISTICS_EXPENSE" }, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
+	                where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID }, sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES }, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
                 select: { id: true, supplierId: true, sourceType: true, costType: true, status: true, deletedAt: true },
                 take: 50,
               },

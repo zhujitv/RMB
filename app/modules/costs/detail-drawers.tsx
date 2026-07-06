@@ -34,7 +34,7 @@ export function CostDetailDrawer({
 }) {
   const [activeTab, setActiveTab] = useState("basic");
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
-  const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
+	const manualCost = !isLogisticsGeneratedCost(cost);
   const voided = isVoidedCost(cost);
   const deleteAllowed = canDeleteCost(cost);
   const voidAllowed = canVoidCost(cost);

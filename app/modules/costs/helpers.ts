@@ -27,7 +27,7 @@ export function isLogisticsInvoiceCost(cost: CostRow) {
 }
 
 export function isLogisticsGeneratedCost(cost: Pick<CostRow, "sourceType">) {
-  return cost.sourceType === "LOGISTICS_EXPENSE";
+	return ["LOGISTICS_EXPENSE", "LOGISTICS_FEE"].includes(String(cost.sourceType || ""));
 }
 
 export function isProductSupplierPaymentEnabled(cost: CostRow) {

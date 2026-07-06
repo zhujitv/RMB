@@ -46,10 +46,10 @@ export function LogisticsInvoiceGroupsPanel({
       (group.itemIds?.length || 0) > 0 ||
       !logisticsCurrencySummaryIsZero(group.currencyTotals),
   );
-  const approvedItems = items.filter(
-    (item) => logisticsExpenseBillAuditStatusFromRow(item) === "审核通过",
-  );
-  if (!visibleGroups.length || !approvedItems.length) return null;
+	const uploadableItems = items.filter(
+		(item) => ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+	);
+	if (!visibleGroups.length || !uploadableItems.length) return null;
 
   async function deleteInvoiceGroup(
     targetExpense: LogisticsExpense,
@@ -150,7 +150,9 @@ export function LogisticsInvoiceGroupsPanel({
           const validationPassed = ["校验通过", "人工确认通过"].includes(validationStatus);
           const validationProblem = uploaded && !validationPassed && validationStatus !== "识别中" && validationStatus !== "已上传待识别";
           const recognizedAmount = Number(group.recognizedAmount || 0);
-          const recognizedName = group.recognizedName || "-";
+	          const recognizedName = group.recognizedName || "-";
+	          const recognizedSeller = group.recognizedSeller || "-";
+	          const recognizedBuyer = group.recognizedBuyer || "-";
           const invoiceDocument =
             groupItems
               .map((item) => item.invoiceDocument)
@@ -170,10 +172,9 @@ export function LogisticsInvoiceGroupsPanel({
           const canUploadGroup =
             canUploadInvoice &&
             groupItems.length > 0 &&
-            groupItems.every(
-              (item) =>
-                logisticsExpenseBillAuditStatusFromRow(item) === "审核通过",
-            ) &&
+	            groupItems.every((item) =>
+	              ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+	            ) &&
             !uploaded &&
             !confirmed;
           const canDeleteGroup =
@@ -279,10 +280,18 @@ export function LogisticsInvoiceGroupsPanel({
                       <span>系统费用分组</span>
                       <strong title={group.label}>{group.label}</strong>
                     </div>
-                    <div className={styles.logisticsInvoiceValidationItem}>
-                      <span>识别品名</span>
-                      <strong title={recognizedName}>{recognizedName}</strong>
-                    </div>
+	                    <div className={styles.logisticsInvoiceValidationItem}>
+	                      <span>识别品名</span>
+	                      <strong title={recognizedName}>{recognizedName}</strong>
+	                    </div>
+	                    <div className={styles.logisticsInvoiceValidationItem}>
+	                      <span>识别销售方</span>
+	                      <strong title={recognizedSeller}>{recognizedSeller}</strong>
+	                    </div>
+	                    <div className={styles.logisticsInvoiceValidationItem}>
+	                      <span>识别购买方</span>
+	                      <strong title={recognizedBuyer}>{recognizedBuyer}</strong>
+	                    </div>
                     <div className={styles.logisticsInvoiceValidationItem}>
                       <span>发票号码</span>
                       <strong title={group.recognizedInvoiceNo || "-"}>{group.recognizedInvoiceNo || "-"}</strong>

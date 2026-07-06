@@ -16,6 +16,7 @@ import {
   assertRead,
   canRead,
   effectivePermissions,
+  isLogisticsGeneratedCostSourceType,
   isProductSupplierOperatorRole,
   normalizeOrderDocumentType,
   permissionError,
@@ -271,5 +272,5 @@ export async function resolveDocumentScope({ orderId, documentType, costId, supp
 }
 
 export function isLogisticsGeneratedCostInvoice(documentType: string | null | undefined, cost: DocumentCostLike | null | undefined) {
-  return documentType === "SUPPLIER_INVOICE" && cost?.sourceType === "LOGISTICS_EXPENSE";
+	return documentType === "SUPPLIER_INVOICE" && isLogisticsGeneratedCostSourceType(cost?.sourceType);
 }

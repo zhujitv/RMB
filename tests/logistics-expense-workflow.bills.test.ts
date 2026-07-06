@@ -70,28 +70,22 @@ test("logistics expense list reads avoid transactions for count and pagination",
   assert.doesNotMatch(listLogisticsExpensesSource, /prisma\.\$transaction/);
 });
 
-test("logistics expense approval works at bill level and groups invoice emails by supplier", () => {
+test("logistics expense approval works at bill level and pushes uploaded invoices to costs", () => {
   assert.match(logisticsReviewRoute, /export async function PATCH/);
   assert.match(
     logisticsReviewRoute,
     /reviewLogisticsExpenseBills\(request, actor, body\)/,
   );
-  assert.match(logisticsReviewRoute, /开票通知已按供应商合并发送/);
-  assert.match(backend, /export async function reviewLogisticsExpenseBills/);
-  assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
-  assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
-  assert.match(backend, /notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)/);
-  assert.match(
-    backend,
-    /applyLogisticsExpenseInvoiceNotificationResults\(approvedRows, emailResults, actor, now\)/,
-  );
-  assert.match(backend, /const bySupplier = new Map/);
-  assert.match(backend, /group\.bills\.push\(bill\)/);
-  assert.match(
-    backend,
-    /sendNotificationEmail\(\{[\s\S]*recipientEmails: resolved\.emails/,
-  );
-  assert.match(backend, /NOTIFICATION_TEMPLATE_TYPES\.LOGISTICS_INVOICE_NOTICE/);
+	assert.doesNotMatch(logisticsReviewRoute, /开票通知已按供应商合并发送/);
+	assert.match(backend, /export async function reviewLogisticsExpenseBills/);
+	assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
+	assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
+	assert.match(backend, /await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/);
+	assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
+	assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor\)/);
+	assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
+	assert.match(backend, /LOGISTICS_FEE_COST_SOURCE_TYPE/);
+	assert.match(backend, /NOTIFICATION_TEMPLATE_TYPES\.LOGISTICS_INVOICE_NOTICE/);
   assert.match(schema, /notification_outbox/);
   assert.match(schema, /notification_delivery_logs/);
   assert.match(backend, /待开票费用清单/);
@@ -125,8 +119,9 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /发票上传入口/);
   assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
   assert.match(backend, /paymentStatus: "待开票"/);
-  assert.match(backend, /function paymentStatusUpdateAfterInvoiceProgress/);
-  assert.match(backend, /billPaymentStatus === "待开票"/);
+	assert.match(backend, /function paymentStatusUpdateAfterInvoiceProgress/);
+	assert.match(backend, /billAuditStatus === "审核通过"/);
+	assert.match(backend, /billPaymentStatus === "待开票"/);
   assert.match(backend, /\? \{ paymentStatus: "待付款" \}/);
   assert.match(backend, /export async function uploadLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
   assert.match(backend, /const expenseUpdate = await tx\.logisticsExpense\.updateMany/);
@@ -139,10 +134,10 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.match(backend, /export async function confirmLogisticsExpenseInvoice[\s\S]*refreshLogisticsBillWorkflowStatus\(billRows, actor, paymentStatusUpdateAfterInvoiceProgress\(billRows\)\)/);
   assert.match(backend, /reviewedById: actor\.id/);
   assert.match(backend, /reviewedAt: now/);
-  assert.match(
-    backend,
-    /invoiceNotifiedAt: result\.sent \? now : row\.invoiceNotifiedAt/,
-  );
+	assert.match(
+	    backend,
+	    /invoiceNotificationError: null/,
+	);
   assert.match(
     backend,
     /LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS = \{ timeout: 15000, maxWait: 10000 \}/,
@@ -166,29 +161,32 @@ test("logistics expense approval works at bill level and groups invoice emails b
   assert.doesNotMatch(logisticsBillConvergenceMigration, /SET "audit_status"/);
   assert.match(
     approveLogisticsExpenseBillRowsSource,
-    /tx\.logisticsBill\.update/,
+    /tx\.logisticsBill\.updateMany/,
   );
+  assert.match(backend, /billUpdate\.count !== ids\.length/);
+  assert.match(backend, /billUpdate\.count !== 1/);
+  assert.match(backend, /LOGISTICS_BILL_STATUS_CHANGED/);
+  assert.match(backend, /物流费用账单状态已变化，请刷新后重试。/);
   assert.doesNotMatch(
     approveLogisticsExpenseBillRowsSource,
     /tx\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
+	assert.match(approveLogisticsExpenseBillRowsSource, /syncApprovedLogisticsExpenseCosts\(tx, savedRows, actor\)/);
   assert.match(
     approveLogisticsExpenseBillRowsSource,
-    /createOrUpdateCostFromLogisticsExpense\(prisma, before, actor\)/,
-  );
-  assert.match(
-    approveLogisticsExpenseBillRowsSource,
-    /updateLogisticsExpenseCostIds\(prisma, costLinks\)/,
+    /tx\.logisticsExpense\.findMany/,
   );
   assert.match(
     backend,
-    /prisma\.logisticsBill\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
+    /tx\.logisticsBill\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
   assert.doesNotMatch(
     `${reviewLogisticsExpenseBillsSource}\n${approveLogisticsExpenseBillRowsSource}`,
     /prisma\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
   assert.match(backend, /UPDATE "logistics_expenses"[\s\S]*CASE "id"/);
+  assert.match(backend, /tx\.orderDocument\.updateMany/);
+  assert.match(backend, /tx\.fileAsset\.updateMany/);
   assert.match(
     reviewLogisticsExpenseBillsSource,
     /await approveLogisticsExpenseBillRowsInTransaction\(bill\.rows, actor, reviewRemark, now\)/,
@@ -205,7 +203,7 @@ test("logistics expense approval works at bill level and groups invoice emails b
     approveLogisticsExpenseBillRowsSource,
     /tx\.logisticsExpense\.update\(/,
   );
-  assert.doesNotMatch(
+  assert.match(
     approveLogisticsExpenseBillRowsSource,
     /include: includeLogisticsExpenseRelations/,
   );
@@ -230,10 +228,10 @@ test("logistics expense approval works at bill level and groups invoice emails b
     frontendAggregateStatusSource,
     /部分草稿|部分待审核|部分驳回|部分审核通过/,
   );
-  assert.doesNotMatch(
-    backend,
-    /for \(const bill[\s\S]*notifyLogisticsSupplierInvoice\(bill/,
-  );
+	assert.doesNotMatch(
+	    backend,
+	    /for \(const bill[\s\S]*notifyLogisticsSupplierInvoice\(bill/,
+	);
 });
 
 test("logistics invoice upload is grouped by required invoice categories", () => {
@@ -284,6 +282,7 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.doesNotMatch(backend, /paymentStatus: "已开票"/);
   assert.match(backend, /recognizeAndValidateLogisticsInvoiceGroup/);
   assert.match(backend, /recognizeLogisticsInvoiceWithOcr/);
+  assert.match(backend, /LOGISTICS_INVOICE_OCR_MODULE = "LOGISTICS_INVOICE"/);
   assert.match(backend, /LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE = "LOGISTICS_INVOICE"/);
   assert.match(backend, /invoiceValidationStatusCanContinue/);
   assert.match(backend, /summarizeInvoiceValidationBlockReason/);
@@ -308,9 +307,11 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   );
   assert.match(logisticsModule, /发票校验/);
   assert.match(logisticsModule, /系统分组合计/);
-  assert.match(logisticsModule, /识别发票金额/);
-  assert.match(logisticsModule, /系统费用分组/);
-  assert.match(logisticsModule, /识别品名/);
+	assert.match(logisticsModule, /识别发票金额/);
+	assert.match(logisticsModule, /系统费用分组/);
+	assert.match(logisticsModule, /识别品名/);
+	assert.match(logisticsModule, /识别销售方/);
+	assert.match(logisticsModule, /识别购买方/);
   assert.match(logisticsModule, /人工确认通过/);
   assert.doesNotMatch(
     backend,
@@ -370,10 +371,10 @@ test("logistics expense page supports single bill review and merged batch review
   assert.match(logisticsModule, /selectedReviewableRows/);
   assert.match(logisticsModule, /toggleAllReviewableBills/);
   assert.match(logisticsModule, /reviewSelectedBills/);
-  assert.match(logisticsModule, /\/api\/logistics-costs\/review/);
-  assert.match(logisticsModule, /合并审核 \/ 批量审核/);
-  assert.match(logisticsModule, /同一供应商只发送一封邮件/);
-  assert.match(logisticsModule, /审核通过并通知开票/);
+	assert.match(logisticsModule, /\/api\/logistics-costs\/review/);
+	assert.match(logisticsModule, /合并审核 \/ 批量审核/);
+	assert.doesNotMatch(logisticsModule, /同一供应商只发送一封邮件/);
+	assert.doesNotMatch(logisticsModule, /审核通过并通知开票/);
   assert.match(logisticsModule, /logisticsExpenseBillCanApprove/);
   assert.match(
     logisticsModule,
@@ -402,7 +403,7 @@ test("pending logistics expense bills can be rejected with supplier-facing reaso
   assert.match(logisticsModule, /inputRequiredMessage: "请填写驳回原因。"/);
   assert.match(logisticsModule, /className=\{styles\.billApproveButton\}/);
   assert.match(logisticsModule, /className=\{styles\.billRejectButton\}/);
-  assert.match(logisticsModule, /审核通过并通知开票/);
+	assert.doesNotMatch(logisticsModule, /审核通过并通知开票/);
   assert.match(logisticsModule, /"驳回"/);
   assert.match(logisticsModule, /replaceLogisticsExpenseItemsInRows/);
   assert.match(logisticsModule, /markLogisticsExpenseBillRejected/);

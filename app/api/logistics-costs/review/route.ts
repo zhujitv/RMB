@@ -11,8 +11,8 @@ export async function PATCH(request: NextRequest) {
     const body = await parseJsonBody(request);
     const result = await reviewLogisticsExpenseBills(request, actor, body);
     const message = result.message || (result.emailError
-      ? `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`
-      : "物流费用已审核，开票通知已按供应商合并发送");
+      ? `费用已审核，历史开票通知发送失败：${result.emailError}`
+      : "物流费用已审核，已同步成本管理");
     return ok({ ...result, success: result.success !== false, message });
   } catch (error: unknown) {
     return apiError(maskLogisticsReviewTimeoutError(error), "审核物流费用失败");

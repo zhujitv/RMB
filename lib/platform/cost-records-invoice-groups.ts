@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import { summarizeCurrencyTotals } from "./currency-totals";
-import { ORDER_COST_STATUS_VOID, assertRead, nonEmpty, safeSerializeCost, type CostDto } from "./shared";
+import { LOGISTICS_GENERATED_COST_SOURCE_TYPES, ORDER_COST_STATUS_VOID, assertRead, isLogisticsGeneratedCostSourceType, nonEmpty, safeSerializeCost, type CostDto } from "./shared";
 import { costAccessWhere } from "./masters-access";
 import { attachBusinessDocumentsToCosts, successfulSupplierInvoicePairs } from "./business-documents";
 import { costPageParams } from "./cost-records-shared";
@@ -27,9 +27,9 @@ function logisticsBillIdForCost(cost: CostWithInvoiceGroupRelations | null | und
 }
 
 function costInvoiceGroupKey(cost: CostWithInvoiceGroupRelations) {
-  const billId = logisticsBillIdForCost(cost);
-  if (cost.sourceType === "LOGISTICS_EXPENSE" && billId) return `logistics-bill:${billId}`;
-  if (cost.sourceType === "LOGISTICS_EXPENSE") {
+	const billId = logisticsBillIdForCost(cost);
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType) && billId) return `logistics-bill:${billId}`;
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType)) {
     return [
       "logistics-fallback",
       cost.orderId || "",
@@ -126,7 +126,7 @@ function serializeCostInvoiceGroup(key: string, costs: CostDto[], rawRows: CostW
   const invoiceStatus = groupInvoiceStatus(groupCosts);
   const exceptionType = invoiceExceptionType(groupCosts, paymentStatus, invoiceStatus);
   const sourceTypes = uniqueTextList(groupCosts.map((cost) => cost.sourceType));
-  const groupType = sourceTypes.includes("LOGISTICS_EXPENSE") ? "LOGISTICS_BILL" : "COST";
+	const groupType = sourceTypes.some(isLogisticsGeneratedCostSourceType) ? "LOGISTICS_BILL" : "COST";
   const costTypeLabels = uniqueTextList(groupCosts.map((cost) => cost.costType));
   const latestCreatedAt = groupCosts
     .map((cost) => new Date(cost.createdAt || cost.updatedAt || 0).getTime())
@@ -271,7 +271,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
   const fullWhere: Prisma.OrderCostWhereInput[] = [];
   if (billIds.length) {
     fullWhere.push({
-      sourceType: "LOGISTICS_EXPENSE",
+	      sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
       generatedLogisticsExpense: { is: { billId: { in: billIds } } },
     });
   }

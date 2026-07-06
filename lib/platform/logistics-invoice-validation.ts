@@ -3,14 +3,15 @@ import { readR2Object } from "../r2";
 import { prisma } from "../prisma";
 import { recognizeLogisticsInvoiceWithOcr } from "./ocr-integration";
 import { saveOcrRawResult } from "./ocr-raw-results";
-import { parseVatInvoiceFields, supplierDocumentLabels, visibleResultFields } from "./supplier-document-ocr-shared";
+import { looselyMatches, parseVatInvoiceFields, supplierDocumentLabels, visibleResultFields } from "./supplier-document-ocr-shared";
 import { invoiceParserIssues } from "./supplier-document-ocr-validation";
 import { getLogisticsInvoiceValidationRules } from "./logistics-invoice-validation-rules";
 import { logisticsInvoiceGroupForKey, type LogisticsInvoiceGroupDefinition } from "./logistics-invoice-groups";
 import { codedError, dateFromInput, nonEmpty, num, optional, runNonCriticalTask, writeAudit } from "./shared";
+import { DEFAULT_COMPANY_PROFILE_SETTINGS } from "./shared-constants";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
-export const LOGISTICS_INVOICE_OCR_MODULE = "SUPPLIER_DOCUMENT_RETURN";
+export const LOGISTICS_INVOICE_OCR_MODULE = "LOGISTICS_INVOICE";
 export const LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE = "LOGISTICS_INVOICE";
 export const LOGISTICS_INVOICE_VALIDATION_NOT_UPLOADED = "未上传";
 export const LOGISTICS_INVOICE_VALIDATION_UPLOADED = "已上传待识别";
@@ -18,6 +19,7 @@ export const LOGISTICS_INVOICE_VALIDATION_PROCESSING = "识别中";
 export const LOGISTICS_INVOICE_VALIDATION_PASSED = "校验通过";
 export const LOGISTICS_INVOICE_VALIDATION_AMOUNT_MISMATCH = "金额不一致";
 export const LOGISTICS_INVOICE_VALIDATION_NAME_MISMATCH = "品名不匹配";
+export const LOGISTICS_INVOICE_VALIDATION_PARTY_MISMATCH = "抬头不匹配";
 export const LOGISTICS_INVOICE_VALIDATION_FAILED = "识别失败";
 export const LOGISTICS_INVOICE_VALIDATION_MANUAL_PASSED = "人工确认通过";
 
@@ -237,14 +239,22 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
     latestApiName = recognized.apiName || recognized.source || "ALIYUN_RECOGNIZE_INVOICE";
     latestProvider = recognized.provider || "ALIYUN";
     const fields = parseVatInvoiceFields(text, structuredFields);
+    const expectedSellerName = nonEmpty(document.supplier?.invoiceTitle || document.supplier?.supplierName);
+    const expectedBuyerName = nonEmpty(
+      document.order.businessEntity?.name
+      || document.order.businessEntityNameSnapshot
+      || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh,
+    );
     const rules = await getLogisticsInvoiceValidationRules();
     const validation = validateLogisticsInvoiceFields({
       fields,
       rows,
       invoiceGroup,
       keywords: rules[invoiceGroup.key]?.keywords || [],
+      expectedSellerName,
+      expectedBuyerName,
     });
-    const parserIssues = invoiceParserIssues(fields).filter((issue) => issue.field === "productName");
+    const parserIssues = invoiceParserIssues(fields).filter((issue) => ["productName", "seller", "buyer"].includes(issue.field || ""));
     const issues = mergeValidationIssues(validation.issues, parserIssues);
     const status = validationStatusFromIssues(issues, validation.status);
     const message = issueMessage(issues);
@@ -259,6 +269,10 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
       systemCurrency: validation.currency,
       recognizedAmount: fields.amountWithTax || 0,
       recognizedName: fields.productName || "",
+      expectedSellerName,
+      recognizedSeller: fields.seller || "",
+      expectedBuyerName,
+      recognizedBuyer: fields.buyer || "",
       allowedKeywords: rules[invoiceGroup.key]?.keywords || [],
       issues,
       fields,
@@ -397,6 +411,8 @@ function validateLogisticsInvoiceFields(input: {
   rows: LogisticsInvoiceValidationRow[];
   invoiceGroup: LogisticsInvoiceGroupDefinition;
   keywords: string[];
+  expectedSellerName?: string;
+  expectedBuyerName?: string;
 }) {
   const expectedAmount = expectedGroupAmount(input.rows);
   const currency = groupCurrency(input.rows);
@@ -420,11 +436,35 @@ function validateLogisticsInvoiceFields(input: {
       message: `品名不匹配：系统费用分组 ${input.invoiceGroup.label}，识别品名 ${input.fields.productName}`,
     });
   }
+  if (input.expectedSellerName) {
+    if (!input.fields.seller) {
+      issues.push({ level: "manual", field: "seller", message: "未识别到发票销售方，需人工确认" });
+    } else if (!looselyMatches(input.fields.seller, input.expectedSellerName)) {
+      issues.push({
+        level: "error",
+        field: "seller",
+        message: `销售方不匹配：物流供应商 ${input.expectedSellerName}，识别销售方 ${input.fields.seller}`,
+      });
+    }
+  }
+  if (input.expectedBuyerName) {
+    if (!input.fields.buyer) {
+      issues.push({ level: "manual", field: "buyer", message: "未识别到发票购买方，需人工确认" });
+    } else if (!looselyMatches(input.fields.buyer, input.expectedBuyerName)) {
+      issues.push({
+        level: "error",
+        field: "buyer",
+        message: `购买方不匹配：系统抬头 ${input.expectedBuyerName}，识别购买方 ${input.fields.buyer}`,
+      });
+    }
+  }
   const status = issues.some((issue) => issue.field === "amountWithTax")
     ? LOGISTICS_INVOICE_VALIDATION_AMOUNT_MISMATCH
     : issues.some((issue) => issue.field === "productName")
       ? LOGISTICS_INVOICE_VALIDATION_NAME_MISMATCH
-      : LOGISTICS_INVOICE_VALIDATION_PASSED;
+      : issues.some((issue) => issue.field === "seller" || issue.field === "buyer")
+        ? LOGISTICS_INVOICE_VALIDATION_PARTY_MISMATCH
+        : LOGISTICS_INVOICE_VALIDATION_PASSED;
   return { expectedAmount, currency, issues, status };
 }
 
@@ -435,6 +475,7 @@ function validationStatusFromIssues(
   if (!issues.length) return LOGISTICS_INVOICE_VALIDATION_PASSED;
   if (issues.some((issue) => issue.field === "amountWithTax")) return LOGISTICS_INVOICE_VALIDATION_AMOUNT_MISMATCH;
   if (issues.some((issue) => issue.field === "productName")) return LOGISTICS_INVOICE_VALIDATION_NAME_MISMATCH;
+  if (issues.some((issue) => issue.field === "seller" || issue.field === "buyer")) return LOGISTICS_INVOICE_VALIDATION_PARTY_MISMATCH;
   return fallback || LOGISTICS_INVOICE_VALIDATION_FAILED;
 }
 

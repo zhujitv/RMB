@@ -33,7 +33,7 @@ export type LogisticsExpenseCreateData = Prisma.LogisticsExpenseUncheckedCreateI
 
 export type LogisticsExpenseUpdateData = Prisma.LogisticsExpenseUncheckedUpdateInput;
 
-export type CostLink = { expenseId: string; costId: string };
+export type CostLink = { expenseId: string; costId: string; invoiceDocumentId?: string | null };
 
 export type ReviewBill = { billId: string; rows: LogisticsExpenseRow[] };
 

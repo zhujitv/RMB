@@ -32,6 +32,15 @@ export const NON_PARTICIPATING_COST_TYPES = ["目的港费用"];
 export const LOGISTICS_EXPENSE_AUDIT_STATUSES = ["草稿", "待审核", "审核通过", "已驳回"];
 export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["未通知", "已通知开票", "已上传", "已确认"];
 export const LOGISTICS_EXPENSE_PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
+export const LOGISTICS_FEE_COST_SOURCE_TYPE = "LOGISTICS_FEE";
+export const LEGACY_LOGISTICS_EXPENSE_COST_SOURCE_TYPE = "LOGISTICS_EXPENSE";
+export const LOGISTICS_GENERATED_COST_SOURCE_TYPES = [
+  LEGACY_LOGISTICS_EXPENSE_COST_SOURCE_TYPE,
+  LOGISTICS_FEE_COST_SOURCE_TYPE,
+];
+export function isLogisticsGeneratedCostSourceType(value: unknown) {
+  return LOGISTICS_GENERATED_COST_SOURCE_TYPES.includes(String(value || ""));
+}
 export const TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS = [
   { key: "CUSTOMS", label: "报关费发票", missingCostLabel: "缺少报关费发票", costTypes: ["报关费"] },
   { key: "TRUCKING", label: "拖车费发票", missingCostLabel: "缺少拖车发票", costTypes: ["拖车费", "国内物流费", "国内拖车费", "打单费", "进港费", "提箱费", "落箱费", "预提费", "查验费", "超重费", "其他本地费用", "其他物流费用"] },

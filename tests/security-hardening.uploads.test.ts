@@ -47,7 +47,7 @@ test("logistics generated cost invoices are managed only by logistics invoice gr
   );
   assert.match(
     orderDocumentsService,
-    /documentType === "SUPPLIER_INVOICE" && cost\?\.sourceType === "LOGISTICS_EXPENSE"/,
+    /documentType === "SUPPLIER_INVOICE" && isLogisticsGeneratedCostSourceType\(cost\?\.sourceType\)/,
   );
   assert.match(
     orderDocumentsService,

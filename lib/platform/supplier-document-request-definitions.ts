@@ -13,6 +13,7 @@ import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-documen
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
   ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_SUPPLIER_TYPES,
@@ -196,7 +197,7 @@ export function supplierDocumentRequestFactoryCostWhere({
     ],
     deletedAt: null,
     status: { not: ORDER_COST_STATUS_VOID },
-    sourceType: { not: "LOGISTICS_EXPENSE" },
+	    sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
     costType: { in: FACTORY_SUPPLIER_COST_TYPES },
     supplier: {
       is: {

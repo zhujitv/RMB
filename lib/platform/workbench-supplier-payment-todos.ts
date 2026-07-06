@@ -5,6 +5,7 @@ import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
   ORDER_COST_STATUS_VOID,
   getCommissionFormulaSettings,
   includeOrderRelations,
@@ -87,7 +88,7 @@ export async function listSupplierDocumentTodos(context: WorkbenchTodoContext) {
           customer: true,
           salesperson: { select: { id: true, name: true, email: true, role: true } },
           costs: {
-            where: { deletedAt: null, sourceType: { not: "LOGISTICS_EXPENSE" }, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
+	            where: { deletedAt: null, sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES }, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
             select: { id: true, supplierId: true, sourceType: true, costType: true, deletedAt: true },
             take: 50,
           },

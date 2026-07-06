@@ -5,10 +5,14 @@ import {
   aggregateLogisticsExpenseStatus,
   createOrUpdateCostFromLogisticsExpense,
   includeLogisticsExpenseRelations,
-  notifyLogisticsSupplierInvoiceBills,
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
+import { logisticsInvoiceExpenseMatchesGroup, logisticsInvoiceGroupsForExpenses } from "./logistics-invoice-groups";
+import {
+  invoiceValidationStatusCanContinue,
+  summarizeInvoiceValidationBlockReason,
+} from "./logistics-invoice-validation";
 import {
   LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS,
   actorId,
@@ -71,6 +75,15 @@ export function collectLogisticsExpenseReviewBill(rows: LogisticsExpenseRow[] = 
     }));
     return;
   }
+  const invoiceBlockReason = logisticsInvoiceReviewBlockReason(rows);
+  if (invoiceBlockReason) {
+    results.push(logisticsExpenseReviewResultFromRows(rows, {
+      auditStatus: billAuditStatus,
+      notificationStatus: "not_sent",
+      errorMessage: invoiceBlockReason,
+    }));
+    return;
+  }
   bills.push({ billId, rows });
 }
 
@@ -78,8 +91,8 @@ export async function approveLogisticsExpenseBillsInTransaction(billIds: string[
   assertWorkflowActor(actor);
   const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
   if (!ids.length) return;
-  await prisma.$transaction([
-    prisma.logisticsBill.updateMany({
+  await prisma.$transaction(async (tx) => {
+    const billUpdate = await tx.logisticsBill.updateMany({
       where: {
         id: { in: ids },
         deletedAt: null,
@@ -92,77 +105,57 @@ export async function approveLogisticsExpenseBillsInTransaction(billIds: string[
         reviewRemark,
         rejectReason: null,
         invoiceNotificationError: null,
-        paymentStatus: "待开票",
-        invoiceStatus: "待开票",
+        paymentStatus: "待付款",
+        invoiceStatus: "已上传发票",
         updatedById: actorId(actor),
       },
-    }),
-  ], LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+    });
+    if (billUpdate.count !== ids.length) {
+      throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_STATUS_CHANGED");
+    }
+    const rows = await tx.logisticsExpense.findMany({
+      where: {
+        billId: { in: ids },
+        deletedAt: null,
+      },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ billId: "asc" }, { createdAt: "asc" }],
+      take: ids.length * 500,
+    });
+    await syncApprovedLogisticsExpenseCosts(tx, rows, actor);
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
-export function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestLike, actor: ActorContext, approvedRows: LogisticsExpenseRow[] = [], now = new Date()) {
-  if (!approvedRows.length) return;
-  void runNonCriticalTask("物流费用批量审核后续处理", async () => {
-    const costLinks: CostLink[] = [];
-    const costSyncFailures: { row: LogisticsExpenseRow; message: string }[] = [];
-    for (const row of approvedRows) {
-      try {
-        const cost = await createOrUpdateCostFromLogisticsExpense(prisma, row, actor);
-        costLinks.push({ expenseId: row.id, costId: cost.id });
-      } catch (error: unknown) {
-        costSyncFailures.push({ row, message: errorMessage(error, "成本同步失败") });
-      }
-    }
-    await updateLogisticsExpenseCostIds(prisma, costLinks);
-    let emailResults: EmailResult[] = [];
-    let finalRows = approvedRows;
-    const costFailedBillIds = new Set(costSyncFailures.map((item) => rowBillId(item.row)).filter(Boolean));
-    const rowsWithCostFailedBills = approvedRows.filter((row) => {
-      const billId = rowBillId(row);
-      return billId ? costFailedBillIds.has(billId) : false;
-    });
-    const rowsReadyForNotification = approvedRows.filter((row) => {
-      const billId = rowBillId(row);
-      return !billId || !costFailedBillIds.has(billId);
-    });
-    if (costSyncFailures.length) {
-      const failureMessage = `成本同步失败：${[...new Set(costSyncFailures.map((item) => item.message))].join("；")}`;
-      emailResults.push(logisticsExpenseNotificationFailureResult(rowsWithCostFailedBills, failureMessage));
-    }
-    if (rowsReadyForNotification.length) {
-      try {
-        emailResults.push(...await notifyLogisticsSupplierInvoiceBills(rowsReadyForNotification));
-      } catch (error: unknown) {
-        emailResults.push(logisticsExpenseNotificationFailureResult(rowsReadyForNotification, errorMessage(error, "邮件发送失败")));
-      }
-    }
-    try {
-      finalRows = await applyLogisticsExpenseInvoiceNotificationResults(approvedRows, emailResults, actor, now);
-    } catch (error: unknown) {
-      const message = errorMessage(error, "开票通知状态记录失败");
-      emailResults = emailResults.length
-        ? emailResults.map((result) => result.sent ? { ...result, sent: false, error: message } : result)
-        : [logisticsExpenseNotificationFailureResult(approvedRows, message)];
-      finalRows = approvedRows;
-    }
-    const reloadedRows = await reloadLogisticsExpenseRowsForBillIds([...new Set(approvedRows.map(rowBillId).filter(Boolean))], actor);
-    if (reloadedRows.length) finalRows = reloadedRows;
-    for (const [billId, billRows] of groupLogisticsExpenseRowsByBillId(finalRows)) {
-      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, approvedRows.filter((row) => rowBillId(row) === billId).map(serializeLogisticsExpense), {
+export async function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestLike, actor: ActorContext, approvedRows: LogisticsExpenseRow[] = [], now = new Date()) {
+  if (!approvedRows.length) return [];
+  const billIds = [...new Set(approvedRows.map(rowBillId).filter(Boolean))];
+  const reloadedRows = await runNonCriticalTask(
+    "物流费用审核后重新读取账单",
+    () => reloadLogisticsExpenseRowsForBillIds(billIds, actor),
+    { context: { billIds } },
+  );
+  const finalRows = Array.isArray(reloadedRows) && reloadedRows.length ? reloadedRows : approvedRows;
+  for (const [billId, billRows] of groupLogisticsExpenseRowsByBillId(finalRows)) {
+    await runNonCriticalTask(
+      "物流费用审核日志写入",
+      () => writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, approvedRows.filter((row) => rowBillId(row) === billId).map(serializeLogisticsExpense), {
         bill: serializeLogisticsExpenseBill(billRows),
-        emailResults,
-      });
-    }
-    for (const result of emailResults.filter((item) => !item.sent && !item.skipped)) {
-      await writeAudit(request, actor, "物流费用开票通知失败", "logistics_bills", result.supplierId || "supplier", null, {
-        supplierName: result.supplierName,
-        errorMessage: result.error,
-        expenseIds: result.expenseIds,
-      });
-    }
-    await refreshTaxRefundCompletenessBatch(finalRows.map((row) => row.orderId));
-    invalidateWorkbenchTodosCache();
-  });
+      }),
+      { context: { billId } },
+    );
+  }
+  const orderIds = [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))];
+  await runNonCriticalTask(
+    "物流费用审核后刷新退税完整度",
+    () => refreshTaxRefundCompletenessBatch(orderIds),
+    { context: { orderIds } },
+  );
+  await runNonCriticalTask(
+    "物流费用审核后刷新待办缓存",
+    () => invalidateWorkbenchTodosCache(),
+    { context: { billIds } },
+  );
+  return finalRows;
 }
 
 export async function approveLogisticsExpenseBillRowsInTransaction(rows: LogisticsExpenseRow[] = [], actor: ActorContext, reviewRemark: string | null | undefined, now = new Date()) {
@@ -172,8 +165,12 @@ export async function approveLogisticsExpenseBillRowsInTransaction(rows: Logisti
   const billId = rowBillId(rows[0]);
   await prisma.$transaction(async (tx) => {
     if (rows[0]?.billId) {
-      await tx.logisticsBill.update({
-        where: { id: billId },
+      const billUpdate = await tx.logisticsBill.updateMany({
+        where: {
+          id: billId,
+          deletedAt: null,
+          auditStatus: "待审核",
+        },
         data: {
           auditStatus: "审核通过",
           reviewedById: actor.id,
@@ -181,21 +178,41 @@ export async function approveLogisticsExpenseBillRowsInTransaction(rows: Logisti
           reviewRemark,
           rejectReason: null,
           invoiceNotificationError: null,
-          paymentStatus: "待开票",
-          invoiceStatus: "未通知",
+          paymentStatus: "待付款",
+          invoiceStatus: "已上传发票",
           updatedById: actorId(actor),
         },
       });
+      if (billUpdate.count !== 1) {
+        throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_STATUS_CHANGED");
+      }
+      const savedRows = await tx.logisticsExpense.findMany({
+        where: {
+          id: { in: ids },
+          deletedAt: null,
+        },
+        include: includeLogisticsExpenseRelations(),
+        orderBy: [{ createdAt: "asc" }],
+        take: ids.length,
+      });
+      await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor);
       return;
     }
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
-  const costLinks: CostLink[] = [];
-  for (const before of rows) {
-    const cost = await createOrUpdateCostFromLogisticsExpense(prisma, before, actor);
-    costLinks.push({ expenseId: before.id, costId: cost.id });
+}
+
+export function logisticsInvoiceReviewBlockReason(rows: LogisticsExpenseRow[] = []) {
+  const groups = logisticsInvoiceGroupsForExpenses(rows);
+  for (const group of groups) {
+    const groupRows = rows.filter((row) => logisticsInvoiceExpenseMatchesGroup(row, group));
+    if (!groupRows.length) continue;
+    const missingUpload = groupRows.find((row) => !["已上传", "已确认"].includes(nonEmpty(row.invoiceStatus)) || !row.invoiceDocumentId);
+    if (missingUpload) return `${group.label}未上传发票，不能审核通过。`;
+    const invalid = groupRows.find((row) => !invoiceValidationStatusCanContinue(row.invoiceValidationStatus));
+    if (invalid) return `${group.label}${summarizeInvoiceValidationBlockReason(groupRows)}`;
   }
-  await updateLogisticsExpenseCostIds(prisma, costLinks);
+  return "";
 }
 
 export async function updateLogisticsExpenseCostIds(tx: Prisma.TransactionClient | typeof prisma, costLinks: CostLink[] = []) {
@@ -208,6 +225,47 @@ export async function updateLogisticsExpenseCostIds(tx: Prisma.TransactionClient
     SET "cost_id" = CASE "id" ${Prisma.join(cases, " ")} END
     WHERE "id" IN (${Prisma.join(ids)})
   `);
+}
+
+export async function syncApprovedLogisticsExpenseCosts(tx: Prisma.TransactionClient | typeof prisma, rows: LogisticsExpenseRow[] = [], actor: ActorContext) {
+  if (!rows.length) throw codedError("物流费用账单缺少费用明细，不能同步成本。", 409, "LOGISTICS_COST_SYNC_ROWS_EMPTY");
+  const links: CostLink[] = [];
+  for (const row of rows) {
+    const cost = await createOrUpdateCostFromLogisticsExpense(tx, row, actor);
+    links.push({ expenseId: row.id, costId: cost.id, invoiceDocumentId: row.invoiceDocumentId || null });
+  }
+  await updateLogisticsExpenseCostIds(tx, links);
+  await linkLogisticsExpenseInvoiceDocumentsToCosts(tx, links);
+  return links;
+}
+
+export async function linkLogisticsExpenseInvoiceDocumentsToCosts(tx: Prisma.TransactionClient | typeof prisma, costLinks: CostLink[] = []) {
+  const linksByDocumentId = new Map<string, CostLink>();
+  for (const link of costLinks) {
+    const documentId = nonEmpty(link.invoiceDocumentId);
+    if (link.expenseId && link.costId && documentId && !linksByDocumentId.has(documentId)) {
+      linksByDocumentId.set(documentId, { ...link, invoiceDocumentId: documentId });
+    }
+  }
+  for (const link of linksByDocumentId.values()) {
+    await tx.orderDocument.updateMany({
+      where: {
+        id: link.invoiceDocumentId || "",
+        deletedAt: null,
+      },
+      data: { costId: link.costId },
+    });
+    await tx.fileAsset.updateMany({
+      where: {
+        isDeleted: false,
+        OR: [
+          { orderDocumentId: link.invoiceDocumentId || "" },
+          { logisticsExpenseId: link.expenseId },
+        ],
+      },
+      data: { costId: link.costId },
+    });
+  }
 }
 
 export function logisticsExpenseReviewSafeErrorMessage(error: unknown) {
@@ -285,7 +343,7 @@ export function logisticsExpenseReviewSummaryMessage(successCount = 0, failedCou
       ? failures.map((result) => `${result.orderNo || result.billId || "账单"}${result.blNo ? `/${result.blNo}` : ""}：${result.errorMessage}`).join("；")
       : "审核物流费用失败";
   }
-  const parts = [`已审核 ${successCount} 票物流费用`];
+	const parts = [`已审核 ${successCount} 票物流费用，已同步成本管理`];
   if (emailError) parts.push(`开票通知发送失败，可稍后重发：${emailError}`);
   if (failedCount) parts.push(`有 ${failedCount} 票未审核：${failures.map((result) => `${result.orderNo || result.billId || "账单"}${result.blNo ? `/${result.blNo}` : ""}：${result.errorMessage || "审核失败"}`).join("；")}`);
   return parts.join("；");

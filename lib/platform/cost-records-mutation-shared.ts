@@ -19,6 +19,7 @@ import {
   dateFromInput,
   effectivePermissions,
   inputHasOwn,
+  isLogisticsGeneratedCostSourceType,
   isLogisticsCostType,
   isProductSupplierType,
   nonEmpty,
@@ -105,8 +106,8 @@ export function isProductSupplierPaymentCost(cost: {
   sourceType?: string | null;
   supplier?: { supplierType?: string | null } | null;
 }) {
-  if (cost.sourceType === "LOGISTICS_EXPENSE" || isLogisticsCostType(cost.costType || "")) return false;
-  return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType || "") || isProductSupplierType(cost.supplier?.supplierType);
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType) || isLogisticsCostType(cost.costType || "")) return false;
+	return FACTORY_SUPPLIER_COST_TYPES.includes(cost.costType || "") || isProductSupplierType(cost.supplier?.supplierType);
 }
 
 export function assertProductSupplierPaymentCost(cost: {
@@ -218,7 +219,7 @@ export function costDeleteBlockReasons(cost: CostDeletionCandidate) {
   if (hasSupplierDocumentRequestLink(cost)) reasons.push("已关联资料回传任务");
   if (hasProfitSettlementLink(cost)) reasons.push("已关联利润或提成结算");
   if (cost.costConfirmed) reasons.push("成本已确认");
-  if (cost.sourceType === "LOGISTICS_EXPENSE" || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
+	if (isLogisticsGeneratedCostSourceType(cost.sourceType) || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
   return [...new Set(reasons)];
 }
 
@@ -334,7 +335,7 @@ export async function buildCostData(order: CostOrderLike, actor: CostActor, inpu
   const costType = COST_TYPES.includes(inputCostType) ? inputCostType : "其他费用";
   const sourceType = nonEmpty(input.sourceType || before?.sourceType || "MANUAL");
   const sourceId = nonEmpty(input.sourceId || before?.sourceId || "");
-  if (!id && sourceType !== "LOGISTICS_EXPENSE" && isLogisticsCostType(costType)) {
+	if (!id && !isLogisticsGeneratedCostSourceType(sourceType) && isLogisticsCostType(costType)) {
     throw codedError("该类费用请从物流费用录入模块提交，审核通过后自动进入成本。", 400, "LOGISTICS_COST_REQUIRES_EXPENSE_WORKFLOW");
   }
   const requestedCurrency = nonEmpty(input.currency || "CNY").toUpperCase();

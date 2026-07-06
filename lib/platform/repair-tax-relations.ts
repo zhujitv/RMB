@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
-import { FACTORY_SUPPLIER_COST_TYPES, ORDER_COST_STATUS_VOID, SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
+import { FACTORY_SUPPLIER_COST_TYPES, LOGISTICS_GENERATED_COST_SOURCE_TYPES, ORDER_COST_STATUS_VOID, SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
 import { refreshTaxRefundCompleteness, syncCostInvoiceStatus } from "./shared-tax-sync";
 
 const DEFAULT_REPAIR_LIMIT = 500;
@@ -174,7 +174,7 @@ export async function repairTaxRelations(options: RepairTaxRelationOptions = {})
         deletedAt: null,
         status: { not: ORDER_COST_STATUS_VOID },
         costType: { in: FACTORY_SUPPLIER_COST_TYPES },
-        sourceType: { not: "LOGISTICS_EXPENSE" },
+	        sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
       },
       select: {
         id: true,

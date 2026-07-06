@@ -8,6 +8,7 @@ import {
   assertInputSchema,
   assertJsonObject,
   codedError,
+  isLogisticsGeneratedCostSourceType,
   isLogisticsCostType,
   normalizedCostType,
   permissionError,
@@ -51,9 +52,9 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
   if (!before) throw permissionError("成本记录不存在、已删除或已作废", 404);
   if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
 
-  if (before.sourceType === "LOGISTICS_EXPENSE" && !isLogisticsCostType(nextCostType)) {
-    throw codedError("物流费用同步成本只能改为物流费用类型。", 400, "LOGISTICS_COST_TYPE_REQUIRED");
-  }
+	if (isLogisticsGeneratedCostSourceType(before.sourceType) && !isLogisticsCostType(nextCostType)) {
+		throw codedError("物流费用同步成本只能改为物流费用类型。", 400, "LOGISTICS_COST_TYPE_REQUIRED");
+	}
 
   if (before.costType === nextCostType) {
     return {
@@ -63,13 +64,13 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
   }
 
   const changedAt = new Date();
-  const relatedLogisticsExpenseIds = [
-    before.generatedLogisticsExpense?.id,
-    before.sourceType === "LOGISTICS_EXPENSE" ? before.sourceId : null,
-  ].filter((value): value is string => Boolean(value));
+	const relatedLogisticsExpenseIds = [
+		before.generatedLogisticsExpense?.id,
+		isLogisticsGeneratedCostSourceType(before.sourceType) ? before.sourceId : null,
+	].filter((value): value is string => Boolean(value));
 
-  let updated = await prisma.$transaction(async (tx) => {
-    if (relatedLogisticsExpenseIds.length || before.sourceType === "LOGISTICS_EXPENSE") {
+	let updated = await prisma.$transaction(async (tx) => {
+		if (relatedLogisticsExpenseIds.length || isLogisticsGeneratedCostSourceType(before.sourceType)) {
       await tx.logisticsExpense.updateMany({
         where: {
           deletedAt: null,

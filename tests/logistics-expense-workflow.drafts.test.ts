@@ -180,7 +180,7 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   );
   assert.doesNotMatch(
     logisticsExpenseDetailLineSource,
-    /提交审核|撤回账单|审核通过并通知开票|驳回/,
+    /提交审核|撤回账单|审核通过|驳回/,
   );
   assert.doesNotMatch(logisticsModule, /<th>集装箱柜型<\/th>/);
   assert.doesNotMatch(logisticsModule, /<th>序号<\/th>/);

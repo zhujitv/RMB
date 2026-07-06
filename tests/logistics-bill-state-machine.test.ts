@@ -25,8 +25,8 @@ test("logistics bill state machine centralizes workflow transitions", () => {
   assert.equal(canRejectLogisticsBill({ auditStatus: "待审核" }), true);
   assert.equal(canRejectLogisticsBill({ auditStatus: "草稿" }), false);
 
-  assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "审核通过" }), true);
-  assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "待审核" }), false);
+	assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "审核通过" }), true);
+	assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "待审核" }), true);
 });
 
 test("logistics bill payment requires approved bill and uploaded invoice", () => {

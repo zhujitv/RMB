@@ -5,6 +5,8 @@ import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
   LOGISTICS_COST_TYPES,
   LOGISTICS_EXPENSE_AUDIT_STATUSES,
+  LOGISTICS_FEE_COST_SOURCE_TYPE,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
   ORDER_COST_STATUS_VOID,
   amountCny,
   codedError,
@@ -355,9 +357,11 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
 }
 
 export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient | typeof prisma, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
-  const costType = String(normalizedCostType(nonEmpty(expense.costType)));
-  const currentActorId = logisticsExpenseActorId(actor);
-  const costData = {
+	const costType = String(normalizedCostType(nonEmpty(expense.costType)));
+	const currentActorId = logisticsExpenseActorId(actor);
+	const invoiceUploaded = Boolean(expense.invoiceDocumentId)
+		|| ["已上传", "已确认", "已上传发票", "已确认发票"].includes(nonEmpty(expense.invoiceStatus || expense.detailInvoiceStatus));
+	const costData = {
     orderId: expense.orderId,
     supplierId: expense.supplierId,
     supplierNameSnapshot: expense.supplierNameSnapshot || expense.supplier?.supplierName || "",
@@ -374,15 +378,22 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     costConfirmed: true,
     costConfirmedAt: new Date(),
     paymentDate: null,
-    invoiceStatus: "未通知",
-    sourceType: "LOGISTICS_EXPENSE",
-    sourceId: expense.id,
+		invoiceStatus: invoiceUploaded ? "已收到" : "未收到",
+		sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
+		sourceId: expense.id,
     remark: expense.remark || "",
     updatedById: currentActorId || null,
-  };
-  const existing = expense.costId
-    ? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } })
-    : await tx.orderCost.findFirst({ where: { sourceType: "LOGISTICS_EXPENSE", sourceId: expense.id, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } });
+	};
+	const existing = expense.costId
+		? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } })
+		: await tx.orderCost.findFirst({
+			where: {
+				sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
+				sourceId: expense.id,
+				deletedAt: null,
+				status: { not: ORDER_COST_STATUS_VOID },
+			},
+		});
   if (existing) return tx.orderCost.update({ where: { id: existing.id }, data: costData });
   return tx.orderCost.create({ data: { ...costData, createdById: currentActorId || null } });
 }

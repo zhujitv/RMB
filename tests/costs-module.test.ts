@@ -53,7 +53,7 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(costsMutation, /export async function updateProductSupplierCostPayment[\s\S]*assertWrite\(actor, "costs"\)/);
   assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher[\s\S]*assertWrite\(actor, "costs"\)/);
   assert.match(costsMutation, /function isProductSupplierPaymentCost/);
-  assert.match(costsMutation, /cost\.sourceType === "LOGISTICS_EXPENSE" \|\| isLogisticsCostType/);
+  assert.match(costsMutation, /isLogisticsGeneratedCostSourceType\(cost\.sourceType\) \|\| isLogisticsCostType/);
   assert.match(costsMutation, /export async function updateProductSupplierCostPayment/);
   assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher/);
   assert.match(costsMutation, /productPaymentCost && !canManageProductPayment/);
@@ -121,7 +121,7 @@ test("cost management groups logistics invoices by shipment before display", () 
   assert.match(costsQueries, /`logistics-bill:\$\{billId\}`/);
   assert.match(costsQueries, /generatedLogisticsExpense: \{[\s\S]*bill: true/);
   assert.match(costsQueries, /const fullWhere: Prisma\.OrderCostWhereInput\[\] = \[\]/);
-  assert.match(costsQueries, /sourceType: "LOGISTICS_EXPENSE"[\s\S]*generatedLogisticsExpense: \{ is: \{ billId: \{ in: billIds \} \} \}/);
+  assert.match(costsQueries, /sourceType: \{ in: LOGISTICS_GENERATED_COST_SOURCE_TYPES \}[\s\S]*generatedLogisticsExpense: \{ is: \{ billId: \{ in: billIds \} \} \}/);
   assert.match(costsQueries, /serializeCostInvoiceGroup/);
   assert.match(costsQueries, /summarizeCurrencyTotals\(groupCosts\)/);
 });
@@ -241,7 +241,7 @@ test("cost detail tables always keep an invoice operation column", () => {
 
 test("logistics generated costs are read-only in cost invoice management", () => {
   assert.match(costsModule, /function isLogisticsGeneratedCost\(cost: Pick<CostRow, "sourceType">\)/);
-  assert.match(costsModule, /return cost\.sourceType === "LOGISTICS_EXPENSE"/);
+  assert.match(costsModule, /\["LOGISTICS_EXPENSE", "LOGISTICS_FEE"\]\.includes\(String\(cost\.sourceType \|\| ""\)\)/);
   assert.match(costsModule, /logisticsGenerated \? \(/);
   assert.match(costsModule, />查看说明<\/button>/);
   assert.match(costsModule, /const canManageDocuments = canWriteDocuments && !logisticsGenerated/);
@@ -363,7 +363,7 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /actor\.role === "业务员"/);
   assert.match(costsMutation, /普通业务员不可删除已确认成本/);
   assert.match(costsMutation, /function canPhysicallyDeleteCost/);
-  assert.match(costsMutation, /sourceType !== "LOGISTICS_EXPENSE"/);
+  assert.match(costsMutation, /!isLogisticsGeneratedCostSourceType\(sourceType\)/);
   assert.match(costsMutation, /status: ORDER_COST_STATUS_VOID/);
   assert.match(costsMutation, /action === "deleted" \? "删除成本明细" : "作废成本明细"/);
   assert.match(costsMutation, /deletedById: actor\.id/);

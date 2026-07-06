@@ -136,14 +136,14 @@ test("logistics expenses are stored outside official costs until approved", () =
 });
 
 test("approval generates official costs with source tracking", () => {
-  assert.match(backend, /sourceType: "LOGISTICS_EXPENSE"/);
+  assert.match(backend, /sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE/);
   assert.match(backend, /sourceId: expense\.id/);
   assert.match(backend, /costConfirmed: true/);
   assert.match(backend, /审核通过物流费用/);
   assert.match(backend, /reviewLogisticsExpenseBills/);
   assert.match(
     backend,
-    /invoiceNotifiedAt: result\.sent \? now : row\.invoiceNotifiedAt/,
+    /await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/,
   );
   assert.match(
     costsModule,
@@ -162,7 +162,8 @@ test("manual logistics costs are blocked from ordinary cost entry", () => {
 test("official logistics cost generation is source scoped instead of cost-type scoped", () => {
   assert.doesNotMatch(backend, /LOGISTICS_EXPENSE_DUPLICATE_COST/);
   assert.doesNotMatch(backend, /同一订单同一物流费用类型已存在正式成本/);
-  assert.match(backend, /sourceType: "LOGISTICS_EXPENSE"/);
+  assert.match(backend, /sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE/);
+  assert.match(backend, /sourceType: \{ in: LOGISTICS_GENERATED_COST_SOURCE_TYPES \}/);
   assert.match(backend, /sourceId: expense\.id/);
   assert.match(migration, /order_costs_source_unique/);
 });
@@ -176,15 +177,23 @@ test("logistics bill supplier key does not reuse deleted or sampled legacy bills
   assert.doesNotMatch(backend, /include: \{ expenses: \{ where: \{ deletedAt: null \}, select: \{ supplierId: true \}, take: 20 \} \}/);
 });
 
-test("logistics review side effects still notify bills that synced costs successfully", () => {
-  assert.match(backend, /const costFailedBillIds = new Set\(costSyncFailures\.map\(\(item\) => rowBillId\(item\.row\)\)\.filter\(Boolean\)\)/);
-  assert.match(backend, /const rowsWithCostFailedBills = approvedRows\.filter/);
-  assert.match(backend, /rowsReadyForNotification = approvedRows\.filter/);
-  assert.match(backend, /costFailedBillIds\.has\(billId\)/);
-  assert.match(backend, /emailResults\.push\(\.\.\.await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)\)/);
-  assert.match(backend, /emailResults\.push\(logisticsExpenseNotificationFailureResult\(rowsWithCostFailedBills, failureMessage\)\)/);
-  assert.doesNotMatch(backend, /costFailedExpenseIds/);
-  assert.doesNotMatch(backend, /if \(costSyncFailures\.length\) \{[\s\S]*\} else \{\s*try \{\s*emailResults = await notifyLogisticsSupplierInvoiceBills\(approvedRows\)/);
+test("logistics review side effects synchronously push costs and do not notify invoice upload", () => {
+  assert.doesNotMatch(backend, /costSyncFailures/);
+  assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
+  assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor\)/);
+  assert.match(backend, /await updateLogisticsExpenseCostIds\(tx, links\)/);
+  assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
+  assert.match(backend, /tx\.orderDocument\.updateMany/);
+  assert.match(backend, /tx\.fileAsset\.updateMany/);
+  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后重新读取账单"/);
+  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核日志写入"/);
+  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后刷新退税完整度"/);
+  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后刷新待办缓存"/);
+  assert.doesNotMatch(backend, /await writeAudit\(request, actor, "审核通过物流费用账单"/);
+  assert.doesNotMatch(backend, /await refreshTaxRefundCompletenessBatch\(finalRows\.map/);
+  assert.match(backend, /return finalRows/);
+  assert.doesNotMatch(backend, /rowsReadyForNotification = approvedRows\.filter/);
+  assert.doesNotMatch(backend, /emailResults\.push\(\.\.\.await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)\)/);
 });
 
 test("supplier role is renamed and scoped to assigned logistics work", () => {

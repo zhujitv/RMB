@@ -95,7 +95,7 @@ test("old LCL completeness cache with port requirement is refreshed", () => {
 
 test("tax refund logistics completeness reports required invoice gaps with exact labels", () => {
   assert.match(completeness, /function isActualApprovedLogisticsCost/);
-  assert.match(completeness, /sourceType === "LOGISTICS_EXPENSE" \|\| cost\.costConfirmed === true/);
+  assert.match(completeness, /isLogisticsGeneratedCostSourceType\(cost\.sourceType\) \|\| cost\.costConfirmed === true/);
   assert.match(completeness, /positiveCostAmount\(cost\)/);
   assert.match(completeness, /function logisticsRequirementMissingLabel/);
   assert.match(completeness, /return "CIF订单缺少海运费发票"/);

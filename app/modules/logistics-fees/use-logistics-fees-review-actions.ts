@@ -3,7 +3,6 @@ import { apiJson } from "../../api";
 import type { ConfirmationDialogState, ConfirmationResult } from "../../components";
 import type { LogisticsExpense, LogisticsExpenseMutationResult } from "./model";
 import {
-  billSupplierIds,
   logisticsExpenseReviewFailureMessage,
   logisticsExpenseReviewNotice,
   logisticsExpenseShipmentBillIds,
@@ -87,12 +86,11 @@ export function createLogisticsFeesReviewActions({
       setNotice("");
       return;
     }
-    const supplierCount = new Set(selectedReviewableRows.flatMap((row) => billSupplierIds(row))).size;
-    const confirmationResult = await requestConfirmation({
-      title: "合并审核 / 批量审核",
-      message: "审核通过后系统会按供应商合并发送开票通知，同一供应商只发送一封邮件。",
-      details: [`选中账单：${selectedReviewableRows.length} 票`, `涉及供应商：${supplierCount || 0} 家`],
-      confirmLabel: "审核通过并通知",
+	    const confirmationResult = await requestConfirmation({
+	      title: "合并审核 / 批量审核",
+	      message: "审核通过后系统会同步生成或更新成本管理记录。",
+	      details: [`选中账单：${selectedReviewableRows.length} 票`],
+	      confirmLabel: "审核通过",
       cancelLabel: "取消",
       variant: "warning",
     });

@@ -2,6 +2,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   COST_PAYMENT_STATUSES,
   COST_TYPES,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
   ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
@@ -166,7 +167,7 @@ function costEffectiveInvoiceReceivedWhere(supplierInvoicePairs: SupplierInvoice
     OR: [
       { documents: { some: SUCCESS_SUPPLIER_INVOICE_FILTER } },
       ...(supplierReturnWhere ? [supplierReturnWhere] : []),
-      { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: "已收到" },
+	      { sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES }, invoiceStatus: "已收到" },
     ],
   };
 }
@@ -179,8 +180,8 @@ function costEffectiveInvoiceMissingWhere(supplierInvoicePairs: SupplierInvoiceP
       ...(supplierReturnWhere ? [{ NOT: supplierReturnWhere }] : []),
       {
         OR: [
-          { sourceType: { not: "LOGISTICS_EXPENSE" } },
-          { sourceType: "LOGISTICS_EXPENSE", invoiceStatus: { not: "已收到" } },
+	          { sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES } },
+	          { sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES }, invoiceStatus: { not: "已收到" } },
         ],
       },
     ],

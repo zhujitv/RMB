@@ -159,7 +159,7 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(service, /export async function listSupplierDocumentRequestCostCandidates/);
   assert.match(service, /supplierDocumentRequestFactoryCostWhere/);
   assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
-  assert.match(service, /sourceType: \{ not: "LOGISTICS_EXPENSE" \}/);
+  assert.match(service, /sourceType: \{ notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES \}/);
   assert.match(service, /allowFactoryDocumentUpload: true/);
   assert.match(service, /loadFactorySupplierReturnCostForRequest\(input\)/);
   assert.match(service, /TEMPLATE_FILE_REQUIRED/);

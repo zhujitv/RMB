@@ -36,7 +36,7 @@ test("manual explains unified logistics cost entry and review flow", () => {
   assert.match(manualModule, /物流信息维护首程运输、集装箱、报关资料和物流归档状态/);
   assert.match(manualModule, /页面只保留物流列表和运输监控/);
   assert.match(manualModule, /title: "物流费用"/);
-  assert.match(manualModule, /物流费用以物流账单为单位管理费用明细、审核、开票通知、发票分组、月结汇总和付款状态/);
+  assert.match(manualModule, /物流费用以物流账单为单位管理费用明细、发票上传校验、审核、月结汇总和付款状态/);
   assert.match(manualModule, /合并审核 \/ 批量审核/);
   assert.match(manualModule, /标记已付款时必须录入付款时间/);
   assert.match(manualModule, /海运费、ENS费、保险费及所有 USD 费用归入海运费发票/);

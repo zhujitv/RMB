@@ -97,7 +97,7 @@ export function canRejectLogisticsBill(input: LogisticsBillStateInput = {}) {
 }
 
 export function canUploadLogisticsBillInvoice(input: LogisticsBillStateInput = {}) {
-  return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过";
+  return ["待审核", "审核通过"].includes(normalizeLogisticsBillAuditStatus(input.auditStatus));
 }
 
 export function canMarkLogisticsBillPaid(input: LogisticsBillStateInput = {}) {

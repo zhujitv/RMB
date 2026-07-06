@@ -96,13 +96,13 @@ export function LogisticsExpenseBillActions({
             className={styles.billApproveButton}
             type="button"
             disabled={busy || saving}
-            title="审核当前提单账单并通知供应商开票"
+	            title="审核当前提单账单，审核通过后同步到成本管理"
             onClick={(event) => {
               event.stopPropagation();
               onApprove(expense);
             }}
           >
-            {busy ? "处理中..." : "审核通过并通知开票"}
+	            {busy ? "处理中..." : "审核通过"}
           </button>
           <button
             className={styles.billRejectButton}

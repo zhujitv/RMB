@@ -145,7 +145,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /supplierDocumentRequestsForFactoryCosts/);
   assert.match(workbenchSource, /if \(nonEmpty\(row\.costId\)\) return isActiveFactorySupplierCostRef\(row\.cost, supplierId\)/);
   assert.match(workbenchSource, /if \(!costs\.length\) return false/);
-  assert.match(workbenchSource, /cost\.sourceType !== "LOGISTICS_EXPENSE"/);
+  assert.match(workbenchSource, /!isLogisticsGeneratedCostSourceType\(cost\.sourceType\)/);
   assert.match(workbenchSource, /return requestsDone && supplierDocumentsUploadedForFactoryCosts\(order\)/);
   assert.match(workbenchSource, /supplierDocumentRequestMatchesCost/);
   assert.match(workbenchSource, /supplierDocumentRequests = \(\(cost\.order as WorkbenchWorkflowOrder\)\.supplierDocumentRequests \|\| \[\]\)[\s\S]*supplierDocumentRequestMatchesCost/);

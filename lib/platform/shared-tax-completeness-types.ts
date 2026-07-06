@@ -10,6 +10,7 @@ import {
   TAX_EXPORT_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_REQUIREMENTS,
   TAX_REFUND_SUPPLIER_TYPES,
+  isLogisticsGeneratedCostSourceType,
   normalizedCostType,
 } from "./shared-constants";
 
@@ -306,9 +307,8 @@ export function positiveCostAmount(cost: CostLike = {}) {
 }
 
 export function isActualApprovedLogisticsCost(cost: CostLike = {}) {
-  if (!positiveCostAmount(cost)) return false;
-  const sourceType = String(cost.sourceType || "");
-  return sourceType === "LOGISTICS_EXPENSE" || cost.costConfirmed === true || !sourceType;
+	if (!positiveCostAmount(cost)) return false;
+	return isLogisticsGeneratedCostSourceType(cost.sourceType) || cost.costConfirmed === true || !cost.sourceType;
 }
 
 export function isNonFullContainerTaxRefundOrder(order: TaxOrderLike = {}) {

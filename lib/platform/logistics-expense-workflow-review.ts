@@ -7,7 +7,7 @@ import {
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
-import { canRejectLogisticsBill, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
+import { canRejectLogisticsBill } from "./logistics-bill-state-machine";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import {
   actorId,
@@ -171,7 +171,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
         const auditStatus = aggregateLogisticsExpenseStatus(savedRows, "auditStatus");
         results.push(logisticsExpenseReviewResultFromRows(savedRows, {
           auditStatus,
-          notificationStatus: auditStatus === "审核通过" ? "pending" : "not_sent",
+          notificationStatus: auditStatus === "审核通过" ? "skipped" : "not_sent",
           errorMessage: auditStatus === "审核通过" ? "" : "账单状态已变化，请刷新后重试",
         }));
       }
@@ -193,7 +193,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       finalRows.push(...savedRows);
       results.push(logisticsExpenseReviewResultFromRows(savedRows, {
         auditStatus: "审核通过",
-        notificationStatus: "pending",
+        notificationStatus: "skipped",
         errorMessage: "",
       }));
     } catch (error: unknown) {
@@ -205,9 +205,13 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       }));
     }
   }
-  const approvedBillIds = [...new Set(results.filter((result) => result.auditStatus === "审核通过").map((result) => result.billId).filter(Boolean))];
-  const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
-  scheduleLogisticsExpenseReviewSideEffects(request, actor, approvedRows, now);
+	const approvedBillIds = [...new Set(results.filter((result) => result.auditStatus === "审核通过").map((result) => result.billId).filter(Boolean))];
+	const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
+	const syncedRows = await scheduleLogisticsExpenseReviewSideEffects(request, actor, approvedRows, now);
+	if (syncedRows.length) {
+		const syncedById = new Map(syncedRows.map((row) => [row.id, row]));
+		finalRows = finalRows.map((row) => syncedById.get(row.id) || row);
+	}
   if (approvedRows.length) invalidateWorkbenchTodosCache();
   const serializedBills = approvedBillIds
     .map((billId) => serializeLogisticsExpenseBill(finalRows.filter((row) => rowBillId(row) === billId)))
@@ -232,7 +236,7 @@ export async function resendLogisticsExpenseInvoiceNotice(request: AuditRequestL
   assertCanReviewLogisticsExpense(actor);
   const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
   if (!rows.length) throw codedError("未找到可通知开票的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
-  const blocked = rows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row) }));
+	const blocked = rows.find((row) => rowAuditStatus(row) !== "审核通过");
   if (blocked) throw codedError("只有审核通过的物流费用账单可以重新发送开票通知。", 400, "LOGISTICS_EXPENSE_NOTICE_STATUS_INVALID");
   const emailResults = await notifyLogisticsSupplierInvoiceBills(rows);
   const updatedRows = await applyLogisticsExpenseInvoiceNotificationResults(rows, emailResults, actor, new Date());
