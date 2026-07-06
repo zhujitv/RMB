@@ -45,6 +45,7 @@ type AliyunOcrDiagnostics = {
 };
 type AliyunOcrRetryOptions = {
   maxAttempts?: number;
+  url?: string;
 };
 
 export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
@@ -95,6 +96,64 @@ export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<Raste
     };
   } catch (error) {
     console.error("customs-pdf-rasterize-for-ocr-failed", { message: ocrErrorText(error) });
+    return null;
+  }
+}
+
+export async function rasterizeFirstPdfPageForSupplierOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
+  if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") return null;
+  try {
+    const canvasModule = await import("@napi-rs/canvas");
+    const { createCanvas, DOMMatrix, ImageData, Path2D } = canvasModule;
+    const globalScope = globalThis as Record<string, unknown>;
+    globalScope.DOMMatrix ||= DOMMatrix;
+    globalScope.ImageData ||= ImageData;
+    globalScope.Path2D ||= Path2D;
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as {
+      getDocument: (params: Record<string, unknown>) => { promise: Promise<Record<string, unknown>>; destroy?: () => Promise<void> };
+    };
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      disableFontFace: true,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+    const pdf = await loadingTask.promise as Record<string, unknown> & {
+      numPages?: number;
+      getPage: (pageNumber: number) => Promise<Record<string, unknown> & {
+        getViewport: (params: { scale: number }) => { width: number; height: number };
+        render: (params: Record<string, unknown>) => { promise: Promise<void> };
+      }>;
+      destroy?: () => Promise<void>;
+    };
+    const page = await pdf.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const longestSide = Math.max(baseViewport.width, baseViewport.height);
+    const scale = Math.min(2.4, Math.max(1.2, 1800 / Math.max(longestSide, 1)));
+    const viewport = page.getViewport({ scale });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas: null, canvasContext: context, viewport }).promise;
+    const pageCount = Number(pdf.numPages || 1);
+    await pdf.destroy?.().catch(() => undefined);
+    await loadingTask.destroy?.().catch(() => undefined);
+    const targetBytes = 1_500_000;
+    const qualities = [0.82, 0.74, 0.66, 0.58];
+    let jpegBuffer = canvas.toBuffer("image/jpeg", qualities[0]);
+    for (const quality of qualities.slice(1)) {
+      if (jpegBuffer.length <= targetBytes) break;
+      jpegBuffer = canvas.toBuffer("image/jpeg", quality);
+    }
+    return {
+      buffer: Buffer.from(jpegBuffer),
+      width: canvas.width,
+      height: canvas.height,
+      pageCount,
+    };
+  } catch (error) {
+    console.error("supplier-document-pdf-rasterize-for-ocr-failed", { message: ocrErrorText(error) });
     return null;
   }
 }
@@ -379,9 +438,10 @@ export async function recognizeAliyunVatInvoice(
 ): Promise<OcrRecognitionResult> {
   scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
+  const source = options.url ? { url: options.url } : { body: Readable.from(buffer) };
   const response = await withAliyunOcrRetry("ALIYUN_RECOGNIZE_INVOICE", settings, () => (
     client.recognizeInvoice(new RecognizeInvoiceRequest({
-      body: Readable.from(buffer),
+      ...source,
       pageNo: 1,
     }))
   ), options);
@@ -407,9 +467,10 @@ export async function recognizeAliyunSupplierContract(
 ): Promise<OcrRecognitionResult> {
   scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
+  const source = options.url ? { url: options.url } : { body: Readable.from(buffer) };
   const response = await withAliyunOcrRetry("ALIYUN_RECOGNIZE_GENERAL_STRUCTURE", settings, () => (
     client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
-      body: Readable.from(buffer),
+      ...source,
       keys: SUPPLIER_CONTRACT_KEYS,
     }))
   ), options);

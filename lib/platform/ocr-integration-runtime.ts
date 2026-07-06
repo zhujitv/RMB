@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { deleteR2Object, safeFileName, signedObjectReadUrl, uploadToR2 } from "../r2";
 import {
   type OcrFeatureKey,
   type OcrRecognitionOptions,
@@ -8,7 +10,7 @@ import {
 } from "./ocr-integration-shared";
 import { recognizeAliyunCustomsDeclaration } from "./ocr-integration-customs";
 import {
-  rasterizeFirstPdfPageForOcr,
+  rasterizeFirstPdfPageForSupplierOcr,
   recognizeAliyunSupplierContract,
   recognizeAliyunVatInvoice,
   recognizeWithPdfTextFallback,
@@ -21,9 +23,34 @@ function supplierDocumentOcrSettings(settings: Awaited<ReturnType<typeof ensureO
   };
 }
 
-async function supplierDocumentOcrBuffer(buffer: Buffer) {
-  const rasterized = await rasterizeFirstPdfPageForOcr(buffer);
-  return rasterized?.buffer || buffer;
+async function supplierDocumentOcrInput(buffer: Buffer, documentType: SupplierOcrDocumentType) {
+  const rasterized = await rasterizeFirstPdfPageForSupplierOcr(buffer);
+  if (!rasterized?.buffer?.length) return { buffer };
+  const tempKey = `ocr-temp/supplier-documents/${safeFileName(documentType)}/${Date.now()}-${randomUUID()}.jpg`;
+  try {
+    await uploadToR2({
+      key: tempKey,
+      body: rasterized.buffer,
+      contentType: "image/jpeg",
+    });
+    const url = await signedObjectReadUrl(tempKey, 600);
+    return {
+      buffer: rasterized.buffer,
+      url,
+      cleanup: () => deleteR2Object(tempKey).catch((error) => {
+        console.warn("supplier-document-ocr-temp-image-delete-failed", {
+          key: tempKey,
+          message: error instanceof Error ? error.message : String(error || ""),
+        });
+      }),
+    };
+  } catch (error) {
+    console.warn("supplier-document-ocr-temp-image-url-failed", {
+      documentType,
+      message: error instanceof Error ? error.message : String(error || ""),
+    });
+    return { buffer: rasterized.buffer };
+  }
 }
 
 export async function recognizePdfTextWithOcr(
@@ -58,13 +85,13 @@ export async function recognizeSupplierDocumentWithOcr(
 ): Promise<OcrRecognitionResult> {
   const settings = await ensureOcrFeatureEnabled("supplierDocumentReturn");
   const fileBuffer = bufferFromInput(buffer);
-  const ocrBuffer = await supplierDocumentOcrBuffer(fileBuffer);
+  const ocrInput = await supplierDocumentOcrInput(fileBuffer, documentType);
   const ocrSettings = supplierDocumentOcrSettings(settings);
   try {
     if (documentType === "SUPPLIER_INVOICE") {
-      return await recognizeAliyunVatInvoice(ocrBuffer, ocrSettings, { maxAttempts: 1 });
+      return await recognizeAliyunVatInvoice(ocrInput.buffer, ocrSettings, { maxAttempts: 1, url: ocrInput.url });
     }
-    return await recognizeAliyunSupplierContract(ocrBuffer, ocrSettings, { maxAttempts: 1 });
+    return await recognizeAliyunSupplierContract(ocrInput.buffer, ocrSettings, { maxAttempts: 1, url: ocrInput.url });
   } catch (error) {
     console.error("aliyun-ocr-structured-failed", {
       documentType,
@@ -76,6 +103,8 @@ export async function recognizeSupplierDocumentWithOcr(
       source: "ALIYUN_CONTRACT_FALLBACK_PDF_TEXT",
       error,
     });
+  } finally {
+    await ocrInput.cleanup?.();
   }
 }
 
