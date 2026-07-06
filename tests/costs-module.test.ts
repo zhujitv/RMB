@@ -7,6 +7,7 @@ import { readWorkspaceStylesSource } from "./source-helpers.ts";
 const costsModule = readCostsModuleSource();
 const costsMutation = readCostRecordsMutationsSource();
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
+const costTypeRoute = readFileSync("app/api/costs/[id]/cost-type/route.ts", "utf8");
 const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "utf8");
 const costPaymentVoucherRoute = readFileSync("app/api/costs/[id]/payment-voucher/route.ts", "utf8");
 const costPaymentVoucherDownloadRoute = readFileSync("app/api/costs/[id]/payment-voucher/download/route.ts", "utf8");
@@ -254,6 +255,28 @@ test("manual temporary freight forwarder costs remain manageable in costs module
   assert.match(costsModule, /const canManageDocuments = canWriteDocuments && !logisticsGenerated/);
   assert.doesNotMatch(costsModule, /isLogisticsInvoiceCost\(cost\)[\s\S]{0,160}canManageDocuments = false/);
   assert.match(costsModule, /documentType=\{documentType\}[\s\S]*canWriteDocuments=\{canManageDocuments\}/);
+});
+
+test("cost document drawer supports audited admin cost type correction", () => {
+  assert.match(logisticsFeesModule, /\[\.\.\.baseTypes, "港杂费"\]/);
+  assert.match(costsModule, /const canManageCostType = \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
+  assert.match(costsModule, /canManageCostType=\{canManageCostType\}/);
+  assert.match(costsModule, /onUpdateCostType=\{props\.onUpdateCostType\}/);
+  assert.match(costsModule, /\/api\/costs\/\$\{encodeURIComponent\(cost\.id\)\}\/cost-type/);
+  assert.match(costsModule, /placeholder="必填，例如：原费用误选，按发票改为港杂费"/);
+  assert.match(costsModule, /disabled=\{costTypeSaving \|\| !selectedCostType \|\| selectedCostType === \(cost\.costType \|\| ""\) \|\| !costTypeReason\.trim\(\)\}/);
+  assert.match(costTypeRoute, /updateCostType\(request, actor, id, body\)/);
+  assert.match(costTypeRoute, /return ok\(\{ success: true, ok: true, \.\.\.result \}\)/);
+  assert.match(costsMutation, /export async function updateCostType/);
+  assert.match(costsMutation, /只有管理员或财务可以修改已登记成本类型/);
+  assert.doesNotMatch(costsMutation, /export async function updateCostType[\s\S]{0,260}assertWrite\(actor, "costs"\)/);
+  assert.match(costsMutation, /requireText\(body\.reason \|\| body\.changeReason, "修改原因"\)/);
+  assert.match(costsMutation, /data:\s*\{[\s\S]*costType: nextCostType,[\s\S]*updatedById: currentActor\.id/);
+  assert.match(costsMutation, /oldCostType: before\.costType/);
+  assert.match(costsMutation, /newCostType: nextCostType/);
+  assert.match(costsMutation, /scheduleTaxRefundCompletenessRefresh\(updated\.orderId, "成本类型修改后退税完整度刷新"\)/);
+  assert.match(costsMutation, /invalidateWorkbenchTodosCache\(\)/);
+  assert.doesNotMatch(costsMutation, /国外代理费[\s\S]{0,120}港杂费/);
 });
 
 test("cost payable summary module is explicitly disabled and no longer rendered", () => {

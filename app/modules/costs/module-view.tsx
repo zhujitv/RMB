@@ -46,7 +46,9 @@ type CostsModuleViewProps = {
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
+  canManageCostType: boolean;
   canManageFactoryPayments: boolean;
+  costTypeSavingId: string;
   paymentSavingId: string;
   voucherUploadingKey: string;
   voucherPreviewCost: CostRow | null;
@@ -71,6 +73,7 @@ type CostsModuleViewProps = {
   onCostFormSaved: (saved: CostRow | CostRow[] | null | undefined) => Promise<void>;
   onCloseDocuments: () => void;
   onUploadDocument: (cost: CostRow, documentType: string, file: File | null) => void;
+  onUpdateCostType: (cost: CostRow, costType: string, reason: string) => void;
   onUpdatePayment: (cost: CostRow, paid: boolean, paidAt?: string) => void;
   onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
   onDeleteDocument: (cost: CostRow, document: CostDocument) => void;
@@ -107,7 +110,9 @@ export function CostsModuleView(props: CostsModuleViewProps) {
     uploadProgressByKey,
     deletingDocumentId,
     canWriteDocuments,
+    canManageCostType,
     canManageFactoryPayments,
+    costTypeSavingId,
     paymentSavingId,
     voucherUploadingKey,
     voucherPreviewCost,
@@ -238,11 +243,14 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             uploadProgressByKey={uploadProgressByKey}
             deletingDocumentId={deletingDocumentId}
             canWriteDocuments={canWriteDocuments}
+            canManageCostType={canManageCostType}
             canManageFactoryPayments={canManageFactoryPayments}
+            costTypeSaving={costTypeSavingId === documentCost.id}
             paymentSavingId={paymentSavingId}
             voucherUploadingKey={voucherUploadingKey}
             onClose={props.onCloseDocuments}
             onUpload={props.onUploadDocument}
+            onUpdateCostType={props.onUpdateCostType}
             onUpdatePayment={props.onUpdatePayment}
             onUploadPaymentVoucher={props.onUploadPaymentVoucher}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}

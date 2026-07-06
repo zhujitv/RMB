@@ -30,6 +30,7 @@ export function LogisticsExpenseForm({
       selectedOrder={controller.selectedOrder}
       selectedSupplier={controller.selectedSupplier}
       isLockedSupplier={controller.isLockedSupplier}
+      canSelectTemporarySupplier={controller.canSelectTemporarySupplier}
       supplierSummaryText={controller.supplierSummaryText}
       supplierAllowedCostTypes={controller.supplierAllowedCostTypes}
       costTypeOptions={controller.costTypeOptions}

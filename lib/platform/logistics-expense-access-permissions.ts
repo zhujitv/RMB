@@ -38,6 +38,7 @@ export function assertCanReadLogisticsExpenses(actor: LogisticsActor) {
 }
 
 export function assertCanWriteLogisticsExpense(actor: LogisticsActor) {
+  if (logisticsExpenseActorRole(actor) === "业务员") return;
   if (canWrite(actor, "logistics")) return;
   throw permissionError("无权限录入物流费用", 403);
 }

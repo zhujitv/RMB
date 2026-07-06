@@ -5,4 +5,5 @@ export {
   updateProductSupplierCostPayment,
   uploadProductSupplierCostPaymentVoucher,
 } from "./cost-records-payment-mutations";
+export { updateCostType } from "./cost-records-mutation-cost-type";
 export { deleteLogisticsCost, saveLogisticsCost } from "./cost-records-logistics-mutations";

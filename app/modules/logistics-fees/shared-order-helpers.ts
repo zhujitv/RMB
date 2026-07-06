@@ -94,7 +94,10 @@ export function allowedCostTypeOptions(
     supplier?.allowedLogisticsCostTypes?.filter((type) =>
       COST_TYPES.includes(type),
     ) || [];
-  return allowed.length ? allowed : COST_TYPES;
+  const baseTypes = allowed.length ? allowed : COST_TYPES;
+  return [...baseTypes, "港杂费"].filter((type, index, rows) =>
+    COST_TYPES.includes(type) && rows.indexOf(type) === index,
+  );
 }
 
 export function normalizeExpenseItemCostType(

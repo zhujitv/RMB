@@ -31,6 +31,7 @@ type CostActionsParams = {
   setDocumentError: Dispatch<SetStateAction<string>>;
   setUploadingKey: Dispatch<SetStateAction<string>>;
   setPaymentSavingId: Dispatch<SetStateAction<string>>;
+  setCostTypeSavingId: Dispatch<SetStateAction<string>>;
   setVoucherUploadingKey: Dispatch<SetStateAction<string>>;
   setVoucherPreviewCost: Dispatch<SetStateAction<CostRow | null>>;
   setUploadProgressByKey: Dispatch<SetStateAction<Record<string, number>>>;
@@ -60,6 +61,7 @@ export function useCostDocumentActions({
   setDocumentError,
   setUploadingKey,
   setPaymentSavingId,
+  setCostTypeSavingId,
   setVoucherUploadingKey,
   setVoucherPreviewCost,
   setUploadProgressByKey,
@@ -216,6 +218,61 @@ export function useCostDocumentActions({
     }
   }
 
+  async function updateCostType(cost: CostRow, costType: string, reason: string) {
+    const nextCostType = costType.trim();
+    const changeReason = reason.trim();
+    if (!nextCostType) {
+      setDocumentError("请选择成本类型。");
+      return;
+    }
+    if (nextCostType === (cost.costType || "")) return;
+    if (!changeReason) {
+      setDocumentError("请填写修改原因。");
+      return;
+    }
+    setCostTypeSavingId(cost.id);
+    setDocumentError("");
+    try {
+      const result = await apiJson<{
+        success?: boolean;
+        ok?: boolean;
+        message?: string;
+        cost?: CostRow;
+        orderSummary?: CostOrderSummary | null;
+        data?: { cost?: CostRow; orderSummary?: CostOrderSummary | null };
+      }>(`/api/costs/${encodeURIComponent(cost.id)}/cost-type`, {
+        method: "PATCH",
+        body: JSON.stringify({ costType: nextCostType, reason: changeReason }),
+      });
+      if (result.success !== true && result.ok !== true) throw new Error(result.message || "更新成本类型失败");
+      const nextCost = result.cost || result.data?.cost;
+      if (!nextCost) throw new Error(result.message || "更新成本类型失败");
+      const nextOrderSummary = result.orderSummary || result.data?.orderSummary || null;
+      setRows((current) => current.map((item) => item.id === nextCost.id ? { ...item, ...nextCost } : item));
+      setDetailCost((current) => current?.id === nextCost.id ? { ...current, ...nextCost } : current);
+      setDocumentCost((current) => current?.id === nextCost.id ? { ...current, ...nextCost } : current);
+      setVoucherPreviewCost((current) => current?.id === nextCost.id ? { ...current, ...nextCost } : current);
+      setCostFormDrawer((current) => current?.cost?.id === nextCost.id ? { ...current, cost: { ...current.cost, ...nextCost } } : current);
+      if (nextOrderSummary) {
+        setOrderRows((current) => current.map((item) => (
+          item.id === nextOrderSummary.id || item.orderId === nextOrderSummary.orderId
+            ? { ...item, ...nextOrderSummary }
+            : item
+        )));
+        setDetailOrderSummary((current) => current && (current.id === nextOrderSummary.id || current.orderId === nextOrderSummary.orderId)
+          ? { ...current, ...nextOrderSummary }
+          : current);
+      }
+      await refreshDocumentCost(nextCost.id);
+      void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
+      setNotice("成本类型已更新");
+    } catch (updateError) {
+      setDocumentError(updateError instanceof Error ? updateError.message : "更新成本类型失败");
+    } finally {
+      setCostTypeSavingId("");
+    }
+  }
+
   async function uploadPaymentVoucher(cost: CostRow, file: File | null) {
     if (!file) return;
     if (!isProductSupplierPaymentEnabled(cost)) {
@@ -356,6 +413,7 @@ export function useCostDocumentActions({
     openInvoiceGroupDocuments,
     refreshDocumentCost,
     uploadCostDocument,
+    updateCostType,
     updateProductSupplierCostPayment,
     uploadPaymentVoucher,
     deleteCostDocument,

@@ -22,6 +22,7 @@ export function LogisticsExpenseFormView({
   selectedOrder,
   selectedSupplier,
   isLockedSupplier,
+  canSelectTemporarySupplier,
   supplierSummaryText,
   supplierAllowedCostTypes,
   costTypeOptions,
@@ -44,6 +45,7 @@ export function LogisticsExpenseFormView({
   selectedOrder: ExpenseOrderOption | undefined;
   selectedSupplier: SupplierOption | null;
   isLockedSupplier: boolean;
+  canSelectTemporarySupplier: boolean;
   supplierSummaryText: string;
   supplierAllowedCostTypes: string;
   costTypeOptions: string[];
@@ -98,8 +100,8 @@ export function LogisticsExpenseFormView({
             <SearchAutocomplete
               value={selectedSupplier || null}
               cacheKey={`logistics-fee-suppliers:${form.orderId || "none"}`}
-              emptyLabel={selectedOrder ? "该订单未分配物流相关供应商" : "请先选择订单"}
-              placeholder={selectedOrder ? "选择该订单绑定物流相关供应商" : "请先选择订单"}
+              emptyLabel={selectedOrder ? (canSelectTemporarySupplier ? "未找到启用的物流类供应商" : "该订单未分配物流相关供应商") : "请先选择订单"}
+              placeholder={selectedOrder ? (canSelectTemporarySupplier ? "选择订单绑定或临时物流供应商" : "选择该订单绑定物流相关供应商") : "请先选择订单"}
               disabled={isLockedSupplier || !selectedOrder}
               searchOnFocus
               getLabel={supplierLabel}
@@ -198,6 +200,7 @@ export function LogisticsExpenseFormView({
       {!isLockedSupplier ? (
         <div className={styles.quickCreateMeta}>
           <span>供应商：{supplierSummaryText}</span>
+          {canSelectTemporarySupplier ? <span>可选择订单绑定或临时物流供应商</span> : null}
           {supplierAllowedCostTypes ? <span>允许费用：{supplierAllowedCostTypes}</span> : null}
         </div>
       ) : null}

@@ -4,7 +4,7 @@ import { formatDate, formatDateTime, moneyText } from "../../formatters";
 import { PAYMENT_VOUCHER_UPLOAD_ACCEPT, PDF_UPLOAD_ACCEPT } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import styles from "../../WorkspaceShell.module.css";
-import type { CostDocument, CostRow } from "./model";
+import { COST_FILTER_TYPE_LABELS, COST_FILTER_TYPES, type CostDocument, type CostRow } from "./model";
 import { costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, paymentVoucherUploadKey } from "./helpers";
 
 export function CostDocumentsDrawer({
@@ -15,11 +15,14 @@ export function CostDocumentsDrawer({
   uploadProgressByKey,
   deletingDocumentId,
   canWriteDocuments,
+  canManageCostType,
   canManageFactoryPayments,
+  costTypeSaving,
   paymentSavingId,
   voucherUploadingKey,
   onClose,
   onUpload,
+  onUpdateCostType,
   onUpdatePayment,
   onUploadPaymentVoucher,
   onOpenPaymentVoucher,
@@ -32,11 +35,14 @@ export function CostDocumentsDrawer({
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   canWriteDocuments: boolean;
+  canManageCostType: boolean;
   canManageFactoryPayments: boolean;
+  costTypeSaving: boolean;
   paymentSavingId: string;
   voucherUploadingKey: string;
   onClose: () => void;
   onUpload: (cost: CostRow, documentType: string, file: File | null) => void;
+  onUpdateCostType: (cost: CostRow, costType: string, reason: string) => void;
   onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
   onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
@@ -52,6 +58,21 @@ export function CostDocumentsDrawer({
   const readOnlyReason = logisticsGenerated
     ? "该成本来自物流费用审核，发票按物流费用模块的分组开票规则上传；成本管理仅同步查看，不能在这里上传、替换或删除。"
     : "";
+  const [selectedCostType, setSelectedCostType] = useState(cost.costType || "");
+  const [costTypeReason, setCostTypeReason] = useState("");
+  const costTypeOptions = (cost.costType && !COST_FILTER_TYPES.includes(cost.costType)
+    ? [cost.costType, ...COST_FILTER_TYPES]
+    : COST_FILTER_TYPES
+  ).filter((type, index, rows) => rows.indexOf(type) === index);
+
+  useEffect(() => {
+    setSelectedCostType(cost.costType || "");
+    setCostTypeReason("");
+  }, [cost.id, cost.costType]);
+
+  function submitCostTypeChange() {
+    onUpdateCostType(cost, selectedCostType, costTypeReason);
+  }
 
   return (
     <DismissibleLayer
@@ -83,11 +104,44 @@ export function CostDocumentsDrawer({
               <div className={styles.detailGrid}>
                 <DetailField label="订单号" value={cost.orderNo || "-"} />
                 <DetailField label="供应商" value={supplierName} />
-                <DetailField label="成本类型" value={logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} />
+                {canManageCostType ? (
+                  <label>
+                    成本类型
+                    <select className={styles.uiSelect} value={selectedCostType} disabled={costTypeSaving} onChange={(event) => setSelectedCostType(event.target.value)}>
+                      {costTypeOptions.map((type) => <option key={type} value={type}>{COST_FILTER_TYPE_LABELS[type] || logisticsCostTypeLabel(type) || type}</option>)}
+                    </select>
+                  </label>
+                ) : (
+                  <DetailField label="成本类型" value={logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} />
+                )}
                 <DetailField label="成本金额" value={moneyText(cost.currency, cost.amount, cost.amountCny)} />
                 <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
                 <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
+                {canManageCostType ? (
+                  <label>
+                    修改原因
+                    <input
+                      className={styles.uiInput}
+                      value={costTypeReason}
+                      disabled={costTypeSaving || selectedCostType === (cost.costType || "")}
+                      onChange={(event) => setCostTypeReason(event.target.value)}
+                      placeholder="必填，例如：原费用误选，按发票改为港杂费"
+                    />
+                  </label>
+                ) : null}
               </div>
+              {canManageCostType ? (
+                <div className={styles.detailActions}>
+                  <button
+                    className={styles.secondaryButton}
+                    type="button"
+                    disabled={costTypeSaving || !selectedCostType || selectedCostType === (cost.costType || "") || !costTypeReason.trim()}
+                    onClick={submitCostTypeChange}
+                  >
+                    {costTypeSaving ? "保存中..." : "保存成本类型"}
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className={styles.documentGroupCard}>
               <strong>资料要求</strong>

@@ -233,6 +233,35 @@ test("supplier account data scope is supplier-based, not user-created fallback",
   );
 });
 
+test("internal users can choose enabled temporary logistics fee suppliers", () => {
+  assert.match(
+    backend,
+    /export function assertCanWriteLogisticsExpense\(actor: LogisticsActor\) \{\s*if \(logisticsExpenseActorRole\(actor\) === "业务员"\) return;/,
+  );
+  assert.match(
+    backend,
+    /const canSelectTemporarySupplier = role === "管理员" \|\| role === "业务员"/,
+  );
+  assert.match(
+    backend,
+    /if \(!canSelectTemporarySupplier\) \{[\s\S]*LOGISTICS_SUPPLIER_NOT_ASSIGNED/,
+  );
+  assert.match(
+    backend,
+    /else if \(role === "业务员" && !supplier\.allowLogisticsExpenseEntry\)/,
+  );
+  assert.match(
+    logisticsFeesForm,
+    /const canSelectTemporarySupplier = !isLockedSupplier && \["管理员", "业务员"\]\.includes\(currentUserRole\)/,
+  );
+  assert.match(
+    logisticsFeesForm,
+    /new URLSearchParams\(\{ type: "logistics-fee", status: "active" \}\)/,
+  );
+  assert.match(logisticsFeesForm, /选择订单绑定或临时物流供应商/);
+  assert.match(logisticsFeesForm, /可选择订单绑定或临时物流供应商/);
+});
+
 test("supplier settings include logistics expense and invoice permissions", () => {
   assert.match(schema, /allowLogisticsExpenseEntry\s+Boolean\s+@default\(false\)/);
   assert.match(schema, /allowedLogisticsCostTypes\s+Json\?/);

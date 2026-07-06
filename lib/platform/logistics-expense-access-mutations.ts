@@ -92,8 +92,10 @@ export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, act
 export async function assertLogisticsExpenseSupplier(actor: LogisticsActor, order: LogisticsExpenseOrderForAccess, input: UnknownRecord = {}): Promise<LogisticsSupplierForExpense> {
   const role = logisticsExpenseActorRole(actor);
   const actorSupplier = logisticsExpenseActorSupplierId(actor);
+  const isExternalLogisticsSupplier = [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role);
+  const canSelectTemporarySupplier = role === "管理员" || role === "业务员";
   const requestedSupplierId = nonEmpty(input.supplierId || input.supplier_id);
-  const supplierId = [LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && actorSupplier
+  const supplierId = isExternalLogisticsSupplier && actorSupplier
     ? actorSupplier
     : requestedSupplierId;
   if (!supplierId) throw codedError("请选择物流供应商。", 400, "LOGISTICS_SUPPLIER_REQUIRED");
@@ -101,11 +103,13 @@ export async function assertLogisticsExpenseSupplier(actor: LogisticsActor, orde
   if (!DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType)) {
     throw codedError("只有物流、报关、海运或港杂费用供应商可以提交物流费用。", 400, "LOGISTICS_SUPPLIER_TYPE_INVALID");
   }
-  if (role !== "管理员") {
+  if (!canSelectTemporarySupplier) {
     if (!supplier.allowLogisticsExpenseEntry) throw codedError("该供应商尚未开启物流费用录入权限。", 403, "LOGISTICS_EXPENSE_ENTRY_DISABLED");
     if (!(order.logisticsSuppliers || []).some((row) => row.supplierId === supplier.id)) {
       throw codedError("该订单未分配给当前物流供应商，不能录入费用。", 403, "LOGISTICS_SUPPLIER_NOT_ASSIGNED");
     }
+  } else if (role === "业务员" && !supplier.allowLogisticsExpenseEntry) {
+    throw codedError("该供应商尚未开启物流费用录入权限。", 403, "LOGISTICS_EXPENSE_ENTRY_DISABLED");
   }
   return supplier;
 }

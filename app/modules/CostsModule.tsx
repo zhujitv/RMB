@@ -31,6 +31,7 @@ export function CostsModule({
   const [documentError, setDocumentError] = useState("");
   const [uploadingKey, setUploadingKey] = useState("");
   const [paymentSavingId, setPaymentSavingId] = useState("");
+  const [costTypeSavingId, setCostTypeSavingId] = useState("");
   const [voucherUploadingKey, setVoucherUploadingKey] = useState("");
   const [voucherPreviewCost, setVoucherPreviewCost] = useState<CostRow | null>(null);
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
@@ -45,6 +46,7 @@ export function CostsModule({
   } = useConfirmationDialog();
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
   const canManageFactoryPayments = ["管理员", "财务"].includes(currentUser.role);
+  const canManageCostType = ["管理员", "财务"].includes(currentUser.role);
   const clearTransientState = useCallback(() => {
     setDetailCost(null);
     setDetailOrderSummary(null);
@@ -147,6 +149,7 @@ export function CostsModule({
     openCostDocuments,
     openInvoiceGroupDocuments,
     uploadCostDocument,
+    updateCostType,
     updateProductSupplierCostPayment,
     uploadPaymentVoucher,
     deleteCostDocument,
@@ -164,6 +167,7 @@ export function CostsModule({
     setDocumentError,
     setUploadingKey,
     setPaymentSavingId,
+    setCostTypeSavingId,
     setVoucherUploadingKey,
     setVoucherPreviewCost,
     setUploadProgressByKey,
@@ -213,6 +217,7 @@ export function CostsModule({
     setDocumentError("");
     setUploadingKey("");
     setPaymentSavingId("");
+    setCostTypeSavingId("");
     setVoucherUploadingKey("");
     setDeletingDocumentId("");
   }
@@ -244,7 +249,9 @@ export function CostsModule({
       uploadProgressByKey={uploadProgressByKey}
       deletingDocumentId={deletingDocumentId}
       canWriteDocuments={canWriteDocuments}
+      canManageCostType={canManageCostType}
       canManageFactoryPayments={canManageFactoryPayments}
+      costTypeSavingId={costTypeSavingId}
       paymentSavingId={paymentSavingId}
       voucherUploadingKey={voucherUploadingKey}
       voucherPreviewCost={voucherPreviewCost}
@@ -274,6 +281,7 @@ export function CostsModule({
       onUploadDocument={(cost, documentType, file) => {
         if (file) void uploadCostDocument(cost, documentType, file);
       }}
+      onUpdateCostType={(cost, costType, reason) => void updateCostType(cost, costType, reason)}
       onUpdatePayment={(cost, paid, paidAt) => void updateProductSupplierCostPayment(cost, paid, paidAt || "")}
       onUploadPaymentVoucher={(cost, file) => {
         if (file) void uploadPaymentVoucher(cost, file);

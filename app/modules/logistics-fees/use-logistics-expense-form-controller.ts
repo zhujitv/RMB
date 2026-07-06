@@ -41,6 +41,7 @@ export function useLogisticsExpenseFormController({
   const initialOrderId = normalizedInitialOrder?.id || "";
   const initialSuppliers = normalizedInitialOrder?.logisticsSuppliers || [];
   const isLockedSupplier = currentUserRole === "物流供应商" && Boolean(currentUserSupplierId);
+  const canSelectTemporarySupplier = !isLockedSupplier && ["管理员", "业务员"].includes(currentUserRole);
   const [form, setForm] = useState<ExpenseForm>(() => ({
     ...emptyExpenseForm,
     orderId: initialOrderId,
@@ -103,12 +104,43 @@ export function useLogisticsExpenseFormController({
       setMessage("请先选择关联订单");
       return [];
     }
-    setSuppliers((current) => mergeSuppliers(current, orderSuppliers));
-    const keyword = nextKeyword.trim().toLowerCase();
-    if (!keyword) return orderSuppliers;
+    const keyword = nextKeyword.trim();
+    const globalSuppliers = canSelectTemporarySupplier
+      ? await searchAvailableLogisticsSuppliers(keyword)
+      : [];
+    const mergedSuppliers = mergeSuppliers(orderSuppliers, globalSuppliers);
+    setSuppliers((current) => mergeSuppliers(current, mergedSuppliers));
+    if (canSelectTemporarySupplier) return mergedSuppliers;
+    const normalizedKeyword = keyword.toLowerCase();
+    if (!normalizedKeyword) return orderSuppliers;
     return orderSuppliers.filter((supplier) =>
-      [supplier.supplierName, supplier.name, supplier.supplierType].some((value) => String(value || "").toLowerCase().includes(keyword)),
+      [supplier.supplierName, supplier.name, supplier.supplierType].some((value) => String(value || "").toLowerCase().includes(normalizedKeyword)),
     );
+  }
+
+  async function searchAvailableLogisticsSuppliers(nextKeyword: string) {
+    try {
+      const params = new URLSearchParams({ type: "logistics-fee", status: "active" });
+      if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
+      const result = await apiJson<{ suppliers?: SupplierOption[] }>(`/api/suppliers/search?${params}`);
+      const rows = filterLogisticsFeeSuppliers(Array.isArray(result.suppliers) ? result.suppliers : []);
+      return currentUserRole === "业务员"
+        ? rows.filter((supplier) => supplier.allowLogisticsExpenseEntry)
+        : rows;
+    } catch (supplierError) {
+      setMessage(supplierError instanceof Error ? supplierError.message : "读取物流供应商失败");
+      return [];
+    }
+  }
+
+  function isLogisticsFeeSupplier(supplierId: string) {
+    return filterLogisticsFeeSuppliers(suppliers).some((supplier) => supplier.id === supplierId);
+  }
+
+  function shouldKeepCurrentSupplier(supplierId: string, availableSupplierIds: Set<string>) {
+    if (!supplierId) return false;
+    if (availableSupplierIds.has(supplierId)) return true;
+    return canSelectTemporarySupplier && isLogisticsFeeSupplier(supplierId);
   }
 
   async function resolveExpenseItemExchangeRate(index: number, currency: string) {
@@ -190,7 +222,7 @@ export function useLogisticsExpenseFormController({
     setForm((current) => ({
       ...current,
       orderId: normalizedOrder.id,
-      supplierId: nextSupplierId || (current.supplierId && availableSupplierIds.has(current.supplierId) ? current.supplierId : ""),
+      supplierId: nextSupplierId || (shouldKeepCurrentSupplier(current.supplierId, availableSupplierIds) ? current.supplierId : ""),
       items: current.items.map((item) => normalizeExpenseItemCostType(item, nextCostTypes)),
     }));
   }
@@ -250,6 +282,7 @@ export function useLogisticsExpenseFormController({
     selectedOrder,
     selectedSupplier,
     isLockedSupplier,
+    canSelectTemporarySupplier,
     supplierSummaryText: selectedSupplier ? supplierLabel(selectedSupplier) : isLockedSupplier ? "加载供应商信息中..." : selectedOrder ? "未选择" : "请先选择订单",
     supplierAllowedCostTypes: selectedSupplier?.allowedLogisticsCostTypes?.length ? selectedSupplier.allowedLogisticsCostTypes.map((type) => logisticsCostTypeLabel(type)).join(" / ") : "",
     costTypeOptions: allowedCostTypeOptions(selectedSupplier, isLockedSupplier),
