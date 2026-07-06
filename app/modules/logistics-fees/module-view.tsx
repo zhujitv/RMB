@@ -222,6 +222,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
           canWithdraw={isLogisticsSupplier}
           canEditAmount={isLogisticsSupplier}
           canUploadInvoice={isLogisticsSupplier || canConfirmInvoice || canReviewExpense}
+          canManageInvoiceRecognition={canConfirmInvoice || canReviewExpense}
           canMarkPaid={canConfirmInvoice}
           canSubmitDraft={canCreateExpense}
           canDeleteExpense={canCreateExpense}

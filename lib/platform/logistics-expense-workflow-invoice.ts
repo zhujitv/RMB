@@ -29,12 +29,14 @@ import {
   logisticsInvoiceGroupCurrencyViolation,
   logisticsInvoiceGroupForExpense,
   logisticsInvoiceGroupForKey,
+  logisticsInvoiceGroupMixedCurrencyViolation,
 } from "./logistics-invoice-groups";
 import {
   clearLogisticsInvoiceValidation,
+  createLogisticsInvoiceRecognitionTask,
   invoiceValidationStatusCanContinue,
   markLogisticsInvoiceValidationUploaded,
-  recognizeAndValidateLogisticsInvoiceGroup,
+  runLogisticsInvoiceOcrTask,
   summarizeInvoiceValidationBlockReason,
 } from "./logistics-invoice-validation";
 import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
@@ -79,6 +81,8 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
   if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用，不能上传该分组发票。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
+  const mixedCurrencyViolation = logisticsInvoiceGroupMixedCurrencyViolation(targetRows, invoiceGroup);
+  if (mixedCurrencyViolation) throw codedError(mixedCurrencyViolation, 400, "LOGISTICS_INVOICE_GROUP_MIXED_CURRENCY");
   const blocked = targetRows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row) }));
   if (blocked) throw codedError("该发票分组包含尚未提交审核的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_INVOICE_UPLOAD_STATUS_BLOCKED");
   const file = formData.get("file");
@@ -146,12 +150,39 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     throw error;
   }
   await markLogisticsInvoiceValidationUploaded(targetIds, actor);
-  await recognizeAndValidateLogisticsInvoiceGroup({
-    documentId: document.id,
-    invoiceGroupKey: invoiceGroup.key,
-    rows: savedRows,
-    actor,
-  });
+  try {
+    const ocrTask = await createLogisticsInvoiceRecognitionTask({
+      documentId: document.id,
+      invoiceGroupKey: invoiceGroup.key,
+      rows: savedRows,
+      actor,
+    });
+    void runNonCriticalTask("物流发票后台识别", () => runLogisticsInvoiceOcrTask(ocrTask.id), {
+      context: {
+        taskId: ocrTask.id,
+        documentId: document.id,
+        invoiceGroupKey: invoiceGroup.key,
+        rowIds: targetIds,
+      },
+      slowMs: 3000,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "物流发票识别任务创建失败");
+    await prisma.logisticsExpense.updateMany({
+      where: { id: { in: targetIds }, deletedAt: null },
+      data: {
+        invoiceValidationStatus: "识别失败",
+        invoiceValidationMessage: `OCR任务创建失败：${message.slice(0, 500)}`,
+        updatedById: actorId(actor),
+      },
+    }).catch(() => null);
+    console.error("logistics-invoice-ocr-task-create-failed", {
+      documentId: document.id,
+      invoiceGroupKey: invoiceGroup.key,
+      rowIds: targetIds,
+      message,
+    });
+  }
   await runNonCriticalTask("物流发票上传状态日志写入", () => writeAudit(request, actor, "提交物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
@@ -163,6 +194,58 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   }
   const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   await refreshLogisticsBillWorkflowStatus(billRows, actor, paymentStatusUpdateAfterInvoiceProgress(billRows));
+  invalidateWorkbenchTodosCache();
+  const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  return {
+    bill: serializeLogisticsExpenseBill(finalRows),
+    expenses: finalRows.map(serializeLogisticsExpense),
+    invoiceGroup: invoiceGroup.key,
+  };
+}
+
+export async function rerunLogisticsExpenseInvoiceRecognition(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
+  assertCanConfirmLogisticsInvoice(actor);
+  const before = await loadLogisticsExpenseForAction(id, actor);
+  const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
+  const fallbackGroup = logisticsInvoiceGroupForExpense(before);
+  const invoiceGroup = requestedGroup || fallbackGroup;
+  if (!invoiceGroup) throw codedError("请选择有效发票分组。", 400, "LOGISTICS_INVOICE_GROUP_INVALID");
+  const targetRows = rows.filter((row) => logisticsInvoiceExpenseMatchesGroup(row, invoiceGroup));
+  const groupViolation = targetRows.map((row) => logisticsInvoiceGroupCurrencyViolation(row, invoiceGroup)).find(Boolean);
+  if (groupViolation) throw codedError(groupViolation, 400, "LOGISTICS_INVOICE_GROUP_CURRENCY_INVALID");
+  if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
+  const mixedCurrencyViolation = logisticsInvoiceGroupMixedCurrencyViolation(targetRows, invoiceGroup);
+  if (mixedCurrencyViolation) throw codedError(mixedCurrencyViolation, 400, "LOGISTICS_INVOICE_GROUP_MIXED_CURRENCY");
+  const documentId = optional(input.documentId) || targetRows.find((row) => row.invoiceDocumentId)?.invoiceDocumentId || "";
+  if (!documentId) throw codedError("当前分组没有已上传发票，不能重新识别。", 400, "LOGISTICS_INVOICE_DOCUMENT_NOT_FOUND");
+  const targetDocumentRows = targetRows.filter((row) => row.invoiceDocumentId === documentId);
+  if (!targetDocumentRows.length) throw codedError("该发票文件不属于当前账单分组。", 400, "LOGISTICS_INVOICE_DOCUMENT_SCOPE_INVALID");
+  const ocrTask = await createLogisticsInvoiceRecognitionTask({
+    documentId,
+    invoiceGroupKey: invoiceGroup.key,
+    rows: targetDocumentRows,
+    actor,
+  });
+  void runNonCriticalTask("物流发票重新识别后台执行", () => runLogisticsInvoiceOcrTask(ocrTask.id), {
+    context: {
+      taskId: ocrTask.id,
+      documentId,
+      invoiceGroupKey: invoiceGroup.key,
+      rowIds: targetDocumentRows.map((row) => row.id),
+    },
+    slowMs: 3000,
+  });
+  await runNonCriticalTask("物流发票重新识别日志写入", () => writeAudit(request, actor, "重新识别物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
+    invoiceGroup: invoiceGroup.key,
+    invoiceGroupLabel: invoiceGroup.label,
+    documentId,
+    taskId: ocrTask.id,
+    rowIds: targetDocumentRows.map((row) => row.id),
+  }));
+  for (const orderId of [...new Set(targetDocumentRows.map((row) => row.orderId).filter(Boolean))]) {
+    scheduleTaxRefundCompletenessRefresh(String(orderId), "物流发票重新识别后退税完整度刷新");
+  }
   invalidateWorkbenchTodosCache();
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   return {

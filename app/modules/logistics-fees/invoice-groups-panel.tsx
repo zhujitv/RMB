@@ -30,16 +30,19 @@ export function LogisticsInvoiceGroupsPanel({
   items,
   groups,
   canUploadInvoice,
+  canManageInvoiceRecognition,
   onUploaded,
 }: {
   expense: LogisticsExpense;
   items: LogisticsExpense[];
   groups: LogisticsInvoiceGroupSummary[];
   canUploadInvoice: boolean;
+  canManageInvoiceRecognition: boolean;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
 }) {
   const [deletingGroupKey, setDeletingGroupKey] = useState("");
   const [confirmingGroupKey, setConfirmingGroupKey] = useState("");
+  const [recognizingGroupKey, setRecognizingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
   const visibleGroups = groups.filter(
     (group) =>
@@ -118,6 +121,39 @@ export function LogisticsInvoiceGroupsPanel({
       }));
     } finally {
       setConfirmingGroupKey("");
+    }
+  }
+
+  async function rerunInvoiceRecognition(
+    targetExpense: LogisticsExpense,
+    group: LogisticsInvoiceGroupSummary,
+  ) {
+    if (!group.invoiceDocumentId) return;
+    setRecognizingGroupKey(group.key);
+    setGroupMessage((current) => ({ ...current, [group.key]: "" }));
+    try {
+      const response = await fetch(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rerunInvoiceRecognition",
+          invoiceGroup: group.key,
+          documentId: group.invoiceDocumentId,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success !== true)
+        throw new Error(result.message || "重新识别失败");
+      setGroupMessage((current) => ({ ...current, [group.key]: "已提交重新识别" }));
+      onUploaded(result);
+    } catch (error) {
+      setGroupMessage((current) => ({
+        ...current,
+        [group.key]: error instanceof Error ? error.message : "重新识别失败",
+      }));
+    } finally {
+      setRecognizingGroupKey("");
     }
   }
 
@@ -306,16 +342,26 @@ export function LogisticsInvoiceGroupsPanel({
                       {group.validationMessage}
                     </div>
                   ) : null}
-                  {validationProblem && canUploadInvoice ? (
+                  {canManageInvoiceRecognition && group.invoiceDocumentId ? (
                     <div className={styles.logisticsInvoiceValidationActions}>
                       <button
                         className={styles.secondaryButton}
                         type="button"
-                        disabled={confirmingGroupKey === group.key}
-                        onClick={() => manuallyConfirmValidation(targetExpense, group)}
+                        disabled={recognizingGroupKey === group.key}
+                        onClick={() => rerunInvoiceRecognition(targetExpense, group)}
                       >
-                        {confirmingGroupKey === group.key ? "确认中..." : "人工确认通过"}
+                        {recognizingGroupKey === group.key ? "识别中..." : "重新识别"}
                       </button>
+                      {validationProblem ? (
+                        <button
+                          className={styles.secondaryButton}
+                          type="button"
+                          disabled={confirmingGroupKey === group.key}
+                          onClick={() => manuallyConfirmValidation(targetExpense, group)}
+                        >
+                          {confirmingGroupKey === group.key ? "确认中..." : "人工确认通过"}
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

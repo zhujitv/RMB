@@ -8,6 +8,7 @@ import {
   ok,
   parseJsonBody,
   resendLogisticsExpenseInvoiceNotice,
+  rerunLogisticsExpenseInvoiceRecognition,
   reviewLogisticsExpense,
   submitLogisticsExpenseBill,
   updateLogisticsExpense,
@@ -64,6 +65,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if ((body.action || "") === "manualConfirmInvoiceValidation") {
       const result = await manuallyConfirmLogisticsInvoiceValidation(request, actor, id, body);
       return ok({ success: true, ...result, message: "物流发票校验已人工确认通过" });
+    }
+    if ((body.action || "") === "rerunInvoiceRecognition" || (body.action || "") === "recognizeInvoice") {
+      const result = await rerunLogisticsExpenseInvoiceRecognition(request, actor, id, body);
+      return ok({ success: true, ...result, message: "物流发票已提交重新识别" });
     }
     if ((body.action || "") === "paymentStatus" || (body.action || "") === "markPaid") {
       const expense = await updateLogisticsExpensePaymentStatus(request, actor, id, body);

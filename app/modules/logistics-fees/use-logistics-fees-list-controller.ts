@@ -55,10 +55,13 @@ export function useLogisticsFeesListController({
     nextKeyword = submittedKeyword,
     nextStatus = status,
     nextCostType = costType,
+    options: { silent?: boolean } = {},
   ) {
     const requestId = ++listRequestRef.current;
-    setLoading(true);
-    setError("");
+    if (!options.silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const params = new URLSearchParams({
         page: String(nextPage),
@@ -94,7 +97,7 @@ export function useLogisticsFeesListController({
       }
       return [];
     } finally {
-      if (requestId === listRequestRef.current) setLoading(false);
+      if (requestId === listRequestRef.current && !options.silent) setLoading(false);
     }
   }
 
@@ -108,6 +111,20 @@ export function useLogisticsFeesListController({
     void loadExpenses(1, submittedKeyword, status, costType);
     void loadStatement(statementMonth);
   }, [refreshToken]);
+
+  useEffect(() => {
+    if (loading) return;
+    const hasProcessingInvoice = rows.some((row) =>
+      (row.invoiceGroups || []).some((group) =>
+        ["识别中", "已上传待识别"].includes(String(group.validationStatus || "")),
+      ),
+    );
+    if (!hasProcessingInvoice) return;
+    const timer = window.setInterval(() => {
+      void loadExpenses(page, submittedKeyword, status, costType, { silent: true });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [rows, page, submittedKeyword, status, costType, loading]);
 
   useEffect(() => {
     if (!focusToken) return;

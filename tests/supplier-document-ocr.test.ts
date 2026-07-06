@@ -60,6 +60,8 @@ test("supplier OCR has a cron worker fallback for processing tasks", () => {
   assert.match(service, /supplier-document-ocr-pending-worker/);
   assert.match(supplierOcrCronRoute, /assertCronSecret\(request\)/);
   assert.match(supplierOcrCronRoute, /runPendingSupplierDocumentOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
+  assert.match(supplierOcrCronRoute, /runPendingLogisticsInvoiceOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
+  assert.match(supplierOcrCronRoute, /return ok\(\{ supplier, logistics \}\)/);
   assert.match(vercelConfig, /"path": "\/api\/cron\/supplier-document-ocr"/);
   assert.match(vercelConfig, /"\*\/5 \* \* \* \*"/);
 });

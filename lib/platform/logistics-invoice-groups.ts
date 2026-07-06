@@ -90,6 +90,18 @@ export function logisticsInvoiceGroupCurrencyViolation(expense: LogisticsInvoice
   return "";
 }
 
+export function logisticsInvoiceGroupCurrencies(expenses: LogisticsInvoiceGroupExpenseLike[] = []) {
+  return [...new Set(expenses.map((expense) => normalizedInvoiceCurrency(expense.currency || "CNY")).filter(Boolean))];
+}
+
+export function logisticsInvoiceGroupMixedCurrencyViolation(expenses: LogisticsInvoiceGroupExpenseLike[] = [], group: LogisticsInvoiceGroupDefinition | null = null) {
+  const currencies = logisticsInvoiceGroupCurrencies(expenses);
+  if (group && currencies.length > 1) {
+    return `${group.label}包含多个币种（${currencies.join(" / ")}），请按币种拆分发票后再上传。`;
+  }
+  return "";
+}
+
 export function logisticsInvoiceGroupsForCostTypes(costTypes: unknown[] = []) {
   const normalizedTypes = costTypes
     .map((item) => normalizedInvoiceCostType(item))

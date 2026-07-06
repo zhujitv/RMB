@@ -16,6 +16,10 @@ export {
 export {
   confirmLogisticsExpenseInvoice,
   deleteLogisticsExpenseInvoice,
+  rerunLogisticsExpenseInvoiceRecognition,
   updateLogisticsExpensePaymentStatus,
   uploadLogisticsExpenseInvoice,
 } from "./logistics-expense-workflow-invoice";
+export {
+  runPendingLogisticsInvoiceOcrTasks,
+} from "./logistics-invoice-validation";

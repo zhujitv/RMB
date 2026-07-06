@@ -39,6 +39,7 @@ export const backend = [
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readNotificationEngineSource(),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
+  readFileSync("lib/platform/logistics-invoice-amount-parser.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-validation-rules.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-validation.ts", "utf8"),
   readFileSync("lib/platform/logistics-bill-state-machine.ts", "utf8"),

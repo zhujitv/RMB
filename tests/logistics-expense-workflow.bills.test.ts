@@ -61,6 +61,7 @@ import {
   listLogisticsExpensesSource,
   logisticsSupplierStatementSource
 } from "./logistics-expense-workflow-context.ts";
+import { extractLogisticsForeignCurrencyAmount } from "../lib/platform/logistics-invoice-amount-parser.ts";
 
 test("logistics expense list reads avoid transactions for count and pagination", () => {
   assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.count/);
@@ -280,6 +281,15 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(backend, /invoiceDocumentId: document\.id/);
   assert.match(backend, /invoiceStatus: "已上传"/);
   assert.doesNotMatch(backend, /paymentStatus: "已开票"/);
+  assert.match(backend, /createLogisticsInvoiceRecognitionTask/);
+  assert.match(backend, /runLogisticsInvoiceOcrTask/);
+  assert.match(backend, /物流发票后台识别/);
+  assert.match(backend, /OCR任务创建失败/);
+  assert.match(backend, /id: \{ in: rowIds \}, invoiceDocumentId: task\.documentId/);
+  assert.match(backend, /runPendingLogisticsInvoiceOcrTasks/);
+  assert.match(backend, /LOGISTICS_INVOICE_GROUP_MIXED_CURRENCY/);
+  assert.match(backend, /物流发票重新识别后台执行/);
+  assert.match(backend, /scheduleTaxRefundCompletenessRefresh\(String\(orderId\), "物流发票校验人工确认后退税完整度刷新"\)/);
   assert.match(backend, /recognizeAndValidateLogisticsInvoiceGroup/);
   assert.match(backend, /recognizeLogisticsInvoiceWithOcr/);
   assert.match(backend, /LOGISTICS_INVOICE_OCR_MODULE = "LOGISTICS_INVOICE"/);
@@ -310,9 +320,15 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
 	assert.match(logisticsModule, /识别发票金额/);
 	assert.match(logisticsModule, /系统费用分组/);
 	assert.match(logisticsModule, /识别品名/);
-	assert.match(logisticsModule, /识别销售方/);
-	assert.match(logisticsModule, /识别购买方/);
+  assert.match(logisticsModule, /识别销售方/);
+  assert.match(logisticsModule, /识别购买方/);
+  assert.match(logisticsModule, /重新识别/);
+  assert.match(logisticsModule, /action: "rerunInvoiceRecognition"/);
+  assert.match(logisticsModule, /window\.setInterval/);
+  assert.match(logisticsModule, /\["识别中", "已上传待识别"\]/);
+  assert.match(logisticsModule, /\{ silent: true \}/);
   assert.match(logisticsModule, /人工确认通过/);
+  assert.match(logisticsCostRoute, /rerunLogisticsExpenseInvoiceRecognition/);
   assert.doesNotMatch(
     backend,
     /requireText\(formData\.get\("invoiceNo"\)|requirePositive\(formData\.get\("invoiceAmount"\)|请选择开票日期/,
@@ -328,6 +344,17 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
     logisticsModule,
     /compactInvoiceUpload[\s\S]*InvoiceUploadForm/,
   );
+});
+
+test("logistics ocean freight invoice parser uses foreign currency amount from remark", () => {
+  const text = `
+    电子发票（增值税专用发票）
+    发票号码：26332000005808236626
+    价税合计（小写）¥6783.21
+    销售方开户账号 USD:19533014040013697
+    备注：美元汇率6.79，美金金额999，只接受美元付款。
+  `;
+  assert.equal(extractLogisticsForeignCurrencyAmount(text, "USD", 999), 999);
 });
 
 test("withdraw and invoice notification mutations keep current logistics bill expanded locally", () => {

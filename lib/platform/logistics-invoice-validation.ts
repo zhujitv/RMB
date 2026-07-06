@@ -6,8 +6,15 @@ import { saveOcrRawResult } from "./ocr-raw-results";
 import { looselyMatches, parseVatInvoiceFields, supplierDocumentLabels, visibleResultFields } from "./supplier-document-ocr-shared";
 import { invoiceParserIssues } from "./supplier-document-ocr-validation";
 import { getLogisticsInvoiceValidationRules } from "./logistics-invoice-validation-rules";
-import { logisticsInvoiceGroupForKey, OCEAN_FREIGHT_INVOICE_GROUP_KEY, type LogisticsInvoiceGroupDefinition } from "./logistics-invoice-groups";
-import { codedError, dateFromInput, nonEmpty, num, optional, runNonCriticalTask, writeAudit } from "./shared";
+import { extractLogisticsForeignCurrencyAmount } from "./logistics-invoice-amount-parser";
+import {
+  logisticsInvoiceGroupCurrencies,
+  logisticsInvoiceGroupForExpense,
+  logisticsInvoiceGroupForKey,
+  OCEAN_FREIGHT_INVOICE_GROUP_KEY,
+  type LogisticsInvoiceGroupDefinition,
+} from "./logistics-invoice-groups";
+import { codedError, dateFromInput, nonEmpty, num, optional, runNonCriticalTask, scheduleTaxRefundCompletenessRefresh, writeAudit } from "./shared";
 import { DEFAULT_COMPANY_PROFILE_SETTINGS } from "./shared-constants";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
@@ -35,7 +42,7 @@ type ActorLike = {
 
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
-type LogisticsInvoiceValidationRow = {
+export type LogisticsInvoiceValidationRow = {
   id: string;
   orderId: string;
   supplierId: string;
@@ -44,6 +51,10 @@ type LogisticsInvoiceValidationRow = {
   amount?: Prisma.Decimal | number | string | null;
   invoiceDocumentId?: string | null;
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
@@ -70,36 +81,6 @@ function expectedGroupAmount(rows: LogisticsInvoiceValidationRow[]) {
 
 function amountMatches(actual: number, expected: number) {
   return Math.abs(roundMoney(actual) - roundMoney(expected)) <= 0.01;
-}
-
-function moneyCandidate(value: unknown) {
-  const text = String(value || "").replace(/[,，\s]/g, "");
-  const parsed = Number.parseFloat(text);
-  return Number.isFinite(parsed) ? roundMoney(parsed) : 0;
-}
-
-export function extractLogisticsForeignCurrencyAmount(text: string, currency: string, expectedAmount = 0) {
-  const normalizedCurrency = cleanText(currency).toUpperCase();
-  if (!normalizedCurrency || normalizedCurrency === "CNY") return 0;
-  const source = String(text || "")
-    .replace(/\r/g, "\n")
-    .replace(/[ \t]+/g, " ");
-  const currencyTokens = normalizedCurrency === "USD"
-    ? "(?:USD|US\\$|美元|美金|美金金额|美元金额)"
-    : `(?:${normalizedCurrency})`;
-  const amountPattern = "([0-9]{1,7}(?:[,，][0-9]{3})*(?:\\.[0-9]{1,2})?)(?![0-9])";
-  const patterns = [
-    new RegExp(`${currencyTokens}\\s*(?:金额|合计|费用|海运费|运费|FREIGHT|AMOUNT)?\\s*[:：]?\\s*${amountPattern}`, "gi"),
-    new RegExp(`${amountPattern}\\s*(?:${normalizedCurrency === "USD" ? "USD|US\\$|美元|美金" : normalizedCurrency})`, "gi"),
-  ];
-  const candidates = patterns.flatMap((pattern) => Array.from(source.matchAll(pattern)).map((match) => moneyCandidate(match[1])))
-    .filter((value) => value > 0 && value < 10_000_000);
-  if (!candidates.length) return 0;
-  const unique = Array.from(new Set(candidates));
-  const expected = roundMoney(expectedAmount);
-  const exact = unique.find((value) => expected > 0 && amountMatches(value, expected));
-  if (exact) return exact;
-  return unique[0] || 0;
 }
 
 export function recognizedLogisticsInvoiceAmount(input: {
@@ -188,6 +169,53 @@ export async function markLogisticsInvoiceValidationUploaded(rowIds: string[], a
   });
 }
 
+export async function createLogisticsInvoiceRecognitionTask(input: {
+  documentId: string;
+  invoiceGroupKey: string;
+  rows: LogisticsInvoiceValidationRow[];
+  actor: ActorLike;
+}) {
+  const documentId = nonEmpty(input.documentId);
+  const invoiceGroup = logisticsInvoiceGroupForKey(input.invoiceGroupKey);
+  const rows = input.rows.filter((row) => row.id);
+  const rowIds = rows.map((row) => row.id);
+  if (!documentId || !invoiceGroup || !rowIds.length) {
+    throw codedError("物流发票识别任务参数不完整。", 400, "LOGISTICS_INVOICE_OCR_TASK_INVALID");
+  }
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, deletedAt: null },
+    select: { id: true, orderId: true, supplierId: true },
+  });
+  if (!document) throw codedError("物流发票文件不存在或已删除。", 404, "LOGISTICS_INVOICE_DOCUMENT_NOT_FOUND");
+  const validationJson = {
+    documentId,
+    invoiceGroupKey: invoiceGroup.key,
+    rowIds,
+  };
+  const task = await prisma.ocrTask.create({
+    data: {
+      module: LOGISTICS_INVOICE_OCR_MODULE,
+      documentId,
+      orderId: document.orderId,
+      supplierId: document.supplierId,
+      documentType: LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE,
+      status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+      validationStatus: "PROCESSING",
+      validationJson,
+    },
+    include: { results: true },
+  });
+  await updateRowsWithValidationResult({
+    rowIds,
+    actor: input.actor,
+    status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+    message: "",
+    validationJson,
+    taskId: task.id,
+  });
+  return task;
+}
+
 export async function clearLogisticsInvoiceValidation(rowIds: string[], actor: ActorLike) {
   const ids = rowIds.filter(Boolean);
   if (!ids.length) return;
@@ -245,6 +273,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
   invoiceGroupKey: string;
   rows: LogisticsInvoiceValidationRow[];
   actor: ActorLike;
+  taskId?: string;
 }) {
   const rows = input.rows.filter((row) => row.id);
   const rowIds = rows.map((row) => row.id);
@@ -271,19 +300,40 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
     status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
     message: "",
     validationJson: { documentId, invoiceGroupKey: input.invoiceGroupKey },
+    taskId: input.taskId || null,
   });
-  const task = await prisma.ocrTask.create({
-    data: {
-      module: LOGISTICS_INVOICE_OCR_MODULE,
-      documentId,
-      orderId: document.orderId,
-      supplierId: document.supplierId,
-      documentType: LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE,
-      status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
-      validationStatus: "PROCESSING",
-    },
-    include: { results: true },
-  });
+  const task = input.taskId
+    ? await prisma.ocrTask.update({
+        where: { id: input.taskId },
+        data: {
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+          errorMessage: null,
+          validationJson: {
+            documentId,
+            invoiceGroupKey: invoiceGroup.key,
+            rowIds,
+          },
+        },
+        include: { results: true },
+      })
+    : await prisma.ocrTask.create({
+        data: {
+          module: LOGISTICS_INVOICE_OCR_MODULE,
+          documentId,
+          orderId: document.orderId,
+          supplierId: document.supplierId,
+          documentType: LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE,
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+          validationJson: {
+            documentId,
+            invoiceGroupKey: invoiceGroup.key,
+            rowIds,
+          },
+        },
+        include: { results: true },
+      });
   let latestRawText = "";
   let latestRawJson: unknown = null;
   let latestApiName = "";
@@ -468,6 +518,138 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
   }
 }
 
+export async function runLogisticsInvoiceOcrTask(taskId: string) {
+  const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
+  if (!task) throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
+  if (task.module !== LOGISTICS_INVOICE_OCR_MODULE) {
+    throw codedError("该 OCR 任务不是物流发票识别任务。", 400, "LOGISTICS_INVOICE_OCR_TASK_MODULE_INVALID");
+  }
+  const validation = asRecord(task.validationJson);
+  const rowIds = Array.isArray(validation.rowIds)
+    ? validation.rowIds.map((item) => String(item || "")).filter(Boolean)
+    : [];
+  const rows = await prisma.logisticsExpense.findMany({
+    where: {
+      deletedAt: null,
+      ...(rowIds.length
+        ? { id: { in: rowIds }, invoiceDocumentId: task.documentId }
+        : { invoiceDocumentId: task.documentId }),
+    },
+    select: {
+      id: true,
+      orderId: true,
+      supplierId: true,
+      costType: true,
+      currency: true,
+      amount: true,
+      invoiceDocumentId: true,
+    },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+  });
+  const mappedRows = rows.map((row) => ({
+    id: row.id,
+    orderId: row.orderId,
+    supplierId: row.supplierId,
+    costType: row.costType,
+    currency: row.currency,
+    amount: row.amount,
+    invoiceDocumentId: row.invoiceDocumentId,
+  }));
+  const invoiceGroupKey = nonEmpty(validation.invoiceGroupKey) || logisticsInvoiceGroupForExpense(mappedRows[0])?.key || "";
+  if (!mappedRows.length || !invoiceGroupKey) {
+    await prisma.ocrTask.update({
+      where: { id: task.id },
+      data: {
+        status: LOGISTICS_INVOICE_VALIDATION_FAILED,
+        validationStatus: "FAILED",
+        errorMessage: "未找到物流发票对应的费用分组。",
+      },
+    });
+    throw codedError("未找到物流发票对应的费用分组。", 404, "LOGISTICS_INVOICE_OCR_ROWS_NOT_FOUND");
+  }
+  return recognizeAndValidateLogisticsInvoiceGroup({
+    documentId: task.documentId,
+    invoiceGroupKey,
+    rows: mappedRows,
+    actor: null,
+    taskId: task.id,
+  });
+}
+
+export async function runPendingLogisticsInvoiceOcrTasks(limit = 5, minAgeMs = 60_000) {
+  const safeLimit = Math.min(Math.max(Math.trunc(Number(limit) || 5), 1), 20);
+  const readyBefore = new Date(Date.now() - Math.max(Math.trunc(Number(minAgeMs) || 60_000), 15_000));
+  const tasks = await prisma.ocrTask.findMany({
+    where: {
+      module: LOGISTICS_INVOICE_OCR_MODULE,
+      status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+      validationStatus: "PROCESSING",
+      updatedAt: { lt: readyBefore },
+    },
+    select: { id: true, documentId: true, orderId: true, supplierId: true, documentType: true, updatedAt: true },
+    orderBy: { updatedAt: "asc" },
+    take: safeLimit,
+  });
+  const result = {
+    scanned: tasks.length,
+    processed: 0,
+    failed: 0,
+    skipped: 0,
+    taskIds: tasks.map((task) => task.id),
+  };
+  for (const task of tasks) {
+    try {
+      const claimed = await prisma.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+          updatedAt: { lte: task.updatedAt },
+        },
+        data: { updatedAt: new Date(), errorMessage: null },
+      });
+      if (!claimed.count) {
+        result.skipped += 1;
+        continue;
+      }
+      await runLogisticsInvoiceOcrTask(task.id);
+      result.processed += 1;
+    } catch (error) {
+      result.failed += 1;
+      const message = error instanceof Error ? error.message : String(error || "物流发票识别失败");
+      await prisma.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+        },
+        data: {
+          status: LOGISTICS_INVOICE_VALIDATION_FAILED,
+          validationStatus: "FAILED",
+          errorMessage: message.slice(0, 1000),
+          validationJson: {
+            issues: [{ level: "manual", message: message.slice(0, 1000) }],
+            parserStatus: "物流发票后台识别失败",
+          },
+        },
+      }).catch(() => null);
+      console.error("logistics-invoice-ocr-pending-worker-failed", {
+        taskId: task.id,
+        documentId: task.documentId,
+        orderId: task.orderId,
+        supplierId: task.supplierId,
+        documentType: task.documentType,
+        message,
+      });
+    }
+  }
+  if (tasks.length) {
+    console.info("logistics-invoice-ocr-pending-worker", result);
+  }
+  return result;
+}
+
 function validateLogisticsInvoiceFields(input: {
   fields: ReturnType<typeof parseVatInvoiceFields>;
   rawText: string;
@@ -478,8 +660,16 @@ function validateLogisticsInvoiceFields(input: {
   expectedBuyerName?: string;
 }) {
   const expectedAmount = expectedGroupAmount(input.rows);
-  const currency = groupCurrency(input.rows);
+  const currencies = logisticsInvoiceGroupCurrencies(input.rows);
+  const currency = currencies.length === 1 ? currencies[0] : groupCurrency(input.rows);
   const issues: Array<{ level: "error" | "manual"; field: string; message: string }> = [];
+  if (currencies.length > 1) {
+    issues.push({
+      level: "error",
+      field: "amountWithTax",
+      message: `同一发票分组包含多个币种（${currencies.join(" / ")}），请按币种拆分发票后再校验。`,
+    });
+  }
   const recognizedAmountResult = recognizedLogisticsInvoiceAmount({
     fields: input.fields,
     rawText: input.rawText,
@@ -488,7 +678,9 @@ function validateLogisticsInvoiceFields(input: {
     expectedAmount,
   });
   const recognizedAmount = recognizedAmountResult.amount;
-  if (!recognizedAmount) {
+  if (currencies.length > 1) {
+    // Mixed-currency groups cannot be compared to one invoice amount.
+  } else if (!recognizedAmount) {
     issues.push({
       level: "manual",
       field: "amountWithTax",
@@ -614,6 +806,9 @@ export async function manuallyConfirmLogisticsInvoiceValidation(
     confirmedAt,
     rowIds: targetIds,
   }));
+  for (const orderId of [...new Set(targetRows.map((row) => row.orderId).filter(Boolean))]) {
+    scheduleTaxRefundCompletenessRefresh(String(orderId), "物流发票校验人工确认后退税完整度刷新");
+  }
   invalidateWorkbenchTodosCache();
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   return {
