@@ -178,6 +178,50 @@
 .statementPanel { composes: statementPanel from "./styles/workspace-shell/logistics-fees.module.css"; } .statementRow { composes: statementRow from "./styles/workspace-shell/logistics-fees.module.css"; composes: statementRow from "./styles/workspace-shell/responsive-typography.module.css"; } .statusBadge { composes: statusBadge from "./styles/workspace-shell/shell-account.module.css"; }
 .statusBadgeDanger { composes: statusBadgeDanger from "./styles/workspace-shell/shell-account.module.css"; } .statusBadgeSuccess { composes: statusBadgeSuccess from "./styles/workspace-shell/shell-account.module.css"; } .statusColumn { composes: statusColumn from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: statusColumn from "./styles/workspace-shell/tables-dashboard.module.css"; }
 .statusDanger { composes: statusDanger from "./styles/workspace-shell/manual-table.module.css"; } .rowDanger { composes: rowDanger from "./styles/workspace-shell/workspace-tax-drawer-overrides.module.css"; } .statusIcon { composes: statusIcon from "./styles/workspace-shell/lists-reports-costs.module.css"; }
+
+.exchangeRateField {
+  min-width: 0;
+}
+
+.exchangeRateInputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.exchangeRateInputRow input[readonly] {
+  background: #f8fafc;
+}
+
+.exchangeRateHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #b45309;
+}
+
+.inlineLinkButton {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.inlineLinkButton:hover,
+.inlineLinkButton:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 720px) {
+  .exchangeRateInputRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .statusInfo { composes: statusInfo from "./styles/workspace-shell/manual-table.module.css"; } .statusMuted { composes: statusMuted from "./styles/workspace-shell/manual-table.module.css"; } .statusPanel { composes: statusPanel from "./styles/workspace-shell/lists-reports-costs.module.css"; composes: statusPanel from "./styles/workspace-shell/responsive-typography.module.css"; }
 .statusPill { composes: statusPill from "./styles/workspace-shell/manual-table.module.css"; composes: statusPill from "./styles/workspace-shell/responsive-main.module.css"; composes: statusPill from "./styles/workspace-shell/responsive-typography.module.css"; composes: statusPill from "./styles/workspace-shell/supplier-documents.module.css"; } .statusSuccess { composes: statusSuccess from "./styles/workspace-shell/manual-table.module.css"; } .statusWarning { composes: statusWarning from "./styles/workspace-shell/manual-table.module.css"; }
 .successBanner { composes: successBanner from "./styles/workspace-shell/tables-dashboard.module.css"; } .subList { composes: subList from "./styles/workspace-shell/responsive-typography.module.css"; composes: subList from "./styles/workspace-shell/tables-dashboard.module.css"; } .subListItem { composes: subListItem from "./styles/workspace-shell/responsive-main.module.css"; composes: subListItem from "./styles/workspace-shell/responsive-typography.module.css"; composes: subListItem from "./styles/workspace-shell/tables-dashboard.module.css"; }

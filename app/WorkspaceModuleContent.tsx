@@ -6,6 +6,7 @@ import { AccountSettings } from "./AccountSettings";
 import { StatusPanel } from "./StatusPanel";
 import styles from "./WorkspaceShell.module.css";
 import type { AuthPayload, AuthState, CompanyProfileSettings, MenuItem, WorkbenchTodo, WorkbenchTodosState } from "./types";
+import type { SettingsTabKey } from "./modules/settings/types";
 import { canWritePermission } from "./utils";
 import { WelcomePanel } from "./WelcomePanel";
 
@@ -36,6 +37,7 @@ type TaxRefundFocus = { keyword: string; action: string; token: number };
 type LogisticsFeesFocus = { keyword: string; billId: string; token: number };
 type SupplierDocumentsFocus = { keyword: string; requestId: string; token: number };
 type CustomerCommunicationFocus = { keyword: string; orderId: string; token: number };
+type SettingsFocus = { tab: SettingsTabKey; token: number };
 
 export function WorkspaceModuleContent({
   payload,
@@ -54,6 +56,7 @@ export function WorkspaceModuleContent({
   oceanControlTowerFocus,
   logisticsFeesFocus,
   supplierDocumentsFocus,
+  settingsFocus,
   setAuth,
   setActiveMenu,
   setOrdersFocus,
@@ -65,6 +68,7 @@ export function WorkspaceModuleContent({
   setCustomerCommunicationFocus,
   setLogisticsFeesFocus,
   setSupplierDocumentsFocus,
+  setSettingsFocus,
   selectWorkspaceMenu,
   loadWorkbenchTodos,
   openWorkbenchTodo,
@@ -87,6 +91,7 @@ export function WorkspaceModuleContent({
   oceanControlTowerFocus: KeywordFocus;
   logisticsFeesFocus: LogisticsFeesFocus;
   supplierDocumentsFocus: SupplierDocumentsFocus;
+  settingsFocus: SettingsFocus;
   setAuth: Dispatch<SetStateAction<AuthState>>;
   setActiveMenu: Dispatch<SetStateAction<string>>;
   setOrdersFocus: Dispatch<SetStateAction<KeywordFocus>>;
@@ -98,6 +103,7 @@ export function WorkspaceModuleContent({
   setCustomerCommunicationFocus: Dispatch<SetStateAction<CustomerCommunicationFocus>>;
   setLogisticsFeesFocus: Dispatch<SetStateAction<LogisticsFeesFocus>>;
   setSupplierDocumentsFocus: Dispatch<SetStateAction<SupplierDocumentsFocus>>;
+  setSettingsFocus: Dispatch<SetStateAction<SettingsFocus>>;
   selectWorkspaceMenu: (menuKey: string) => void;
   loadWorkbenchTodos: (options?: { refresh?: boolean }) => Promise<void>;
   openWorkbenchTodo: (todo: WorkbenchTodo) => void;
@@ -113,7 +119,20 @@ export function WorkspaceModuleContent({
   if (!allowedMenuKeys.has(activeMenu)) {
     return <StatusPanel title="无权限访问" message="当前账号没有该功能模块权限，请从左侧选择可用菜单。" actionLabel="返回工作台首页" onAction={() => setActiveMenu("welcome")} />;
   }
-  if (activeMenu === "orders") return <OrdersModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={ordersFocus.keyword} initialOpenToken={ordersFocus.token} />;
+  if (activeMenu === "orders") {
+    return (
+      <OrdersModule
+        currentUser={payload.user}
+        permissions={payload.permissions}
+        initialKeyword={ordersFocus.keyword}
+        initialOpenToken={ordersFocus.token}
+        onOpenExchangeSettings={() => {
+          setSettingsFocus({ tab: "exchangeRates", token: Date.now() });
+          setActiveMenu("settings");
+        }}
+      />
+    );
+  }
   if (activeMenu === "dashboard") return <DashboardModule />;
   if (activeMenu === "payments") return <PaymentsModule currentUser={payload.user} initialKeyword={paymentsFocus.keyword} initialOpenToken={paymentsFocus.token} />;
   if (activeMenu === "costs") return <CostsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={costsFocus.keyword} initialOpenToken={costsFocus.token} />;
@@ -180,7 +199,7 @@ export function WorkspaceModuleContent({
       />
     );
   }
-  if (activeMenu === "settings") return <SettingsModule onCompanyProfileSaved={updateCompanyProfile} />;
+  if (activeMenu === "settings") return <SettingsModule initialTab={settingsFocus.tab} initialTabToken={settingsFocus.token} onCompanyProfileSaved={updateCompanyProfile} />;
   if (activeMenu === "manual") return <ManualModule />;
   return <StatusPanel title="功能暂不可用" message="该功能入口暂未开放，请从左侧选择可用的业务模块。" actionLabel="返回工作台首页" onAction={() => setActiveMenu("welcome")} />;
 }

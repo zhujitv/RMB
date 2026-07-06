@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import {
   CURRENCIES,
+  EXCHANGE_RATE_SOURCES,
   ORDER_STATUSES,
   RECEIVABLE_ORDER_INPUT_SCHEMA,
   TRADE_TERMS,
@@ -71,11 +72,25 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
   const currency = optional(inputData.currency)?.toUpperCase();
   if (!currency) throw codedError("请选择币种", 400, "CURRENCY_REQUIRED");
   if (!CURRENCIES.includes(currency)) throw codedError("请选择有效币种", 400, "CURRENCY_REQUIRED");
-  const exchange = await resolveExchangeRateSnapshot(inputData, currentActor, {
+  if (currency !== "CNY" && (
+    !Number(inputData.exchangeRate)
+    || !inputData.exchangeRateDate
+    || !EXCHANGE_RATE_SOURCES.includes(optional(inputData.exchangeRateSource) || "")
+    || !inputData.exchangeRateType
+  )) {
+    throw codedError("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。", 400, "OFFICIAL_RATE_REQUIRED");
+  }
+  const exchangeInput = currency === "CNY"
+    ? { ...inputData, exchangeRate: 1, exchangeRateSource: "系统", exchangeRateType: "人民币" }
+    : inputData;
+  const exchange = await resolveExchangeRateSnapshot(exchangeInput, currentActor, {
     currency,
     defaultDate: todayInputInChina(),
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
   });
+  if (currency !== "CNY" && !EXCHANGE_RATE_SOURCES.includes(exchange.exchangeRateSource)) {
+    throw codedError("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。", 400, "OFFICIAL_RATE_REQUIRED");
+  }
   const orderAmounts = resolveOrderAmounts(inputData);
   const payment = resolveOrderPaymentDates(inputData, before, orderAmounts.finalReceivableAmount, exchange.exchangeRate);
   const salespersonUserId = await resolveSalespersonUserId(inputData, actor, customer, before);

@@ -47,6 +47,7 @@ type OrdersModuleViewProps = {
   onEditOrder: (order: OrderRow | null, options?: { returnToDetail?: boolean }) => void;
   onDeleteOrder: (order: OrderRow) => void;
   onBusinessEntityTransferred: (orderId: string, patch: Partial<OrderRow>) => void;
+  onOpenExchangeSettings?: () => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
   onUpdateConfirmationInput: (value: string) => void;
@@ -108,6 +109,7 @@ export function OrdersModuleView({
           <QuickCreateOrderPanel
             initialOrder={editOrder}
             canManageOrderAssignments={canManageOrderAssignments}
+            onOpenExchangeSettings={actions.onOpenExchangeSettings}
             onCancel={actions.onOrderEditCancel}
             onSaved={(order) => actions.onOrderSaved(order)}
           />

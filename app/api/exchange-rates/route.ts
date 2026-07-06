@@ -12,6 +12,7 @@ const getExchangeRateQuoteTyped = getExchangeRateQuote as (
     source: string | null;
     rateType: string | null;
     forceRefresh: boolean;
+    cacheOnly: boolean;
   },
   actor: unknown,
 ) => Promise<unknown>;
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
         source: query.get("source"),
         rateType: query.get("rateType"),
         forceRefresh,
+        cacheOnly: query.get("cacheOnly") === "1",
       }, actor),
     });
   } catch (error: unknown) {

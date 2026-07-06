@@ -3,10 +3,30 @@ import { useSettingsSaveActions } from "./use-settings-save-actions";
 import { useSettingsControllerActions } from "./use-settings-controller-actions";
 import { useSettingsLoadActions } from "./use-settings-load-actions";
 import { filtersForTab } from "./helpers";
-import type { SettingsModuleProps } from "./types";
+import type { SettingsModuleProps, SettingsTabKey } from "./types";
 import { useSettingsState } from "./use-settings-state";
 
-export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleProps = {}) {
+const SETTINGS_TAB_KEYS = new Set<SettingsTabKey>([
+  "home",
+  "companyProfile",
+  "businessEntities",
+  "customers",
+  "suppliers",
+  "users",
+  "ocrIntegration",
+  "shipsgoIntegration",
+  "exchangeRates",
+  "commissionFormula",
+  "notificationTemplates",
+  "auditLogs",
+  "apiPerformance",
+]);
+
+function isSettingsTabKey(value: unknown): value is SettingsTabKey {
+  return typeof value === "string" && SETTINGS_TAB_KEYS.has(value as SettingsTabKey);
+}
+
+export function useSettingsController({ initialTab, initialTabToken = 0, onCompanyProfileSaved }: SettingsModuleProps = {}) {
   const state = useSettingsState();
 
   const {
@@ -158,6 +178,11 @@ export function useSettingsController({ onCompanyProfileSaved }: SettingsModuleP
     userForm: state.userForm,
     fetchNotificationTemplateSettings,
   });
+
+  useEffect(() => {
+    if (!isSettingsTabKey(initialTab)) return;
+    controllerActions.selectTab(initialTab);
+  }, [initialTab, initialTabToken]);
 
   useEffect(() => {
     if (!state.loadedTabs.has(state.activeTab)) {

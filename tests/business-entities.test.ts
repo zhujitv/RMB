@@ -110,7 +110,7 @@ test("orders UI can select filter display and transfer business entity", () => {
   assert.match(quickOrderPanel, /\/api\/business-entities/);
   assert.match(quickOrderPanel, /业务主体/);
   assert.match(quickOrderPanel, /disabled=\{Boolean\(initialOrder\?\.id\)\}/);
-  assert.match(quickOrderPanel, /businessEntityId: form\.businessEntityId/);
+  assert.match(quickOrderPanel, /businessEntityId: normalizedForm\.businessEntityId/);
   assert.match(ordersModule, /全部业务主体/);
   assert.match(ordersModule, /businessEntityColumn/);
   assert.match(ordersModule, /entity\.displayName \|\| entity\.shortName \|\| entity\.name/);

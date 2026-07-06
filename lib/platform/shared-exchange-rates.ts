@@ -155,7 +155,7 @@ export async function getExchangeRateQuote(input: ExchangeRateSettingsInput = {}
     const serialized = serializeExchangeRate(exact, rateDate);
     if (serialized) return { ...serialized, settings };
   }
-  if (settings.autoUpdate || input.forceRefresh) {
+  if (!input.cacheOnly && (settings.autoUpdate || input.forceRefresh)) {
     await refreshExchangeRatesForDate(rateDate, { source, rateType });
   }
   const cached = await findCachedExchangeRate(currency, rateDate, rateType, source)
@@ -164,7 +164,11 @@ export async function getExchangeRateQuote(input: ExchangeRateSettingsInput = {}
     const serialized = serializeExchangeRate(cached, rateDate);
     if (serialized) return { ...serialized, settings };
   }
-  throw codedError("未找到可用汇率，请财务手动刷新汇率后再保存。", 404, "EXCHANGE_RATE_NOT_FOUND");
+  throw codedError(
+    input.cacheOnly ? "当前币种暂无官方汇率缓存，请到系统设置刷新汇率。" : "未找到可用汇率，请财务手动刷新汇率后再保存。",
+    404,
+    "EXCHANGE_RATE_NOT_FOUND",
+  );
 }
 
 export async function resolveExchangeRateSnapshot(input: ExchangeRateSettingsInput, actor: ActorLike, { currency, defaultDate, allowHistoricalSource = false }: ExchangeSnapshotOptions = {}): Promise<ExchangeRateSnapshot> {
@@ -193,7 +197,7 @@ export async function resolveExchangeRateSnapshot(input: ExchangeRateSettingsInp
     const cached = await findCachedExchangeRate(finalCurrency, exchangeRateDate, exchangeRateType, exchangeRateSource, true);
     const cachedRate = Number(cached?.rateToCny || 0);
     if (!cached || Math.abs(cachedRate - exchangeRate) > 0.000001) {
-      throw codedError("官方汇率必须来自系统缓存，请先刷新汇率后再保存。", 400, "OFFICIAL_RATE_CACHE_REQUIRED");
+      throw codedError("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。", 400, "OFFICIAL_RATE_CACHE_REQUIRED");
     }
   }
   const actorRole = actor?.role || "";

@@ -25,11 +25,13 @@ export function OrdersModule({
   permissions,
   initialKeyword = "",
   initialOpenToken = 0,
+  onOpenExchangeSettings,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialOpenToken?: number;
+  onOpenExchangeSettings?: () => void;
 }) {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [summary, setSummary] = useState<CurrencyTotals | null>(null);
@@ -250,6 +252,7 @@ export function OrdersModule({
       onEditOrder={openEditOrder}
       onDeleteOrder={(order) => void deleteOrder(order)}
       onBusinessEntityTransferred={applyOrderPatch}
+      onOpenExchangeSettings={onOpenExchangeSettings}
       onCancelConfirmation={cancelConfirmation}
       onConfirmConfirmation={confirmConfirmation}
       onUpdateConfirmationInput={updateConfirmationInput}

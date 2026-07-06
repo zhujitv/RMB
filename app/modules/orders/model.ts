@@ -140,6 +140,7 @@ export type SettingsResponse = {
 
 export type ExchangeRateResponse = {
   rate?: {
+    currency?: string;
     rateToCny?: number;
     exchangeRate?: number;
     rate?: number;

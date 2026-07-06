@@ -6,6 +6,7 @@ import { LoadingPanel } from "./LoadingPanel";
 import { LoginPanel } from "./LoginPanel";
 import { PasswordChangePanel } from "./PasswordChangePanel";
 import type { WorkbenchTodo } from "./types";
+import type { SettingsTabKey } from "./modules/settings/types";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { WorkspaceModuleContent } from "./WorkspaceModuleContent";
 import {
@@ -26,6 +27,7 @@ export function WorkspaceShell() {
   const [oceanControlTowerFocus, setOceanControlTowerFocus] = useState({ keyword: "", token: 0 });
   const [logisticsFeesFocus, setLogisticsFeesFocus] = useState({ keyword: "", billId: "", token: 0 });
   const [supplierDocumentsFocus, setSupplierDocumentsFocus] = useState({ keyword: "", requestId: "", token: 0 });
+  const [settingsFocus, setSettingsFocus] = useState<{ tab: SettingsTabKey; token: number }>({ tab: "home", token: 0 });
   const workspaceAuth = useWorkspaceAuthController({ setActiveMenu });
   const {
     auth,
@@ -54,6 +56,7 @@ export function WorkspaceShell() {
   function selectWorkspaceMenu(menuKey: string) {
     const normalizedMenuKey = normalizeWorkspaceMenuKey(menuKey);
     if (menuKey === "logisticsReview") setLogisticsFeesFocus({ keyword: "", billId: "", token: Date.now() });
+    if (normalizedMenuKey === "settings") setSettingsFocus({ tab: "home", token: Date.now() });
     setActiveMenu(normalizedMenuKey);
   }
 
@@ -200,6 +203,7 @@ export function WorkspaceShell() {
         oceanControlTowerFocus={oceanControlTowerFocus}
         logisticsFeesFocus={logisticsFeesFocus}
         supplierDocumentsFocus={supplierDocumentsFocus}
+        settingsFocus={settingsFocus}
         setAuth={setAuth}
         setActiveMenu={setActiveMenu}
         setOrdersFocus={setOrdersFocus}
@@ -211,6 +215,7 @@ export function WorkspaceShell() {
         setCustomerCommunicationFocus={setCustomerCommunicationFocus}
         setLogisticsFeesFocus={setLogisticsFeesFocus}
         setSupplierDocumentsFocus={setSupplierDocumentsFocus}
+        setSettingsFocus={setSettingsFocus}
         selectWorkspaceMenu={selectWorkspaceMenu}
         loadWorkbenchTodos={loadWorkbenchTodos}
         openWorkbenchTodo={openWorkbenchTodo}

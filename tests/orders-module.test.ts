@@ -140,10 +140,14 @@ test("orders create form submits system exchange rate metadata", () => {
   assert.match(ordersModule, /exchangeRateDate: result\.rate\?\.rateDate \|\| ""/);
   assert.match(ordersModule, /exchangeRateSource: result\.rate\?\.source \|\| ""/);
   assert.match(ordersModule, /exchangeRateType: result\.rate\?\.rateType \|\| ""/);
-  assert.match(ordersModule, /exchangeRateDate: form\.exchangeRateDate \|\| undefined/);
-  assert.match(ordersModule, /exchangeRateSource: form\.exchangeRateSource \|\| undefined/);
-  assert.match(ordersModule, /exchangeRateType: form\.exchangeRateType \|\| undefined/);
-  assert.match(ordersModule, /exchangeRateSource: "手动"/);
+  assert.match(ordersModule, /exchangeRateDate: normalizedForm\.exchangeRateDate \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateSource: normalizedForm\.exchangeRateSource \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateType: normalizedForm\.exchangeRateType \|\| undefined/);
+  assert.match(ordersModule, /刷新官方汇率/);
+  assert.match(ordersModule, /cacheOnly=1/);
+  assert.match(ordersService, /!EXCHANGE_RATE_SOURCES\.includes\(exchange\.exchangeRateSource\)/);
+  assert.match(ordersService, /当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。/);
+  assert.doesNotMatch(ordersModule, /exchangeRateSource: "手动"/);
 });
 
 test("order detail edit switches from drawer to edit form without silent failure", () => {
@@ -169,7 +173,7 @@ test("orders create form supports actual shipment date", () => {
   assert.match(ordersService, /actualShipmentDate,/);
   assert.match(orderSerialization, /actualShipmentDate: dateToInput\(order\.actualShipmentDate\)/);
   assert.match(ordersModule, /actualShipmentDate\?: string;/);
-  assert.match(ordersModule, /actualShipmentDate: form\.actualShipmentDate \|\| undefined/);
+  assert.match(ordersModule, /actualShipmentDate: normalizedForm\.actualShipmentDate \|\| undefined/);
   assert.match(ordersModule, /发货时间/);
   assert.match(ordersModule, /<DetailField label="发货时间" value=\{order\.actualShipmentDate \|\| "-"\} \/>/);
   assert.doesNotMatch(ordersModule, /预计发货日期/);

@@ -18,17 +18,20 @@ import { useQuickOrderPanelController } from "./quick-order-panel-controller";
 export function QuickCreateOrderPanel({
   initialOrder,
   canManageOrderAssignments = false,
+  onOpenExchangeSettings,
   onCancel,
   onSaved,
 }: {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
+  onOpenExchangeSettings?: () => void;
   onCancel: () => void;
   onSaved: (order?: OrderRow | null) => void;
 }) {
   const controller = useQuickOrderPanelController({
     initialOrder,
     canManageOrderAssignments,
+    onOpenExchangeSettings,
     onSaved,
   });
 
@@ -99,9 +102,35 @@ export function QuickCreateOrderPanel({
             {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
           </select>
         </label>
-        <label>
+        <label className={styles.exchangeRateField}>
           汇率
-          <input value={controller.form.exchangeRate} onChange={(event) => controller.handleExchangeRateChange(event.target.value)} readOnly={controller.form.currency === "CNY"} placeholder="自动获取或手工填写" inputMode="decimal" required />
+          <div className={styles.exchangeRateInputRow}>
+            <input
+              value={controller.form.exchangeRate}
+              readOnly
+              placeholder={controller.form.currency === "CNY" ? "CNY 自动为 1" : "点击刷新官方汇率"}
+              inputMode="decimal"
+              required
+            />
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={controller.refreshingExchangeRate || controller.form.currency === "CNY"}
+              onClick={() => void controller.refreshOfficialExchangeRate()}
+            >
+              {controller.refreshingExchangeRate ? "读取中..." : "刷新官方汇率"}
+            </button>
+          </div>
+          {controller.exchangeCacheMissing ? (
+            <small className={styles.exchangeRateHint}>
+              当前币种暂无官方汇率缓存，请到系统设置刷新汇率。
+              {controller.onOpenExchangeSettings ? (
+                <button className={styles.inlineLinkButton} type="button" onClick={controller.onOpenExchangeSettings}>
+                  前往系统设置刷新汇率
+                </button>
+              ) : null}
+            </small>
+          ) : null}
         </label>
         <label>
           预计应收金额
