@@ -381,7 +381,7 @@ export function createAliyunOcrClient(settings: ReturnType<typeof normalizeOcrIn
     accessKeySecret: settings.accessKeySecret,
     endpoint: aliyunEndpointFromUrl(settings.apiBaseUrl),
     readTimeout: settings.timeoutMs,
-    connectTimeout: settings.timeoutMs,
+    connectTimeout: Math.min(settings.timeoutMs, 10000),
   }));
 }
 
@@ -400,7 +400,7 @@ export function createAliyunDocMindClient(settings: ReturnType<typeof normalizeO
     accessKeySecret: settings.accessKeySecret,
     endpoint: aliyunDocMindEndpoint(),
     readTimeout: settings.timeoutMs,
-    connectTimeout: settings.timeoutMs,
+    connectTimeout: Math.min(settings.timeoutMs, 10000),
   }));
 }
 

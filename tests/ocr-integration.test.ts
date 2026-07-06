@@ -99,16 +99,12 @@ test("OCR integration uses Aliyun structured APIs for supplier documents with PD
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /ALIYUN_RECOGNIZE_GENERAL_STRUCTURE/);
   assert.match(service, /recognizeSupplierDocumentWithOcr/);
-  assert.match(service, /supplierDocumentOcrInput/);
-  assert.match(service, /rasterizeFirstPdfPageForSupplierOcr\(buffer\)/);
-  assert.match(service, /uploadToR2/);
-  assert.match(service, /signedObjectReadUrl\(tempKey, 600\)/);
-  assert.match(service, /deleteR2Object\(tempKey\)/);
   assert.match(service, /const source = options\.url \? \{ url: options\.url \} : \{ body: Readable\.from\(buffer\) \}/);
-  assert.match(service, /supplierDocumentOcrSettings/);
-  assert.match(service, /timeoutMs: Math\.max\(settings\.timeoutMs, 30_000\)/);
-  assert.match(service, /return await recognizeAliyunVatInvoice\(ocrInput\.buffer, ocrSettings, \{ maxAttempts: 1, url: ocrInput\.url \}\)/);
-  assert.match(service, /return await recognizeAliyunSupplierContract\(ocrInput\.buffer, ocrSettings, \{ maxAttempts: 1, url: ocrInput\.url \}\)/);
+  assert.match(service, /return await recognizeAliyunVatInvoice\(fileBuffer, settings, \{ maxAttempts: 1 \}\)/);
+  assert.match(service, /return await recognizeAliyunSupplierContract\(fileBuffer, settings, \{ maxAttempts: 1 \}\)/);
+  assert.doesNotMatch(service, /supplierDocumentOcrInput/);
+  assert.doesNotMatch(service, /rasterizeFirstPdfPageForSupplierOcr\(buffer\)/);
+  assert.doesNotMatch(service, /signedObjectReadUrl\(tempKey, 600\)/);
   assert.match(service, /if \(documentType === "SUPPLIER_INVOICE"\) throw error/);
   assert.doesNotMatch(service, /ALIYUN_INVOICE_GENERAL_STRUCTURE_FALLBACK/);
   assert.doesNotMatch(service, /recognizeAliyunSupplierInvoiceWithGeneralStructure/);
@@ -130,7 +126,7 @@ test("Aliyun OCR requests retry and log provider diagnostics before surfacing fa
   assert.match(service, /scheduleAliyunOcrStartupHealthCheck/);
   assert.match(instrumentation, /scheduleAliyunOcrStartupHealthCheck/);
   assert.match(instrumentation, /getOcrIntegrationSettings/);
-  assert.match(service, /connectTimeout: settings\.timeoutMs/);
+  assert.match(service, /connectTimeout: Math\.min\(settings\.timeoutMs, 10000\)/);
 });
 
 test("Aliyun invoice parser reads official Data payload and invoiceDetails", async () => {

@@ -20,6 +20,7 @@ const vatParser = readFileSync("lib/platform/supplier-vat-invoice-parser.ts", "u
 const supplierRequests = readSupplierDocumentRequestsSource();
 const supplierRequestList = readSupplierDocumentRequestListSource();
 const supplierModule = readSupplierDocumentsModuleSource();
+const supplierUploadActions = readFileSync("app/modules/supplier-documents/use-supplier-document-request-actions.ts", "utf8");
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
 const rejectRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/reject/route.ts", "utf8");
@@ -35,13 +36,13 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
   assert.match(schema, /request\s+SupplierDocumentRequest\?/);
 });
 
-test("supplier document upload triggers foreground OCR after the file is saved", () => {
-  assert.match(supplierModule, /async function recognizeUploadedDocument/);
-  assert.match(supplierModule, /正在识别，请勿关闭页面/);
-  assert.match(supplierModule, /documents\/\$\{encodeURIComponent\(document\.id\)\}\/ocr/);
-  assert.match(supplierModule, /timeoutMs: 65_000/);
-  assert.match(supplierModule, /data\.ocrTask \|\| data\.result/);
-  assert.match(supplierModule, /data\.status === "FAILED" \|\| data\.status === "TIMEOUT"/);
+test("supplier document upload saves files without automatic OCR", () => {
+  assert.match(supplierUploadActions, /setNotice\(data\.message \|\| "上传成功"\)/);
+  assert.doesNotMatch(supplierUploadActions, /async function recognizeUploadedDocument/);
+  assert.doesNotMatch(supplierUploadActions, /setOcrBusyKey/);
+  assert.doesNotMatch(supplierUploadActions, /正在识别，请勿关闭页面/);
+  assert.doesNotMatch(supplierUploadActions, /documents\/\$\{encodeURIComponent\(document\.id\)\}\/ocr/);
+  assert.doesNotMatch(supplierUploadActions, /timeoutMs: 65_000/);
   assert.match(supplierRequests, /message: "上传成功"/);
   assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
   assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
