@@ -59,12 +59,14 @@ import {
   supplierDocumentRequestFactoryCostInclude,
   supplierDocumentRequestFactoryCostWhere,
   supplierDocumentRequestInclude,
+  supplierDocumentRequestListSelect,
   supplierDocumentRequestPairKey,
   type ActorLike,
   type AuditRequestLike,
   type FactorySupplierReturnCost,
   type QueryLike,
   type SupplierDocumentRequestInput,
+  type SupplierDocumentRequestListRow,
   type SupplierDocumentRequestRow,
   type SupplierDocumentUploadInput,
 } from "./supplier-document-request-types";
@@ -90,12 +92,10 @@ import {
   uniqueEmails,
 } from "./supplier-document-request-serialization";
 
-export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
-  assertRead(actor, "supplierDocuments");
+function supplierDocumentRequestListWhere(query: QueryLike, actor: ActorLike): Prisma.SupplierDocumentRequestWhereInput {
   const status = nonEmpty(query.get("status"));
   const keyword = nonEmpty(query.get("keyword") || query.get("q"));
-  const { page, pageSize } = pageParams(query, 10, 50);
-  const where: Prisma.SupplierDocumentRequestWhereInput = {
+  return {
     deletedAt: null,
     ...(SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(status) ? { status } : {}),
     ...(isProductSupplierOperatorRole(actor?.role)
@@ -107,15 +107,87 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
     ...(keyword && !isProductSupplierOperatorRole(actor?.role)
       ? {
           OR: [
-            { order: { orderNo: { contains: keyword, mode: "insensitive" } } },
+            { purchaseOrderNo: { contains: keyword, mode: "insensitive" } },
             { supplier: { supplierName: { contains: keyword, mode: "insensitive" } } },
           ],
         }
       : keyword
-        ? { order: { orderNo: { contains: keyword, mode: "insensitive" } } }
+        ? { purchaseOrderNo: { contains: keyword, mode: "insensitive" } }
         : {}),
   };
-  const [total, pendingCount, rows] = await Promise.all([
+}
+
+function serializeSupplierDocumentRequestListItem(
+  row: SupplierDocumentRequestListRow,
+  actor: ActorLike,
+  uploadedCount: number,
+) {
+  const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
+  return {
+    id: row.id,
+    purchaseOrderNo: row.purchaseOrderNo || "",
+    supplierName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.supplier?.supplierName || ""),
+    status: SUPPLIER_DOCUMENT_REQUEST_STATUSES.includes(row.status) ? row.status : "待上传",
+    dueDate: dateToInput(row.dueDate),
+    requiredDocumentTypes: requiredTypes,
+    uploadedCount,
+    requiredCount: requiredTypes.length,
+    updatedAt: row.updatedAt,
+  };
+}
+
+async function supplierDocumentRequestUploadedCounts(rows: SupplierDocumentRequestListRow[]) {
+  const requestIds = rows.map((row) => row.id).filter(Boolean);
+  if (!requestIds.length) return new Map<string, number>();
+  const requiredTypesByRequestId = new Map(
+    rows.map((row) => [row.id, new Set(requiredDocumentTypes(row.requiredDocumentTypes).map((type) => normalizeSupplierReturnDocumentType(type)))])
+  );
+  const uploadedGroups = await prisma.orderDocument.groupBy({
+    by: ["factoryDocumentRequestId", "documentType"],
+    where: {
+      factoryDocumentRequestId: { in: requestIds },
+      deletedAt: null,
+      uploadStatus: "SUCCESS",
+    },
+  });
+  const uploadedTypesByRequestId = new Map<string, Set<string>>();
+  for (const group of uploadedGroups) {
+    const requestId = group.factoryDocumentRequestId || "";
+    if (!requestId) continue;
+    const documentType = normalizeSupplierReturnDocumentType(group.documentType);
+    const requiredTypes = requiredTypesByRequestId.get(requestId);
+    if (!requiredTypes?.has(documentType)) continue;
+    const uploadedTypes = uploadedTypesByRequestId.get(requestId) || new Set<string>();
+    uploadedTypes.add(documentType);
+    uploadedTypesByRequestId.set(requestId, uploadedTypes);
+  }
+  return new Map([...uploadedTypesByRequestId.entries()].map(([requestId, uploadedTypes]) => [requestId, uploadedTypes.size]));
+}
+
+export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
+  assertRead(actor, "supplierDocuments");
+  const { page, pageSize } = pageParams(query, 10, 50);
+  const where = supplierDocumentRequestListWhere(query, actor);
+  const [total, rows] = await Promise.all([
+    prisma.supplierDocumentRequest.count({ where }),
+    prisma.supplierDocumentRequest.findMany({
+      where,
+      select: supplierDocumentRequestListSelect(),
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  const uploadedCounts = await supplierDocumentRequestUploadedCounts(rows);
+  return {
+    ...pageResult(rows.map((row) => serializeSupplierDocumentRequestListItem(row, actor, uploadedCounts.get(row.id) || 0)), total, page, pageSize),
+  };
+}
+
+export async function getSupplierDocumentRequestStats(query: QueryLike, actor: ActorLike) {
+  assertRead(actor, "supplierDocuments");
+  const where = supplierDocumentRequestListWhere(query, actor);
+  const [totalCount, pendingCount] = await Promise.all([
     prisma.supplierDocumentRequest.count({ where }),
     prisma.supplierDocumentRequest.count({
       where: {
@@ -123,23 +195,14 @@ export async function listSupplierDocumentRequests(query: QueryLike, actor: Acto
         status: { not: "已完成" },
       },
     }),
-    prisma.supplierDocumentRequest.findMany({
-      where,
-      include: supplierDocumentRequestInclude(),
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
   ]);
-  const reconciledRows = await Promise.all(rows.map(async (row) => {
-    const refreshed = await safeRefreshSupplierDocumentRequestCompletion(row.id);
-    return refreshed ? { ...row, status: refreshed.status, completedAt: refreshed.completedAt, completedById: refreshed.completedById } : row;
-  }));
-  const rowsWithOcr = await attachSupplierDocumentOcrTasks(reconciledRows);
-  return {
-    ...pageResult(rowsWithOcr.map((row) => serializeSupplierDocumentRequest(row, actor)), total, page, pageSize),
-    summary: { pendingCount },
-  };
+  return { totalCount, pendingCount };
+}
+
+export async function getSupplierDocumentRequestDetail(id: string, actor: ActorLike) {
+  assertRead(actor, "supplierDocuments");
+  const row = await loadSupplierDocumentRequest(id, actor);
+  return serializeSupplierDocumentRequest(row, actor);
 }
 
 export async function deleteSupplierDocumentRequest(request: AuditRequestLike, actor: ActorLike, requestId: string) {

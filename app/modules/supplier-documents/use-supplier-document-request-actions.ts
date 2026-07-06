@@ -27,6 +27,8 @@ type SupplierDocumentRequestActionOptions = {
   submittedKeyword: string;
   requestConfirmation: RequestConfirmation;
   loadRows: (page: number, pageSize: number, keyword: string, options?: { silent?: boolean }) => Promise<SupplierDocumentTask[]>;
+  loadTaskDetail: (taskId: string, options?: { silent?: boolean; force?: boolean }) => Promise<SupplierDocumentTask | null>;
+  loadStats: (keyword?: string, options?: { silent?: boolean }) => Promise<void>;
   onRefreshTodos?: () => void | Promise<void>;
   setRows: Dispatch<SetStateAction<SupplierDocumentTask[]>>;
   setNotice: Dispatch<SetStateAction<string>>;
@@ -56,6 +58,8 @@ export function useSupplierDocumentRequestActions({
   submittedKeyword,
   requestConfirmation,
   loadRows,
+  loadTaskDetail,
+  loadStats,
   onRefreshTodos,
   setRows,
   setNotice,
@@ -75,10 +79,21 @@ export function useSupplierDocumentRequestActions({
     const keyword = normalizedSearchText(submittedKeyword);
     if (!keyword) return true;
     const haystack = [
-      request.orderNo,
+      request.purchaseOrderNo || request.orderNo,
       currentUserRole === "产品供应商" ? "" : request.supplierName,
     ].map(normalizedSearchText).join(" ");
     return haystack.includes(keyword);
+  }
+
+  function mergeDetailedRequest(row: SupplierDocumentTask, request: SupplierDocumentTask) {
+    return {
+      ...row,
+      ...request,
+      purchaseOrderNo: request.purchaseOrderNo || request.orderNo || row.purchaseOrderNo || row.orderNo || "",
+      detailLoaded: true,
+      detailLoading: false,
+      detailError: "",
+    };
   }
 
   function mergeRequestRow(request: SupplierDocumentTask | null | undefined) {
@@ -140,7 +155,8 @@ export function useSupplierDocumentRequestActions({
         setNotice(data.message || "OCR校验结果已更新");
         setError("");
       }
-      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+      void loadTaskDetail(task.id, { silent: true, force: true });
+      void loadStats(submittedKeyword, { silent: true });
     } catch (ocrError) {
       const message = apiErrorMessage(ocrError, "OCR识别失败，请人工核对或重新上传");
       updateDocumentOcrTask(task.id, document.id, localFailedOcrTask(document, message));
@@ -169,8 +185,13 @@ export function useSupplierDocumentRequestActions({
         formData,
         (progress) => setProgressByKey((current) => ({ ...current, [uploadKey]: progress })),
       );
-      if (data.request?.id) {
-        setRows((current) => current.map((row) => (row.id === data.request?.id ? data.request : row)));
+      const uploadedRequest = data.request;
+      if (uploadedRequest?.id) {
+        setRows((current) => current.map((row) => (
+          row.id === uploadedRequest.id
+            ? mergeDetailedRequest(row, uploadedRequest)
+            : row
+        )));
       }
       setUploadingKey("");
       setProgressByKey((current) => {
@@ -179,8 +200,11 @@ export function useSupplierDocumentRequestActions({
         return next;
       });
       setNotice(data.message || "上传成功");
+      void loadStats(submittedKeyword, { silent: true });
       if (data.document?.id) {
         await recognizeUploadedDocument(task, data.document);
+      } else {
+        void loadTaskDetail(task.id, { silent: true, force: true });
       }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
@@ -207,7 +231,7 @@ export function useSupplierDocumentRequestActions({
     }
     const result = await requestConfirmation({
       title: "删除资料回传任务",
-      message: `确认删除资料回传任务 ${task.orderNo || "-"}？此操作将删除该任务及已上传资料，删除后不可恢复。`,
+      message: `确认删除资料回传任务 ${task.purchaseOrderNo || task.orderNo || "-"}？此操作将删除该任务及已上传资料，删除后不可恢复。`,
       details: task.hasTaxRefundDocuments ? ["该任务已关联退税资料，删除后退税完整度将重新计算。"] : undefined,
       confirmLabel: "删除",
       cancelLabel: "取消",
@@ -228,6 +252,7 @@ export function useSupplierDocumentRequestActions({
       const nextTotal = Math.max(0, total - 1);
       const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1))));
       void loadRows(nextPage, pageSize, submittedKeyword, { silent: true });
+      void loadStats(submittedKeyword, { silent: true });
       void onRefreshTodos?.();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除资料回传任务失败");
@@ -252,8 +277,13 @@ export function useSupplierDocumentRequestActions({
           body: JSON.stringify({ action: "resendNotice" }),
         },
       );
-      if (data.request?.id) {
-        setRows((current) => current.map((row) => (row.id === data.request?.id ? data.request : row)));
+      const noticeRequest = data.request;
+      if (noticeRequest?.id) {
+        setRows((current) => current.map((row) => (
+          row.id === noticeRequest.id
+            ? mergeDetailedRequest(row, noticeRequest)
+            : row
+        )));
       }
       setNotice(data.message || "催办邮件已重新发送");
     } catch (resendError) {
@@ -274,7 +304,9 @@ export function useSupplierDocumentRequestActions({
       if (page !== 1) setPage(1);
     }
     void loadRows(1, pageSize, submittedKeyword, { silent: true });
+    void loadStats(submittedKeyword, { silent: true });
     if (createdId) setExpandedTaskId(createdId);
+    if (createdId) void loadTaskDetail(createdId, { silent: true, force: true });
     void onRefreshTodos?.();
   }
 

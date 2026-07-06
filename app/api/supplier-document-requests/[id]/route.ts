@@ -1,10 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteSupplierDocumentRequest, parseJsonBody, resendSupplierDocumentRequestNotice } from "../../../../lib/platform-db";
+import { apiError, deleteSupplierDocumentRequest, getSupplierDocumentRequestDetail, parseJsonBody, resendSupplierDocumentRequestNotice } from "../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const actor = await requireApiActor(request);
+    const { id } = await params;
+    const requestRow = await getSupplierDocumentRequestDetail(id, actor);
+    return NextResponse.json({
+      success: true,
+      request: requestRow,
+      data: requestRow,
+    });
+  } catch (error: unknown) {
+    return apiError(error, "读取资料回传任务详情失败");
+  }
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

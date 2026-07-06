@@ -286,6 +286,7 @@ export function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWit
   return {
     id: row.id,
     orderId: row.orderId,
+    purchaseOrderNo: row.purchaseOrderNo || row.order?.orderNo || "",
     orderNo: row.order?.orderNo || "",
     ...businessEntityFieldsFromOrder(row.order),
     supplierId: row.supplierId,

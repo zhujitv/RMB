@@ -61,12 +61,16 @@ export function SupplierDocumentTaskCard({
   const factoryCostSlots = task.factoryCostSlots || [];
   const defaultUploadCostId = factoryCostSlots.length === 1 ? factoryCostSlots[0]?.id || "" : "";
   const taskStatus = task.status || "待上传";
-  const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
+  const displayOrderNo = task.purchaseOrderNo || task.orderNo || "";
+  const requiredLabels = task.requiredDocumentLabels?.length
+    ? task.requiredDocumentLabels
+    : requiredTypes.map((type) => DOCUMENT_LABELS[type] || type);
+  const requirementText = requiredLabels.join("、") || "-";
   return (
     <article className={getBusinessEntityRowClass(task, styles, styles.supplierDocumentTaskCard)}>
       <div className={styles.supplierDocumentTaskRow}>
-        <span className={styles.supplierDocumentTaskOrder} aria-label="订单号" title={task.orderNo || "-"}>
-          {task.orderNo || "-"}
+        <span className={styles.supplierDocumentTaskOrder} aria-label="订单号" title={displayOrderNo || "-"}>
+          {displayOrderNo || "-"}
         </span>
         <span className={styles.supplierDocumentTaskSupplier} title={task.supplierName || "-"}>
           {task.supplierName || "-"}
@@ -90,110 +94,132 @@ export function SupplierDocumentTaskCard({
       </div>
       {isExpanded ? (
         <div className={styles.supplierDocumentTaskDetail}>
-          <div className={styles.supplierDocumentTaskMeta}>
-            <span>
-              <small>通知时间</small>
-              <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
-            </span>
-            <span>
-              <small>发送状态</small>
-              <b>{supplierDocumentSendStatusLabel(task.sendStatus)}</b>
-            </span>
-            <span>
-              <small>通知人</small>
-              <b>{task.requestedByName || "-"}</b>
-            </span>
-            {task.sendError ? (
-              <span title={task.sendError}>
-                <small>发送记录</small>
-                <b>{task.sendError}</b>
-              </span>
-            ) : null}
-            {task.message ? (
-              <span title={task.message}>
-                <small>备注</small>
-                <b>{task.message}</b>
-              </span>
-            ) : null}
+          <div className={styles.supplierDocumentTaskDetailMobileHeader}>
+            <div className={styles.supplierDocumentTaskDetailMobileTitle}>
+              <strong>{displayOrderNo || "资料回传"}</strong>
+              <span>{task.supplierName || requirementText}</span>
+            </div>
+            <button className={styles.secondaryButton} type="button" onClick={onToggle}>
+              关闭
+            </button>
           </div>
-          {task.hasTemplate ? (
-            <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
-              下载合同样本（{task.templateFileName || `${task.orderNo || "合同样本"}.xlsx`}）
-            </a>
-          ) : null}
-          {isAdmin ? (
-            <div className={styles.supplierDocumentNoticeActions}>
-              <button className={styles.secondaryButton} type="button" onClick={() => onResendNotice(task)} disabled={resending}>
-                {resending ? "发送中..." : "重新发送邮件"}
+          {task.detailLoading || (!task.detailLoaded && !task.documents) ? (
+            <div className={styles.emptyState}>正在加载当前任务资料...</div>
+          ) : task.detailError ? (
+            <div className={styles.inlineError}>
+              <span>{task.detailError}</span>
+              <button className={styles.secondaryButton} type="button" onClick={onOpen}>
+                重试
               </button>
             </div>
-          ) : null}
-          <div className={styles.supplierDocumentUploadGrid}>
-            {uniqueRequiredDocumentTypes(requiredTypes).map((documentType) => {
-                const document = latestDocumentByType(task.documents || [], documentType);
-                const uploadCostId = document?.costId || defaultUploadCostId;
-                const key = supplierUploadKey(task.id, documentType, uploadCostId);
-                const uploading = uploadingKey === key;
-                const documentOcrBusy = document ? ocrBusyKey.startsWith(`${task.id}:${document.id}:`) : false;
-                const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
-                const fileName = document ? supplierDocumentFileName(document) : "";
-                const fileWarning = document ? supplierDocumentFileWarning(document) : "";
-                return (
-                  <div className={styles.supplierDocumentUploadCard} key={documentType}>
-                    <div className={styles.supplierDocumentUploadHeader}>
-                      <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
-                      <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
-                    </div>
-                    {factoryCostSlots.length ? <span className={styles.supplierDocumentUploadHint}>{factoryCostSlotSummary(factoryCostSlots)}</span> : null}
-                    <div className={styles.supplierDocumentUploadBody}>
-                      {document ? (
-                        <div className={styles.fileUploadFile}>
-                          <div className={styles.fileUploadFileName} title={fileName}>
-                            {fileName}
-                          </div>
-                          <div className={styles.fileUploadMeta}>
-                            <span>上传人：{document.uploadedByName || "-"}</span>
-                            <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
-                          </div>
-                          {fileWarning ? <div className={styles.inlineError}>{fileWarning}</div> : null}
-                          <div className={styles.fileUploadActions}>
-                            <span className={styles.fileUploadActionLabel}>操作：</span>
-                            <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
-                            <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
-                          </div>
-                          <SupplierDocumentOcrPanel
-                            task={task}
-                            document={document}
-                            canManageOcr={canManageOcr}
-                            busyKey={ocrBusyKey}
-                            onRerun={onRerunOcr}
-                            onConfirm={onConfirmOcr}
-                            onReject={onRejectOcr}
-                          />
+          ) : (
+            <>
+              <div className={styles.supplierDocumentTaskMeta}>
+                <span>
+                  <small>通知时间</small>
+                  <b>{formatDateTime(task.sentAt || task.createdAt) || "-"}</b>
+                </span>
+                <span>
+                  <small>发送状态</small>
+                  <b>{supplierDocumentSendStatusLabel(task.sendStatus)}</b>
+                </span>
+                <span>
+                  <small>通知人</small>
+                  <b>{task.requestedByName || "-"}</b>
+                </span>
+                {task.sendError ? (
+                  <span title={task.sendError}>
+                    <small>发送记录</small>
+                    <b>{task.sendError}</b>
+                  </span>
+                ) : null}
+                {task.message ? (
+                  <span title={task.message}>
+                    <small>备注</small>
+                    <b>{task.message}</b>
+                  </span>
+                ) : null}
+              </div>
+              {task.hasTemplate ? (
+                <a className={styles.supplierDocumentTemplateButton} href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/template`}>
+                  下载合同样本（{task.templateFileName || `${displayOrderNo || "合同样本"}.xlsx`}）
+                </a>
+              ) : null}
+              {isAdmin ? (
+                <div className={styles.supplierDocumentNoticeActions}>
+                  <button className={styles.secondaryButton} type="button" onClick={() => onResendNotice(task)} disabled={resending}>
+                    {resending ? "发送中..." : "重新发送邮件"}
+                  </button>
+                </div>
+              ) : null}
+              <div className={styles.supplierDocumentUploadGrid}>
+                {uniqueRequiredDocumentTypes(requiredTypes).map((documentType) => {
+                    const document = latestDocumentByType(task.documents || [], documentType);
+                    const uploadCostId = document?.costId || defaultUploadCostId;
+                    const key = supplierUploadKey(task.id, documentType, uploadCostId);
+                    const uploading = uploadingKey === key;
+                    const documentOcrBusy = document ? ocrBusyKey.startsWith(`${task.id}:${document.id}:`) : false;
+                    const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
+                    const fileName = document ? supplierDocumentFileName(document) : "";
+                    const fileWarning = document ? supplierDocumentFileWarning(document) : "";
+                    return (
+                      <div className={styles.supplierDocumentUploadCard} key={documentType}>
+                        <div className={styles.supplierDocumentUploadHeader}>
+                          <strong>{DOCUMENT_LABELS[documentType] || documentType}</strong>
+                          <span className={`${styles.statusPill} ${supplierDocumentStatusClass(uploadStatus)}`}>{uploadStatus}</span>
                         </div>
-                      ) : null}
-                    </div>
-                    <div className={styles.supplierDocumentUploadControls}>
-                      <label className={styles.supplierDocumentUploadButton}>
-                        {uploading ? "上传中..." : documentOcrBusy ? "正在识别..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
-                        <input
-                          type="file"
-                          accept={PDF_UPLOAD_ACCEPT}
-                          disabled={uploading || documentOcrBusy}
-                          hidden
-                          onChange={(event) => {
-                            onUpload(task, documentType, event.target.files?.[0] || null, uploadCostId);
-                            event.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                      <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
-                      {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+                        {factoryCostSlots.length ? <span className={styles.supplierDocumentUploadHint}>{factoryCostSlotSummary(factoryCostSlots)}</span> : null}
+                        <div className={styles.supplierDocumentUploadBody}>
+                          {document ? (
+                            <div className={styles.fileUploadFile}>
+                              <div className={styles.fileUploadFileName} title={fileName}>
+                                {fileName}
+                              </div>
+                              <div className={styles.fileUploadMeta}>
+                                <span>上传人：{document.uploadedByName || "-"}</span>
+                                <span>上传时间：{formatDateTime(document.uploadedAt)}</span>
+                              </div>
+                              {fileWarning ? <div className={styles.inlineError}>{fileWarning}</div> : null}
+                              <div className={styles.fileUploadActions}>
+                                <span className={styles.fileUploadActionLabel}>操作：</span>
+                                <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
+                                <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
+                              </div>
+                              <SupplierDocumentOcrPanel
+                                task={task}
+                                document={document}
+                                canManageOcr={canManageOcr}
+                                busyKey={ocrBusyKey}
+                                onRerun={onRerunOcr}
+                                onConfirm={onConfirmOcr}
+                                onReject={onRejectOcr}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className={styles.supplierDocumentUploadControls}>
+                          <label className={styles.supplierDocumentUploadButton}>
+                            {uploading ? "上传中..." : documentOcrBusy ? "正在识别..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
+                            <input
+                              type="file"
+                              accept={PDF_UPLOAD_ACCEPT}
+                              disabled={uploading || documentOcrBusy}
+                              hidden
+                              onChange={(event) => {
+                                onUpload(task, documentType, event.target.files?.[0] || null, uploadCostId);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                          <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
+                          {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
         </div>
       ) : null}
     </article>

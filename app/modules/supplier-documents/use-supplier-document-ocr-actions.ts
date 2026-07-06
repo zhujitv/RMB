@@ -9,11 +9,9 @@ import type { SupplierDocument, SupplierDocumentOcrResponse, SupplierDocumentOcr
 type RequestConfirmation = (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
 
 type SupplierDocumentOcrActionOptions = {
-  page: number;
-  pageSize: number;
-  submittedKeyword: string;
   requestConfirmation: RequestConfirmation;
-  loadRows: (page: number, pageSize: number, keyword: string, options?: { silent?: boolean }) => Promise<SupplierDocumentTask[]>;
+  loadTaskDetail: (taskId: string, options?: { silent?: boolean; force?: boolean }) => Promise<SupplierDocumentTask | null>;
+  loadStats: (keyword?: string, options?: { silent?: boolean }) => Promise<void>;
   setRows: Dispatch<SetStateAction<SupplierDocumentTask[]>>;
   setOcrBusyKey: Dispatch<SetStateAction<string>>;
   setError: Dispatch<SetStateAction<string>>;
@@ -21,11 +19,9 @@ type SupplierDocumentOcrActionOptions = {
 };
 
 export function useSupplierDocumentOcrActions({
-  page,
-  pageSize,
-  submittedKeyword,
   requestConfirmation,
-  loadRows,
+  loadTaskDetail,
+  loadStats,
   setRows,
   setOcrBusyKey,
   setError,
@@ -78,7 +74,8 @@ export function useSupplierDocumentOcrActions({
       } else {
         setNotice(data.message || "OCR校验结果已更新");
       }
-      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+      void loadTaskDetail(task.id, { silent: true, force: true });
+      void loadStats(undefined, { silent: true });
     } catch (ocrError) {
       const message = apiErrorMessage(ocrError, "重新识别失败");
       updateDocumentOcrTask(task.id, document.id, localFailedOcrTask(document, message));
@@ -100,7 +97,8 @@ export function useSupplierDocumentOcrActions({
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
       setNotice(data.message || "已人工确认通过");
-      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+      void loadTaskDetail(task.id, { silent: true, force: true });
+      void loadStats(undefined, { silent: true });
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "人工确认失败"));
     } finally {
@@ -135,7 +133,8 @@ export function useSupplierDocumentOcrActions({
       );
       updateDocumentOcrTask(task.id, document.id, data.ocrTask);
       setNotice(data.message || "已驳回重传");
-      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+      void loadTaskDetail(task.id, { silent: true, force: true });
+      void loadStats(undefined, { silent: true });
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "驳回失败"));
     } finally {

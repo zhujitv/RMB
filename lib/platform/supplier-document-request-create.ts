@@ -154,6 +154,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
       const saved = await tx.supplierDocumentRequest.create({
         data: {
           orderId: order.id,
+          purchaseOrderNo: order.orderNo || order.id,
           supplierId: supplier.id,
           costId: factoryCost.id,
           requestedById,

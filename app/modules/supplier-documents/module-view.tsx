@@ -23,6 +23,9 @@ type SupplierDocumentsModuleViewProps = {
   total: number;
   totalPages: number;
   pendingCount: number;
+  statsTotalCount: number;
+  statsLoading: boolean;
+  statsError: string;
   submittedKeyword: string;
   deletingTaskId: string;
   resendingTaskId: string;
@@ -65,6 +68,9 @@ export function SupplierDocumentsModuleView({
   total,
   totalPages,
   pendingCount,
+  statsTotalCount,
+  statsLoading,
+  statsError,
   deletingTaskId,
   resendingTaskId,
   ocrBusyKey,
@@ -100,16 +106,17 @@ export function SupplierDocumentsModuleView({
           </div>
           <div className={styles.supplierDocumentsStatCard}>
             <span>待回传</span>
-            <strong>{pendingCount}</strong>
+            <strong>{statsError ? "加载失败" : statsLoading ? "加载中..." : pendingCount}</strong>
           </div>
           <div className={styles.supplierDocumentsStatCard}>
             <span>全部任务</span>
-            <strong>{total}</strong>
+            <strong>{statsError ? "加载失败" : statsLoading ? "加载中..." : statsTotalCount}</strong>
           </div>
         </div>
       ) : null}
 
       {notice ? <div className={styles.inlineSuccess}>{notice}</div> : null}
+      {!loadError && statsError ? <div className={styles.inlineError}>{statsError}</div> : null}
       {loadError ? (
         <div className={styles.inlineError}>
           <strong>读取失败：</strong>
@@ -121,7 +128,7 @@ export function SupplierDocumentsModuleView({
       ) : error ? <div className={styles.inlineError}>{error}</div> : null}
 
       {loading ? (
-        <div className={styles.emptyState}>正在加载产品供应商资料回传任务...</div>
+        <SupplierDocumentListSkeleton />
       ) : loadError ? (
         null
       ) : rows.length ? (
@@ -185,5 +192,27 @@ export function SupplierDocumentsModuleView({
         />
       ) : null}
     </section>
+  );
+}
+
+function SupplierDocumentListSkeleton() {
+  return (
+    <div className={styles.supplierDocumentsTaskList} aria-busy="true" aria-label="正在加载产品供应商资料回传任务">
+      {[0, 1, 2, 3].map((index) => (
+        <article className={styles.supplierDocumentTaskCard} key={index}>
+          <div className={styles.supplierDocumentTaskRow}>
+            <span className={styles.supplierDocumentTaskOrder}>加载中...</span>
+            <span className={styles.supplierDocumentTaskSupplier}>加载中...</span>
+            <span className={`${styles.statusPill} ${styles.statusMuted}`}>加载中</span>
+            <span className={styles.supplierDocumentTaskDate}>--</span>
+            <span className={styles.supplierDocumentTaskRequirement}>正在加载资料要求</span>
+            <span className={styles.supplierDocumentTaskActions}>
+              <button className={styles.secondaryButton} type="button" disabled>展开</button>
+              <button className={styles.primaryButtonCompact} type="button" disabled>上传资料</button>
+            </span>
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }

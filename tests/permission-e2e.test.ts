@@ -119,6 +119,7 @@ test("E2E permission: product supplier portal is supplier-bound and never expose
 
   for (const route of [
     "app/api/supplier-document-requests/route.ts",
+    "app/api/supplier-document-requests/stats/route.ts",
     "app/api/supplier-document-requests/[id]/route.ts",
     "app/api/supplier-document-requests/[id]/documents/route.ts",
     "app/api/supplier-document-requests/[id]/template/route.ts",

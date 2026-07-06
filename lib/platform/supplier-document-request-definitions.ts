@@ -72,6 +72,9 @@ export type ExcelUploadFile = {
 export type SupplierDocumentRequestRow = Prisma.SupplierDocumentRequestGetPayload<{
   include: ReturnType<typeof supplierDocumentRequestInclude>;
 }>;
+export type SupplierDocumentRequestListRow = Prisma.SupplierDocumentRequestGetPayload<{
+  select: ReturnType<typeof supplierDocumentRequestListSelect>;
+}>;
 export type SupplierDocumentWithOptionalOcr = SupplierDocumentRequestRow["documents"][number] & {
   ocrTasks?: unknown[];
 };
@@ -152,6 +155,18 @@ export function supplierDocumentRequestInclude() {
       },
       orderBy: [{ createdAt: "desc" }],
     },
+  });
+}
+
+export function supplierDocumentRequestListSelect() {
+  return Prisma.validator<Prisma.SupplierDocumentRequestSelect>()({
+    id: true,
+    purchaseOrderNo: true,
+    requiredDocumentTypes: true,
+    status: true,
+    dueDate: true,
+    updatedAt: true,
+    supplier: { select: { supplierName: true } },
   });
 }
 

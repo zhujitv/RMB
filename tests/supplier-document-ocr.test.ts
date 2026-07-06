@@ -59,7 +59,7 @@ test("supplier document page silently polls only while OCR is processing", () =>
   assert.match(supplierModule, /function hasProcessingOcrTask/);
   assert.match(supplierModule, /document\.ocrTask\?\.status === "OCR识别中"/);
   assert.match(supplierModule, /window\.setInterval/);
-  assert.match(supplierModule, /loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
+  assert.match(supplierModule, /loadTaskDetail\(expandedTaskId, \{ silent: true, force: true \}\)/);
   assert.match(supplierModule, /window\.clearInterval/);
 });
 
@@ -371,7 +371,9 @@ test("supplier document UI only shows manual OCR confirmation for abnormal resul
   assert.match(supplierModule, /function supplierOcrRequiresManualReview/);
   assert.match(supplierModule, /const requiresManualReview = supplierOcrRequiresManualReview\(ocrTask\)/);
   assert.match(supplierModule, /requiresManualReview \? \(/);
-  assert.match(supplierModule, /void loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
+  assert.match(supplierModule, /void loadTaskDetail\(task\.id, \{ silent: true, force: true \}\)/);
+  assert.match(supplierModule, /loadStats: \(keyword\?: string, options\?: \{ silent\?: boolean \}\) => Promise<void>/);
+  assert.match(supplierModule, /void loadStats\(undefined, \{ silent: true \}\)/);
 });
 
 test("supplier OCR routes expose re-recognize, confirm, and reject operations", () => {

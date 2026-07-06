@@ -54,6 +54,7 @@ export type SupplierFactoryCostSlot = {
 
 export type SupplierDocumentTask = {
   id: string;
+  purchaseOrderNo?: string;
   orderNo?: string;
   businessEntityIsDefault?: boolean;
   supplierName?: string;
@@ -73,6 +74,11 @@ export type SupplierDocumentTask = {
   hasTaxRefundDocuments?: boolean;
   taxRefundDocumentCount?: number;
   documents?: SupplierDocument[];
+  uploadedCount?: number;
+  requiredCount?: number;
+  detailLoaded?: boolean;
+  detailLoading?: boolean;
+  detailError?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -85,8 +91,18 @@ export type SupplierDocumentsResponse = {
     total?: number;
     totalPages?: number;
   };
-  summary?: {
+};
+
+export type SupplierDocumentDetailResponse = {
+  request?: SupplierDocumentTask;
+  data?: SupplierDocumentTask;
+  message?: string;
+};
+
+export type SupplierDocumentsStatsResponse = {
+  stats?: {
     pendingCount?: number;
+    totalCount?: number;
   };
 };
 

@@ -278,3 +278,24 @@
   gap: 8px;
   white-space: nowrap;
 }
+
+@media (max-width: 640px) {
+  .supplierDocumentRequestDialog {
+    width: min(100%, calc(100vw - 24px));
+    max-width: none;
+    height: min(100%, calc(100dvh - 24px));
+    max-height: none;
+    border-radius: 16px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .supplierDocumentRequestCostField,
+  .supplierDocumentRequestTypes,
+  .supplierDocumentRequestMessage {
+    grid-column: 1 / -1;
+  }
+
+  .supplierDocumentRequestTypes {
+    grid-template-columns: 1fr;
+  }
+}

@@ -642,6 +642,7 @@ model OrderDocument {
   @@index([deletedAt])
   @@index([deletedAt, orderId, relatedModule, documentType, uploadStatus], map: "order_documents_order_module_status_idx")
   @@index([deletedAt, supplierId, documentType, uploadStatus], map: "order_documents_supplier_status_idx")
+  @@index([factoryDocumentRequestId, deletedAt], map: "order_documents_factory_request_deleted_idx")
   @@map("order_documents")
 }
 
@@ -693,6 +694,7 @@ model FileAsset {
 model SupplierDocumentRequest {
   id                    String    @id @default(cuid())
   orderId               String    @map("order_id")
+  purchaseOrderNo       String?   @map("purchase_order_no")
   supplierId            String    @map("supplier_id")
   costId                String?   @map("cost_id")
   requestedById         String?   @map("requested_by")
@@ -730,6 +732,7 @@ model SupplierDocumentRequest {
   ocrTasks    OcrTask[]
 
   @@index([orderId])
+  @@index([purchaseOrderNo])
   @@index([supplierId])
   @@index([costId])
   @@index([requestedById])
@@ -738,6 +741,7 @@ model SupplierDocumentRequest {
   @@index([status])
   @@index([sendStatus])
   @@index([dueDate])
+  @@index([createdAt])
   @@index([deletedAt])
   @@index([deletedAt, status, dueDate], map: "supplier_document_requests_status_due_idx")
   @@index([deletedAt, supplierId, status], map: "supplier_document_requests_supplier_status_idx")

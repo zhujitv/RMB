@@ -180,6 +180,10 @@ test("local build scripts load env files before prisma commands", () => {
   );
   assert.match(
     packageJson,
+    /"build": "npm run build:release"/,
+  );
+  assert.match(
+    packageJson,
     /"db:deploy": "node scripts\/run-with-env\.mjs prisma migrate deploy"/,
   );
   assert.match(

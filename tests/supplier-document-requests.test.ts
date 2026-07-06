@@ -13,6 +13,7 @@ const supplierDocumentStyles = readCssModuleGraphSource("app/styles/workspace-sh
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
 const supplierRequestRoute = readFileSync("app/api/supplier-document-requests/[id]/route.ts", "utf8");
+const supplierRequestStatsRoute = readFileSync("app/api/supplier-document-requests/stats/route.ts", "utf8");
 const supplierRequestDocumentRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/route.ts", "utf8");
 const supplierRequestTemplateRoute = readFileSync("app/api/supplier-document-requests/[id]/template/route.ts", "utf8");
 const taxModule = readTaxRefundModuleSource();
@@ -27,8 +28,12 @@ const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
   assert.match(schema, /costId\s+String\?\s+@map\("cost_id"\)/);
+  assert.match(schema, /purchaseOrderNo\s+String\?\s+@map\("purchase_order_no"\)/);
   assert.match(schema, /cost\s+OrderCost\?\s+@relation\(fields: \[costId\], references: \[id\], onDelete: SetNull\)/);
   assert.match(schema, /@@index\(\[costId\]\)/);
+  assert.match(schema, /@@index\(\[purchaseOrderNo\]\)/);
+  assert.match(schema, /@@index\(\[createdAt\]\)/);
+  assert.match(schema, /@@index\(\[factoryDocumentRequestId, deletedAt\], map: "order_documents_factory_request_deleted_idx"\)/);
   assert.match(schema, /allowFactoryDocumentUpload\s+Boolean\s+@default\(false\)\s+@map\("allow_factory_document_upload"\)/);
   assert.match(schema, /factoryDocumentRequestId\s+String\?\s+@map\("factory_document_request_id"\)/);
   assert.match(schema, /documents\s+OrderDocument\[\]/);
@@ -108,10 +113,20 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(supplierModule, /styles\.supplierDocumentsPage/);
   assert.match(supplierModule, /styles\.supplierDocumentTaskCard/);
   assert.match(supplierModule, /styles\.supplierDocumentUploadCard/);
+  assert.match(supplierModule, /styles\.supplierDocumentTaskDetailMobileHeader/);
+  assert.match(supplierModule, /onClick=\{onToggle\}[\s\S]*关闭/);
   assert.match(supplierModule, /选择 PDF 文件/);
   assert.match(supplierModule, /下载合同样本/);
   assert.doesNotMatch(supplierModule, /fileUploadEmpty/);
   assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
+});
+
+test("supplier document mobile detail opens as a fixed foreground drawer", () => {
+  assert.match(supplierDocumentStyles, /\.supplierDocumentTaskDetailMobileHeader/);
+  assert.match(supplierDocumentStyles, /@media \(max-width: 720px\)[\s\S]*\.supplierDocumentTaskDetail\s*\{[\s\S]*position: fixed/);
+  assert.match(supplierDocumentStyles, /@media \(max-width: 720px\)[\s\S]*\.supplierDocumentTaskDetail\s*\{[\s\S]*100dvh/);
+  assert.match(supplierDocumentStyles, /@media \(max-width: 520px\)[\s\S]*\.supplierDocumentTaskActions\s*\{[\s\S]*grid-template-columns: repeat\(auto-fit, minmax\(96px, 1fr\)\)/);
+  assert.match(supplierDocumentStyles, /@media \(max-width: 640px\)[\s\S]*\.supplierDocumentRequestDialog\s*\{[\s\S]*calc\(100dvh - 24px\)/);
 });
 
 test("supplier document reminders are owned by the supplier return module", () => {
@@ -236,7 +251,7 @@ test("admin can soft delete supplier document requests from the foreground list"
   assert.match(supplierModule, /task\.canDelete/);
   assert.match(supplierModule, /styles\.supplierDocumentDeleteButton/);
   assert.match(supplierModule, /删除资料回传任务/);
-  assert.match(supplierModule, /确认删除资料回传任务 \$\{task\.orderNo \|\| "-"\}？此操作将删除该任务及已上传资料，删除后不可恢复。/);
+  assert.match(supplierModule, /确认删除资料回传任务 \$\{task\.purchaseOrderNo \|\| task\.orderNo \|\| "-"\}？此操作将删除该任务及已上传资料，删除后不可恢复。/);
   assert.match(supplierModule, /该任务已关联退税资料，删除后退税完整度将重新计算。/);
   assert.match(supplierModule, /资料回传任务已删除/);
   assert.match(supplierModule, /method: "DELETE"/);
@@ -252,13 +267,29 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(service, /prisma\.supplierDocumentRequest\.count\(\{ where \}\)/);
   assert.match(service, /skip: \(page - 1\) \* pageSize/);
   assert.match(service, /take: pageSize/);
-  assert.match(service, /pageResult\(rowsWithOcr\.map\(\(row\) => serializeSupplierDocumentRequest\(row, actor\)\), total, page, pageSize\)/);
+  assert.match(service, /select: supplierDocumentRequestListSelect\(\)/);
+  assert.match(service, /purchaseOrderNo: true/);
+  assert.match(service, /purchaseOrderNo: row\.purchaseOrderNo \|\| ""/);
+  assert.match(service, /purchaseOrderNo: \{ contains: keyword, mode: "insensitive" \}/);
+  assert.match(service, /purchaseOrderNo: order\.orderNo \|\| order\.id/);
+  assert.match(service, /supplierDocumentRequestUploadedCounts\(rows\)/);
+  assert.match(service, /serializeSupplierDocumentRequestListItem\(row, actor, uploadedCounts\.get\(row\.id\) \|\| 0\)/);
+  assert.doesNotMatch(service, /rowsWithOcr/);
   assert.doesNotMatch(service, /take: 100/);
   assert.match(supplierRequestListRoute, /requests: result\.rows/);
   assert.match(supplierRequestListRoute, /pagination: \{/);
-  assert.match(supplierRequestListRoute, /summary: result\.summary/);
+  assert.doesNotMatch(supplierRequestListRoute, /summary: result\.summary/);
+  assert.match(supplierRequestStatsRoute, /getSupplierDocumentRequestStats/);
+  assert.match(supplierRequestStatsRoute, /return ok\(\{ stats \}\)/);
   assert.match(supplierModule, /new URLSearchParams\(\{ page: String\(nextPage\), pageSize: String\(nextPageSize\) \}\)/);
-  assert.match(supplierModule, /<strong>\{total\}<\/strong>/);
+  assert.match(supplierModule, /loadStats\(""\)/);
+  assert.match(supplierModule, /\/api\/supplier-document-requests\/stats/);
+  assert.match(supplierModule, /const \[statsError, setStatsError\] = useState\(""\)/);
+  assert.match(supplierModule, /setStatsError\(""\)/);
+  assert.match(supplierModule, /资料回传统计加载失败，请点击刷新任务重试。/);
+  assert.doesNotMatch(supplierModule, /setPendingCount\(0\)/);
+  assert.doesNotMatch(supplierModule, /setStatsTotalCount\(0\)/);
+  assert.match(supplierModule, /statsError \? "加载失败" : statsLoading \? "加载中\.\.\." : statsTotalCount/);
   assert.match(supplierModule, /total=\{total\}/);
   assert.match(supplierModule, /async function loadRows\(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: \{ silent\?: boolean \} = \{\}\)/);
   assert.match(supplierModule, /if \(!options\.silent\) \{[\s\S]*setLoading\(true\);[\s\S]*setError\(""\);[\s\S]*setLoadError\(""\);[\s\S]*\}/);
@@ -269,7 +300,7 @@ test("supplier document request list uses server-side pagination", () => {
     supplierModule.indexOf("function requestMatchesSubmittedKeyword"),
     supplierModule.indexOf("function mergeRequestRow"),
   );
-  assert.match(requestMatcherSnippet, /request\.orderNo/);
+  assert.match(requestMatcherSnippet, /request\.purchaseOrderNo \|\| request\.orderNo/);
   assert.match(requestMatcherSnippet, /currentUser(?:\.role|Role) === "产品供应商" \? "" : request\.supplierName/);
   assert.doesNotMatch(requestMatcherSnippet, /factoryCostText|requiredDocumentLabels|requiredDocumentTypes|templateFileName|request\.status|request\.message/);
   assert.match(supplierModule, /const shouldShowCreatedRequest = result\.request\?\.id \? mergeRequestRow\(result\.request\) : false/);
@@ -283,8 +314,12 @@ test("supplier document list failure is not rendered as an empty task list", () 
   assert.match(supplierModule, /重试/);
   assert.match(supplierModule, /!\s*loadError \? \(/);
   assert.match(supplierModule, /\) : loadError \? \(\s*null\s*\)/);
-  assert.match(service, /attachSupplierDocumentOcrTasks\(reconciledRows\)/);
-  assert.match(service, /供应商资料回传OCR状态读取失败，已跳过OCR附加信息/);
+  assert.match(supplierModule, /SupplierDocumentListSkeleton/);
+  assert.match(supplierModule, /loadTaskDetail\(taskId/);
+  assert.match(supplierModule, /detailLoading: true/);
+  assert.match(supplierModule, /detailError: message/);
+  assert.match(supplierRequestRoute, /export async function GET/);
+  assert.match(supplierRequestRoute, /getSupplierDocumentRequestDetail\(id, actor\)/);
 });
 
 test("supplier document request completion requires OCR qualification or manual confirmation", () => {

@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
         total: result.total,
         totalPages: result.totalPages,
       },
-      summary: result.summary,
     });
   } catch (error: unknown) {
     return apiError(error, "读取供应商资料回传任务失败");

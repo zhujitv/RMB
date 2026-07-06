@@ -28,6 +28,8 @@
 .supplierDocumentTaskActions { composes: supplierDocumentTaskActions from "./supplier-request-dialog.module.css"; composes: supplierDocumentTaskActions from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentDeleteButton { composes: supplierDocumentDeleteButton from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentTaskDetail { composes: supplierDocumentTaskDetail from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentTaskDetailMobileHeader { composes: supplierDocumentTaskDetailMobileHeader from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentTaskDetailMobileTitle { composes: supplierDocumentTaskDetailMobileTitle from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentTaskMeta { composes: supplierDocumentTaskMeta from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentTemplateButton { composes: supplierDocumentTemplateButton from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentUploadButton { composes: supplierDocumentUploadButton from "./supplier-request-cost-list.module.css"; composes: supplierDocumentUploadButton from "./supplier-task-summary.module.css"; }
