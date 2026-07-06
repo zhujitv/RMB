@@ -7,7 +7,7 @@ import styles from "../../WorkspaceShell.module.css";
 import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { CostInvoiceActions } from "./invoice-actions";
 import { FACTORY_DOCUMENT_TYPES, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
-import { costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, singlePaymentVoucherCost } from "./helpers";
+import { costDeleteActionLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, singlePaymentVoucherCost } from "./helpers";
 
 export function CostTableRows({
   cost,
@@ -27,6 +27,8 @@ export function CostTableRows({
   onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
+  const manualCost = !isLogisticsGeneratedCost(cost);
+  const deleteActionLabel = costDeleteActionLabel(cost);
   return (
     <>
       <tr className={getBusinessEntityRowClass(cost, styles, styles.clickableRow)} onClick={onViewDetail}>
@@ -39,6 +41,19 @@ export function CostTableRows({
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td className={styles.costInvoiceActionColumn}>
           <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
+          {manualCost ? (
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              disabled={deleting}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+            >
+              {deleting ? "处理中..." : deleteActionLabel}
+            </button>
+          ) : null}
         </td>
       </tr>
     </>

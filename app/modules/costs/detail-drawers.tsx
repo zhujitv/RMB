@@ -235,7 +235,7 @@ export function CostOrderItemsTable({
                         onDelete(cost);
                       }}
                     >
-                      {deletingId === cost.id ? "删除中..." : "删除"}
+                      {deletingId === cost.id ? "处理中..." : costDeleteActionLabel(cost)}
                     </button>
                   </div>
                 </td>

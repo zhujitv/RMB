@@ -42,11 +42,15 @@ export function hasSuccessfulCostDocument(cost: Pick<CostRow, "documents">) {
   return (cost.documents || []).some((document) => document.uploadStatus === "SUCCESS");
 }
 
-export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents">) {
-  return isLogisticsGeneratedCost(cost) || hasSuccessfulCostDocument(cost) || isProductSupplierPaid(cost as CostRow) || Boolean(cost.costConfirmed);
+export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus">) {
+  return isLogisticsGeneratedCost(cost)
+    || hasSuccessfulCostDocument(cost)
+    || ["已收到", "部分收到"].includes(cost.invoiceStatus || "")
+    || isProductSupplierPaid(cost as CostRow)
+    || Boolean(cost.costConfirmed);
 }
 
-export function costDeleteActionLabel(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents">) {
+export function costDeleteActionLabel(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus">) {
   return shouldVoidCostOnDelete(cost) ? "作废成本" : "删除成本";
 }
 

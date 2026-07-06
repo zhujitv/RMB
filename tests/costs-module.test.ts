@@ -233,7 +233,7 @@ test("cost detail tables always keep an invoice operation column", () => {
   assert.match(costsModule, /<CostOrderItemsTable[\s\S]*costs=\{order\.costs \|\| \[\]\}[\s\S]*onOpenDocuments=\{onOpenDocuments\}[\s\S]*onDelete=\{onDelete\}/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{onOpenDocuments\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
-  assert.match(costsModule, /deletingId === cost\.id \? "删除中\.\.\." : "删除"/);
+  assert.match(costsModule, /deletingId === cost\.id \? "处理中\.\.\." : costDeleteActionLabel\(cost\)/);
   assert.match(workspaceStyles, /\.costInvoiceActions \{[\s\S]*display: flex;[\s\S]*gap: 6px;/);
   assert.match(workspaceStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 180px;/);
 });
@@ -333,6 +333,10 @@ test("cost order detail can delete a cost item without reloading the page list",
   assert.match(costsModule, /function shouldVoidCostOnDelete/);
   assert.match(costsModule, /function costDeleteActionLabel/);
   assert.match(costsModule, /shouldVoidCostOnDelete\(cost\) \? "作废成本" : "删除成本"/);
+  assert.match(costsModule, /\["已收到", "部分收到"\]\.includes\(cost\.invoiceStatus \|\| ""\)/);
+  assert.match(costsModule, /const deleteActionLabel = costDeleteActionLabel\(cost\)/);
+  assert.match(costsModule, /\{deleting \? "处理中\.\.\." : deleteActionLabel\}/);
+  assert.match(costsModule, /\{deletingId === cost\.id \? "处理中\.\.\." : costDeleteActionLabel\(cost\)\}/);
   assert.match(costsModule, /确认作废这条成本明细吗？作废后将从当前成本、利润和退税完整度中移除，但保留历史审计记录。/);
   assert.match(costsModule, /处理方式：作废，不做物理删除/);
   assert.match(costsModule, /type CostDeleteResponse = \{/);
