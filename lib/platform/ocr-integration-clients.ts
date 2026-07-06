@@ -43,6 +43,9 @@ type AliyunOcrDiagnostics = {
   errorCode: string;
   errorMessage: string;
 };
+type AliyunOcrRetryOptions = {
+  maxAttempts?: number;
+};
 
 export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") return null;
@@ -209,8 +212,12 @@ async function withAliyunOcrRetry<T>(
   apiName: string,
   settings: AliyunOcrSettings,
   operation: () => Promise<T>,
+  options: AliyunOcrRetryOptions = {},
 ): Promise<T> {
-  const maxAttempts = ALIYUN_OCR_RETRY_DELAYS_MS.length + 1;
+  const maxAttempts = Math.min(
+    ALIYUN_OCR_RETRY_DELAYS_MS.length + 1,
+    Math.max(1, Math.trunc(Number(options.maxAttempts || ALIYUN_OCR_RETRY_DELAYS_MS.length + 1))),
+  );
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -368,6 +375,7 @@ export async function recognizeWithPdfTextFallback(
 export async function recognizeAliyunVatInvoice(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: AliyunOcrRetryOptions = {},
 ): Promise<OcrRecognitionResult> {
   scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
@@ -376,7 +384,7 @@ export async function recognizeAliyunVatInvoice(
       body: Readable.from(buffer),
       pageNo: 1,
     }))
-  ));
+  ), options);
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
   const { extractedFields, text } = extractAliyunInvoiceRecognitionData(responseBody);
@@ -395,6 +403,7 @@ export async function recognizeAliyunVatInvoice(
 export async function recognizeAliyunSupplierContract(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: AliyunOcrRetryOptions = {},
 ): Promise<OcrRecognitionResult> {
   scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
@@ -403,7 +412,7 @@ export async function recognizeAliyunSupplierContract(
       body: Readable.from(buffer),
       keys: SUPPLIER_CONTRACT_KEYS,
     }))
-  ));
+  ), options);
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
   const data = parseJsonMaybe(responseField(responseBody, "data"));

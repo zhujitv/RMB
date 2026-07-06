@@ -8,10 +8,23 @@ import {
 } from "./ocr-integration-shared";
 import { recognizeAliyunCustomsDeclaration } from "./ocr-integration-customs";
 import {
+  rasterizeFirstPdfPageForOcr,
   recognizeAliyunSupplierContract,
   recognizeAliyunVatInvoice,
   recognizeWithPdfTextFallback,
 } from "./ocr-integration-clients";
+
+function supplierDocumentOcrSettings(settings: Awaited<ReturnType<typeof ensureOcrFeatureEnabled>>) {
+  return {
+    ...settings,
+    timeoutMs: Math.max(settings.timeoutMs, 30_000),
+  };
+}
+
+async function supplierDocumentOcrBuffer(buffer: Buffer) {
+  const rasterized = await rasterizeFirstPdfPageForOcr(buffer);
+  return rasterized?.buffer || buffer;
+}
 
 export async function recognizePdfTextWithOcr(
   buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
@@ -45,11 +58,13 @@ export async function recognizeSupplierDocumentWithOcr(
 ): Promise<OcrRecognitionResult> {
   const settings = await ensureOcrFeatureEnabled("supplierDocumentReturn");
   const fileBuffer = bufferFromInput(buffer);
+  const ocrBuffer = await supplierDocumentOcrBuffer(fileBuffer);
+  const ocrSettings = supplierDocumentOcrSettings(settings);
   try {
     if (documentType === "SUPPLIER_INVOICE") {
-      return await recognizeAliyunVatInvoice(fileBuffer, settings);
+      return await recognizeAliyunVatInvoice(ocrBuffer, ocrSettings, { maxAttempts: 1 });
     }
-    return await recognizeAliyunSupplierContract(fileBuffer, settings);
+    return await recognizeAliyunSupplierContract(ocrBuffer, ocrSettings, { maxAttempts: 1 });
   } catch (error) {
     console.error("aliyun-ocr-structured-failed", {
       documentType,
