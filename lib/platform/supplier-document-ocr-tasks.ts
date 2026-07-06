@@ -11,6 +11,7 @@ import {
   INTERNAL_OCR_ROLES,
   OCR_STATUS_FAILED,
   OCR_STATUS_PROCESSING,
+  OCR_RERUN_CANCELLED_MESSAGE,
   OCR_STALE_PROCESSING_MESSAGE,
   SUPPLIER_DOCUMENT_OCR_FEATURE,
   SUPPLIER_DOCUMENT_OCR_MODULE,
@@ -28,6 +29,7 @@ import {
   supplierDocumentLabels,
   supplierDocumentOcrFailureMessage,
   supplierOcrErrorText,
+  supplierOcrTaskTimeoutMs,
   supplierOcrProcessingStaleMs,
   visibleResultFields,
 } from "./supplier-document-ocr-shared";
@@ -49,13 +51,22 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
       where: {
         module: SUPPLIER_DOCUMENT_OCR_MODULE,
         documentId: { in: uniqueDocumentIds },
-        OR: [
-          { status: OCR_STATUS_PROCESSING },
-          { validationStatus: "PROCESSING" },
+        AND: [
+          {
+            OR: [
+              { status: OCR_STATUS_PROCESSING },
+              { validationStatus: "PROCESSING" },
+            ],
+          },
+          {
+            OR: [
+              { updatedAt: { lt: staleBefore } },
+              { createdAt: { lt: staleBefore } },
+            ],
+          },
         ],
-        updatedAt: { lt: staleBefore },
       },
-      select: { id: true, documentId: true, requestId: true, updatedAt: true },
+      select: { id: true, documentId: true, requestId: true, createdAt: true, updatedAt: true },
       take: Math.min(Math.max(uniqueDocumentIds.length * 2, 20), 500),
     });
     if (!staleTasks.length) return 0;
@@ -77,12 +88,102 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
       documentIds: staleTasks.map((task) => task.documentId),
       requestIds: staleTasks.map((task) => task.requestId).filter(Boolean),
       staleBefore: staleBefore.toISOString(),
+      createdAt: staleTasks.map((task) => task.createdAt),
     });
     return staleTasks.length;
   } catch (error) {
     throwIfSupplierOcrTableMissing(error);
     logServerError("供应商资料回传OCR处理中任务自愈失败", error, { documentCount: uniqueDocumentIds.length });
     return 0;
+  }
+}
+
+export async function cancelProcessingSupplierDocumentOcrTasks(documentId: string, requestId = "", reason = OCR_RERUN_CANCELLED_MESSAGE) {
+  if (!documentId) return 0;
+  const updated = await prisma.ocrTask.updateMany({
+    where: {
+      module: SUPPLIER_DOCUMENT_OCR_MODULE,
+      documentId,
+      ...(requestId ? { requestId } : {}),
+      OR: [
+        { status: OCR_STATUS_PROCESSING },
+        { validationStatus: "PROCESSING" },
+      ],
+    },
+    data: {
+      status: OCR_STATUS_FAILED,
+      validationStatus: VALIDATION_FAILED,
+      errorMessage: reason,
+      validationJson: {
+        issues: [{ level: "manual", message: reason }],
+        parserStatus: "OCR任务已取消",
+      },
+    },
+  });
+  if (updated.count) {
+    console.info("supplier-document-ocr-processing-cancelled", { documentId, requestId, count: updated.count });
+  }
+  return updated.count;
+}
+
+async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown, parserStatus = "OCR后台任务执行失败") {
+  const task = await prisma.ocrTask.findUnique({
+    where: { id: taskId },
+    select: { id: true, requestId: true, documentId: true, orderId: true, documentType: true },
+  });
+  const originalMessage = supplierOcrErrorText(error);
+  const message = supplierDocumentOcrFailureMessage(error);
+  const saved = await prisma.ocrTask.update({
+    where: { id: taskId },
+    data: {
+      status: OCR_STATUS_FAILED,
+      validationStatus: VALIDATION_FAILED,
+      errorMessage: message.slice(0, 1000),
+      validationJson: {
+        issues: [{ level: "manual", message }],
+        parserStatus,
+        technicalError: originalMessage.slice(0, 1000),
+      },
+    },
+    include: { results: true },
+  });
+  if (task?.requestId) {
+    await refreshSupplierDocumentRequestQualification(task.requestId).catch((refreshError) => {
+      logServerError("供应商资料回传OCR失败后完成度刷新失败", refreshError, {
+        taskId,
+        requestId: task.requestId,
+        documentId: task.documentId,
+      });
+    });
+  }
+  return saved;
+}
+
+export async function runSupplierDocumentOcrTaskWithTimeout(taskId: string, timeoutMs = supplierOcrTaskTimeoutMs()) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      runSupplierDocumentOcrTask(taskId),
+      new Promise<OcrTaskRow>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(codedError(OCR_STALE_PROCESSING_MESSAGE, 504, "SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT"));
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT") {
+      const saved = await markSupplierDocumentOcrTaskFailed(taskId, error, "OCR后台任务执行超时");
+      logServerError("供应商资料回传OCR后台任务超时", error, {
+        taskId,
+        timeoutMs,
+        documentId: saved.documentId,
+        requestId: saved.requestId || "",
+      });
+      return saved;
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -125,26 +226,11 @@ export async function runPendingSupplierDocumentOcrTasks(limit = 5, minAgeMs = 6
         result.skipped += 1;
         continue;
       }
-      await runSupplierDocumentOcrTask(task.id);
+      await runSupplierDocumentOcrTaskWithTimeout(task.id);
       result.processed += 1;
     } catch (error) {
       result.failed += 1;
-      await prisma.ocrTask.updateMany({
-        where: {
-          id: task.id,
-          status: OCR_STATUS_PROCESSING,
-          validationStatus: "PROCESSING",
-        },
-        data: {
-          status: OCR_STATUS_FAILED,
-          validationStatus: VALIDATION_FAILED,
-          errorMessage: supplierOcrErrorText(error).slice(0, 1000),
-          validationJson: {
-            issues: [{ level: "manual", message: supplierDocumentOcrFailureMessage(error) }],
-            parserStatus: "OCR后台任务执行失败",
-          },
-        },
-      }).catch((updateError) => {
+      await markSupplierDocumentOcrTaskFailed(task.id, error).catch((updateError) => {
         logServerError("供应商资料回传OCR后台任务失败状态回写失败", updateError, { taskId: task.id });
       });
       logServerError("供应商资料回传OCR后台任务执行失败", error, {

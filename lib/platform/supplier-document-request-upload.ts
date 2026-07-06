@@ -6,7 +6,7 @@ import {
   createSupplierDocumentOcrTaskForUpload,
   reconcileStaleSupplierDocumentOcrTasks,
   refreshSupplierDocumentRequestQualification,
-  runSupplierDocumentOcrTask,
+  runSupplierDocumentOcrTaskWithTimeout,
   serializeSupplierDocumentOcrTask,
 } from "./supplier-document-ocr";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
@@ -158,7 +158,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     if (ocrTask?.id) {
       ocrTaskId = ocrTask.id;
       void runNonCriticalTask("产品供应商回传资料OCR后台识别", async () => {
-        return runSupplierDocumentOcrTask(ocrTask.id);
+        return runSupplierDocumentOcrTaskWithTimeout(ocrTask.id);
       }, { context: { documentId: document.id, requestId: row.id, documentType, taskId: ocrTask.id }, slowMs: 3000 });
     } else {
       await refreshSupplierDocumentRequestQualification(row.id);

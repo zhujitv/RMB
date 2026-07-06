@@ -49,6 +49,7 @@ export const OCR_STALE_PROCESSING_MESSAGE = "OCR识别超时，请点击重新�
 export const OCR_NETWORK_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
 export const OCR_PERMISSION_FAILURE_MESSAGE = "阿里云 OCR 服务未开通或权限配置异常，请管理员检查 OCR 服务开通状态、接口权限和 AccessKey 配置。";
 export const OCR_PROVIDER_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
+export const OCR_RERUN_CANCELLED_MESSAGE = "已重新发起识别，旧识别任务已取消。";
 export const VALIDATION_PASSED = "PASSED";
 export const VALIDATION_EXCEPTION = "EXCEPTION";
 export const VALIDATION_FAILED = "FAILED";
@@ -57,6 +58,7 @@ export const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
 export const VALIDATION_REJECTED = "REJECTED";
 export const INTERNAL_OCR_ROLES = ["管理员", "财务", "业务员", "采购"];
 export const DEFAULT_SUPPLIER_OCR_PROCESSING_STALE_MS = 2 * 60 * 1000;
+export const DEFAULT_SUPPLIER_OCR_TASK_TIMEOUT_MS = 50 * 1000;
 
 export type ValidationIssue = {
   level: "error" | "warning" | "manual";
@@ -88,6 +90,12 @@ export function cleanText(value: unknown) {
 export function supplierOcrProcessingStaleMs() {
   const configured = Number.parseInt(String(process.env.SUPPLIER_DOCUMENT_OCR_STALE_MS || ""), 10);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUPPLIER_OCR_PROCESSING_STALE_MS;
+}
+
+export function supplierOcrTaskTimeoutMs() {
+  const configured = Number.parseInt(String(process.env.SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT_MS || ""), 10);
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_SUPPLIER_OCR_TASK_TIMEOUT_MS;
+  return Math.min(Math.max(configured, 15_000), 55_000);
 }
 
 export function supplierOcrErrorText(error: unknown) {

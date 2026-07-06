@@ -37,7 +37,7 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
 
 test("supplier document upload creates OCR task without changing tax refund module", () => {
   assert.match(supplierRequests, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
-  assert.match(supplierRequests, /runSupplierDocumentOcrTask\(ocrTask\.id\)/);
+  assert.match(supplierRequests, /runSupplierDocumentOcrTaskWithTimeout\(ocrTask\.id\)/);
   assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
   assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
   assert.match(supplierRequests, /已跳过OCR附加信息/);
@@ -56,7 +56,9 @@ test("supplier document page silently polls only while OCR is processing", () =>
 test("supplier OCR has a cron worker fallback for processing tasks", () => {
   assert.match(service, /export async function runPendingSupplierDocumentOcrTasks/);
   assert.match(service, /updatedAt: \{ lt: readyBefore \}/);
-  assert.match(service, /await runSupplierDocumentOcrTask\(task\.id\)/);
+  assert.match(service, /await runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
+  assert.match(service, /export async function runSupplierDocumentOcrTaskWithTimeout/);
+  assert.match(service, /SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT/);
   assert.match(service, /supplier-document-ocr-pending-worker/);
   assert.match(supplierOcrCronRoute, /assertCronSecret\(request\)/);
   assert.match(supplierOcrCronRoute, /runPendingSupplierDocumentOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
@@ -321,7 +323,9 @@ test("supplier OCR rerun loads supplier return document and exposes actionable f
   assert.match(service, /SUPPLIER_DOCUMENT_FILE_MISSING/);
   assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
   assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
+  assert.match(service, /cancelProcessingSupplierDocumentOcrTasks\(documentId, requestId\)/);
   assert.match(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
+  assert.match(service, /runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
   assert.doesNotMatch(service, /const result = await runSupplierDocumentOcrTask\(task\.id\);[\s\S]{0,220}return serializeSupplierDocumentOcrTask\(result\)/);
   assert.match(ocrRoute, /已开始重新识别，OCR识别中/);
   assert.match(service, /normalizeSupplierReturnDocumentType/);
@@ -344,7 +348,9 @@ test("supplier OCR reconciles stale processing tasks instead of leaving them stu
   assert.match(service, /export async function reconcileStaleSupplierDocumentOcrTasks/);
   assert.match(service, /status: OCR_STATUS_PROCESSING/);
   assert.match(service, /validationStatus: "PROCESSING"/);
+  assert.match(service, /createdAt: \{ lt: staleBefore \}/);
   assert.match(service, /status: OCR_STATUS_FAILED/);
   assert.match(service, /validationStatus: VALIDATION_FAILED/);
+  assert.match(service, /Date\.now\(\) - new Date\(task\.createdAt\)\.getTime\(\) > supplierOcrProcessingStaleMs\(\)/);
   assert.match(supplierRequests, /reconcileStaleSupplierDocumentOcrTasks\(documentIds\)/);
 });

@@ -7,19 +7,23 @@ import {
   OCR_STATUS_MANUAL,
   OCR_STATUS_PASSED,
   OCR_STATUS_PROCESSING,
+  OCR_STALE_PROCESSING_MESSAGE,
   VALIDATION_CONFIRMED,
+  VALIDATION_FAILED,
   VALIDATION_REJECTED,
   type ActorLike,
   type AuditRequestLike,
   type OcrTaskRow,
   sanitizeSupplierOcrMessage,
+  supplierOcrProcessingStaleMs,
 } from "./supplier-document-ocr-shared";
 import {
   assertInternalOcrManager,
+  cancelProcessingSupplierDocumentOcrTasks,
   createSupplierDocumentOcrTask,
   loadSupplierReturnDocument,
   refreshSupplierDocumentRequestQualification,
-  runSupplierDocumentOcrTask,
+  runSupplierDocumentOcrTaskWithTimeout,
   throwIfSupplierOcrTableMissing,
 } from "./supplier-document-ocr-tasks";
 
@@ -32,10 +36,11 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
       where: { documentId, requestId },
       orderBy: [{ createdAt: "desc" }],
     });
+    await cancelProcessingSupplierDocumentOcrTasks(documentId, requestId);
     const task = await createSupplierDocumentOcrTask(document);
     if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
     void runNonCriticalTask("资料回传OCR重新识别后台执行", async () => {
-      const result = await runSupplierDocumentOcrTask(task.id);
+      const result = await runSupplierDocumentOcrTaskWithTimeout(task.id);
       await writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result);
       return result;
     }, { context: { documentId, requestId, taskId: task.id, documentType: document.documentType }, slowMs: 3000 });
@@ -106,6 +111,12 @@ export async function rejectSupplierDocumentOcr(request: AuditRequestLike, actor
 
 export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undefined) {
   if (!task) return null;
+  const staleProcessing = (
+    task.status === OCR_STATUS_PROCESSING
+    || task.validationStatus === "PROCESSING"
+  ) && Date.now() - new Date(task.createdAt).getTime() > supplierOcrProcessingStaleMs();
+  const serializedStatus = staleProcessing ? "OCR识别失败，需人工核对" : task.status;
+  const serializedValidationStatus = staleProcessing ? VALIDATION_FAILED : (task.validationStatus || "");
   const validationJson = task.validationJson && typeof task.validationJson === "object" && !Array.isArray(task.validationJson)
     ? task.validationJson as Record<string, unknown>
     : {};
@@ -119,21 +130,23 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
         };
       }).filter((issue) => issue.message)
     : [];
-  const errorMessage = sanitizeSupplierOcrMessage(task.errorMessage, "");
+  const errorMessage = staleProcessing ? OCR_STALE_PROCESSING_MESSAGE : sanitizeSupplierOcrMessage(task.errorMessage, "");
   const issues = persistedIssues.length
     ? persistedIssues
-    : errorMessage
-      ? [{ level: "manual", message: errorMessage, field: "" }]
-      : task.status === OCR_STATUS_PROCESSING || task.validationStatus === "PROCESSING"
-        ? [{ level: "manual", message: "OCR正在识别，请稍候。", field: "" }]
-        : [];
+    : staleProcessing
+      ? [{ level: "manual", message: OCR_STALE_PROCESSING_MESSAGE, field: "" }]
+      : errorMessage
+        ? [{ level: "manual", message: errorMessage, field: "" }]
+        : task.status === OCR_STATUS_PROCESSING || task.validationStatus === "PROCESSING"
+          ? [{ level: "manual", message: "OCR正在识别，请稍候。", field: "" }]
+          : [];
   return {
     id: task.id,
     documentId: task.documentId,
     requestId: task.requestId,
     documentType: task.documentType,
-    status: task.status,
-    validationStatus: task.validationStatus || "",
+    status: serializedStatus,
+    validationStatus: serializedValidationStatus,
     errorMessage,
     rejectReason: task.rejectReason || "",
     rawText: task.rawText || "",
