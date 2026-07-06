@@ -321,6 +321,9 @@ test("supplier OCR rerun loads supplier return document and exposes actionable f
   assert.match(service, /SUPPLIER_DOCUMENT_FILE_MISSING/);
   assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
   assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
+  assert.match(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
+  assert.doesNotMatch(service, /const result = await runSupplierDocumentOcrTask\(task\.id\);[\s\S]{0,220}return serializeSupplierDocumentOcrTask\(result\)/);
+  assert.match(ocrRoute, /已开始重新识别，OCR识别中/);
   assert.match(service, /normalizeSupplierReturnDocumentType/);
   assert.match(service, /VAT_INVOICE/);
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       success: true,
       ocrTask,
       data: ocrTask,
-      message: "已重新识别",
+      message: "已开始重新识别，OCR识别中",
     });
   } catch (error: unknown) {
     return apiError(error, "重新识别供应商回传资料失败");
