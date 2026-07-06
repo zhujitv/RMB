@@ -43,6 +43,7 @@ export type CostRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   supplierName?: string;
   supplierNameSnapshot?: string;
   vendorName?: string;
@@ -90,6 +91,7 @@ export type CostInvoiceGroupRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   supplierId?: string;
   supplierName?: string;
   supplierNameSnapshot?: string;
@@ -212,6 +214,7 @@ export type CostOrderSummary = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   receivableAmountCny?: number;
   totalCostCny?: number;
   factoryCostCny?: number;

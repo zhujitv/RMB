@@ -132,6 +132,7 @@ export type DomesticLogisticsRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   logisticsStatus?: string;
   isArchived?: boolean;
   auditStatus?: string;
@@ -185,6 +186,7 @@ export type ShipsgoControlTowerRow = ShipsgoTrackingRow & {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   orderIsArchived?: boolean;
   isCompleted?: boolean;
   isSoonArriving?: boolean;

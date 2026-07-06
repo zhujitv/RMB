@@ -2,14 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  readCostRecordsQueriesSource,
+  readCostsModuleSource,
+  readCustomerCommunicationModuleSource,
+  readCustomerCommunicationServiceSource,
+  readDomesticLogisticsModuleSource,
+  readLogisticsExpenseAccessSource,
+  readLogisticsFeesModuleSource,
   readOrdersModuleSource,
   readOrdersServiceSource,
+  readPaymentsModuleSource,
+  readPaymentsServiceSource,
+  readProfitModuleSource,
   readReportServiceSource,
   readReportsModuleSource,
   readSettingsModuleSource,
   readSharedOrderSerializationSource,
+  readSharedSerializationSource,
+  readSupplierDocumentRequestsSource,
+  readSupplierDocumentsModuleSource,
   readTaxRefundModuleSource,
   readTaxRefundsSource,
+  readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
@@ -41,6 +55,21 @@ const settingsCards = readSettingsModuleSource();
 const settingsController = readSettingsModuleSource();
 const settingsView = readSettingsModuleSource();
 const settingsRoute = readFileSync("app/api/settings/business-entities/route.ts", "utf8");
+const workspaceStyles = readWorkspaceStylesSource();
+const rowStyleHelper = readFileSync("app/modules/business-entity-row-style.ts", "utf8");
+const paymentsModule = readPaymentsModuleSource();
+const paymentsService = readPaymentsServiceSource();
+const costsModule = readCostsModuleSource();
+const costQueries = readCostRecordsQueriesSource();
+const logisticsFeesModule = readLogisticsFeesModuleSource();
+const logisticsExpenseAccess = readLogisticsExpenseAccessSource();
+const domesticLogisticsModule = readDomesticLogisticsModuleSource();
+const profitModule = readProfitModuleSource();
+const customerCommunicationModule = readCustomerCommunicationModuleSource();
+const customerCommunicationService = readCustomerCommunicationServiceSource();
+const sharedSerialization = readSharedSerializationSource();
+const supplierDocumentsModule = readSupplierDocumentsModuleSource();
+const supplierDocumentRequests = readSupplierDocumentRequestsSource();
 
 test("business entities are modeled as order-level markers", () => {
   assert.match(schema, /model BusinessEntity/);
@@ -141,4 +170,39 @@ test("settings can maintain business entities without making it multi tenant", (
   assert.match(settingsController, /请填写公司全称/);
   assert.match(settingsController, /\/api\/settings\/business-entities/);
   assert.match(settingsView, /activeTab === "businessEntities"/);
+});
+
+test("business entity rows use one shared non-default highlight rule", () => {
+  assert.match(rowStyleHelper, /getBusinessEntityRowClass/);
+  assert.match(rowStyleHelper, /businessEntityIsDefault/);
+  assert.match(rowStyleHelper, /nested\.isDefault/);
+  assert.match(workspaceStyles, /businessEntityOtherRow/);
+  assert.match(workspaceStyles, /#f3f8ff/i);
+  assert.match(workspaceStyles, /#eaf4ff/i);
+  assert.match(workspaceStyles, /logisticsCompactRowActive/);
+
+  assert.match(service, /businessEntityIsDefault/);
+  assert.match(orderSerialization, /businessEntityFieldsFromOrder\(order\)/);
+  assert.match(sharedSerialization, /businessEntityFieldsFromOrder\(payment\.order\)/);
+  assert.match(costQueries, /businessEntity: true/);
+  assert.match(logisticsExpenseAccess, /businessEntityIsDefault/);
+  assert.match(taxRefundService, /businessEntityIsDefault/);
+  assert.match(reportService, /businessEntityIsDefault/);
+  assert.match(customerCommunicationService, /businessEntityIsDefault/);
+  assert.match(supplierDocumentRequests, /businessEntityFieldsFromOrder\(row\.order\)/);
+
+  [
+    ordersModule,
+    paymentsModule,
+    costsModule,
+    logisticsFeesModule,
+    domesticLogisticsModule,
+    profitModule,
+    reportsModule,
+    taxRefundListPanel,
+    customerCommunicationModule,
+    supplierDocumentsModule,
+  ].forEach((source) => {
+    assert.match(source, /getBusinessEntityRowClass/);
+  });
 });

@@ -24,6 +24,7 @@ export type ReportRow = Record<string, unknown> & {
   businessEntityShortName?: string;
   businessEntityName?: string;
   businessEntityNameSnapshot?: string;
+  businessEntityIsDefault?: boolean;
   orderNo?: string;
   taxRefundStatus?: string;
 };

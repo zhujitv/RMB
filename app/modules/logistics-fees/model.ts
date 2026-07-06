@@ -98,6 +98,7 @@ export type LogisticsExpense = {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   vesselVoyage?: string;
   supplierId?: string;
   supplierName?: string;
@@ -195,6 +196,7 @@ export type ExpenseOrderOption = {
   billOfLadingNo?: string;
   customerName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   vesselVoyage?: string;
   truckPlateNo?: string;
   cargoName?: string;

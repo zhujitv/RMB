@@ -2,6 +2,7 @@ import { DetailField, SideDetailDrawer } from "../../components";
 import { formatCny, formatPercent } from "../../formatters";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import {
   costGroupText,
   formatCnyOrDash,
@@ -18,7 +19,7 @@ export function ProfitRows({
 }) {
   const summary = row.summary || {};
   return (
-    <tr className={styles.clickableRow} onClick={onViewDetail}>
+    <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}>{row.orderNo || "-"}</td>
       <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
       <td className={styles.amountColumn}>{formatCny(summary.receivableCny)}</td>

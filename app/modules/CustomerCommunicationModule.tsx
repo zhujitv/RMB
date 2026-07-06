@@ -10,6 +10,7 @@ import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
 import type { CommunicationDetail, CommunicationDraft, CommunicationListResponse, CommunicationRow, MailForm } from "./customer-communication-types";
 import { canWritePermission } from "../utils";
+import { getBusinessEntityRowClass } from "./business-entity-row-style";
 
 const LANGUAGE_OPTIONS = [
   { value: "EN", label: "英文" },
@@ -212,7 +213,7 @@ export function CustomerCommunicationModule({
             {loading ? (
               <tr><td colSpan={9}><div className={styles.emptyState}>正在加载客户沟通列表...</div></td></tr>
             ) : rows.length ? rows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={getBusinessEntityRowClass(row, styles)}>
                 <td><strong>{row.orderNo || "-"}</strong></td>
                 <td>{row.customerShortName || "-"}</td>
                 <td>{row.billOfLadingNo || "-"}</td>

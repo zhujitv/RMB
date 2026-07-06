@@ -1,6 +1,7 @@
 import { UiCheckbox } from "../../components";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import type { LogisticsExpense } from "./model";
 import {
   compactStatusLabel,
@@ -136,7 +137,12 @@ function LogisticsExpenseCompactRow({
     expense.currencyTotals || logisticsExpenseCurrencySummaryFromItems(items);
   return (
     <tr
-      className={`${styles.clickableRow} ${active ? styles.logisticsCompactRowActive : ""}`}
+      className={getBusinessEntityRowClass(
+        expense,
+        styles,
+        styles.clickableRow,
+        active && styles.logisticsCompactRowActive,
+      )}
       onClick={onOpen}
     >
       {selectionEnabled ? (

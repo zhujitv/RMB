@@ -47,6 +47,7 @@ import {
   validEmail,
   writeAudit,
 } from "./shared";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import {
   EXCEL_TEMPLATE_MIME,
   LEGACY_EXCEL_TEMPLATE_MIME,
@@ -282,6 +283,7 @@ export function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWit
     id: row.id,
     orderId: row.orderId,
     orderNo: row.order?.orderNo || "",
+    ...businessEntityFieldsFromOrder(row.order),
     supplierId: row.supplierId,
     supplierName: isProductSupplierOperatorRole(actor?.role) ? "" : (row.supplier?.supplierName || ""),
     requiredDocumentTypes: requiredTypes,

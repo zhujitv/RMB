@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiJson } from "../../api";
 import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import {
   EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS,
   EMPTY_SHIPSGO_CONTROL_TOWER_STATS,
@@ -298,7 +299,7 @@ export function ShipsgoControlTowerView({
               <tr><td colSpan={14}><div className={styles.emptyState}>控制塔数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((row) => (
               <Fragment key={row.id}>
-                <tr className={styles.clickableRow}>
+                <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)}>
                   <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
                   <td className={styles.blNoColumn}>{row.blNo || row.billOfLadingNo || row.masterBlNo || "-"}</td>
                   <td className={styles.customerColumn} title={row.customerName || row.customerShortName || ""}>{row.customerShortName || "-"}</td>

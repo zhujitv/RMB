@@ -4,6 +4,7 @@ export type CommunicationRow = {
   customerShortName?: string;
   billOfLadingNo?: string;
   businessEntityName?: string;
+  businessEntityIsDefault?: boolean;
   declarationDate?: string | null;
   logisticsStatus?: string;
   clearanceStatus?: string;

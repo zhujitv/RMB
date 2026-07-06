@@ -134,6 +134,7 @@ type ShipsgoControlTowerRow = ShipsgoTrackingDto & {
   billOfLadingNo: string;
   customerName: string;
   customerShortName: string;
+  businessEntityIsDefault: boolean;
   orderIsArchived: boolean;
   isCompleted: boolean;
   isSoonArriving: boolean;
@@ -153,6 +154,7 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
     blNo?: string | null;
     customerNameSnapshot?: string | null;
     isArchived?: boolean | null;
+    businessEntity?: { isDefault?: boolean | null } | null;
     customer?: { shortName?: string | null; name?: string | null } | null;
   } | null;
 }, now = new Date()): ShipsgoControlTowerRow {
@@ -181,6 +183,9 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
     billOfLadingNo: row.order?.blNo || tracking.masterBlNo || tracking.bookingNumber || "",
     customerName: row.order?.customer?.name || row.order?.customerNameSnapshot || "",
     customerShortName: row.order?.customer?.shortName || row.order?.customerNameSnapshot || "",
+    businessEntityIsDefault: typeof row.order?.businessEntity?.isDefault === "boolean"
+      ? row.order.businessEntity.isDefault
+      : true,
     orderIsArchived: row.order?.isArchived === true,
     isCompleted,
     isSoonArriving,
@@ -220,6 +225,7 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
           salespersonUserId: true,
           customerNameSnapshot: true,
           isArchived: true,
+          businessEntity: { select: { isDefault: true } },
           customer: { select: { name: true, shortName: true, salespersonUserId: true } },
           logisticsSuppliers: { select: { supplierId: true } },
         },

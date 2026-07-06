@@ -3,6 +3,7 @@ import { DetailField, UiCheckbox } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerDisplayName, customerLegalName } from "../../utils";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { CustomsDocumentPanel } from "./customs-documents-panel";
 import { DomesticLogisticsEditPanel } from "./edit-panel";
 import { firstItemValue, showContainerManagementFields } from "./helpers";
@@ -85,7 +86,7 @@ export function DomesticLogisticsRows({
   const cargoText = info?.cargoDescription || firstItemValue(info, "cargoName") || "-";
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
+      <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onToggle}>
         {selectionEnabled ? (
           <td className={styles.selectionColumn} onClick={(event) => event.stopPropagation()}>
             <UiCheckbox

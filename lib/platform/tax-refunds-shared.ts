@@ -55,7 +55,7 @@ export const taxRefundLightListSelect = Prisma.validator<Prisma.ReceivableOrderS
   taxRefundArchiveRemark: true,
   taxSubmittedAt: true,
   customer: { select: { name: true, shortName: true } },
-  businessEntity: { select: { id: true, name: true, shortName: true } },
+  businessEntity: { select: { id: true, name: true, shortName: true, isDefault: true } },
 });
 export type TaxRefundLightListOrder = Prisma.ReceivableOrderGetPayload<{ select: typeof taxRefundLightListSelect }>;
 export const taxRefundDocumentLightSelect = Prisma.validator<Prisma.OrderDocumentSelect>()({

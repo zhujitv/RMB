@@ -15,6 +15,7 @@ export type PaymentRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   paymentDate?: string;
   currency?: string;
   exchangeRate?: number;

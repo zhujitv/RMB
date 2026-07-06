@@ -22,6 +22,13 @@ export type CostInvoiceGroupCostDto = CostDto & {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityId?: string;
+  businessEntityName?: string;
+  businessEntityShortName?: string;
+  businessEntityDisplayName?: string;
+  businessEntityNameSnapshot?: string;
+  businessEntityIsDefault?: boolean;
+  businessEntity?: unknown;
 };
 export type CostListFilters = {
   keyword: Prisma.StringFilter | null;
@@ -64,7 +71,7 @@ export type CostWithInvoiceGroupRelations = Prisma.OrderCostGetPayload<{ include
 
 export function includeCostListRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
-    order: { include: { customer: true, salesperson: true } },
+    order: { include: { customer: true, businessEntity: true, salesperson: true } },
     supplier: true,
     documents: {
       where: { deletedAt: null },

@@ -70,12 +70,14 @@ export function businessEntityFieldsFromOrder(order: BusinessEntityOrderLike | n
     : null;
   const name = nonEmpty(order?.businessEntityNameSnapshot || entity?.name || "");
   const shortName = nonEmpty(entity?.shortName || "");
+  const businessEntityIsDefault = typeof entity?.isDefault === "boolean" ? entity.isDefault : true;
   return {
     businessEntityId: nonEmpty(order?.businessEntityId || entity?.id || ""),
     businessEntityName: name,
     businessEntityShortName: shortName,
     businessEntityDisplayName: shortName || name,
     businessEntityNameSnapshot: name,
+    businessEntityIsDefault,
     businessEntity: entity ? serializeBusinessEntity(entity) : null,
   };
 }

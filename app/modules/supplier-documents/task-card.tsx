@@ -18,6 +18,7 @@ import {
   supplierUploadKey,
   uniqueRequiredDocumentTypes,
 } from "./helpers";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 
 export function SupplierDocumentTaskCard({
   task,
@@ -62,7 +63,7 @@ export function SupplierDocumentTaskCard({
   const taskStatus = task.status || "待上传";
   const requirementText = (task.requiredDocumentLabels || []).join("、") || "-";
   return (
-    <article className={styles.supplierDocumentTaskCard}>
+    <article className={getBusinessEntityRowClass(task, styles, styles.supplierDocumentTaskCard)}>
       <div className={styles.supplierDocumentTaskRow}>
         <span className={styles.supplierDocumentTaskOrder} aria-label="订单号" title={task.orderNo || "-"}>
           {task.orderNo || "-"}

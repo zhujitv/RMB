@@ -88,7 +88,7 @@ const orderSelect = Prisma.validator<Prisma.ReceivableOrderSelect>()({
       salespersonUserId: true,
     },
   },
-  businessEntity: { select: { id: true, name: true, shortName: true } },
+  businessEntity: { select: { id: true, name: true, shortName: true, isDefault: true } },
   documents: {
     where: { deletedAt: null },
     select: {
@@ -214,6 +214,10 @@ function businessEntityName(order: CommunicationOrder) {
   return order.businessEntity?.shortName || order.businessEntity?.name || order.businessEntityNameSnapshot || "";
 }
 
+function businessEntityIsDefault(order: CommunicationOrder) {
+  return typeof order.businessEntity?.isDefault === "boolean" ? order.businessEntity.isDefault : true;
+}
+
 function shippingRecipientEmails(customer: CommunicationOrder["customer"] | null | undefined) {
   const configured = parseEmailList(customer?.shippingDocsEmails || []);
   return configured.length ? configured : parseEmailList(customer?.contactEmail || "");
@@ -246,6 +250,7 @@ function serializeCommunicationRow(order: CommunicationOrder) {
     customerShortName: customerShortName(order.customer || {}) || order.customerNameSnapshot,
     billOfLadingNo: order.blNo || "",
     businessEntityName: businessEntityName(order),
+    businessEntityIsDefault: businessEntityIsDefault(order),
     declarationDate: dateToInput(order.customsDeclarationDate),
     logisticsStatus: logisticsStatus(order),
     clearanceStatus: status.value,

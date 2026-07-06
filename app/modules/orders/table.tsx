@@ -2,6 +2,7 @@
 import { MoneyAmount } from "../../components";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import type { OrderRow } from "./model";
 import { orderCurrencyAmount } from "./utils";
 
@@ -24,7 +25,7 @@ export function OrderTableRows({
   const businessEntityDisplayName = order.businessEntityDisplayName || order.businessEntityShortName || businessEntityFullName;
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <tr className={getBusinessEntityRowClass(order, styles, styles.clickableRow)} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td className={styles.businessEntityColumn} title={businessEntityFullName || ""}>{businessEntityDisplayName || "-"}</td>

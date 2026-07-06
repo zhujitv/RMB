@@ -9,6 +9,7 @@
 .selectionColumn { composes: selectionColumn from "./table-pinning-columns.module.css"; composes: selectionColumn from "./tax-refund-list-columns.module.css"; }
 .customerColumn { composes: customerColumn from "./table-pinning-columns.module.css"; composes: customerColumn from "./tax-refund-list-columns.module.css"; }
 .businessEntityColumn { composes: businessEntityColumn from "./table-pinning-columns.module.css"; }
+.businessEntityOtherRow { composes: businessEntityOtherRow from "./table-pinning-columns.module.css"; }
 .blNoColumn { composes: blNoColumn from "./table-pinning-columns.module.css"; composes: blNoColumn from "./tax-refund-list-columns.module.css"; }
 .containerTypeColumn { composes: containerTypeColumn from "./table-pinning-columns.module.css"; composes: containerTypeColumn from "./tax-refund-list-columns.module.css"; }
 .amountColumn { composes: amountColumn from "./table-pinning-columns.module.css"; composes: amountColumn from "./tax-refund-list-columns.module.css"; }

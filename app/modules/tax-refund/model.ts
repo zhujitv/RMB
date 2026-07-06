@@ -79,6 +79,7 @@ export type TaxRefundRow = {
   businessEntityShortName?: string;
   businessEntityDisplayName?: string;
   businessEntityNameSnapshot?: string;
+  businessEntityIsDefault?: boolean;
   currency?: string;
   customsDeclarationNo?: string;
   customsDeclarationDate?: string | null;

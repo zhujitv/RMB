@@ -20,6 +20,7 @@ import {
 import { listCosts } from "./cost-records";
 import { listOrders, type OrderListRow } from "./orders-module";
 import { listPayments, type PaymentListRow } from "./payments-module";
+import { businessEntityFieldsFromOrder } from "./business-entities";
 import { logisticsCostTypeLabel } from "./logistics-cost-types";
 import { orderAccessWhere, scopeOrderForActor } from "./order-access";
 export { getAuditLogs } from "./audit-logs";
@@ -146,6 +147,7 @@ function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, comm
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,
     customerShortName: shortCustomerName,
+    ...businessEntityFieldsFromOrder(scoped),
     currency: scoped.currency,
     status: scoped.status,
     salespersonName: scoped.salesperson?.name || "",

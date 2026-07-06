@@ -3,6 +3,7 @@
 import { MoneyAmount } from "../../components";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import type { PaymentRow } from "./types";
 import { paymentStatusClass } from "./helpers";
 
@@ -15,7 +16,7 @@ export function PaymentTableRows({
 }) {
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <tr className={getBusinessEntityRowClass(payment, styles, styles.clickableRow)} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{payment.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(payment)}>{customerDisplayName(payment)}</td>
         <td>{payment.paymentDate || "-"}</td>

@@ -73,6 +73,7 @@ export type OrderRow = {
   businessEntityShortName?: string;
   businessEntityDisplayName?: string;
   businessEntityNameSnapshot?: string;
+  businessEntityIsDefault?: boolean;
   businessEntity?: BusinessEntityOption | null;
   currency?: string;
   exchangeRate?: number;

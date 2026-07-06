@@ -36,9 +36,48 @@
   background: #fff;
 }
 
+.businessEntityOtherRow {
+  --business-entity-row-background: #f3f8ff;
+  --business-entity-row-hover-background: #eaf4ff;
+  background: var(--business-entity-row-background);
+}
+
+.businessEntityOtherRow:hover {
+  background: var(--business-entity-row-hover-background);
+}
+
+.dataTable tr.businessEntityOtherRow > td {
+  background: var(--business-entity-row-background);
+}
+
+.dataTable tr.businessEntityOtherRow.clickableRow:hover > td,
+.dataTable tr.businessEntityOtherRow:hover > td {
+  background: var(--business-entity-row-hover-background);
+}
+
+.dataTable tr.businessEntityOtherRow.logisticsCompactRowActive > td {
+  background: #eff6ff;
+}
+
+.dataTable tr.businessEntityOtherRow.logisticsCompactRowActive:hover > td {
+  background: #dbeafe;
+}
+
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow td:nth-child(1),
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow td:nth-child(2) {
+  background: var(--business-entity-row-background);
+}
+
 .tablePinnedTwoCols .clickableRow:hover td:nth-child(1),
 .tablePinnedTwoCols .clickableRow:hover td:nth-child(2) {
   background: #f8fafc;
+}
+
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow.clickableRow:hover td:nth-child(1),
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow.clickableRow:hover td:nth-child(2),
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow:hover td:nth-child(1),
+.tablePinnedTwoCols .dataTable tr.businessEntityOtherRow:hover td:nth-child(2) {
+  background: var(--business-entity-row-hover-background);
 }
 
 .dataTable th.orderNoColumn,

@@ -76,6 +76,7 @@ export function OrderDetailDrawer({
         businessEntityNameSnapshot: targetBusinessEntity?.name || "",
         businessEntityShortName: targetBusinessEntity?.shortName || "",
         businessEntityDisplayName: targetBusinessEntity?.displayName || targetBusinessEntity?.shortName || targetBusinessEntity?.name || "",
+        businessEntityIsDefault: targetBusinessEntity?.isDefault !== false,
         businessEntity: targetBusinessEntity,
       };
       onBusinessEntityTransferred?.(nextOrder);

@@ -48,6 +48,9 @@ export function orderToReceivable(order: BusinessReportRow) {
     businessEntityName: order.businessEntityName || order.businessEntityNameSnapshot || "",
     businessEntityShortName: order.businessEntityShortName || "",
     businessEntityDisplayName: order.businessEntityDisplayName || order.businessEntityShortName || order.businessEntityName || order.businessEntityNameSnapshot || "",
+    businessEntityIsDefault: typeof order.businessEntityIsDefault === "boolean"
+      ? order.businessEntityIsDefault
+      : (reportRecord(order.businessEntity).isDefault === false ? false : true),
     salespersonName: order.salespersonName,
     country: order.country,
     currency: order.currency,

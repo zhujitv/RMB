@@ -3,6 +3,7 @@ import { useState } from "react";
 import { formatDate } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { customerDisplayName, customerLegalName } from "../../utils";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { completenessClass, statusClass, taxCompletenessTooltipGroups, taxRefundBillOfLadingNumbers, taxRowStatus, taxStatusLabel } from "./helpers";
 import { TAX_REFUND_STATUS_OPTIONS, type TaxRefundRow } from "./model";
 
@@ -62,7 +63,7 @@ export function TaxRefundTableRow({
   };
 
   return (
-    <tr className={styles.clickableRow} onClick={onViewDetail}>
+    <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onViewDetail}>
       <td className={styles.taxRefundOrderNoColumn}>{row.orderNo || "-"}</td>
       <td className={styles.taxRefundBlNoColumn} title={billOfLadingTitle || "-"}>
         {billOfLadingNumbers.length ? (

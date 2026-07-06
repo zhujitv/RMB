@@ -4,6 +4,7 @@ import { customerDisplayName, customerLegalName } from "../../utils";
 import { summarizeCurrencyTotals } from "../../../lib/platform/currency-totals";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { CostInvoiceActions } from "./invoice-actions";
 import { FACTORY_DOCUMENT_TYPES, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
 import { costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, singlePaymentVoucherCost } from "./helpers";
@@ -28,7 +29,7 @@ export function CostTableRows({
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <tr className={getBusinessEntityRowClass(cost, styles, styles.clickableRow)} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
         <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
@@ -96,7 +97,7 @@ export function CostInvoiceGroupRows({
   const exceptionLabel = group.invoiceExceptionLabel || "";
   const voucherCost = singlePaymentVoucherCost(group.costs || []);
   return (
-    <tr className={styles.clickableRow} onClick={onViewDetail}>
+    <tr className={getBusinessEntityRowClass(group, styles, styles.clickableRow)} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
       <td className={styles.customerColumn} title={customerLegalName(group)}>{customerDisplayName(group)}</td>
       <td className={styles.supplierColumn} title={supplierName}>{supplierName}</td>
@@ -173,7 +174,7 @@ export function CostOrderSummaryRows({
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onViewDetail}>
+      <tr className={getBusinessEntityRowClass(order, styles, styles.clickableRow)} onClick={onViewDetail}>
         <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td className={styles.amountColumn}>
@@ -240,4 +241,3 @@ export function recalculateOrderSummary(order: CostOrderSummary, costs: CostRow[
     },
   };
 }
-

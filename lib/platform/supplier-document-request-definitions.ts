@@ -123,6 +123,7 @@ export function supplierDocumentRequestInclude() {
         isArchived: true,
         taxSubmittedAt: true,
         taxRefundArchivedAt: true,
+        businessEntity: { select: { id: true, name: true, shortName: true, isDefault: true } },
         costs: {
           where: { deletedAt: null },
           include: { supplier: true },

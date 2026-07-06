@@ -55,6 +55,7 @@ export type SupplierFactoryCostSlot = {
 export type SupplierDocumentTask = {
   id: string;
   orderNo?: string;
+  businessEntityIsDefault?: boolean;
   supplierName?: string;
   requestedByName?: string;
   requiredDocumentTypes?: string[];

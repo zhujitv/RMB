@@ -31,6 +31,7 @@ export type ProfitRow = {
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
+  businessEntityIsDefault?: boolean;
   salespersonName?: string;
   commissionStatus?: string;
   commissionSettledByName?: string;

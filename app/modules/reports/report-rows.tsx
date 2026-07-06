@@ -1,6 +1,7 @@
 import { DetailField, UiCheckbox } from "../../components";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
+import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import {
   HIDDEN_DETAIL_KEYS,
   type ReportColumn,
@@ -29,7 +30,7 @@ export function ReportRows({
   const colSpan = visibleColumns.length + 2;
   return (
     <>
-      <tr className={styles.clickableRow} onClick={onToggle}>
+      <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onToggle}>
         <td>
           <span onClick={(event) => event.stopPropagation()}>
             <UiCheckbox
