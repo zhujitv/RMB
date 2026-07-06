@@ -13,6 +13,10 @@
       "schedule": "30 2 * * *"
     },
     {
+      "path": "/api/cron/supplier-document-ocr",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/shipsgo-sync",
       "schedule": "0 */6 * * *"
     }

@@ -23,6 +23,8 @@ const supplierModule = readSupplierDocumentsModuleSource();
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
 const rejectRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/reject/route.ts", "utf8");
+const supplierOcrCronRoute = readFileSync("app/api/cron/supplier-document-ocr/route.ts", "utf8");
+const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("supplier return OCR stores tasks and fields in independent OCR tables", () => {
   assert.match(schema, /model OcrTask/);
@@ -49,6 +51,17 @@ test("supplier document page silently polls only while OCR is processing", () =>
   assert.match(supplierModule, /window\.setInterval/);
   assert.match(supplierModule, /loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
   assert.match(supplierModule, /window\.clearInterval/);
+});
+
+test("supplier OCR has a cron worker fallback for processing tasks", () => {
+  assert.match(service, /export async function runPendingSupplierDocumentOcrTasks/);
+  assert.match(service, /updatedAt: \{ lt: readyBefore \}/);
+  assert.match(service, /await runSupplierDocumentOcrTask\(task\.id\)/);
+  assert.match(service, /supplier-document-ocr-pending-worker/);
+  assert.match(supplierOcrCronRoute, /assertCronSecret\(request\)/);
+  assert.match(supplierOcrCronRoute, /runPendingSupplierDocumentOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
+  assert.match(vercelConfig, /"path": "\/api\/cron\/supplier-document-ocr"/);
+  assert.match(vercelConfig, /"\*\/5 \* \* \* \*"/);
 });
 
 test("supplier OCR validates invoice and contract against supplier, business entity, amount, and duplicates", () => {

@@ -86,6 +86,82 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
   }
 }
 
+export async function runPendingSupplierDocumentOcrTasks(limit = 5, minAgeMs = 60_000) {
+  const safeLimit = Math.min(Math.max(Math.trunc(Number(limit) || 5), 1), 20);
+  const readyBefore = new Date(Date.now() - Math.max(Math.trunc(Number(minAgeMs) || 60_000), 15_000));
+  const tasks = await prisma.ocrTask.findMany({
+    where: {
+      module: SUPPLIER_DOCUMENT_OCR_MODULE,
+      status: OCR_STATUS_PROCESSING,
+      validationStatus: "PROCESSING",
+      updatedAt: { lt: readyBefore },
+    },
+    select: { id: true, documentId: true, requestId: true, orderId: true, documentType: true, updatedAt: true },
+    orderBy: { updatedAt: "asc" },
+    take: safeLimit,
+  });
+  const result = {
+    scanned: tasks.length,
+    processed: 0,
+    failed: 0,
+    skipped: 0,
+    taskIds: tasks.map((task) => task.id),
+  };
+  for (const task of tasks) {
+    try {
+      const claimed = await prisma.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          status: OCR_STATUS_PROCESSING,
+          validationStatus: "PROCESSING",
+          updatedAt: { lte: task.updatedAt },
+        },
+        data: {
+          updatedAt: new Date(),
+          errorMessage: null,
+        },
+      });
+      if (!claimed.count) {
+        result.skipped += 1;
+        continue;
+      }
+      await runSupplierDocumentOcrTask(task.id);
+      result.processed += 1;
+    } catch (error) {
+      result.failed += 1;
+      await prisma.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          status: OCR_STATUS_PROCESSING,
+          validationStatus: "PROCESSING",
+        },
+        data: {
+          status: OCR_STATUS_FAILED,
+          validationStatus: VALIDATION_FAILED,
+          errorMessage: supplierOcrErrorText(error).slice(0, 1000),
+          validationJson: {
+            issues: [{ level: "manual", message: supplierDocumentOcrFailureMessage(error) }],
+            parserStatus: "OCR后台任务执行失败",
+          },
+        },
+      }).catch((updateError) => {
+        logServerError("供应商资料回传OCR后台任务失败状态回写失败", updateError, { taskId: task.id });
+      });
+      logServerError("供应商资料回传OCR后台任务执行失败", error, {
+        taskId: task.id,
+        documentId: task.documentId,
+        requestId: task.requestId,
+        orderId: task.orderId,
+        documentType: task.documentType,
+      });
+    }
+  }
+  if (tasks.length) {
+    console.info("supplier-document-ocr-pending-worker", result);
+  }
+  return result;
+}
+
 export function assertInternalOcrManager(actor: ActorLike) {
   if (!actor?.id || !INTERNAL_OCR_ROLES.includes(String(actor.role || ""))) {
     throw codedError("没有权限处理 OCR 校验结果。", 403, "OCR_MANAGE_PERMISSION_DENIED");
