@@ -10,6 +10,7 @@ import {
   OCR_STALE_PROCESSING_MESSAGE,
   VALIDATION_CONFIRMED,
   VALIDATION_FAILED,
+  VALIDATION_PASSED,
   VALIDATION_REJECTED,
   type ActorLike,
   type AuditRequestLike,
@@ -31,9 +32,8 @@ import {
 
 export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
   assertWrite(actor, "supplierDocuments");
-  assertInternalOcrManager(actor);
   try {
-    const document = await loadSupplierReturnDocument(documentId, requestId);
+    const document = await loadSupplierReturnDocument(documentId, requestId, actor);
     const before = await prisma.ocrTask.findFirst({
       where: { documentId, requestId },
       orderBy: [{ createdAt: "desc" }],
@@ -41,12 +41,9 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
     await cancelProcessingSupplierDocumentOcrTasks(documentId, requestId);
     const task = await createSupplierDocumentOcrTask(document);
     if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
-    void runNonCriticalTask("资料回传OCR重新识别后台执行", async () => {
-      const result = await runSupplierDocumentOcrTaskWithTimeout(task.id);
-      await writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result);
-      return result;
-    }, { context: { documentId, requestId, taskId: task.id, documentType: document.documentType }, slowMs: 3000 });
-    return serializeSupplierDocumentOcrTask(task);
+    const result = await runSupplierDocumentOcrTaskWithTimeout(task.id);
+    await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
+    return serializeSupplierDocumentOcrTask(result);
   } catch (error: unknown) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
@@ -190,5 +187,41 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
     businessEntityName: String(validationJson.businessEntityName || ""),
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+  };
+}
+
+export function supplierDocumentOcrApiResult(ocrTask: ReturnType<typeof serializeSupplierDocumentOcrTask>) {
+  const validationStatus = String(ocrTask?.validationStatus || "");
+  const statusText = String(ocrTask?.status || "");
+  const issues = Array.isArray(ocrTask?.issues) ? ocrTask.issues : [];
+  const errorMessage = String(ocrTask?.errorMessage || issues[0]?.message || "");
+  const timeout = /超时|TIMEOUT/i.test([errorMessage, ...issues.map((issue) => issue.message || "")].join(" "));
+  if (timeout) {
+    return {
+      status: "TIMEOUT",
+      message: "OCR识别超时，请重新识别或人工确认。",
+      result: ocrTask,
+      error: errorMessage || "OCR识别超时",
+    };
+  }
+  if (validationStatus === VALIDATION_PASSED || statusText === OCR_STATUS_PASSED) {
+    return {
+      status: "PASSED",
+      message: "OCR校验通过",
+      result: ocrTask,
+    };
+  }
+  if (validationStatus === VALIDATION_FAILED || statusText.includes("失败")) {
+    return {
+      status: "FAILED",
+      message: "OCR识别失败，请人工核对或重新上传",
+      result: ocrTask,
+      error: errorMessage || "具体失败原因未返回",
+    };
+  }
+  return {
+    status: "NEEDS_REVIEW",
+    message: "OCR已识别，但部分字段需人工确认",
+    result: ocrTask,
   };
 }

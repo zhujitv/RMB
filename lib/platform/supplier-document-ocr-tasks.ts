@@ -3,6 +3,7 @@ import { readR2Object } from "../r2";
 import { prisma } from "../prisma";
 import { logServerError, codedError } from "./shared-base-utils";
 import { ORDER_COST_STATUS_VOID } from "./shared-cost-constants";
+import { isProductSupplierOperatorRole } from "./shared-constants";
 import { assertRead } from "./shared-auth";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
 import { saveOcrRawResult } from "./ocr-raw-results";
@@ -313,7 +314,7 @@ export function throwIfSupplierOcrTableMissing(error: unknown): never | void {
   );
 }
 
-export async function loadSupplierReturnDocument(documentId: string, requestId = ""): Promise<OcrDocumentRow> {
+export async function loadSupplierReturnDocument(documentId: string, requestId = "", actor: ActorLike = null): Promise<OcrDocumentRow> {
   if (!documentId) throw codedError("缺少 supplierReturnDocumentId。", 400, "SUPPLIER_RETURN_DOCUMENT_ID_REQUIRED");
   const document = await prisma.orderDocument.findFirst({
     where: {
@@ -345,6 +346,9 @@ export async function loadSupplierReturnDocument(documentId: string, requestId =
   }
   if (requestId && document.factoryDocumentRequestId !== requestId) {
     throw codedError("回传资料文件与当前任务不匹配。", 400, "SUPPLIER_DOCUMENT_REQUEST_MISMATCH");
+  }
+  if (isProductSupplierOperatorRole(actor?.role) && document.supplierId !== actor?.supplierId) {
+    throw codedError("回传资料文件不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_NOT_FOUND");
   }
   if (!document.storageKey) {
     throw codedError("文件记录存在，但文件地址无法访问。", 404, "SUPPLIER_DOCUMENT_FILE_MISSING");
@@ -404,9 +408,8 @@ export async function runSupplierDocumentOcrForDocument(
 ) {
   if (actor) {
     assertRead(actor, "supplierDocuments");
-    assertInternalOcrManager(actor);
   }
-  const document = await loadSupplierReturnDocument(documentId, options.requestId || "");
+  const document = await loadSupplierReturnDocument(documentId, options.requestId || "", actor);
   let task: OcrTaskRow | null = null;
   try {
     task = options.taskId

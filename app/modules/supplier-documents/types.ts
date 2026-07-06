@@ -92,6 +92,7 @@ export type SupplierDocumentsResponse = {
 
 export type SupplierUploadResponse = {
   request?: SupplierDocumentTask;
+  document?: SupplierDocument;
   message?: string;
 };
 
@@ -107,6 +108,9 @@ export type SupplierDocumentNoticeResponse = {
 
 export type SupplierDocumentOcrResponse = {
   success?: boolean;
+  status?: "PASSED" | "NEEDS_REVIEW" | "FAILED" | "TIMEOUT" | string;
   ocrTask?: SupplierDocumentOcrTask | null;
+  result?: SupplierDocumentOcrTask | null;
+  error?: string;
   message?: string;
 };

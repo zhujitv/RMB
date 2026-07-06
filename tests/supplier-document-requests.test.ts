@@ -5,6 +5,7 @@ import { readCssModuleGraphSource, readNotificationEngineSource, readSettingsMod
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readSupplierDocumentRequestsSource();
+const uploadService = readFileSync("lib/platform/supplier-document-request-upload.ts", "utf8");
 const notificationEngine = readNotificationEngineSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
@@ -359,14 +360,12 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 
-test("supplier document upload is not blocked when OCR task creation fails", () => {
-  assert.match(service, /let ocrWarning = ""/);
-  assert.match(service, /let ocrTaskId = ""/);
-  assert.match(service, /供应商回传资料上传成功但OCR任务创建失败/);
-  assert.match(service, /message: ocrWarning \? `上传成功；\$\{ocrWarning\}` : \(ocrTaskId \? "上传成功，OCR识别中" : "上传成功"\)/);
-  assert.match(service, /void runNonCriticalTask\("产品供应商回传资料OCR后台识别"/);
-  assert.match(service, /return runSupplierDocumentOcrTaskWithTimeout\(ocrTask\.id\)/);
-  assert.doesNotMatch(service, /const completedTask = await runNonCriticalTask\("产品供应商回传资料OCR识别"/);
-  assert.doesNotMatch(service, /completedTask\?\.status === "OCR识别失败，需人工核对"/);
-  assert.doesNotMatch(service, /const ocrTask = await createSupplierDocumentOcrTaskForUpload\(document\.id\);[\s\S]{0,180}throw error/);
+test("supplier document upload only saves the file before foreground OCR", () => {
+  assert.match(uploadService, /message: "上传成功"/);
+  assert.doesNotMatch(uploadService, /let ocrWarning = ""/);
+  assert.doesNotMatch(uploadService, /let ocrTaskId = ""/);
+  assert.doesNotMatch(uploadService, /供应商回传资料上传成功但OCR任务创建失败/);
+  assert.doesNotMatch(uploadService, /产品供应商回传资料OCR后台识别/);
+  assert.doesNotMatch(uploadService, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
+  assert.doesNotMatch(uploadService, /runSupplierDocumentOcrTaskWithTimeout\(ocrTask\.id\)/);
 });

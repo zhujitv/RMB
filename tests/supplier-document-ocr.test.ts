@@ -35,14 +35,20 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
   assert.match(schema, /request\s+SupplierDocumentRequest\?/);
 });
 
-test("supplier document upload creates OCR task without changing tax refund module", () => {
-  assert.match(supplierRequests, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
-  assert.match(supplierRequests, /runSupplierDocumentOcrTaskWithTimeout\(ocrTask\.id\)/);
+test("supplier document upload triggers foreground OCR after the file is saved", () => {
+  assert.match(supplierModule, /async function recognizeUploadedDocument/);
+  assert.match(supplierModule, /正在识别，请勿关闭页面/);
+  assert.match(supplierModule, /documents\/\$\{encodeURIComponent\(document\.id\)\}\/ocr/);
+  assert.match(supplierModule, /timeoutMs: 65_000/);
+  assert.match(supplierModule, /data\.ocrTask \|\| data\.result/);
+  assert.match(supplierModule, /data\.status === "FAILED" \|\| data\.status === "TIMEOUT"/);
+  assert.match(supplierRequests, /message: "上传成功"/);
   assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
   assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
   assert.match(supplierRequests, /已跳过OCR附加信息/);
   assert.doesNotMatch(supplierRequestList, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
+  assert.doesNotMatch(supplierRequests, /产品供应商回传资料OCR后台识别/);
 });
 
 test("supplier document page silently polls only while OCR is processing", () => {
@@ -51,6 +57,16 @@ test("supplier document page silently polls only while OCR is processing", () =>
   assert.match(supplierModule, /window\.setInterval/);
   assert.match(supplierModule, /loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
   assert.match(supplierModule, /window\.clearInterval/);
+});
+
+test("supplier document foreground OCR disables repeated actions while waiting", () => {
+  assert.match(supplierModule, /const documentOcrBusy = document \? ocrBusyKey\.startsWith/);
+  assert.match(supplierModule, /disabled=\{uploading \|\| documentOcrBusy\}/);
+  assert.match(supplierModule, /const documentBusy = busyKey\.startsWith/);
+  assert.match(supplierModule, /<OcrWaitingInline \/>/);
+  assert.match(supplierModule, /<ButtonSpinnerText text="识别中\.\.\." \/>/);
+  assert.match(supplierModule, /disabled=\{documentBusy\}/);
+  assert.match(supplierModule, /supplierDocumentOcrSpinner/);
 });
 
 test("supplier OCR has a cron worker fallback for processing tasks", () => {
@@ -334,27 +350,31 @@ test("supplier document UI only shows manual OCR confirmation for abnormal resul
 
 test("supplier OCR routes expose re-recognize, confirm, and reject operations", () => {
   assert.match(ocrRoute, /rerunSupplierDocumentOcr/);
+  assert.match(ocrRoute, /supplierDocumentOcrApiResult/);
+  assert.match(ocrRoute, /\.\.\.ocrResult/);
   assert.match(confirmRoute, /confirmSupplierDocumentOcr/);
   assert.match(rejectRoute, /rejectSupplierDocumentOcr/);
   assert.match(rejectRoute, /parseJsonBody\(request, \{ allowEmpty: true \}\)/);
 });
 
 test("supplier OCR rerun loads supplier return document and exposes actionable failures", () => {
-  assert.match(service, /loadSupplierReturnDocument\(documentId, requestId\)/);
+  assert.match(service, /loadSupplierReturnDocument\(documentId, requestId, actor\)/);
   assert.match(service, /缺少 supplierReturnDocumentId/);
   assert.match(service, /SUPPLIER_DOCUMENT_REQUEST_MISMATCH/);
   assert.match(service, /SUPPLIER_DOCUMENT_FILE_MISSING/);
   assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
   assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
   assert.match(service, /cancelProcessingSupplierDocumentOcrTasks\(documentId, requestId\)/);
-  assert.match(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
-  assert.match(service, /runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
-  assert.doesNotMatch(service, /const result = await runSupplierDocumentOcrTask\(task\.id\);[\s\S]{0,220}return serializeSupplierDocumentOcrTask\(result\)/);
-  assert.match(ocrRoute, /已开始重新识别，OCR识别中/);
+  assert.match(service, /const result = await runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
+  assert.match(service, /return serializeSupplierDocumentOcrTask\(result\)/);
+  assert.match(service, /status: "TIMEOUT"/);
+  assert.match(service, /OCR识别超时，请重新识别或人工确认。/);
+  assert.doesNotMatch(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
+  assert.doesNotMatch(ocrRoute, /已开始重新识别，OCR识别中/);
   assert.match(service, /normalizeSupplierReturnDocumentType/);
   assert.match(service, /VAT_INVOICE/);
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);
-  assert.match(supplierModule, /OCR识别失败，需人工核对/);
+  assert.match(supplierModule, /OCR识别失败，请人工核对或重新上传/);
 });
 
 test("supplier OCR missing table errors are converted into migration guidance", () => {

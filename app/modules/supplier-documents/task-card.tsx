@@ -134,6 +134,7 @@ export function SupplierDocumentTaskCard({
                 const uploadCostId = document?.costId || defaultUploadCostId;
                 const key = supplierUploadKey(task.id, documentType, uploadCostId);
                 const uploading = uploadingKey === key;
+                const documentOcrBusy = document ? ocrBusyKey.startsWith(`${task.id}:${document.id}:`) : false;
                 const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
                 const fileName = document ? supplierDocumentFileName(document) : "";
                 const fileWarning = document ? supplierDocumentFileWarning(document) : "";
@@ -174,11 +175,11 @@ export function SupplierDocumentTaskCard({
                     </div>
                     <div className={styles.supplierDocumentUploadControls}>
                       <label className={styles.supplierDocumentUploadButton}>
-                        {uploading ? "上传中..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
+                        {uploading ? "上传中..." : documentOcrBusy ? "正在识别..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
                         <input
                           type="file"
                           accept={PDF_UPLOAD_ACCEPT}
-                          disabled={uploading}
+                          disabled={uploading || documentOcrBusy}
                           hidden
                           onChange={(event) => {
                             onUpload(task, documentType, event.target.files?.[0] || null, uploadCostId);
@@ -217,23 +218,33 @@ function SupplierDocumentOcrPanel({
   onReject: (task: SupplierDocumentTask, document: SupplierDocument) => void;
 }) {
   const ocrTask = document.ocrTask;
+  const documentBusy = busyKey.startsWith(`${task.id}:${document.id}:`);
+  const rerunBusy = busyKey === supplierOcrActionKey(task.id, document.id, "rerun");
+  const confirmBusy = busyKey === supplierOcrActionKey(task.id, document.id, "confirm");
+  const rejectBusy = busyKey === supplierOcrActionKey(task.id, document.id, "reject");
   if (!ocrTask) {
     return (
       <div className={styles.supplierDocumentOcrPanel}>
         <div className={styles.supplierDocumentOcrHeader}>
           <strong>OCR 校验结果</strong>
-          <span className={`${styles.statusPill} ${styles.statusMuted}`}>未识别</span>
+          <span className={`${styles.statusPill} ${documentBusy ? styles.statusWarning : styles.statusMuted}`}>
+            {documentBusy ? "OCR识别中" : "未识别"}
+          </span>
         </div>
-        <p className={styles.supplierDocumentUploadHint}>该文件暂未生成 OCR 校验结果。</p>
+        {documentBusy ? (
+          <OcrWaitingInline />
+        ) : (
+          <p className={styles.supplierDocumentUploadHint}>该文件暂未生成 OCR 校验结果。</p>
+        )}
         {canManageOcr ? (
           <div className={styles.supplierDocumentOcrActions}>
             <button
               className={styles.secondaryButton}
               type="button"
               onClick={() => onRerun(task, document)}
-              disabled={busyKey === supplierOcrActionKey(task.id, document.id, "rerun")}
+              disabled={documentBusy}
             >
-              {busyKey === supplierOcrActionKey(task.id, document.id, "rerun") ? "识别中..." : "重新识别"}
+              {rerunBusy ? <ButtonSpinnerText text="识别中..." /> : "重新识别"}
             </button>
           </div>
         ) : null}
@@ -248,8 +259,11 @@ function SupplierDocumentOcrPanel({
     <div className={styles.supplierDocumentOcrPanel}>
       <div className={styles.supplierDocumentOcrHeader}>
         <strong>OCR 校验结果</strong>
-        <span className={`${styles.statusPill} ${supplierDocumentStatusClass(status)}`}>{status}</span>
+        <span className={`${styles.statusPill} ${supplierDocumentStatusClass(documentBusy ? "OCR识别中" : status)}`}>
+          {documentBusy ? "OCR识别中" : status}
+        </span>
       </div>
+      {documentBusy ? <OcrWaitingInline /> : null}
       <div className={styles.supplierDocumentOcrMeta}>
         <span>文件类型：{DOCUMENT_LABELS[document.documentType || ""] || document.documentType || "-"}</span>
         <span>更新时间：{formatDateTime(ocrTask.updatedAt)}</span>
@@ -290,9 +304,9 @@ function SupplierDocumentOcrPanel({
             className={styles.secondaryButton}
             type="button"
             onClick={() => onRerun(task, document)}
-            disabled={busyKey === supplierOcrActionKey(task.id, document.id, "rerun")}
+            disabled={documentBusy}
           >
-            {busyKey === supplierOcrActionKey(task.id, document.id, "rerun") ? "识别中..." : "重新识别"}
+            {rerunBusy ? <ButtonSpinnerText text="识别中..." /> : "重新识别"}
           </button>
           {requiresManualReview ? (
             <>
@@ -300,23 +314,41 @@ function SupplierDocumentOcrPanel({
                 className={styles.primaryButtonCompact}
                 type="button"
                 onClick={() => onConfirm(task, document)}
-                disabled={busyKey === supplierOcrActionKey(task.id, document.id, "confirm")}
+                disabled={documentBusy}
               >
-                {busyKey === supplierOcrActionKey(task.id, document.id, "confirm") ? "确认中..." : "人工确认通过"}
+                {confirmBusy ? "确认中..." : "人工确认通过"}
               </button>
               <button
                 className={styles.dangerButton}
                 type="button"
                 onClick={() => onReject(task, document)}
-                disabled={busyKey === supplierOcrActionKey(task.id, document.id, "reject")}
+                disabled={documentBusy}
               >
-                {busyKey === supplierOcrActionKey(task.id, document.id, "reject") ? "驳回中..." : "驳回重传"}
+                {rejectBusy ? "驳回中..." : "驳回重传"}
               </button>
             </>
           ) : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function OcrWaitingInline() {
+  return (
+    <div className={styles.supplierDocumentOcrWaiting}>
+      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+      <span>正在识别，请勿关闭页面</span>
+    </div>
+  );
+}
+
+function ButtonSpinnerText({ text }: { text: string }) {
+  return (
+    <span className={styles.supplierDocumentOcrButtonLoading}>
+      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+      <span>{text}</span>
+    </span>
   );
 }
 

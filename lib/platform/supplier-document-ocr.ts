@@ -9,4 +9,10 @@ export {
   runPendingSupplierDocumentOcrTasks,
   refreshSupplierDocumentRequestQualification,
 } from "./supplier-document-ocr-tasks";
-export { rerunSupplierDocumentOcr, confirmSupplierDocumentOcr, rejectSupplierDocumentOcr, serializeSupplierDocumentOcrTask } from "./supplier-document-ocr-actions";
+export {
+  rerunSupplierDocumentOcr,
+  confirmSupplierDocumentOcr,
+  rejectSupplierDocumentOcr,
+  serializeSupplierDocumentOcrTask,
+  supplierDocumentOcrApiResult,
+} from "./supplier-document-ocr-actions";

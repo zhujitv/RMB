@@ -44,6 +44,11 @@ export function useSupplierDocumentOcrActions({
     }));
   }
 
+  function ocrFailureMessage(data: SupplierDocumentOcrResponse) {
+    const parts = [data.message, data.error].map((value) => String(value || "").trim()).filter(Boolean);
+    return parts.length ? [...new Set(parts)].join("：") : "OCR识别失败，请人工核对或重新上传";
+  }
+
   async function rerunOcr(task: SupplierDocumentTask, document: SupplierDocument) {
     const busyKey = supplierOcrActionKey(task.id, document.id, "rerun");
     setOcrBusyKey(busyKey);
@@ -52,16 +57,16 @@ export function useSupplierDocumentOcrActions({
     try {
       const data = await apiJson<SupplierDocumentOcrResponse>(
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr`,
-        { method: "POST" },
+        { method: "POST", timeoutMs: 65_000 },
       );
-      updateDocumentOcrTask(task.id, document.id, data.ocrTask);
-      const taskStatus = data.ocrTask?.status || "";
-      if (taskStatus.includes("失败")) {
-        setError(data.ocrTask?.errorMessage || data.message || "OCR识别失败，需人工核对");
+      const ocrTask = data.ocrTask || data.result;
+      updateDocumentOcrTask(task.id, document.id, ocrTask);
+      if (data.status === "FAILED" || data.status === "TIMEOUT") {
+        setError(ocrFailureMessage(data));
       } else {
-        setNotice(data.message || "已重新识别");
-        void loadRows(page, pageSize, submittedKeyword, { silent: true });
+        setNotice(data.message || "OCR校验结果已更新");
       }
+      void loadRows(page, pageSize, submittedKeyword, { silent: true });
     } catch (ocrError) {
       setError(apiErrorMessage(ocrError, "重新识别失败"));
     } finally {

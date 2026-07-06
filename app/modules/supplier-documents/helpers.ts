@@ -43,10 +43,13 @@ export function uniqueRequiredDocumentTypes(requiredTypes: string[]) {
 }
 
 export function apiErrorMessage(error: unknown, fallback: string) {
+  const cleanMessage = (message: string) => message
+    .replace(/。服务器返回非JSON响应，请查看服务端日志。?/g, "")
+    .trim();
   if (error instanceof ApiRequestError) {
-    return error.code ? `${error.message}（${error.code}）` : error.message;
+    return cleanMessage(error.message || fallback);
   }
-  return error instanceof Error ? error.message : fallback;
+  return error instanceof Error ? cleanMessage(error.message || fallback) : fallback;
 }
 
 export function latestDocumentByType(documents: SupplierDocument[], documentType: string) {

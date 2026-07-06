@@ -42,6 +42,9 @@
 .supplierDocumentOcrFields { composes: supplierDocumentOcrFields from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentOcrIssues { composes: supplierDocumentOcrIssues from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentOcrActions { composes: supplierDocumentOcrActions from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentOcrWaiting { composes: supplierDocumentOcrWaiting from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentOcrButtonLoading { composes: supplierDocumentOcrButtonLoading from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentOcrSpinner { composes: supplierDocumentOcrSpinner from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentOcrRawText { composes: supplierDocumentOcrRawText from "./supplier-request-cost-list.module.css"; composes: supplierDocumentOcrRawText from "./supplier-task-summary.module.css"; }
 .supplierDocumentUploadHint { composes: supplierDocumentUploadHint from "./supplier-task-summary.module.css"; }
 .customsUploadCard { composes: customsUploadCard from "./supplier-task-summary.module.css"; }
