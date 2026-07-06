@@ -121,11 +121,17 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /OCR原文已识别但解析失败，请人工核对。/);
   assert.match(service, /parserStatus: latestRawText \? "OCR原文已识别但解析失败" : "OCR原文未识别"/);
   assert.match(service, /supplierDocumentOcrFailureMessage/);
-  assert.match(service, /OCR 服务异常，请稍后点击“重新识别”/);
+  assert.match(service, /supplierDocumentOcrFailureKind/);
+  assert.match(service, /supplierDocumentOcrFailureMessageForKind/);
+  assert.match(service, /supplierOcrFailureTechnicalDetails/);
+  assert.match(service, /OCR 连接超时，请稍后点击“重新识别”/);
+  assert.match(service, /OCR 配置缺失，请联系管理员到系统设置检查 OCR 配置。/);
+  assert.match(service, /OCR 额度不足或调用频率受限，请检查阿里云账户额度。/);
   assert.match(service, /OCR_PERMISSION_FAILURE_MESSAGE/);
   assert.match(service, /ocrServiceNotOpen/);
   assert.match(service, /sanitizeSupplierOcrMessage\(task\.errorMessage, ""\)/);
-  assert.match(service, /sanitizeSupplierOcrMessage\(record\.message, ""\)/);
+  assert.match(service, /const rawMessage = String\(record\.message \|\| ""\)/);
+  assert.match(service, /sanitizeSupplierOcrMessage\(rawMessage, ""\)/);
   assert.match(service, /OCR正在识别，请稍候。/);
   assert.match(service, /errorMessage\s*\?\s*\[\{ level: "manual", message: errorMessage, field: "" \}\]/);
   assert.match(service, /technicalError: originalMessage\.slice\(0, 1000\)/);
@@ -133,6 +139,23 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(supplierModule, /查看 OCR 原始文本/);
   assert.match(supplierModule, /ocrTask\.rawText/);
   assert.match(supplierModule, /styles\.supplierDocumentOcrRawText/);
+});
+
+test("supplier OCR failure messages are actionable by root cause", () => {
+  assert.match(service, /return "TIMEOUT"/);
+  assert.match(service, /return "CONFIG_MISSING"/);
+  assert.match(service, /return "AUTH_FAILED"/);
+  assert.match(service, /return "QUOTA_LIMITED"/);
+  assert.match(service, /return "FILE_READ_FAILED"/);
+  assert.match(service, /return "PDF_PROCESS_FAILED"/);
+  assert.match(service, /return "STRUCTURE_INVALID"/);
+  assert.match(service, /OCR 连接超时，请稍后点击“重新识别”/);
+  assert.match(service, /OCR 配置缺失，请联系管理员到系统设置检查 OCR 配置。/);
+  assert.match(service, /OCR AccessKey\/Secret 配置错误或接口权限不足，请联系管理员。/);
+  assert.match(service, /OCR 额度不足或调用频率受限，请检查阿里云账户额度。/);
+  assert.match(service, /文件无法读取，请重新上传 PDF 后再识别。/);
+  assert.match(service, /PDF 处理失败，请重新上传清晰、未加密的 PDF。/);
+  assert.match(service, /OCR 返回结构异常，请点击重新识别或人工确认。/);
 });
 
 test("VAT invoice parser extracts buyer seller totals and item from Aliyun raw text", () => {

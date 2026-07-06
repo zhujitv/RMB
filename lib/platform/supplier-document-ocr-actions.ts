@@ -14,6 +14,8 @@ import {
   type ActorLike,
   type AuditRequestLike,
   type OcrTaskRow,
+  supplierDocumentOcrFailureMessage,
+  supplierDocumentOcrFailureMessageForKind,
   sanitizeSupplierOcrMessage,
   supplierOcrProcessingStaleMs,
 } from "./supplier-document-ocr-shared";
@@ -120,17 +122,41 @@ export function serializeSupplierDocumentOcrTask(task: OcrTaskRow | null | undef
   const validationJson = task.validationJson && typeof task.validationJson === "object" && !Array.isArray(task.validationJson)
     ? task.validationJson as Record<string, unknown>
     : {};
+  const failureKind = String(validationJson.failureKind || "");
+  const technicalError = String(validationJson.technicalError || "");
+  const storedErrorLooksGeneric = /OCR 服务异常|服务异常|请联系管理员查看服务器日志/i.test(String(task.errorMessage || ""));
+  const fallbackFailureMessage = failureKind
+    ? supplierDocumentOcrFailureMessageForKind(failureKind)
+    : technicalError && storedErrorLooksGeneric
+      ? supplierDocumentOcrFailureMessage(Object.assign(new Error(technicalError), {
+          code: String(validationJson.errorCode || ""),
+          details: {
+            httpStatus: validationJson.httpStatus,
+            errorCode: validationJson.errorCode,
+            errorMessage: validationJson.errorMessage,
+            responseBody: validationJson.responseBody,
+          },
+        }))
+      : "";
   const persistedIssues = Array.isArray(validationJson.issues)
     ? validationJson.issues.map((issue) => {
         const record = issue && typeof issue === "object" ? issue as Record<string, unknown> : {};
+        const rawMessage = String(record.message || "");
+        const message = /OCR 服务异常|服务异常|请联系管理员查看服务器日志/i.test(rawMessage) && fallbackFailureMessage
+          ? fallbackFailureMessage
+          : sanitizeSupplierOcrMessage(rawMessage, "");
         return {
           level: String(record.level || "manual"),
-          message: sanitizeSupplierOcrMessage(record.message, ""),
+          message,
           field: String(record.field || ""),
         };
       }).filter((issue) => issue.message)
     : [];
-  const errorMessage = staleProcessing ? OCR_STALE_PROCESSING_MESSAGE : sanitizeSupplierOcrMessage(task.errorMessage, "");
+  const errorMessage = staleProcessing
+    ? OCR_STALE_PROCESSING_MESSAGE
+    : fallbackFailureMessage && storedErrorLooksGeneric
+      ? fallbackFailureMessage
+      : sanitizeSupplierOcrMessage(task.errorMessage, "");
   const issues = persistedIssues.length
     ? persistedIssues
     : staleProcessing

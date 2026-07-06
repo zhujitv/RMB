@@ -27,7 +27,9 @@ import {
   sanitizeSupplierOcrMessage,
   shortRawText,
   supplierDocumentLabels,
+  supplierDocumentOcrFailureKind,
   supplierDocumentOcrFailureMessage,
+  supplierOcrFailureTechnicalDetails,
   supplierOcrErrorText,
   supplierOcrTaskTimeoutMs,
   supplierOcrProcessingStaleMs,
@@ -80,6 +82,9 @@ export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string
         validationJson: {
           issues: [{ level: "manual", message: OCR_STALE_PROCESSING_MESSAGE }],
           parserStatus: "OCR后台任务超时",
+          failureKind: "TIMEOUT",
+          technicalError: "Supplier document OCR task stayed PROCESSING beyond the stale threshold.",
+          errorCode: "SUPPLIER_DOCUMENT_OCR_STALE_TIMEOUT",
         },
       },
     });
@@ -133,6 +138,8 @@ async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown,
   });
   const originalMessage = supplierOcrErrorText(error);
   const message = supplierDocumentOcrFailureMessage(error);
+  const failureKind = supplierDocumentOcrFailureKind(error);
+  const technicalDetails = supplierOcrFailureTechnicalDetails(error);
   const saved = await prisma.ocrTask.update({
     where: { id: taskId },
     data: {
@@ -142,7 +149,15 @@ async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown,
       validationJson: {
         issues: [{ level: "manual", message }],
         parserStatus,
+        failureKind,
         technicalError: originalMessage.slice(0, 1000),
+        provider: technicalDetails.provider,
+        apiName: technicalDetails.apiName,
+        requestId: technicalDetails.requestId,
+        httpStatus: technicalDetails.httpStatus,
+        errorCode: technicalDetails.errorCode,
+        errorMessage: technicalDetails.errorMessage,
+        responseBody: technicalDetails.responseBody,
       },
     },
     include: { results: true },
@@ -176,6 +191,8 @@ export async function runSupplierDocumentOcrTaskWithTimeout(taskId: string, time
       logServerError("供应商资料回传OCR后台任务超时", error, {
         taskId,
         timeoutMs,
+        failureKind: supplierDocumentOcrFailureKind(error),
+        technicalDetails: supplierOcrFailureTechnicalDetails(error),
         documentId: saved.documentId,
         requestId: saved.requestId || "",
       });
@@ -239,6 +256,8 @@ export async function runPendingSupplierDocumentOcrTasks(limit = 5, minAgeMs = 6
         requestId: task.requestId,
         orderId: task.orderId,
         documentType: task.documentType,
+        failureKind: supplierDocumentOcrFailureKind(error),
+        technicalDetails: supplierOcrFailureTechnicalDetails(error),
       });
     }
   }
@@ -513,6 +532,8 @@ export async function runSupplierDocumentOcrForDocument(
     throwIfSupplierOcrTableMissing(error);
     const originalMessage = supplierOcrErrorText(error);
     const message = supplierDocumentOcrFailureMessage(error);
+    const failureKind = supplierDocumentOcrFailureKind(error);
+    const technicalDetails = supplierOcrFailureTechnicalDetails(error);
     let saved: OcrTaskRow;
     try {
       saved = await prisma.ocrTask.update({
@@ -525,9 +546,15 @@ export async function runSupplierDocumentOcrForDocument(
           validationJson: {
             issues: [{ level: "manual", message }],
             parserStatus: latestRawText ? "OCR原文已识别但解析失败" : "OCR原文未识别",
+            failureKind,
             technicalError: originalMessage.slice(0, 1000),
             provider: latestProvider,
             apiName: latestApiName || "SUPPLIER_DOCUMENT_OCR",
+            requestId: technicalDetails.requestId,
+            httpStatus: technicalDetails.httpStatus,
+            errorCode: technicalDetails.errorCode,
+            errorMessage: technicalDetails.errorMessage,
+            responseBody: technicalDetails.responseBody,
           },
         },
         include: { results: true },
@@ -547,7 +574,15 @@ export async function runSupplierDocumentOcrForDocument(
       throwIfSupplierOcrTableMissing(updateError);
       throw updateError;
     }
-    logServerError("产品供应商回传资料OCR识别失败", error, { documentId, taskId: task.id });
+    logServerError("产品供应商回传资料OCR识别失败", error, {
+      documentId,
+      taskId: task.id,
+      requestId: document.factoryDocumentRequestId || "",
+      orderId: document.orderId || "",
+      documentType: document.documentType,
+      failureKind,
+      technicalDetails,
+    });
     if (document.factoryDocumentRequestId) {
       await refreshSupplierDocumentRequestQualification(document.factoryDocumentRequestId);
     }

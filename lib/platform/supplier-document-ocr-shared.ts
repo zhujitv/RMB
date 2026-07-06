@@ -2,6 +2,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import { writeAudit } from "./shared-audit";
 import {
   codedError,
+  isPlainRecord,
   nonEmpty,
 } from "./shared-base-utils";
 import {
@@ -46,9 +47,14 @@ export const OCR_STATUS_EXCEPTION = "OCR识别成功，存在异常";
 export const OCR_STATUS_FAILED = "OCR识别失败，需人工核对";
 export const OCR_STATUS_MANUAL = "待人工确认";
 export const OCR_STALE_PROCESSING_MESSAGE = "OCR识别超时，请点击重新识别或人工核对。";
-export const OCR_NETWORK_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
-export const OCR_PERMISSION_FAILURE_MESSAGE = "阿里云 OCR 服务未开通或权限配置异常，请管理员检查 OCR 服务开通状态、接口权限和 AccessKey 配置。";
-export const OCR_PROVIDER_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
+export const OCR_NETWORK_FAILURE_MESSAGE = "OCR 连接超时，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
+export const OCR_CONFIG_FAILURE_MESSAGE = "OCR 配置缺失，请联系管理员到系统设置检查 OCR 配置。";
+export const OCR_PERMISSION_FAILURE_MESSAGE = "OCR AccessKey/Secret 配置错误或接口权限不足，请联系管理员。";
+export const OCR_QUOTA_FAILURE_MESSAGE = "OCR 额度不足或调用频率受限，请检查阿里云账户额度。";
+export const OCR_FILE_FAILURE_MESSAGE = "文件无法读取，请重新上传 PDF 后再识别。";
+export const OCR_PDF_FAILURE_MESSAGE = "PDF 处理失败，请重新上传清晰、未加密的 PDF。";
+export const OCR_STRUCTURE_FAILURE_MESSAGE = "OCR 返回结构异常，请点击重新识别或人工确认。";
+export const OCR_PROVIDER_FAILURE_MESSAGE = "阿里云 OCR 返回异常，请稍后重新识别；管理员可根据服务端日志排查。";
 export const OCR_RERUN_CANCELLED_MESSAGE = "已重新发起识别，旧识别任务已取消。";
 export const VALIDATION_PASSED = "PASSED";
 export const VALIDATION_EXCEPTION = "EXCEPTION";
@@ -106,9 +112,94 @@ export function supplierOcrErrorCode(error: unknown) {
   return String((error as { code?: unknown } | null)?.code || "");
 }
 
+export function supplierOcrErrorDetails(error: unknown) {
+  const details = (error as { details?: unknown } | null)?.details;
+  return isPlainRecord(details) ? details : {};
+}
+
+export function supplierOcrFailureTechnicalDetails(error: unknown) {
+  const details = supplierOcrErrorDetails(error);
+  return {
+    code: supplierOcrErrorCode(error),
+    message: supplierOcrErrorText(error),
+    provider: cleanText(details.provider),
+    apiName: cleanText(details.apiName),
+    requestId: cleanText(details.requestId),
+    httpStatus: cleanText(details.httpStatus),
+    errorCode: cleanText(details.errorCode),
+    errorMessage: cleanText(details.errorMessage),
+    endpoint: cleanText(details.endpoint),
+    region: cleanText(details.region),
+    responseBody: cleanText(details.responseBody).slice(0, 1000),
+  };
+}
+
+export function supplierOcrFailureHaystack(error: unknown) {
+  const details = supplierOcrFailureTechnicalDetails(error);
+  return [
+    details.code,
+    details.message,
+    details.provider,
+    details.apiName,
+    details.requestId,
+    details.httpStatus,
+    details.errorCode,
+    details.errorMessage,
+    details.responseBody,
+  ].join(" ");
+}
+
 export function isSupplierOcrNetworkError(error: unknown) {
-  const text = [supplierOcrErrorCode(error), supplierOcrErrorText(error)].join(" ");
-  return /(ConnectTimeout|ReadTimeout|Timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed|Connect HTTPS)/i.test(text);
+  return /(SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT|ConnectTimeout|ReadTimeout|Timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed|Connect HTTPS|504\b)/i.test(supplierOcrFailureHaystack(error));
+}
+
+export function supplierDocumentOcrFailureKind(error: unknown) {
+  const code = supplierOcrErrorCode(error);
+  const text = supplierOcrFailureHaystack(error);
+  if (/(SUPPLIER_DOCUMENT_FILE_MISSING|FILE_SIGNATURE_INVALID|FILE_REQUIRED|NoSuchKey|NoSuchBucket|R2|storage|readR2Object|文件.*(不存在|失效|无法访问)|Object not found)/i.test(text)) {
+    return "FILE_READ_FAILED";
+  }
+  if (/(FILE_TOO_LARGE|RequestEntityTooLarge|EntityTooLarge|PayloadTooLarge|超过.*(大小|限制)|too large|file size)/i.test(text)) {
+    return "PDF_TOO_LARGE";
+  }
+  if (/(PDF.*(处理|转换|渲染|解析)|pdfjs|rasterize|canvas|InvalidPDF|encrypted|password|加密|损坏|corrupt)/i.test(text)) {
+    return "PDF_PROCESS_FAILED";
+  }
+  if (/(OCR_ACCESS_KEY_REQUIRED|OCR_CREDENTIAL_REQUIRED|OCR_PROVIDER_ADAPTER_NOT_CONFIGURED|OCR_FEATURE_DISABLED|配置缺失|未配置|启用 OCR 前|feature.*disabled)/i.test(text)) {
+    return "CONFIG_MISSING";
+  }
+  if (/(ocrServiceNotOpen|not activated the OCR service|not activated|未开通|未启用|InvalidAccessKeyId|SignatureDoesNotMatch|Unauthorized|Forbidden|AccessDenied|NoPermission|InvalidSecurityToken|401\b|403\b|AccessKey|Secret)/i.test(text)) {
+    return "AUTH_FAILED";
+  }
+  if (/(Quota|Throttling|TooManyRequests|QPS|LimitExceeded|Insufficient|Balance|Arrear|Credit|额度|配额|欠费|余额|429\b)/i.test(text)) {
+    return "QUOTA_LIMITED";
+  }
+  if (isSupplierOcrNetworkError(error)) return "TIMEOUT";
+  if (/(NO_TEXT|PARSE_FAILED|STRUCTURE|结构异常|返回结构|未返回|not return|empty|OCR原文未识别|OCR原文已识别但解析失败|解析失败)/i.test(text)) {
+    return "STRUCTURE_INVALID";
+  }
+  if (code === "ALIYUN_OCR_SERVICE_UNAVAILABLE") return "ALIYUN_PROVIDER_ERROR";
+  return "UNKNOWN";
+}
+
+export function supplierDocumentOcrFailureMessageForKind(kind: string) {
+  if (kind === "TIMEOUT") return OCR_NETWORK_FAILURE_MESSAGE;
+  if (kind === "CONFIG_MISSING") return OCR_CONFIG_FAILURE_MESSAGE;
+  if (kind === "AUTH_FAILED") return OCR_PERMISSION_FAILURE_MESSAGE;
+  if (kind === "QUOTA_LIMITED") return OCR_QUOTA_FAILURE_MESSAGE;
+  if (kind === "FILE_READ_FAILED") return OCR_FILE_FAILURE_MESSAGE;
+  if (kind === "PDF_TOO_LARGE") return "PDF 超过大小限制，请压缩后重新上传。";
+  if (kind === "PDF_PROCESS_FAILED") return OCR_PDF_FAILURE_MESSAGE;
+  if (kind === "STRUCTURE_INVALID") return OCR_STRUCTURE_FAILURE_MESSAGE;
+  if (kind === "ALIYUN_PROVIDER_ERROR") return OCR_PROVIDER_FAILURE_MESSAGE;
+  return "";
+}
+
+export function supplierDocumentOcrFailureActionMessage(error: unknown) {
+  const kind = supplierDocumentOcrFailureKind(error);
+  const mapped = supplierDocumentOcrFailureMessageForKind(kind);
+  if (mapped) return mapped;
+  return sanitizeSupplierOcrMessage(supplierOcrErrorText(error));
 }
 
 export function sanitizeSupplierOcrMessage(value: unknown, fallback = "OCR识别失败，需人工核对。") {
@@ -127,13 +218,7 @@ export function sanitizeSupplierOcrMessage(value: unknown, fallback = "OCR识别
 }
 
 export function supplierDocumentOcrFailureMessage(error: unknown) {
-  if (supplierOcrErrorCode(error) === "ALIYUN_OCR_SERVICE_UNAVAILABLE") {
-    return OCR_PROVIDER_FAILURE_MESSAGE;
-  }
-  if (isSupplierOcrNetworkError(error)) {
-    return OCR_NETWORK_FAILURE_MESSAGE;
-  }
-  return sanitizeSupplierOcrMessage(supplierOcrErrorText(error));
+  return supplierDocumentOcrFailureActionMessage(error);
 }
 
 export function normalizeComparable(value: unknown) {
