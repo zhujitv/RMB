@@ -38,6 +38,18 @@ export function isProductSupplierPaid(cost: CostRow) {
   return Boolean(cost.paid) || cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
 }
 
+export function hasSuccessfulCostDocument(cost: Pick<CostRow, "documents">) {
+  return (cost.documents || []).some((document) => document.uploadStatus === "SUCCESS");
+}
+
+export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents">) {
+  return isLogisticsGeneratedCost(cost) || hasSuccessfulCostDocument(cost) || isProductSupplierPaid(cost as CostRow) || Boolean(cost.costConfirmed);
+}
+
+export function costDeleteActionLabel(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents">) {
+  return shouldVoidCostOnDelete(cost) ? "作废成本" : "删除成本";
+}
+
 export function isProductSupplierPaymentFormLocked(item: Pick<CostItemForm, "costType">, supplier: SupplierOption | null, canManageFactoryPayments: boolean) {
   if (canManageFactoryPayments) return false;
   return FACTORY_COST_TYPES.includes(item.costType) || PRODUCT_SUPPLIER_TYPES.includes(supplier?.supplierType || "");

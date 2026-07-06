@@ -329,7 +329,12 @@ test("cost order summary keeps cost items inside shipment detail drawer", () => 
 });
 
 test("cost order detail can delete a cost item without reloading the page list", () => {
-  assert.match(costsModule, /message: "确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。"/);
+  assert.match(costsModule, /确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。/);
+  assert.match(costsModule, /function shouldVoidCostOnDelete/);
+  assert.match(costsModule, /function costDeleteActionLabel/);
+  assert.match(costsModule, /shouldVoidCostOnDelete\(cost\) \? "作废成本" : "删除成本"/);
+  assert.match(costsModule, /确认作废这条成本明细吗？作废后将从当前成本、利润和退税完整度中移除，但保留历史审计记录。/);
+  assert.match(costsModule, /处理方式：作废，不做物理删除/);
   assert.match(costsModule, /type CostDeleteResponse = \{/);
   assert.match(costsModule, /orderSummary\?: CostOrderSummary \| null/);
   assert.match(costsModule, /function applyDeletedCost\(cost: CostRow, orderSummary\?: CostOrderSummary \| null\)/);

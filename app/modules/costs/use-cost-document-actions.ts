@@ -5,7 +5,7 @@ import { moneyText } from "../../formatters";
 import { uploadFormDataWithProgress, validatePaymentVoucherUploadFile, validatePdfUploadFile } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import { recalculateOrderSummary } from "./cost-table";
-import { costSupplierName, costUploadKey, hasPaymentVoucher, isProductSupplierPaymentEnabled, paymentVoucherUploadKey } from "./helpers";
+import { costDeleteActionLabel, costSupplierName, costUploadKey, hasPaymentVoucher, isProductSupplierPaymentEnabled, shouldVoidCostOnDelete, paymentVoucherUploadKey } from "./helpers";
 import type {
   CostDeleteResponse,
   CostDetailResponse,
@@ -378,14 +378,19 @@ export function useCostDocumentActions({
   }
 
   async function deleteCost(cost: CostRow) {
+    const willVoid = shouldVoidCostOnDelete(cost);
+    const actionLabel = costDeleteActionLabel(cost);
     const confirmationResult = await requestConfirmation({
-      title: "删除成本明细",
-      message: "确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。",
+      title: actionLabel,
+      message: willVoid
+        ? "确认作废这条成本明细吗？作废后将从当前成本、利润和退税完整度中移除，但保留历史审计记录。"
+        : "确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。",
       details: [
         `订单：${cost.orderNo || "-"}`,
         `成本：${logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} ${moneyText(cost.currency, cost.amount, cost.amountCny)}`,
+        ...(willVoid ? ["处理方式：作废，不做物理删除"] : ["处理方式：物理删除"]),
       ],
-      confirmLabel: "删除成本",
+      confirmLabel: actionLabel,
       cancelLabel: "取消",
       variant: "danger",
     });

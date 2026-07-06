@@ -7,7 +7,7 @@ import styles from "../../WorkspaceShell.module.css";
 import { CostInvoiceActions } from "./invoice-actions";
 import type { CostDocument, CostInvoiceGroupRow, CostOrderSummary, CostRow } from "./model";
 import { costInvoiceStatusClass, costPaymentStatusClass } from "./cost-table";
-import { costSupplierName, currencyTotalAmount, hasPaymentVoucher, isLogisticsGeneratedCost, isProductSupplierPaid, isProductSupplierPaymentEnabled } from "./helpers";
+import { costDeleteActionLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isLogisticsGeneratedCost, isProductSupplierPaid, isProductSupplierPaymentEnabled } from "./helpers";
 
 export function CostDetailDrawer({
   cost,
@@ -29,6 +29,7 @@ export function CostDetailDrawer({
   const [activeTab, setActiveTab] = useState("basic");
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
+  const deleteActionLabel = costDeleteActionLabel(cost);
 
   useEffect(() => {
     setActiveTab("basic");
@@ -48,7 +49,7 @@ export function CostDetailDrawer({
             <>
               <button className={styles.secondaryButton} type="button" onClick={onEdit}>编辑成本</button>
               <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onDelete}>
-                {deleting ? "删除中..." : "删除成本"}
+                {deleting ? "处理中..." : deleteActionLabel}
               </button>
             </>
           ) : null}
