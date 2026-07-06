@@ -55,7 +55,10 @@ test("OCR settings no longer expose customs declaration PDF text test entry poin
   assert.equal(existsSync("app/api/settings/ocr/customs-pdf-full-text-test/route.ts"), false);
   assert.equal(existsSync("app/api/settings/ocr/test-customs/route.ts"), false);
   assert.equal(existsSync("lib/platform/ocr-integration-customs-pdf-text-test.ts"), false);
+  assert.equal(existsSync("lib/platform/ocr-integration-diagnostics.ts"), false);
   assert.doesNotMatch(service, /testCustomsDeclarationPdfFullTextParse/);
+  assert.doesNotMatch(service, /testCustomsDeclarationOcr/);
+  assert.doesNotMatch(service, /ocr-tests\/customs/);
   assert.doesNotMatch(settingsModule, /\/api\/settings\/ocr\/customs-pdf-full-text-test/);
   assert.doesNotMatch(settingsModule, /\/api\/settings\/ocr\/test-customs/);
   assert.doesNotMatch(settingsModule, /PDF报关单整单文本解析测试/);
@@ -511,6 +514,6 @@ test("OCR center diagnostics remain controlled by OCR settings while tax refund 
   assert.match(service, /tableConfig: new RecognizeAllTextRequestTableConfig/);
   assert.match(service, /ALIYUN_RECOGNIZE_ALL_TEXT_TABLE_FALLBACK/);
   assert.match(service, /ALIYUN_CUSTOMS_FALLBACK_PDF_TEXT/);
-  assert.match(r2, /export async function signedObjectReadUrl/);
-  assert.match(service, /signedObjectReadUrl/);
+  assert.doesNotMatch(r2, /export async function signedObjectReadUrl/);
+  assert.doesNotMatch(service, /signedObjectReadUrl/);
 });

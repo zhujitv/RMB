@@ -19,6 +19,8 @@ import {
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -68,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
     if ((body.action || "") === "rerunInvoiceRecognition" || (body.action || "") === "recognizeInvoice") {
       const result = await rerunLogisticsExpenseInvoiceRecognition(request, actor, id, body);
-      return ok({ success: true, ...result, message: "物流发票已提交重新识别" });
+      return ok({ success: true, ...result, message: result.message || "物流发票OCR校验结果已更新" });
     }
     if ((body.action || "") === "paymentStatus" || (body.action || "") === "markPaid") {
       const expense = await updateLogisticsExpensePaymentStatus(request, actor, id, body);

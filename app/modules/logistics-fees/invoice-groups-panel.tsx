@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react";
 import { useRef, useState } from "react";
+import { apiJson } from "../../api";
 import { PdfPreviewButton } from "../../components";
 import { formatDateTime } from "../../formatters";
 import { preventEnterFormSubmit } from "../../formGuards";
@@ -49,10 +50,10 @@ export function LogisticsInvoiceGroupsPanel({
       (group.itemIds?.length || 0) > 0 ||
       !logisticsCurrencySummaryIsZero(group.currencyTotals),
   );
-	const uploadableItems = items.filter(
-		(item) => ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
-	);
-	if (!visibleGroups.length || !uploadableItems.length) return null;
+  const uploadableItems = items.filter(
+    (item) => ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+  );
+  if (!visibleGroups.length || !uploadableItems.length) return null;
 
   async function deleteInvoiceGroup(
     targetExpense: LogisticsExpense,
@@ -128,29 +129,29 @@ export function LogisticsInvoiceGroupsPanel({
     targetExpense: LogisticsExpense,
     group: LogisticsInvoiceGroupSummary,
   ) {
-    if (!group.invoiceDocumentId) return;
     setRecognizingGroupKey(group.key);
-    setGroupMessage((current) => ({ ...current, [group.key]: "" }));
+    setGroupMessage((current) => ({ ...current, [group.key]: "正在识别，请勿关闭页面" }));
     try {
-      const response = await fetch(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`, {
+      const result = await apiJson<LogisticsExpenseMutationResult>(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`, {
         method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        timeoutMs: 65_000,
         body: JSON.stringify({
           action: "rerunInvoiceRecognition",
           invoiceGroup: group.key,
-          documentId: group.invoiceDocumentId,
+          documentId: group.invoiceDocumentId || undefined,
         }),
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.success !== true)
+      if (result.success !== true)
         throw new Error(result.message || "重新识别失败");
-      setGroupMessage((current) => ({ ...current, [group.key]: "已提交重新识别" }));
       onUploaded(result);
+      setGroupMessage((current) => ({
+        ...current,
+        [group.key]: logisticsOcrResultMessage(result),
+      }));
     } catch (error) {
       setGroupMessage((current) => ({
         ...current,
-        [group.key]: error instanceof Error ? error.message : "重新识别失败",
+        [group.key]: logisticsApiErrorMessage(error, "重新识别失败"),
       }));
     } finally {
       setRecognizingGroupKey("");
@@ -174,6 +175,7 @@ export function LogisticsInvoiceGroupsPanel({
             ...new Set(groupItems.map((item) => item.costType).filter(Boolean)),
           ];
           const targetExpense = groupItems[0] || expense;
+          const recognizing = recognizingGroupKey === group.key;
           const uploaded = Boolean(
             group.uploaded ||
             group.status === "已上传" ||
@@ -182,13 +184,14 @@ export function LogisticsInvoiceGroupsPanel({
           const confirmed = Boolean(
             group.confirmed || group.status === "已确认",
           );
-          const validationStatus = group.validationStatus || (uploaded ? "已上传待识别" : "未上传");
-          const validationPassed = ["校验通过", "人工确认通过"].includes(validationStatus);
-          const validationProblem = uploaded && !validationPassed && validationStatus !== "识别中" && validationStatus !== "已上传待识别";
+          const storedValidationStatus = group.validationStatus || (uploaded ? "已上传待识别" : "未上传");
+          const validationStatus = recognizing ? "识别中" : storedValidationStatus;
+          const validationPassed = ["校验通过", "人工确认通过"].includes(storedValidationStatus);
+          const validationProblem = uploaded && !recognizing && !validationPassed && storedValidationStatus !== "识别中" && storedValidationStatus !== "已上传待识别";
           const recognizedAmount = Number(group.recognizedAmount || 0);
-	          const recognizedName = group.recognizedName || "-";
-	          const recognizedSeller = group.recognizedSeller || "-";
-	          const recognizedBuyer = group.recognizedBuyer || "-";
+          const recognizedName = group.recognizedName || "-";
+          const recognizedSeller = group.recognizedSeller || "-";
+          const recognizedBuyer = group.recognizedBuyer || "-";
           const invoiceDocument =
             groupItems
               .map((item) => item.invoiceDocument)
@@ -208,15 +211,16 @@ export function LogisticsInvoiceGroupsPanel({
           const canUploadGroup =
             canUploadInvoice &&
             groupItems.length > 0 &&
-	            groupItems.every((item) =>
-	              ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
-	            ) &&
+            groupItems.every((item) =>
+              ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+            ) &&
             !uploaded &&
             !confirmed;
           const canDeleteGroup =
             canUploadInvoice &&
             uploaded &&
             !confirmed &&
+            !recognizing &&
             Boolean(group.invoiceDocumentId);
           return (
             <div className={styles.logisticsInvoiceGroupCard} key={group.key}>
@@ -299,6 +303,7 @@ export function LogisticsInvoiceGroupsPanel({
                     <span>发票校验</span>
                     <StatusPill value={validationStatus} />
                   </div>
+                  {recognizing ? <OcrWaitingInline /> : null}
                   <div className={styles.logisticsInvoiceValidationGrid}>
                     <div className={styles.logisticsInvoiceValidationItem}>
                       <span>系统分组合计</span>
@@ -316,18 +321,18 @@ export function LogisticsInvoiceGroupsPanel({
                       <span>系统费用分组</span>
                       <strong title={group.label}>{group.label}</strong>
                     </div>
-	                    <div className={styles.logisticsInvoiceValidationItem}>
-	                      <span>识别品名</span>
-	                      <strong title={recognizedName}>{recognizedName}</strong>
-	                    </div>
-	                    <div className={styles.logisticsInvoiceValidationItem}>
-	                      <span>识别销售方</span>
-	                      <strong title={recognizedSeller}>{recognizedSeller}</strong>
-	                    </div>
-	                    <div className={styles.logisticsInvoiceValidationItem}>
-	                      <span>识别购买方</span>
-	                      <strong title={recognizedBuyer}>{recognizedBuyer}</strong>
-	                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>识别品名</span>
+                      <strong title={recognizedName}>{recognizedName}</strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>识别销售方</span>
+                      <strong title={recognizedSeller}>{recognizedSeller}</strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>识别购买方</span>
+                      <strong title={recognizedBuyer}>{recognizedBuyer}</strong>
+                    </div>
                     <div className={styles.logisticsInvoiceValidationItem}>
                       <span>发票号码</span>
                       <strong title={group.recognizedInvoiceNo || "-"}>{group.recognizedInvoiceNo || "-"}</strong>
@@ -347,10 +352,10 @@ export function LogisticsInvoiceGroupsPanel({
                       <button
                         className={styles.secondaryButton}
                         type="button"
-                        disabled={recognizingGroupKey === group.key}
+                        disabled={recognizing}
                         onClick={() => rerunInvoiceRecognition(targetExpense, group)}
                       >
-                        {recognizingGroupKey === group.key ? "识别中..." : "重新识别"}
+                        {recognizing ? <ButtonSpinnerText text="识别中..." /> : "重新识别"}
                       </button>
                       {validationProblem ? (
                         <button
@@ -371,6 +376,7 @@ export function LogisticsInvoiceGroupsPanel({
                   expense={targetExpense}
                   group={group}
                   onUploaded={onUploaded}
+                  onRecognize={rerunInvoiceRecognition}
                 />
               ) : null}
               {groupMessage[group.key] ? (
@@ -396,14 +402,48 @@ function logisticsCurrencySummaryText(group: LogisticsInvoiceGroupSummary) {
   return values.length ? values.join(" / ") : "-";
 }
 
+function logisticsApiErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  return message
+    .replace(/。服务器返回非JSON响应，请查看服务端日志。?/g, "")
+    .trim() || fallback;
+}
+
+function logisticsOcrResultMessage(result: LogisticsExpenseMutationResult) {
+  const parts = [result.message, result.error]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return parts.length ? [...new Set(parts)].join("：") : "OCR校验结果已更新";
+}
+
+function OcrWaitingInline() {
+  return (
+    <div className={styles.supplierDocumentOcrWaiting}>
+      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+      <span>正在识别，请勿关闭页面</span>
+    </div>
+  );
+}
+
+function ButtonSpinnerText({ text }: { text: string }) {
+  return (
+    <span className={styles.supplierDocumentOcrButtonLoading}>
+      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+      <span>{text}</span>
+    </span>
+  );
+}
+
 function InvoiceUploadForm({
   expense,
   group,
   onUploaded,
+  onRecognize,
 }: {
   expense: LogisticsExpense;
   group: LogisticsInvoiceGroupSummary;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
+  onRecognize: (targetExpense: LogisticsExpense, group: LogisticsInvoiceGroupSummary) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -444,12 +484,14 @@ function InvoiceUploadForm({
         );
       setProgress(100);
       setStatus("success");
-      setMessage("上传成功");
+      setMessage("上传成功，正在识别...");
       onUploaded(result);
+      await onRecognize(expense, group);
+      setMessage("上传成功");
     } catch (uploadError) {
       setStatus("failed");
       setMessage(
-        uploadError instanceof Error ? uploadError.message : "上传失败，请重试",
+        logisticsApiErrorMessage(uploadError, "上传失败，请重试"),
       );
       setProgress(0);
     } finally {

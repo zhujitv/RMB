@@ -329,7 +329,11 @@ export type LogisticsExpenseBatchSaveResult = {
 
 export type LogisticsExpenseMutationResult = {
   success?: boolean;
+  status?: "PASSED" | "NEEDS_REVIEW" | "FAILED" | "TIMEOUT" | string;
   message?: string;
+  error?: string;
+  result?: unknown;
+  ocrTask?: unknown;
   expense?: LogisticsExpense;
   expenses?: LogisticsExpense[];
   bill?: LogisticsExpense;

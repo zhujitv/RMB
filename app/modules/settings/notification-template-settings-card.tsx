@@ -62,7 +62,6 @@ export function NotificationTemplateSettingsCard({
   onChange,
   onSelectType,
   onReset,
-  onTestSend,
   onSubmit,
 }: {
   settings: NotificationTemplateSettings | null;
@@ -74,7 +73,6 @@ export function NotificationTemplateSettingsCard({
   onChange: (form: NotificationTemplateForm) => void;
   onSelectType: (type: string) => void;
   onReset: () => void;
-  onTestSend: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
@@ -117,7 +115,7 @@ export function NotificationTemplateSettingsCard({
         <div>
           <strong>邮件通知中心</strong>
           <div className={styles.quickCreateMeta}>
-            <span>统一管理系统邮件模板、变量、发送测试和最近发送记录。</span>
+            <span>统一管理系统邮件模板、变量和最近发送记录。</span>
           </div>
         </div>
       </div>
@@ -275,7 +273,6 @@ export function NotificationTemplateSettingsCard({
       <div className={styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存通知模板"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onReset} disabled={saving}>恢复当前值</button>
-        <button className={styles.secondaryButton} type="button" onClick={onTestSend} disabled={saving}>发送测试邮件</button>
       </div>
 
       <section className={styles.documentGroupCard}>

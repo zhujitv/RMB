@@ -1,6 +1,7 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { logServerError } from "./shared-base-utils";
+import { SUPPLIER_DOCUMENT_OCR_MODULE } from "./supplier-document-ocr-shared";
 
 const OCR_STATUS_PASSED = "OCR识别成功，校验通过";
 const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
@@ -57,6 +58,7 @@ export async function refreshSupplierDocumentRequestCompletion(
         where: { deletedAt: null },
         include: {
           ocrTasks: {
+            where: { module: SUPPLIER_DOCUMENT_OCR_MODULE },
             orderBy: [{ createdAt: "desc" }],
             take: 1,
             select: {

@@ -58,12 +58,6 @@ export type RasterizedPdfPage = {
   height: number;
   pageCount: number;
 };
-export type OcrTestUploadFile = {
-  body: Buffer | Uint8Array | ArrayBuffer;
-  originalFileName: string;
-  mimeType?: string | null;
-};
-
 export const SUPPLIER_CONTRACT_KEYS = [
   "供应商",
   "采购方",

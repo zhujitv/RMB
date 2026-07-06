@@ -21,6 +21,7 @@ const supplierRequests = readSupplierDocumentRequestsSource();
 const supplierRequestList = readSupplierDocumentRequestListSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const supplierUploadActions = readFileSync("app/modules/supplier-documents/use-supplier-document-request-actions.ts", "utf8");
+const completionService = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
 const rejectRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/reject/route.ts", "utf8");
@@ -85,6 +86,22 @@ test("supplier OCR has a cron worker fallback for processing tasks", () => {
   assert.match(supplierOcrCronRoute, /return ok\(\{ supplier, logistics \}\)/);
   assert.match(vercelConfig, /"path": "\/api\/cron\/supplier-document-ocr"/);
   assert.match(vercelConfig, /"\*\/5 \* \* \* \*"/);
+});
+
+test("supplier OCR ignores late task writes after timeout or manual handling", () => {
+  assert.match(service, /supplier-document-ocr-late-failure-ignored/);
+  assert.match(service, /supplier-document-ocr-late-error-ignored/);
+  assert.match(service, /supplier-document-ocr-run-skipped-non-processing/);
+  assert.match(service, /const writable = await tx\.ocrTask\.updateMany/);
+  assert.match(service, /status: OCR_STATUS_PROCESSING,\s*validationStatus: "PROCESSING"/);
+  assert.match(service, /if \(!writable\.count\)/);
+});
+
+test("supplier OCR task reads are scoped to supplier document return module", () => {
+  assert.match(supplierRequests, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId: \{ in: documentIds \} \}/);
+  assert.match(completionService, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE \}/);
+  assert.match(service, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId, requestId \}/);
+  assert.match(service, /await loadSupplierReturnDocument\(documentId, requestId, actor\)/);
 });
 
 test("supplier OCR validates invoice and contract against supplier, business entity, amount, and duplicates", () => {
@@ -383,6 +400,7 @@ test("supplier OCR rerun loads supplier return document and exposes actionable f
   assert.match(service, /normalizeSupplierReturnDocumentType/);
   assert.match(service, /VAT_INVOICE/);
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);
+  assert.match(supplierModule, /updateDocumentOcrTask\(task\.id, document\.id, localFailedOcrTask\(document, message\)\)/);
   assert.match(supplierModule, /OCR识别失败，请人工核对或重新上传/);
 });
 

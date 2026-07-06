@@ -185,31 +185,7 @@ function selectNotificationTemplate(type: string) {
     setNotificationTemplateMessage("");
   }
 
-async function testNotificationTemplate() {
-    if (!notificationTemplateForm) return;
-    setNotificationTemplateSaving(true);
-    setNotificationTemplateMessage("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(
-        "/api/settings/notification-templates/test",
-        {
-          method: "POST",
-          body: JSON.stringify(notificationTemplateForm),
-        },
-      );
-      if (result.success !== true) throw new Error(result.message || "测试邮件发送失败");
-      const nextSettings = await fetchNotificationTemplateSettings();
-      setNotificationTemplateSettings(nextSettings);
-      setNotificationTemplateForm(notificationTemplateFormFromSettings(nextSettings, notificationTemplateForm.type));
-      setNotificationTemplateMessage(result.message || "测试邮件已发送");
-    } catch (sendError) {
-      setNotificationTemplateMessage(sendError instanceof Error ? sendError.message : "测试邮件发送失败");
-    } finally {
-      setNotificationTemplateSaving(false);
-    }
-  }
-
-async function saveShipsgoIntegrationSettings(event: FormEvent<HTMLFormElement>) {
+  async function saveShipsgoIntegrationSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!shipsgoIntegrationForm) return;
     setShipsgoIntegrationSaving(true);
@@ -273,7 +249,6 @@ async function saveOcrIntegrationSettings(event: FormEvent<HTMLFormElement>) {
     saveCommissionFormulaSettings,
     saveNotificationTemplateSettings,
     selectNotificationTemplate,
-    testNotificationTemplate,
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
   };

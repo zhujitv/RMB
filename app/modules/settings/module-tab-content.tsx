@@ -67,7 +67,6 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     saveCommissionFormulaSettings,
     saveNotificationTemplateSettings,
     selectNotificationTemplate,
-    testNotificationTemplate,
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     setBusinessEntityForm,
@@ -170,7 +169,6 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings, selectedNotificationTemplateType));
           setNotificationTemplateMessage("");
         }}
-        onTestSend={() => void testNotificationTemplate()}
         onSubmit={saveNotificationTemplateSettings}
       />
     );

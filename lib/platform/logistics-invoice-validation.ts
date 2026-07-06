@@ -29,6 +29,8 @@ export const LOGISTICS_INVOICE_VALIDATION_NAME_MISMATCH = "品名不匹配";
 export const LOGISTICS_INVOICE_VALIDATION_PARTY_MISMATCH = "抬头不匹配";
 export const LOGISTICS_INVOICE_VALIDATION_FAILED = "识别失败";
 export const LOGISTICS_INVOICE_VALIDATION_MANUAL_PASSED = "人工确认通过";
+export const LOGISTICS_INVOICE_OCR_TIMEOUT_MESSAGE = "OCR识别超时，请重新识别或人工确认。";
+export const DEFAULT_LOGISTICS_INVOICE_OCR_TASK_TIMEOUT_MS = 50 * 1000;
 
 export const LOGISTICS_INVOICE_VALIDATION_PASSING_STATUSES = [
   LOGISTICS_INVOICE_VALIDATION_PASSED,
@@ -130,6 +132,17 @@ function jsonInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNu
   return value as Prisma.InputJsonValue;
 }
 
+function logisticsOcrErrorMessage(error: unknown, fallback = "物流发票识别失败") {
+  return error instanceof Error ? error.message : String(error || fallback);
+}
+
+function validationRowIds(value: unknown) {
+  const validation = asRecord(value);
+  return Array.isArray(validation.rowIds)
+    ? validation.rowIds.map((item) => String(item || "")).filter(Boolean)
+    : [];
+}
+
 export function invoiceValidationStatusCanContinue(status: unknown) {
   return LOGISTICS_INVOICE_VALIDATION_PASSING_STATUSES.includes(cleanText(status));
 }
@@ -192,6 +205,11 @@ export async function createLogisticsInvoiceRecognitionTask(input: {
     invoiceGroupKey: invoiceGroup.key,
     rowIds,
   };
+  await cancelProcessingLogisticsInvoiceOcrTasks({
+    documentId,
+    rowIds,
+    reason: "已重新发起识别，旧识别任务已取消。",
+  });
   const task = await prisma.ocrTask.create({
     data: {
       module: LOGISTICS_INVOICE_OCR_MODULE,
@@ -214,6 +232,36 @@ export async function createLogisticsInvoiceRecognitionTask(input: {
     taskId: task.id,
   });
   return task;
+}
+
+async function cancelProcessingLogisticsInvoiceOcrTasks(input: {
+  documentId: string;
+  rowIds?: string[];
+  reason: string;
+}) {
+  const rowIds = (input.rowIds || []).filter(Boolean);
+  const updated = await prisma.ocrTask.updateMany({
+    where: {
+      module: LOGISTICS_INVOICE_OCR_MODULE,
+      documentId: input.documentId,
+      OR: [
+        { status: LOGISTICS_INVOICE_VALIDATION_PROCESSING },
+        { validationStatus: "PROCESSING" },
+      ],
+    },
+    data: {
+      status: LOGISTICS_INVOICE_VALIDATION_FAILED,
+      validationStatus: "FAILED",
+      errorMessage: input.reason,
+      validationJson: {
+        documentId: input.documentId,
+        rowIds,
+        issues: [{ level: "manual", message: input.reason }],
+        parserStatus: "物流发票识别任务已取消",
+      },
+    },
+  });
+  return updated.count;
 }
 
 export async function clearLogisticsInvoiceValidation(rowIds: string[], actor: ActorLike) {
@@ -248,10 +296,17 @@ async function updateRowsWithValidationResult(input: {
   validationJson?: unknown;
   taskId?: string | null;
   fields?: ReturnType<typeof parseVatInvoiceFields> | null;
+  expectedTaskId?: string;
+  expectedStatus?: string;
 }) {
   const fields = input.fields || null;
   await prisma.logisticsExpense.updateMany({
-    where: { id: { in: input.rowIds }, deletedAt: null },
+    where: {
+      id: { in: input.rowIds },
+      deletedAt: null,
+      ...(input.expectedTaskId ? { invoiceOcrTaskId: input.expectedTaskId } : {}),
+      ...(input.expectedStatus ? { invoiceValidationStatus: input.expectedStatus } : {}),
+    },
     data: {
       invoiceValidationStatus: input.status,
       invoiceValidationMessage: optional(input.message),
@@ -294,29 +349,38 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
     });
     return null;
   }
-  await updateRowsWithValidationResult({
-    rowIds,
-    actor: input.actor,
-    status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
-    message: "",
-    validationJson: { documentId, invoiceGroupKey: input.invoiceGroupKey },
-    taskId: input.taskId || null,
-  });
   const task = input.taskId
-    ? await prisma.ocrTask.update({
-        where: { id: input.taskId },
-        data: {
-          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
-          validationStatus: "PROCESSING",
-          errorMessage: null,
-          validationJson: {
+    ? await (async () => {
+        const claimed = await prisma.ocrTask.updateMany({
+          where: {
+            id: input.taskId,
+            module: LOGISTICS_INVOICE_OCR_MODULE,
+            status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+            validationStatus: "PROCESSING",
+          },
+          data: {
+            errorMessage: null,
+            validationJson: {
+              documentId,
+              invoiceGroupKey: invoiceGroup.key,
+              rowIds,
+            },
+          },
+        });
+        const current = await prisma.ocrTask.findUnique({ where: { id: input.taskId }, include: { results: true } });
+        if (!current) throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
+        if (!claimed.count) {
+          console.info("logistics-invoice-ocr-run-skipped-non-processing", {
+            taskId: input.taskId,
+            status: current.status,
+            validationStatus: current.validationStatus,
             documentId,
             invoiceGroupKey: invoiceGroup.key,
-            rowIds,
-          },
-        },
-        include: { results: true },
-      })
+          });
+          return current;
+        }
+        return current;
+      })()
     : await prisma.ocrTask.create({
         data: {
           module: LOGISTICS_INVOICE_OCR_MODULE,
@@ -334,6 +398,17 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
         },
         include: { results: true },
       });
+  if (task.status !== LOGISTICS_INVOICE_VALIDATION_PROCESSING || task.validationStatus !== "PROCESSING") return task;
+  await updateRowsWithValidationResult({
+    rowIds,
+    actor: input.actor,
+    status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+    message: "",
+    validationJson: { documentId, invoiceGroupKey: input.invoiceGroupKey, rowIds },
+    taskId: task.id,
+    expectedTaskId: task.id,
+    expectedStatus: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+  });
   let latestRawText = "";
   let latestRawJson: unknown = null;
   let latestApiName = "";
@@ -393,6 +468,27 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
       provider: recognized.provider,
     };
     const saved = await prisma.$transaction(async (tx) => {
+      const writable = await tx.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          module: LOGISTICS_INVOICE_OCR_MODULE,
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+        },
+        data: {
+          status,
+          validationStatus: status === LOGISTICS_INVOICE_VALIDATION_PASSED ? "PASSED" : "EXCEPTION",
+          errorMessage: message || null,
+          rawText: text.slice(0, 120000),
+          resultJson: fields as unknown as Prisma.InputJsonValue,
+          validationJson: validationJson as Prisma.InputJsonValue,
+        },
+      });
+      if (!writable.count) {
+        const current = await tx.ocrTask.findUnique({ where: { id: task.id }, include: { results: true } });
+        if (current) return current;
+        throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
+      }
       await saveOcrRawResult({
         documentId,
         orderId: document.orderId,
@@ -422,19 +518,13 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
           })),
         });
       }
-      await tx.ocrTask.update({
-        where: { id: task.id },
-        data: {
-          status,
-          validationStatus: status === LOGISTICS_INVOICE_VALIDATION_PASSED ? "PASSED" : "EXCEPTION",
-          errorMessage: message || null,
-          rawText: text.slice(0, 120000),
-          resultJson: fields as unknown as Prisma.InputJsonValue,
-          validationJson: validationJson as Prisma.InputJsonValue,
-        },
-      });
       await tx.logisticsExpense.updateMany({
-        where: { id: { in: rowIds }, deletedAt: null },
+        where: {
+          id: { in: rowIds },
+          deletedAt: null,
+          invoiceOcrTaskId: task.id,
+          invoiceValidationStatus: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+        },
         data: {
           invoiceValidationStatus: status,
           invoiceValidationMessage: message || null,
@@ -473,7 +563,25 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
       provider: latestProvider,
       apiName: latestApiName || "LOGISTICS_INVOICE_OCR",
     };
-    await prisma.$transaction(async (tx) => {
+    const saved = await prisma.$transaction(async (tx) => {
+      const writable = await tx.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          module: LOGISTICS_INVOICE_OCR_MODULE,
+          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+          validationStatus: "PROCESSING",
+        },
+        data: {
+          status: LOGISTICS_INVOICE_VALIDATION_FAILED,
+          validationStatus: "FAILED",
+          errorMessage: message.slice(0, 1000),
+          rawText: latestRawText ? latestRawText.slice(0, 120000) : null,
+          validationJson: validationJson as Prisma.InputJsonValue,
+        },
+      });
+      if (!writable.count) {
+        return tx.ocrTask.findUnique({ where: { id: task.id }, include: { results: true } });
+      }
       await saveOcrRawResult({
         documentId,
         orderId: document.orderId,
@@ -485,18 +593,13 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
         status: "FAILED",
         errorMessage: message,
       }, tx).catch(() => null);
-      await tx.ocrTask.update({
-        where: { id: task.id },
-        data: {
-          status: LOGISTICS_INVOICE_VALIDATION_FAILED,
-          validationStatus: "FAILED",
-          errorMessage: message.slice(0, 1000),
-          rawText: latestRawText ? latestRawText.slice(0, 120000) : null,
-          validationJson: validationJson as Prisma.InputJsonValue,
-        },
-      });
       await tx.logisticsExpense.updateMany({
-        where: { id: { in: rowIds }, deletedAt: null },
+        where: {
+          id: { in: rowIds },
+          deletedAt: null,
+          invoiceOcrTaskId: task.id,
+          invoiceValidationStatus: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+        },
         data: {
           invoiceValidationStatus: LOGISTICS_INVOICE_VALIDATION_FAILED,
           invoiceValidationMessage: message.slice(0, 1000),
@@ -505,6 +608,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
           updatedById: input.actor?.id || null,
         },
       });
+      return tx.ocrTask.findUnique({ where: { id: task.id }, include: { results: true } });
     });
     console.error("logistics-invoice-validation-failed", {
       documentId,
@@ -514,7 +618,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
       message,
     });
     invalidateWorkbenchTodosCache();
-    return null;
+    return saved;
   }
 }
 
@@ -577,6 +681,124 @@ export async function runLogisticsInvoiceOcrTask(taskId: string) {
   });
 }
 
+async function markLogisticsInvoiceOcrTaskFailed(taskId: string, error: unknown, parserStatus = "物流发票识别失败") {
+  const current = await prisma.ocrTask.findUnique({ where: { id: taskId }, include: { results: true } });
+  if (!current) throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
+  const message = logisticsOcrErrorMessage(error).slice(0, 1000);
+  const validation = asRecord(current.validationJson);
+  const rowIds = validationRowIds(current.validationJson);
+  const validationJson = {
+    ...validation,
+    issues: [{ level: "manual", message }],
+    parserStatus,
+  };
+  const updated = await prisma.ocrTask.updateMany({
+    where: {
+      id: taskId,
+      module: LOGISTICS_INVOICE_OCR_MODULE,
+      status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+      validationStatus: "PROCESSING",
+    },
+    data: {
+      status: LOGISTICS_INVOICE_VALIDATION_FAILED,
+      validationStatus: "FAILED",
+      errorMessage: message,
+      validationJson: validationJson as Prisma.InputJsonValue,
+    },
+  });
+  if (updated.count && rowIds.length) {
+    await prisma.logisticsExpense.updateMany({
+      where: {
+        id: { in: rowIds },
+        deletedAt: null,
+        invoiceOcrTaskId: taskId,
+        invoiceValidationStatus: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
+      },
+      data: {
+        invoiceValidationStatus: LOGISTICS_INVOICE_VALIDATION_FAILED,
+        invoiceValidationMessage: message,
+        invoiceValidationJson: validationJson as Prisma.InputJsonValue,
+      },
+    });
+  }
+  const saved = await prisma.ocrTask.findUnique({ where: { id: taskId }, include: { results: true } });
+  if (!saved) throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
+  if (!updated.count) {
+    console.info("logistics-invoice-ocr-late-failure-ignored", {
+      taskId,
+      status: saved.status,
+      validationStatus: saved.validationStatus,
+      documentId: saved.documentId,
+    });
+  }
+  invalidateWorkbenchTodosCache();
+  return saved;
+}
+
+export async function runLogisticsInvoiceOcrTaskWithTimeout(taskId: string, timeoutMs = DEFAULT_LOGISTICS_INVOICE_OCR_TASK_TIMEOUT_MS) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      runLogisticsInvoiceOcrTask(taskId),
+      new Promise<Awaited<ReturnType<typeof runLogisticsInvoiceOcrTask>>>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(codedError(LOGISTICS_INVOICE_OCR_TIMEOUT_MESSAGE, 504, "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT"));
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT") {
+      console.error("logistics-invoice-ocr-timeout", { taskId, timeoutMs });
+      return markLogisticsInvoiceOcrTaskFailed(taskId, error, "物流发票识别超时");
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+export function logisticsInvoiceOcrApiResult(ocrTask: Awaited<ReturnType<typeof runLogisticsInvoiceOcrTaskWithTimeout>> | null | undefined) {
+  const validationStatus = String(ocrTask?.validationStatus || "");
+  const statusText = String(ocrTask?.status || "");
+  const validationJson = ocrTask?.validationJson && typeof ocrTask.validationJson === "object" && !Array.isArray(ocrTask.validationJson)
+    ? ocrTask.validationJson as Record<string, unknown>
+    : {};
+  const issues = Array.isArray(validationJson.issues)
+    ? validationJson.issues.map((issue) => asRecord(issue)).map((issue) => String(issue.message || "")).filter(Boolean)
+    : [];
+  const errorMessage = String(ocrTask?.errorMessage || issues[0] || "");
+  const timeout = /超时|TIMEOUT/i.test([errorMessage, ...issues].join(" "));
+  if (timeout) {
+    return {
+      status: "TIMEOUT",
+      message: LOGISTICS_INVOICE_OCR_TIMEOUT_MESSAGE,
+      result: ocrTask,
+      error: errorMessage || "OCR识别超时",
+    };
+  }
+  if (validationStatus === "PASSED" || statusText === LOGISTICS_INVOICE_VALIDATION_PASSED) {
+    return {
+      status: "PASSED",
+      message: "OCR校验通过",
+      result: ocrTask,
+    };
+  }
+  if (validationStatus === "FAILED" || statusText === LOGISTICS_INVOICE_VALIDATION_FAILED || !ocrTask) {
+    return {
+      status: "FAILED",
+      message: "OCR识别失败，请人工核对或重新上传",
+      result: ocrTask,
+      error: errorMessage || "具体失败原因未返回",
+    };
+  }
+  return {
+    status: "NEEDS_REVIEW",
+    message: "OCR已识别，但部分字段需人工确认",
+    result: ocrTask,
+    error: errorMessage || "",
+  };
+}
+
 export async function runPendingLogisticsInvoiceOcrTasks(limit = 5, minAgeMs = 60_000) {
   const safeLimit = Math.min(Math.max(Math.trunc(Number(limit) || 5), 1), 20);
   const readyBefore = new Date(Date.now() - Math.max(Math.trunc(Number(minAgeMs) || 60_000), 15_000));
@@ -613,27 +835,12 @@ export async function runPendingLogisticsInvoiceOcrTasks(limit = 5, minAgeMs = 6
         result.skipped += 1;
         continue;
       }
-      await runLogisticsInvoiceOcrTask(task.id);
+      await runLogisticsInvoiceOcrTaskWithTimeout(task.id);
       result.processed += 1;
     } catch (error) {
       result.failed += 1;
-      const message = error instanceof Error ? error.message : String(error || "物流发票识别失败");
-      await prisma.ocrTask.updateMany({
-        where: {
-          id: task.id,
-          status: LOGISTICS_INVOICE_VALIDATION_PROCESSING,
-          validationStatus: "PROCESSING",
-        },
-        data: {
-          status: LOGISTICS_INVOICE_VALIDATION_FAILED,
-          validationStatus: "FAILED",
-          errorMessage: message.slice(0, 1000),
-          validationJson: {
-            issues: [{ level: "manual", message: message.slice(0, 1000) }],
-            parserStatus: "物流发票后台识别失败",
-          },
-        },
-      }).catch(() => null);
+      const message = logisticsOcrErrorMessage(error, "物流发票识别失败");
+      await markLogisticsInvoiceOcrTaskFailed(task.id, error, "物流发票后台识别失败").catch(() => null);
       console.error("logistics-invoice-ocr-pending-worker-failed", {
         taskId: task.id,
         documentId: task.documentId,
@@ -789,6 +996,14 @@ export async function manuallyConfirmLogisticsInvoiceValidation(
   if (!targetIds.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
   const before = targetRows.map(serializeLogisticsExpense);
   const confirmedAt = new Date();
+  const documentIds = [...new Set(targetRows.map((row) => nonEmpty(row.invoiceDocumentId)).filter(Boolean))];
+  for (const documentId of documentIds) {
+    await cancelProcessingLogisticsInvoiceOcrTasks({
+      documentId,
+      rowIds: targetIds,
+      reason: "已人工确认通过，旧识别任务已取消。",
+    });
+  }
   await prisma.logisticsExpense.updateMany({
     where: { id: { in: targetIds }, deletedAt: null },
     data: {

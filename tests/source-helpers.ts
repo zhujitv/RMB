@@ -276,7 +276,6 @@ const OCR_INTEGRATION_FILES = [
   "lib/platform/ocr-integration.ts",
   "lib/platform/ocr-integration-clients.ts",
   "lib/platform/ocr-integration-customs.ts",
-  "lib/platform/ocr-integration-diagnostics.ts",
   "lib/platform/ocr-integration-docmind.ts",
   "lib/platform/ocr-integration-parsing.ts",
   "lib/platform/ocr-integration-runtime.ts",
@@ -308,7 +307,6 @@ const NOTIFICATION_ENGINE_FILES = [
   "lib/platform/notification-helpers.ts",
   "lib/platform/notification-send.ts",
   "lib/platform/notification-settings.ts",
-  "lib/platform/notification-template-test.ts",
 ];
 
 const WORKBENCH_TODOS_FILES = [

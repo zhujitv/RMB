@@ -35,8 +35,9 @@ import {
   clearLogisticsInvoiceValidation,
   createLogisticsInvoiceRecognitionTask,
   invoiceValidationStatusCanContinue,
+  logisticsInvoiceOcrApiResult,
   markLogisticsInvoiceValidationUploaded,
-  runLogisticsInvoiceOcrTask,
+  runLogisticsInvoiceOcrTaskWithTimeout,
   summarizeInvoiceValidationBlockReason,
 } from "./logistics-invoice-validation";
 import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
@@ -150,39 +151,6 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     throw error;
   }
   await markLogisticsInvoiceValidationUploaded(targetIds, actor);
-  try {
-    const ocrTask = await createLogisticsInvoiceRecognitionTask({
-      documentId: document.id,
-      invoiceGroupKey: invoiceGroup.key,
-      rows: savedRows,
-      actor,
-    });
-    void runNonCriticalTask("物流发票后台识别", () => runLogisticsInvoiceOcrTask(ocrTask.id), {
-      context: {
-        taskId: ocrTask.id,
-        documentId: document.id,
-        invoiceGroupKey: invoiceGroup.key,
-        rowIds: targetIds,
-      },
-      slowMs: 3000,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error || "物流发票识别任务创建失败");
-    await prisma.logisticsExpense.updateMany({
-      where: { id: { in: targetIds }, deletedAt: null },
-      data: {
-        invoiceValidationStatus: "识别失败",
-        invoiceValidationMessage: `OCR任务创建失败：${message.slice(0, 500)}`,
-        updatedById: actorId(actor),
-      },
-    }).catch(() => null);
-    console.error("logistics-invoice-ocr-task-create-failed", {
-      documentId: document.id,
-      invoiceGroupKey: invoiceGroup.key,
-      rowIds: targetIds,
-      message,
-    });
-  }
   await runNonCriticalTask("物流发票上传状态日志写入", () => writeAudit(request, actor, "提交物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
@@ -227,15 +195,8 @@ export async function rerunLogisticsExpenseInvoiceRecognition(request: AuditRequ
     rows: targetDocumentRows,
     actor,
   });
-  void runNonCriticalTask("物流发票重新识别后台执行", () => runLogisticsInvoiceOcrTask(ocrTask.id), {
-    context: {
-      taskId: ocrTask.id,
-      documentId,
-      invoiceGroupKey: invoiceGroup.key,
-      rowIds: targetDocumentRows.map((row) => row.id),
-    },
-    slowMs: 3000,
-  });
+  const ocrTaskResult = await runLogisticsInvoiceOcrTaskWithTimeout(ocrTask.id);
+  const ocrResult = logisticsInvoiceOcrApiResult(ocrTaskResult);
   await runNonCriticalTask("物流发票重新识别日志写入", () => writeAudit(request, actor, "重新识别物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
@@ -252,6 +213,8 @@ export async function rerunLogisticsExpenseInvoiceRecognition(request: AuditRequ
     bill: serializeLogisticsExpenseBill(finalRows),
     expenses: finalRows.map(serializeLogisticsExpense),
     invoiceGroup: invoiceGroup.key,
+    ...ocrResult,
+    ocrTask: ocrTaskResult,
   };
 }
 

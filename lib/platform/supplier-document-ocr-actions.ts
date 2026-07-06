@@ -8,6 +8,7 @@ import {
   OCR_STATUS_PASSED,
   OCR_STATUS_PROCESSING,
   OCR_STALE_PROCESSING_MESSAGE,
+  SUPPLIER_DOCUMENT_OCR_MODULE,
   VALIDATION_CONFIRMED,
   VALIDATION_FAILED,
   VALIDATION_PASSED,
@@ -35,7 +36,7 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
   try {
     const document = await loadSupplierReturnDocument(documentId, requestId, actor);
     const before = await prisma.ocrTask.findFirst({
-      where: { documentId, requestId },
+      where: { module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId, requestId },
       orderBy: [{ createdAt: "desc" }],
     });
     await cancelProcessingSupplierDocumentOcrTasks(documentId, requestId);
@@ -53,8 +54,9 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
 export async function confirmSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string) {
   assertWrite(actor, "supplierDocuments");
   assertInternalOcrManager(actor);
+  await loadSupplierReturnDocument(documentId, requestId, actor);
   const before = await prisma.ocrTask.findFirst({
-    where: { documentId, requestId },
+    where: { module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId, requestId },
     orderBy: [{ createdAt: "desc" }],
     include: { results: true },
   });
@@ -80,10 +82,11 @@ export async function confirmSupplierDocumentOcr(request: AuditRequestLike, acto
 export async function rejectSupplierDocumentOcr(request: AuditRequestLike, actor: ActorLike, requestId: string, documentId: string, input: unknown = {}) {
   assertWrite(actor, "supplierDocuments");
   assertInternalOcrManager(actor);
+  await loadSupplierReturnDocument(documentId, requestId, actor);
   const reason = nonEmpty((input as { reason?: unknown } | null)?.reason).slice(0, 500);
   if (!reason) throw codedError("请填写驳回原因。", 400, "OCR_REJECT_REASON_REQUIRED");
   const before = await prisma.ocrTask.findFirst({
-    where: { documentId, requestId },
+    where: { module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId, requestId },
     orderBy: [{ createdAt: "desc" }],
     include: { results: true },
   });

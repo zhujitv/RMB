@@ -137,12 +137,20 @@ async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown,
     where: { id: taskId },
     select: { id: true, requestId: true, documentId: true, orderId: true, documentType: true },
   });
+  if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
   const originalMessage = supplierOcrErrorText(error);
   const message = supplierDocumentOcrFailureMessage(error);
   const failureKind = supplierDocumentOcrFailureKind(error);
   const technicalDetails = supplierOcrFailureTechnicalDetails(error);
-  const saved = await prisma.ocrTask.update({
-    where: { id: taskId },
+  const updated = await prisma.ocrTask.updateMany({
+    where: {
+      id: taskId,
+      module: SUPPLIER_DOCUMENT_OCR_MODULE,
+      OR: [
+        { status: OCR_STATUS_PROCESSING },
+        { validationStatus: "PROCESSING" },
+      ],
+    },
     data: {
       status: OCR_STATUS_FAILED,
       validationStatus: VALIDATION_FAILED,
@@ -161,9 +169,20 @@ async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown,
         responseBody: technicalDetails.responseBody,
       },
     },
-    include: { results: true },
   });
-  if (task?.requestId) {
+  const saved = await prisma.ocrTask.findUnique({ where: { id: taskId }, include: { results: true } });
+  if (!saved) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+  if (!updated.count) {
+    console.info("supplier-document-ocr-late-failure-ignored", {
+      taskId,
+      status: saved.status,
+      validationStatus: saved.validationStatus,
+      requestId: saved.requestId || "",
+      documentId: saved.documentId,
+    });
+    return saved;
+  }
+  if (task.requestId) {
     await refreshSupplierDocumentRequestQualification(task.requestId).catch((refreshError) => {
       logServerError("供应商资料回传OCR失败后完成度刷新失败", refreshError, {
         taskId,
@@ -412,13 +431,33 @@ export async function runSupplierDocumentOcrForDocument(
   const document = await loadSupplierReturnDocument(documentId, options.requestId || "", actor);
   let task: OcrTaskRow | null = null;
   try {
-    task = options.taskId
-      ? await prisma.ocrTask.update({
-          where: { id: options.taskId },
-          data: { status: OCR_STATUS_PROCESSING, validationStatus: "PROCESSING", errorMessage: null },
-          include: { results: true },
-        })
-      : await createSupplierDocumentOcrTaskForUpload(document.id);
+    if (options.taskId) {
+      const claimed = await prisma.ocrTask.updateMany({
+        where: {
+          id: options.taskId,
+          module: SUPPLIER_DOCUMENT_OCR_MODULE,
+          OR: [
+            { status: OCR_STATUS_PROCESSING },
+            { validationStatus: "PROCESSING" },
+          ],
+        },
+        data: { status: OCR_STATUS_PROCESSING, validationStatus: "PROCESSING", errorMessage: null },
+      });
+      task = await prisma.ocrTask.findUnique({ where: { id: options.taskId }, include: { results: true } });
+      if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+      if (!claimed.count) {
+        console.info("supplier-document-ocr-run-skipped-non-processing", {
+          taskId: options.taskId,
+          status: task.status,
+          validationStatus: task.validationStatus,
+          requestId: task.requestId || "",
+          documentId: task.documentId,
+        });
+        return task;
+      }
+    } else {
+      task = await createSupplierDocumentOcrTaskForUpload(document.id);
+    }
   } catch (error: unknown) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
@@ -472,6 +511,20 @@ export async function runSupplierDocumentOcrForDocument(
       validationResult: { status, issues },
     });
     const saved = await prisma.$transaction(async (tx) => {
+      const writable = await tx.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          module: SUPPLIER_DOCUMENT_OCR_MODULE,
+          status: OCR_STATUS_PROCESSING,
+          validationStatus: "PROCESSING",
+        },
+        data: { errorMessage: null },
+      });
+      if (!writable.count) {
+        const current = await tx.ocrTask.findUnique({ where: { id: task.id }, include: { results: true } });
+        if (current) return current;
+        throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+      }
       await saveOcrRawResult({
         documentId: document.id,
         orderId: document.orderId,
@@ -539,8 +592,15 @@ export async function runSupplierDocumentOcrForDocument(
     const technicalDetails = supplierOcrFailureTechnicalDetails(error);
     let saved: OcrTaskRow;
     try {
-      saved = await prisma.ocrTask.update({
-        where: { id: task.id },
+      const updated = await prisma.ocrTask.updateMany({
+        where: {
+          id: task.id,
+          module: SUPPLIER_DOCUMENT_OCR_MODULE,
+          OR: [
+            { status: OCR_STATUS_PROCESSING },
+            { validationStatus: "PROCESSING" },
+          ],
+        },
         data: {
           status: OCR_STATUS_FAILED,
           validationStatus: VALIDATION_FAILED,
@@ -560,8 +620,20 @@ export async function runSupplierDocumentOcrForDocument(
             responseBody: technicalDetails.responseBody,
           },
         },
-        include: { results: true },
       });
+      const current = await prisma.ocrTask.findUnique({ where: { id: task.id }, include: { results: true } });
+      if (!current) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+      saved = current;
+      if (!updated.count) {
+        console.info("supplier-document-ocr-late-error-ignored", {
+          documentId,
+          taskId: task.id,
+          status: saved.status,
+          validationStatus: saved.validationStatus,
+          requestId: document.factoryDocumentRequestId || "",
+        });
+        return saved;
+      }
       await saveOcrRawResult({
         documentId: document.id,
         orderId: document.orderId,

@@ -49,6 +49,18 @@ export function useSupplierDocumentOcrActions({
     return parts.length ? [...new Set(parts)].join("：") : "OCR识别失败，请人工核对或重新上传";
   }
 
+  function localFailedOcrTask(document: SupplierDocument, message: string): SupplierDocumentOcrTask {
+    return {
+      id: `local-${document.id}`,
+      status: "OCR识别失败，需人工核对",
+      validationStatus: "FAILED",
+      errorMessage: message,
+      issues: [{ level: "manual", message }],
+      fields: [],
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   async function rerunOcr(task: SupplierDocumentTask, document: SupplierDocument) {
     const busyKey = supplierOcrActionKey(task.id, document.id, "rerun");
     setOcrBusyKey(busyKey);
@@ -68,7 +80,9 @@ export function useSupplierDocumentOcrActions({
       }
       void loadRows(page, pageSize, submittedKeyword, { silent: true });
     } catch (ocrError) {
-      setError(apiErrorMessage(ocrError, "重新识别失败"));
+      const message = apiErrorMessage(ocrError, "重新识别失败");
+      updateDocumentOcrTask(task.id, document.id, localFailedOcrTask(document, message));
+      setError(message);
     } finally {
       setOcrBusyKey("");
     }

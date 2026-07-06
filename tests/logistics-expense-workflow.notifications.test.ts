@@ -132,7 +132,8 @@ test("settings include configurable logistics invoice notification template", ()
   assert.match(settingsModule, /ccAdminEmails/);
   assert.match(settingsModule, /ccEmails/);
   assert.match(settingsModule, /保存通知模板/);
-  assert.match(settingsModule, /发送测试邮件/);
+  assert.doesNotMatch(settingsModule, /发送测试邮件/);
+  assert.doesNotMatch(settingsModule, /\/api\/settings\/notification-templates\/test/);
   assert.match(settingsModule, /最近发送记录/);
   assert.match(settingsModule, /可用变量/);
   assert.match(settingsModule, /模板预览/);

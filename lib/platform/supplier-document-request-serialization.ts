@@ -9,6 +9,7 @@ import {
   runSupplierDocumentOcrTask,
   serializeSupplierDocumentOcrTask,
 } from "./supplier-document-ocr";
+import { SUPPLIER_DOCUMENT_OCR_MODULE } from "./supplier-document-ocr-shared";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
@@ -326,7 +327,7 @@ export async function attachSupplierDocumentOcrTasks(rows: SupplierDocumentReque
   try {
     await reconcileStaleSupplierDocumentOcrTasks(documentIds);
     const tasks = await prisma.ocrTask.findMany({
-      where: { documentId: { in: documentIds } },
+      where: { module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId: { in: documentIds } },
       include: { results: true },
       orderBy: [{ createdAt: "desc" }],
       take: Math.min(Math.max(documentIds.length * 3, 20), 500),
