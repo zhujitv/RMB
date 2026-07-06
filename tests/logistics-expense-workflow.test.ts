@@ -307,6 +307,19 @@ test("invoice upload and confirmation workflow is present", () => {
   assert.match(logisticsModule, /已确认发票/);
 });
 
+test("USD ocean freight invoices use foreign currency amount from remarks instead of CNY tax total", () => {
+  assert.match(backend, /export function extractLogisticsForeignCurrencyAmount/);
+  assert.match(backend, /美金金额\|美元金额/);
+  assert.match(backend, /\(\?!\[0-9\]\)/);
+  assert.match(backend, /value > 0 && value < 10_000_000/);
+  assert.match(backend, /OCEAN_FREIGHT_INVOICE_GROUP_KEY[\s\S]*cleanText\(input\.currency\)\.toUpperCase\(\) === "USD"/);
+  assert.match(backend, /source: "FOREIGN_CURRENCY_REMARK"/);
+  assert.match(backend, /source: "FOREIGN_CURRENCY_MISSING"/);
+  assert.match(backend, /recognizedAmount: validation\.recognizedAmount/);
+  assert.match(backend, /invoiceRecognizedAmount: validation\.recognizedAmount \|\| null/);
+  assert.match(backend, /taxInvoiceAmount: validation\.taxInvoiceAmount/);
+});
+
 test("port charge logistics invoice filenames do not fall back to factory invoice", () => {
   assert.match(backend, /港杂费: "Port-Charges-Invoice"/);
   assert.match(backend, /LOGISTICS_INVOICE_ENGLISH_LABELS\[costType\]/);
