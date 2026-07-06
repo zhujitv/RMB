@@ -55,6 +55,17 @@ export type CostRow = {
   exchangeRateType?: string;
   amount?: number;
   amountCny?: number;
+  status?: string;
+  voidedAt?: string;
+  voidedById?: string;
+  voidReason?: string;
+  restoredAt?: string;
+  restoredById?: string;
+  restoreReason?: string;
+  canDeleteCost?: boolean;
+  deleteBlockedReasons?: string[];
+  taxArchived?: boolean;
+  taxRefundStatus?: string;
   paymentStatus?: string;
   paymentDate?: string;
   paid?: boolean;
@@ -156,6 +167,15 @@ export type CostDeleteResponse = {
   orderSummary?: CostOrderSummary | null;
 };
 
+export type CostBatchVoidResponse = {
+  success?: boolean;
+  ok?: boolean;
+  message?: string;
+  voidedCount?: number;
+  skippedCount?: number;
+  costs?: CostRow[];
+};
+
 export type CostPaymentResponse = {
   success?: boolean;
   cost?: CostRow;
@@ -238,6 +258,7 @@ export type CostOrderSummary = {
 
 export type CostFilters = {
   keyword: string;
+  costStatus: string;
   costType: string;
   paymentStatus: string;
   costConfirmed: string;
@@ -267,7 +288,7 @@ export type CostItemForm = {
 };
 
 export type CostFormDrawerState = {
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "copy";
   cost: CostRow | null;
 };
 export type CostView = "invoiceGroups" | "details" | "orders" | "invoiceExceptions";
@@ -298,6 +319,7 @@ export function emptyCostItemForm(): CostItemForm {
 
 export const emptyCostFilters: CostFilters = {
   keyword: "",
+  costStatus: "ACTIVE",
   costType: "",
   paymentStatus: "",
   costConfirmed: "",

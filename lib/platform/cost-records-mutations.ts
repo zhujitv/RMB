@@ -1,4 +1,4 @@
-export { deleteCost, saveCost, saveCosts } from "./cost-records-supplier-mutations";
+export { batchVoidCosts, deleteCost, restoreCost, saveCost, saveCosts } from "./cost-records-supplier-mutations";
 export {
   getProductSupplierCostPaymentVoucher,
   getProductSupplierCostPaymentVoucherMetadata,

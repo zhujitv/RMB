@@ -27,7 +27,7 @@ export type OcrDocumentRow = Prisma.OrderDocumentGetPayload<{
         order: {
           include: {
             businessEntity: true;
-            costs: { where: { deletedAt: null }; include: { supplier: true } };
+            costs: { where: { deletedAt: null; status: { not: "VOID" } }; include: { supplier: true } };
           };
         };
         supplier: true;

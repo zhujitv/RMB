@@ -153,6 +153,9 @@ export type CostOrderLike = PaymentOrderLike & {
   currency?: string | null;
   exchangeRate?: unknown;
   status?: string | null;
+  commissionStatus?: string | null;
+  commissionSettlementRecords?: Array<{ id?: string | null }> | null;
+  taxRefundArchivedAt?: Date | string | null;
 };
 export type CostDocumentLike = Record<string, unknown> & {
   id?: string | null;
@@ -198,6 +201,13 @@ export type CostLike = Record<string, unknown> & {
   exchangeRateType?: string | null;
   amount?: unknown;
   amountCny?: unknown;
+  status?: string | null;
+  voidedAt?: Date | string | null;
+  voidedById?: string | null;
+  voidReason?: string | null;
+  restoredAt?: Date | string | null;
+  restoredById?: string | null;
+  restoreReason?: string | null;
   paymentStatus?: string | null;
   costConfirmed?: boolean | null;
   costConfirmedAt?: Date | string | null;
@@ -208,11 +218,15 @@ export type CostLike = Record<string, unknown> & {
   paymentVoucherFileName?: string | null;
   paymentVoucherMimeType?: string | null;
   paymentVoucherUploadedAt?: Date | string | null;
+  paymentVoucherStorageKey?: string | null;
+  paymentVoucherBucket?: string | null;
   invoiceStatus?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
   remark?: string | null;
   documents?: CostDocumentLike[] | null;
+  generatedLogisticsExpense?: unknown;
+  supplierDocumentRequests?: Array<{ id?: string | null; deletedAt?: Date | string | null }> | null;
   createdBy?: UserLike | null;
   updatedBy?: UserLike | null;
   createdAt?: Date | string | null;

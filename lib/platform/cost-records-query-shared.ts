@@ -2,6 +2,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   COST_PAYMENT_STATUSES,
   COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
   dateFromInput,
@@ -32,6 +33,7 @@ export type CostInvoiceGroupCostDto = CostDto & {
 };
 export type CostListFilters = {
   keyword: Prisma.StringFilter | null;
+  costStatus: string;
   costType: string;
   paymentStatus: string;
   costConfirmed: boolean | null;
@@ -71,8 +73,21 @@ export type CostWithInvoiceGroupRelations = Prisma.OrderCostGetPayload<{ include
 
 export function includeCostListRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
-    order: { include: { customer: true, businessEntity: true, salesperson: true } },
+    order: {
+      include: {
+        customer: true,
+        businessEntity: true,
+        salesperson: true,
+        commissionSettlementRecords: { select: { id: true }, take: 1 },
+      },
+    },
     supplier: true,
+    generatedLogisticsExpense: { select: { id: true } },
+    supplierDocumentRequests: {
+      where: { deletedAt: null },
+      select: { id: true, deletedAt: true },
+      take: 1,
+    },
     documents: {
       where: { deletedAt: null },
       include: { uploadedBy: true, supplier: true },
@@ -98,6 +113,7 @@ export function costListFiltersFromQuery(query: CostQuery): CostListFilters {
   const keyword = insensitiveContains(query.get("keyword"));
   return {
     keyword,
+    costStatus: nonEmpty(query.get("costStatus")) || "ACTIVE",
     costType: nonEmpty(query.get("costType")),
     paymentStatus: nonEmpty(query.get("paymentStatus")),
     costConfirmed: costConfirmedFilter(query.get("costConfirmed")),
@@ -253,8 +269,14 @@ function costFilterClauses(filters: CostListFilters, supplierInvoicePairs: Suppl
 
 export function pagedCostWhere(filters: CostListFilters, actor: ActorLike, supplierInvoicePairs: SupplierInvoicePair[] = []): Prisma.OrderCostWhereInput {
   const clauses = costFilterClauses(filters, supplierInvoicePairs);
+  const statusWhere: Prisma.OrderCostWhereInput = filters.costStatus === "VOID"
+    ? { status: ORDER_COST_STATUS_VOID }
+    : filters.costStatus === "ALL"
+      ? {}
+      : { status: { not: ORDER_COST_STATUS_VOID } };
   return {
     deletedAt: null,
+    ...statusWhere,
     ...costAccessWhere(actor),
     ...(clauses.length ? { AND: clauses } : {}),
   };

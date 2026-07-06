@@ -69,6 +69,14 @@ export function CostFilterPanel({
 
         <div className={styles.costFilterPrimaryRow}>
           <label>
+            记录状态
+            <select value={filters.costStatus} onChange={(event) => onSetFilter("costStatus", event.target.value)}>
+              <option value="ACTIVE">有效成本</option>
+              <option value="VOID">已作废</option>
+              <option value="ALL">全部记录</option>
+            </select>
+          </label>
+          <label>
             成本类型
             <select value={filters.costType} onChange={(event) => onSetFilter("costType", event.target.value)}>
               <option value="">全部成本类型</option>

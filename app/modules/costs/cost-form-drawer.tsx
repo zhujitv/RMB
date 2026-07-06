@@ -19,17 +19,22 @@ export function CostFormDrawer({
 }) {
   const cost = drawer.cost;
   const editMode = drawer.mode === "edit";
+  const copyMode = drawer.mode === "copy";
   const supplierName = cost ? (cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-") : "-";
   const title = editMode
     ? `${cost?.orderNo || "-"} · ${customerDisplayName(cost || {})}`
+    : copyMode
+      ? `复制成本 · ${cost?.orderNo || "-"}`
     : "登记成本";
   const subtitle = editMode
     ? `成本类型：${logisticsCostTypeLabel(cost?.costType || "") || cost?.costType || "-"} · 付款状态：${cost?.paymentStatus || "-"} · 供应商：${supplierName}`
+    : copyMode
+      ? `将以 ${supplierName} 的成本信息创建一条新成本，附件和付款凭证不会复制。`
     : "选择订单后登记供应商成本，保存后当前筛选和页码保持不变。";
 
   return (
     <SideDetailDrawer
-      ariaLabel={editMode ? "编辑成本" : "登记成本"}
+      ariaLabel={editMode ? "编辑成本" : copyMode ? "复制成本" : "登记成本"}
       kicker="成本管理"
       title={title}
       subtitle={subtitle}

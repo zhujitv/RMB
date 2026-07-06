@@ -6,6 +6,7 @@ import {
   codedError,
   effectivePermissions,
   nonEmpty,
+  ORDER_COST_STATUS_VOID,
   permissionError,
 } from "./shared";
 
@@ -18,6 +19,7 @@ type ActorLike = {
 type OrderCostLike = {
   id?: string | null;
   createdById?: string | null;
+  status?: string | null;
   deletedAt?: unknown;
 } & Record<string, unknown>;
 
@@ -79,7 +81,7 @@ export function orderAccessWhere(actor: ActorLike): Prisma.ReceivableOrderWhereI
   }
   if (scope === "OWN_COST") {
     const currentActorId = actorId(actor);
-    return currentActorId ? { costs: { some: { createdById: currentActorId, deletedAt: null } } } : { id: "__no_order_access__" };
+    return currentActorId ? { costs: { some: { createdById: currentActorId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } } } : { id: "__no_order_access__" };
   }
   return { id: "__no_order_access__" };
 }
@@ -90,10 +92,10 @@ export function scopeOrderForActor<T extends OrderLike | null | undefined>(order
   return {
     ...order,
     payments: [],
-    costs: (order.costs || []).filter((cost) => !cost.deletedAt && cost.createdById === currentActorId),
+    costs: (order.costs || []).filter((cost) => !cost.deletedAt && cost.status !== ORDER_COST_STATUS_VOID && cost.createdById === currentActorId),
     documents: (order.documents || []).filter((document) => (
       document.relatedModule === "SUPPLIER"
-      && (document.cost?.createdById === currentActorId || (order.costs || []).some((cost) => cost.id === document.costId && cost.createdById === currentActorId))
+      && (document.cost?.createdById === currentActorId || (order.costs || []).some((cost) => cost.id === document.costId && cost.status !== ORDER_COST_STATUS_VOID && cost.createdById === currentActorId))
     )),
   } as T;
 }
@@ -105,7 +107,7 @@ export function canAccessOrder(actor: ActorLike, order: OrderLike | null | undef
   if (scope === "OWN") return orderOwnedBySalesperson(order, actorId(actor));
   if (scope === "OWN_COST") {
     const currentActorId = actorId(actor);
-    return (order?.costs || []).some((cost) => !cost.deletedAt && cost.createdById === currentActorId);
+    return (order?.costs || []).some((cost) => !cost.deletedAt && cost.status !== ORDER_COST_STATUS_VOID && cost.createdById === currentActorId);
   }
   return false;
 }
@@ -123,7 +125,7 @@ export function validateDuplicateOrder(orderNo: string, id: string | null = null
 export async function assertOrderOpen(orderId: string, actor: ActorLike) {
   const order = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null },
-    include: { customer: true, costs: { where: { deletedAt: null }, select: { createdById: true, deletedAt: true } } },
+    include: { customer: true, costs: { where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } }, select: { createdById: true, status: true, deletedAt: true } } },
   });
   if (!order) {
     throw codedError("请选择有效应收订单", 400, "ORDER_REQUIRED");

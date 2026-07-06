@@ -4,6 +4,7 @@ import { canAccessOrder } from "./order-access";
 import type { InputSchema } from "./shared-base-utils";
 import {
   COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   assertInputSchema,
   assertJsonObject,
   codedError,
@@ -41,13 +42,13 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
   }
 
   const before = await prisma.orderCost.findFirst({
-    where: { id, deletedAt: null },
+    where: { id, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
     include: {
       ...includeCostRelations(),
       generatedLogisticsExpense: true,
     },
   });
-  if (!before) throw permissionError("成本记录不存在或已删除", 404);
+  if (!before) throw permissionError("成本记录不存在、已删除或已作废", 404);
   if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
 
   if (before.sourceType === "LOGISTICS_EXPENSE" && !isLogisticsCostType(nextCostType)) {

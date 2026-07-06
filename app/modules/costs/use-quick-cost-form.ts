@@ -40,6 +40,7 @@ export function useQuickCostForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const editMode = Boolean(initialCost?.id);
+  const copyMode = Boolean(initialCost && !initialCost.id);
 
   useEffect(() => {
     const nextItem = costItemFromRow(initialCost);
@@ -47,7 +48,7 @@ export function useQuickCostForm({
     setItems([nextItem]);
     setExchangeMetaByItem({ [nextItem.localId]: exchangeRateMeta(nextItem.currency) });
     setMessage("");
-  }, [initialCost?.id]);
+  }, [initialCost?.id, initialCost?.orderId, initialCost?.supplierId, initialCost?.costType, initialCost?.amount, initialCost?.updatedAt]);
 
   useEffect(() => {
     setExchangeMetaByItem((current) => {
@@ -272,6 +273,7 @@ export function useQuickCostForm({
 
   return {
     editMode,
+    copyMode,
     form,
     items,
     orderOptions,

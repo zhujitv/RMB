@@ -913,6 +913,13 @@ model OrderCost {
   amount                   Decimal   @db.Decimal(18, 2)
   amountCny                Decimal   @map("amount_cny") @db.Decimal(18, 2)
   paymentStatus            String    @default("待支付") @map("payment_status")
+  status                   String    @default("ACTIVE")
+  voidedAt                 DateTime? @map("voided_at")
+  voidedById               String?   @map("voided_by")
+  voidReason               String?   @map("void_reason") @db.Text
+  restoredAt               DateTime? @map("restored_at")
+  restoredById             String?   @map("restored_by")
+  restoreReason            String?   @map("restore_reason") @db.Text
   costConfirmed            Boolean   @default(false) @map("cost_confirmed")
   costConfirmedAt          DateTime? @map("cost_confirmed_at")
   paymentDate              DateTime? @map("payment_date") @db.Date
@@ -947,6 +954,8 @@ model OrderCost {
   @@index([supplierId])
   @@index([costType])
   @@index([paymentStatus])
+  @@index([status])
+  @@index([voidedAt])
   @@index([paid])
   @@index([paidAt])
   @@index([costConfirmed])

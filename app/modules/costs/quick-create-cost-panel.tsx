@@ -44,7 +44,7 @@ export function QuickCreateCostPanel({
     >
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{controller.editMode ? "编辑成本" : "批量登记成本"}</strong>
+          <strong>{controller.editMode ? "编辑成本" : controller.copyMode ? "复制成本" : "批量登记成本"}</strong>
         </div>
         {!controller.editMode ? (
           <div className={styles.detailActions}>

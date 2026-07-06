@@ -17,6 +17,12 @@ const saveCostTyped = saveCost as (
 ) => Promise<unknown>;
 
 const getCostTyped = getCost as (id: string, actor: unknown) => Promise<unknown>;
+const deleteCostTyped = deleteCost as (
+  request: NextRequest,
+  actor: unknown,
+  id: string,
+  input?: Record<string, unknown>,
+) => Promise<unknown>;
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
@@ -43,7 +49,8 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
     const actor = await requireApiActor(request);
-    const result = await deleteCost(request, actor, id);
+    const body = await parseJsonBody(request, { allowEmpty: true });
+    const result = await deleteCostTyped(request, actor, id, body) as Record<string, unknown>;
     return ok({ success: true, ok: true, ...result });
   } catch (error: unknown) {
     return apiError(error, "删除成本失败");

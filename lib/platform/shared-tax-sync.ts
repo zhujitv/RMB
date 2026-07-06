@@ -7,7 +7,7 @@ import {
   taxRefundStatusFromCompleteness,
 } from "./shared-tax-completeness";
 import { hasCostBusinessDocument } from "./business-documents";
-import { runNonCriticalTask } from "./shared-constants";
+import { ORDER_COST_STATUS_VOID, runNonCriticalTask } from "./shared-constants";
 
 type TaxRefundCompletenessOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
 type TaxRefundCompletenessResult = ReturnType<typeof taxDocumentCompleteness>;
@@ -155,7 +155,7 @@ export function scheduleTaxRefundCompletenessRefreshBatch(
 export async function syncCostInvoiceStatus(costId: string | null | undefined) {
   if (!costId) return null;
   const cost = await prisma.orderCost.findFirst({
-    where: { id: costId, deletedAt: null },
+    where: { id: costId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
     select: { id: true, orderId: true, supplierId: true, sourceType: true, invoiceStatus: true },
   });
   if (!cost) return null;

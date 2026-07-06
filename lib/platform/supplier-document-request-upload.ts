@@ -13,6 +13,7 @@ import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-documen
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_SUPPLIER_TYPES,
   assertRead,
@@ -176,6 +177,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
               orderId: row.orderId,
               supplierId: row.supplierId,
               deletedAt: null,
+              status: { not: ORDER_COST_STATUS_VOID },
             },
             select: { id: true },
             take: SUPPLIER_INVOICE_SYNC_COST_LIMIT,

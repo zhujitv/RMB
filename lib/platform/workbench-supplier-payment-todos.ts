@@ -5,6 +5,7 @@ import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   getCommissionFormulaSettings,
   includeOrderRelations,
   isProductSupplierOperatorRole,
@@ -181,6 +182,7 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
     prisma.orderCost.findMany({
       where: {
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
         paymentStatus: { not: "已取消" },
         AND: [
           baseWhere,
@@ -199,6 +201,7 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
     prisma.orderCost.findMany({
       where: {
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
         paymentStatus: { not: "已取消" },
         AND: [
           baseWhere,
@@ -215,6 +218,7 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
     prisma.orderCost.findMany({
       where: {
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
         paymentStatus: { not: "已取消" },
         paidAt: null,
         AND: [

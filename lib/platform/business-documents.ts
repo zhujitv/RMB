@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
+import { ORDER_COST_STATUS_VOID, SUPPLIER_DOCUMENT_TYPES } from "./shared-constants";
 
 export const SUPPLIER_RETURN_DOCUMENT_SOURCE = "SUPPLIER_RETURN";
 const BUSINESS_DOCUMENTS_PER_ORDER_LIMIT = 200;
@@ -206,6 +206,7 @@ export async function hasCostBusinessDocument(cost: CostDocumentCarrier, documen
       orderId: cost.orderId,
       supplierId: cost.supplierId,
       deletedAt: null,
+      status: { not: ORDER_COST_STATUS_VOID },
     },
   });
   const count = await prisma.orderDocument.count({

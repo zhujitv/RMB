@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { canRead } from "./shared-access";
 import { orderAccessWhere } from "./order-access";
-import { isProductSupplierOperatorRole } from "./shared";
+import { ORDER_COST_STATUS_VOID, isProductSupplierOperatorRole } from "./shared";
 import { isFinanceWorkbenchActor } from "./workbench-todo-policy";
 import { addDays, startOfChinaDay } from "./workbench-todo-rules";
 import {
@@ -98,6 +98,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
     batches.push(prisma.orderCost.findMany({
       where: {
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
         paymentStatus: { not: "已取消" },
         AND: [
           productCostWhere,

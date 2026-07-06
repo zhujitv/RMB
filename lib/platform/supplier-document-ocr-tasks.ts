@@ -2,6 +2,7 @@ import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { readR2Object } from "../r2";
 import { prisma } from "../prisma";
 import { logServerError, codedError } from "./shared-base-utils";
+import { ORDER_COST_STATUS_VOID } from "./shared-cost-constants";
 import { assertRead } from "./shared-auth";
 import { isOcrFeatureEnabled, recognizeSupplierDocumentWithOcr } from "./ocr-integration";
 import { saveOcrRawResult } from "./ocr-raw-results";
@@ -150,7 +151,7 @@ export async function loadSupplierReturnDocument(documentId: string, requestId =
           order: {
             include: {
               businessEntity: true,
-              costs: { where: { deletedAt: null }, include: { supplier: true } },
+              costs: { where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } }, include: { supplier: true } },
             },
           },
           supplier: true,

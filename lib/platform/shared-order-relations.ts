@@ -1,4 +1,5 @@
 import { Prisma } from "../generated/prisma/client.js";
+import { ORDER_COST_STATUS_VOID } from "./shared-constants";
 
 export function domesticLogisticsInfoSafeSelect() {
   return Prisma.validator<Prisma.DomesticLogisticsInfoSelect>()({
@@ -44,7 +45,7 @@ export function includeOrderRelations() {
     createdBy: true,
     updatedBy: true,
     payments: {
-      where: { deletedAt: null },
+      where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
       include: { createdBy: true, updatedBy: true },
       orderBy: [{ paymentDate: "desc" as const }, { createdAt: "desc" as const }],
     },

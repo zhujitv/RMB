@@ -7,52 +7,85 @@ import styles from "../../WorkspaceShell.module.css";
 import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { CostInvoiceActions } from "./invoice-actions";
 import { FACTORY_DOCUMENT_TYPES, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
-import { costDeleteActionLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, singlePaymentVoucherCost } from "./helpers";
+import { canDeleteCost, canVoidCost, costStatusLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, isVoidedCost, singlePaymentVoucherCost } from "./helpers";
 
 export function CostTableRows({
   cost,
+  selected,
   onViewDetail,
   deleting,
+  onSelect,
   onEdit,
+  onCopy,
+  onVoid,
   onDelete,
+  onRestore,
   onOpenDocuments,
   onOpenPaymentVoucher,
 }: {
   cost: CostRow;
+  selected: boolean;
   onViewDetail: () => void;
   deleting: boolean;
+  onSelect: (selected: boolean) => void;
   onEdit: () => void;
+  onCopy: () => void;
+  onVoid: () => void;
   onDelete: () => void;
+  onRestore: () => void;
   onOpenDocuments: () => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const manualCost = !isLogisticsGeneratedCost(cost);
-  const deleteActionLabel = costDeleteActionLabel(cost);
+  const voided = isVoidedCost(cost);
+  const deleteAllowed = canDeleteCost(cost);
+  const voidAllowed = canVoidCost(cost);
   return (
     <>
       <tr className={getBusinessEntityRowClass(cost, styles, styles.clickableRow)} onClick={onViewDetail}>
+        <td>
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={!voidAllowed}
+            onChange={(event) => onSelect(event.target.checked)}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`选择成本 ${cost.orderNo || ""}`}
+          />
+        </td>
         <td className={styles.orderNoColumn}><strong>{cost.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(cost)}>{customerDisplayName(cost)}</td>
         <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
         <td className={styles.supplierColumn} title={supplierName}>{supplierName}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
-        <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
+        <td><span className={`${styles.statusPill} ${voided ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{costStatusLabel(cost)}</span></td>
         <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td className={styles.costInvoiceActionColumn}>
           <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
           {manualCost ? (
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              disabled={deleting}
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-              }}
-            >
-              {deleting ? "处理中..." : deleteActionLabel}
-            </button>
+            <>
+              {voided ? (
+                <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
+                  {deleting ? "处理中..." : "恢复"}
+                </button>
+              ) : (
+                <>
+                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>编辑</button>
+                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onCopy(); }}>复制</button>
+                  {voidAllowed ? (
+                    <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onVoid(); }}>
+                      {deleting ? "处理中..." : "作废"}
+                    </button>
+                  ) : null}
+                  {deleteAllowed ? (
+                    <button className={styles.fileDangerButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
+                      {deleting ? "处理中..." : "删除"}
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </>
           ) : null}
         </td>
       </tr>
@@ -60,10 +93,24 @@ export function CostTableRows({
   );
 }
 
-export function CostDetailTableHead() {
+export function CostDetailTableHead({
+  allSelected,
+  onToggleAll,
+}: {
+  allSelected: boolean;
+  onToggleAll: (selected: boolean) => void;
+}) {
   return (
     <thead>
       <tr>
+        <th>
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={(event) => onToggleAll(event.target.checked)}
+            aria-label="选择当前页可作废成本"
+          />
+        </th>
         <th className={styles.orderNoColumn}>订单号</th>
         <th className={styles.customerColumn}>客户简称</th>
         <th>成本类型</th>
@@ -161,7 +208,7 @@ export function costViewColSpan(costView: CostView) {
   if (costView === "orders") return 6;
   if (costView === "invoiceGroups") return 8;
   if (costView === "invoiceExceptions") return 9;
-  return 8;
+  return 9;
 }
 
 export function costViewLabel(costView: CostView) {

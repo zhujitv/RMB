@@ -7,7 +7,7 @@ import styles from "../../WorkspaceShell.module.css";
 import { CostInvoiceActions } from "./invoice-actions";
 import type { CostDocument, CostInvoiceGroupRow, CostOrderSummary, CostRow } from "./model";
 import { costInvoiceStatusClass, costPaymentStatusClass } from "./cost-table";
-import { costDeleteActionLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isLogisticsGeneratedCost, isProductSupplierPaid, isProductSupplierPaymentEnabled } from "./helpers";
+import { canDeleteCost, canVoidCost, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isLogisticsGeneratedCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, isVoidedCost } from "./helpers";
 
 export function CostDetailDrawer({
   cost,
@@ -15,7 +15,10 @@ export function CostDetailDrawer({
   onOpenDocuments,
   onOpenPaymentVoucher,
   onEdit,
+  onCopy,
+  onVoid,
   onDelete,
+  onRestore,
   onClose,
 }: {
   cost: CostRow;
@@ -23,13 +26,18 @@ export function CostDetailDrawer({
   onOpenDocuments: () => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
   onEdit: () => void;
+  onCopy: () => void;
+  onVoid: () => void;
   onDelete: () => void;
+  onRestore: () => void;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState("basic");
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
   const manualCost = cost.sourceType !== "LOGISTICS_EXPENSE";
-  const deleteActionLabel = costDeleteActionLabel(cost);
+  const voided = isVoidedCost(cost);
+  const deleteAllowed = canDeleteCost(cost);
+  const voidAllowed = canVoidCost(cost);
 
   useEffect(() => {
     setActiveTab("basic");
@@ -47,10 +55,26 @@ export function CostDetailDrawer({
           <button className={styles.primaryButtonCompact} type="button" onClick={onOpenDocuments}>资料维护</button>
           {manualCost ? (
             <>
-              <button className={styles.secondaryButton} type="button" onClick={onEdit}>编辑成本</button>
-              <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onDelete}>
-                {deleting ? "处理中..." : deleteActionLabel}
-              </button>
+              {voided ? (
+                <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onRestore}>
+                  {deleting ? "处理中..." : "恢复作废"}
+                </button>
+              ) : (
+                <>
+                  <button className={styles.secondaryButton} type="button" onClick={onEdit}>编辑成本</button>
+                  <button className={styles.secondaryButton} type="button" onClick={onCopy}>复制成本</button>
+                  {voidAllowed ? (
+                    <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onVoid}>
+                      {deleting ? "处理中..." : "作废"}
+                    </button>
+                  ) : null}
+                  {deleteAllowed ? (
+                    <button className={styles.fileDangerButton} type="button" disabled={deleting} onClick={onDelete}>
+                      {deleting ? "处理中..." : "删除"}
+                    </button>
+                  ) : null}
+                </>
+              )}
             </>
           ) : null}
         </>
@@ -140,14 +164,18 @@ export function CostOrderSummaryDrawer({
   onOpenDocuments,
   onOpenPaymentVoucher,
   deletingId,
+  onVoid,
   onDelete,
+  onRestore,
   onClose,
 }: {
   order: CostOrderSummary;
   onOpenDocuments: (costId: string) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
   deletingId: string;
+  onVoid: (cost: CostRow) => void;
   onDelete: (cost: CostRow) => void;
+  onRestore: (cost: CostRow) => void;
   onClose: () => void;
 }) {
   const confirmProgress = order.costConfirmProgress?.text || "无成本";
@@ -174,7 +202,9 @@ export function CostOrderSummaryDrawer({
         deletingId={deletingId}
         onOpenDocuments={onOpenDocuments}
         onOpenPaymentVoucher={onOpenPaymentVoucher}
+        onVoid={onVoid}
         onDelete={onDelete}
+        onRestore={onRestore}
       />
     </SideDetailDrawer>
   );
@@ -185,13 +215,17 @@ export function CostOrderItemsTable({
   deletingId,
   onOpenDocuments,
   onOpenPaymentVoucher,
+  onVoid,
   onDelete,
+  onRestore,
 }: {
   costs: CostRow[];
   deletingId: string;
   onOpenDocuments: (costId: string) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
+  onVoid: (cost: CostRow) => void;
   onDelete: (cost: CostRow) => void;
+  onRestore: (cost: CostRow) => void;
 }) {
   return (
     <div className={styles.logisticsDrawerSection}>
@@ -221,22 +255,29 @@ export function CostOrderItemsTable({
                 <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
-                <td><span className={`${styles.statusPill} ${cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{cost.paymentStatus || "-"}</span></td>
+                <td><span className={`${styles.statusPill} ${isVoidedCost(cost) ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{isVoidedCost(cost) ? "已作废" : cost.paymentStatus || "-"}</span></td>
                 <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
                 <td className={styles.costInvoiceActionColumn}>
                   <div className={styles.costInvoiceActions}>
                     <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} onOpenPaymentVoucher={onOpenPaymentVoucher} />
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      disabled={deletingId === cost.id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete(cost);
-                      }}
-                    >
-                      {deletingId === cost.id ? "处理中..." : costDeleteActionLabel(cost)}
-                    </button>
+                    {isVoidedCost(cost) ? (
+                      <button className={styles.secondaryButton} type="button" disabled={deletingId === cost.id} onClick={(event) => { event.stopPropagation(); onRestore(cost); }}>
+                        {deletingId === cost.id ? "处理中..." : "恢复"}
+                      </button>
+                    ) : (
+                      <>
+                        {canVoidCost(cost) ? (
+                          <button className={styles.secondaryButton} type="button" disabled={deletingId === cost.id} onClick={(event) => { event.stopPropagation(); onVoid(cost); }}>
+                            {deletingId === cost.id ? "处理中..." : "作废"}
+                          </button>
+                        ) : null}
+                        {canDeleteCost(cost) ? (
+                          <button className={styles.fileDangerButton} type="button" disabled={deletingId === cost.id} onClick={(event) => { event.stopPropagation(); onDelete(cost); }}>
+                            {deletingId === cost.id ? "处理中..." : "删除"}
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

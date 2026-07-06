@@ -5,6 +5,7 @@ import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   getCommissionFormulaSettings,
   includeOrderRelations,
   isProductSupplierOperatorRole,
@@ -70,6 +71,7 @@ export type WorkbenchWorkflowOrder = TodoOrder & {
     supplierId?: string | null;
     sourceType?: string | null;
     costType?: string | null;
+    status?: string | null;
     deletedAt?: Date | string | null;
     documents?: Array<{ documentType?: string | null; uploadStatus?: string | null; relatedModule?: string | null; costId?: string | null; supplierId?: string | null; deletedAt?: Date | string | null }> | null;
   }> | null;
@@ -80,6 +82,7 @@ export type WorkbenchFactoryCostRef = {
   supplierId?: string | null;
   sourceType?: string | null;
   costType?: string | null;
+  status?: string | null;
   deletedAt?: Date | string | null;
 };
 
@@ -98,6 +101,7 @@ export function supplierDocumentFileMatchesCost(
 export function activeFactorySupplierCosts(order: WorkbenchWorkflowOrder) {
   return (order.costs || []).filter((cost) => (
     !cost.deletedAt
+    && cost.status !== ORDER_COST_STATUS_VOID
     && nonEmpty(cost.id)
     && cost.sourceType !== "LOGISTICS_EXPENSE"
     && FACTORY_SUPPLIER_COST_TYPES.includes(nonEmpty(cost.costType))
@@ -143,6 +147,7 @@ export function supplierDocumentRequestMatchesCost(
 
 export function isActiveFactorySupplierCostRef(cost: WorkbenchFactoryCostRef | null | undefined, supplierId = "") {
   if (!cost || cost.deletedAt) return false;
+  if (cost.status === ORDER_COST_STATUS_VOID) return false;
   if (cost.sourceType === "LOGISTICS_EXPENSE") return false;
   if (!FACTORY_SUPPLIER_COST_TYPES.includes(nonEmpty(cost.costType))) return false;
   return supplierId ? cost.supplierId === supplierId : Boolean(cost.supplierId);

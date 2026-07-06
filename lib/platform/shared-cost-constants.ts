@@ -61,6 +61,9 @@ export const LEGACY_FOREIGN_CURRENCY_COST_TYPES = ["佣金"];
 export const COST_TYPES = [...CNY_ONLY_COST_TYPES, ...FOREIGN_CURRENCY_COST_TYPES, ...LEGACY_FOREIGN_CURRENCY_COST_TYPES]
   .filter((item, index, arr) => arr.indexOf(item) === index);
 export const COST_PAYMENT_STATUSES = ["待支付", "部分支付", "已支付", "已取消"];
+export const ORDER_COST_STATUS_ACTIVE = "ACTIVE";
+export const ORDER_COST_STATUS_VOID = "VOID";
+export const ORDER_COST_STATUSES = [ORDER_COST_STATUS_ACTIVE, ORDER_COST_STATUS_VOID];
 export const INVOICE_STATUSES = ["未收到", "已收到"];
 export const TRADE_TERMS = ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"];
 export const COST_IDEMPOTENCY_WINDOW_MS = 10 * 1000;

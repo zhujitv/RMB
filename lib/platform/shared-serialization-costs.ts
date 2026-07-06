@@ -1,5 +1,5 @@
 import { dateToInput, logServerError } from "./shared-base-utils";
-import { normalizedCostType } from "./shared-constants";
+import { ORDER_COST_STATUS_VOID, normalizedCostType } from "./shared-constants";
 import { serializeUser } from "./shared-users";
 import { businessEntityFieldsFromOrder } from "./business-entities";
 import { managedFileDownloadPath } from "./file-center";
@@ -54,8 +54,59 @@ export function invoiceStatusFromDocuments(documents: OrderDocumentStatusLike[] 
   )) ? "已收到" : "未收到";
 }
 
+function serializedCostPaid(cost: CostLike) {
+  return Boolean(cost.paid)
+    || Boolean(cost.paidAt)
+    || Boolean(cost.paymentDate)
+    || cost.paymentStatus === "已支付"
+    || cost.paymentStatus === "部分支付";
+}
+
+function serializedCostHasVoucher(cost: CostLike) {
+  return Boolean(cost.paymentVoucherStorageKey || cost.paymentVoucherUrl || cost.paymentVoucherFileName);
+}
+
+function serializedCostUploadedDocument(cost: CostLike) {
+  return (cost.documents || []).some((document) => (
+    !document.deletedAt
+    && (document.uploadStatus === "SUCCESS" || Boolean(document.factoryDocumentRequestId))
+  ));
+}
+
+function serializedCostTaxLinked(cost: CostLike) {
+  const order = cost.order;
+  const taxStatus = String(order?.taxRefundStatus || "").trim();
+  return Boolean(order?.taxArchived || order?.taxRefundArchivedAt || (taxStatus && taxStatus !== "NOT_READY"));
+}
+
+function serializedCostProfitLinked(cost: CostLike) {
+  const order = cost.order;
+  return ["已结算", "SETTLED"].includes(String(order?.commissionStatus || "").trim())
+    || Boolean((order?.commissionSettlementRecords || []).length);
+}
+
+function serializedCostSupplierRequestLinked(cost: CostLike) {
+  return (cost.supplierDocumentRequests || []).some((request) => !request.deletedAt);
+}
+
+function serializedCostDeleteBlockedReasons(cost: CostLike) {
+  const reasons: string[] = [];
+  if (cost.status === ORDER_COST_STATUS_VOID) reasons.push("成本已作废");
+  if (String(cost.paymentStatus || "").trim() !== "待支付") reasons.push("付款状态不是待支付");
+  if (serializedCostPaid(cost)) reasons.push("已存在付款记录");
+  if (serializedCostHasVoucher(cost)) reasons.push("已存在付款凭证");
+  if (serializedCostUploadedDocument(cost)) reasons.push("已存在成本附件或发票资料");
+  if (serializedCostTaxLinked(cost)) reasons.push("订单已进入退税流程");
+  if (serializedCostSupplierRequestLinked(cost)) reasons.push("已关联资料回传任务");
+  if (serializedCostProfitLinked(cost)) reasons.push("已关联利润或提成结算");
+  if (cost.costConfirmed) reasons.push("成本已确认");
+  if (cost.sourceType === "LOGISTICS_EXPENSE" || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
+  return [...new Set(reasons)];
+}
+
 export function fallbackSerializedCost(costInput: unknown = {}) {
   const cost = asLooseRecord<CostLike>(costInput);
+  const deleteBlockedReasons = serializedCostDeleteBlockedReasons(cost);
   return {
     id: cost.id,
     orderId: cost.orderId,
@@ -69,6 +120,15 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     exchangeRate: Number(cost.exchangeRate || 1),
     amount: Number(cost.amount || 0),
     amountCny: Number(cost.amountCny || 0),
+    status: cost.status || "ACTIVE",
+    voidedAt: dateTimeToIso(cost.voidedAt),
+    voidedById: cost.voidedById || "",
+    voidReason: cost.voidReason || "",
+    restoredAt: dateTimeToIso(cost.restoredAt),
+    restoredById: cost.restoredById || "",
+    restoreReason: cost.restoreReason || "",
+    canDeleteCost: deleteBlockedReasons.length === 0,
+    deleteBlockedReasons,
     paymentStatus: cost.paymentStatus || "待支付",
     costConfirmed: Boolean(cost.costConfirmed),
     paymentDate: dateToInput(cost.paymentDate),
@@ -103,6 +163,7 @@ export function safeSerializeCost(costInput: unknown = {}) {
 
 export function serializeCost(costInput: unknown) {
   const cost = asLooseRecord<CostLike>(costInput);
+  const deleteBlockedReasons = serializedCostDeleteBlockedReasons(cost);
   const costDocuments = (cost.documents || []).map((document) => ({
     ...document,
     cost: document.cost || cost,
@@ -140,6 +201,15 @@ export function serializeCost(costInput: unknown) {
     exchangeRateType: cost.exchangeRateType || "",
     amount: Number(cost.amount),
     amountCny: Number(cost.amountCny),
+    status: cost.status || "ACTIVE",
+    voidedAt: dateTimeToIso(cost.voidedAt),
+    voidedById: cost.voidedById || "",
+    voidReason: cost.voidReason || "",
+    restoredAt: dateTimeToIso(cost.restoredAt),
+    restoredById: cost.restoredById || "",
+    restoreReason: cost.restoreReason || "",
+    canDeleteCost: deleteBlockedReasons.length === 0,
+    deleteBlockedReasons,
     paymentStatus: cost.paymentStatus,
     costConfirmed: Boolean(cost.costConfirmed),
     costConfirmedAt: cost.costConfirmedAt,

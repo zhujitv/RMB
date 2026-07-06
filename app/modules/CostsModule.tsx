@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useConfirmationDialog } from "../components";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission } from "../utils";
-import { hasPaymentVoucher } from "./costs/helpers";
+import { canVoidCost, hasPaymentVoucher, isVoidedCost } from "./costs/helpers";
 import { CostsModuleView } from "./costs/module-view";
 import { PAGE_SIZE, type CostFormDrawerState, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow } from "./costs/model";
 import { useCostDocumentActions } from "./costs/use-cost-document-actions";
@@ -37,6 +37,7 @@ export function CostsModule({
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
   const {
     confirmation,
     requestConfirmation,
@@ -105,6 +106,31 @@ export function CostsModule({
     setCostFormDrawer({ mode: "edit", cost });
   }
 
+  function openCopyCostDrawer(cost: CostRow) {
+    const copiedCost: CostRow = {
+      ...cost,
+      id: "",
+      paymentStatus: "待支付",
+      paymentDate: "",
+      paid: false,
+      paidAt: "",
+      paymentVoucherUrl: "",
+      paymentVoucherFileName: "",
+      paymentVoucherMimeType: "",
+      paymentVoucherUploadedAt: "",
+      documents: [],
+      status: "ACTIVE",
+      voidedAt: "",
+      voidReason: "",
+    };
+    setReturnDetailCost(null);
+    setDetailCost(null);
+    setDetailOrderSummary(null);
+    setDetailInvoiceGroup(null);
+    setDocumentCost(null);
+    setCostFormDrawer({ mode: "copy", cost: copiedCost });
+  }
+
   function openPaymentVoucherPreview(cost: CostRow) {
     if (!hasPaymentVoucher(cost)) return;
     setVoucherPreviewCost(cost);
@@ -153,7 +179,10 @@ export function CostsModule({
     updateProductSupplierCostPayment,
     uploadPaymentVoucher,
     deleteCostDocument,
+    voidCost,
     deleteCost,
+    restoreCost,
+    batchVoidCosts,
   } = useCostDocumentActions({
     rows,
     setRows,
@@ -184,6 +213,24 @@ export function CostsModule({
     requestConfirmation,
   });
 
+  const selectedCosts = rows.filter((cost) => selectedCostIds.includes(cost.id) && canVoidCost(cost));
+
+  function toggleCostSelection(costId: string, selected: boolean) {
+    setSelectedCostIds((current) => selected
+      ? [...new Set([...current, costId])]
+      : current.filter((id) => id !== costId));
+  }
+
+  function toggleAllVisibleCosts(selected: boolean) {
+    const selectableIds = rows.filter((cost) => canVoidCost(cost)).map((cost) => cost.id);
+    setSelectedCostIds(selected ? selectableIds : []);
+  }
+
+  async function handleBatchVoid() {
+    await batchVoidCosts(selectedCosts);
+    setSelectedCostIds([]);
+  }
+
   async function handleCostFormSaved(saved: CostRow | CostRow[] | null | undefined) {
     const savedDrawer = costFormDrawer;
     const detailToRestore = returnDetailCost;
@@ -196,6 +243,7 @@ export function CostsModule({
     setDetailCost(detailToRestore ? { ...detailToRestore, ...(restoredDetail || {}) } : null);
     setDetailOrderSummary(null);
     mergeCostRows(saved);
+    setSelectedCostIds((current) => current.filter((id) => !savedRows.some((cost) => cost.id === id && isVoidedCost(cost))));
     if (savedDrawer?.mode === "edit") {
       const removedCount = costView === "details"
         ? savedRows.filter((cost) => rows.some((row) => row.id === cost.id) && !costMatchesSubmittedFilters(cost)).length
@@ -238,6 +286,8 @@ export function CostsModule({
       page={page}
       totalPages={totalPages}
       deletingId={deletingId}
+      selectedCostIds={selectedCostIds}
+      selectedVoidableCount={selectedCosts.length}
       detailCost={detailCost}
       detailOrderSummary={detailOrderSummary}
       detailInvoiceGroup={detailInvoiceGroup}
@@ -271,7 +321,13 @@ export function CostsModule({
       onSetOrderDetail={setDetailOrderSummary}
       onSetInvoiceGroupDetail={setDetailInvoiceGroup}
       onEditCost={openEditCostDrawer}
+      onCopyCost={openCopyCostDrawer}
+      onVoidCost={(cost) => void voidCost(cost)}
       onDeleteCost={(cost) => void deleteCost(cost)}
+      onRestoreCost={(cost) => void restoreCost(cost)}
+      onToggleCostSelection={toggleCostSelection}
+      onToggleAllVisibleCosts={toggleAllVisibleCosts}
+      onBatchVoid={() => void handleBatchVoid()}
       onOpenDocuments={(costId) => void openCostDocuments(costId)}
       onOpenInvoiceGroupDocuments={(group) => void openInvoiceGroupDocuments(group)}
       onOpenPaymentVoucher={openPaymentVoucherPreview}

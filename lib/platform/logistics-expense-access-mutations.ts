@@ -5,6 +5,7 @@ import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
   LOGISTICS_COST_TYPES,
   LOGISTICS_EXPENSE_AUDIT_STATUSES,
+  ORDER_COST_STATUS_VOID,
   amountCny,
   codedError,
   dateFromInput,
@@ -380,8 +381,8 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     updatedById: currentActorId || null,
   };
   const existing = expense.costId
-    ? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null } })
-    : await tx.orderCost.findFirst({ where: { sourceType: "LOGISTICS_EXPENSE", sourceId: expense.id, deletedAt: null } });
+    ? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } })
+    : await tx.orderCost.findFirst({ where: { sourceType: "LOGISTICS_EXPENSE", sourceId: expense.id, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } });
   if (existing) return tx.orderCost.update({ where: { id: existing.id }, data: costData });
   return tx.orderCost.create({ data: { ...costData, createdById: currentActorId || null } });
 }

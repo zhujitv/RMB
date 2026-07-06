@@ -43,6 +43,8 @@ export function costMatchesFilters(cost: CostRow, filters: CostFilters) {
     if (!haystack.includes(keywordValue)) return false;
   }
   if (filters.costType && !equivalentSubmittedCostTypes(filters.costType).includes(cost.costType || "")) return false;
+  if (filters.costStatus === "VOID" && cost.status !== "VOID") return false;
+  if ((filters.costStatus === "ACTIVE" || !filters.costStatus) && cost.status === "VOID") return false;
   if (filters.paymentStatus && cost.paymentStatus !== filters.paymentStatus) return false;
   if (filters.invoiceStatus && cost.invoiceStatus !== filters.invoiceStatus) return false;
   if (filters.costConfirmed) {

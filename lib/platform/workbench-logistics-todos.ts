@@ -5,6 +5,7 @@ import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
   FACTORY_SUPPLIER_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   getCommissionFormulaSettings,
   includeOrderRelations,
   isProductSupplierOperatorRole,
@@ -130,12 +131,13 @@ export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) 
         take: 50,
       },
       costs: {
-        where: { deletedAt: null, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
+        where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID }, costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
         select: {
           id: true,
           supplierId: true,
           sourceType: true,
           costType: true,
+          status: true,
           deletedAt: true,
           documents: {
             where: { deletedAt: null, relatedModule: "SUPPLIER", documentType: { in: ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"] } },

@@ -5,7 +5,7 @@ import { PAYMENT_VOUCHER_UPLOAD_ACCEPT, PDF_UPLOAD_ACCEPT } from "../../utils";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import styles from "../../WorkspaceShell.module.css";
 import { COST_FILTER_TYPE_LABELS, COST_FILTER_TYPES, type CostDocument, type CostRow } from "./model";
-import { costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, paymentVoucherUploadKey } from "./helpers";
+import { canDeleteCost, canVoidCost, costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, isVoidedCost, paymentVoucherUploadKey } from "./helpers";
 
 export function CostDocumentsDrawer({
   cost,
@@ -26,6 +26,11 @@ export function CostDocumentsDrawer({
   onUpdatePayment,
   onUploadPaymentVoucher,
   onOpenPaymentVoucher,
+  onEditCost,
+  onCopyCost,
+  onVoidCost,
+  onDeleteCost,
+  onRestoreCost,
   onDelete,
 }: {
   cost: CostRow;
@@ -46,6 +51,11 @@ export function CostDocumentsDrawer({
   onUpdatePayment: (cost: CostRow, paid: boolean, paidAt: string) => void;
   onUploadPaymentVoucher: (cost: CostRow, file: File | null) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
+  onEditCost: () => void;
+  onCopyCost: () => void;
+  onVoidCost: () => void;
+  onDeleteCost: () => void;
+  onRestoreCost: () => void;
   onDelete: (cost: CostRow, document: CostDocument) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
@@ -54,9 +64,15 @@ export function CostDocumentsDrawer({
   const paymentEnabled = isProductSupplierPaymentEnabled(cost);
   const dismissConfirmMessage = uploadingKey || voucherUploadingKey ? "当前内容尚未保存，确定关闭吗？" : "";
   const logisticsGenerated = isLogisticsGeneratedCost(cost);
-  const canManageDocuments = canWriteDocuments && !logisticsGenerated;
+  const voided = isVoidedCost(cost);
+  const canManageDocuments = canWriteDocuments && !logisticsGenerated && !voided;
+  const canEditCostType = canManageCostType && !voided;
+  const deleteAllowed = canDeleteCost(cost);
+  const voidAllowed = canVoidCost(cost);
   const readOnlyReason = logisticsGenerated
     ? "该成本来自物流费用审核，发票按物流费用模块的分组开票规则上传；成本管理仅同步查看，不能在这里上传、替换或删除。"
+    : voided
+      ? "该成本已作废，仅保留历史金额、附件、付款凭证和操作日志。恢复后才能继续维护。"
     : "";
   const [selectedCostType, setSelectedCostType] = useState(cost.costType || "");
   const [costTypeReason, setCostTypeReason] = useState("");
@@ -92,6 +108,20 @@ export function CostDocumentsDrawer({
             <small>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"} · 提单号：{cost.blNo || cost.billOfLadingNo || "-"}</small>
           </div>
           <div className={styles.taxRefundDrawerActions}>
+            {!logisticsGenerated ? (
+              <>
+                {voided ? (
+                  <button className={styles.secondaryButton} type="button" onClick={onRestoreCost}>恢复作废</button>
+                ) : (
+                  <>
+                    <button className={styles.secondaryButton} type="button" onClick={onEditCost}>编辑</button>
+                    <button className={styles.secondaryButton} type="button" onClick={onCopyCost}>复制</button>
+                    {voidAllowed ? <button className={styles.secondaryButton} type="button" onClick={onVoidCost}>作废</button> : null}
+                    {deleteAllowed ? <button className={styles.fileDangerButton} type="button" onClick={onDeleteCost}>删除</button> : null}
+                  </>
+                )}
+              </>
+            ) : null}
             <button className={styles.ghostButton} type="button" onClick={requestClose}>关闭</button>
           </div>
         </header>
@@ -104,7 +134,7 @@ export function CostDocumentsDrawer({
               <div className={styles.detailGrid}>
                 <DetailField label="订单号" value={cost.orderNo || "-"} />
                 <DetailField label="供应商" value={supplierName} />
-                {canManageCostType ? (
+                {canEditCostType ? (
                   <label>
                     成本类型
                     <select className={styles.uiSelect} value={selectedCostType} disabled={costTypeSaving} onChange={(event) => setSelectedCostType(event.target.value)}>
@@ -117,7 +147,7 @@ export function CostDocumentsDrawer({
                 <DetailField label="成本金额" value={moneyText(cost.currency, cost.amount, cost.amountCny)} />
                 <DetailField label="成本确认" value={cost.costConfirmed ? "已确认" : "未确认"} />
                 <DetailField label="发票状态" value={cost.invoiceStatus || "-"} />
-                {canManageCostType ? (
+                {canEditCostType ? (
                   <label>
                     修改原因
                     <input
@@ -130,7 +160,7 @@ export function CostDocumentsDrawer({
                   </label>
                 ) : null}
               </div>
-              {canManageCostType ? (
+              {canEditCostType ? (
                 <div className={styles.detailActions}>
                   <button
                     className={styles.secondaryButton}
@@ -159,7 +189,7 @@ export function CostDocumentsDrawer({
             {paymentEnabled ? (
               <ProductSupplierPaymentPanel
                 cost={cost}
-                canManage={canManageFactoryPayments}
+                canManage={canManageFactoryPayments && !voided}
                 saving={paymentSavingId === cost.id}
                 voucherUploading={voucherUploadingKey === paymentVoucherKey}
                 voucherProgress={uploadProgressByKey[paymentVoucherKey] || 0}

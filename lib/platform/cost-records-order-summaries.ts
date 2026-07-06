@@ -107,6 +107,12 @@ export async function listCostOrderSummaries(query: CostQuery, actor: ActorLike 
           where: costWhere,
           include: {
             supplier: true,
+            generatedLogisticsExpense: { select: { id: true } },
+            supplierDocumentRequests: {
+              where: { deletedAt: null },
+              select: { id: true, deletedAt: true },
+              take: 1,
+            },
             documents: {
               where: { deletedAt: null },
               include: { uploadedBy: true, supplier: true },

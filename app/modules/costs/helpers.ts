@@ -38,8 +38,22 @@ export function isProductSupplierPaid(cost: CostRow) {
   return Boolean(cost.paid) || cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
 }
 
+export function isVoidedCost(cost: Pick<CostRow, "status" | "paymentStatus">) {
+  return cost.status === "VOID" || cost.paymentStatus === "已取消";
+}
+
 export function hasSuccessfulCostDocument(cost: Pick<CostRow, "documents">) {
   return (cost.documents || []).some((document) => document.uploadStatus === "SUCCESS");
+}
+
+export function canDeleteCost(cost: Pick<CostRow, "status" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus" | "sourceType" | "canDeleteCost">) {
+  if (isVoidedCost(cost)) return false;
+  if (typeof cost.canDeleteCost === "boolean") return cost.canDeleteCost;
+  return !shouldVoidCostOnDelete(cost);
+}
+
+export function canVoidCost(cost: Pick<CostRow, "status" | "paymentStatus" | "sourceType">) {
+  return !isVoidedCost(cost) && !isLogisticsGeneratedCost(cost);
 }
 
 export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus">) {
@@ -52,6 +66,10 @@ export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "payme
 
 export function costDeleteActionLabel(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus">) {
   return shouldVoidCostOnDelete(cost) ? "作废成本" : "删除成本";
+}
+
+export function costStatusLabel(cost: Pick<CostRow, "status" | "paymentStatus">) {
+  return isVoidedCost(cost) ? "已作废" : (cost.paymentStatus || "-");
 }
 
 export function isProductSupplierPaymentFormLocked(item: Pick<CostItemForm, "costType">, supplier: SupplierOption | null, canManageFactoryPayments: boolean) {

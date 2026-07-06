@@ -8,6 +8,7 @@ import {
   COST_IDEMPOTENCY_WINDOW_MS,
   FACTORY_SUPPLIER_COST_TYPES,
   LOGISTICS_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
   customerFullName,
@@ -44,6 +45,7 @@ type CostLike = {
   amountCny?: NumericLike | null;
   paymentStatus?: string | null;
   costConfirmed?: boolean | null;
+  status?: string | null;
   documents?: CostDocumentLike[] | null;
   createdById?: string | null;
   deletedAt?: Date | string | null;
@@ -215,10 +217,23 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
 
 export function includeCostRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
-    order: { include: { customer: true, businessEntity: true, salesperson: true } },
+    order: {
+      include: {
+        customer: true,
+        businessEntity: true,
+        salesperson: true,
+        commissionSettlementRecords: { select: { id: true }, take: 1 },
+      },
+    },
     supplier: true,
     createdBy: true,
     updatedBy: true,
+    generatedLogisticsExpense: { select: { id: true } },
+    supplierDocumentRequests: {
+      where: { deletedAt: null },
+      select: { id: true, deletedAt: true },
+      take: 1,
+    },
     documents: {
       where: { deletedAt: null },
       include: { uploadedBy: true, supplier: true },
@@ -260,6 +275,7 @@ function duplicateCreatedAtWindow(windowMs: number, createdBefore?: Date): Prism
 function duplicateCostWhere(data: CostCreateData, windowMs: number, { sameCreator = false }: DuplicateCostOptions = {}, createdBefore?: Date): Prisma.OrderCostWhereInput {
   return {
     deletedAt: null,
+    status: { not: ORDER_COST_STATUS_VOID },
     orderId: data.orderId,
     supplierId: data.supplierId || null,
     costType: data.costType,

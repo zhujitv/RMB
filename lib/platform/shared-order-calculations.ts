@@ -1,6 +1,6 @@
 import { nonEmpty, normalizeEmail, num } from "./shared-base-utils";
 import { calculateCommissionFormulaBase } from "./commission-formula";
-import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES } from "./shared-constants";
+import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES, ORDER_COST_STATUS_VOID } from "./shared-constants";
 import { taxDocumentCompleteness } from "./shared-tax-completeness";
 
 type NumericLike = number | string | { toString(): string };
@@ -15,6 +15,7 @@ type PaymentLike = {
 };
 
 type CostLike = {
+  status?: string | null;
   paymentStatus?: string | null;
   deletedAt?: Date | string | null;
   costType?: string | null;
@@ -138,7 +139,10 @@ export function confirmedPayment(payment: PaymentLike) {
 }
 
 export function validCost(cost: CostLike) {
-  return cost.paymentStatus !== "已取消" && !cost.deletedAt && !NON_PARTICIPATING_COST_TYPES.includes(cost.costType || "");
+  return cost.status !== ORDER_COST_STATUS_VOID
+    && cost.paymentStatus !== "已取消"
+    && !cost.deletedAt
+    && !NON_PARTICIPATING_COST_TYPES.includes(cost.costType || "");
 }
 
 export function confirmedCost(cost: CostLike) {

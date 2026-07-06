@@ -4,6 +4,7 @@ import {
   PAYMENT_STATUSES,
   PAYMENT_INPUT_SCHEMA,
   PAYMENT_TYPES,
+  ORDER_COST_STATUS_VOID,
   amountCny,
   assertInputSchema,
   assertJsonObject,
@@ -240,7 +241,7 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
       order: {
         include: {
           customer: true,
-          costs: { where: { deletedAt: null }, select: { createdById: true, deletedAt: true } },
+          costs: { where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } }, select: { createdById: true, status: true, deletedAt: true } },
         },
       },
     },

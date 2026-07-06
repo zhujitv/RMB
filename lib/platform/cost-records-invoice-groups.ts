@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import { summarizeCurrencyTotals } from "./currency-totals";
-import { assertRead, nonEmpty, safeSerializeCost, type CostDto } from "./shared";
+import { ORDER_COST_STATUS_VOID, assertRead, nonEmpty, safeSerializeCost, type CostDto } from "./shared";
 import { costAccessWhere } from "./masters-access";
 import { attachBusinessDocumentsToCosts, successfulSupplierInvoicePairs } from "./business-documents";
 import { costPageParams } from "./cost-records-shared";
@@ -281,6 +281,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
     ? await prisma.orderCost.findMany({
       where: {
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
         ...costAccessWhere(actor),
         OR: fullWhere,
       },

@@ -8,6 +8,8 @@ import {
   CURRENCIES,
   FACTORY_SUPPLIER_COST_TYPES,
   LOGISTICS_COST_TYPES,
+  ORDER_COST_STATUS_ACTIVE,
+  ORDER_COST_STATUS_VOID,
   amountCny,
   booleanInput,
   canConfirmLogisticsCost,
@@ -50,6 +52,13 @@ export type CostOrderLike = {
   currency?: string | null;
 };
 export type DeletedCostAction = "deleted" | "voided";
+export type CostLifecycleReasonInput = {
+  reason?: unknown;
+  voidReason?: unknown;
+  deleteReason?: unknown;
+  restoreReason?: unknown;
+  action?: unknown;
+};
 export type CostWithPaymentRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostRelations> }> & {
   paid?: boolean | null;
   paidAt?: Date | null;
@@ -80,6 +89,10 @@ export function isCostEntryActor(actor: CostActor) {
 
 export function isPaidCost(cost: { paymentStatus?: string | null }) {
   return cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+}
+
+export function isVoidedCost(cost: { status?: string | null; paymentStatus?: string | null; deletedAt?: Date | string | null }) {
+  return cost.status === ORDER_COST_STATUS_VOID || cost.paymentStatus === "已取消" || Boolean(cost.deletedAt);
 }
 
 export function assertCanManageProductSupplierPayment(actor: CostActor) {
@@ -126,7 +139,7 @@ export function paymentVoucherFileName(extension: string) {
 
 export async function loadCostForPayment(actor: CostActor, id: string): Promise<CostWithPaymentRelations> {
   const cost = await prisma.orderCost.findFirst({
-    where: { id, deletedAt: null },
+    where: { id, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
     include: includeCostRelations(),
   });
   if (!cost) throw permissionError("成本记录不存在或已删除", 404);
@@ -135,11 +148,108 @@ export async function loadCostForPayment(actor: CostActor, id: string): Promise<
   return cost as CostWithPaymentRelations;
 }
 
-export function canPhysicallyDeleteCost(cost: { sourceType?: string | null; paymentStatus?: string | null; costConfirmed?: boolean | null }, hasUploadedInvoice: boolean) {
-  return !hasUploadedInvoice
-    && !isPaidCost(cost)
-    && !cost.costConfirmed
-    && cost.sourceType !== "LOGISTICS_EXPENSE";
+type CostDeletionCandidate = {
+  sourceType?: string | null;
+  paymentStatus?: string | null;
+  costConfirmed?: boolean | null;
+  paid?: boolean | null;
+  paidAt?: Date | string | null;
+  paymentDate?: Date | string | null;
+  paymentVoucherUrl?: string | null;
+  paymentVoucherFileName?: string | null;
+  paymentVoucherStorageKey?: string | null;
+  status?: string | null;
+  documents?: Array<{ uploadStatus?: string | null; deletedAt?: Date | string | null; factoryDocumentRequestId?: string | null }> | null;
+  supplierDocumentRequests?: Array<{ id?: string | null; deletedAt?: Date | string | null }> | null;
+  generatedLogisticsExpense?: unknown;
+  order?: {
+    taxArchived?: boolean | null;
+    taxRefundStatus?: string | null;
+    taxRefundArchivedAt?: Date | string | null;
+    commissionStatus?: string | null;
+    commissionSettlementRecords?: Array<{ id?: string | null }> | null;
+  } | null;
+};
+
+function hasUploadedCostDocument(cost: CostDeletionCandidate) {
+  return (cost.documents || []).some((document) => (
+    !document.deletedAt
+    && (document.uploadStatus === "SUCCESS" || Boolean(document.factoryDocumentRequestId))
+  ));
+}
+
+function hasPaymentRecord(cost: CostDeletionCandidate) {
+  return Boolean(cost.paid)
+    || Boolean(cost.paidAt)
+    || Boolean(cost.paymentDate)
+    || isPaidCost(cost);
+}
+
+function hasPaymentVoucherRecord(cost: CostDeletionCandidate) {
+  return Boolean(cost.paymentVoucherStorageKey || cost.paymentVoucherUrl || cost.paymentVoucherFileName);
+}
+
+function hasTaxRefundLink(cost: CostDeletionCandidate) {
+  const order = cost.order;
+  if (!order) return false;
+  const status = nonEmpty(order.taxRefundStatus);
+  return Boolean(order.taxArchived || order.taxRefundArchivedAt || (status && status !== "NOT_READY"));
+}
+
+function hasSupplierDocumentRequestLink(cost: CostDeletionCandidate) {
+  return (cost.supplierDocumentRequests || []).some((request) => !request.deletedAt);
+}
+
+function hasProfitSettlementLink(cost: CostDeletionCandidate) {
+  const order = cost.order;
+  if (!order) return false;
+  return ["已结算", "SETTLED"].includes(nonEmpty(order.commissionStatus))
+    || Boolean((order.commissionSettlementRecords || []).length);
+}
+
+export function costDeleteBlockReasons(cost: CostDeletionCandidate) {
+  const reasons: string[] = [];
+  if (isVoidedCost(cost)) reasons.push("成本已作废或已删除");
+  if (nonEmpty(cost.paymentStatus) !== "待支付") reasons.push("付款状态不是待支付");
+  if (hasPaymentRecord(cost)) reasons.push("已存在付款记录");
+  if (hasPaymentVoucherRecord(cost)) reasons.push("已存在付款凭证");
+  if (hasUploadedCostDocument(cost)) reasons.push("已存在成本附件或发票资料");
+  if (hasTaxRefundLink(cost)) reasons.push("订单已进入退税流程");
+  if (hasSupplierDocumentRequestLink(cost)) reasons.push("已关联资料回传任务");
+  if (hasProfitSettlementLink(cost)) reasons.push("已关联利润或提成结算");
+  if (cost.costConfirmed) reasons.push("成本已确认");
+  if (cost.sourceType === "LOGISTICS_EXPENSE" || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
+  return [...new Set(reasons)];
+}
+
+export function canPhysicallyDeleteCost(cost: CostDeletionCandidate) {
+  return costDeleteBlockReasons(cost).length === 0;
+}
+
+export function requireCostLifecycleReason(input: CostLifecycleReasonInput | null | undefined, fallbackLabel = "原因") {
+  const reason = nonEmpty(input?.reason || input?.voidReason || input?.deleteReason || input?.restoreReason);
+  if (!reason) throw codedError(`${fallbackLabel}不能为空`, 400, "COST_LIFECYCLE_REASON_REQUIRED");
+  return reason;
+}
+
+export function activeOrderCostWhere(): Prisma.OrderCostWhereInput {
+  return {
+    deletedAt: null,
+    status: { not: ORDER_COST_STATUS_VOID },
+  };
+}
+
+export function restoreOrderCostData(actor: CostActor, reason: string): Prisma.OrderCostUncheckedUpdateInput {
+  return {
+    status: ORDER_COST_STATUS_ACTIVE,
+    voidedAt: null,
+    voidedById: null,
+    voidReason: null,
+    restoredAt: new Date(),
+    restoredById: actor.id,
+    restoreReason: reason,
+    updatedById: actor.id,
+  };
 }
 
 export function assertCanDeleteCost(actor: CostActor, cost: { createdById?: string | null; paymentStatus?: string | null; costConfirmed?: boolean | null }) {
@@ -170,10 +280,17 @@ export async function costOrderSummaryForMutation(orderId: string, actor: CostAc
       costs: {
         where: {
           deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
           ...(ownCostScope ? { createdById: actor.id } : {}),
         },
         include: {
           supplier: true,
+          generatedLogisticsExpense: { select: { id: true } },
+          supplierDocumentRequests: {
+            where: { deletedAt: null },
+            select: { id: true, deletedAt: true },
+            take: 1,
+          },
           documents: {
             where: { deletedAt: null },
             include: { uploadedBy: true, supplier: true },

@@ -3,6 +3,7 @@ import { type OrderDocumentType } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
   FACTORY_SUPPLIER_COST_TYPES,
+  ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_EXPORT_DOCUMENT_TYPES,
   assertRead,
@@ -145,7 +146,7 @@ async function getTaxRefundCostDocumentSection(orderId: string, actor: ActorLike
       taxRefundCompleteness: true,
       taxRefundCompletenessUpdatedAt: true,
       costs: {
-        where: { deletedAt: null, costType: { in: costTypes } },
+        where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID }, costType: { in: costTypes } },
         select: taxRefundCostLightSelect,
         orderBy: [{ createdAt: "desc" }],
         take: 80,
@@ -208,7 +209,7 @@ async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: Act
         take: 5,
       },
       costs: {
-        where: { deletedAt: null, costType: { in: TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES } },
+        where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID }, costType: { in: TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES } },
         select: taxRefundCostLightSelect,
         orderBy: [{ createdAt: "desc" }],
         take: 80,

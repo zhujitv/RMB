@@ -10,6 +10,7 @@ import { canAccessOrder } from "./order-access";
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
   LOGISTICS_OPERATOR_ROLE,
+  ORDER_COST_STATUS_VOID,
   SALES_DOCUMENT_TYPES,
   SUPPLIER_DOCUMENT_TYPES,
   assertRead,
@@ -115,7 +116,7 @@ export async function assertDocumentOrder(orderId: string, actor: ActorLike, doc
       createdBy: true,
       salesperson: true,
       logisticsSuppliers: { select: { supplierId: true } },
-      costs: { where: { deletedAt: null }, select: { createdById: true, deletedAt: true } },
+      costs: { where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } }, select: { createdById: true, status: true, deletedAt: true } },
     },
   });
   if (!order) throw permissionError("请选择有效应收订单", 400);
@@ -253,6 +254,7 @@ export async function resolveDocumentScope({ orderId, documentType, costId, supp
         id: requireText(costId, "成本记录"),
         orderId: order.id,
         deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
       },
       include: { order: true, supplier: true },
     });

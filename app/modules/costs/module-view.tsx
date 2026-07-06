@@ -35,6 +35,8 @@ type CostsModuleViewProps = {
   page: number;
   totalPages: number;
   deletingId: string;
+  selectedCostIds: string[];
+  selectedVoidableCount: number;
   detailCost: CostRow | null;
   detailOrderSummary: CostOrderSummary | null;
   detailInvoiceGroup: CostInvoiceGroupRow | null;
@@ -65,7 +67,13 @@ type CostsModuleViewProps = {
   onSetOrderDetail: (order: CostOrderSummary | null) => void;
   onSetInvoiceGroupDetail: (group: CostInvoiceGroupRow | null) => void;
   onEditCost: (cost: CostRow, options?: { returnToDetail?: boolean }) => void;
+  onCopyCost: (cost: CostRow) => void;
+  onVoidCost: (cost: CostRow) => void;
   onDeleteCost: (cost: CostRow) => void;
+  onRestoreCost: (cost: CostRow) => void;
+  onToggleCostSelection: (costId: string, selected: boolean) => void;
+  onToggleAllVisibleCosts: (selected: boolean) => void;
+  onBatchVoid: () => void;
   onOpenDocuments: (costId: string) => void;
   onOpenInvoiceGroupDocuments: (group: CostInvoiceGroupRow) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
@@ -99,6 +107,8 @@ export function CostsModuleView(props: CostsModuleViewProps) {
     page,
     totalPages,
     deletingId,
+    selectedCostIds,
+    selectedVoidableCount,
     detailCost,
     detailOrderSummary,
     detailInvoiceGroup,
@@ -133,6 +143,11 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             <button className={styles.secondaryButton} type="button" disabled={loading} onClick={props.onRefresh}>
               {loading ? "刷新中..." : "刷新"}
             </button>
+            {costView === "details" ? (
+              <button className={styles.secondaryButton} type="button" disabled={!selectedVoidableCount || deletingId === "__batch_void__"} onClick={props.onBatchVoid}>
+                {deletingId === "__batch_void__" ? "作废中..." : `批量作废${selectedVoidableCount ? ` (${selectedVoidableCount})` : ""}`}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -153,7 +168,12 @@ export function CostsModuleView(props: CostsModuleViewProps) {
 
         <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.costTableWrap}`}>
           <table className={styles.dataTable}>
-            {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceGroups" || costView === "invoiceExceptions" ? <CostInvoiceGroupTableHead showException={costView === "invoiceExceptions"} /> : <CostDetailTableHead />}
+            {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceGroups" || costView === "invoiceExceptions" ? <CostInvoiceGroupTableHead showException={costView === "invoiceExceptions"} /> : (
+              <CostDetailTableHead
+                allSelected={rows.length > 0 && rows.every((cost) => selectedCostIds.includes(cost.id))}
+                onToggleAll={props.onToggleAllVisibleCosts}
+              />
+            )}
             <tbody>
               {loading ? (
                 <tr>
@@ -178,10 +198,15 @@ export function CostsModuleView(props: CostsModuleViewProps) {
                     <CostTableRows
                       key={cost.id}
                       cost={cost}
+                      selected={selectedCostIds.includes(cost.id)}
                       onViewDetail={() => props.onSetDetailCost(cost)}
                       deleting={deletingId === cost.id}
+                      onSelect={(selected) => props.onToggleCostSelection(cost.id, selected)}
                       onEdit={() => props.onEditCost(cost)}
+                      onCopy={() => props.onCopyCost(cost)}
+                      onVoid={() => props.onVoidCost(cost)}
                       onDelete={() => props.onDeleteCost(cost)}
+                      onRestore={() => props.onRestoreCost(cost)}
                       onOpenDocuments={() => props.onOpenDocuments(cost.id)}
                       onOpenPaymentVoucher={props.onOpenPaymentVoucher}
                     />
@@ -203,7 +228,10 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             onOpenDocuments={() => props.onOpenDocuments(detailCost.id)}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}
             onEdit={() => props.onEditCost(detailCost, { returnToDetail: true })}
+            onCopy={() => props.onCopyCost(detailCost)}
+            onVoid={() => props.onVoidCost(detailCost)}
             onDelete={() => props.onDeleteCost(detailCost)}
+            onRestore={() => props.onRestoreCost(detailCost)}
             onClose={() => props.onSetDetailCost(null)}
           />
         ) : null}
@@ -221,7 +249,9 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             onOpenDocuments={(costId) => props.onOpenDocuments(costId)}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}
             deletingId={deletingId}
+            onVoid={props.onVoidCost}
             onDelete={props.onDeleteCost}
+            onRestore={props.onRestoreCost}
             onClose={() => props.onSetOrderDetail(null)}
           />
         ) : null}
@@ -254,6 +284,11 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             onUpdatePayment={props.onUpdatePayment}
             onUploadPaymentVoucher={props.onUploadPaymentVoucher}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}
+            onEditCost={() => props.onEditCost(documentCost)}
+            onCopyCost={() => props.onCopyCost(documentCost)}
+            onVoidCost={() => props.onVoidCost(documentCost)}
+            onDeleteCost={() => props.onDeleteCost(documentCost)}
+            onRestoreCost={() => props.onRestoreCost(documentCost)}
             onDelete={props.onDeleteDocument}
           />
         ) : null}
