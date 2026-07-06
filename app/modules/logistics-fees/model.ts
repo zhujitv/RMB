@@ -144,6 +144,19 @@ export type LogisticsExpense = {
   invoiceUploadedAt?: string | null;
   invoiceConfirmedBy?: UserLite;
   invoiceConfirmedAt?: string | null;
+  invoiceValidationStatus?: string;
+  invoiceValidationMessage?: string;
+  invoiceValidationJson?: unknown;
+  invoiceOcrTaskId?: string;
+  invoiceRecognizedNo?: string;
+  invoiceRecognizedDate?: string;
+  invoiceRecognizedSeller?: string;
+  invoiceRecognizedBuyer?: string;
+  invoiceRecognizedAmount?: number | null;
+  invoiceRecognizedName?: string;
+  invoiceManualConfirmedById?: string;
+  invoiceManualConfirmedAt?: string | null;
+  invoiceManualConfirmReason?: string;
   createdBy?: UserLite;
   updatedBy?: UserLite;
   createdAt?: string;
@@ -166,6 +179,18 @@ export type LogisticsInvoiceGroupSummary = {
   notified?: boolean;
   invoiceDocumentId?: string;
   invoiceNotificationError?: string;
+  validationStatus?: string;
+  validationMessage?: string;
+  validationJson?: unknown;
+  ocrTaskId?: string;
+  recognizedInvoiceNo?: string;
+  recognizedInvoiceDate?: string;
+  recognizedSeller?: string;
+  recognizedBuyer?: string;
+  recognizedAmount?: number;
+  recognizedName?: string;
+  manualConfirmedAt?: string | null;
+  manualConfirmReason?: string;
 };
 
 export type LogisticsExpensesResponse = {

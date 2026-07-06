@@ -217,6 +217,13 @@ export type NotificationTemplateSettings = {
 export type OcrIntegrationSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
 
+export type LogisticsInvoiceValidationRule = {
+  label: string;
+  keywords: string[];
+};
+
+export type LogisticsInvoiceValidationRules = Record<string, LogisticsInvoiceValidationRule>;
+
 export type ExchangeRateForm = {
   source: string;
   rateType: string;
@@ -283,6 +290,7 @@ export type OcrIntegrationForm = {
   appCodeConfigured: boolean;
   invoiceTextEnabled: boolean;
   supplierDocumentReturnEnabled: boolean;
+  logisticsInvoiceEnabled: boolean;
   timeoutMs: string;
 };
 

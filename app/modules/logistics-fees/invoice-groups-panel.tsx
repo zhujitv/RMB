@@ -39,6 +39,7 @@ export function LogisticsInvoiceGroupsPanel({
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
 }) {
   const [deletingGroupKey, setDeletingGroupKey] = useState("");
+  const [confirmingGroupKey, setConfirmingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
   const visibleGroups = groups.filter(
     (group) =>
@@ -86,6 +87,40 @@ export function LogisticsInvoiceGroupsPanel({
     }
   }
 
+  async function manuallyConfirmValidation(
+    targetExpense: LogisticsExpense,
+    group: LogisticsInvoiceGroupSummary,
+  ) {
+    const reason = window.prompt("请填写人工确认原因。");
+    if (!reason?.trim()) return;
+    setConfirmingGroupKey(group.key);
+    setGroupMessage((current) => ({ ...current, [group.key]: "" }));
+    try {
+      const response = await fetch(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "manualConfirmInvoiceValidation",
+          invoiceGroup: group.key,
+          reason,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success !== true)
+        throw new Error(result.message || "人工确认失败");
+      setGroupMessage((current) => ({ ...current, [group.key]: "已人工确认通过" }));
+      onUploaded(result);
+    } catch (error) {
+      setGroupMessage((current) => ({
+        ...current,
+        [group.key]: error instanceof Error ? error.message : "人工确认失败",
+      }));
+    } finally {
+      setConfirmingGroupKey("");
+    }
+  }
+
   return (
     <div className={styles.logisticsInvoiceGroupsPanel}>
       <div className={styles.logisticsInvoiceGroupsHeader}>
@@ -111,6 +146,11 @@ export function LogisticsInvoiceGroupsPanel({
           const confirmed = Boolean(
             group.confirmed || group.status === "已确认",
           );
+          const validationStatus = group.validationStatus || (uploaded ? "已上传待识别" : "未上传");
+          const validationPassed = ["校验通过", "人工确认通过"].includes(validationStatus);
+          const validationProblem = uploaded && !validationPassed && validationStatus !== "识别中" && validationStatus !== "已上传待识别";
+          const recognizedAmount = Number(group.recognizedAmount || 0);
+          const recognizedName = group.recognizedName || "-";
           const invoiceDocument =
             groupItems
               .map((item) => item.invoiceDocument)
@@ -216,6 +256,61 @@ export function LogisticsInvoiceGroupsPanel({
                   </div>
                 </div>
               ) : null}
+              {uploaded ? (
+                <div className={styles.logisticsInvoiceValidationBox}>
+                  <div className={styles.logisticsInvoiceValidationHead}>
+                    <span>发票校验</span>
+                    <StatusPill value={validationStatus} />
+                  </div>
+                  <div className={styles.logisticsInvoiceValidationGrid}>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>系统分组合计</span>
+                      <strong title={logisticsCurrencySummaryText(group)}>
+                        {logisticsCurrencySummaryText(group)}
+                      </strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>识别发票金额</span>
+                      <strong title={recognizedAmount ? `${recognizedAmount.toFixed(2)}` : "-"}>
+                        {recognizedAmount ? recognizedAmount.toFixed(2) : "-"}
+                      </strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>系统费用分组</span>
+                      <strong title={group.label}>{group.label}</strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>识别品名</span>
+                      <strong title={recognizedName}>{recognizedName}</strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>发票号码</span>
+                      <strong title={group.recognizedInvoiceNo || "-"}>{group.recognizedInvoiceNo || "-"}</strong>
+                    </div>
+                    <div className={styles.logisticsInvoiceValidationItem}>
+                      <span>开票日期</span>
+                      <strong title={group.recognizedInvoiceDate || "-"}>{group.recognizedInvoiceDate || "-"}</strong>
+                    </div>
+                  </div>
+                  {group.validationMessage ? (
+                    <div className={styles.logisticsInvoiceValidationError}>
+                      {group.validationMessage}
+                    </div>
+                  ) : null}
+                  {validationProblem && canUploadInvoice ? (
+                    <div className={styles.logisticsInvoiceValidationActions}>
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        disabled={confirmingGroupKey === group.key}
+                        onClick={() => manuallyConfirmValidation(targetExpense, group)}
+                      >
+                        {confirmingGroupKey === group.key ? "确认中..." : "人工确认通过"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {canUploadGroup ? (
                 <InvoiceUploadForm
                   expense={targetExpense}
@@ -234,6 +329,16 @@ export function LogisticsInvoiceGroupsPanel({
       </div>
     </div>
   );
+}
+
+function logisticsCurrencySummaryText(group: LogisticsInvoiceGroupSummary) {
+  const summary = group.currencyTotals;
+  if (!summary) return "-";
+  const values = [
+    summary.cnyActual ? `CNY ${Number(summary.cnyActual).toFixed(2)}` : "",
+    ...(summary.foreignTotals || []).map((item) => `${item.currency} ${Number(item.amount || 0).toFixed(2)}`),
+  ].filter(Boolean);
+  return values.length ? values.join(" / ") : "-";
 }
 
 function InvoiceUploadForm({

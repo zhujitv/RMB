@@ -40,6 +40,7 @@ export const DEFAULT_COMPANY_PROFILE_SETTINGS = {
   footerText: "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.",
 };
 export const OCR_INTEGRATION_SETTING_KEY = "ocr_integration";
+export const LOGISTICS_INVOICE_VALIDATION_RULES_SETTING_KEY = "logistics_invoice_validation_rules";
 export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   enabled: false,
   provider: "ALIYUN",
@@ -51,8 +52,27 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
   supplierDocumentReturnEnabled: false,
+  logisticsInvoiceEnabled: false,
   fallbackToPdfText: true,
   timeoutMs: 15000,
+};
+export const DEFAULT_LOGISTICS_INVOICE_VALIDATION_RULES = {
+  CUSTOMS: {
+    label: "报关费",
+    keywords: ["报关费", "代理报关费", "报关代理服务费"],
+  },
+  PORT_CHARGES: {
+    label: "港杂费",
+    keywords: ["代理港杂费", "港杂费", "港口杂费"],
+  },
+  OCEAN_FREIGHT: {
+    label: "海运费",
+    keywords: ["国际货物运输代理服务费", "国际货运代理服务费", "海运费", "海运代理费"],
+  },
+  TRUCKING_OTHER: {
+    label: "拖车及其他费用合并发票",
+    keywords: ["国内道路运输服务代理", "道路运输服务", "拖车费", "国内运输代理服务"],
+  },
 };
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {

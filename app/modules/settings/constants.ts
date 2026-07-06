@@ -175,6 +175,7 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   appCodeConfigured: false,
   invoiceTextEnabled: false,
   supplierDocumentReturnEnabled: false,
+  logisticsInvoiceEnabled: false,
   timeoutMs: "15000",
 };
 export const OCR_FEATURE_OPTIONS = [
@@ -188,10 +189,15 @@ export const OCR_FEATURE_OPTIONS = [
     label: "产品供应商资料回传 OCR",
     description: "供应商上传采购合同和增值税发票后自动识别并校验内容。",
   },
+  {
+    key: "logisticsInvoiceEnabled",
+    label: "物流费用发票 OCR",
+    description: "物流费用分组发票上传后自动识别金额和服务名称，并校验分组合计。",
+  },
 ] satisfies Array<{
   key: keyof Pick<
     OcrIntegrationForm,
-    "invoiceTextEnabled" | "supplierDocumentReturnEnabled"
+    "invoiceTextEnabled" | "supplierDocumentReturnEnabled" | "logisticsInvoiceEnabled"
   >;
   label: string;
   description: string;

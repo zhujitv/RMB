@@ -2,6 +2,8 @@ import { prisma } from "../prisma";
 import {
   COST_BATCH_INPUT_SCHEMA,
   COST_INPUT_SCHEMA,
+  FILE_ASSET_ROLES,
+  FILE_ASSET_SOURCE_TABLES,
   ORDER_COST_STATUS_VOID,
   assertInputSchema,
   assertJsonObject,
@@ -12,6 +14,7 @@ import {
   runNonCriticalTask,
   safeSerializeCost,
   scheduleTaxRefundCompletenessRefresh,
+  softDeleteFileAssetBySource,
   syncCostInvoiceStatus,
   writeAudit,
 } from "./shared";
@@ -157,9 +160,17 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
     deleteBlockReasons,
   };
   const cost = await prisma.$transaction(async (tx) => {
-    return action === "deleted"
-      ? await tx.orderCost.delete({ where: { id } })
-      : await tx.orderCost.update({
+    if (action === "deleted") {
+      await softDeleteFileAssetBySource(
+        tx,
+        FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
+        id,
+        FILE_ASSET_ROLES.PAYMENT_VOUCHER,
+        deletedAt,
+      );
+      return tx.orderCost.delete({ where: { id } });
+    }
+    return tx.orderCost.update({
         where: { id },
         data: {
           status: ORDER_COST_STATUS_VOID,

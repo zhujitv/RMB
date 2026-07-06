@@ -1,4 +1,5 @@
-import { type FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import { apiJson } from "../../api";
 import { PermissionSelectItem, UiSwitch } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../../types";
@@ -46,6 +47,7 @@ import type {
   NotificationTemplateSettings,
   OcrIntegrationForm,
   OcrIntegrationSettings,
+  LogisticsInvoiceValidationRules,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
 } from "./types";
@@ -69,6 +71,32 @@ export function OcrIntegrationSettingsCard({
   onReset: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [validationRules, setValidationRules] = useState<LogisticsInvoiceValidationRules | null>(null);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [rulesSaving, setRulesSaving] = useState(false);
+  const [rulesMessage, setRulesMessage] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setRulesLoading(true);
+    setRulesMessage("");
+    apiJson<{ rules?: LogisticsInvoiceValidationRules }>("/api/settings/logistics-invoice-validation-rules")
+      .then((result) => {
+        if (!alive) return;
+        setValidationRules(result.rules || {});
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则加载失败");
+      })
+      .finally(() => {
+        if (alive) setRulesLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
   if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
   const currentForm = form || ocrIntegrationFormFromSettings(settings);
@@ -87,6 +115,45 @@ export function OcrIntegrationSettingsCard({
 
   function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
     setField(key, !currentForm[key]);
+  }
+
+  function updateRuleKeywords(key: string, value: string) {
+    setValidationRules((current) => {
+      const rules = current || {};
+      const existing = rules[key] || { label: key, keywords: [] };
+      return {
+        ...rules,
+        [key]: {
+          ...existing,
+          keywords: value
+            .split(/[\n,，;；]+/)
+            .map((item) => item.trim())
+            .filter(Boolean),
+        },
+      };
+    });
+  }
+
+  async function saveValidationRules() {
+    if (!validationRules) return;
+    setRulesSaving(true);
+    setRulesMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; rules?: LogisticsInvoiceValidationRules }>(
+        "/api/settings/logistics-invoice-validation-rules",
+        {
+          method: "PATCH",
+          body: JSON.stringify({ rules: validationRules }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "物流费用发票校验规则保存失败");
+      setValidationRules(result.rules || validationRules);
+      setRulesMessage(result.message || "物流费用发票校验规则已保存");
+    } catch (error) {
+      setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则保存失败");
+    } finally {
+      setRulesSaving(false);
+    }
   }
 
   return (
@@ -177,6 +244,41 @@ export function OcrIntegrationSettingsCard({
               onChange={() => toggleFeature(item.key)}
             />
           ))}
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="物流费用发票校验规则" icon="规">
+        {rulesMessage ? (
+          <div className={rulesMessage.includes("失败") || rulesMessage.includes("无权限") || rulesMessage.includes("错误") ? styles.inlineError : styles.emptyState}>
+            {rulesMessage}
+          </div>
+        ) : null}
+        {rulesLoading ? (
+          <div className={styles.emptyState}>规则加载中...</div>
+        ) : (
+          <div className={styles.settingsFieldGrid}>
+            {Object.entries(validationRules || {}).map(([key, rule]) => (
+              <label className={styles.notificationTemplateField} key={key}>
+                {rule.label}
+                <textarea
+                  value={(rule.keywords || []).join("\n")}
+                  onChange={(event) => updateRuleKeywords(key, event.target.value)}
+                  placeholder="每行一个可匹配品名"
+                  rows={4}
+                />
+              </label>
+            ))}
+          </div>
+        )}
+        <div className={styles.inlineActionGroup}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            disabled={rulesSaving || rulesLoading || !validationRules}
+            onClick={() => void saveValidationRules()}
+          >
+            {rulesSaving ? "保存中..." : "保存校验规则"}
+          </button>
         </div>
       </SettingsCard>
 

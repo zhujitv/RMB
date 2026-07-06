@@ -71,6 +71,55 @@ export function logisticsInvoiceGroupsForBill(
         groupItems
           .map((item) => item.invoiceNotificationError || "")
           .find(Boolean) || "",
+      validationStatus:
+        groupItems
+          .map((item) => item.invoiceValidationStatus || "")
+          .find(Boolean) || "未上传",
+      validationMessage:
+        groupItems
+          .map((item) => item.invoiceValidationMessage || "")
+          .find(Boolean) || "",
+      validationJson:
+        groupItems
+          .map((item) => item.invoiceValidationJson)
+          .find(Boolean) || null,
+      ocrTaskId:
+        groupItems
+          .map((item) => item.invoiceOcrTaskId || "")
+          .find(Boolean) || "",
+      recognizedInvoiceNo:
+        groupItems
+          .map((item) => item.invoiceRecognizedNo || "")
+          .find(Boolean) || "",
+      recognizedInvoiceDate:
+        groupItems
+          .map((item) => item.invoiceRecognizedDate || "")
+          .find(Boolean) || "",
+      recognizedSeller:
+        groupItems
+          .map((item) => item.invoiceRecognizedSeller || "")
+          .find(Boolean) || "",
+      recognizedBuyer:
+        groupItems
+          .map((item) => item.invoiceRecognizedBuyer || "")
+          .find(Boolean) || "",
+      recognizedAmount: Number(
+        groupItems
+          .map((item) => item.invoiceRecognizedAmount)
+          .find((value) => value != null) || 0,
+      ),
+      recognizedName:
+        groupItems
+          .map((item) => item.invoiceRecognizedName || "")
+          .find(Boolean) || "",
+      manualConfirmedAt:
+        groupItems
+          .map((item) => item.invoiceManualConfirmedAt)
+          .find(Boolean) || null,
+      manualConfirmReason:
+        groupItems
+          .map((item) => item.invoiceManualConfirmReason || "")
+          .find(Boolean) || "",
     };
   });
 }

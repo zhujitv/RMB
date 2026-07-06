@@ -4,6 +4,7 @@ import {
   codedError,
   confirmLogisticsExpenseInvoice,
   logServerError,
+  manuallyConfirmLogisticsInvoiceValidation,
   ok,
   parseJsonBody,
   resendLogisticsExpenseInvoiceNotice,
@@ -59,6 +60,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if ((body.action || "") === "confirmInvoice") {
       const expense = await confirmLogisticsExpenseInvoice(request, actor, id, body);
       return ok({ success: true, expense, message: "物流发票已确认" });
+    }
+    if ((body.action || "") === "manualConfirmInvoiceValidation") {
+      const result = await manuallyConfirmLogisticsInvoiceValidation(request, actor, id, body);
+      return ok({ success: true, ...result, message: "物流发票校验已人工确认通过" });
     }
     if ((body.action || "") === "paymentStatus" || (body.action || "") === "markPaid") {
       const expense = await updateLogisticsExpensePaymentStatus(request, actor, id, body);

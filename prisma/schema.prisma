@@ -1056,6 +1056,19 @@ model LogisticsExpense {
   invoiceUploadedAt        DateTime? @map("invoice_uploaded_at")
   invoiceConfirmedById     String?   @map("invoice_confirmed_by")
   invoiceConfirmedAt       DateTime? @map("invoice_confirmed_at")
+  invoiceValidationStatus  String    @default("未上传") @map("invoice_validation_status")
+  invoiceValidationMessage String?   @map("invoice_validation_message") @db.Text
+  invoiceValidationJson    Json?     @map("invoice_validation_json")
+  invoiceOcrTaskId         String?   @map("invoice_ocr_task_id")
+  invoiceRecognizedNo      String?   @map("invoice_recognized_no")
+  invoiceRecognizedDate    DateTime? @map("invoice_recognized_date") @db.Date
+  invoiceRecognizedSeller  String?   @map("invoice_recognized_seller")
+  invoiceRecognizedBuyer   String?   @map("invoice_recognized_buyer")
+  invoiceRecognizedAmount  Decimal?  @map("invoice_recognized_amount") @db.Decimal(18, 2)
+  invoiceRecognizedName    String?   @map("invoice_recognized_name") @db.Text
+  invoiceManualConfirmedById String? @map("invoice_manual_confirmed_by")
+  invoiceManualConfirmedAt DateTime? @map("invoice_manual_confirmed_at")
+  invoiceManualConfirmReason String? @map("invoice_manual_confirm_reason") @db.Text
   forceConfirmReason       String?   @map("force_confirm_reason")
   createdById              String?   @map("created_by")
   updatedById              String?   @map("updated_by")
@@ -1081,6 +1094,8 @@ model LogisticsExpense {
   @@index([costType])
   @@index([auditStatus])
   @@index([invoiceStatus])
+  @@index([invoiceValidationStatus])
+  @@index([invoiceOcrTaskId])
   @@index([invoiceDocumentId])
   @@index([paymentStatus])
   @@index([createdById])

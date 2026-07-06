@@ -31,8 +31,16 @@ export function logisticsExpensePayButtonState(expense: LogisticsExpense) {
     logisticsExpenseBillPaymentStatusFromRow(expense),
     "payment",
   );
-  return {
+  const validationBlocked = items.some((item) =>
+    !["校验通过", "人工确认通过"].includes(String(item.invoiceValidationStatus || "未上传")),
+  );
+  const state = {
     ...logisticsBillPayState({ auditStatus, invoiceStatus, paymentStatus }),
     rule: PAY_BUTTON_RULE,
+  };
+  return {
+    ...state,
+    canMarkPaid: state.canMarkPaid && !validationBlocked,
+    validationBlocked,
   };
 }

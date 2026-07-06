@@ -30,6 +30,13 @@ import {
   logisticsInvoiceGroupForExpense,
   logisticsInvoiceGroupForKey,
 } from "./logistics-invoice-groups";
+import {
+  clearLogisticsInvoiceValidation,
+  invoiceValidationStatusCanContinue,
+  markLogisticsInvoiceValidationUploaded,
+  recognizeAndValidateLogisticsInvoiceGroup,
+  summarizeInvoiceValidationBlockReason,
+} from "./logistics-invoice-validation";
 import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
 import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
@@ -91,6 +98,8 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
         data: {
           invoiceDocumentId: document.id,
           invoiceStatus: "已上传",
+          invoiceValidationStatus: "已上传待识别",
+          invoiceValidationMessage: null,
           invoiceNotificationError: null,
           invoiceUploadedById: actorId(actor),
           invoiceUploadedAt: uploadedAt,
@@ -134,6 +143,13 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
     if (document.storageKey) await deleteManagedStoredFile(document.storageKey).catch(() => null);
     throw error;
   }
+  await markLogisticsInvoiceValidationUploaded(targetIds, actor);
+  await recognizeAndValidateLogisticsInvoiceGroup({
+    documentId: document.id,
+    invoiceGroupKey: invoiceGroup.key,
+    rows: savedRows,
+    actor,
+  });
   await runNonCriticalTask("物流发票上传状态日志写入", () => writeAudit(request, actor, "提交物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
     invoiceGroupLabel: invoiceGroup.label,
@@ -149,7 +165,7 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   const finalRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   return {
     bill: serializeLogisticsExpenseBill(finalRows),
-    expenses: savedRows.map(serializeLogisticsExpense),
+    expenses: finalRows.map(serializeLogisticsExpense),
     invoiceGroup: invoiceGroup.key,
   };
 }
@@ -201,6 +217,8 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
           invoiceDocumentId: null,
           invoiceUploadedById: null,
           invoiceUploadedAt: null,
+          invoiceValidationStatus: "未上传",
+          invoiceValidationMessage: null,
           invoiceStatus: row.invoiceNotifiedAt ? "已通知开票" : "待开票",
           updatedById: actorId(actor),
         },
@@ -210,6 +228,7 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
       }
     }
   });
+  await clearLogisticsInvoiceValidation(targetDocumentRows.map((row) => row.id), actor);
   const savedRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   await runNonCriticalTask("物流发票删除状态日志写入", () => writeAudit(request, actor, "删除物流分组发票", "logistics_bills", rowBillId(before), targetRows.map(serializeLogisticsExpense), {
     invoiceGroup: invoiceGroup.key,
@@ -235,6 +254,13 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
   const before = await loadLogisticsExpenseForAction(id, actor);
   if (before.invoiceStatus !== "已上传") throw codedError("只有已上传发票的物流费用可以确认。", 400, "LOGISTICS_INVOICE_NOT_UPLOADED");
   if (!before.invoiceDocumentId) throw codedError("发票文件不能为空。", 400, "LOGISTICS_INVOICE_FILE_REQUIRED");
+  if (!invoiceValidationStatusCanContinue(before.invoiceValidationStatus)) {
+    throw codedError(
+      before.invoiceValidationMessage || "物流发票未校验通过，不能确认发票。",
+      400,
+      "LOGISTICS_INVOICE_VALIDATION_BLOCKED",
+    );
+  }
   const forceConfirmReason = optional(input.forceConfirmReason || input.reason);
   const saved = await prisma.logisticsExpense.update({
     where: { id },
@@ -278,6 +304,12 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
     paymentStatus: billPaymentStatus,
   })) {
     throw codedError("需审核通过且已上传发票后才可标记付款。", 400, "LOGISTICS_PAYMENT_STATE_INVALID");
+  }
+  if (paymentStatus === "已付款") {
+    const blockReason = summarizeInvoiceValidationBlockReason(billRows);
+    if (blockReason) {
+      throw codedError(blockReason, 400, "LOGISTICS_INVOICE_VALIDATION_BLOCKED");
+    }
   }
   const paymentDate = paymentStatus === "已付款" ? dateFromInput(input.paymentDate || input.paidAt || input.paidDate) : null;
   if (paymentStatus === "已付款" && !paymentDate) {

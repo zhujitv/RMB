@@ -282,10 +282,14 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(backend, /invoiceDocumentId: document\.id/);
   assert.match(backend, /invoiceStatus: "已上传"/);
   assert.doesNotMatch(backend, /paymentStatus: "已开票"/);
-  assert.doesNotMatch(
-    backend,
-    /recognizeLogisticsInvoicePdfBuffer|invoiceRecognition|invoiceSellerName|invoiceBuyerName|invoiceRecognizedAt/,
-  );
+  assert.match(backend, /recognizeAndValidateLogisticsInvoiceGroup/);
+  assert.match(backend, /recognizeLogisticsInvoiceWithOcr/);
+  assert.match(backend, /LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE = "LOGISTICS_INVOICE"/);
+  assert.match(backend, /invoiceValidationStatusCanContinue/);
+  assert.match(backend, /summarizeInvoiceValidationBlockReason/);
+  assert.match(backend, /mergeValidationIssues\(validation\.issues, parserIssues\)/);
+  assert.doesNotMatch(backend, /parserIssues\.length \? parserIssues : validation\.issues/);
+  assert.doesNotMatch(backend, /recognizeLogisticsInvoicePdfBuffer|invoiceRecognitionStatus|invoiceRecognitionMessage|invoiceRecognizedAt/);
   assert.match(logisticsModule, /LogisticsInvoiceGroupsPanel/);
   assert.match(logisticsModule, /按费用类型分组上传，同一分组上传一次即可。/);
   assert.match(logisticsModule, /已上传文件列表/);
@@ -302,10 +306,12 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
     invoiceUploadFormSource,
     /body\.set\("invoiceNo"|body\.set\("invoiceDate"|body\.set\("invoiceAmount"|body\.set\("remark"/,
   );
-  assert.doesNotMatch(
-    logisticsModule,
-    /发票号：|开票日期：|识别金额：|销售方：|购买方：|自动识别中|识别成功|识别失败/,
-  );
+  assert.match(logisticsModule, /发票校验/);
+  assert.match(logisticsModule, /系统分组合计/);
+  assert.match(logisticsModule, /识别发票金额/);
+  assert.match(logisticsModule, /系统费用分组/);
+  assert.match(logisticsModule, /识别品名/);
+  assert.match(logisticsModule, /人工确认通过/);
   assert.doesNotMatch(
     backend,
     /requireText\(formData\.get\("invoiceNo"\)|requirePositive\(formData\.get\("invoiceAmount"\)|请选择开票日期/,

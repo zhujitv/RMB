@@ -14,7 +14,7 @@ import { writeAudit } from "./shared-audit";
 export type SettingsActor = Parameters<typeof assertRead>[0];
 export type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
-export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "supplierDocumentReturn";
+export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "supplierDocumentReturn" | "logisticsInvoice";
 export type SupplierOcrDocumentType = "SUPPLIER_PURCHASE_CONTRACT" | "SUPPLIER_INVOICE";
 export type CustomsDeclarationRecognitionMode = "AUTO" | "STRICT" | "MANUAL";
 
@@ -29,6 +29,7 @@ export type OcrIntegrationInput = {
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
   supplierDocumentReturnEnabled?: unknown;
+  logisticsInvoiceEnabled?: unknown;
   fallbackToPdfText?: unknown;
   timeoutMs?: unknown;
 };
@@ -238,6 +239,7 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
     supplierDocumentReturnEnabled: input.supplierDocumentReturnEnabled === true,
+    logisticsInvoiceEnabled: input.logisticsInvoiceEnabled === true,
     fallbackToPdfText: input.fallbackToPdfText !== false,
     timeoutMs: cleanTimeoutMs(input.timeoutMs),
   };
@@ -267,6 +269,7 @@ export function serializeOcrFeatureFlags(setting: unknown) {
     customsDeclarationEnabled: enabled && normalized.customsDeclarationEnabled,
     invoiceTextEnabled: enabled && normalized.invoiceTextEnabled,
     supplierDocumentReturnEnabled: enabled && normalized.supplierDocumentReturnEnabled,
+    logisticsInvoiceEnabled: enabled && normalized.logisticsInvoiceEnabled,
     fallbackToPdfText: normalized.fallbackToPdfText,
     timeoutMs: normalized.timeoutMs,
   };
@@ -279,12 +282,14 @@ export function ocrFeatureEnabled(settings: ReturnType<typeof normalizeOcrIntegr
   if (feature === "customsDeclaration") return settings.customsDeclarationMode !== "MANUAL" && settings.customsDeclarationEnabled;
   if (feature === "invoiceText") return settings.invoiceTextEnabled;
   if (feature === "supplierDocumentReturn") return settings.supplierDocumentReturnEnabled;
+  if (feature === "logisticsInvoice") return settings.logisticsInvoiceEnabled;
   return false;
 }
 
 export function ocrFeatureLabel(feature: OcrFeatureKey) {
   if (feature === "customsDeclaration") return "报关单识别";
   if (feature === "supplierDocumentReturn") return "产品供应商资料回传 OCR";
+  if (feature === "logisticsInvoice") return "物流费用发票 OCR";
   return "发票识别";
 }
 

@@ -233,7 +233,8 @@ test("cost detail tables always keep an invoice operation column", () => {
   assert.match(costsModule, /<CostOrderItemsTable[\s\S]*costs=\{order\.costs \|\| \[\]\}[\s\S]*onOpenDocuments=\{onOpenDocuments\}[\s\S]*onDelete=\{onDelete\}/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{onOpenDocuments\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
-  assert.match(costsModule, /deletingId === cost\.id \? "处理中\.\.\." : costDeleteActionLabel\(cost\)/);
+  assert.match(costsModule, /deletingId === cost\.id \? "处理中\.\.\." : "作废"/);
+  assert.match(costsModule, /deletingId === cost\.id \? "处理中\.\.\." : "删除"/);
   assert.match(workspaceStyles, /\.costInvoiceActions \{[\s\S]*display: flex;[\s\S]*gap: 6px;/);
   assert.match(workspaceStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 180px;/);
 });
@@ -329,16 +330,17 @@ test("cost order summary keeps cost items inside shipment detail drawer", () => 
 });
 
 test("cost order detail can delete a cost item without reloading the page list", () => {
-  assert.match(costsModule, /确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析。/);
+  assert.match(costsModule, /确认删除这条成本明细吗？删除后将影响该订单成本合计和利润分析，且不可恢复。/);
   assert.match(costsModule, /function shouldVoidCostOnDelete/);
   assert.match(costsModule, /function costDeleteActionLabel/);
   assert.match(costsModule, /shouldVoidCostOnDelete\(cost\) \? "作废成本" : "删除成本"/);
   assert.match(costsModule, /\["已收到", "部分收到"\]\.includes\(cost\.invoiceStatus \|\| ""\)/);
-  assert.match(costsModule, /const deleteActionLabel = costDeleteActionLabel\(cost\)/);
-  assert.match(costsModule, /\{deleting \? "处理中\.\.\." : deleteActionLabel\}/);
-  assert.match(costsModule, /\{deletingId === cost\.id \? "处理中\.\.\." : costDeleteActionLabel\(cost\)\}/);
-  assert.match(costsModule, /确认作废这条成本明细吗？作废后将从当前成本、利润和退税完整度中移除，但保留历史审计记录。/);
-  assert.match(costsModule, /处理方式：作废，不做物理删除/);
+  assert.match(costsModule, /\{deleting \? "处理中\.\.\." : "作废"\}/);
+  assert.match(costsModule, /\{deleting \? "处理中\.\.\." : "删除"\}/);
+  assert.match(costsModule, /\{deletingId === cost\.id \? "处理中\.\.\." : "作废"\}/);
+  assert.match(costsModule, /\{deletingId === cost\.id \? "处理中\.\.\." : "删除"\}/);
+  assert.match(costsModule, /确认作废这条成本明细吗？作废后将从成本统计、利润分析、退税计算、待办和报表中排除，但保留金额、附件、付款凭证和操作日志。/);
+  assert.match(costsModule, /lifecycleDetails\(cost, "作废，不做物理删除"\)/);
   assert.match(costsModule, /type CostDeleteResponse = \{/);
   assert.match(costsModule, /orderSummary\?: CostOrderSummary \| null/);
   assert.match(costsModule, /function applyDeletedCost\(cost: CostRow, orderSummary\?: CostOrderSummary \| null\)/);
@@ -353,7 +355,7 @@ test("cost order detail can delete a cost item without reloading the page list",
 });
 
 test("cost delete backend enforces permissions, audit, and voids risky records", () => {
-  assert.match(costRoute, /const result = await deleteCost\(request, actor, id\)/);
+  assert.match(costRoute, /const result = await deleteCostTyped\(request, actor, id, body\)/);
   assert.match(costRoute, /return ok\(\{ success: true, ok: true, \.\.\.result \}\)/);
   assert.match(costsMutation, /function assertCanDeleteCost/);
   assert.match(costsMutation, /actor\.role === "管理员"/);
@@ -362,7 +364,7 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /普通业务员不可删除已确认成本/);
   assert.match(costsMutation, /function canPhysicallyDeleteCost/);
   assert.match(costsMutation, /sourceType !== "LOGISTICS_EXPENSE"/);
-  assert.match(costsMutation, /paymentStatus: "已取消"/);
+  assert.match(costsMutation, /status: ORDER_COST_STATUS_VOID/);
   assert.match(costsMutation, /action === "deleted" \? "删除成本明细" : "作废成本明细"/);
   assert.match(costsMutation, /deletedById: actor\.id/);
   assert.match(costsMutation, /deletedAt/);
@@ -371,13 +373,13 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /supplier: cost\.supplierNameSnapshot/);
   assert.match(costsMutation, /amount: Number\(cost\.amount\)/);
   assert.match(costsMutation, /orderSummary: await costOrderSummaryForMutation\(before\.orderId, currentActor\)/);
-  assert.match(costsMutation, /scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);
+  assert.match(costsMutation, /scheduleCostLifecycleRefresh\(before\.orderId\)/);
 });
 
 test("cost create and edit interactions use right side drawers instead of inline panels", () => {
   assert.match(costsModule, /type CostFormDrawerState = \{/);
   assert.match(costsModule, /function CostFormDrawer\(/);
-  assert.match(costsModule, /<SideDetailDrawer[\s\S]*ariaLabel=\{editMode \? "编辑成本" : "登记成本"\}/);
+  assert.match(costsModule, /<SideDetailDrawer[\s\S]*ariaLabel=\{editMode \? "编辑成本" : copyMode \? "复制成本" : "登记成本"\}/);
   assert.match(costsModule, /<QuickCreateCostPanel[\s\S]*drawerMode/);
   assert.match(costsModule, /onClick=\{(?:openCreateCostDrawer|props\.onCreateCost)\}/);
   assert.match(costsModule, /onEdit=\{\(\) => (?:openEditCostDrawer|props\.onEditCost)\(detailCost, \{ returnToDetail: true \}\)\}/);

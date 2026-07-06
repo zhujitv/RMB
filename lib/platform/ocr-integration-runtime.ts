@@ -63,3 +63,11 @@ export async function recognizeSupplierDocumentWithOcr(
     });
   }
 }
+
+export async function recognizeLogisticsInvoiceWithOcr(
+  buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
+): Promise<OcrRecognitionResult> {
+  const settings = await ensureOcrFeatureEnabled("logisticsInvoice");
+  const fileBuffer = bufferFromInput(buffer);
+  return recognizeAliyunVatInvoice(fileBuffer, settings);
+}

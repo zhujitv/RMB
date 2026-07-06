@@ -30,6 +30,12 @@
 .logisticsInvoiceGroupTitle { composes: logisticsInvoiceGroupTitle from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceGroupMeta { composes: logisticsInvoiceGroupMeta from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceGroupError { composes: logisticsInvoiceGroupError from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationBox { composes: logisticsInvoiceValidationBox from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationHead { composes: logisticsInvoiceValidationHead from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationGrid { composes: logisticsInvoiceValidationGrid from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationItem { composes: logisticsInvoiceValidationItem from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationError { composes: logisticsInvoiceValidationError from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceValidationActions { composes: logisticsInvoiceValidationActions from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileList { composes: logisticsInvoiceFileList from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileRow { composes: logisticsInvoiceFileRow from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileName { composes: logisticsInvoiceFileName from "./logistics-bill-actions.module.css"; }
