@@ -46,12 +46,26 @@ function parseAmount(text: string, patterns: RegExp[]) {
 
 function parseDateText(text: string, patterns: RegExp[]) {
   const value = firstMatch(text, patterns);
-  const normalized = value
-    .replace(/[年月.]/g, "-")
-    .replace(/[日号]/g, "")
-    .replace(/--+/g, "-")
-    .trim();
-  return normalized || value;
+  return normalizeInvoiceDate(value);
+}
+
+function normalizeInvoiceDate(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const compact = text.replace(/\s+/g, " ");
+  const labeled = compact.match(/(?:开票日期|开票时间|开具日期|开具时间|发票日期|制票日期|日期)[:：]?\s*(.+)$/);
+  const source = cleanText(labeled?.[1] || compact);
+  const chinese = source.match(/([0-9]{4})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*(?:日|号)?/);
+  const separated = source.match(/([0-9]{4})[-/.]([0-9]{1,2})[-/.]([0-9]{1,2})/);
+  const compactDate = source.match(/\b([0-9]{4})([0-9]{2})([0-9]{2})\b/);
+  const match = chinese || separated || compactDate;
+  if (!match) return source;
+  const [, year, month, day] = match;
+  return [
+    year,
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
 }
 
 function normalizeOcrLines(text: string) {
@@ -385,9 +399,10 @@ export function parseVatInvoiceFields(text: string, structuredFields: Record<str
     /发票号[:：]?\s*([A-Z0-9\-]{6,30})/i,
     /No\.?\s*[:：]?\s*([A-Z0-9\-]{6,30})/i,
   ]);
-  const invoiceDate = structuredText(structuredFields, "invoiceDate") || parseDateText(text, [
-    /开票日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
-    /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?)/,
+  const invoiceDate = normalizeInvoiceDate(structuredText(structuredFields, "invoiceDate")) || parseDateText(text, [
+    /(?:开票日期|开票时间|开具日期|开具时间|发票日期|制票日期)[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?(?:\s+[0-9:：]{4,8})?)/,
+    /(?:开票日期|开票时间|开具日期|开具时间|发票日期|制票日期)[:：]?\s*([0-9]{8})/,
+    /日期[:：]?\s*([0-9]{4}[年\-/.][0-9]{1,2}[月\-/.][0-9]{1,2}[日号]?(?:\s+[0-9:：]{4,8})?)/,
   ]);
   const amountWithTax = structuredAmount(structuredFields, "amountWithTax") || extractInvoiceAmountWithTax(text);
   const totals = extractInvoiceTotals(text);

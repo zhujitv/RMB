@@ -253,7 +253,7 @@ test("VAT invoice parser prefers trusted structured fields over noisy raw party 
 test("VAT invoice parser accepts group company seller names from Aliyun structured fields", () => {
   const fields = parseVatInvoiceFields("", {
     invoiceNo: "2634200002105865616",
-    invoiceDate: "2026年07月03日",
+    invoiceDate: "2026年07月03日 10:20:30",
     buyer: "浙江莱诺建材有限公司",
     buyerTaxNo: "91330681MA2D86XM28",
     seller: "安徽森泰木塑集团股份有限公司",
@@ -268,6 +268,12 @@ test("VAT invoice parser accepts group company seller names from Aliyun structur
   assert.equal(fields.seller, "安徽森泰木塑集团股份有限公司");
   assert.equal(fields.sellerTaxNo, "91341822796423104J");
   assert.equal(fields.buyer, "浙江莱诺建材有限公司");
+  assert.equal(fields.invoiceDate, "2026-07-03");
+});
+
+test("VAT invoice parser normalizes labeled invoice date text", () => {
+  assert.equal(parseVatInvoiceFields("开具日期：20260703", {}).invoiceDate, "2026-07-03");
+  assert.equal(parseVatInvoiceFields("开票时间：2026/7/3 10:20:30", {}).invoiceDate, "2026-07-03");
 });
 
 test("VAT invoice parser infers seller from plain company sequence in Aliyun text", () => {

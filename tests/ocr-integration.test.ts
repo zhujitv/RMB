@@ -208,6 +208,23 @@ test("Aliyun invoice parser falls back to prism key value pairs without merging 
   assert.equal(result.extractedFields.productName, "*有色金属压延材*铝制工程结构件");
 });
 
+test("Aliyun invoice parser maps invoice time aliases to invoice date", async () => {
+  process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+  const { extractAliyunInvoiceRecognitionData } = await import("../lib/platform/aliyun-invoice-ocr-parser.ts");
+  const payload = {
+    Data: JSON.stringify({
+      data: {
+        invoiceTime: "2026年7月3日 10:20:30",
+      },
+      prism_keyValueInfo: [
+        { key: "开具日期", value: "2026年7月3日" },
+      ],
+    }),
+  };
+  const result = extractAliyunInvoiceRecognitionData(payload);
+  assert.equal(result.extractedFields.invoiceDate, "2026年7月3日 10:20:30");
+});
+
 test("Aliyun invoice parser reads seller from contextual and repeated key value entries", async () => {
   process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
   const { extractAliyunInvoiceRecognitionData } = await import("../lib/platform/aliyun-invoice-ocr-parser.ts");
