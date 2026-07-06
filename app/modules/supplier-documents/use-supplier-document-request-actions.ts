@@ -5,10 +5,13 @@ import { apiJson } from "../../api";
 import type { ConfirmationDialogState, ConfirmationResult } from "../../components";
 import { uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import type { CreateSupplierDocumentRequestResult } from "./create-request-dialog";
-import { supplierUploadKey } from "./helpers";
+import { apiErrorMessage, supplierOcrActionKey, supplierUploadKey } from "./helpers";
 import type {
+  SupplierDocument,
   SupplierDocumentDeleteResponse,
   SupplierDocumentNoticeResponse,
+  SupplierDocumentOcrResponse,
+  SupplierDocumentOcrTask,
   SupplierDocumentTask,
   SupplierUploadResponse,
 } from "./types";
@@ -35,6 +38,7 @@ type SupplierDocumentRequestActionOptions = {
   setPendingCount: Dispatch<SetStateAction<number>>;
   setDeletingTaskId: Dispatch<SetStateAction<string>>;
   setResendingTaskId: Dispatch<SetStateAction<string>>;
+  setOcrBusyKey: Dispatch<SetStateAction<string>>;
   setCreateDialogOpen: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<number>>;
 };
@@ -63,6 +67,7 @@ export function useSupplierDocumentRequestActions({
   setPendingCount,
   setDeletingTaskId,
   setResendingTaskId,
+  setOcrBusyKey,
   setCreateDialogOpen,
   setPage,
 }: SupplierDocumentRequestActionOptions) {
@@ -85,6 +90,65 @@ export function useSupplierDocumentRequestActions({
       return shouldShow && page === 1 ? [request, ...current].slice(0, pageSize) : current;
     });
     return shouldShow;
+  }
+
+  function updateDocumentOcrTask(taskId: string, documentId: string, ocrTask: SupplierDocumentOcrTask | null | undefined) {
+    if (!ocrTask) return;
+    setRows((current) => current.map((row) => {
+      if (row.id !== taskId) return row;
+      return {
+        ...row,
+        documents: (row.documents || []).map((document) => (
+          document.id === documentId ? { ...document, ocrTask } : document
+        )),
+      };
+    }));
+  }
+
+  function localFailedOcrTask(document: SupplierDocument, message: string): SupplierDocumentOcrTask {
+    return {
+      id: `local-${document.id}`,
+      status: "OCR识别失败，需人工核对",
+      validationStatus: "FAILED",
+      errorMessage: message,
+      issues: [{ level: "manual", message }],
+      fields: [],
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function ocrFailureMessage(data: SupplierDocumentOcrResponse) {
+    const parts = [data.message, data.error].map((value) => String(value || "").trim()).filter(Boolean);
+    return parts.length ? [...new Set(parts)].join("：") : "OCR识别失败，请人工核对或重新上传";
+  }
+
+  async function recognizeUploadedDocument(task: SupplierDocumentTask, document: SupplierDocument) {
+    const busyKey = supplierOcrActionKey(task.id, document.id, "upload");
+    setOcrBusyKey(busyKey);
+    setNotice("正在识别，请勿关闭页面");
+    try {
+      const data = await apiJson<SupplierDocumentOcrResponse>(
+        `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr`,
+        { method: "POST", timeoutMs: 65_000 },
+      );
+      const ocrTask = data.ocrTask || data.result;
+      updateDocumentOcrTask(task.id, document.id, ocrTask);
+      if (data.status === "FAILED" || data.status === "TIMEOUT") {
+        setError(ocrFailureMessage(data));
+        setNotice("");
+      } else {
+        setNotice(data.message || "OCR校验结果已更新");
+        setError("");
+      }
+      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+    } catch (ocrError) {
+      const message = apiErrorMessage(ocrError, "OCR识别失败，请人工核对或重新上传");
+      updateDocumentOcrTask(task.id, document.id, localFailedOcrTask(document, message));
+      setError(message);
+      setNotice("");
+    } finally {
+      setOcrBusyKey("");
+    }
   }
 
   async function uploadDocument(task: SupplierDocumentTask, documentType: string, file: File | null, costId = "") {
@@ -115,6 +179,9 @@ export function useSupplierDocumentRequestActions({
         return next;
       });
       setNotice(data.message || "上传成功");
+      if (data.document?.id) {
+        await recognizeUploadedDocument(task, data.document);
+      }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "资料上传失败");
     } finally {

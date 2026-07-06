@@ -360,7 +360,7 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 
-test("supplier document upload only saves the file before optional manual OCR", () => {
+test("supplier document upload only saves the file before foreground OCR", () => {
   assert.match(uploadService, /message: "上传成功"/);
   assert.doesNotMatch(uploadService, /let ocrWarning = ""/);
   assert.doesNotMatch(uploadService, /let ocrTaskId = ""/);

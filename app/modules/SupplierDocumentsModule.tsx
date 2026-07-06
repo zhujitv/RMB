@@ -133,6 +133,7 @@ export function SupplierDocumentsModule({
     setPendingCount,
     setDeletingTaskId,
     setResendingTaskId,
+    setOcrBusyKey,
     setCreateDialogOpen,
     setPage,
   });
