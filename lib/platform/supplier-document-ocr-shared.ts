@@ -46,9 +46,9 @@ export const OCR_STATUS_EXCEPTION = "OCR识别成功，存在异常";
 export const OCR_STATUS_FAILED = "OCR识别失败，需人工核对";
 export const OCR_STATUS_MANUAL = "待人工确认";
 export const OCR_STALE_PROCESSING_MESSAGE = "OCR识别超时，请点击重新识别或人工核对。";
-export const OCR_NETWORK_FAILURE_MESSAGE = "阿里云 OCR 服务连接超时，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
+export const OCR_NETWORK_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请先人工核对该文件。";
 export const OCR_PERMISSION_FAILURE_MESSAGE = "阿里云 OCR 服务未开通或权限配置异常，请管理员检查 OCR 服务开通状态、接口权限和 AccessKey 配置。";
-export const OCR_PROVIDER_FAILURE_MESSAGE = "OCR服务调用失败，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
+export const OCR_PROVIDER_FAILURE_MESSAGE = "OCR 服务异常，请稍后点击“重新识别”；如仍失败，请联系管理员查看服务器日志。";
 export const VALIDATION_PASSED = "PASSED";
 export const VALIDATION_EXCEPTION = "EXCEPTION";
 export const VALIDATION_FAILED = "FAILED";
@@ -119,6 +119,9 @@ export function sanitizeSupplierOcrMessage(value: unknown, fallback = "OCR识别
 }
 
 export function supplierDocumentOcrFailureMessage(error: unknown) {
+  if (supplierOcrErrorCode(error) === "ALIYUN_OCR_SERVICE_UNAVAILABLE") {
+    return OCR_PROVIDER_FAILURE_MESSAGE;
+  }
   if (isSupplierOcrNetworkError(error)) {
     return OCR_NETWORK_FAILURE_MESSAGE;
   }

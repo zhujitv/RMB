@@ -54,6 +54,10 @@ export function SupplierDocumentsModule({
     void loadRows(1, pageSize);
   }, []);
 
+  function hasProcessingOcrTask(items: SupplierDocumentTask[]) {
+    return items.some((task) => (task.documents || []).some((document) => document.ocrTask?.status === "OCR识别中"));
+  }
+
   async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: { silent?: boolean } = {}) {
     const dataRequestId = ++loadRowsDataRequestRef.current;
     const visibleRequestId = options.silent
@@ -137,6 +141,14 @@ export function SupplierDocumentsModule({
   useEffect(() => {
     if (page > totalPages) void loadRows(totalPages, pageSize, submittedKeyword);
   }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!hasProcessingOcrTask(rows)) return undefined;
+    const timer = window.setInterval(() => {
+      void loadRows(page, pageSize, submittedKeyword, { silent: true });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [rows, page, pageSize, submittedKeyword]);
 
   useEffect(() => {
     if (!initialOpenToken) return;

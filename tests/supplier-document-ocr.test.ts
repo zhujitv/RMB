@@ -43,6 +43,14 @@ test("supplier document upload creates OCR task without changing tax refund modu
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
 });
 
+test("supplier document page silently polls only while OCR is processing", () => {
+  assert.match(supplierModule, /function hasProcessingOcrTask/);
+  assert.match(supplierModule, /document\.ocrTask\?\.status === "OCR识别中"/);
+  assert.match(supplierModule, /window\.setInterval/);
+  assert.match(supplierModule, /loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
+  assert.match(supplierModule, /window\.clearInterval/);
+});
+
 test("supplier OCR validates invoice and contract against supplier, business entity, amount, and duplicates", () => {
   assert.match(service, /发票销售方与供应商不一致/);
   assert.match(service, /发票购买方与业务主体不一致/);
@@ -96,7 +104,7 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /OCR原文已识别但解析失败，请人工核对。/);
   assert.match(service, /parserStatus: latestRawText \? "OCR原文已识别但解析失败" : "OCR原文未识别"/);
   assert.match(service, /supplierDocumentOcrFailureMessage/);
-  assert.match(service, /阿里云 OCR 服务连接超时，请稍后点击“重新识别”/);
+  assert.match(service, /OCR 服务异常，请稍后点击“重新识别”/);
   assert.match(service, /OCR_PERMISSION_FAILURE_MESSAGE/);
   assert.match(service, /ocrServiceNotOpen/);
   assert.match(service, /sanitizeSupplierOcrMessage\(task\.errorMessage, ""\)/);

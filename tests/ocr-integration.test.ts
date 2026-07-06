@@ -20,6 +20,7 @@ const r2 = readFileSync("lib/r2.ts", "utf8");
 const nextConfig = readFileSync("next.config.mjs", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const settingsModule = readSettingsModuleSource();
+const instrumentation = existsSync("instrumentation.ts") ? readFileSync("instrumentation.ts", "utf8") : "";
 
 test("OCR integration settings are modular and stored in system settings", () => {
   assert.match(constants, /OCR_INTEGRATION_SETTING_KEY = "ocr_integration"/);
@@ -91,7 +92,9 @@ test("OCR integration uses Aliyun structured APIs for supplier documents with PD
   assert.match(service, /@alicloud\/ocr-api20210707/);
   assert.match(service, /RecognizeInvoiceRequest/);
   assert.match(service, /RecognizeGeneralStructureRequest/);
+  assert.match(service, /withAliyunOcrRetry\("ALIYUN_RECOGNIZE_INVOICE"/);
   assert.match(service, /recognizeInvoice\(new RecognizeInvoiceRequest/);
+  assert.match(service, /withAliyunOcrRetry\("ALIYUN_RECOGNIZE_GENERAL_STRUCTURE"/);
   assert.match(service, /recognizeGeneralStructure\(new RecognizeGeneralStructureRequest/);
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /ALIYUN_RECOGNIZE_GENERAL_STRUCTURE/);
@@ -103,6 +106,22 @@ test("OCR integration uses Aliyun structured APIs for supplier documents with PD
   assert.match(service, /OCR_ACCESS_KEY_REQUIRED/);
   assert.doesNotMatch(service, /ALIYUN_INVOICE_FALLBACK_PDF_TEXT/);
   assert.match(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
+});
+
+test("Aliyun OCR requests retry and log provider diagnostics before surfacing failure", () => {
+  assert.match(service, /ALIYUN_OCR_RETRY_DELAYS_MS = \[1000, 2000, 5000\] as const/);
+  assert.match(service, /withAliyunOcrRetry/);
+  assert.match(service, /aliyun-ocr-request-failed/);
+  assert.match(service, /requestId/);
+  assert.match(service, /httpStatus/);
+  assert.match(service, /responseBody/);
+  assert.match(service, /errorMessage/);
+  assert.match(service, /ALIYUN_OCR_SERVICE_UNAVAILABLE/);
+  assert.match(service, /checkAliyunOcrConnectivity/);
+  assert.match(service, /scheduleAliyunOcrStartupHealthCheck/);
+  assert.match(instrumentation, /scheduleAliyunOcrStartupHealthCheck/);
+  assert.match(instrumentation, /getOcrIntegrationSettings/);
+  assert.match(service, /connectTimeout: settings\.timeoutMs/);
 });
 
 test("Aliyun invoice parser reads official Data payload and invoiceDetails", async () => {

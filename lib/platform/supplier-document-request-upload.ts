@@ -152,15 +152,14 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
   let ocrWarning = "";
+  let ocrTaskId = "";
   try {
     const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
     if (ocrTask?.id) {
-      const completedTask = await runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
+      ocrTaskId = ocrTask.id;
+      void runNonCriticalTask("产品供应商回传资料OCR后台识别", async () => {
         return runSupplierDocumentOcrTask(ocrTask.id);
-      }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
-      if (completedTask?.status === "OCR识别失败，需人工核对") {
-        ocrWarning = completedTask.errorMessage || "OCR识别失败，需人工核对或稍后重新识别。";
-      }
+      }, { context: { documentId: document.id, requestId: row.id, documentType, taskId: ocrTask.id }, slowMs: 3000 });
     } else {
       await refreshSupplierDocumentRequestQualification(row.id);
     }
@@ -196,6 +195,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   return {
     request: serializeSupplierDocumentRequest(refreshed, actor),
     document: serializeSupplierDocument(document),
-    message: ocrWarning ? `上传成功；${ocrWarning}` : "上传成功",
+    message: ocrWarning ? `上传成功；${ocrWarning}` : (ocrTaskId ? "上传成功，OCR识别中" : "上传成功"),
   };
 }
