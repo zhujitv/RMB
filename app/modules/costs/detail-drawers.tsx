@@ -243,8 +243,8 @@ export function CostOrderItemsTable({
               <th className={styles.supplierColumn}>供应商</th>
               <th>币种</th>
               <th className={styles.amountColumn}>原币金额</th>
-              <th>付款状态</th>
-              <th>发票状态</th>
+              <th className={styles.statusColumn}>付款状态</th>
+              <th className={styles.statusColumn}>发票状态</th>
               <th className={styles.costInvoiceActionColumn}>操作</th>
             </tr>
           </thead>
@@ -255,8 +255,8 @@ export function CostOrderItemsTable({
                 <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
-                <td><span className={`${styles.statusPill} ${isVoidedCost(cost) ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{isVoidedCost(cost) ? "已作废" : cost.paymentStatus || "-"}</span></td>
-                <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
+                <td className={styles.statusColumn}><span className={`${styles.statusPill} ${isVoidedCost(cost) ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{isVoidedCost(cost) ? "已作废" : cost.paymentStatus || "-"}</span></td>
+                <td className={styles.statusColumn}><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
                 <td className={styles.costInvoiceActionColumn}>
                   <div className={styles.costInvoiceActions}>
                     <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} onOpenPaymentVoucher={onOpenPaymentVoucher} />
@@ -411,9 +411,9 @@ export function CostInvoiceGroupItemsTable({
               <th>币种</th>
               <th className={styles.amountColumn}>原币金额</th>
               <th className={styles.amountColumn}>折人民币</th>
-              <th>付款状态</th>
+              <th className={styles.statusColumn}>付款状态</th>
               <th>付款凭证</th>
-              <th>发票状态</th>
+              <th className={styles.statusColumn}>发票状态</th>
               <th>创建时间</th>
               <th>审核时间</th>
               <th>备注</th>
@@ -430,13 +430,13 @@ export function CostInvoiceGroupItemsTable({
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount("CNY", cost.amountCny ?? 0)}</td>
-                <td><span className={costPaymentStatusClass(cost.paymentStatus)}>{cost.paymentStatus || "-"}</span></td>
+                <td className={styles.statusColumn}><span className={costPaymentStatusClass(cost.paymentStatus)}>{cost.paymentStatus || "-"}</span></td>
                 <td>
                   {hasPaymentVoucher(cost) ? (
                     <button className={styles.fileActionButton} type="button" onClick={() => onOpenPaymentVoucher(cost)}>查看付款凭证</button>
                   ) : isProductSupplierPaid(cost) && isProductSupplierPaymentEnabled(cost) ? "未上传水单" : "-"}
                 </td>
-                <td><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
+                <td className={styles.statusColumn}><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
                 <td>{formatDateTime(cost.logisticsSource?.createdAt || cost.createdAt)}</td>
                 <td>{formatDateTime(cost.logisticsSource?.reviewedAt)}</td>
                 <td title={cost.remark || ""}>{cost.remark || "-"}</td>

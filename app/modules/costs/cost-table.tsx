@@ -59,8 +59,8 @@ export function CostTableRows({
         <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
         <td className={styles.supplierColumn} title={supplierName}>{supplierName}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={cost.currency} amount={cost.amount} amountCny={cost.amountCny} /></td>
-        <td><span className={`${styles.statusPill} ${voided ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{costStatusLabel(cost)}</span></td>
-        <td><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
+        <td className={styles.statusColumn}><span className={`${styles.statusPill} ${voided ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{costStatusLabel(cost)}</span></td>
+        <td className={styles.statusColumn}><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td className={styles.costInvoiceActionColumn}>
           <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
           {manualCost ? (
@@ -116,8 +116,8 @@ export function CostDetailTableHead({
         <th>成本类型</th>
         <th className={styles.supplierColumn}>供应商</th>
         <th className={styles.amountColumn}>成本金额</th>
-        <th>付款状态</th>
-        <th>发票状态</th>
+        <th className={styles.statusColumn}>付款状态</th>
+        <th className={styles.statusColumn}>发票状态</th>
         <th className={styles.costInvoiceActionColumn}>操作</th>
       </tr>
     </thead>

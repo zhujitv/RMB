@@ -20,9 +20,16 @@
 }
 
 .costTableWrap .dataTable th.statusColumn,
-.costTableWrap .dataTable td.statusColumn {
-  width: 112px;
-  min-width: 112px;
+.costTableWrap .dataTable td.statusColumn,
+.dataTable th.statusColumn,
+.dataTable td.statusColumn {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .costTableWrap .dataTable th.operationColumn,

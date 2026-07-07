@@ -220,7 +220,7 @@ test("cost management page is centered and constrained to readable table width",
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.supplierColumn,[\s\S]*min-width: 220px;[\s\S]*text-overflow: ellipsis;/);
   assert.match(workspaceStyles, /\.costTableWrap\.tablePinnedTwoCols \.dataTable th\.customerColumn,[\s\S]*width: 120px;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.amountColumn,[\s\S]*width: 120px;/);
-  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 112px;/);
+  assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 120px;[\s\S]*white-space: nowrap;[\s\S]*word-break: keep-all;[\s\S]*overflow-wrap: normal;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.operationColumn,[\s\S]*width: 80px;/);
 });
 
@@ -232,6 +232,12 @@ test("cost detail tables always keep an invoice operation column", () => {
   assert.match(costsModule, />替换<\/button>/);
   assert.match(costsModule, />上传发票<\/button>/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
+  assert.match(costsModule, /<th className=\{styles\.statusColumn\}>付款状态<\/th>/);
+  assert.match(costsModule, /<th className=\{styles\.statusColumn\}>发票状态<\/th>/);
+  assert.match(costsModule, /<td className=\{styles\.statusColumn\}><span className=\{`\$\{styles\.statusPill\}/);
+  assert.match(costsModule, /<td className=\{styles\.statusColumn\}><span className=\{costPaymentStatusClass\(cost\.paymentStatus\)\}/);
+  assert.match(costsModule, /<td className=\{styles\.statusColumn\}><span className=\{costInvoiceStatusClass\(cost\.invoiceStatus\)\}/);
+  assert.match(costsModule, /<td title=\{cost\.remark \|\| ""\}>\{cost\.remark \|\| "-"\}<\/td>/);
   assert.match(costsModule, /<CostOrderItemsTable[\s\S]*costs=\{order\.costs \|\| \[\]\}[\s\S]*onOpenDocuments=\{onOpenDocuments\}[\s\S]*onDelete=\{onDelete\}/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{onOpenDocuments\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
