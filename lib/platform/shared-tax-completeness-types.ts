@@ -41,11 +41,13 @@ export type CostLike = {
   amount?: NumericLike | null;
   amountCny?: NumericLike | null;
   currency?: string | null;
+  status?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
   costConfirmed?: boolean | null;
   createdAt?: Date | string | null;
   deletedAt?: Date | string | null;
+  documents?: OrderDocumentLike[] | null;
 };
 export type LogisticsExpenseInvoiceLike = {
   id?: string | null;

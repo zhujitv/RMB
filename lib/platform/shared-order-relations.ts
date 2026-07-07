@@ -50,7 +50,7 @@ export function includeOrderRelations() {
       orderBy: [{ paymentDate: "desc" as const }, { createdAt: "desc" as const }],
     },
     costs: {
-      where: { deletedAt: null },
+      where: { deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
       include: {
         supplier: true,
         createdBy: true,

@@ -311,6 +311,7 @@ export function serializeTaxRefundLightCost(cost: TaxRefundCostLight, order: Rec
     amount: Number(cost.amount || 0),
     amountCny: Number(cost.amountCny || 0),
     currency: cost.currency,
+    status: cost.status,
     invoiceStatus: cost.invoiceStatus,
     sourceType: cost.sourceType,
     sourceId: cost.sourceId || "",

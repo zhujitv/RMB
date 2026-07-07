@@ -144,6 +144,9 @@ export type TaxCost = {
   amount?: number;
   amountCny?: number;
   currency?: string;
+  status?: string;
+  sourceType?: string;
+  sourceId?: string;
   documents?: TaxDocument[];
 };
 

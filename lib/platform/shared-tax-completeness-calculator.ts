@@ -1,5 +1,6 @@
 import {
   DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
+  ORDER_COST_STATUS_VOID,
   ORDER_DOCUMENT_LABELS,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_EXPORT_DOCUMENT_TYPES,
@@ -8,6 +9,7 @@ import {
 } from "./shared-constants";
 import {
   type MissingEntry,
+  type CostLike,
   type OrderDocumentLike,
   type SupplierEntry,
   type TaxOrderLike,
@@ -38,12 +40,59 @@ export function documentCompleteness(documents: OrderDocumentLike[] = []) {
   return taxDocumentCompleteness({ documents });
 }
 
+function successTaxRefundDocument(document: OrderDocumentLike | null | undefined): document is OrderDocumentLike {
+  return successDocument(document) && document.cost?.status !== ORDER_COST_STATUS_VOID;
+}
+
+function normalizedFactoryCostAmount(cost: CostLike) {
+  const amountCny = Number(cost.amountCny || 0);
+  const amount = Number(cost.amount || 0);
+  const value = amountCny > 0 ? amountCny : amount;
+  return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+}
+
+function factoryCostShadowKey(cost: CostLike) {
+  if (cost.sourceType && cost.sourceId) return `source:${cost.sourceType}:${cost.sourceId}`;
+  return [
+    cost.supplierId || supplierNameForCost(cost),
+    normalizedCostType(String(cost.costType || "")),
+    cost.currency || "CNY",
+    normalizedFactoryCostAmount(cost),
+  ].map((value) => String(value || "").trim()).join("|");
+}
+
+function successfulFactoryDocumentCount(cost: CostLike, documents: OrderDocumentLike[] = []) {
+  return [...(cost.documents || []), ...documents].filter((document) => (
+    successDocument(document)
+    && SUPPLIER_DOCUMENT_TYPES.includes(document.documentType as never)
+    && (document.costId === cost.id || (!document.costId && document.supplierId === cost.supplierId))
+  )).length;
+}
+
+export function uniqueTaxRefundFactoryCosts(costs: CostLike[] = [], documents: OrderDocumentLike[] = []) {
+  const groups = new Map<string, CostLike[]>();
+  costs.forEach((cost) => {
+    const key = factoryCostShadowKey(cost);
+    groups.set(key, [...(groups.get(key) || []), cost]);
+  });
+  return [...groups.values()].flatMap((items) => {
+    if (items.length <= 1) return items;
+    const withDocuments = items
+      .map((cost) => ({ cost, score: successfulFactoryDocumentCount(cost, documents) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score);
+    const withoutDocuments = items.filter((cost) => successfulFactoryDocumentCount(cost, documents) === 0);
+    if (withDocuments.length === 1 && withoutDocuments.length > 0) return [withDocuments[0].cost];
+    return items;
+  });
+}
+
 export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
   const documents = order.documents || [];
-  const activeCosts = (order.costs || []).filter((cost) => !cost.deletedAt && cost.supplierId);
-  const factoryCosts = activeCosts.filter(isTaxRefundFactoryCost);
+  const activeCosts = (order.costs || []).filter((cost) => !cost.deletedAt && cost.status !== ORDER_COST_STATUS_VOID && cost.supplierId);
+  const factoryCosts = uniqueTaxRefundFactoryCosts(activeCosts.filter(isTaxRefundFactoryCost), documents);
   const logisticsInvoiceCosts = activeCosts.filter((cost) => !isTaxRefundFactoryCost(cost) && isTaxRefundLogisticsInvoiceCost(cost) && isActualApprovedLogisticsCost(cost));
-  const successDocs = documents.filter(successDocument);
+  const successDocs = documents.filter(successTaxRefundDocument);
   const logisticsInvoiceCoverages = logisticsInvoiceGroupCoverages(successDocs, logisticsInvoiceCosts);
   const hasOrderType = (type: string) => successDocs.some((doc) => doc.documentType === type && !doc.costId && doc.relatedModule !== "SUPPLIER");
   const domesticLogisticsInfo = (order.domesticLogisticsInfos || [])[0] || order.domesticLogisticsInfo || null;
@@ -102,7 +151,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
     const daysSinceCostCreated = costCreatedAt ? Math.floor((Date.now() - costCreatedAt.getTime()) / 86400000) : 0;
     SUPPLIER_DOCUMENT_TYPES.forEach((type) => {
       const cost = factoryCosts.find((item) => item.id && item.id === entry.costId) || null;
-      const allowLegacySupplierFallback = Boolean(cost);
+      const allowLegacySupplierFallback = Boolean(cost) && (entry.sameSupplierCostCount || 0) <= 1;
       const exists = entry.missingFactoryCost ? false : successDocs.some((doc) => (
         doc.documentType === type
         && cost
