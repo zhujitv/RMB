@@ -20,7 +20,7 @@ export const USER_APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED", "DISAB
 export const CURRENCIES = ["USD", "EUR", "GBP", "CNY", "HKD"];
 export const ORDER_STATUSES = ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
 export const PAYMENT_STATUSES = ["待确认", "已到账", "已退回", "已取消"];
-export const PAYMENT_TYPES = ["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"];
+export const PAYMENT_TYPES = ["预付款", "中期款", "分批款", "全款", "尾款", "补差款", "退款", "其他"];
 export const LEGACY_COST_TYPE_LABELS = {
   国内物流费: "拖车费",
   国内拖车费: "拖车费",

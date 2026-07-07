@@ -11,6 +11,20 @@ import { CURRENCIES, PAYMENT_TYPES, type ExchangeRateResponse, type OrdersRespon
 import { orderLabel, paymentFormFromRow, paymentStatusOptions } from "./helpers";
 
 type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>;
+const FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。";
+
+function numericValue(...values: unknown[]) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return 0;
+}
+
+function orderReceivedCny(order?: PaymentOrderOption | null) {
+  return numericValue(order?.receivedAmountCny, order?.summary?.confirmedPaymentsCny);
+}
 
 export function QuickCreatePaymentPanel({
   initialPayment,
@@ -178,7 +192,7 @@ export function QuickCreatePaymentPanel({
     }
   }
 
-  function validateQuickPaymentForm(nextForm: QuickPaymentForm) {
+  function validateQuickPaymentForm(nextForm: QuickPaymentForm, selectedOrder?: PaymentOrderOption | null) {
     const errors: PaymentFieldErrors = {};
     const currency = nextForm.currency.trim().toUpperCase();
     const amountText = nextForm.amount.trim();
@@ -189,6 +203,9 @@ export function QuickCreatePaymentPanel({
     if (!nextForm.orderId.trim()) errors.orderId = "请选择关联订单";
     if (!nextForm.paymentDate.trim()) errors.paymentDate = "请选择收款日期";
     if (!nextForm.paymentType.trim()) errors.paymentType = "请选择收款类型";
+    else if (nextForm.paymentType === "尾款" && selectedOrder && orderReceivedCny(selectedOrder) <= 0) {
+      errors.paymentType = FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE;
+    }
     if (!amountText) errors.amount = "请输入收款金额";
     else if (!Number.isFinite(amount) || amount <= 0) errors.amount = "收款金额必须大于 0";
     if (!currency) errors.currency = "请选择币种";
@@ -212,14 +229,14 @@ export function QuickCreatePaymentPanel({
         exchangeRateType: form.exchangeRateType || "人民币",
       }
       : { ...form, currency: normalizedCurrency };
-    const errors = validateQuickPaymentForm(normalizedForm);
+    const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
+    const errors = validateQuickPaymentForm(normalizedForm, selectedOrder);
     setFieldErrors(errors);
     if (Object.keys(errors).length) {
-      setMessage("请完善收款信息");
+      setMessage(errors.paymentType || "请完善收款信息");
       setForm(normalizedForm);
       return;
     }
-    const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
     const orderCurrency = selectedOrder?.currency?.toUpperCase();
     if (orderCurrency && normalizedForm.currency !== orderCurrency) {
       setMessage("收款币种必须与订单币种一致。");

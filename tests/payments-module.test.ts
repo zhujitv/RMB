@@ -47,10 +47,12 @@ test("payment registration keeps receipt currency aligned with the receivable or
 
 test("quick payment registration validates required fields before submit", () => {
   assert.match(paymentsModule, /type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>/);
+  assert.match(paymentsModule, /FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。"/);
   assert.match(paymentsModule, /function validateQuickPaymentForm/);
   assert.match(paymentsModule, /errors\.orderId = "请选择关联订单"/);
   assert.match(paymentsModule, /errors\.paymentDate = "请选择收款日期"/);
   assert.match(paymentsModule, /errors\.paymentType = "请选择收款类型"/);
+  assert.match(paymentsModule, /nextForm\.paymentType === "尾款"[\s\S]*orderReceivedCny\(selectedOrder\) <= 0[\s\S]*errors\.paymentType = FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE/);
   assert.match(paymentsModule, /errors\.amount = "请输入收款金额"/);
   assert.match(paymentsModule, /errors\.amount = "收款金额必须大于 0"/);
   assert.match(paymentsModule, /errors\.exchangeRate = "汇率不能为空"/);
@@ -58,7 +60,7 @@ test("quick payment registration validates required fields before submit", () =>
   assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{submitQuickPayment\} noValidate>/);
   assert.match(paymentsModule, /\{fieldErrors\.paymentDate \? <small className=\{styles\.inlineError\}>\{fieldErrors\.paymentDate\}<\/small> : null\}/);
   assert.match(paymentsModule, /\{fieldErrors\.amount \? <small className=\{styles\.inlineError\}>\{fieldErrors\.amount\}<\/small> : null\}/);
-  assert.match(paymentsModule, /setMessage\("请完善收款信息"\)/);
+  assert.match(paymentsModule, /setMessage\(errors\.paymentType \|\| "请完善收款信息"\)/);
 });
 
 test("CNY payment saves with automatic exchange rate while foreign currency requires a positive rate", () => {
@@ -79,12 +81,15 @@ test("payment save refreshes only the payments list and summary after success", 
 
 test("payments backend rejects missing required save fields with explicit messages", () => {
   assert.match(paymentsService, /function assertPaymentInputRequiredFields/);
+  assert.match(paymentsService, /FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。"/);
   assert.match(paymentsService, /throw codedError\("请选择关联订单", 400, "PAYMENT_ORDER_REQUIRED"\)/);
   assert.match(paymentsService, /throw codedError\("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED"\)/);
   assert.match(paymentsService, /throw codedError\("请选择收款类型", 400, "PAYMENT_TYPE_REQUIRED"\)/);
   assert.match(paymentsService, /throw codedError\("请输入收款金额", 400, "PAYMENT_AMOUNT_REQUIRED"\)/);
   assert.match(paymentsService, /throw codedError\("收款金额必须大于 0", 400, "PAYMENT_AMOUNT_POSITIVE_REQUIRED"\)/);
   assert.match(paymentsService, /throw codedError\("请选择币种", 400, "PAYMENT_CURRENCY_REQUIRED"\)/);
+  assert.match(paymentsService, /function assertFinalPaymentHasHistory/);
+  assert.match(paymentsService, /status: "已到账"[\s\S]*deletedAt: null[\s\S]*throw codedError\(FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE, 400, "PAYMENT_FINAL_REQUIRES_HISTORY"\)/);
   assert.doesNotMatch(paymentsService, /dateFromInput\(inputData\.paymentDate\) \|\| dateFromInput\(todayInputInChina\(\)\)/);
 });
 
@@ -129,8 +134,8 @@ test("payments list uses backend keyword fuzzy search and keeps detail-only expa
 });
 
 test("payment types support phased receipts without defaulting to final payment", () => {
-  assert.match(sharedConstants, /PAYMENT_TYPES = \["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"\]/);
-  assert.match(paymentsModule, /const PAYMENT_TYPES = \["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"\]/);
+  assert.match(sharedConstants, /PAYMENT_TYPES = \["预付款", "中期款", "分批款", "全款", "尾款", "补差款", "退款", "其他"\]/);
+  assert.match(paymentsModule, /const PAYMENT_TYPES = \["预付款", "中期款", "分批款", "全款", "尾款", "补差款", "退款", "其他"\]/);
   assert.match(paymentsModule, /paymentType: ""/);
   assert.match(paymentsModule, /<option value="">请选择收款类型<\/option>/);
   assert.match(paymentsService, /paymentType: PAYMENT_TYPES\.includes\(paymentType\) \? paymentType : ""/);

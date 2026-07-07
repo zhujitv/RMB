@@ -56,6 +56,7 @@ type PaymentListFilters = {
 };
 
 const FOREIGN_PAYMENT_CURRENCIES = new Set(["USD", "EUR", "GBP", "HKD"]);
+const FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。";
 
 function actorId(actor: ActorLike) {
   return requireText(actor?.id, "当前用户");
@@ -252,6 +253,22 @@ function assertPaymentExchangeInput(input: PaymentInput, currency: string) {
   }
 }
 
+async function assertFinalPaymentHasHistory(orderId: string, paymentType: string, currentPaymentId: string | null) {
+  if (paymentType !== "尾款") return;
+  const historicalArrived = await prisma.payment.aggregate({
+    where: {
+      orderId,
+      status: "已到账",
+      deletedAt: null,
+      ...(currentPaymentId ? { NOT: { id: currentPaymentId } } : {}),
+    },
+    _sum: { amountCny: true },
+  });
+  if (Number(historicalArrived._sum.amountCny || 0) <= 0) {
+    throw codedError(FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE, 400, "PAYMENT_FINAL_REQUIRES_HISTORY");
+  }
+}
+
 export async function savePayment(request: AuditRequestLike, actor: ActorLike, input: unknown, id: string | null = null) {
   assertWrite(actor, "payments");
   const currentActorId = actorId(actor);
@@ -282,12 +299,14 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
   const amount = requirePositive(inputData.amount, "收款金额");
   const paymentDate = dateFromInput(inputData.paymentDate);
   if (!paymentDate) throw codedError("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED");
+  const paymentType = requireText(inputData.paymentType, "收款类型");
   const orderCurrency = requireText(order.currency, "订单币种").toUpperCase();
   const requestedCurrency = requireText(inputData.currency, "币种").toUpperCase();
   if (requestedCurrency !== orderCurrency) {
     throw codedError("收款币种必须与订单币种一致。", 400, "PAYMENT_CURRENCY_MISMATCH");
   }
   assertPaymentExchangeInput(inputData, orderCurrency);
+  await assertFinalPaymentHasHistory(order.id, paymentType, id);
   const exchangeInput: PaymentInput = orderCurrency === "CNY"
     ? {
       ...inputData,
@@ -316,7 +335,6 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
   });
   const exchangeRate = exchange.exchangeRate;
   const requestedStatus = PAYMENT_STATUSES.includes(String(inputData.status || "")) ? String(inputData.status) : "待确认";
-  const paymentType = requireText(inputData.paymentType, "收款类型");
   const data: Prisma.PaymentUncheckedCreateInput = {
     orderId: order.id,
     paymentDate,

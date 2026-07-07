@@ -1,7 +1,7 @@
 import type { CurrencyTotals } from "../../../lib/platform/currency-totals";
 
 export const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
-export const PAYMENT_TYPES = ["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"];
+export const PAYMENT_TYPES = ["预付款", "中期款", "分批款", "全款", "尾款", "补差款", "退款", "其他"];
 export const PAYMENT_STATUSES = ["待确认", "已到账", "已退回", "已取消"];
 
 export type UserLite = {
