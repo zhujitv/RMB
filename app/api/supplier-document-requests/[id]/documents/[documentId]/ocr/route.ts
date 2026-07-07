@@ -5,7 +5,7 @@ import { requireApiActor } from "../../../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 10;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string; documentId: string }> }) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       success: true,
       ocrTask,
       data: ocrTask,
-      message: "已重新识别",
+      message: "已提交重新识别，OCR正在后台处理",
     });
   } catch (error: unknown) {
     return apiError(error, "重新识别供应商回传资料失败");

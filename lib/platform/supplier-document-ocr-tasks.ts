@@ -11,6 +11,7 @@ import {
   OCR_STATUS_FAILED,
   OCR_STATUS_PROCESSING,
   OCR_STALE_PROCESSING_MESSAGE,
+  SUPPLIER_DOCUMENT_OCR_TIMEOUT_MESSAGE,
   SUPPLIER_DOCUMENT_OCR_FEATURE,
   SUPPLIER_DOCUMENT_OCR_MODULE,
   SUPPLIER_DOCUMENT_OCR_TYPES,
@@ -28,6 +29,7 @@ import {
   supplierDocumentOcrFailureMessage,
   supplierOcrErrorText,
   supplierOcrProcessingStaleMs,
+  supplierOcrTaskTimeoutMs,
   visibleResultFields,
 } from "./supplier-document-ocr-shared";
 import {
@@ -38,6 +40,12 @@ import {
   validateContract,
   validateInvoice,
 } from "./supplier-document-ocr-validation";
+
+function supplierDocumentOcrScheduledTasks() {
+  const state = globalThis as typeof globalThis & { __rmbSupplierDocumentOcrScheduledTasks?: Set<string> };
+  state.__rmbSupplierDocumentOcrScheduledTasks ||= new Set<string>();
+  return state.__rmbSupplierDocumentOcrScheduledTasks;
+}
 
 export async function reconcileStaleSupplierDocumentOcrTasks(documentIds: string[] = []) {
   const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
@@ -213,6 +221,70 @@ export async function runSupplierDocumentOcrTask(taskId: string) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
   }
+}
+
+async function markSupplierDocumentOcrTaskFailed(taskId: string, error: unknown, parserStatus = "OCR后台任务失败") {
+  const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
+  if (!task) throw codedError("OCR任务不存在。", 404, "OCR_TASK_NOT_FOUND");
+  const originalMessage = supplierOcrErrorText(error);
+  const message = supplierDocumentOcrFailureMessage(error);
+  const saved = await prisma.ocrTask.update({
+    where: { id: taskId },
+    data: {
+      status: OCR_STATUS_FAILED,
+      validationStatus: VALIDATION_FAILED,
+      errorMessage: message.slice(0, 1000),
+      validationJson: {
+        ...(task.validationJson && typeof task.validationJson === "object" && !Array.isArray(task.validationJson) ? task.validationJson as Record<string, unknown> : {}),
+        issues: [{ level: "manual", message }],
+        parserStatus,
+        technicalError: originalMessage.slice(0, 1000),
+      },
+    },
+    include: { results: true },
+  });
+  if (task.requestId) {
+    await refreshSupplierDocumentRequestQualification(task.requestId);
+  }
+  return saved;
+}
+
+export async function runSupplierDocumentOcrTaskWithTimeout(taskId: string, timeoutMs = supplierOcrTaskTimeoutMs()) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      runSupplierDocumentOcrTask(taskId),
+      new Promise<Awaited<ReturnType<typeof runSupplierDocumentOcrTask>>>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(codedError(SUPPLIER_DOCUMENT_OCR_TIMEOUT_MESSAGE, 504, "SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT"));
+        }, Math.max(15_000, timeoutMs));
+      }),
+    ]);
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT") {
+      console.error("supplier-document-ocr-timeout", { taskId, timeoutMs });
+      return markSupplierDocumentOcrTaskFailed(taskId, error, "OCR后台任务超时");
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+export function scheduleSupplierDocumentOcrTask(taskId: string, context: Record<string, unknown> = {}) {
+  if (!taskId) return;
+  const scheduledTasks = supplierDocumentOcrScheduledTasks();
+  if (scheduledTasks.has(taskId)) return;
+  scheduledTasks.add(taskId);
+  setTimeout(() => {
+    runSupplierDocumentOcrTaskWithTimeout(taskId)
+      .catch((error) => {
+        logServerError("产品供应商回传资料OCR后台识别失败", error, { taskId, ...context });
+      })
+      .finally(() => {
+        scheduledTasks.delete(taskId);
+      });
+  }, 0);
 }
 
 export async function runSupplierDocumentOcrForDocument(

@@ -65,7 +65,7 @@ export function useSupplierDocumentOcrActions({
     try {
       const data = await apiJson<SupplierDocumentOcrResponse>(
         `/api/supplier-document-requests/${encodeURIComponent(task.id)}/documents/${encodeURIComponent(document.id)}/ocr`,
-        { method: "POST", timeoutMs: 65_000 },
+        { method: "POST" },
       );
       const ocrTask = data.ocrTask || data.result;
       updateDocumentOcrTask(task.id, document.id, ocrTask);

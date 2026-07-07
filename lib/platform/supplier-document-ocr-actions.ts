@@ -19,7 +19,7 @@ import {
   createSupplierDocumentOcrTask,
   loadSupplierReturnDocument,
   refreshSupplierDocumentRequestQualification,
-  runSupplierDocumentOcrTask,
+  scheduleSupplierDocumentOcrTask,
   throwIfSupplierOcrTableMissing,
 } from "./supplier-document-ocr-tasks";
 
@@ -34,9 +34,9 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
     });
     const task = await createSupplierDocumentOcrTask(document);
     if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
-    const result = await runSupplierDocumentOcrTask(task.id);
-    await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
-    return serializeSupplierDocumentOcrTask(result);
+    scheduleSupplierDocumentOcrTask(task.id, { documentId, requestId, documentType: document.documentType, rerun: true });
+    await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, task));
+    return serializeSupplierDocumentOcrTask(task);
   } catch (error: unknown) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
