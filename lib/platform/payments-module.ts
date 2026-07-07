@@ -13,7 +13,6 @@ import {
   dateFromInput,
   dateToInput,
   effectivePermissions,
-  includeOrderRelations,
   inputHasOwn,
   nonEmpty,
   optional,
@@ -25,7 +24,6 @@ import {
   resolveExchangeRateSnapshot,
   runNonCriticalTask,
   serializePayment,
-  summarizeOrder,
   type PaymentDto,
   todayInputInChina,
   writeAudit,
@@ -69,14 +67,39 @@ function actorRole(actor: ActorLike) {
 async function syncOrderStatusInPaymentTransaction(tx: Prisma.TransactionClient, orderId: string) {
   const order = await tx.receivableOrder.findUnique({
     where: { id: orderId },
-    include: includeOrderRelations(),
+    select: {
+      id: true,
+      status: true,
+      actualShipmentAmount: true,
+      receivableAmountCny: true,
+      estimatedReceivableAmountCny: true,
+      actualShipmentAmountCny: true,
+      finalReceivableAmountCny: true,
+    },
   });
   if (!order || ["草稿", "已关闭", "已取消"].includes(order.status)) return order;
-  const summary = summarizeOrder(order);
+  const arrivedPayments = await tx.payment.aggregate({
+    where: {
+      orderId,
+      status: "已到账",
+      deletedAt: null,
+    },
+    _sum: { amountCny: true },
+  });
+  const receivableCny = Number(
+    order.finalReceivableAmountCny
+      ?? order.actualShipmentAmountCny
+      ?? order.estimatedReceivableAmountCny
+      ?? order.receivableAmountCny
+      ?? 0,
+  );
+  const confirmedPaymentsCny = Number(arrivedPayments._sum.amountCny || 0);
+  const outstandingCny = Math.max(receivableCny - confirmedPaymentsCny, 0);
+  const overpaidCny = Math.max(confirmedPaymentsCny - receivableCny, 0);
   let status = order.status;
-  if (Number(summary.overpaidCny || 0) > 0) status = "多收款";
-  else if (Number(summary.outstandingCny || 0) <= 0) status = "已收齐";
-  else if (Number(summary.confirmedPaymentsCny || 0) > 0) status = "部分收款";
+  if (overpaidCny > 0) status = "多收款";
+  else if (outstandingCny <= 0) status = "已收齐";
+  else if (confirmedPaymentsCny > 0) status = "部分收款";
   else if (["部分收款", "已收齐", "多收款"].includes(order.status)) {
     status = order.actualShipmentAmount == null ? "已确认" : "已发货";
   }
@@ -84,7 +107,7 @@ async function syncOrderStatusInPaymentTransaction(tx: Prisma.TransactionClient,
     return tx.receivableOrder.update({
       where: { id: orderId },
       data: { status },
-      include: includeOrderRelations(),
+      select: { id: true, status: true },
     });
   }
   return order;

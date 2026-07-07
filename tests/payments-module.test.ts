@@ -74,6 +74,16 @@ test("CNY payment saves with automatic exchange rate while foreign currency requ
   assert.match(paymentsService, /amountCny\(amount, exchangeRate\)/);
 });
 
+test("payment save synchronizes order receipt status with a lightweight transaction query", () => {
+  const syncStatusBlock = paymentsService.match(/async function syncOrderStatusInPaymentTransaction[\s\S]*?\n}\n\ntype PageResult/);
+  assert.ok(syncStatusBlock, "syncOrderStatusInPaymentTransaction block should exist");
+  assert.match(syncStatusBlock[0], /select: \{\s*id: true,\s*status: true,/);
+  assert.match(syncStatusBlock[0], /tx\.payment\.aggregate\(\{/);
+  assert.match(syncStatusBlock[0], /_sum: \{ amountCny: true \}/);
+  assert.match(syncStatusBlock[0], /select: \{ id: true, status: true \}/);
+  assert.doesNotMatch(syncStatusBlock[0], /includeOrderRelations\(\)|summarizeOrder\(/);
+});
+
 test("payment save refreshes only the payments list and summary after success", () => {
   assert.match(paymentsModule, /onSaved=\{\(payment\) => \{[\s\S]*void loadPayments\(page, submittedFilters\);[\s\S]*\}\}/);
   assert.doesNotMatch(paymentsModule, /window\.location|location\.href|router\.refresh|reload\(/);
