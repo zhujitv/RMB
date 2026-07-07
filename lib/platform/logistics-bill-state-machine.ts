@@ -15,6 +15,7 @@ export type LogisticsBillStateInput = {
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
   costSynced?: boolean | null;
+  hasInvoiceDocument?: boolean | null;
 };
 
 export type LogisticsBillState = {
@@ -133,23 +134,39 @@ export function logisticsBillEditBlockReason(input: LogisticsBillStateInput = {}
 
 export function logisticsBillDeleteBlock(input: LogisticsBillStateInput = {}) {
   const auditStatus = normalizeLogisticsBillAuditStatus(input.auditStatus);
+  const invoiceStatus = normalizeLogisticsBillInvoiceStatus(input.invoiceStatus);
   const invoiceText = String(input.invoiceStatus || "").trim();
+  const paymentStatus = normalizeLogisticsBillPaymentStatus(input.paymentStatus);
   const paymentText = String(input.paymentStatus || "").trim();
   if (input.costSynced) {
-    return { message: "该费用已同步到成本，请先取消同步后再删除。", code: "LOGISTICS_EXPENSE_SYNCED_COST_DELETE_BLOCKED" };
+    return { message: "已同步成本：请先取消成本同步。", code: "LOGISTICS_EXPENSE_SYNCED_COST_DELETE_BLOCKED" };
+  }
+  if (invoiceText.includes("已确认") || invoiceStatus === "已上传发票" && invoiceText.includes("确认")) {
+    return { message: "已确认发票：不允许删除。", code: "LOGISTICS_EXPENSE_CONFIRMED_INVOICE_DELETE_BLOCKED" };
+  }
+  if (input.hasInvoiceDocument || invoiceStatus === "已上传发票" || invoiceStatus === "部分上传发票" || invoiceText.includes("已上传")) {
+    return { message: "已上传发票：请先删除已上传发票。", code: "LOGISTICS_EXPENSE_INVOICED_DELETE_BLOCKED" };
+  }
+  if (paymentStatus === "已付款" || paymentStatus === "部分付款" || paymentText.includes("已付款")) {
+    return { message: "已付款：不允许删除。", code: "LOGISTICS_EXPENSE_PAID_DELETE_BLOCKED" };
   }
   if (auditStatus === "审核通过") {
-    return { message: "已审核通过的物流费用不能删除。", code: "LOGISTICS_EXPENSE_APPROVED_DELETE_BLOCKED" };
+    return { message: "审核通过：请先撤回审核。", code: "LOGISTICS_EXPENSE_APPROVED_DELETE_BLOCKED" };
   }
   if (auditStatus === "待审核") {
-    return { message: "待审核账单不能删除明细，请先撤回为草稿。", code: "LOGISTICS_EXPENSE_PENDING_DELETE_BLOCKED" };
+    return { message: "审核状态不是草稿：请先撤回审核。", code: "LOGISTICS_EXPENSE_PENDING_DELETE_BLOCKED" };
   }
-  if (invoiceText.includes("已上传") || invoiceText.includes("已确认")
-    || paymentText.includes("已开票") || paymentText.includes("待付款") || paymentText.includes("已付款")) {
-    return { message: "已开票或已付款的物流费用不能删除。", code: "LOGISTICS_EXPENSE_INVOICED_DELETE_BLOCKED" };
+  if (auditStatus === "已驳回") {
+    return { message: "审核状态不是草稿：请先恢复为草稿。", code: "LOGISTICS_EXPENSE_REJECTED_DELETE_BLOCKED" };
   }
-  if (!["草稿", "已驳回"].includes(auditStatus)) {
-    return { message: "当前状态的物流费用不能删除。", code: "LOGISTICS_EXPENSE_DELETE_STATUS_BLOCKED" };
+  if (auditStatus !== "草稿") {
+    return { message: "审核状态不是草稿：请先撤回审核。", code: "LOGISTICS_EXPENSE_DELETE_STATUS_BLOCKED" };
+  }
+  if (invoiceStatus !== "待开票") {
+    return { message: "发票状态不是待开票：请先删除已上传发票或恢复待开票状态。", code: "LOGISTICS_EXPENSE_INVOICE_STATUS_DELETE_BLOCKED" };
+  }
+  if (!["待开票", "未付款"].includes(paymentStatus) && paymentText !== "未付款") {
+    return { message: "付款状态不是未付款：不允许删除。", code: "LOGISTICS_EXPENSE_PAYMENT_STATUS_DELETE_BLOCKED" };
   }
   return null;
 }

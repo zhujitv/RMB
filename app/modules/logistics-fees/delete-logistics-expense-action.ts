@@ -7,6 +7,7 @@ import {
   formatOriginalCurrencyAccounting,
   logisticsExpenseDeleteBlockReason,
   removeLogisticsExpenseFromRows,
+  replaceLogisticsExpenseBillsInRows,
 } from "./shared";
 
 type DeleteLogisticsExpenseParams = {
@@ -45,7 +46,7 @@ export function createDeleteLogisticsExpenseAction({
     }
     const confirmationResult = await requestConfirmation({
       title: "删除物流费用明细",
-      message: "确定删除这条费用明细吗？删除后不可恢复。",
+      message: "确定删除这条费用明细吗？删除后不可恢复，账单金额将自动重新计算。",
       details: [
         `订单：${expense.orderNo || "-"}`,
         `费用：${logisticsCostTypeLabel(expense.costType || "") || "-"} ${formatOriginalCurrencyAccounting(expense.currency || "CNY", expense.amount || 0)}`,
@@ -60,7 +61,7 @@ export function createDeleteLogisticsExpenseAction({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(
+      const result = await apiJson<{ success?: boolean; message?: string; bill?: LogisticsExpense | null }>(
         `/api/logistics-expenses/${encodeURIComponent(expense.id)}`,
         {
           method: "DELETE",
@@ -70,7 +71,7 @@ export function createDeleteLogisticsExpenseAction({
         throw new Error(result.message || "删除物流费用明细失败");
       }
       const removal = removeLogisticsExpenseFromRows(rows, expense.id);
-      setRows(removal.rows);
+      setRows(result.bill ? replaceLogisticsExpenseBillsInRows(removal.rows, [result.bill]) : removal.rows);
       if (removal.removedBill) setTotal((current) => Math.max(0, current - 1));
       await loadStatement(statementMonth);
       void onRefreshTodos?.();

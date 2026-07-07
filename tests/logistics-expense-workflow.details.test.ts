@@ -127,19 +127,25 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(backend, /export async function deleteLogisticsExpense/);
   assert.match(backend, /LOGISTICS_EXPENSE_SYNCED_COST_DELETE_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_APPROVED_DELETE_BLOCKED/);
+  assert.match(backend, /LOGISTICS_EXPENSE_CONFIRMED_INVOICE_DELETE_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_INVOICED_DELETE_BLOCKED/);
+  assert.match(backend, /LOGISTICS_EXPENSE_PAID_DELETE_BLOCKED/);
   assert.match(backend, /deletedAt: new Date\(\)/);
+  assert.match(backend, /deletedItems: preparedDeletes\.map/);
+  assert.match(logisticsExpenseDeleteRoute, /\.\.\.result/);
+  assert.match(logisticsExpenseDeleteRoute, /message: "已删除"/);
   assert.match(
     logisticsModule,
     /\/api\/logistics-expenses\/\$\{encodeURIComponent\(expense\.id\)\}/,
   );
   assert.match(logisticsModule, /删除物流费用明细/);
-  assert.match(logisticsModule, /确定删除这条费用明细吗？删除后不可恢复。/);
+  assert.match(logisticsModule, /确定删除这条费用明细吗？删除后不可恢复，账单金额将自动重新计算。/);
   assert.match(logisticsModule, /const \[deletingId, setDeletingId\]/);
   assert.match(logisticsModule, /删除中\.\.\./);
   assert.match(logisticsModule, /event\.stopPropagation\(\)/);
   assert.match(deleteExpenseSource, /setRows/);
   assert.match(logisticsModule, /removeLogisticsExpenseFromRows/);
+  assert.match(logisticsModule, /replaceLogisticsExpenseBillsInRows/);
   assert.match(deleteExpenseSource, /loadStatement\(statementMonth\)/);
   assert.match(deleteExpenseSource, /setNotice\("已删除"\)/);
   assert.doesNotMatch(deleteExpenseSource, /loadExpenses\(/);

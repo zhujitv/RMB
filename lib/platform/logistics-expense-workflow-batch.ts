@@ -205,6 +205,7 @@ export function logisticsExpenseDeleteBlock(expense: LogisticsExpenseStateSnapsh
     auditStatus: rowAuditStatus(expense),
     invoiceStatus: expense.invoiceStatus,
     paymentStatus: expense.paymentStatus,
-    costSynced: Boolean(expense.costId),
+    costSynced: Boolean(expense.costId) || expense.costSyncStatus === "已同步",
+    hasInvoiceDocument: Boolean(expense.invoiceDocumentId),
   });
 }

@@ -163,11 +163,25 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   void runNonCriticalTask("物流费用账单明细批量保存日志写入", () => writeAudit(request, actor, "批量保存物流费用账单明细", "logistics_expenses", targetBillId, {
     bill: serializeLogisticsExpenseBill(billRows),
     deletedIds,
+    deletedItems: preparedDeletes.map((row) => ({
+      id: row.id,
+      costType: row.costType || "",
+      amount: Number(row.amount || 0),
+      currency: row.currency || "CNY",
+    })),
   }, {
     bill: serializedBill,
     updateCount: preparedUpdates.length,
     createCount: preparedCreates.length,
     deleteCount: deletedIds.length,
+    deletedItems: preparedDeletes.map((row) => ({
+      id: row.id,
+      deletedById: actorId(actor) || "",
+      deletedAt: new Date().toISOString(),
+      costType: row.costType || "",
+      amount: Number(row.amount || 0),
+      currency: row.currency || "CNY",
+    })),
     durationMs: Date.now() - startedAt,
   }));
   console.info("[logistics-expense.batch-save]", {
@@ -262,8 +276,6 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
   assertCanWriteLogisticsExpense(actor);
   const before = await loadLogisticsExpenseForAction(id, actor);
   const billId = rowBillId(before);
-  const billBlockReason = await logisticsExpenseBillEditBlockReason(before, actor);
-  if (billBlockReason) throw codedError(billBlockReason.replace("修改", "删除"), 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");
   const block = logisticsExpenseDeleteBlock(before);
   if (block) throw codedError(block.message, 400, block.code);
   const saved = await prisma.logisticsExpense.update({
@@ -271,9 +283,9 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
     data: { deletedAt: new Date(), updatedById: actorId(actor) },
     include: includeLogisticsExpenseRelations(),
   });
-  await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, before, saved));
   scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  let serializedBill: ReturnType<typeof serializeLogisticsExpenseBill> | null = null;
   if (!billRows.length && before.billId) {
     await prisma.logisticsBill.update({
       where: { id: billId },
@@ -281,7 +293,34 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
     }).catch(() => null);
   } else {
     await refreshLogisticsBillWorkflowStatus(billRows, actor).catch(() => null);
+    const refreshedBillRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+    serializedBill = refreshedBillRows.length ? serializeLogisticsExpenseBill(refreshedBillRows) : null;
   }
+  const serializedExpense = serializeLogisticsExpense(saved);
+  await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, {
+    ...before,
+    deleteSnapshot: {
+      costType: before.costType || "",
+      amount: Number(before.amount || 0),
+      currency: before.currency || "CNY",
+    },
+  }, {
+    ...saved,
+    deletedItem: {
+      deletedById: actorId(actor) || "",
+      deletedAt: saved.deletedAt,
+      costType: before.costType || "",
+      amount: Number(before.amount || 0),
+      currency: before.currency || "CNY",
+    },
+    bill: serializedBill,
+  }));
   invalidateWorkbenchTodosCache();
-  return serializeLogisticsExpense(saved);
+  return {
+    expense: serializedExpense,
+    bill: serializedBill,
+    deletedId: id,
+    totalAmount: serializedBill?.amount || 0,
+    totalAmountCny: serializedBill?.amountCny || 0,
+  };
 }

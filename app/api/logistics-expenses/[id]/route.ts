@@ -13,8 +13,8 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { id } = await params;
-    const expense = await deleteLogisticsExpense(request, actor, id);
-    return ok({ success: true, expense, message: "已删除" });
+    const result = await deleteLogisticsExpense(request, actor, id);
+    return ok({ success: true, ...result, message: "已删除" });
   } catch (error: unknown) {
     return apiError(error, "删除物流费用明细失败");
   }

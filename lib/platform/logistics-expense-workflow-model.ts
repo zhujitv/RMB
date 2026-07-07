@@ -24,9 +24,11 @@ export type LogisticsExpenseRow = Prisma.LogisticsExpenseGetPayload<{ include: R
 
 export type LogisticsExpenseStateSnapshot = {
   costId?: string | null;
+  costSyncStatus?: string | null;
   auditStatus?: string | null;
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
+  invoiceDocumentId?: string | null;
 };
 
 export type LogisticsExpenseCreateData = Prisma.LogisticsExpenseUncheckedCreateInput;

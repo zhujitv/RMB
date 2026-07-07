@@ -217,10 +217,12 @@ export function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
+  const costSyncStatus = expenseCostSyncText(expense);
   return logisticsBillDeleteBlockReason({
     auditStatus,
     invoiceStatus,
     paymentStatus,
-    costSynced: Boolean(expense.costId),
+    costSynced: Boolean(expense.costId) || costSyncStatus === "已同步",
+    hasInvoiceDocument: Boolean(expense.invoiceDocumentId),
   });
 }

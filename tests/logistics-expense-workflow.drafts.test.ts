@@ -135,7 +135,7 @@ test("logistics suppliers can edit price and quantity only while bill is draft o
   assert.match(backend, /logisticsExpenseBillEditBlockReason/);
   assert.match(backend, /账单\$\{billStatus \|\| "当前状态"\}，不能保存明细，请先撤回为草稿。/);
   assert.match(backend, /不能修改明细，请先撤回为草稿。/);
-  assert.match(backend, /不能删除明细，请先撤回为草稿。/);
+  assert.match(backend, /审核状态不是草稿：请先撤回审核。/);
   assert.match(backend, /LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_APPROVED_LOCKED/);
   assert.match(logisticsModule, /canEditAmount=\{isLogisticsSupplier\}/);

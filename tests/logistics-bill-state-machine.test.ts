@@ -76,9 +76,14 @@ test("logistics bill detail edit and delete reasons use the same state machine",
   assert.equal(logisticsBillEditBlockReason({ auditStatus: "草稿", costSynced: true }), "该费用已同步到成本，不能修改。");
 
   assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿" }), "");
-  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "待审核" }), "待审核账单不能删除明细，请先撤回为草稿。");
-  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "审核通过" }), "已审核通过的物流费用不能删除。");
-  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", invoiceStatus: "已上传" }), "已开票或已付款的物流费用不能删除。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", costSynced: true }), "已同步成本：请先取消成本同步。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", invoiceStatus: "已确认" }), "已确认发票：不允许删除。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", invoiceStatus: "已上传" }), "已上传发票：请先删除已上传发票。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", hasInvoiceDocument: true }), "已上传发票：请先删除已上传发票。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "草稿", paymentStatus: "已付款" }), "已付款：不允许删除。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "待审核" }), "审核状态不是草稿：请先撤回审核。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "审核通过" }), "审核通过：请先撤回审核。");
+  assert.equal(logisticsBillDeleteBlockReason({ auditStatus: "已驳回" }), "审核状态不是草稿：请先恢复为草稿。");
 });
 
 test("logistics bill default tab follows workflow state", () => {
