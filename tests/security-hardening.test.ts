@@ -182,7 +182,7 @@ test("critical write paths use shared input schemas", () => {
   );
   assert.match(
     paymentsModule,
-    /assertInputSchema\(assertJsonObject\(input\), PAYMENT_INPUT_SCHEMA\)/,
+    /const jsonInput = assertJsonObject\(input\);[\s\S]*assertPaymentInputRequiredFields\(jsonInput\);[\s\S]*assertInputSchema\(jsonInput, PAYMENT_INPUT_SCHEMA\)/,
   );
   assert.match(
     costsModule,
