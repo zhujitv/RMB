@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import DocMindClient from "@alicloud/docmind-api20220711";
 import AliyunOcrClient, {
+  RecognizeGeneralStructureRequest,
   RecognizeInvoiceRequest,
 } from "@alicloud/ocr-api20210707";
 import { $OpenApiUtil } from "@alicloud/openapi-core";
@@ -15,6 +16,7 @@ import {
   type OcrRecognitionOptions,
   type OcrRecognitionResult,
   type RasterizedPdfPage,
+  SUPPLIER_CONTRACT_KEYS,
   customsTextFallbackParsedJson,
   normalizeOcrIntegrationSettings,
   normalizeFieldValue,
@@ -24,6 +26,11 @@ import {
   toPlainJson,
   sleep,
 } from "./ocr-integration-shared";
+import {
+  CONTRACT_FIELD_ALIASES,
+  collectFieldsFromObject,
+  collectText,
+} from "./ocr-integration-parsing";
 
 export const ALIYUN_OCR_RETRY_DELAYS_MS = [1000, 2000, 5000] as const;
 const ALIYUN_OCR_HEALTH_STATE_KEY = "__rmbAliyunOcrHealthCheckScheduled";
@@ -387,5 +394,33 @@ export async function recognizeAliyunVatInvoice(
     extractedFields,
     parsedJson: extractedFields,
     parser: "VAT_INVOICE",
+  };
+}
+
+export async function recognizeAliyunSupplierContract(
+  buffer: Buffer,
+  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+): Promise<OcrRecognitionResult> {
+  const client = createAliyunOcrClient(settings);
+  const response = await withAliyunOcrRetry("ALIYUN_RECOGNIZE_GENERAL_STRUCTURE", settings, () => (
+    client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+      body: Readable.from(buffer),
+      keys: SUPPLIER_CONTRACT_KEYS,
+    }))
+  ), { maxAttempts: 1 });
+  const rawJson = toPlainJson(response);
+  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
+  const data = parseJsonMaybe(responseField(responseBody, "data"));
+  const extractedFields = collectFieldsFromObject(data, CONTRACT_FIELD_ALIASES);
+  const text = collectText(data).join("\n");
+  return {
+    text,
+    source: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
+    provider: settings.provider,
+    apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
+    rawJson,
+    extractedFields,
+    parsedJson: extractedFields,
+    parser: "PURCHASE_CONTRACT",
   };
 }

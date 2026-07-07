@@ -10,6 +10,7 @@ import type {
   SupplierDocumentsResponse,
   SupplierDocumentsStatsResponse,
 } from "./supplier-documents/types";
+import { useSupplierDocumentOcrActions } from "./supplier-documents/use-supplier-document-ocr-actions";
 import { useSupplierDocumentRequestActions } from "./supplier-documents/use-supplier-document-request-actions";
 import type { User } from "../types";
 
@@ -45,6 +46,7 @@ export function SupplierDocumentsModule({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
+  const [ocrBusyKey, setOcrBusyKey] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const loadRowsDataRequestRef = useRef(0);
   const loadRowsVisibleRequestRef = useRef(0);
@@ -97,6 +99,10 @@ export function SupplierDocumentsModule({
       detailLoading: false,
       detailError: "",
     };
+  }
+
+  function hasProcessingOcrTask(task: SupplierDocumentTask | null | undefined) {
+    return Boolean(task?.documents?.some((document) => document.ocrTask?.status === "OCR识别中"));
   }
 
   async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: { silent?: boolean } = {}) {
@@ -201,6 +207,15 @@ export function SupplierDocumentsModule({
   }
 
   const isAdmin = currentUser.role === "管理员";
+  const { rerunOcr, confirmOcr, rejectOcr } = useSupplierDocumentOcrActions({
+    requestConfirmation,
+    loadTaskDetail,
+    loadStats,
+    setRows,
+    setOcrBusyKey,
+    setError,
+    setNotice,
+  });
   const {
     uploadDocument,
     deleteTask,
@@ -246,6 +261,16 @@ export function SupplierDocumentsModule({
   }, [expandedTaskId, rows]);
 
   useEffect(() => {
+    if (!expandedTaskId) return undefined;
+    const expandedTask = rows.find((row) => row.id === expandedTaskId);
+    if (!hasProcessingOcrTask(expandedTask)) return undefined;
+    const timer = window.setInterval(() => {
+      void loadTaskDetail(expandedTaskId, { force: true, silent: true });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [expandedTaskId, rows]);
+
+  useEffect(() => {
     if (!initialOpenToken) return;
     const keyword = initialKeyword.trim();
     void loadRows(1, pageSize, keyword).then((nextRows) => {
@@ -278,6 +303,7 @@ export function SupplierDocumentsModule({
       submittedKeyword={submittedKeyword}
       deletingTaskId={deletingTaskId}
       resendingTaskId={resendingTaskId}
+      ocrBusyKey={ocrBusyKey}
       createDialogOpen={createDialogOpen}
       isAdmin={isAdmin}
       safePage={safePage}
@@ -306,6 +332,9 @@ export function SupplierDocumentsModule({
       onUpload={uploadDocument}
       onDeleteTask={(task) => void deleteTask(task)}
       onResendNotice={(task) => void resendNotice(task)}
+      onRerunOcr={(task, document) => void rerunOcr(task, document)}
+      onConfirmOcr={(task, document) => void confirmOcr(task, document)}
+      onRejectOcr={(task, document) => void rejectOcr(task, document)}
       onPage={(nextPage) => {
         setExpandedTaskId("");
         void loadRows(nextPage, pageSize, submittedKeyword);

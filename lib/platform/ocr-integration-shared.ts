@@ -14,7 +14,8 @@ import { writeAudit } from "./shared-audit";
 export type SettingsActor = Parameters<typeof assertRead>[0];
 export type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
-export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "logisticsInvoice";
+export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "supplierDocumentReturn" | "logisticsInvoice";
+export type SupplierOcrDocumentType = "SUPPLIER_PURCHASE_CONTRACT" | "SUPPLIER_INVOICE";
 export type CustomsDeclarationRecognitionMode = "AUTO" | "STRICT" | "MANUAL";
 
 export type OcrIntegrationInput = {
@@ -27,6 +28,7 @@ export type OcrIntegrationInput = {
   customsDeclarationMode?: unknown;
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
+  supplierDocumentReturnEnabled?: unknown;
   logisticsInvoiceEnabled?: unknown;
   fallbackToPdfText?: unknown;
   timeoutMs?: unknown;
@@ -56,6 +58,18 @@ export type RasterizedPdfPage = {
   height: number;
   pageCount: number;
 };
+export const SUPPLIER_CONTRACT_KEYS = [
+  "供应商",
+  "采购方",
+  "订单号",
+  "合同号",
+  "合同金额",
+  "产品名称",
+  "规格型号",
+  "数量",
+  "单价",
+  "签订日期",
+];
 export const CUSTOMS_DECLARATION_MIN_TIMEOUT_MS = 60000;
 export const DOCMIND_CUSTOMS_POLL_INTERVAL_MS = 1500;
 export const DOCMIND_CUSTOMS_MAX_POLLS = 12;
@@ -218,6 +232,7 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     customsDeclarationMode,
     customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
+    supplierDocumentReturnEnabled: input.supplierDocumentReturnEnabled === true,
     logisticsInvoiceEnabled: input.logisticsInvoiceEnabled === true,
     fallbackToPdfText: input.fallbackToPdfText !== false,
     timeoutMs: cleanTimeoutMs(input.timeoutMs),
@@ -247,6 +262,7 @@ export function serializeOcrFeatureFlags(setting: unknown) {
     customsDeclarationMode: normalized.customsDeclarationMode,
     customsDeclarationEnabled: enabled && normalized.customsDeclarationEnabled,
     invoiceTextEnabled: enabled && normalized.invoiceTextEnabled,
+    supplierDocumentReturnEnabled: enabled && normalized.supplierDocumentReturnEnabled,
     logisticsInvoiceEnabled: enabled && normalized.logisticsInvoiceEnabled,
     fallbackToPdfText: normalized.fallbackToPdfText,
     timeoutMs: normalized.timeoutMs,
@@ -259,12 +275,14 @@ export function ocrFeatureEnabled(settings: ReturnType<typeof normalizeOcrIntegr
   if (!credentialsConfigured) return false;
   if (feature === "customsDeclaration") return settings.customsDeclarationMode !== "MANUAL" && settings.customsDeclarationEnabled;
   if (feature === "invoiceText") return settings.invoiceTextEnabled;
+  if (feature === "supplierDocumentReturn") return settings.supplierDocumentReturnEnabled;
   if (feature === "logisticsInvoice") return settings.logisticsInvoiceEnabled;
   return false;
 }
 
 export function ocrFeatureLabel(feature: OcrFeatureKey) {
   if (feature === "customsDeclaration") return "报关单识别";
+  if (feature === "supplierDocumentReturn") return "产品供应商资料回传 OCR";
   if (feature === "logisticsInvoice") return "物流费用发票 OCR";
   return "发票识别";
 }

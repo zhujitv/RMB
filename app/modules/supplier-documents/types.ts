@@ -13,6 +13,34 @@ export type SupplierDocument = {
   uploadStatusLabel?: string;
   uploadedByName?: string;
   uploadedAt?: string;
+  ocrTask?: SupplierDocumentOcrTask | null;
+};
+
+export type SupplierDocumentOcrIssue = {
+  level?: string;
+  message?: string;
+  field?: string;
+};
+
+export type SupplierDocumentOcrField = {
+  key?: string;
+  label?: string;
+  value?: string;
+};
+
+export type SupplierDocumentOcrTask = {
+  id?: string;
+  status?: string;
+  validationStatus?: string;
+  errorMessage?: string;
+  rejectReason?: string;
+  rawText?: string;
+  fields?: SupplierDocumentOcrField[];
+  issues?: SupplierDocumentOcrIssue[];
+  expectedAmount?: number | null;
+  supplierName?: string;
+  businessEntityName?: string;
+  updatedAt?: string;
 };
 
 export type SupplierFactoryCostSlot = {
@@ -91,5 +119,14 @@ export type SupplierDocumentDeleteResponse = {
 
 export type SupplierDocumentNoticeResponse = {
   request?: SupplierDocumentTask;
+  message?: string;
+};
+
+export type SupplierDocumentOcrResponse = {
+  success?: boolean;
+  status?: "PASSED" | "NEEDS_REVIEW" | "FAILED" | "TIMEOUT" | string;
+  ocrTask?: SupplierDocumentOcrTask | null;
+  result?: SupplierDocumentOcrTask | null;
+  error?: string;
   message?: string;
 };

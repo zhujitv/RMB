@@ -322,12 +322,15 @@ test("supplier document list failure is not rendered as an empty task list", () 
   assert.match(supplierRequestRoute, /getSupplierDocumentRequestDetail\(id, actor\)/);
 });
 
-test("supplier document request completion requires successful required uploads", () => {
+test("supplier document request completion requires successful OCR-qualified uploads", () => {
   const completionService = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
   assert.match(completionService, /const uploaded = document\?\.uploadStatus === "SUCCESS"/);
-  assert.match(completionService, /qualified: uploaded/);
+  assert.match(completionService, /const qualified = uploaded && isOcrQualified\(task\)/);
+  assert.match(completionService, /qualified,/);
   assert.match(completionService, /allQualified \? "已完成" : anyStarted \? "部分上传" : "待上传"/);
-  assert.doesNotMatch(completionService, /Ocr|OCR_STATUS|VALIDATION_CONFIRMED|ocrTasks/);
+  assert.match(completionService, /OCR_STATUS_PASSED/);
+  assert.match(completionService, /VALIDATION_CONFIRMED/);
+  assert.match(completionService, /ocrTasks/);
   assert.match(service, /status: nextStatus, completedAt: null, completedById: null/);
   assert.match(service, /safeRefreshSupplierDocumentRequestCompletion\(row\.id\)/);
 });
@@ -378,8 +381,11 @@ test("supplier document cards merge upload slots with uploaded files by document
   assert.match(supplierModule, /重新上传 PDF 文件/);
   assert.match(supplierModule, /<PdfPreviewButton documentId=\{document\.id\}/);
   assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
-  assert.doesNotMatch(supplierModule, /SupplierDocumentOcrPanel/);
-  assert.doesNotMatch(supplierModule, /OCR 校验结果|查看 OCR 原始文本|人工确认通过|驳回重传/);
+  assert.match(supplierModule, /SupplierDocumentOcrPanel/);
+  assert.match(supplierModule, /OCR 校验结果/);
+  assert.match(supplierModule, /查看 OCR 原始文本/);
+  assert.match(supplierModule, /人工确认通过/);
+  assert.match(supplierModule, /驳回重传/);
   assert.doesNotMatch(supplierModule, /function supplierDocumentUploadSlots/);
   assert.doesNotMatch(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
   assert.doesNotMatch(supplierModule, /已上传资料槽|uploadedDocumentSlots/);

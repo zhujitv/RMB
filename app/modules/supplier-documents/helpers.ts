@@ -1,6 +1,10 @@
 import { ApiRequestError } from "../../api";
 import styles from "../../WorkspaceShell.module.css";
-import type { SupplierDocument, SupplierFactoryCostSlot } from "./types";
+import type { SupplierDocument, SupplierDocumentOcrTask, SupplierFactoryCostSlot } from "./types";
+
+export const OCR_STATUS_PASSED = "OCR识别成功，校验通过";
+export const VALIDATION_PASSED = "PASSED";
+export const VALIDATION_CONFIRMED = "MANUAL_CONFIRMED";
 
 export const DOCUMENT_LABELS: Record<string, string> = {
   SUPPLIER_PURCHASE_CONTRACT: "工厂采购合同",
@@ -78,6 +82,14 @@ export function supplierUploadKey(taskId: string, documentType: string, costId =
   return [taskId, documentType, costId].join(":");
 }
 
+export function supplierOcrActionKey(taskId: string, documentId: string, action: string) {
+  return [taskId, documentId, action].join(":");
+}
+
+export function canManageSupplierDocumentOcr(role = "") {
+  return ["管理员", "财务", "业务员", "采购"].includes(role);
+}
+
 export function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
   const amountCny = Number(slot.amountCny || 0);
   const amount = Number(slot.amount || 0);
@@ -87,8 +99,9 @@ export function formatFactoryCostSlotAmount(slot: SupplierFactoryCostSlot) {
 }
 
 export function supplierDocumentStatusClass(status: string) {
-  if (status === "已完成" || status === "已上传") return styles.statusSuccess;
-  if (status === "部分上传" || status === "上传中") return styles.statusWarning;
+  if (status === "已完成" || status === "已上传" || status === OCR_STATUS_PASSED) return styles.statusSuccess;
+  if (status === "部分上传" || status === "上传中" || status === "OCR识别中" || status === "待人工确认") return styles.statusWarning;
+  if (status === "OCR识别成功，存在异常" || status === "OCR识别失败，需人工核对") return styles.statusDanger;
   if (status === "已关闭") return styles.statusMuted;
   return styles.statusMuted;
 }
@@ -98,4 +111,21 @@ export function supplierDocumentSendStatusLabel(status = "") {
   if (status === "failed") return "发送失败";
   if (status === "pending") return "待发送";
   return status || "未记录";
+}
+
+export function supplierOcrCleanlyPassed(ocrTask: SupplierDocumentOcrTask) {
+  const validationStatus = String(ocrTask.validationStatus || "");
+  const noIssues = !(ocrTask.issues || []).length;
+  const validationPassed = !validationStatus || [VALIDATION_PASSED, VALIDATION_CONFIRMED].includes(validationStatus);
+  return (
+    ocrTask.status === OCR_STATUS_PASSED
+    && validationPassed
+    && noIssues
+    && !ocrTask.errorMessage
+    && !ocrTask.rejectReason
+  );
+}
+
+export function supplierOcrRequiresManualReview(ocrTask: SupplierDocumentOcrTask) {
+  return !supplierOcrCleanlyPassed(ocrTask) && ocrTask.validationStatus !== VALIDATION_CONFIRMED;
 }

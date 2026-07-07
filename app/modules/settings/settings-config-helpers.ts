@@ -111,6 +111,7 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     appCode: "",
     appCodeConfigured: settings?.appCodeConfigured === true,
     invoiceTextEnabled: settings?.invoiceTextEnabled === true,
+    supplierDocumentReturnEnabled: settings?.supplierDocumentReturnEnabled === true,
     logisticsInvoiceEnabled: settings?.logisticsInvoiceEnabled === true,
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };

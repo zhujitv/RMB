@@ -457,6 +457,10 @@ export const readTaxRefundsSource = () => readSources([...TAX_REFUNDS_FILES, ...
 export const readOcrIntegrationSource = () => readSources([...OCR_INTEGRATION_FILES, ...readSourcePrefix("lib/platform", ["ocr-integration"])]);
 export const readCustomsDeclarationParserSource = () => readSources([...CUSTOMS_DECLARATION_PARSER_FILES, ...readSourcePrefix("lib", ["customs-declaration", "customs-pdf"])]);
 export const readSupplierDocumentRequestsSource = () => readSources([...SUPPLIER_DOCUMENT_REQUEST_FILES, ...readSourcePrefix("lib/platform", ["supplier-document-request"])]);
+export const readSupplierDocumentOcrSource = () => readSources([
+  ...readSourcePrefix("lib/platform", ["supplier-document-ocr"]),
+  "lib/platform/supplier-contract-order-match.ts",
+]);
 export const readNotificationEngineSource = () => readSources(NOTIFICATION_ENGINE_FILES);
 export const readWorkbenchTodosSource = () => readSources([...WORKBENCH_TODOS_FILES, ...readSourcePrefix("lib/platform", ["workbench"])]);
 export const readLogisticsExpenseWorkflowSource = () => readSources([...LOGISTICS_EXPENSE_WORKFLOW_FILES, ...readSourcePrefix("lib/platform", ["logistics-expense-workflow", "logistics-expense-invoice-notifications"])]);

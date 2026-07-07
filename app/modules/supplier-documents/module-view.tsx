@@ -5,8 +5,8 @@ import type { User } from "../../types";
 import styles from "../../WorkspaceShell.module.css";
 import { CreateSupplierDocumentRequestDialog, type CreateSupplierDocumentRequestResult } from "./create-request-dialog";
 import { SupplierDocumentTaskCard } from "./task-card";
-import type { SupplierDocumentTask } from "./types";
-import { SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS } from "./helpers";
+import type { SupplierDocument, SupplierDocumentTask } from "./types";
+import { SUPPLIER_DOCUMENT_PAGE_SIZE_OPTIONS, canManageSupplierDocumentOcr } from "./helpers";
 
 type SupplierDocumentsModuleViewProps = {
   currentUser: User;
@@ -29,6 +29,7 @@ type SupplierDocumentsModuleViewProps = {
   submittedKeyword: string;
   deletingTaskId: string;
   resendingTaskId: string;
+  ocrBusyKey: string;
   createDialogOpen: boolean;
   isAdmin: boolean;
   safePage: number;
@@ -44,6 +45,9 @@ type SupplierDocumentsModuleViewProps = {
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDeleteTask: (task: SupplierDocumentTask) => void;
   onResendNotice: (task: SupplierDocumentTask) => void;
+  onRerunOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onConfirmOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
+  onRejectOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
   onPage: (page: number) => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
@@ -69,6 +73,7 @@ export function SupplierDocumentsModuleView({
   statsError,
   deletingTaskId,
   resendingTaskId,
+  ocrBusyKey,
   createDialogOpen,
   isAdmin,
   safePage,
@@ -150,8 +155,10 @@ export function SupplierDocumentsModuleView({
                 task={task}
                 uploadingKey={uploadingKey}
                 progressByKey={progressByKey}
+                ocrBusyKey={ocrBusyKey}
                 isExpanded={expandedTaskId === task.id}
                 isAdmin={isAdmin}
+                canManageOcr={canManageSupplierDocumentOcr(currentUser.role)}
                 deleting={deletingTaskId === task.id}
                 resending={resendingTaskId === task.id}
                 onToggle={() => actions.onToggleTask(task.id)}
@@ -159,6 +166,9 @@ export function SupplierDocumentsModuleView({
                 onUpload={actions.onUpload}
                 onDelete={actions.onDeleteTask}
                 onResendNotice={actions.onResendNotice}
+                onRerunOcr={actions.onRerunOcr}
+                onConfirmOcr={actions.onConfirmOcr}
+                onRejectOcr={actions.onRejectOcr}
               />
             ))}
           </div>

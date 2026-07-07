@@ -51,6 +51,7 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   customsDeclarationMode: "AUTO",
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
+  supplierDocumentReturnEnabled: false,
   logisticsInvoiceEnabled: false,
   fallbackToPdfText: true,
   timeoutMs: 15000,
