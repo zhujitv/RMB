@@ -395,11 +395,12 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 
-test("supplier document upload only saves the file before asynchronous OCR starts", () => {
-  assert.match(uploadService, /message: "上传成功"/);
-  assert.doesNotMatch(uploadService, /let ocrWarning = ""/);
+test("supplier document upload starts OCR through the direct SDK task path", () => {
+  assert.match(uploadService, /let ocrWarning = ""/);
+  assert.match(uploadService, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
+  assert.match(uploadService, /runSupplierDocumentOcrTask\(ocrTask\.id\)/);
+  assert.match(uploadService, /供应商回传资料上传成功但OCR任务创建失败/);
+  assert.match(uploadService, /message: ocrWarning \? `上传成功；\$\{ocrWarning\}` : "上传成功"/);
   assert.doesNotMatch(uploadService, /let ocrTaskId = ""/);
-  assert.doesNotMatch(uploadService, /供应商回传资料上传成功但OCR任务创建失败/);
-  assert.doesNotMatch(uploadService, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
   assert.doesNotMatch(uploadService, /runSupplierDocumentOcrTaskWithTimeout\(ocrTask\.id\)/);
 });

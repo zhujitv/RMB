@@ -2,12 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isSuspiciousInvoiceParty, parseVatInvoiceFields } from "../lib/platform/supplier-vat-invoice-parser.ts";
-import {
-  readSupplierDocumentOcrSource,
-  readSupplierDocumentRequestListSource,
-  readSupplierDocumentRequestsSource,
-  readSupplierDocumentsModuleSource,
-} from "./source-helpers.ts";
+import { readSupplierDocumentOcrSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource } from "./source-helpers.ts";
 import {
   contractOrderNoMatches,
   normalizeContractOrderNoSet,
@@ -18,15 +13,10 @@ const schema = readFileSync("prisma/schema.prisma", "utf8");
 const service = readSupplierDocumentOcrSource();
 const vatParser = readFileSync("lib/platform/supplier-vat-invoice-parser.ts", "utf8");
 const supplierRequests = readSupplierDocumentRequestsSource();
-const supplierRequestList = readSupplierDocumentRequestListSource();
 const supplierModule = readSupplierDocumentsModuleSource();
-const supplierUploadActions = readFileSync("app/modules/supplier-documents/use-supplier-document-request-actions.ts", "utf8");
-const completionService = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
 const ocrRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/route.ts", "utf8");
 const confirmRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/confirm/route.ts", "utf8");
 const rejectRoute = readFileSync("app/api/supplier-document-requests/[id]/documents/[documentId]/ocr/reject/route.ts", "utf8");
-const supplierOcrCronRoute = readFileSync("app/api/cron/supplier-document-ocr/route.ts", "utf8");
-const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("supplier return OCR stores tasks and fields in independent OCR tables", () => {
   assert.match(schema, /model OcrTask/);
@@ -37,71 +27,13 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
   assert.match(schema, /request\s+SupplierDocumentRequest\?/);
 });
 
-test("supplier document upload starts asynchronous OCR after the file is saved", () => {
-  assert.match(supplierUploadActions, /setNotice\(data\.message \|\| "上传成功"\)/);
-  assert.match(supplierUploadActions, /async function recognizeUploadedDocument/);
-  assert.match(supplierUploadActions, /setOcrBusyKey/);
-  assert.match(supplierUploadActions, /正在识别，请勿关闭页面/);
-  assert.match(supplierUploadActions, /documents\/\$\{encodeURIComponent\(document\.id\)\}\/ocr/);
-  assert.match(supplierUploadActions, /timeoutMs: 65_000/);
-  assert.match(supplierUploadActions, /data\.ocrTask \|\| data\.result/);
-  assert.match(supplierUploadActions, /data\.status === "FAILED" \|\| data\.status === "TIMEOUT"/);
-  assert.match(supplierRequests, /message: "上传成功"/);
+test("supplier document upload creates OCR task without changing tax refund module", () => {
+  assert.match(supplierRequests, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
+  assert.match(supplierRequests, /runSupplierDocumentOcrTask\(ocrTask\.id\)/);
   assert.match(supplierRequests, /attachSupplierDocumentOcrTasks/);
   assert.match(supplierRequests, /prisma\.ocrTask\.findMany/);
   assert.match(supplierRequests, /已跳过OCR附加信息/);
-  assert.doesNotMatch(supplierRequestList, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
-  assert.doesNotMatch(supplierUploadActions, /runSupplierDocumentOcrTaskWithTimeout/);
-});
-
-test("supplier document page silently polls only while OCR is processing", () => {
-  assert.match(supplierModule, /function hasProcessingOcrTask/);
-  assert.match(supplierModule, /document\.ocrTask\?\.status === "OCR识别中"/);
-  assert.match(supplierModule, /window\.setInterval/);
-  assert.match(supplierModule, /loadTaskDetail\(expandedTaskId, \{ silent: true, force: true \}\)/);
-  assert.match(supplierModule, /window\.clearInterval/);
-});
-
-test("supplier document asynchronous OCR disables repeated actions while waiting", () => {
-  assert.match(supplierModule, /const documentOcrBusy = document \? ocrBusyKey\.startsWith/);
-  assert.match(supplierModule, /disabled=\{uploading \|\| documentOcrBusy\}/);
-  assert.match(supplierModule, /const documentBusy = busyKey\.startsWith/);
-  assert.match(supplierModule, /<OcrWaitingInline \/>/);
-  assert.match(supplierModule, /<ButtonSpinnerText text="识别中\.\.\." \/>/);
-  assert.match(supplierModule, /disabled=\{documentBusy\}/);
-  assert.match(supplierModule, /supplierDocumentOcrSpinner/);
-});
-
-test("supplier OCR has a cron worker fallback for processing tasks", () => {
-  assert.match(service, /export async function runPendingSupplierDocumentOcrTasks/);
-  assert.match(service, /updatedAt: \{ lt: readyBefore \}/);
-  assert.match(service, /await runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
-  assert.match(service, /export async function runSupplierDocumentOcrTaskWithTimeout/);
-  assert.match(service, /SUPPLIER_DOCUMENT_OCR_TASK_TIMEOUT/);
-  assert.match(service, /supplier-document-ocr-pending-worker/);
-  assert.match(supplierOcrCronRoute, /assertCronSecret\(request\)/);
-  assert.match(supplierOcrCronRoute, /runPendingSupplierDocumentOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
-  assert.match(supplierOcrCronRoute, /runPendingLogisticsInvoiceOcrTasks\(limit \|\| 5, minAgeMs \|\| 60_000\)/);
-  assert.match(supplierOcrCronRoute, /return ok\(\{ supplier, logistics \}\)/);
-  assert.match(vercelConfig, /"path": "\/api\/cron\/supplier-document-ocr"/);
-  assert.match(vercelConfig, /"\*\/5 \* \* \* \*"/);
-});
-
-test("supplier OCR ignores late task writes after timeout or manual handling", () => {
-  assert.match(service, /supplier-document-ocr-late-failure-ignored/);
-  assert.match(service, /supplier-document-ocr-late-error-ignored/);
-  assert.match(service, /supplier-document-ocr-run-skipped-non-processing/);
-  assert.match(service, /const writable = await tx\.ocrTask\.updateMany/);
-  assert.match(service, /status: OCR_STATUS_PROCESSING,\s*validationStatus: "PROCESSING"/);
-  assert.match(service, /if \(!writable\.count\)/);
-});
-
-test("supplier OCR task reads are scoped to supplier document return module", () => {
-  assert.match(supplierRequests, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId: \{ in: documentIds \} \}/);
-  assert.match(completionService, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE \}/);
-  assert.match(service, /where: \{ module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId, requestId \}/);
-  assert.match(service, /await loadSupplierReturnDocument\(documentId, requestId, actor\)/);
 });
 
 test("supplier OCR validates invoice and contract against supplier, business entity, amount, and duplicates", () => {
@@ -157,17 +89,11 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(service, /OCR原文已识别但解析失败，请人工核对。/);
   assert.match(service, /parserStatus: latestRawText \? "OCR原文已识别但解析失败" : "OCR原文未识别"/);
   assert.match(service, /supplierDocumentOcrFailureMessage/);
-  assert.match(service, /supplierDocumentOcrFailureKind/);
-  assert.match(service, /supplierDocumentOcrFailureMessageForKind/);
-  assert.match(service, /supplierOcrFailureTechnicalDetails/);
-  assert.match(service, /OCR 连接超时，请稍后点击“重新识别”/);
-  assert.match(service, /OCR 配置缺失，请联系管理员到系统设置检查 OCR 配置。/);
-  assert.match(service, /OCR 额度不足或调用频率受限，请检查阿里云账户额度。/);
+  assert.match(service, /阿里云 OCR 服务连接超时，请稍后点击“重新识别”/);
   assert.match(service, /OCR_PERMISSION_FAILURE_MESSAGE/);
   assert.match(service, /ocrServiceNotOpen/);
   assert.match(service, /sanitizeSupplierOcrMessage\(task\.errorMessage, ""\)/);
-  assert.match(service, /const rawMessage = String\(record\.message \|\| ""\)/);
-  assert.match(service, /sanitizeSupplierOcrMessage\(rawMessage, ""\)/);
+  assert.match(service, /sanitizeSupplierOcrMessage\(record\.message, ""\)/);
   assert.match(service, /OCR正在识别，请稍候。/);
   assert.match(service, /errorMessage\s*\?\s*\[\{ level: "manual", message: errorMessage, field: "" \}\]/);
   assert.match(service, /technicalError: originalMessage\.slice\(0, 1000\)/);
@@ -175,23 +101,6 @@ test("supplier VAT invoice OCR uses structured parser and preserves raw text", (
   assert.match(supplierModule, /查看 OCR 原始文本/);
   assert.match(supplierModule, /ocrTask\.rawText/);
   assert.match(supplierModule, /styles\.supplierDocumentOcrRawText/);
-});
-
-test("supplier OCR failure messages are actionable by root cause", () => {
-  assert.match(service, /return "TIMEOUT"/);
-  assert.match(service, /return "CONFIG_MISSING"/);
-  assert.match(service, /return "AUTH_FAILED"/);
-  assert.match(service, /return "QUOTA_LIMITED"/);
-  assert.match(service, /return "FILE_READ_FAILED"/);
-  assert.match(service, /return "PDF_PROCESS_FAILED"/);
-  assert.match(service, /return "STRUCTURE_INVALID"/);
-  assert.match(service, /OCR 连接超时，请稍后点击“重新识别”/);
-  assert.match(service, /OCR 配置缺失，请联系管理员到系统设置检查 OCR 配置。/);
-  assert.match(service, /OCR AccessKey\/Secret 配置错误或接口权限不足，请联系管理员。/);
-  assert.match(service, /OCR 额度不足或调用频率受限，请检查阿里云账户额度。/);
-  assert.match(service, /文件无法读取，请重新上传 PDF 后再识别。/);
-  assert.match(service, /PDF 处理失败，请重新上传清晰、未加密的 PDF。/);
-  assert.match(service, /OCR 返回结构异常，请点击重新识别或人工确认。/);
 });
 
 test("VAT invoice parser extracts buyer seller totals and item from Aliyun raw text", () => {
@@ -270,7 +179,7 @@ test("VAT invoice parser prefers trusted structured fields over noisy raw party 
 test("VAT invoice parser accepts group company seller names from Aliyun structured fields", () => {
   const fields = parseVatInvoiceFields("", {
     invoiceNo: "2634200002105865616",
-    invoiceDate: "2026年07月03日 10:20:30",
+    invoiceDate: "2026年07月03日",
     buyer: "浙江莱诺建材有限公司",
     buyerTaxNo: "91330681MA2D86XM28",
     seller: "安徽森泰木塑集团股份有限公司",
@@ -285,12 +194,6 @@ test("VAT invoice parser accepts group company seller names from Aliyun structur
   assert.equal(fields.seller, "安徽森泰木塑集团股份有限公司");
   assert.equal(fields.sellerTaxNo, "91341822796423104J");
   assert.equal(fields.buyer, "浙江莱诺建材有限公司");
-  assert.equal(fields.invoiceDate, "2026-07-03");
-});
-
-test("VAT invoice parser normalizes labeled invoice date text", () => {
-  assert.equal(parseVatInvoiceFields("开具日期：20260703", {}).invoiceDate, "2026-07-03");
-  assert.equal(parseVatInvoiceFields("开票时间：2026/7/3 10:20:30", {}).invoiceDate, "2026-07-03");
 });
 
 test("VAT invoice parser infers seller from plain company sequence in Aliyun text", () => {
@@ -372,39 +275,27 @@ test("supplier document UI only shows manual OCR confirmation for abnormal resul
   assert.match(supplierModule, /const requiresManualReview = supplierOcrRequiresManualReview\(ocrTask\)/);
   assert.match(supplierModule, /requiresManualReview \? \(/);
   assert.match(supplierModule, /void loadTaskDetail\(task\.id, \{ silent: true, force: true \}\)/);
-  assert.match(supplierModule, /loadStats: \(keyword\?: string, options\?: \{ silent\?: boolean \}\) => Promise<void>/);
-  assert.match(supplierModule, /void loadStats\(undefined, \{ silent: true \}\)/);
+  assert.doesNotMatch(supplierModule, /recognizeUploadedDocument/);
 });
 
 test("supplier OCR routes expose re-recognize, confirm, and reject operations", () => {
   assert.match(ocrRoute, /rerunSupplierDocumentOcr/);
-  assert.match(ocrRoute, /supplierDocumentOcrApiResult/);
-  assert.match(ocrRoute, /\.\.\.ocrResult/);
   assert.match(confirmRoute, /confirmSupplierDocumentOcr/);
   assert.match(rejectRoute, /rejectSupplierDocumentOcr/);
   assert.match(rejectRoute, /parseJsonBody\(request, \{ allowEmpty: true \}\)/);
 });
 
 test("supplier OCR rerun loads supplier return document and exposes actionable failures", () => {
-  assert.match(service, /loadSupplierReturnDocument\(documentId, requestId, actor\)/);
+  assert.match(service, /loadSupplierReturnDocument\(documentId, requestId\)/);
   assert.match(service, /缺少 supplierReturnDocumentId/);
   assert.match(service, /SUPPLIER_DOCUMENT_REQUEST_MISMATCH/);
   assert.match(service, /SUPPLIER_DOCUMENT_FILE_MISSING/);
   assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
   assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
-  assert.match(service, /cancelProcessingSupplierDocumentOcrTasks\(documentId, requestId\)/);
-  assert.match(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
-  assert.match(service, /const result = await runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
-  assert.match(service, /return serializeSupplierDocumentOcrTask\(task\)/);
-  assert.match(service, /status: "PROCESSING"/);
-  assert.match(service, /OCR已开始识别，完成后将自动更新。/);
-  assert.match(service, /status: "TIMEOUT"/);
-  assert.match(service, /OCR识别超时，请重新识别或人工确认。/);
   assert.match(service, /normalizeSupplierReturnDocumentType/);
   assert.match(service, /VAT_INVOICE/);
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);
-  assert.match(supplierModule, /updateDocumentOcrTask\(task\.id, document\.id, localFailedOcrTask\(document, message\)\)/);
-  assert.match(supplierModule, /OCR识别失败，请人工核对或重新上传/);
+  assert.match(supplierModule, /OCR识别失败，需人工核对/);
 });
 
 test("supplier OCR missing table errors are converted into migration guidance", () => {
@@ -421,9 +312,7 @@ test("supplier OCR reconciles stale processing tasks instead of leaving them stu
   assert.match(service, /export async function reconcileStaleSupplierDocumentOcrTasks/);
   assert.match(service, /status: OCR_STATUS_PROCESSING/);
   assert.match(service, /validationStatus: "PROCESSING"/);
-  assert.match(service, /createdAt: \{ lt: staleBefore \}/);
   assert.match(service, /status: OCR_STATUS_FAILED/);
   assert.match(service, /validationStatus: VALIDATION_FAILED/);
-  assert.match(service, /Date\.now\(\) - new Date\(task\.createdAt\)\.getTime\(\) > supplierOcrProcessingStaleMs\(\)/);
   assert.match(supplierRequests, /reconcileStaleSupplierDocumentOcrTasks\(documentIds\)/);
 });

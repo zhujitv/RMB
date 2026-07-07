@@ -434,17 +434,12 @@ export async function recognizeWithPdfTextFallback(
 export async function recognizeAliyunVatInvoice(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-  options: AliyunOcrRetryOptions = {},
 ): Promise<OcrRecognitionResult> {
-  scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
-  const source = options.url ? { url: options.url } : { body: Readable.from(buffer) };
-  const response = await withAliyunOcrRetry("ALIYUN_RECOGNIZE_INVOICE", settings, () => (
-    client.recognizeInvoice(new RecognizeInvoiceRequest({
-      ...source,
-      pageNo: 1,
-    }))
-  ), options);
+  const response = await client.recognizeInvoice(new RecognizeInvoiceRequest({
+    body: Readable.from(buffer),
+    pageNo: 1,
+  }));
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
   const { extractedFields, text } = extractAliyunInvoiceRecognitionData(responseBody);
@@ -463,17 +458,12 @@ export async function recognizeAliyunVatInvoice(
 export async function recognizeAliyunSupplierContract(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-  options: AliyunOcrRetryOptions = {},
 ): Promise<OcrRecognitionResult> {
-  scheduleAliyunOcrStartupHealthCheck(settings);
   const client = createAliyunOcrClient(settings);
-  const source = options.url ? { url: options.url } : { body: Readable.from(buffer) };
-  const response = await withAliyunOcrRetry("ALIYUN_RECOGNIZE_GENERAL_STRUCTURE", settings, () => (
-    client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
-      ...source,
-      keys: SUPPLIER_CONTRACT_KEYS,
-    }))
-  ), options);
+  const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
+    body: Readable.from(buffer),
+    keys: SUPPLIER_CONTRACT_KEYS,
+  }));
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
   const data = parseJsonMaybe(responseField(responseBody, "data"));

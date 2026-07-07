@@ -47,9 +47,9 @@ export async function recognizeSupplierDocumentWithOcr(
   const fileBuffer = bufferFromInput(buffer);
   try {
     if (documentType === "SUPPLIER_INVOICE") {
-      return await recognizeAliyunVatInvoice(fileBuffer, settings, { maxAttempts: 1 });
+      return await recognizeAliyunVatInvoice(fileBuffer, settings);
     }
-    return await recognizeAliyunSupplierContract(fileBuffer, settings, { maxAttempts: 1 });
+    return await recognizeAliyunSupplierContract(fileBuffer, settings);
   } catch (error) {
     console.error("aliyun-ocr-structured-failed", {
       documentType,

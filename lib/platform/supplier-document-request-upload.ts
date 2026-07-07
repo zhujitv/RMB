@@ -2,6 +2,11 @@ import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
+import {
+  createSupplierDocumentOcrTaskForUpload,
+  refreshSupplierDocumentRequestQualification,
+  runSupplierDocumentOcrTask,
+} from "./supplier-document-ocr";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
@@ -144,6 +149,23 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
+  let ocrWarning = "";
+  try {
+    const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
+    if (ocrTask?.id) {
+      const completedTask = await runNonCriticalTask("产品供应商回传资料OCR识别", async () => {
+        return runSupplierDocumentOcrTask(ocrTask.id);
+      }, { context: { documentId: document.id, requestId: row.id, documentType }, slowMs: 3000 });
+      if (completedTask?.status === "OCR识别失败，需人工核对") {
+        ocrWarning = completedTask.errorMessage || "OCR识别失败，需人工核对或稍后重新识别。";
+      }
+    } else {
+      await refreshSupplierDocumentRequestQualification(row.id);
+    }
+  } catch (error: unknown) {
+    ocrWarning = error instanceof Error ? error.message : "OCR任务创建失败，请稍后重试或联系管理员。";
+    logServerError("供应商回传资料上传成功但OCR任务创建失败", error, { documentId: document.id, requestId: row.id, documentType });
+  }
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
       const costs = uniqueFactoryCost
@@ -172,6 +194,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   return {
     request: serializeSupplierDocumentRequest(refreshed, actor),
     document: serializeSupplierDocument(document),
-    message: "上传成功",
+    message: ocrWarning ? `上传成功；${ocrWarning}` : "上传成功",
   };
 }
