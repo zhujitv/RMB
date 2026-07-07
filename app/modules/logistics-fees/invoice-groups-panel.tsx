@@ -418,8 +418,8 @@ function logisticsOcrResultMessage(result: LogisticsExpenseMutationResult) {
 
 function OcrWaitingInline() {
   return (
-    <div className={styles.supplierDocumentOcrWaiting}>
-      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+    <div className={styles.logisticsInvoiceOcrWaiting}>
+      <span className={styles.logisticsInvoiceOcrSpinner} aria-hidden="true" />
       <span>正在识别，请勿关闭页面</span>
     </div>
   );
@@ -427,8 +427,8 @@ function OcrWaitingInline() {
 
 function ButtonSpinnerText({ text }: { text: string }) {
   return (
-    <span className={styles.supplierDocumentOcrButtonLoading}>
-      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
+    <span className={styles.logisticsInvoiceOcrButtonLoading}>
+      <span className={styles.logisticsInvoiceOcrSpinner} aria-hidden="true" />
       <span>{text}</span>
     </span>
   );

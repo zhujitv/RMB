@@ -280,6 +280,42 @@
   flex-wrap: wrap;
 }
 
+.logisticsInvoiceOcrWaiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.logisticsInvoiceOcrButtonLoading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.logisticsInvoiceOcrSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: logisticsInvoiceSpin 0.8s linear infinite;
+}
+
+@keyframes logisticsInvoiceSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .logisticsInvoiceFileList {
   display: grid;
   gap: 6px;

@@ -289,7 +289,6 @@ export type OcrIntegrationForm = {
   appCode: string;
   appCodeConfigured: boolean;
   invoiceTextEnabled: boolean;
-  supplierDocumentReturnEnabled: boolean;
   logisticsInvoiceEnabled: boolean;
   timeoutMs: string;
 };

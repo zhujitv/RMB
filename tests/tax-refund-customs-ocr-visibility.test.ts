@@ -83,13 +83,13 @@ test("tax refund dedicated OCR and calculation database structures are removed b
   assert.match(migration, /'REFUND_CALCULATED'/);
 });
 
-test("generic OCR center and supplier return OCR remain available", () => {
+test("generic OCR center remains available without supplier return OCR", () => {
   assert.match(schema, /model OcrTask/);
   assert.match(schema, /model OcrRawResult/);
   assert.match(schema, /model OcrResult/);
   assert.match(schema, /model SupplierDocumentRequest/);
   assert.match(schema, /documents\s+OrderDocument\[\]/);
   assert.match(schema, /requestId\s+String\?\s+@map\("request_id"\)/);
-  assert.match(ocrIntegration, /supplierDocumentReturnEnabled/);
+  assert.doesNotMatch(ocrIntegration, /supplierDocumentReturnEnabled|supplierDocumentReturn/);
   assert.equal(existsSync("app/api/settings/ocr/route.ts"), true);
 });

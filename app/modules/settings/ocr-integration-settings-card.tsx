@@ -282,7 +282,7 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
-      <div className={styles.emptyState}>增值税发票及采购合同结构化识别需要 AccessKey ID / AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。</div>
+      <div className={styles.emptyState}>增值税发票和物流费用发票识别需要 AccessKey ID / AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。</div>
     </SettingsPage>
   );
 }

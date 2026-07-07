@@ -373,14 +373,6 @@ const SHARED_TAX_COMPLETENESS_FILES = [
   "lib/platform/shared-tax-supplier-documents.ts",
 ];
 
-const SUPPLIER_DOCUMENT_OCR_FILES = [
-  "lib/platform/supplier-document-ocr.ts",
-  "lib/platform/supplier-document-ocr-actions.ts",
-  "lib/platform/supplier-document-ocr-shared.ts",
-  "lib/platform/supplier-document-ocr-tasks.ts",
-  "lib/platform/supplier-document-ocr-validation.ts",
-];
-
 const SHIPSGO_TRACKING_FILES = [
   "lib/platform/shipsgo-tracking.ts",
   "lib/platform/shipsgo-tracking-utils.ts",
@@ -471,7 +463,6 @@ export const readLogisticsExpenseWorkflowSource = () => readSources([...LOGISTIC
 export const readLogisticsExpenseAccessSource = () => readSources([...LOGISTICS_EXPENSE_ACCESS_FILES, ...readSourcePrefix("lib/platform", ["logistics-expense-access"])]);
 export const readLogisticsExpenseInvoiceSource = () => readSources(["lib/platform/logistics-expense-invoice.ts", ...readSourcePrefix("lib/platform", ["logistics-expense-invoice"])]);
 export const readSharedTaxCompletenessSource = () => readSources([...SHARED_TAX_COMPLETENESS_FILES, ...readSourcePrefix("lib/platform", ["shared-tax-completeness", "shared-tax-logistics-invoices", "shared-tax-supplier-documents"])]);
-export const readSupplierDocumentOcrSource = () => readSources([...SUPPLIER_DOCUMENT_OCR_FILES, ...readSourcePrefix("lib/platform", ["supplier-document-ocr", "supplier-vat-invoice", "supplier-purchase-contract"])]);
 export const readShipsgoTrackingSource = () => readSources([...SHIPSGO_TRACKING_FILES, ...readSourcePrefix("lib/platform", ["shipsgo"])]);
 export const readReportServiceSource = () => readSources(REPORT_SERVICE_FILES);
 export const readDomesticLogisticsOpsSource = () => readSources(DOMESTIC_LOGISTICS_OPS_FILES);

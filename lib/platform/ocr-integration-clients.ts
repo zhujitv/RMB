@@ -1,7 +1,6 @@
 import { Readable } from "node:stream";
 import DocMindClient from "@alicloud/docmind-api20220711";
 import AliyunOcrClient, {
-  RecognizeGeneralStructureRequest,
   RecognizeInvoiceRequest,
 } from "@alicloud/ocr-api20210707";
 import { $OpenApiUtil } from "@alicloud/openapi-core";
@@ -16,7 +15,6 @@ import {
   type OcrRecognitionOptions,
   type OcrRecognitionResult,
   type RasterizedPdfPage,
-  SUPPLIER_CONTRACT_KEYS,
   customsTextFallbackParsedJson,
   normalizeOcrIntegrationSettings,
   normalizeFieldValue,
@@ -26,11 +24,6 @@ import {
   toPlainJson,
   sleep,
 } from "./ocr-integration-shared";
-import {
-  CONTRACT_FIELD_ALIASES,
-  collectFieldsFromObject,
-  collectText,
-} from "./ocr-integration-parsing";
 
 export const ALIYUN_OCR_RETRY_DELAYS_MS = [1000, 2000, 5000] as const;
 const ALIYUN_OCR_HEALTH_STATE_KEY = "__rmbAliyunOcrHealthCheckScheduled";
@@ -96,64 +89,6 @@ export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<Raste
     };
   } catch (error) {
     console.error("customs-pdf-rasterize-for-ocr-failed", { message: ocrErrorText(error) });
-    return null;
-  }
-}
-
-export async function rasterizeFirstPdfPageForSupplierOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
-  if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") return null;
-  try {
-    const canvasModule = await import("@napi-rs/canvas");
-    const { createCanvas, DOMMatrix, ImageData, Path2D } = canvasModule;
-    const globalScope = globalThis as Record<string, unknown>;
-    globalScope.DOMMatrix ||= DOMMatrix;
-    globalScope.ImageData ||= ImageData;
-    globalScope.Path2D ||= Path2D;
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as {
-      getDocument: (params: Record<string, unknown>) => { promise: Promise<Record<string, unknown>>; destroy?: () => Promise<void> };
-    };
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
-      disableFontFace: true,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    });
-    const pdf = await loadingTask.promise as Record<string, unknown> & {
-      numPages?: number;
-      getPage: (pageNumber: number) => Promise<Record<string, unknown> & {
-        getViewport: (params: { scale: number }) => { width: number; height: number };
-        render: (params: Record<string, unknown>) => { promise: Promise<void> };
-      }>;
-      destroy?: () => Promise<void>;
-    };
-    const page = await pdf.getPage(1);
-    const baseViewport = page.getViewport({ scale: 1 });
-    const longestSide = Math.max(baseViewport.width, baseViewport.height);
-    const scale = Math.min(2.4, Math.max(1.2, 1800 / Math.max(longestSide, 1)));
-    const viewport = page.getViewport({ scale });
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-    const context = canvas.getContext("2d");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvas: null, canvasContext: context, viewport }).promise;
-    const pageCount = Number(pdf.numPages || 1);
-    await pdf.destroy?.().catch(() => undefined);
-    await loadingTask.destroy?.().catch(() => undefined);
-    const targetBytes = 1_500_000;
-    const qualities = [0.82, 0.74, 0.66, 0.58];
-    let jpegBuffer = canvas.toBuffer("image/jpeg", qualities[0]);
-    for (const quality of qualities.slice(1)) {
-      if (jpegBuffer.length <= targetBytes) break;
-      jpegBuffer = canvas.toBuffer("image/jpeg", quality);
-    }
-    return {
-      buffer: Buffer.from(jpegBuffer),
-      width: canvas.width,
-      height: canvas.height,
-      pageCount,
-    };
-  } catch (error) {
-    console.error("supplier-document-pdf-rasterize-for-ocr-failed", { message: ocrErrorText(error) });
     return null;
   }
 }
@@ -452,31 +387,5 @@ export async function recognizeAliyunVatInvoice(
     extractedFields,
     parsedJson: extractedFields,
     parser: "VAT_INVOICE",
-  };
-}
-
-export async function recognizeAliyunSupplierContract(
-  buffer: Buffer,
-  settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
-): Promise<OcrRecognitionResult> {
-  const client = createAliyunOcrClient(settings);
-  const response = await client.recognizeGeneralStructure(new RecognizeGeneralStructureRequest({
-    body: Readable.from(buffer),
-    keys: SUPPLIER_CONTRACT_KEYS,
-  }));
-  const rawJson = toPlainJson(response);
-  const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
-  const data = parseJsonMaybe(responseField(responseBody, "data"));
-  const extractedFields = collectFieldsFromObject(data, CONTRACT_FIELD_ALIASES);
-  const text = collectText(data).join("\n");
-  return {
-    text,
-    source: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
-    provider: settings.provider,
-    apiName: "ALIYUN_RECOGNIZE_GENERAL_STRUCTURE",
-    rawJson,
-    extractedFields,
-    parsedJson: extractedFields,
-    parser: "PURCHASE_CONTRACT",
   };
 }

@@ -4,7 +4,7 @@ export async function register() {
     const { getOcrIntegrationSettings } = await import("./lib/platform/ocr-integration-shared");
     const { scheduleAliyunOcrStartupHealthCheck } = await import("./lib/platform/ocr-integration-clients");
     const settings = await getOcrIntegrationSettings();
-    if (settings.enabled && settings.supplierDocumentReturnEnabled) {
+    if (settings.enabled && (settings.invoiceTextEnabled || settings.customsDeclarationEnabled)) {
       scheduleAliyunOcrStartupHealthCheck(settings);
     }
   } catch (error) {

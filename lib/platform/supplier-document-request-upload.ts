@@ -2,11 +2,6 @@ import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
-import {
-  createSupplierDocumentOcrTaskForUpload,
-  refreshSupplierDocumentRequestQualification,
-  scheduleSupplierDocumentOcrTask,
-} from "./supplier-document-ocr";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
@@ -70,7 +65,6 @@ import {
 import {
   actorId,
   adminCcEmails,
-  attachSupplierDocumentOcrTasks,
   dateFromInput,
   factoryCostSlotsForSupplierRequest,
   jsonStringArray,
@@ -149,18 +143,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw error;
   }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
-  let ocrScheduled = false;
-  try {
-    const ocrTask = await createSupplierDocumentOcrTaskForUpload(document.id);
-    if (ocrTask?.id) {
-      ocrScheduled = true;
-      scheduleSupplierDocumentOcrTask(ocrTask.id, { documentId: document.id, requestId: row.id, documentType });
-    } else {
-      await refreshSupplierDocumentRequestQualification(row.id);
-    }
-  } catch (error: unknown) {
-    logServerError("供应商回传资料上传成功但OCR任务创建失败", error, { documentId: document.id, requestId: row.id, documentType });
-  }
+  await safeRefreshSupplierDocumentRequestCompletion(row.id, { completedById: uploadedById });
   if (documentType === "SUPPLIER_INVOICE") {
     await runNonCriticalTask("成本发票状态同步", async () => {
       const costs = uniqueFactoryCost
@@ -189,6 +172,6 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   return {
     request: serializeSupplierDocumentRequest(refreshed, actor),
     document: serializeSupplierDocument(document),
-    message: ocrScheduled ? "上传成功，OCR正在后台识别" : "上传成功",
+    message: "上传成功",
   };
 }

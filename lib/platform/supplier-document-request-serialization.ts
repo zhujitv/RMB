@@ -2,14 +2,6 @@ import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
-import {
-  createSupplierDocumentOcrTaskForUpload,
-  reconcileStaleSupplierDocumentOcrTasks,
-  refreshSupplierDocumentRequestQualification,
-  runSupplierDocumentOcrTask,
-  serializeSupplierDocumentOcrTask,
-} from "./supplier-document-ocr";
-import { SUPPLIER_DOCUMENT_OCR_MODULE } from "./supplier-document-ocr-shared";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
@@ -70,7 +62,6 @@ import {
   type FactorySupplierReturnCost,
   type SupplierDocumentRequestInput,
   type SupplierDocumentRequestRow,
-  type SupplierDocumentRequestWithOptionalOcr,
 } from "./supplier-document-request-types";
 
 export {
@@ -275,7 +266,7 @@ export async function readValidatedExcelTemplate(file: unknown): Promise<ExcelUp
   };
 }
 
-export function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWithOptionalOcr, actor: ActorLike) {
+export function serializeSupplierDocumentRequest(row: SupplierDocumentRequestRow, actor: ActorLike) {
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   const documents = (row.documents || [])
     .filter((document) => requiredTypes.includes(normalizeSupplierReturnDocumentType(document.documentType) as OrderDocumentType))
@@ -314,51 +305,8 @@ export function serializeSupplierDocumentRequest(row: SupplierDocumentRequestWit
   };
 }
 
-export async function attachSupplierDocumentOcrTasks(rows: SupplierDocumentRequestRow[]): Promise<SupplierDocumentRequestWithOptionalOcr[]> {
-  const documentIds = rows
-    .flatMap((row) => row.documents || [])
-    .map((document) => document.id)
-    .filter(Boolean);
-  if (!documentIds.length) {
-    return rows.map((row) => ({
-      ...row,
-      documents: (row.documents || []).map((document) => ({ ...document, ocrTasks: [] })),
-    }));
-  }
-  try {
-    await reconcileStaleSupplierDocumentOcrTasks(documentIds);
-    const tasks = await prisma.ocrTask.findMany({
-      where: { module: SUPPLIER_DOCUMENT_OCR_MODULE, documentId: { in: documentIds } },
-      include: { results: true },
-      orderBy: [{ createdAt: "desc" }],
-      take: Math.min(Math.max(documentIds.length * 3, 20), 500),
-    });
-    const latestByDocumentId = new Map<string, unknown>();
-    for (const task of tasks) {
-      if (!latestByDocumentId.has(task.documentId)) latestByDocumentId.set(task.documentId, task);
-    }
-    return rows.map((row) => ({
-      ...row,
-      documents: (row.documents || []).map((document) => ({
-        ...document,
-        ocrTasks: latestByDocumentId.has(document.id) ? [latestByDocumentId.get(document.id)] : [],
-      })),
-    }));
-  } catch (error: unknown) {
-    logServerError("供应商资料回传OCR状态读取失败，已跳过OCR附加信息", error, { documentCount: documentIds.length });
-    return rows.map((row) => ({
-      ...row,
-      documents: (row.documents || []).map((document) => ({ ...document, ocrTasks: [] })),
-    }));
-  }
-}
-
 export function serializeSupplierDocument(document: unknown) {
   const row = serializeOrderDocument(document);
-  const documentRecord = document as { ocrTasks?: unknown[] } | null | undefined;
-  const ocrTask = Array.isArray(documentRecord?.ocrTasks)
-    ? serializeSupplierDocumentOcrTask(documentRecord.ocrTasks[0] as Parameters<typeof serializeSupplierDocumentOcrTask>[0])
-    : null;
   return {
     id: row.id,
     orderId: row.orderId,
@@ -379,7 +327,6 @@ export function serializeSupplierDocument(document: unknown) {
     source: row.source,
     uploadedByName: row.uploadedByName,
     uploadedAt: row.uploadedAt,
-    ocrTask,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -436,9 +383,7 @@ export async function loadSupplierDocumentRequest(id: string, actor: ActorLike) 
     include: supplierDocumentRequestInclude(),
   });
   if (!refreshed) throw codedError("资料回传任务不存在或无权限访问。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
-  const [rowWithOcr] = await attachSupplierDocumentOcrTasks([row]);
-  const [refreshedWithOcr] = await attachSupplierDocumentOcrTasks([refreshed]);
-  return refreshedWithOcr || rowWithOcr;
+  return refreshed || row;
 }
 
 export function jsonStringArray(value: unknown) {

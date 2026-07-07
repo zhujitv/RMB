@@ -2,13 +2,6 @@ import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
-import {
-  createSupplierDocumentOcrTaskForUpload,
-  reconcileStaleSupplierDocumentOcrTasks,
-  refreshSupplierDocumentRequestQualification,
-  runSupplierDocumentOcrTask,
-  serializeSupplierDocumentOcrTask,
-} from "./supplier-document-ocr";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
@@ -75,12 +68,6 @@ export type SupplierDocumentRequestRow = Prisma.SupplierDocumentRequestGetPayloa
 export type SupplierDocumentRequestListRow = Prisma.SupplierDocumentRequestGetPayload<{
   select: ReturnType<typeof supplierDocumentRequestListSelect>;
 }>;
-export type SupplierDocumentWithOptionalOcr = SupplierDocumentRequestRow["documents"][number] & {
-  ocrTasks?: unknown[];
-};
-export type SupplierDocumentRequestWithOptionalOcr = Omit<SupplierDocumentRequestRow, "documents"> & {
-  documents: SupplierDocumentWithOptionalOcr[];
-};
 export type FactorySupplierReturnCost = Prisma.OrderCostGetPayload<{
   include: ReturnType<typeof supplierDocumentRequestFactoryCostInclude>;
 }>;

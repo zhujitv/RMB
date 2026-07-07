@@ -36,6 +36,9 @@
 .logisticsInvoiceValidationItem { composes: logisticsInvoiceValidationItem from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceValidationError { composes: logisticsInvoiceValidationError from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceValidationActions { composes: logisticsInvoiceValidationActions from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceOcrWaiting { composes: logisticsInvoiceOcrWaiting from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceOcrSpinner { composes: logisticsInvoiceOcrSpinner from "./logistics-bill-actions.module.css"; }
+.logisticsInvoiceOcrButtonLoading { composes: logisticsInvoiceOcrButtonLoading from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileList { composes: logisticsInvoiceFileList from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileRow { composes: logisticsInvoiceFileRow from "./logistics-bill-actions.module.css"; }
 .logisticsInvoiceFileName { composes: logisticsInvoiceFileName from "./logistics-bill-actions.module.css"; }

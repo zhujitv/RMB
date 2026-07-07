@@ -10,7 +10,6 @@ import type {
   SupplierDocumentsResponse,
   SupplierDocumentsStatsResponse,
 } from "./supplier-documents/types";
-import { useSupplierDocumentOcrActions } from "./supplier-documents/use-supplier-document-ocr-actions";
 import { useSupplierDocumentRequestActions } from "./supplier-documents/use-supplier-document-request-actions";
 import type { User } from "../types";
 
@@ -46,7 +45,6 @@ export function SupplierDocumentsModule({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
-  const [ocrBusyKey, setOcrBusyKey] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const loadRowsDataRequestRef = useRef(0);
   const loadRowsVisibleRequestRef = useRef(0);
@@ -64,10 +62,6 @@ export function SupplierDocumentsModule({
     void loadRows(1, pageSize);
     void loadStats("");
   }, []);
-
-  function hasProcessingOcrTask(items: SupplierDocumentTask[]) {
-    return items.some((task) => (task.documents || []).some((document) => document.ocrTask?.status === "OCR识别中"));
-  }
 
   function mergeTaskDetail(listRow: SupplierDocumentTask, detail: SupplierDocumentTask) {
     return {
@@ -206,16 +200,6 @@ export function SupplierDocumentsModule({
     });
   }
 
-  const { rerunOcr, confirmOcr, rejectOcr } = useSupplierDocumentOcrActions({
-    requestConfirmation,
-    loadTaskDetail,
-    loadStats,
-    setRows,
-    setOcrBusyKey,
-    setError,
-    setNotice,
-  });
-
   const isAdmin = currentUser.role === "管理员";
   const {
     uploadDocument,
@@ -244,7 +228,6 @@ export function SupplierDocumentsModule({
     setPendingCount,
     setDeletingTaskId,
     setResendingTaskId,
-    setOcrBusyKey,
     setCreateDialogOpen,
     setPage,
   });
@@ -253,14 +236,6 @@ export function SupplierDocumentsModule({
   useEffect(() => {
     if (page > totalPages) void loadRows(totalPages, pageSize, submittedKeyword);
   }, [page, totalPages]);
-
-  useEffect(() => {
-    if (!expandedTaskId || !hasProcessingOcrTask(rows.filter((row) => row.id === expandedTaskId))) return undefined;
-    const timer = window.setInterval(() => {
-      void loadTaskDetail(expandedTaskId, { silent: true, force: true });
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [rows, expandedTaskId]);
 
   useEffect(() => {
     if (!expandedTaskId) return;
@@ -303,7 +278,6 @@ export function SupplierDocumentsModule({
       submittedKeyword={submittedKeyword}
       deletingTaskId={deletingTaskId}
       resendingTaskId={resendingTaskId}
-      ocrBusyKey={ocrBusyKey}
       createDialogOpen={createDialogOpen}
       isAdmin={isAdmin}
       safePage={safePage}
@@ -332,9 +306,6 @@ export function SupplierDocumentsModule({
       onUpload={uploadDocument}
       onDeleteTask={(task) => void deleteTask(task)}
       onResendNotice={(task) => void resendNotice(task)}
-      onRerunOcr={(task, document) => void rerunOcr(task, document)}
-      onConfirmOcr={(task, document) => void confirmOcr(task, document)}
-      onRejectOcr={(task, document) => void rejectOcr(task, document)}
       onPage={(nextPage) => {
         setExpandedTaskId("");
         void loadRows(nextPage, pageSize, submittedKeyword);

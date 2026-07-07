@@ -322,14 +322,12 @@ test("supplier document list failure is not rendered as an empty task list", () 
   assert.match(supplierRequestRoute, /getSupplierDocumentRequestDetail\(id, actor\)/);
 });
 
-test("supplier document request completion requires OCR qualification or manual confirmation", () => {
+test("supplier document request completion requires successful required uploads", () => {
   const completionService = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
-  assert.match(completionService, /function isOcrQualified/);
-  assert.match(completionService, /OCR_STATUS_PASSED/);
-  assert.match(completionService, /VALIDATION_CONFIRMED/);
   assert.match(completionService, /const uploaded = document\?\.uploadStatus === "SUCCESS"/);
-  assert.match(completionService, /const qualified = uploaded && isOcrQualified\(task\)/);
+  assert.match(completionService, /qualified: uploaded/);
   assert.match(completionService, /allQualified \? "已完成" : anyStarted \? "部分上传" : "待上传"/);
+  assert.doesNotMatch(completionService, /Ocr|OCR_STATUS|VALIDATION_CONFIRMED|ocrTasks/);
   assert.match(service, /status: nextStatus, completedAt: null, completedById: null/);
   assert.match(service, /safeRefreshSupplierDocumentRequestCompletion\(row\.id\)/);
 });
@@ -378,9 +376,10 @@ test("supplier document cards merge upload slots with uploaded files by document
   assert.match(supplierModule, /supplierDocumentFileName\(document\)/);
   assert.match(supplierModule, /文件记录存在，但文件无法访问/);
   assert.match(supplierModule, /重新上传 PDF 文件/);
-  assert.match(supplierModule, /<SupplierDocumentOcrPanel/);
   assert.match(supplierModule, /<PdfPreviewButton documentId=\{document\.id\}/);
   assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
+  assert.doesNotMatch(supplierModule, /SupplierDocumentOcrPanel/);
+  assert.doesNotMatch(supplierModule, /OCR 校验结果|查看 OCR 原始文本|人工确认通过|驳回重传/);
   assert.doesNotMatch(supplierModule, /function supplierDocumentUploadSlots/);
   assert.doesNotMatch(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
   assert.doesNotMatch(supplierModule, /已上传资料槽|uploadedDocumentSlots/);
@@ -395,12 +394,9 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 
-test("supplier document upload schedules OCR through the background SDK task path", () => {
-  assert.match(uploadService, /let ocrScheduled = false/);
-  assert.match(uploadService, /createSupplierDocumentOcrTaskForUpload\(document\.id\)/);
-  assert.match(uploadService, /scheduleSupplierDocumentOcrTask\(ocrTask\.id/);
-  assert.match(uploadService, /供应商回传资料上传成功但OCR任务创建失败/);
-  assert.match(uploadService, /message: ocrScheduled \? "上传成功，OCR正在后台识别" : "上传成功"/);
-  assert.doesNotMatch(uploadService, /let ocrTaskId = ""/);
-  assert.doesNotMatch(uploadService, /await\s+runSupplierDocumentOcrTask\(ocrTask\.id\)/);
+test("supplier document upload no longer creates OCR tasks", () => {
+  assert.match(uploadService, /message: "上传成功"/);
+  assert.match(uploadService, /safeRefreshSupplierDocumentRequestCompletion\(row\.id/);
+  assert.doesNotMatch(uploadService, /ocrScheduled|createSupplierDocumentOcrTask|scheduleSupplierDocumentOcrTask|runSupplierDocumentOcrTask/);
+  assert.doesNotMatch(uploadService, /OCR正在后台识别/);
 });

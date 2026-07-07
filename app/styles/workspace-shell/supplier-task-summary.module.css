@@ -1,15 +1,3 @@
-/* supplier-task-summary: extracted from supplier-documents.module.css without changing selectors. */
-.supplierDocumentOcrRawText pre {
-  max-height: 220px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 8px 0 0;
-  color: #334155;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .supplierDocumentUploadButton {
   width: 100%;
   min-height: 42px;

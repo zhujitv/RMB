@@ -3,8 +3,13 @@ import { readR2Object } from "../r2";
 import { prisma } from "../prisma";
 import { recognizeLogisticsInvoiceWithOcr } from "./ocr-integration";
 import { saveOcrRawResult } from "./ocr-raw-results";
-import { looselyMatches, parseVatInvoiceFields, supplierDocumentLabels, visibleResultFields } from "./supplier-document-ocr-shared";
-import { invoiceParserIssues } from "./supplier-document-ocr-validation";
+import {
+  looselyMatches,
+  parseVatInvoiceFields,
+  vatInvoiceParserIssues,
+  vatInvoiceResultLabels,
+  visibleResultFields,
+} from "./vat-invoice-ocr-shared";
 import { getLogisticsInvoiceValidationRules } from "./logistics-invoice-validation-rules";
 import { extractLogisticsForeignCurrencyAmount } from "./logistics-invoice-amount-parser";
 import {
@@ -439,13 +444,13 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
       expectedSellerName,
       expectedBuyerName,
     });
-    const parserIssues = invoiceParserIssues(fields).filter((issue) => ["productName", "seller", "buyer"].includes(issue.field || ""));
+    const parserIssues = vatInvoiceParserIssues(fields).filter((issue) => ["productName", "seller", "buyer"].includes(issue.field || ""));
     const issues = mergeValidationIssues(validation.issues, parserIssues);
     const status = validationStatusFromIssues(issues, validation.status);
     const message = issueMessage(issues);
     const fieldRows = visibleResultFields(
       fields as unknown as Record<string, unknown>,
-      supplierDocumentLabels("SUPPLIER_INVOICE") as unknown as Record<string, string>,
+      vatInvoiceResultLabels(),
     );
     const validationJson = {
       invoiceGroupKey: invoiceGroup.key,

@@ -37,7 +37,6 @@ type SupplierDocumentRequestActionOptions = {
   setPendingCount: Dispatch<SetStateAction<number>>;
   setDeletingTaskId: Dispatch<SetStateAction<string>>;
   setResendingTaskId: Dispatch<SetStateAction<string>>;
-  setOcrBusyKey: Dispatch<SetStateAction<string>>;
   setCreateDialogOpen: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<number>>;
 };
@@ -68,7 +67,6 @@ export function useSupplierDocumentRequestActions({
   setPendingCount,
   setDeletingTaskId,
   setResendingTaskId,
-  setOcrBusyKey,
   setCreateDialogOpen,
   setPage,
 }: SupplierDocumentRequestActionOptions) {
