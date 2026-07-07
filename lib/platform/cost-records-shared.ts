@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
 import { attachBusinessDocumentsToCost } from "./business-documents";
 import { businessEntityFieldsFromOrder } from "./business-entities";
+import { logisticsCostSourceSelect } from "./cost-records-logistics-source";
 import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
 import {
   COST_DUPLICATE_GUARD_LOOKBACK_MS,
@@ -228,7 +229,7 @@ export function includeCostRelations() {
     supplier: true,
     createdBy: true,
     updatedBy: true,
-    generatedLogisticsExpense: { select: { id: true } },
+    generatedLogisticsExpense: { select: logisticsCostSourceSelect() },
     supplierDocumentRequests: {
       where: { deletedAt: null },
       select: { id: true, deletedAt: true },

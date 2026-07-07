@@ -3,6 +3,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import { assertRead, permissionError, safeSerializeCost, type CostDto } from "./shared";
 import { attachBusinessDocumentsToCost, attachBusinessDocumentsToCosts, successfulSupplierInvoicePairs } from "./business-documents";
 import { costAccessWhere } from "./masters-access";
+import { attachLogisticsSourcesToCosts } from "./cost-records-logistics-source";
 import { includeCostRelations, costPageParams } from "./cost-records-shared";
 import {
   COST_UNPAGINATED_SCAN_LIMIT,
@@ -91,7 +92,7 @@ export async function listCosts(query: CostQuery, actor: ActorLike = null): Prom
     Math.max(Number.isFinite(requestedPageSize) && requestedPageSize > 0 ? requestedPageSize : 1000, 1),
   );
   const { rows } = await findSortedCostRows(where, invoicePairs, 0, take);
-  return (await attachBusinessDocumentsToCosts(rows)).map(safeSerializeCost);
+  return (await attachBusinessDocumentsToCosts(await attachLogisticsSourcesToCosts(rows))).map(safeSerializeCost);
 }
 
 export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
@@ -101,7 +102,7 @@ export async function listCostsPage(query: CostQuery, actor: ActorLike = null) {
   const invoicePairs = await successfulSupplierInvoicePairs();
   const where = pagedCostWhere(filters, actor, invoicePairs);
   const { rows, total } = await findSortedCostRows(where, invoicePairs, (page - 1) * pageSize, pageSize);
-  const rowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(rows);
+  const rowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(await attachLogisticsSourcesToCosts(rows));
   return {
     rows: rowsWithBusinessDocuments.map(safeSerializeCost),
     total,
@@ -121,5 +122,6 @@ export async function getCost(id: string, actor: ActorLike = null) {
     include: includeCostRelations(),
   });
   if (!cost) throw permissionError("成本记录不存在或无权查看", 404);
-  return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
+  const [costWithSource] = await attachLogisticsSourcesToCosts([cost]);
+  return safeSerializeCost(await attachBusinessDocumentsToCost(costWithSource));
 }

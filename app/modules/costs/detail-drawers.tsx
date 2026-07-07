@@ -390,6 +390,7 @@ export function CostInvoiceGroupItemsTable({
   costs: CostRow[];
   onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
+  const logisticsSourceText = (value?: string) => value || "-";
   return (
     <div className={styles.logisticsDrawerSection}>
       <div className={styles.logisticsDrawerSectionHeader}>
@@ -404,12 +405,17 @@ export function CostInvoiceGroupItemsTable({
             <tr>
               <th>费用类型</th>
               <th className={styles.supplierColumn}>供应商</th>
+              <th>shipmentId</th>
+              <th>logisticsFeeId</th>
+              <th>invoiceId</th>
               <th>币种</th>
               <th className={styles.amountColumn}>原币金额</th>
               <th className={styles.amountColumn}>折人民币</th>
               <th>付款状态</th>
               <th>付款凭证</th>
               <th>发票状态</th>
+              <th>创建时间</th>
+              <th>审核时间</th>
               <th>备注</th>
             </tr>
           </thead>
@@ -418,6 +424,9 @@ export function CostInvoiceGroupItemsTable({
               <tr key={cost.id}>
                 <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
                 <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
+                <td title={cost.logisticsSource?.shipmentId || ""}>{logisticsSourceText(cost.logisticsSource?.shipmentId)}</td>
+                <td title={cost.logisticsSource?.logisticsFeeId || cost.sourceId || ""}>{logisticsSourceText(cost.logisticsSource?.logisticsFeeId || cost.sourceId)}</td>
+                <td title={cost.logisticsSource?.invoiceId || ""}>{logisticsSourceText(cost.logisticsSource?.invoiceId)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount("CNY", cost.amountCny ?? 0)}</td>
@@ -428,10 +437,12 @@ export function CostInvoiceGroupItemsTable({
                   ) : isProductSupplierPaid(cost) && isProductSupplierPaymentEnabled(cost) ? "未上传水单" : "-"}
                 </td>
                 <td><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
+                <td>{formatDateTime(cost.logisticsSource?.createdAt || cost.createdAt)}</td>
+                <td>{formatDateTime(cost.logisticsSource?.reviewedAt)}</td>
                 <td title={cost.remark || ""}>{cost.remark || "-"}</td>
               </tr>
             )) : (
-              <tr><td colSpan={9}><div className={styles.emptyState}>暂无费用明细</div></td></tr>
+              <tr><td colSpan={14}><div className={styles.emptyState}>暂无费用明细</div></td></tr>
             )}
           </tbody>
         </table>

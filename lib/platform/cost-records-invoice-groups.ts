@@ -4,6 +4,7 @@ import { summarizeCurrencyTotals } from "./currency-totals";
 import { LOGISTICS_GENERATED_COST_SOURCE_TYPES, ORDER_COST_STATUS_VOID, assertRead, isLogisticsGeneratedCostSourceType, nonEmpty, safeSerializeCost, type CostDto } from "./shared";
 import { costAccessWhere } from "./masters-access";
 import { attachBusinessDocumentsToCosts, successfulSupplierInvoicePairs } from "./business-documents";
+import { attachLogisticsSourcesToCosts } from "./cost-records-logistics-source";
 import { costPageParams } from "./cost-records-shared";
 import {
   COST_INVOICE_GROUP_DETAIL_LIMIT,
@@ -255,7 +256,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
     requiredGroupCount,
     candidateTake,
   );
-  const matchingRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(matchingRows);
+  const matchingRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(await attachLogisticsSourcesToCosts(matchingRows));
   const groupMap = new Map<string, CostWithInvoiceGroupRelations[]>();
   matchingRowsWithBusinessDocuments.forEach((cost) => {
     const key = costInvoiceGroupKey(cost);
@@ -270,9 +271,20 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
     .flatMap((key) => (groupMap.get(key) || []).map((cost) => cost.id));
   const fullWhere: Prisma.OrderCostWhereInput[] = [];
   if (billIds.length) {
+    const billExpenseIds = (await prisma.logisticsExpense.findMany({
+      where: {
+        billId: { in: billIds },
+        deletedAt: null,
+      },
+      select: { id: true },
+      take: COST_INVOICE_GROUP_DETAIL_LIMIT,
+    })).map((row) => row.id);
     fullWhere.push({
 	      sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
-      generatedLogisticsExpense: { is: { billId: { in: billIds } } },
+      OR: [
+        { generatedLogisticsExpense: { is: { billId: { in: billIds } } } },
+        ...(billExpenseIds.length ? [{ sourceId: { in: billExpenseIds } }] : []),
+      ],
     });
   }
   const costIds = uniqueTextList([...singleCostIds, ...fallbackCostIds]);
@@ -290,7 +302,7 @@ async function buildCostInvoiceGroups(query: CostQuery, actor: ActorLike = null,
       take: COST_INVOICE_GROUP_DETAIL_LIMIT,
     })
     : [];
-  const fullRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(fullRows);
+  const fullRowsWithBusinessDocuments = await attachBusinessDocumentsToCosts(await attachLogisticsSourcesToCosts(fullRows));
   const rawRowsByKey = fullRowsWithBusinessDocuments.reduce<Map<string, CostWithInvoiceGroupRelations[]>>((acc, cost) => {
     const key = costInvoiceGroupKey(cost);
     if (!acc.has(key)) acc.set(key, []);

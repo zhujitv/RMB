@@ -13,6 +13,8 @@ import {
 import { customerBusinessName, customerFullName, customerShortName } from "./shared-serialization-parties";
 import { serializeOrderDocument } from "./shared-serialization-documents";
 
+const LOGISTICS_INVOICE_RECEIVED_STATUSES = new Set(["已收到", "已上传", "已确认", "已上传发票", "已确认发票"]);
+
 export function serializePayment(paymentInput: unknown) {
   const payment = asLooseRecord<PaymentLike>(paymentInput);
   return {
@@ -52,6 +54,59 @@ export function invoiceStatusFromDocuments(documents: OrderDocumentStatusLike[] 
     && document.uploadStatus === "SUCCESS"
     && !document.deletedAt
   )) ? "已收到" : "未收到";
+}
+
+function logisticsExpenseSource(cost: CostLike) {
+  return asLooseRecord<Record<string, unknown>>(cost.generatedLogisticsExpense);
+}
+
+function logisticsExpenseBill(source: Record<string, unknown>) {
+  return asLooseRecord<Record<string, unknown>>(source.bill);
+}
+
+function logisticsSourceInvoiceReceived(cost: CostLike) {
+  const source = logisticsExpenseSource(cost);
+  const bill = logisticsExpenseBill(source);
+  return Boolean(source.invoiceDocumentId)
+    || LOGISTICS_INVOICE_RECEIVED_STATUSES.has(String(source.invoiceStatus || "").trim())
+    || LOGISTICS_INVOICE_RECEIVED_STATUSES.has(String(bill.invoiceStatus || "").trim())
+    || LOGISTICS_INVOICE_RECEIVED_STATUSES.has(String(cost.invoiceStatus || "").trim());
+}
+
+function serializedCostInvoiceStatus(cost: CostLike) {
+  if (isLogisticsGeneratedCostSourceType(cost.sourceType)) {
+    return logisticsSourceInvoiceReceived(cost) ? "已收到" : "未收到";
+  }
+  return invoiceStatusFromDocuments(cost.documents || []);
+}
+
+function serializeLogisticsCostSource(cost: CostLike) {
+  if (!isLogisticsGeneratedCostSourceType(cost.sourceType)) return null;
+  const source = logisticsExpenseSource(cost);
+  const sourceId = String(source.id || cost.sourceId || "").trim();
+  if (!sourceId) return null;
+  const bill = logisticsExpenseBill(source);
+  const supplier = asLooseRecord<Record<string, unknown>>(source.supplier);
+  const billId = String(source.billId || bill.id || "").trim();
+  const billOfLadingNo = String(bill.billOfLadingNo || "").trim();
+  return {
+    logisticsFeeId: sourceId,
+    logisticsInvoiceId: String(source.invoiceDocumentId || "").trim(),
+    invoiceId: String(source.invoiceDocumentId || "").trim(),
+    shipmentId: billId || billOfLadingNo,
+    logisticsBillId: billId,
+    billOfLadingNo,
+    supplierId: String(source.supplierId || cost.supplierId || "").trim(),
+    supplierName: String(source.supplierNameSnapshot || supplier.supplierName || cost.supplierNameSnapshot || cost.vendorName || "").trim(),
+    feeType: normalizedCostType(String(source.costType || cost.costType || "")),
+    currency: String(source.currency || cost.currency || "CNY").trim(),
+    amount: Number(source.amount ?? cost.amount ?? 0),
+    amountCny: Number(source.amountCny ?? cost.amountCny ?? 0),
+    auditStatus: String(bill.auditStatus || source.auditStatus || "").trim(),
+    invoiceStatus: String(source.invoiceStatus || bill.invoiceStatus || cost.invoiceStatus || "").trim(),
+    createdAt: source.createdAt || cost.createdAt || null,
+    reviewedAt: source.reviewedAt || bill.reviewedAt || null,
+  };
 }
 
 function serializedCostPaid(cost: CostLike) {
@@ -138,11 +193,10 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
-		invoiceStatus: isLogisticsGeneratedCostSourceType(cost.sourceType)
-			? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
-			: invoiceStatusFromDocuments(cost.documents || []),
+		invoiceStatus: serializedCostInvoiceStatus(cost),
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
+    logisticsSource: serializeLogisticsCostSource(cost),
 		sourceLabel: isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     documents: [],
@@ -220,11 +274,10 @@ export function serializeCost(costInput: unknown) {
     paymentVoucherFileName: cost.paymentVoucherFileName || "",
     paymentVoucherMimeType: cost.paymentVoucherMimeType || "",
     paymentVoucherUploadedAt: dateTimeToIso(cost.paymentVoucherUploadedAt),
-		invoiceStatus: isLogisticsGeneratedCostSourceType(cost.sourceType)
-			? (cost.invoiceStatus || invoiceStatusFromDocuments(cost.documents || []))
-			: invoiceStatusFromDocuments(cost.documents || []),
+		invoiceStatus: serializedCostInvoiceStatus(cost),
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
+    logisticsSource: serializeLogisticsCostSource(cost),
 		sourceLabel: isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     createdBy: serializeUser(cost.createdBy),

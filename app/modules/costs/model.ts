@@ -78,6 +78,25 @@ export type CostRow = {
   costConfirmed?: boolean;
   sourceLabel?: string;
   sourceType?: string;
+  sourceId?: string;
+  logisticsSource?: {
+    logisticsFeeId?: string;
+    logisticsInvoiceId?: string;
+    invoiceId?: string;
+    shipmentId?: string;
+    logisticsBillId?: string;
+    billOfLadingNo?: string;
+    supplierId?: string;
+    supplierName?: string;
+    feeType?: string;
+    currency?: string;
+    amount?: number;
+    amountCny?: number;
+    auditStatus?: string;
+    invoiceStatus?: string;
+    createdAt?: string;
+    reviewedAt?: string;
+  } | null;
   supplierId?: string;
   remark?: string;
   createdBy?: UserLite;

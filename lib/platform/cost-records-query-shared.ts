@@ -13,6 +13,7 @@ import {
 } from "./shared";
 import { costAccessWhere } from "./masters-access";
 import { orderArchiveWhereForScope, archiveScope, includeCostRelations } from "./cost-records-shared";
+import { logisticsCostSourceSelect } from "./cost-records-logistics-source";
 
 export type ActorLike = Record<string, unknown> | null;
 export type CostQuery = URLSearchParams;
@@ -62,11 +63,6 @@ export type CostWorkflowSortWeight = typeof COST_WORKFLOW_SORT_WEIGHTS[number];
 export function includeCostInvoiceGroupRelations() {
   return Prisma.validator<Prisma.OrderCostInclude>()({
     ...includeCostListRelations(),
-    generatedLogisticsExpense: {
-      include: {
-        bill: true,
-      },
-    },
   });
 }
 
@@ -83,7 +79,7 @@ export function includeCostListRelations() {
       },
     },
     supplier: true,
-    generatedLogisticsExpense: { select: { id: true } },
+    generatedLogisticsExpense: { select: logisticsCostSourceSelect() },
     supplierDocumentRequests: {
       where: { deletedAt: null },
       select: { id: true, deletedAt: true },
